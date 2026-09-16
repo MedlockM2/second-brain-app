@@ -74,32 +74,23 @@ async def trigger_review_blurb_generation(
         resolve_scope_sources,
     )
 
-    reading_language = await _reading_language(user_id)
-
     try:
-        # ``reading_language=None`` on purpose, and it is the whole trick of this
-        # hook. Passing the user's language here would send the resolver into the
-        # translation pipeline: on a source that is not yet in that language it
-        # enqueues a translation and raises ``ArtifactTranscriptNotReadyError``, so
-        # a first-ingestion blurb would essentially never be produced — there is no
-        # retry loop behind this call, ingestion completes once. Resolving without a
-        # target language reads the transcript that exists and cannot raise that
-        # error for translation reasons.
-        #
-        # The output language is carried by ``parameters`` instead: the model reads
-        # the original text and writes the blurb in the user's reading language,
-        # which is what the reader actually needs. It also keeps the language part
-        # of ``artifact_id``, so changing reading language yields a new blurb rather
-        # than silently reusing the old one.
+        # The reading language goes straight in, like every user-facing request:
+        # the resolver reads the original transcript and the language only travels
+        # to the model, through ``parameters["language"]`` (task-398). Nothing here
+        # can be deferred over a translation — which matters more on this hook than
+        # anywhere else, since ingestion completes once and there is no retry loop
+        # behind this call. It also keeps the language part of ``artifact_id``, so
+        # changing reading language yields a new blurb rather than silently reusing
+        # the old one.
         resolution = await resolve_scope_sources(
             user_id=user_id,
             scope=ArtifactScope.MEDIA,
             scope_id=media_item_id,
-            reading_language=None,
+            reading_language=await _reading_language(user_id),
         )
         enforce_scope_ceilings(resolution)
 
-        parameters = {"language": reading_language} if reading_language else {}
         plan = await plan_artifact_generation(
             user_id=user_id,
             scope=ArtifactScope.MEDIA,
@@ -107,7 +98,6 @@ async def trigger_review_blurb_generation(
             content_scope_id=record.media_key,
             artifact_type=MediaArtifactType.REVIEW_BLURB,
             resolution=resolution,
-            parameters=parameters,
         )
         artifact, outcome = await commit_artifact_generation(plan)
 

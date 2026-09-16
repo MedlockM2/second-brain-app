@@ -1,19 +1,21 @@
 """
 Resume — or end — the artifact requests that were waiting for their sources.
 
-A generation asked for while a source was still being transcribed or translated is
-not refused: it is written as a ``queued`` entry carrying ``awaiting_expires_at``
-and nothing is enqueued (see ``artifact_service.plan_artifact_generation``). This
-module is the other half — what turns that entry into a real generation once the
-text lands, and what ends it when the text will never come (task-360).
+A generation asked for while a source was still being transcribed is not refused:
+it is written as a ``queued`` entry carrying ``awaiting_expires_at`` and nothing
+is enqueued (see ``artifact_service.plan_artifact_generation``). This module is
+the other half — what turns that entry into a real generation once the text
+lands, and what ends it when the text will never come (task-360).
 
-It hangs off the two completion events the pipeline already emits, and adds no
+Transcription is the only preparation an artifact ever waits on. A source in a
+foreign language is not a wait: the generation reads the original transcript and
+asks the model for the reading language (task-398).
+
+So it hangs off the one completion event the pipeline already emits, and adds no
 queue, no schedule and no index of its own:
+``workers/events/media_completed_worker`` — an ingestion finished, or failed.
 
-- ``workers/events/media_completed_worker`` — an ingestion finished, or failed;
-- ``workers/transcript_translation_worker`` — a translation finished.
-
-Both name a ``media_key``, so the lookup goes the same way every time: the saves
+It names a ``media_key``, so the lookup goes the same way every time: the saves
 of that content (cross-user, since ingestion is deduplicated globally), then the
 scopes those saves belong to — the media itself, its folder, and that
 folder's ancestors, because a folder artifact covers every descendant —
@@ -22,10 +24,9 @@ when its own snapshot says so: a source line carrying ``preparation``. Nothing
 else has to be indexed, and an entry that had already excluded this media before
 the request is never mistaken for one waiting on it.
 
-Exactly-once is the conditional write in ``claim_awaiting_artifact``: the end of an
-ingestion, the end of a translation and the last two sources of a folder
-landing together all reach here, and only the caller that clears
-``awaiting_expires_at`` sends the message.
+Exactly-once is the conditional write in ``claim_awaiting_artifact``: the end of
+an ingestion and the last two sources of a folder landing together both reach
+here, and only the caller that clears ``awaiting_expires_at`` sends the message.
 """
 
 from __future__ import annotations
@@ -51,9 +52,7 @@ async def resume_artifacts_awaiting_media(media_key: str) -> int:
     """Enqueue every waiting entry whose last unreadable source was this media.
 
     Returns how many generations were started. An entry that is still waiting on
-    *another* source is left alone — and so is one whose own text turned out to
-    need a translation, which this very call reserves and dispatches: the
-    translation's completion event then brings it back here.
+    *another* source is left alone.
 
     Never raises. A completion event has a pipeline to finish; a generation that
     could not be resumed is bounded by its own deadline.

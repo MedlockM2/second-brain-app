@@ -10,7 +10,7 @@
 import { getFriendlyErrorMessage } from "./getFriendlyErrorMessage";
 import type { HttpError } from "./httpError";
 import { getQuotaErrorCode, getQuotaErrorMessage } from "./quotaError";
-import { formatNumber, t, tCount } from "../i18n";
+import { formatNumber, t } from "../i18n";
 
 export function describeArtifactRefusal(
   err: unknown,
@@ -46,18 +46,11 @@ export function describeArtifactRefusal(
       }
       return t("artifacts.refusal.tooMuchText");
     }
-    // The only 409 left. A source still being transcribed or translated is no
-    // longer refused at all — the request is accepted and the tile spins until the
-    // backend starts it (task-360) — but a translation the provider refused for
-    // good is not a wait, so the sentence says so instead of sending the reader
-    // back in a moment. The response carries `terminal: true` for the same reason.
-    case "translation_failed": {
-      const failed = Number(details.failed_count ?? 0);
-      if (isFolder && failed > 0) {
-        return tCount("artifacts.refusal.sourcesTranslationFailed", failed);
-      }
-      return t("artifacts.refusal.translationFailed");
-    }
+    // No 409 left on this endpoint. A source still being transcribed is not
+    // refused — the request is accepted and the tile spins until the backend
+    // starts it (task-360) — and a source in a foreign language is not a refusal
+    // either: the generation reads the original transcript and writes in the
+    // reading language (task-398).
     default:
       return getFriendlyErrorMessage(err, {
         fallback: t("artifacts.refusal.generic"),

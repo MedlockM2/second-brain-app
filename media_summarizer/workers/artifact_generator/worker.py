@@ -244,8 +244,6 @@ async def process_message(message: Dict[str, Any]) -> None:
     parameters = body.get("parameters") or {}
     language = parameters.get("language")
     prompt_cache_key = body.get("prompt_cache_key")
-    # Translation provenance set by the common detect+translate step (task-192).
-    translation = body.get("translation") if isinstance(body.get("translation"), dict) else None
 
     # Resolve artifact type
     try:
@@ -306,11 +304,12 @@ async def process_message(message: Dict[str, Any]) -> None:
 
         corpus_sources = await _download_transcripts(sources)
 
-        # Second ceiling check, after translation: a translated corpus can be
-        # longer than the original. Failing here costs nothing; sending a request
-        # the provider will reject costs the whole invocation. The author's
-        # description counts too — it goes in the prompt, so it has to go in the
-        # measurement the ceiling is made of (task-383).
+        # Second ceiling check, on the text actually downloaded: the API measured
+        # the corpus before the transcripts were read, and a source can have grown
+        # since. Failing here costs nothing; sending a request the provider will
+        # reject costs the whole invocation. The author's description counts too —
+        # it goes in the prompt, so it has to go in the measurement the ceiling is
+        # made of (task-383).
         corpus_bytes = sum(
             len(source["text"].encode("utf-8"))
             + len((source.get("description") or "").encode("utf-8"))
@@ -376,8 +375,6 @@ async def process_message(message: Dict[str, Any]) -> None:
             "llm_usage": llm_usage.model_dump(),
             "content": artifact_content,
         }
-        if translation:
-            envelope["translation"] = translation
 
         await complete_artifact_generation(
             artifact_id=artifact_id,

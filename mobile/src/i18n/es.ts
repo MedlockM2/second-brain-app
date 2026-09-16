@@ -238,12 +238,6 @@ export const es: Catalog = {
     "Esta carpeta tiene {count} fuentes, por encima de las {max} que puede leer una sola generación. Genera sobre una subcarpeta más pequeña.",
   "artifacts.refusal.tooMuchText":
     "Hay demasiado texto aquí para una sola generación. Genera sobre una subcarpeta más pequeña.",
-  "artifacts.refusal.translationFailed":
-    "No se ha podido traducir esta transcripción, y no se reintentará automáticamente. Inténtalo más tarde.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "La única fuente que hay aquí no se ha podido traducir, y no se reintentará automáticamente. Inténtalo más tarde.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "No se ha podido traducir ninguna de estas {count} fuentes, y no se reintentará automáticamente. Inténtalo más tarde.",
   "artifacts.refusal.generic":
     "No se ha podido iniciar esta generación. Inténtalo de nuevo.",
   "plan.hourlyRate": "≈ {price} por hora",
@@ -651,12 +645,6 @@ export const es: Catalog = {
   "artifact.regenerating": "Iniciando...",
   "artifact.regenerationQueued":
     "Generación reiniciada. Vuelve en un momento.",
-  "artifact.anotherLanguage": "otro idioma",
-  "artifact.translatedFrom": "Traducido del {language}",
-  "artifact.translationFailed":
-    "Traducción no disponible: se muestra en {language}",
-  "artifact.translationFailedA11y":
-    "Traducción no disponible. Este contenido se muestra en su idioma original, {language}.",
   "artifact.section.keyPoints": "Puntos clave",
   "artifact.section.takeaway": "Para recordar",
   "artifact.section.context": "Contexto",

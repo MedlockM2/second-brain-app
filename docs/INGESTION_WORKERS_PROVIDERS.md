@@ -650,42 +650,44 @@ Ref: `rss_feed_poll_worker.py::_route_item_to_pipeline`, `rss_feed_poll_worker.p
 
 ## Cross-cutting: Transcript Language Detection & Translation
 
-Since task-192 a single, **source-agnostic** detect+translate step runs for **every**
-source — YouTube, TikTok, Instagram, audio/podcast (Deepgram), article, image OCR,
-document (PDF/DOCX/PPTX), text file (TXT/MD/RTF), X, shared notes, and any future
-source. It is **not**
-wired per source. It sits at the only point every source funnels through after a
-transcript is available and **before** artifact generation: inside
-`artifact_service.request_artifact_generation()`, via
-`core/services/transcript_translation.py::ensure_translated_transcript()`.
+A single, **source-agnostic** detect+translate step serves **every** source —
+YouTube, TikTok, Instagram, audio/podcast (Deepgram), article, image OCR, document
+(PDF/DOCX/PPTX), text file (TXT/MD/RTF), X, shared notes, and any future source. It
+is **not** wired per source: all transcripts converge on
+`ProcessingJob.transcription_s3_key`, so one insertion point covers the whole
+matrix.
 
-**Note (task-203):** The synchronous `prewarm_translated_transcript()` call that
-previously ran in every ingestion worker before `job.mark_completed()` has been
-**removed**. Translation for `/raw-content` is now triggered **lazily** on first
-access (cache miss → atomic reservation → SQS enqueue → async worker). This
-eliminates the 45s blocking timeout that was wasted on every long transcript.
-The `persist_detected_language()` side-effect has been moved into the async
-translation worker.
+**What it is for (task-398): the reader's full text, and nothing else.** Only
+`GET /api/media/{id}/raw-content` asks for a translated transcript, lazily, on
+first open (cache miss → atomic reservation → SQS enqueue → async worker), and it
+answers with the original text while the translation runs. **Artifact generation
+does not come through here.** Each generator reads the source's *original*
+transcript and is told the output language through `parameters["language"]` (the
+requester's reading language) and `corpus.language_instruction`, so an artifact
+asked for on a freshly ingested foreign media starts immediately instead of
+waiting 60-90 s for a full transcript translation.
 
-Because all transcripts converge on `ProcessingJob.transcription_s3_key` and all
-artifacts (summary_short, summary_detailed, notes, flashcards, quiz) are requested
-through `request_artifact_generation()`, this single insertion point covers the
-whole matrix with no per-worker duplication.
+**Note (task-203):** the synchronous `prewarm_translated_transcript()` call that
+previously ran in every ingestion worker before `job.mark_completed()` was
+**removed**, which eliminated the 45 s blocking timeout wasted on every long
+transcript. The `persist_detected_language()` side-effect moved into the async
+translation worker, and the artifact resolver detects the language locally for its
+corpus header.
 
 ### Pipeline position
 
 ```
 [any source worker] -> transcript in S3 (job.transcription_s3_key)
         |
-        v
-request_artifact_generation()        <-- common step lives here
-    1. detect language
-    2. decide translation
-    3. translate (GPT-5-nano) if needed   --> translated transcript in S3
-    4. fingerprint + enqueue artifact (transcript_s3_key = translated key)
+        +--> GET /api/media/{id}/raw-content   (reader, task-398 unaffected)
+        |        1. detect language
+        |        2. decide translation
+        |        3. reserve + enqueue [transcript-translation-queue]
+        |        4. worker translates (GPT-5-nano) -> translated transcript in S3
         |
-        v
-[artifact-generator-queue] -> summary / notes / flashcards / quiz
+        +--> POST /api/artifacts                (generation)
+                 reads the ORIGINAL transcript; the reading language travels in
+                 parameters["language"] -> [artifact-generator-queue]
 ```
 
 ### Step behavior
@@ -696,7 +698,7 @@ request_artifact_generation()        <-- common step lives here
 | **Decide** | Translate only when `detected_language != reading_language` (user preference from task-190) **and** the target is one of the 11 V1 languages (task-189: FR, EN, ES, DE, IT, PT, NL, JA, ZH, AR, HI). |
 | **Translate** | `gpt-5-nano-2025-08-07` via the existing OpenAI stack (task-189 owner decision). System prompt preserves oral register, paragraphs, timestamps and speaker labels. **No chunking** for V1 (400k-token window). |
 | **Persist** | Translated transcript written to the same `TRANSCRIPT_BUCKET` under a deterministic key `…​.translated.<target>.<ext>` with S3 metadata `is-translated`, `translated-from`, `target-language`. |
-| **Downstream** | The artifact request switches `transcript_s3_key` to the translated key and forces `parameters.language = target_language`, so every generator's `_build_*_prompt` produces output in the user's reading language. |
+| **Downstream** | Only the reader: `/raw-content` serves the translated key once it exists. Artifact generation never reads it — it reads the original transcript and gets its output language from `parameters["language"]` (task-398). |
 
 ### Detection method choice (justification)
 
@@ -709,9 +711,9 @@ need translating. This matches the task-189 benchmark's explicit guidance.
 
 The translation cache key is `(transcript_s3_key, target_language)`, materialized as the
 deterministic translated S3 key. Before translating, the step checks
-`s3.object_exists(...)`; an existing object is reused and never re-translated. Artifact
-generation idempotence then layers on top via the existing generation fingerprint
-(computed from the translated transcript's sha256).
+`s3.object_exists(...)`; an existing object is reused and never re-translated.
+Artifact idempotence is independent of it: `artifact_id` hashes the original
+transcript's sources plus `parameters` (reading language included).
 
 ### Observability
 
@@ -724,10 +726,10 @@ generation idempotence then layers on top via the existing generation fingerprin
 ### Failure handling
 
 Translation is retried with exponential backoff (`TRANSLATION_MAX_RETRIES`, default 3).
-On terminal failure the step falls back to passing the **original** transcript to artifact
-generation and flags `translation_failed=true` in the artifact envelope's `translation`
-block. The mobile artifact screen surfaces this as a "Translation unavailable — shown in
-&lt;language&gt;" badge so the user knows the content was not translated.
+On terminal failure the lock records the failure kind and `/raw-content` keeps
+serving the original transcript, which the transcript reader surfaces as a
+"Translation unavailable" badge. Nothing else is affected: no artifact waits on a
+translation, so a refused one fails nothing but itself (task-398).
 
 | Env var | Default | Purpose |
 |---|---|---|
@@ -737,8 +739,9 @@ block. The mobile artifact screen surfaces this as a "Translation unavailable �
 | `TRANSLATION_BACKOFF_BASE_SECONDS` | `1.0` | Exponential backoff base. |
 
 Ref: `core/services/transcript_translation.py::ensure_translated_transcript`,
-`core/services/artifact_service.py::_resolve_effective_transcript`,
-`workers/artifact_generator/worker.py` (writes the `translation` envelope block).
+`core/services/raw_content_service.py` (the only caller that asks for a
+translation), `core/services/artifact_service.py::resolve_source` (reads the
+original transcript, detects its language for the corpus header).
 
 ---
 

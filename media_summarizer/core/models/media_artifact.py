@@ -102,10 +102,13 @@ class ArtifactStorageRef(BaseModel):
 class ArtifactSource(BaseModel):
     """One entry of an artifact's immutable source snapshot.
 
-    ``transcript_s3_key`` is the key **actually** read, translation included, so
-    the snapshot designates the exact text the model saw. ``excluded`` marks a
-    source that carried no usable transcript: it is recorded rather than dropped,
-    so the artifact stays honest about what it could not read.
+    ``transcript_s3_key`` is the key the model read: the source's **original**
+    transcript, since a generation never reads a translated one (task-398). So the
+    snapshot designates the exact text the model saw. ``language`` is that text's
+    own language, not the artifact's — the output language lives in
+    ``parameters["language"]``. ``excluded`` marks a source that carried no usable
+    transcript: it is recorded rather than dropped, so the artifact stays honest
+    about what it could not read.
     """
 
     media_item_id: str
@@ -115,7 +118,7 @@ class ArtifactSource(BaseModel):
     excluded: bool = False
     excluded_reason: Optional[str] = None
     #: Set **only** while the entry is waiting for this source to become
-    #: readable: ``"transcription"`` or ``"translation"``. It is the third state
+    #: readable, and only ever ``"transcription"``. It is the third state
     #: of a snapshot line, next to read and excluded, and the reason a completion
     #: event can tell whether a waiting entry is waiting on *its* media without a
     #: second index: the entry names the sources it is still expecting.

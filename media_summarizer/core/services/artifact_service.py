@@ -57,12 +57,10 @@ from media_summarizer.core.models.media_artifact import (
 from media_summarizer.core.models.processing_job import JobStatus
 from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
 from media_summarizer.core.services.transcript_translation import (
-    TranslationInProgressError,
-    TranslationPermanentlyFailedError,
+    detect_language,
     job_source_language_hint,
     normalize_language_tag,
     persist_detected_language,
-    resolve_or_enqueue_translated_transcript,
 )
 from media_summarizer.utils import media_artifacts, s3, sqs
 from media_summarizer.utils.env import required_env
@@ -108,10 +106,10 @@ GENERATION_LEASE_SECONDS = 300
 
 # How long a request may sit waiting for its sources to become readable before it
 # becomes a `failed` entry (task-360). One hour is far above the whole pipeline
-# under load — a long podcast's transcription plus the translation of its
-# transcript — so reaching it means the preparation is stuck, not slow. Bounding
-# it is the point: an unbounded wait is a spinner nobody ends, which is what the
-# refusal it replaces at least avoided.
+# under load — a long podcast's extraction and transcription — so reaching it
+# means the preparation is stuck, not slow. Bounding it is the point: an unbounded
+# wait is a spinner nobody ends, which is what the refusal it replaces at least
+# avoided.
 AWAITING_SOURCES_TIMEOUT_SECONDS = int(
     os.environ.get("ARTIFACT_AWAITING_TIMEOUT_SECONDS", "3600")
 )
@@ -155,25 +153,23 @@ INTERNAL_ARTIFACT_TYPES = {
 GENERATABLE_ARTIFACT_TYPES = REQUESTABLE_ARTIFACT_TYPES | INTERNAL_ARTIFACT_TYPES
 
 
-# Why a source is in the snapshot without having been read. Both are recorded
-# rather than dropped: the snapshot is what makes an artifact interpretable, and
-# "13 of 15 sources" needs the two missing ones to say what happened to them.
+# Why a source is in the snapshot without having been read. Recorded rather than
+# dropped: the snapshot is what makes an artifact interpretable, and "13 of 15
+# sources" needs the two missing ones to say what happened to them.
 #: No transcript, and none is coming: the ingestion failed, was cancelled, or
 #: finished without producing readable text. Deliberately not the same fact as a
 #: transcription still running — that one is a wait, and conflating the two is
 #: what used to answer "nothing to generate" while the pipeline was working
 #: (task-360).
 EXCLUDED_REASON_TRANSCRIPT_UNAVAILABLE = "transcript_unavailable"
-#: A transcript exists, but the translation into the reading language was refused
-#: by the provider for good, so the text the corpus wanted will never exist.
-EXCLUDED_REASON_TRANSLATION_FAILED = "translation_failed"
 
-# The two preparations a request can be waiting on, recorded on the snapshot line
-# of the source it is waiting for. Which one it is decides nothing in the code —
-# both resume through the same path — but it is what makes a waiting entry
-# readable in the table and in a log.
+# The one preparation a request can be waiting on, recorded on the snapshot line
+# of the source it is waiting for. It decides nothing in the code, but it is what
+# makes a waiting entry readable in the table and in a log. There is no longer a
+# `translation` preparation: an artifact is generated from the *original*
+# transcript and its output language is carried by the prompt (task-398), so
+# nothing about a generation waits on a translation any more.
 PREPARATION_TRANSCRIPTION = "transcription"
-PREPARATION_TRANSLATION = "translation"
 
 # Pipeline stages that mean "the text is coming". Compared by value, never by
 # membership of the enum: ``JobStatus`` mixes in ``str`` but keeps ``Enum``'s
@@ -226,7 +222,7 @@ class ArtifactTypeNotEnabledError(ArtifactServiceError):
 
 
 class ArtifactTranscriptNotReadyError(ArtifactServiceError):
-    """At least one source is still being transcribed or translated.
+    """At least one source is still being transcribed.
 
     **Never reaches a user request** since task-360: a requested generation is
     deferred into a waiting entry instead of refused. What is left is the internal
@@ -250,27 +246,6 @@ class ArtifactTranscriptNotReadyError(ArtifactServiceError):
 
 class ArtifactScopeEmptyError(ArtifactServiceError):
     """The scope holds no usable source at all."""
-
-
-class ArtifactTranslationFailedError(ArtifactServiceError):
-    """Every source of the scope was dropped for a translation that will not come.
-
-    The counterpart of :class:`ArtifactTranscriptNotReadyError`, and the reason
-    the two cannot share a code: this one is not retryable, and a client told to
-    "retry in a moment" retries forever (task-327). It reaches the client as its
-    own ``error_code`` so the UI can state a failure instead of a wait.
-    """
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        failed_titles: Optional[List[str]] = None,
-        failed_count: int = 0,
-    ) -> None:
-        super().__init__(message)
-        self.failed_titles = failed_titles or []
-        self.failed_count = failed_count or len(self.failed_titles)
 
 
 class ArtifactScopeTooLargeError(ArtifactServiceError):
@@ -494,7 +469,6 @@ class ResolvedSource:
         transcript_s3_key: str,
         language: Optional[str],
         byte_length: int,
-        translation_metadata: Dict[str, Any],
         published: Optional[str] = None,
         captured: Optional[str] = None,
         description: Optional[str] = None,
@@ -502,14 +476,19 @@ class ResolvedSource:
         self.media_item_id = media_item_id
         self.content_id = content_id
         self.title = title
+        #: The **original** transcript, always: an artifact is generated from the
+        #: text as it was transcribed and the reading language is carried by the
+        #: prompt (task-398).
         self.transcript_s3_key = transcript_s3_key
+        #: The language this source is *written in*, detected locally. It goes in
+        #: the corpus header so the model knows what it is reading; it is never the
+        #: language the artifact comes out in, which is ``parameters["language"]``.
         self.language = language
         #: Transcript bytes **plus** description bytes: what the model is actually
         #: sent, which is what ``MAX_FOLDER_CORPUS_TOKENS`` has to measure. A
         #: description in the prompt but out of the count would make the ceiling
         #: report on something other than the request it guards.
         self.byte_length = byte_length
-        self.translation_metadata = translation_metadata
         #: The presentation text the author wrote next to the media — an Instagram
         #: caption, a TikTok caption, a YouTube description. Its own corpus block,
         #: never folded into the transcript: the transcript is shown verbatim in
@@ -535,7 +514,7 @@ class ResolvedSource:
 
 
 class PendingSource:
-    """One source whose text is coming but is not there yet.
+    """One source whose transcript is coming but is not there yet.
 
     Carries the same two ids as a resolved source, because both are needed and for
     different things: ``content_id`` (the deduplicated ``media_key``) enters the
@@ -569,9 +548,9 @@ class ScopeResolution:
     """What a scope resolved to: usable sources, exclusions, and the volume.
 
     ``pending`` is the third outcome and the whole of task-360: a source being
-    transcribed or translated is neither readable nor lost, so the request is
-    honoured over a source set that includes it and starts once it lands. It used
-    to abort the request with a refusal the user had to come back and retry.
+    transcribed is neither readable nor lost, so the request is honoured over a
+    source set that includes it and starts once it lands. It used to abort the
+    request with a refusal the user had to come back and retry.
     """
 
     def __init__(
@@ -580,12 +559,16 @@ class ScopeResolution:
         sources: List[ResolvedSource],
         excluded: List[ArtifactSource],
         pending: List[PendingSource],
-        target_language: Optional[str],
+        output_language: Optional[str],
     ) -> None:
         self.sources = sources
         self.excluded = excluded
         self.pending = pending
-        self.target_language = target_language
+        #: The language the artifact must be **written** in — the requester's
+        #: reading language, normalized. It reaches the model through
+        #: ``parameters["language"]`` and ``corpus.language_instruction``; no
+        #: source text is ever translated for it (task-398).
+        self.output_language = output_language
 
     @property
     def estimated_tokens(self) -> int:
@@ -656,15 +639,22 @@ async def resolve_source(
     media_item_id: str,
     content_id: str,
     title: Optional[str],
-    reading_language: Optional[str],
     captured: Optional[str] = None,
 ) -> ResolvedSource:
-    """Resolve one source to the exact text the model will read.
+    """Resolve one source to the exact text the model will read: its transcript.
 
-    Reuses the per-media path unchanged (task-189/192): detect the language
-    locally, reuse the cached translation in S3 when there is one, enqueue the
-    translation worker otherwise. So the corpus the model sees is monolingual and
-    a folder of already-read media costs nothing extra.
+    The **original** transcript, always — no translation is resolved, reserved or
+    waited on here (task-398). Asking for an artifact used to send this function
+    into the translation pipeline, which enqueued a full transcript translation and
+    made the request wait 60-90 s for it before generating, while the prompt
+    imposed the output language a second time through
+    ``corpus.language_instruction``. The reading language is carried by
+    ``parameters["language"]`` alone, so a media in any language generates
+    immediately.
+
+    The language is still detected — locally, from a source tag when the platform
+    gave one, so no LLM call and no cost — because the corpus header states what
+    each source is written in and the job keeps the answer for the reader path.
 
     ``captured`` comes from the caller because it lives on the durable library row
     while the publication date lives on the job, and the job is what this function
@@ -672,28 +662,12 @@ async def resolve_source(
     one reader that knows every platform's spelling (task-383).
     """
     transcript_s3_key, transcript_bytes = await _load_transcript_bytes(job)
-    transcript_text = transcript_bytes.decode("utf-8", errors="ignore")
-
-    outcome = await resolve_or_enqueue_translated_transcript(
-        transcript_s3_key=transcript_s3_key,
-        transcript_text=transcript_text,
-        target_language=reading_language,
-        source=getattr(job, "source_platform", None),
-        source_language_hint=job_source_language_hint(job),
-        job_id=getattr(job, "id", None),
-        transcript_bucket=TRANSCRIPT_BUCKET,
+    detected_language, _ = detect_language(
+        transcript_bytes.decode("utf-8", errors="ignore"),
+        source_hint=job_source_language_hint(job),
     )
-    await persist_detected_language(job, outcome.detected_language)
+    await persist_detected_language(job, detected_language)
 
-    if outcome.transcript_s3_key == transcript_s3_key:
-        effective_bytes = transcript_bytes
-    else:
-        effective_bytes = await s3.download_file_to_memory(
-            bucket=TRANSCRIPT_BUCKET,
-            key=outcome.transcript_s3_key,
-        )
-
-    metadata = outcome.metadata()
     # Never truncated: a cut would sever a sentence, and the corpus ceiling is the
     # right place to refuse a volume that grew too big (task-383).
     description = job_source_description(job)
@@ -702,10 +676,9 @@ async def resolve_source(
         media_item_id=media_item_id,
         content_id=content_id,
         title=title,
-        transcript_s3_key=outcome.transcript_s3_key,
-        language=metadata.get("target_language") or outcome.detected_language,
-        byte_length=len(effective_bytes) + description_bytes,
-        translation_metadata=metadata,
+        transcript_s3_key=transcript_s3_key,
+        language=detected_language,
+        byte_length=len(transcript_bytes) + description_bytes,
         published=_iso_date(getattr(job, "media_date_published", None)),
         captured=captured,
         description=description,
@@ -749,22 +722,23 @@ async def resolve_scope_sources(
     Each source lands in exactly one of three places, and the three are never
     conflated (task-360):
 
-    - **read** — its effective transcript exists and was measured;
-    - **pending** — its text is coming: the ingestion is still running, or the
-      translation into the reading language is queued (this call is what reserved
-      and dispatched it). The request is honoured over it and waits;
+    - **read** — its transcript exists and was measured;
+    - **pending** — its text is coming: the ingestion is still running. The
+      request is honoured over it and waits;
     - **excluded** — its text will never come: the ingestion failed or produced
-      nothing readable, or the provider refused the translation for good
-      (task-327). Recorded in the snapshot rather than dropped, so one broken
-      media cannot lock a folder out and the artifact stays honest about what
-      it could not read.
+      nothing readable. Recorded in the snapshot rather than dropped, so one
+      broken media cannot lock a folder out and the artifact stays honest about
+      what it could not read.
 
-    ``target_language`` is derived from the *reading language*, not from a source
-    that happened to resolve. It is the same value either way — every translation
-    outcome reports the normalized target it was asked for — and deriving it here
-    is what makes it knowable before any source is readable, hence what makes a
-    waiting entry's ``artifact_id`` equal to the one the finished resolution
-    computes.
+    A source's own language is never a reason to wait: every transcript is read
+    as it was transcribed and the output language travels in the prompt
+    (task-398), so a freshly ingested foreign media resolves as *read* on the
+    first request.
+
+    ``output_language`` is derived from the *reading language*, never from a
+    source that happened to resolve. That is what makes it knowable before any
+    source is readable, hence what makes a waiting entry's ``artifact_id`` equal
+    to the one the finished resolution computes.
     """
     from media_summarizer.core.services.durable_media_service import resolve_job_for_record
 
@@ -808,13 +782,8 @@ async def resolve_scope_sources(
                 media_item_id=media_item_id,
                 content_id=content_id,
                 title=title,
-                reading_language=reading_language,
                 captured=_iso_date(getattr(record, "saved_at", None)),
             )
-        except TranslationInProgressError:
-            return _pending(PREPARATION_TRANSLATION)
-        except TranslationPermanentlyFailedError:
-            return _excluded(EXCLUDED_REASON_TRANSLATION_FAILED)
         except ArtifactTranscriptNotReadyError:
             # No transcript behind the job yet. Whether that is a wait or a dead
             # end is the job's own status, never the absence of the file.
@@ -838,7 +807,7 @@ async def resolve_scope_sources(
         sources=resolved,
         excluded=excluded,
         pending=pending,
-        target_language=normalize_language_tag(reading_language),
+        output_language=normalize_language_tag(reading_language),
     )
 
 
@@ -1249,8 +1218,11 @@ async def plan_artifact_generation(
         )
 
     merged_parameters = dict(parameters or {})
-    if resolution.target_language:
-        merged_parameters["language"] = resolution.target_language
+    # The reading language is the *only* carrier of the output language: no source
+    # text is translated for it, the prompt asks for it (task-398). It is part of
+    # the hash, so reading in another language is another artifact.
+    if resolution.output_language:
+        merged_parameters["language"] = resolution.output_language
     normalized_parameters = normalize_artifact_parameters(merged_parameters)
 
     generator_version = get_generator_version(resolved_type)
@@ -1435,11 +1407,6 @@ def build_generation_message(
             }
             for source in resolution.sources
         ],
-        # Translation provenance of the first source, which is what the mobile
-        # renders as the "Translated from XX" badge (task-192).
-        "translation": (
-            resolution.sources[0].translation_metadata if resolution.sources else {}
-        ),
     }
 
 
@@ -1563,12 +1530,10 @@ def enforce_scope_ceilings(resolution: ScopeResolution) -> None:
     that makes the history interpretable. Same reason there is no "25 most
     recent" auto-selection: that is truncation wearing a hat.
 
-    An empty scope is refused with the reason that emptied it — and a source still
-    being prepared does not empty anything: it counts here exactly like a readable
-    one, which is what turns "nothing is transcribed yet" from a refusal into a
-    waiting entry (task-360). Only definitive exclusions can leave a scope empty,
-    and a translation the provider refused for good is one: saying so is what keeps
-    the client from retrying (task-327).
+    A source still being prepared does not empty a scope: it counts here exactly
+    like a readable one, which is what turns "nothing is transcribed yet" from a
+    refusal into a waiting entry (task-360). Only definitive exclusions — an
+    ingestion that failed or produced no readable text — can leave a scope empty.
 
     The token ceiling can only be measured on the sources that are readable, so a
     deferred request is checked again at resume, when every transcript exists.
@@ -1576,20 +1541,6 @@ def enforce_scope_ceilings(resolution: ScopeResolution) -> None:
     source_count = len(resolution.sources) + len(resolution.pending)
     estimated_tokens = resolution.estimated_tokens
     if source_count == 0:
-        translation_failed = [
-            source
-            for source in resolution.excluded
-            if source.excluded_reason == EXCLUDED_REASON_TRANSLATION_FAILED
-        ]
-        if translation_failed:
-            raise ArtifactTranslationFailedError(
-                "The translation of every source here failed and will not be "
-                "retried automatically. Try again later.",
-                failed_titles=[
-                    source.title for source in translation_failed if source.title
-                ],
-                failed_count=len(translation_failed),
-            )
         raise ArtifactScopeEmptyError(
             "This folder has no source with a usable transcript yet."
         )
