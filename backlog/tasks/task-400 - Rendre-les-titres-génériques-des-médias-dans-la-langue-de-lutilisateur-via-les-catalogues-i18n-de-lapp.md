@@ -3,9 +3,10 @@ id: TASK-400
 title: >-
   Rendre les titres génériques des médias dans la langue de l'utilisateur via
   les catalogues i18n de l'app
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 12:45'
+updated_date: '2026-09-16 16:46'
 labels:
   - backend
   - mobile
