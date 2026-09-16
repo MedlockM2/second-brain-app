@@ -125,7 +125,16 @@ manquent.
 - **`~/.local/bin/claude-bedrock`** — prérequis dur des deux scripts
   (`command -v claude-bedrock`, sinon arrêt). Wrapper d'une dizaine de lignes :
   il source `~/.config/claude-bedrock/env`, exporte `CLAUDE_CODE_USE_BEDROCK=1`
-  et fait `exec claude "$@"`. À réécrire à la main, avec `chmod +x`.
+  et `CLAUDE_CONFIG_DIR="$HOME/.claude-bedrock"`, puis fait `exec claude "$@"`.
+  À réécrire à la main, avec `chmod +x` et `mkdir -p ~/.claude-bedrock`.
+  Troisième profil, isolé de `~/.claude` (compte Mirakl par défaut, §3) et de
+  `~/.claude-pro-perso` (abonnement personnel, `scripts/testflight_session.sh`) :
+  les trois partageraient sinon `~/.claude.json`, dont le cache
+  `clientDataCacheSlots` retient le dernier modèle utilisé — `us.anthropic.claude-opus-5`
+  sous Bedrock, que l'API Claude.ai des deux autres profils refuse ensuite (même
+  piège que `testflight_session.sh`, notes 2 et 5). Aucun `claude auth login` à
+  faire dans ce profil : l'auth Bedrock passe par `AWS_BEARER_TOKEN_BEDROCK`, pas
+  par un compte Claude.ai.
 - **La registration MCP `asc-testflight`** dans `~/.claude.json` — porte
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY_PATH`, `ASC_READ_ONLY` et
   `ASC_REDACT_PII`. C'est aussi, à défaut de variables d'environnement, la source
