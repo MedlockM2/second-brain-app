@@ -434,3 +434,57 @@ def generate_article_media_key(
         f"{canonical_url.strip()}#text-sha256={content_fingerprint.strip()}"
     )
     return generate_media_key(locator)
+
+
+#: Version of the uploaded-file content-identity recipe, same role as
+#: `ARTICLE_CONTENT_IDENTITY_VERSION`: bumping it re-keys every upload, which is a
+#: decision rather than a refactor.
+UPLOAD_CONTENT_IDENTITY_VERSION = "v1"
+
+
+class UploadedFileKind(str, Enum):
+    """Which upload pipeline a file was sent through.
+
+    Part of the identity material because the pipeline behind a key is not
+    interchangeable: the very same bytes submitted as a document are parsed, and
+    submitted as audio are transcribed, so the two cannot share one media.
+    """
+
+    DOCUMENT = "document"
+    AUDIO = "audio"
+
+
+def generate_uploaded_file_media_key(
+    *,
+    kind: UploadedFileKind,
+    owner_user_id: str,
+    content_fingerprint: str,
+) -> str:
+    """The content identity of a file a user uploaded: its bytes, inside its account.
+
+    Two properties, both deliberate (task-393):
+
+    - **The fingerprint is of the content**, never of the file's name or its size.
+      A name and a byte count identify nothing: two different documents that
+      happen to share both were confounded — the user opened the wrong one — and
+      the same document re-sent under another name was re-parsed and re-paid.
+    - **The owner stays in the material**, so an uploaded file's identity never
+      crosses accounts. A private document or voice note is not mutualisable
+      content: two accounts uploading identical bytes get two medias, two
+      transcripts and two sets of artifacts. This is the one place that decides
+      it, and it is the opposite choice from a public URL, whose identity is the
+      URL alone precisely so that everybody shares one processing.
+
+    ``content_fingerprint`` is expected to carry its algorithm (``md5-<hex>``,
+    ``sha256-<hex>``): the label is what keeps two fingerprints of the same bytes
+    taken with different algorithms from ever being compared as equal.
+    """
+    if not isinstance(owner_user_id, str) or not owner_user_id.strip():
+        raise ValueError("owner user id must be a non-empty string")
+    if not isinstance(content_fingerprint, str) or not content_fingerprint.strip():
+        raise ValueError("content fingerprint must be a non-empty string")
+    locator = (
+        f"upload:{UPLOAD_CONTENT_IDENTITY_VERSION}:{kind.value}:"
+        f"{owner_user_id.strip()}#content={content_fingerprint.strip()}"
+    )
+    return generate_media_key(locator)

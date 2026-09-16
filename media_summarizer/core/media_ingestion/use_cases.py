@@ -55,8 +55,24 @@ def _normalize_shared_text(raw_text: str) -> str:
     return _EXCESS_BLANK_LINES_RE.sub("\n\n", "\n".join(lines)).strip()
 
 
-def _share_locator(*, source_platform: str, share_type: str, content_hash: str) -> str:
-    return f"share://{source_platform}/{share_type}/{content_hash}"
+def _share_locator(
+    *,
+    source_platform: str,
+    share_type: str,
+    content_hash: str,
+    owner_user_id: str | None = None,
+) -> str:
+    """The deterministic locator a shared payload is identified by.
+
+    ``owner_user_id`` is what keeps a shared **file** private (task-393): a voice
+    note someone shares is content of theirs, so its identity carries the account
+    and two users sharing identical bytes get two medias, two transcriptions and
+    two sets of artifacts. Shared *text* keeps an unscoped locator — it is not a
+    file upload, and its mutualisation is decided elsewhere.
+    """
+    owner_scope = (owner_user_id or "").strip()
+    scope = f"{owner_scope}/" if owner_scope else ""
+    return f"share://{source_platform}/{share_type}/{scope}{content_hash}"
 
 
 class IngestUrlUseCase:
@@ -197,6 +213,7 @@ class IngestSharedContentUseCase:
                 source_platform=source_platform.value,
                 share_type=share_type.value,
                 content_hash=content_hash,
+                owner_user_id=command.user.user_id,
             )
             resolved = ResolvedMedia(
                 media_key=generate_media_key(locator),

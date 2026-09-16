@@ -163,6 +163,35 @@ resource "aws_s3_bucket" "covers" {
   }
 }
 
+# SSE-S3, declared rather than inherited from the account default, on the two
+# buckets that receive client uploads. This is what makes an uploaded file's
+# identity readable at all (task-393): the API never sees the bytes, so it takes
+# the object's ETag as the MD5 of the body -- true for a single-part PUT stored in
+# the clear or under SSE-S3, false under SSE-KMS or DSSE-KMS, where the ETag
+# becomes an opaque digest of the ciphertext. Switching either bucket to a KMS key
+# is therefore a decision about content identity, not a storage detail: the
+# ingestion endpoint then answers 422 `upload_fingerprint_encrypted` for every
+# upload that carries no additional checksum, by design rather than by accident.
+resource "aws_s3_bucket_server_side_encryption_configuration" "documents" {
+  bucket = aws_s3_bucket.documents.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "audio" {
+  bucket = aws_s3_bucket.audio.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 # Client uploads land under `uploads/{user_id}/{uuid}/{filename}` through a
 # presigned PUT (task-345), and the ingestion endpoint copies them to their
 # canonical key before returning. Everything still sitting under that prefix is

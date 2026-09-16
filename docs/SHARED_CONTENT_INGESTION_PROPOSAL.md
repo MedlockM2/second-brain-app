@@ -129,7 +129,9 @@ For shared-content ingestion, `media_item.original_url` and `media_item.normaliz
 
 For task-61, they should carry deterministic opaque locators:
 - text: `share://whatsapp/text/<content-hash>`
-- audio: `share://whatsapp/audio/<content-hash>`
+- audio: `share://whatsapp/audio/<user-id>/<content-hash>` — a shared audio file is private content
+  of the sharer, so its locator carries the account and its identity never crosses accounts
+  (task-393). Shared text keeps an unscoped locator.
 
 This is intentionally pragmatic. It avoids widening every existing contract in the same task while still keeping:
 - deterministic `media_key`
