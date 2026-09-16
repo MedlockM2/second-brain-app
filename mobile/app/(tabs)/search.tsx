@@ -112,6 +112,9 @@ function hitToRow(hit: SearchHit): MediaRow {
   return {
     media_item_id: hit.media_item_id,
     title: hit.title,
+    // Carried, not resolved here: the vignette names the row it is handed, and a
+    // hit on a media nothing named must read exactly as its library row does.
+    title_label_key: hit.title_label_key,
     creator_name: hit.creator_name,
     media_type: hit.media_type,
     source_url: hit.source_url,

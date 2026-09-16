@@ -69,8 +69,8 @@ from media_summarizer.api.models.media_contracts import (
 )
 from media_summarizer.core.media_ingestion.title_derivation import (
     MAX_TITLE_LENGTH,
-    derive_media_title,
-    label_for_file_name,
+    derive_stored_title,
+    title_label_key_for_file_name,
 )
 from media_summarizer.core.models import MediaFailureCode, ProcessingJob
 from media_summarizer.core.models.auth import AuthUser
@@ -795,6 +795,11 @@ class MediaSearchItem(BaseModel):
 
     media_item_id: str
     title: Optional[str] = None
+    # Set only when ``title`` is null: the key of the label the app renders as
+    # "<label> — <created_at>" in the reader's own language (task-400). The two are
+    # mutually exclusive, and a client that does not know the key falls back to its
+    # own "Untitled".
+    title_label_key: Optional[str] = None
     # The triage card mirrored from the ``review_blurb`` artifact (task-323): the
     # hook, its bullets and who it is for. Null until that artifact completes, and
     # null forever on an item whose generation failed -- a row without a blurb is a
@@ -1092,6 +1097,7 @@ def _build_media_item_contract(
         media_item_id=record.media_item_id,
         media_key=record.media_key or record.media_item_id,
         title=record.title,
+        title_label_key=record.title_label_key,
         media_image=cover_url,
         creator_name=record.creator_name,
         original_url=record.source_url or "",
@@ -1565,14 +1571,18 @@ async def upload_document(
 
         # Title stored right away (task-266): the cleaned filename when it says
         # something -- "Grant Deed_Security.pdf" reads "Grant Deed Security" --
-        # otherwise the media type plus the upload date, which is the owner's
-        # rule for a camera capture or a library pick whose name is `IMG_4821`.
-        # The parsing worker upgrades it later if the document carries a title.
-        media_title = derive_media_title(
+        # otherwise a label key the app renders with the upload date, which is the
+        # owner's rule for a camera capture or a library pick whose name is
+        # `IMG_4821`. The key is chosen from the extension rather than from the
+        # media type: every import is filed as a `document` row, and an image among
+        # them must still read "Photo" (task-400).
+        # The parsing worker upgrades the title later if the document carries one.
+        derived_title = derive_stored_title(
             [],
-            label=label_for_file_name(file_name),
+            label_key=title_label_key_for_file_name(file_name),
             file_name_candidates=[file_name],
         )
+        media_title = derived_title.title
         # No cover here, for any format: this handler never sees the bytes. The
         # parsing worker builds it once the object sits at its canonical key and
         # the parse is done, and mirrors it back -- the photo itself for a capture
@@ -1589,6 +1599,7 @@ async def upload_document(
             user_id=user.id,
             media_key=media_key,
             title=media_title,
+            title_label_key=derived_title.label_key,
             source_platform="document",
             media_type="document",
             folder_id=resolved_folder_id,
@@ -1746,16 +1757,17 @@ async def upload_audio(
             content_fingerprint=staged.content_fingerprint,
         )
 
-        # Cleaned filename when it carries a name of its own, otherwise
-        # "Audio note — <date>" (task-266). A voice memo exported as
-        # `AUD-20260817-WA0002.opus` has no title to read, and the raw filename
-        # was never one.
-        media_title = derive_media_title(
+        # Cleaned filename when it carries a name of its own, otherwise the
+        # `audio_note` label key the app renders with the upload date (task-266,
+        # task-400). A voice memo exported as `AUD-20260817-WA0002.opus` has no
+        # title to read, and the raw filename was never one.
+        derived_title = derive_stored_title(
             [],
             media_type="audio",
             source_platform="audio",
             file_name_candidates=[file_name],
         )
+        media_title = derived_title.title
         # No cover and no creator for an audio upload, by construction: the file
         # goes straight to Deepgram, and reading an ID3 `APIC`/`artist` tag would
         # need `mutagen` in the runtime for a payoff limited to ripped podcast
@@ -1780,6 +1792,7 @@ async def upload_audio(
             user_id=user.id,
             media_key=media_key,
             title=media_title,
+            title_label_key=derived_title.label_key,
             source_platform="audio",
             media_type="audio",
             folder_id=resolved_folder_id,

@@ -34,8 +34,8 @@ from media_summarizer.core.media_ingestion.media_metadata import (
 )
 from media_summarizer.core.media_ingestion.ports import ContentResolverPort
 from media_summarizer.core.media_ingestion.title_derivation import (
-    derive_media_title,
     first_sentence,
+    select_title,
 )
 from media_summarizer.utils.logging_config import log_event
 
@@ -263,11 +263,11 @@ class InstagramApifyResolver(ContentResolverPort):
                 duration_seconds = None
 
         caption = _extract_caption(item)
-        # Caption first, account name never (task-266).
-        title = derive_media_title(
+        # Caption first, account name never (task-266). A caption that normalises
+        # to nothing leaves the title unset: the orchestrator is the one place that
+        # turns "no title" into a label key (task-400).
+        title = select_title(
             [first_sentence(caption)],
-            media_type=MediaType.SHORT_VIDEO.value,
-            source_platform=SourcePlatform.INSTAGRAM.value,
             authors=[item.get("ownerFullName"), item.get("ownerUsername")],
         )
         # The account the reel belongs to. Same two fields the title rejects --
@@ -361,10 +361,8 @@ class InstagramApifyResolver(ContentResolverPort):
             "caption": caption,
         }
 
-        post_title = derive_media_title(
+        post_title = select_title(
             [first_sentence(caption)],
-            media_type=MediaType.IMAGE_POST.value,
-            source_platform=SourcePlatform.INSTAGRAM.value,
             authors=[item.get("ownerFullName"), item.get("ownerUsername")],
         )
         resolved = ResolvedMedia(

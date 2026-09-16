@@ -4,8 +4,8 @@ Implements the derivation the owner retained at the end of task-265
 (`docs/research/task-265-media-title-derivation/README.md`, `Decision`):
 **approach A -- per-source metadata plumbing**, with no model call anywhere.
 Each producer reads the title its provider already returns, passes it through
-the deterministic distrust rules below, and falls back to a human-readable
-platform label plus the save date when nothing survives.
+the deterministic distrust rules below, and falls back to a platform label plus
+the save date when nothing survives.
 
 Three refinements the owner spelled out, all handled here:
 
@@ -14,9 +14,16 @@ Three refinements the owner spelled out, all handled here:
   ``Video by <user>``), so the beginning of the description is the title --
   never the account name.
 * **Photos** (camera capture or library pick) use their metadata title when the
-  parser surfaces one, else ``<media type> -- <upload date>``.
+  parser surfaces one, else the ``photo`` label plus the upload date.
 * **Imported files** take their title from the document metadata, the cleaned
   filename being only the next candidate.
+
+The last-resort label is **not a string** (task-400). A media whose metadata
+yields nothing is stored with a *label key* and its save date, and the app draws
+``<label> — <date>`` from its own i18n catalogues in the reader's language with a
+locale-formatted date. Building the sentence here would hardcode English and a
+C-locale date into the library row, which is exactly what a TestFlight tester on
+fr-FR reported seeing ("Article — 10 Sep 2026").
 
 Everything in this module is pure: no I/O, no provider call, no LLM. The
 rejection rules are the closed list of *provable* rejections of the benchmark
@@ -27,8 +34,7 @@ absent because they are guesswork (§6.2).
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, NamedTuple, Optional, Sequence
 from urllib.parse import unquote, urlsplit
 
 MAX_TITLE_LENGTH = 120
@@ -143,36 +149,65 @@ _TRAILING_HASHTAGS_RE = re.compile(r"(?:\s+[#@][^\s#@]+)+\s*$")
 _LEADING_HASHTAGS_RE = re.compile(r"^(?:[#@][^\s#@]+\s+)+")
 _ONLY_PUNCTUATION_RE = re.compile(r"^[\W_]+$", re.UNICODE)
 
-# Human-readable last-resort labels (benchmark §9.2). Keyed by media type first
-# because that is what the user sees in the Inbox badge, then specialised by
-# platform where the platform name is the more informative half.
-_MEDIA_TYPE_LABELS = {
-    "youtube_video": "YouTube video",
-    "podcast_episode": "Podcast episode",
-    "article": "Article",
-    "short_video": "Video",
-    "image_post": "Image post",
-    "audio_file": "Audio note",
-    "audio": "Audio note",
-    "shared_text": "Shared note",
-    "document": "Document",
-    "photo": "Photo",
-    "image": "Photo",
+# Last-resort label *keys* (benchmark §9.2, made translatable by task-400).
+#
+# These are wire values: they are written to the library row, travel in every
+# media contract the app reads, and are mapped to a catalogue entry client-side
+# (`mobile/src/lib/mediaTitle.ts`). Renaming one is a contract change: a build
+# that does not know a key reads it as "Saved item", so the rename would silently
+# unlabel every row it touched.
+#
+# Keyed by media type first because that is what the user sees in the Inbox
+# badge, then specialised by platform where the platform name is the more
+# informative half.
+_MEDIA_TYPE_LABEL_KEYS = {
+    "youtube_video": "youtube_video",
+    "podcast_episode": "podcast_episode",
+    "article": "article",
+    "short_video": "video",
+    "image_post": "image_post",
+    "audio_file": "audio_note",
+    "audio": "audio_note",
+    "shared_text": "shared_note",
+    "document": "document",
+    "photo": "photo",
+    "image": "photo",
 }
 
-_PLATFORM_LABELS = {
-    ("short_video", "instagram"): "Instagram video",
-    ("short_video", "tiktok"): "TikTok video",
-    ("image_post", "instagram"): "Instagram post",
-    ("article", "x"): "X post",
-    ("article", "rss"): "Article",
+_PLATFORM_LABEL_KEYS = {
+    ("short_video", "instagram"): "instagram_video",
+    ("short_video", "tiktok"): "tiktok_video",
+    ("image_post", "instagram"): "instagram_post",
+    ("article", "x"): "x_post",
+    ("article", "rss"): "article",
     # A voice note is the only thing WhatsApp still labels: since task-380 a
-    # shared text is attributed to the notes source, and `_MEDIA_TYPE_LABELS`
-    # already labels `shared_text` for every platform.
-    ("audio_file", "whatsapp"): "Voice note",
+    # shared text is attributed to the notes source, and
+    # `_MEDIA_TYPE_LABEL_KEYS` already labels `shared_text` for every platform.
+    ("audio_file", "whatsapp"): "voice_note",
 }
 
-_DEFAULT_LABEL = "Saved item"
+_DEFAULT_LABEL_KEY = "saved_item"
+
+# The closed set the app must hold a translation for. Exported so a reader of
+# either side can check the two lists against each other.
+TITLE_LABEL_KEYS = frozenset(
+    set(_MEDIA_TYPE_LABEL_KEYS.values())
+    | set(_PLATFORM_LABEL_KEYS.values())
+    | {_DEFAULT_LABEL_KEY}
+)
+
+
+class DerivedTitle(NamedTuple):
+    """What a save stores for its title: one of the two fields, never both.
+
+    ``title`` is a real, human-readable title that survived the rejection rules.
+    ``label_key`` is set instead when nothing did, and the app renders
+    ``<label> — <save date>`` from it. Both null is impossible: a save always
+    gets one or the other.
+    """
+
+    title: Optional[str]
+    label_key: Optional[str]
 
 
 def _normalize_for_comparison(value: str) -> str:
@@ -347,55 +382,40 @@ def first_markdown_heading(markdown: Optional[str]) -> Optional[str]:
     return None
 
 
-def media_type_label(
+def title_label_key_for(
     *,
     media_type: Optional[str] = None,
     source_platform: Optional[str] = None,
 ) -> str:
-    """Human-readable label for a media, e.g. ``YouTube video``, ``Photo``."""
+    """Label key for a media, e.g. ``youtube_video``, ``photo``, ``saved_item``."""
     media = (media_type or "").strip().lower()
     platform = (source_platform or "").strip().lower()
 
-    specialised = _PLATFORM_LABELS.get((media, platform))
+    specialised = _PLATFORM_LABEL_KEYS.get((media, platform))
     if specialised:
         return specialised
-    label = _MEDIA_TYPE_LABELS.get(media)
-    if label:
-        return label
+    key = _MEDIA_TYPE_LABEL_KEYS.get(media)
+    if key:
+        return key
     if platform == "youtube":
-        return "YouTube video"
+        return "youtube_video"
     if platform == "instagram":
-        return "Instagram video"
+        return "instagram_video"
     if platform == "tiktok":
-        return "TikTok video"
-    return _DEFAULT_LABEL
+        return "tiktok_video"
+    return _DEFAULT_LABEL_KEY
 
 
-def label_for_file_name(file_name: Optional[str]) -> str:
-    """``Photo`` for an image upload, ``Document`` for anything else."""
+def title_label_key_for_file_name(file_name: Optional[str]) -> str:
+    """``photo`` for an image upload, ``document`` for anything else.
+
+    The upload path needs this because it files every import under
+    ``media_type="document"``: an image picked from the library is a document row
+    that must still read "Photo", which no ``media_type`` mapping can tell.
+    """
     name = (file_name or "").strip().lower()
     ext = name.rsplit(".", 1)[-1] if "." in name else ""
-    return "Photo" if ext in _IMAGE_EXTENSIONS else "Document"
-
-
-def fallback_title(
-    *,
-    media_type: Optional[str] = None,
-    source_platform: Optional[str] = None,
-    label: Optional[str] = None,
-    when: Optional[datetime] = None,
-) -> str:
-    """Last-resort title: platform label plus the save date (benchmark §9.2).
-
-    Distinguishable (the date differs between two failures), readable, honest,
-    and never an empty string -- Algolia stores this value in its top-ranked
-    searchable attribute, so ``""`` and a source URL are both unacceptable.
-    """
-    moment = when or datetime.now(timezone.utc)
-    resolved_label = label or media_type_label(
-        media_type=media_type, source_platform=source_platform
-    )
-    return f"{resolved_label} — {moment.strftime('%d %b %Y')}"
+    return "photo" if ext in _IMAGE_EXTENSIONS else "document"
 
 
 def select_title(
@@ -411,9 +431,9 @@ def select_title(
     ``file_name_candidates`` are filenames, tried after them and cleaned as
     filenames (extension dropped, separators collapsed).
 
-    Workers use this rather than `derive_media_title`: a worker that learns
-    nothing new must leave the stored title alone instead of replacing it with a
-    freshly dated fallback, which would only churn the value.
+    Workers and resolvers use this rather than `derive_stored_title`: only the
+    save that creates the library row decides the label key, so a producer that
+    learns nothing new returns ``None`` and leaves the row alone.
     """
     for raw in candidates:
         normalized = normalize_title_candidate(raw)
@@ -432,21 +452,25 @@ def select_title(
     return None
 
 
-def derive_media_title(
+def derive_stored_title(
     candidates: Sequence[Optional[str]],
     *,
     media_type: Optional[str] = None,
     source_platform: Optional[str] = None,
-    label: Optional[str] = None,
+    label_key: Optional[str] = None,
     authors: Iterable[Optional[str]] = (),
     site_names: Iterable[Optional[str]] = (),
     file_name_candidates: Sequence[Optional[str]] = (),
-    when: Optional[datetime] = None,
-) -> str:
-    """Return the title to store, never empty.
+) -> DerivedTitle:
+    """What to store for this save's title: a real title, or a label key.
 
-    `select_title` first; when nothing survives, the deterministic label of
-    `fallback_title`.
+    `select_title` first; when nothing survives, the deterministic label key of
+    `title_label_key_for` -- or ``label_key`` when the caller knows better than
+    the media type does (the upload path, which labels by file extension).
+
+    The date half of a generic title is not returned: the row already carries its
+    ``saved_at``, which every contract exposes as ``created_at``, and that is what
+    the app formats.
     """
     selected = select_title(
         candidates,
@@ -455,11 +479,12 @@ def derive_media_title(
         file_name_candidates=file_name_candidates,
     )
     if selected:
-        return selected
+        return DerivedTitle(title=selected, label_key=None)
 
-    return fallback_title(
-        media_type=media_type,
-        source_platform=source_platform,
-        label=label,
-        when=when,
+    return DerivedTitle(
+        title=None,
+        label_key=label_key
+        or title_label_key_for(
+            media_type=media_type, source_platform=source_platform
+        ),
     )

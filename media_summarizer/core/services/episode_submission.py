@@ -9,7 +9,7 @@ attempt Podcasting 2.0 transcript retrieval before audio download.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from media_summarizer.core.services.media_submission import submit_media_for_user
 
@@ -18,7 +18,8 @@ async def submit_episode_for_user(
     *,
     user: Any,
     episode_guid: str,
-    episode_title: str,
+    episode_title: Optional[str],
+    episode_title_label_key: Optional[str] = None,
     feed_title: str,
     audio_url: str,
     duration_seconds: int,
@@ -37,7 +38,10 @@ async def submit_episode_for_user(
     Args:
         user: Authenticated user object (must have .id and .email).
         episode_guid: Unique episode GUID (used as media_key).
-        episode_title: Human-readable episode title.
+        episode_title: Human-readable episode title, or ``None`` when the index
+            named the episode nothing usable.
+        episode_title_label_key: Label key the app renders with the save date,
+            set only when ``episode_title`` is ``None`` (task-400).
         feed_title: Podcast/feed title.
         audio_url: Direct URL to the audio enclosure.
         duration_seconds: Episode duration in seconds (0 if unknown).
@@ -54,6 +58,7 @@ async def submit_episode_for_user(
         user=user,
         media_key=episode_guid,
         media_title=episode_title,
+        media_title_label_key=episode_title_label_key,
         source_title=feed_title,
         audio_url=audio_url,
         duration_seconds=duration_seconds,

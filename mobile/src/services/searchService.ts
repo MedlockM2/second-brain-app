@@ -20,6 +20,13 @@ export interface SearchHitHighlight {
 export interface SearchHit {
   media_item_id: string;
   title: string | null;
+  /**
+   * Set only when the media has no title: the key of the label the vignette
+   * renders as "<label> — <created_at>" (task-400). Read from the library row
+   * like everything else here, so a hit is named exactly as its library row is
+   * — the index itself holds an empty title for such a media.
+   */
+  title_label_key: string | null;
   /** Publisher of the media (channel, show, site), or null. */
   creator_name: string | null;
   source_platform: string | null;

@@ -26,6 +26,7 @@ import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { MediaService } from "../services/mediaService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
+import { resolveMediaTitle } from "../lib/mediaTitle";
 import { t } from "../i18n";
 import type { MediaListItem } from "../types/media";
 import type {
@@ -55,6 +56,14 @@ const MAX_TITLE_LENGTH = 120;
 export interface MediaActionSource {
   media_item_id: string;
   title?: string | null;
+  /**
+   * Read together with `created_at` to name a media nothing named (task-400):
+   * both the confirmation that says which media is about to be deleted and the
+   * rename field have to start from the name the user is looking at.
+   */
+  title_label_key?: string | null;
+  /** ISO 8601 save date, part of the name of an untitled media. */
+  created_at?: string | null;
   folder_id?: string | null;
 }
 
@@ -130,9 +139,11 @@ export function useMediaActions<
   const open = useCallback((item: T, rect: AnchorRect) => {
     setTarget({
       mediaItemId: item.media_item_id,
-      // Backend titles are never empty (task-266); the fallback is for a rename
-      // field that must always start from something.
-      title: item.title?.trim() || t("common.untitled"),
+      // The name the user is looking at, which for a media nothing named is the
+      // one the app builds from its label key and its save date (task-400): the
+      // menu speaks about the row that was pressed, and the rename field starts
+      // from what that row shows.
+      title: resolveMediaTitle(item),
       folderId: item.folder_id ?? null,
       item,
     });

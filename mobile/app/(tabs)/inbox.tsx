@@ -576,6 +576,11 @@ function toEngagementTile(entry: RecentEngagement): HomeTileItem {
     kind: "media",
     id: entry.id,
     title: entry.title ?? null,
+    // What names a media nothing named (task-400). `created_at` on this payload
+    // is the media's *save* date, not the engagement's — `engaged_at` would date
+    // the tile by when it was last read, which is not what it is called.
+    titleLabelKey: entry.title_label_key ?? null,
+    savedAt: entry.created_at ?? null,
     creator: entry.creator_name ?? null,
     imageUrl: entry.image_url ?? null,
     // No `updated_at` on this payload, and `engaged_at` would churn the cache on
@@ -607,6 +612,8 @@ function buildRecentlyAdded(media: MediaListItem[]): HomeTileItem[] {
         kind: "media" as const,
         id: item.media_item_id,
         title: item.title ?? null,
+        titleLabelKey: item.title_label_key ?? null,
+        savedAt: item.created_at,
         creator: item.creator_name ?? null,
         imageUrl: item.media_image ?? null,
         cacheKey: `${item.media_item_id}:${item.updated_at}`,

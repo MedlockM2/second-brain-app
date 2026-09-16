@@ -22,7 +22,7 @@ from media_summarizer.api.models.podcast_models import (
     TrendingPodcastsResponse,
 )
 from media_summarizer.api.rate_limit import get_limit_from_env, limiter
-from media_summarizer.core.media_ingestion.title_derivation import derive_media_title
+from media_summarizer.core.media_ingestion.title_derivation import derive_stored_title
 from media_summarizer.core.models.auth import AuthUser
 from media_summarizer.core.services.episode_submission import submit_episode_for_user
 from media_summarizer.utils import database_async, podcast_index
@@ -262,13 +262,16 @@ async def submit_episode_for_processing(
         # Episode title as the index returned it, validated by the shared
         # derivation (task-266): the placeholder that used to sit here was a
         # constant French string, identical for every episode the index answered
-        # without a title, and it was stored as-is in the library.
-        episode_title = derive_media_title(
+        # without a title, and it was stored as-is in the library. An episode the
+        # index names not at all is stored with the `podcast_episode` label key
+        # instead, and named by the app (task-400).
+        derived_title = derive_stored_title(
             [episode_info.get("title")],
             media_type="podcast_episode",
             source_platform="podcast_index",
             site_names=[feed_title],
         )
+        episode_title = derived_title.title
         episode_image = episode_info.get("image", "")
 
         # Ensure date_published is an integer
@@ -295,6 +298,7 @@ async def submit_episode_for_processing(
             user=user,
             episode_guid=payload.episode_guid,
             episode_title=episode_title,
+            episode_title_label_key=derived_title.label_key,
             feed_title=feed_title,
             audio_url=audio_url,
             duration_seconds=duration_seconds,

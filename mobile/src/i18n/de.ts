@@ -746,4 +746,23 @@ export const de: Catalog = {
   "startupError.body":
     "Ein unerwarteter Fehler hat den Start der App unterbrochen. Ein neuer Versuch genügt meistens.",
   "startupError.retryA11y": "Erneut versuchen, die App zu starten",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "YouTube-Video",
+  "mediaTitle.label.podcastEpisode": "Podcast-Folge",
+  "mediaTitle.label.article": "Artikel",
+  "mediaTitle.label.video": "Video",
+  "mediaTitle.label.imagePost": "Bildbeitrag",
+  "mediaTitle.label.instagramVideo": "Instagram-Video",
+  "mediaTitle.label.tiktokVideo": "TikTok-Video",
+  "mediaTitle.label.instagramPost": "Instagram-Beitrag",
+  "mediaTitle.label.xPost": "X-Beitrag",
+  "mediaTitle.label.audioNote": "Audionotiz",
+  "mediaTitle.label.voiceNote": "Sprachnachricht",
+  "mediaTitle.label.sharedNote": "Geteilte Notiz",
+  "mediaTitle.label.document": "Dokument",
+  "mediaTitle.label.photo": "Foto",
+  "mediaTitle.label.savedItem": "Gespeichertes Element",
+
+  "folder.sourceOpenA11y": "{title} öffnen",
 };

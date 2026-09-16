@@ -214,9 +214,13 @@ class MediaItemContract(BaseModel):
     media_key: str
     # Display title as stored on the durable library row -- the very value the
     # list endpoint returns, so the detail screen and the inbox show the same
-    # thing instead of each inventing a label. Nullable: a row whose metadata has
-    # not resolved yet carries no title, and clients degrade to the source URL.
+    # thing instead of each inventing a label. Nullable: nothing the source
+    # exposed was usable as a title.
     title: Optional[str] = None
+    # Set only when ``title`` is null: the key of the label the client renders as
+    # "<label> — <created_at>" in the reader's own language (task-400). Same pair
+    # as the list endpoint, so the detail header and the tile read alike.
+    title_label_key: Optional[str] = None
     # Cover and publisher, same two values the list endpoint returns, so the
     # detail header and the Inbox tile cannot disagree (task-304). `media_image`
     # is already resolved into a fetchable URL by the endpoint -- clients never

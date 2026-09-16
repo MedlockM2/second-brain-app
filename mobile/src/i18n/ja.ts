@@ -616,4 +616,25 @@ export const ja: Catalog = {
   "startupError.body":
     "予期しないエラーで起動が中断されました。もう一度試すと、たいてい復帰できます。",
   "startupError.retryA11y": "アプリの起動をもう一度試す",
+
+  // Japanese parenthesises the date rather than dashing it: the dash pattern of
+  // the reference catalogue reads as a typo here.
+  "mediaTitle.generic": "{label}（{date}）",
+  "mediaTitle.label.youtubeVideo": "YouTube動画",
+  "mediaTitle.label.podcastEpisode": "ポッドキャストのエピソード",
+  "mediaTitle.label.article": "記事",
+  "mediaTitle.label.video": "動画",
+  "mediaTitle.label.imagePost": "画像の投稿",
+  "mediaTitle.label.instagramVideo": "Instagram動画",
+  "mediaTitle.label.tiktokVideo": "TikTok動画",
+  "mediaTitle.label.instagramPost": "Instagramの投稿",
+  "mediaTitle.label.xPost": "Xの投稿",
+  "mediaTitle.label.audioNote": "音声メモ",
+  "mediaTitle.label.voiceNote": "ボイスメッセージ",
+  "mediaTitle.label.sharedNote": "共有されたメモ",
+  "mediaTitle.label.document": "ドキュメント",
+  "mediaTitle.label.photo": "写真",
+  "mediaTitle.label.savedItem": "保存した項目",
+
+  "folder.sourceOpenA11y": "{title}を開く",
 };

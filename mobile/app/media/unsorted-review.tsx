@@ -57,6 +57,7 @@ import { FolderSaveSheet } from "../../src/components/FolderSaveSheet";
 import { buildFolderTree } from "../../src/lib/folderTree";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import { getMediaTypeIcon } from "../../src/lib/mediaTypeDisplay";
+import { resolveMediaTitle } from "../../src/lib/mediaTitle";
 import { MediaService } from "../../src/services/mediaService";
 import { OrganizationService } from "../../src/services/organizationService";
 import type { MediaListItem, MediaType } from "../../src/types/media";
@@ -234,6 +235,10 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   );
 
   const current = items[activeIndex];
+  // What the three action labels say they act on. Named through the catalogues
+  // like the card itself, so a media nothing named is announced as the card
+  // shows it rather than as an empty string (task-400).
+  const currentTitle = current ? resolveMediaTitle(current) : "";
 
   /**
    * Discard: the deletion goes out on the first tap, with no confirmation.
@@ -450,7 +455,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
                   disabled={isMutating}
                   testID="unsorted-review-discard"
                   accessibilityLabel={t("unsortedReview.discardA11y", {
-                    title: current?.title ?? "",
+                    title: currentTitle,
                   })}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: isMutating }}
@@ -475,7 +480,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
                 onPress={handleDeepen}
                 testID="unsorted-review-deepen"
                 accessibilityLabel={t("unsortedReview.deepenA11y", {
-                  title: current?.title ?? "",
+                  title: currentTitle,
                 })}
                 accessibilityRole="button"
               >
@@ -499,7 +504,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
                   disabled={isMutating}
                   testID="unsorted-review-save"
                   accessibilityLabel={t("unsortedReview.saveA11y", {
-                    title: current?.title ?? "",
+                    title: currentTitle,
                   })}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: isMutating }}
@@ -712,7 +717,7 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
 
           <View style={styles.cardHeading}>
             <Text style={styles.cardTitle} numberOfLines={3}>
-              {item.title}
+              {resolveMediaTitle(item)}
             </Text>
             {subtitle ? (
               <Text style={styles.cardCreator} numberOfLines={1}>

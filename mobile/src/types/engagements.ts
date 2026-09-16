@@ -25,6 +25,18 @@ export interface RecentEngagement {
   /** Media item id, or folder id — whichever `kind` says. */
   id: string;
   title?: string | null;
+  /**
+   * Media only, and only when `title` is null: the key of the label the tile
+   * renders as "<label> — <created_at>" (task-400). A folder always has a name,
+   * so it never carries one.
+   */
+  title_label_key?: string | null;
+  /**
+   * Media only: when the media was *saved*, not when it was engaged with — the
+   * date the generic title above carries. Both are projected by the
+   * `engaged-index`, so naming a tile costs no extra read server-side.
+   */
+  created_at?: string | null;
   engaged_at: string;
   /** Media only: publisher of the media (a channel, a show, a site, an account). */
   creator_name?: string | null;

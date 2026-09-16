@@ -8,7 +8,7 @@ In V1, notifications are delivered via mobile app polling, not email.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from media_summarizer.core.media_ingestion.media_metadata import select_creator
 from media_summarizer.core.models import ProcessingJob, UserMediaStatus
@@ -42,7 +42,8 @@ async def submit_media_for_user(
     *,
     user: Any,
     media_key: str,
-    media_title: str,
+    media_title: Optional[str],
+    media_title_label_key: Optional[str] = None,
     source_title: str,
     audio_url: str,
     duration_seconds: int,
@@ -90,6 +91,7 @@ async def submit_media_for_user(
         user_id=user.id,
         media_key=media_key,
         title=media_title,
+        title_label_key=media_title_label_key,
         creator_name=creator_name,
         source_url=audio_url,
         source_platform=source or "audio",

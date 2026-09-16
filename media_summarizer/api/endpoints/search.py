@@ -59,6 +59,15 @@ class SearchHit(BaseModel):
 
     media_item_id: str = Field(..., description="ID of the matching media item")
     title: Optional[str] = Field(None, description="Media title")
+    title_label_key: Optional[str] = Field(
+        None,
+        description=(
+            "Set only when the media has no title: the key of the label the client "
+            "renders as '<label> — <created_at>' in the reader's language "
+            "(task-400). Read from the library row, so a media the index holds "
+            "with an empty title still shows the same name as in the library."
+        ),
+    )
     creator_name: Optional[str] = Field(None, description="Publisher of the media")
     source_platform: Optional[str] = Field(None, description="Source platform")
     media_type: Optional[str] = Field(
@@ -217,6 +226,7 @@ async def search_transcripts(
                 SearchHit(
                     media_item_id=hit_data.get("media_item_id", ""),
                     title=detail.get("title") or hit_data.get("title") or None,
+                    title_label_key=detail.get("title_label_key") or None,
                     creator_name=detail.get("creator_name") or None,
                     source_platform=hit_data.get("source_platform") or None,
                     media_type=detail.get("media_type") or None,

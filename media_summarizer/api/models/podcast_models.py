@@ -93,7 +93,9 @@ class EpisodeSelectionResponse(BaseModel):
     message: str = Field(..., description="Response message")
     minutes_hold_estimated: int = Field(..., description="Estimated minutes placed on hold for this job")
     estimated_processing_time: str = Field(..., description="Estimated processing time")
-    episode_title: str = Field(..., description="Selected episode title")
+    # Null when the index named the episode nothing usable: the library row then
+    # carries a label key instead, and the app names it (task-400).
+    episode_title: Optional[str] = Field(None, description="Selected episode title")
     podcast_title: str = Field(..., description="Podcast title")
 
 

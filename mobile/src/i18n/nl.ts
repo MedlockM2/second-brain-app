@@ -644,4 +644,23 @@ export const nl: Catalog = {
   "startupError.body":
     "Een onverwachte fout heeft het opstarten van de app onderbroken. Opnieuw proberen helpt meestal.",
   "startupError.retryA11y": "Probeer de app opnieuw te starten",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "YouTube-video",
+  "mediaTitle.label.podcastEpisode": "Podcastaflevering",
+  "mediaTitle.label.article": "Artikel",
+  "mediaTitle.label.video": "Video",
+  "mediaTitle.label.imagePost": "Fotobericht",
+  "mediaTitle.label.instagramVideo": "Instagram-video",
+  "mediaTitle.label.tiktokVideo": "TikTok-video",
+  "mediaTitle.label.instagramPost": "Instagram-bericht",
+  "mediaTitle.label.xPost": "X-bericht",
+  "mediaTitle.label.audioNote": "Audionotitie",
+  "mediaTitle.label.voiceNote": "Spraakbericht",
+  "mediaTitle.label.sharedNote": "Gedeelde notitie",
+  "mediaTitle.label.document": "Document",
+  "mediaTitle.label.photo": "Foto",
+  "mediaTitle.label.savedItem": "Bewaard item",
+
+  "folder.sourceOpenA11y": "{title} openen",
 };

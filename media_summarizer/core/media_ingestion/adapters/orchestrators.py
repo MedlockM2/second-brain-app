@@ -21,7 +21,7 @@ from media_summarizer.core.media_ingestion.media_metadata import (
     select_creator,
 )
 from media_summarizer.core.media_ingestion.ports import SubmissionOrchestratorPort
-from media_summarizer.core.media_ingestion.title_derivation import derive_media_title
+from media_summarizer.core.media_ingestion.title_derivation import derive_stored_title
 from media_summarizer.core.models import (
     JobStatus,
     MediaFailureCode,
@@ -468,10 +468,13 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         # Single derivation point for the title stored at submission (task-266).
         # Resolvers put whatever their provider already knows in `resolved.title`;
         # here it is validated against the deterministic distrust rules and, when
-        # nothing survives, replaced by a readable "<label> — <date>" fallback.
+        # nothing survives, the row is stored with a *label key* instead and the
+        # app draws "<label> — <save date>" from its own catalogues (task-400).
         # A worker that later learns the real title (YouTube, TikTok, article,
-        # document) overwrites this value through the durable mirror.
-        title = derive_media_title(
+        # document) overwrites this value through the durable mirror; the label key
+        # stays on the row and is simply no longer read, because a non-null title
+        # always wins over it.
+        derived = derive_stored_title(
             [resolved.title],
             media_type=resolved.media_type.value,
             source_platform=resolved.source_platform.value,
@@ -479,6 +482,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                 resolved.metadata.get("original_name") if resolved.metadata else None
             ],
         )
+        title = derived.title
 
         # The durable library entry is created FIRST (task-218 §4.3): everything
         # below it -- the idempotence reservation, the processing job, the queue
@@ -498,6 +502,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             user_id=command.user.user_id,
             media_key=resolved.media_key,
             title=title,
+            title_label_key=derived.label_key,
             creator_name=creator_name,
             thumbnail_url=cover_url,
             source_url=resolved.normalized_url,

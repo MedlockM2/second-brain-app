@@ -37,6 +37,7 @@ import { mergeArtifactIntoHistory } from "../../../src/lib/artifactHistory";
 import { sameSourceSet } from "../../../src/lib/artifactSources";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
 import { getMediaTypeIcon } from "../../../src/lib/mediaTypeDisplay";
+import { resolveMediaTitle } from "../../../src/lib/mediaTitle";
 import {
   buildFolderTree,
   type FolderNode,
@@ -748,6 +749,10 @@ interface SourceRowProps {
 function SourceRow({ media, onPress, onLongPress, style }: SourceRowProps) {
   const mediaType = (media.media_type ?? "unknown") as MediaType;
   const rowRef = useRef<View>(null);
+  // The same name every other surface shows, built from the label key and the
+  // save date when the row holds no title (task-400). The source URL that used
+  // to stand in here is gone: it is not a name, and it read as one.
+  const title = resolveMediaTitle(media);
 
   // Measured on the gesture rather than on layout: a `FlatList` cell moves with
   // every scroll, so the only rect the menu can trust is the one taken when the
@@ -770,7 +775,7 @@ function SourceRow({ media, onPress, onLongPress, style }: SourceRowProps) {
       onPress={() => onPress(media.media_item_id)}
       onLongPress={onLongPress ? handleLongPress : undefined}
       testID={`folder-source-media-${media.media_item_id}`}
-      accessibilityLabel={`Open ${media.title ?? "source"}`}
+      accessibilityLabel={t("folder.sourceOpenA11y", { title })}
       // The gesture is invisible, so a screen reader is told about it — and only
       // where it exists. `Pressable` keeps the tap and the long press exclusive,
       // so opening the menu never also opens the media.
@@ -787,7 +792,7 @@ function SourceRow({ media, onPress, onLongPress, style }: SourceRowProps) {
         />
       </View>
       <Text style={styles.sourceTitle} numberOfLines={1}>
-        {media.title ?? media.source_url ?? "Source"}
+        {title}
       </Text>
     </Pressable>
   );

@@ -602,4 +602,24 @@ export const zh: Catalog = {
   "startupError.title": "应用无法启动",
   "startupError.body": "启动过程中发生意外错误。重试通常就能恢复。",
   "startupError.retryA11y": "重新尝试启动应用",
+
+  // Same as `ja`: the date goes in full-width parentheses, not after a dash.
+  "mediaTitle.generic": "{label}（{date}）",
+  "mediaTitle.label.youtubeVideo": "YouTube 视频",
+  "mediaTitle.label.podcastEpisode": "播客单集",
+  "mediaTitle.label.article": "文章",
+  "mediaTitle.label.video": "视频",
+  "mediaTitle.label.imagePost": "图片帖子",
+  "mediaTitle.label.instagramVideo": "Instagram 视频",
+  "mediaTitle.label.tiktokVideo": "TikTok 视频",
+  "mediaTitle.label.instagramPost": "Instagram 帖子",
+  "mediaTitle.label.xPost": "X 帖子",
+  "mediaTitle.label.audioNote": "音频笔记",
+  "mediaTitle.label.voiceNote": "语音消息",
+  "mediaTitle.label.sharedNote": "共享笔记",
+  "mediaTitle.label.document": "文档",
+  "mediaTitle.label.photo": "照片",
+  "mediaTitle.label.savedItem": "已保存的内容",
+
+  "folder.sourceOpenA11y": "打开 {title}",
 };

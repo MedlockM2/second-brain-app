@@ -21,7 +21,7 @@ from media_summarizer.core.media_ingestion.adapters.podcast_resolver_foundation 
 )
 from media_summarizer.core.media_ingestion.domain import SourcePlatform
 from media_summarizer.core.media_ingestion.media_metadata import select_creator
-from media_summarizer.core.media_ingestion.title_derivation import derive_media_title
+from media_summarizer.core.media_ingestion.title_derivation import select_title
 from media_summarizer.core.services import audio_quota_gate
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
@@ -297,14 +297,17 @@ async def process_message(message: dict) -> None:
             raise RuntimeError("PodcastIndex resolution returned no audio URL.")
 
         # The episode title the index returned, else whatever the job already
-        # holds, else the deterministic label -- never the bare word "Podcast
-        # episode", which was the same string for every unresolved episode
-        # (task-266).
-        episode_title = derive_media_title(
-            [resolution.get("episode_title"), job.title],
-            media_type="podcast_episode",
-            source_platform=job.source_platform,
-            site_names=[resolution.get("podcast_title")],
+        # holds -- never the bare word "Podcast episode", which was the same string
+        # for every unresolved episode (task-266). When neither survives, the title
+        # stays unset: only the save decides the label key the app renders, so a
+        # resolution that learned nothing must leave the library row alone
+        # (task-400).
+        episode_title = (
+            select_title(
+                [resolution.get("episode_title"), job.title],
+                site_names=[resolution.get("podcast_title")],
+            )
+            or job.title
         )
         podcast_title = resolution.get("podcast_title") or "Podcast"
         episode_image = resolution.get("episode_image") or job.media_image or ""

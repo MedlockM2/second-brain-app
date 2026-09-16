@@ -72,6 +72,7 @@ import type {
   ArtifactType,
 } from "../types/media";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
+import { resolveMediaTitle } from "../lib/mediaTitle";
 import { describeArtifactRefusal } from "../lib/artifactRefusal";
 import { mergeArtifactIntoHistory } from "../lib/artifactHistory";
 
@@ -338,13 +339,13 @@ export function CompletedDetailView({
     router.push(`/media/folder?${params.toString()}`);
   }, [router, media_item.media_item_id, currentFolderId]);
 
-  // The title as this screen shows it: whatever the library row holds, and
-  // nothing more — since task-266 the backend always stores a readable, non-empty
-  // title, so the URL-then-"Untitled" chain that used to be here is gone from
-  // every screen. A rename patches it in place: this screen holds no list to
-  // reload, so the new name has to land on the hero directly.
+  // The title as this screen shows it: whatever the library row holds, or the
+  // label key it carries instead, read as "<label> — <save date>" in the reader's
+  // language (task-400). The URL-then-"Untitled" chain that used to be here is
+  // gone from every screen. A rename patches it in place: this screen holds no
+  // list to reload, so the new name has to land on the hero directly.
   const [renamedTitle, setRenamedTitle] = useState<string | null>(null);
-  const displayTitle = renamedTitle ?? media_item.title;
+  const displayTitle = renamedTitle ?? resolveMediaTitle(media_item);
 
   // The header `…`, and what it offers: the rename and the delete a long press
   // already offers in Library, reachable from the item itself. No "Move" row —
