@@ -252,12 +252,6 @@ export const fr: Catalog = {
     "Ce dossier compte {count} sources, au-delà des {max} qu'une seule génération peut lire. Générez sur un sous-dossier plus petit.",
   "artifacts.refusal.tooMuchText":
     "Il y a trop de texte ici pour une seule génération. Générez sur un sous-dossier plus petit.",
-  "artifacts.refusal.translationFailed":
-    "Cette transcription n'a pas pu être traduite, et cela ne sera pas retenté automatiquement. Réessayez plus tard.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "La seule source ici n'a pas pu être traduite, et cela ne sera pas retenté automatiquement. Réessayez plus tard.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "Aucune de ces {count} sources n'a pu être traduite, et cela ne sera pas retenté automatiquement. Réessayez plus tard.",
   "artifacts.refusal.generic":
     "Impossible de lancer cette génération. Veuillez réessayer.",
   "plan.hourlyRate": "≈ {price} de l'heure",
@@ -669,12 +663,6 @@ export const fr: Catalog = {
   "artifact.regenerating": "Lancement...",
   "artifact.regenerationQueued":
     "Génération relancée. Revenez dans un instant.",
-  "artifact.anotherLanguage": "une autre langue",
-  "artifact.translatedFrom": "Traduit depuis {language}",
-  "artifact.translationFailed":
-    "Traduction indisponible — affiché en {language}",
-  "artifact.translationFailedA11y":
-    "Traduction indisponible. Ce contenu est affiché dans sa langue d'origine, {language}.",
   "artifact.section.keyPoints": "Points clés",
   "artifact.section.takeaway": "À retenir",
   "artifact.section.context": "Contexte",

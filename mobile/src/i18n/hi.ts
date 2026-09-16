@@ -209,12 +209,6 @@ export const hi: Catalog = {
   "artifacts.refusal.mediaEmpty": "इस आइटम का अभी ट्रांसक्रिप्ट नहीं है, इसलिए बनाने के लिए कुछ नहीं है।",
   "artifacts.refusal.tooManySources": "इस फ़ोल्डर में {count} स्रोत हैं, जो एक बार में पढ़े जा सकने वाले {max} से ज़्यादा हैं। किसी छोटे सबफ़ोल्डर पर बनाएँ।",
   "artifacts.refusal.tooMuchText": "एक बार में बनाने के लिए यहाँ बहुत ज़्यादा टेक्स्ट है। किसी छोटे सबफ़ोल्डर पर बनाएँ।",
-  "artifacts.refusal.translationFailed":
-    "इस ट्रांसक्रिप्ट का अनुवाद नहीं हो सका, और यह अपने आप दोबारा नहीं आज़माया जाएगा। बाद में फिर कोशिश करें।",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "यहाँ मौजूद एकमात्र स्रोत का अनुवाद नहीं हो सका, और यह अपने आप दोबारा नहीं आज़माया जाएगा। बाद में फिर कोशिश करें।",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "इन {count} स्रोतों में से किसी का भी अनुवाद नहीं हो सका, और यह अपने आप दोबारा नहीं आज़माया जाएगा। बाद में फिर कोशिश करें।",
   "artifacts.refusal.generic": "यह जनरेशन शुरू नहीं की जा सकी। कृपया फिर से कोशिश करें।",
   "plan.hourlyRate": "≈ {price} प्रति घंटा",
   "plan.card.allowance": "हर महीने {duration}",
@@ -566,10 +560,6 @@ export const hi: Catalog = {
   "artifact.regenerating": "शुरू हो रहा है...",
   "artifact.regenerationQueued":
     "बनाना फिर से शुरू हुआ। कुछ देर बाद वापस आएँ।",
-  "artifact.anotherLanguage": "कोई दूसरी भाषा",
-  "artifact.translatedFrom": "{language} से अनूदित",
-  "artifact.translationFailed": "अनुवाद उपलब्ध नहीं — {language} में दिखाया जा रहा है",
-  "artifact.translationFailedA11y": "अनुवाद उपलब्ध नहीं। यह सामग्री अपनी मूल भाषा, {language}, में दिखाई जा रही है।",
   "artifact.section.keyPoints": "मुख्य बिंदु",
   "artifact.section.takeaway": "निचोड़",
   "artifact.section.context": "संदर्भ",

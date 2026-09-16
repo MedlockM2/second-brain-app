@@ -302,14 +302,6 @@ export const en = {
     "This folder has {count} sources, over the {max} a single generation can read. Generate on a smaller subfolder instead.",
   "artifacts.refusal.tooMuchText":
     "There is too much text here for one generation. Generate on a smaller subfolder instead.",
-  // A translation the provider refused for good, as opposed to one still
-  // running: nothing is coming, so the copy must not invite a retry in a moment.
-  "artifacts.refusal.translationFailed":
-    "This transcript could not be translated, and that will not be retried on its own. Try again later.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "The only source here could not be translated, and that will not be retried on its own. Try again later.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "None of these {count} sources could be translated, and that will not be retried on its own. Try again later.",
   "artifacts.refusal.generic": "Unable to start this generation. Please try again.",
 
   // --- Plans and paywall copy ---
@@ -746,11 +738,6 @@ export const en = {
   "artifact.regenerating": "Starting...",
   "artifact.regenerationQueued":
     "Generation restarted. Come back in a moment.",
-  "artifact.anotherLanguage": "another language",
-  "artifact.translatedFrom": "Translated from {language}",
-  "artifact.translationFailed": "Translation unavailable — shown in {language}",
-  "artifact.translationFailedA11y":
-    "Translation unavailable. This content is shown in its original language, {language}.",
   "artifact.section.keyPoints": "Key points",
   "artifact.section.takeaway": "Takeaway",
   "artifact.section.context": "Context",

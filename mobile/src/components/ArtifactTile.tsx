@@ -19,9 +19,9 @@
  *
  * How far along the source is, on the other hand, is not this tile's business
  * and no longer gates anything (task-360): a generation asked for while a
- * transcription or a translation is still running is accepted and starts by
- * itself when the text lands, so the tile shows the ordinary in-progress state
- * rather than an inert "Processing..." note.
+ * transcription is still running is accepted and starts by itself when the text
+ * lands, so the tile shows the ordinary in-progress state rather than an inert
+ * "Processing..." note.
  *
  * The tile carries no "View" action either: opening a generated artifact is the
  * job of the history list below it, which routes to `/artifacts/<id>`. Keeping

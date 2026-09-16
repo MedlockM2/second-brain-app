@@ -28,7 +28,6 @@ from media_summarizer.core.services.artifact_service import (
     ArtifactGenerationOutcome,
     ArtifactScopeEmptyError,
     ArtifactScopeTooLargeError,
-    ArtifactTranslationFailedError,
     ArtifactTypeNotEnabledError,
     commit_artifact_generation,
     enforce_scope_ceilings,
@@ -404,32 +403,6 @@ async def create_artifact(
                 "max_sources": exc.max_sources,
                 "estimated_tokens": exc.estimated_tokens,
                 "max_tokens": exc.max_tokens,
-            },
-        )
-    except ArtifactTranslationFailedError as exc:
-        # A 409 — the request is refused by the state of the sources, not by its own
-        # shape — with ``terminal: true``: retrying changes nothing until the
-        # provider works again, and the client must show a failure rather than a
-        # wait (task-327 AC#6). The retryable refusal it used to be paired with is
-        # gone: a source still being prepared is now waited on, not refused
-        # (task-360).
-        log_event(
-            logger,
-            logging.WARNING,
-            "artifact.create.translation_failed",
-            "Artifact refused: every source lost its translation permanently",
-            artifact_type=artifact_type,
-            error_code="translation_failed",
-            failed_count=exc.failed_count,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "translation_failed",
-                "message": str(exc),
-                "failed_count": exc.failed_count,
-                "failed_titles": exc.failed_titles,
-                "terminal": True,
             },
         )
     except HTTPException:

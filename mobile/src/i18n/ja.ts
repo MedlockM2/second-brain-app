@@ -207,12 +207,6 @@ export const ja: Catalog = {
   "artifacts.refusal.mediaEmpty": "この項目にはまだ文字起こしがないため、生成する元がありません。",
   "artifacts.refusal.tooManySources": "このフォルダには {count} 件のソースがあり、1 回の生成で読める {max} 件を超えています。より小さなサブフォルダで生成してください。",
   "artifacts.refusal.tooMuchText": "1 回の生成にはテキストが多すぎます。より小さなサブフォルダで生成してください。",
-  "artifacts.refusal.translationFailed":
-    "この文字起こしは翻訳できませんでした。自動で再試行されることはありません。あとでもう一度お試しください。",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "ここにある唯一のソースを翻訳できませんでした。自動で再試行されることはありません。あとでもう一度お試しください。",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "この {count} 件のソースはいずれも翻訳できませんでした。自動で再試行されることはありません。あとでもう一度お試しください。",
   "artifacts.refusal.generic": "この生成を開始できませんでした。もう一度お試しください。",
   "plan.hourlyRate": "1 時間あたり約 {price}",
   "plan.card.allowance": "毎月 {duration}",
@@ -548,10 +542,6 @@ export const ja: Catalog = {
   "artifact.regenerating": "開始中...",
   "artifact.regenerationQueued":
     "生成を再開しました。少し経ってから戻ってきてください。",
-  "artifact.anotherLanguage": "別の言語",
-  "artifact.translatedFrom": "{language} から翻訳",
-  "artifact.translationFailed": "翻訳を利用できません — {language} で表示しています",
-  "artifact.translationFailedA11y": "翻訳を利用できません。このコンテンツは元の言語（{language}）で表示されています。",
   "artifact.section.keyPoints": "要点",
   "artifact.section.takeaway": "まとめ",
   "artifact.section.context": "背景",

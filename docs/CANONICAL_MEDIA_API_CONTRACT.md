@@ -110,8 +110,8 @@ different language for this one item (e.g. keeping an English video's original t
 their reading language is French). The value is normalized to a bare lowercase ISO 639-1 code
 (`"fr-FR"` → `"fr"`) and travels to the ingestion worker, which asks the transcript provider for
 that language. If the video has no captions in that language, the provider returns its default
-track and the downstream translation step brings the transcript back to the user's
-`reading_language`.
+track, and the reader's full-text translation brings it back to the user's
+`reading_language` when they open it (`GET /api/media/{id}/raw-content`).
 
 Response (`IngestUrlResponse`):
 ```json
@@ -281,11 +281,10 @@ tap". Both leave every quota counter untouched, and both are logged under their
 own event (`artifact.reused`, `artifact.collapsed`).
 
 **A source still being prepared is not a refusal** (task-360). A request whose
-transcription or translation has not finished is *accepted*: the entry is written
-`queued` exactly like any other, `created` is returned with the same `202`, the
-quota is debited once there and then, and nothing is put on the generation queue
-yet. The end of the ingestion (`media_completed_worker`) and the end of the
-translation (`transcript_translation_worker`) are the two join points that enqueue
+transcription has not finished is *accepted*: the entry is written `queued`
+exactly like any other, `created` is returned with the same `202`, the quota is
+debited once there and then, and nothing is put on the generation queue yet. The
+end of the ingestion (`media_completed_worker`) is the join point that enqueues
 it, with no second call from the client. So the entry appears in
 `GET /api/artifacts?scope=…` as `queued` from the moment of the tap, survives
 leaving the screen, and turns into `generating` then `ready` by itself. The
@@ -293,12 +292,21 @@ deferred request and the generation that follows it are **one entry and one
 debit**: the `artifact_id` hashes the sources still in preparation in alongside the
 readable ones, so the id does not move when they land.
 
+Transcription is the **only** preparation a generation ever waits on. A media in
+a language the user does not read is generated immediately: the corpus is each
+source's original transcript and the output language travels in the prompt, via
+`parameters["language"]` (the requester's reading language, part of the
+`artifact_id` hash). Nothing on this endpoint translates a transcript, so a
+foreign media asked for the second it lands starts straight away (task-398). The
+reader's full-text translation (`GET /api/media/{id}/raw-content`) is a separate,
+non-blocking path and is unaffected.
+
 A wait is bounded. `awaiting_expires_at` is stamped on the entry
 (`ARTIFACT_AWAITING_TIMEOUT_SECONDS`, one hour by default) and an expired wait
 becomes `failed` with `sources_preparation_timeout` — no entry stays `queued`
 forever. A preparation that will not complete ends the wait early with
-`sources_preparation_failed`: a failed ingestion, or a translation the provider
-refused permanently. `sources_changed` is the residual case where the scope's
+`sources_preparation_failed`: an ingestion that failed or produced no readable
+transcript. `sources_changed` is the residual case where the scope's
 sources moved while the entry waited, so the generation would no longer be the one
 that was asked for.
 
@@ -308,7 +316,6 @@ Typed refusals:
 |---|---|---|---|
 | No source at all in the scope, or every source definitively unusable | `422` | `scope_empty` | no |
 | More than 25 sources, or more than 120 000 estimated tokens | `422` | `scope_too_large` | no |
-| Every source lost its translation permanently | `409` | `translation_failed` | no, not until the provider works again |
 | Out of minutes (folder scope only) | `403` | `out_of_minutes` | next period, or on upgrade |
 | Artifact type disabled | `400` | — | no |
 | Generation disabled globally | `503` | — | no |
@@ -316,17 +323,10 @@ Typed refusals:
 `scope_too_large` carries the four numbers the client displays, so it computes
 nothing: `source_count`, `max_sources`, `estimated_tokens`, `max_tokens`.
 
-`translation_failed` is the only `409` left, and it keeps its `terminal: true`:
-retrying changes nothing until the provider answers again, which is the opposite
-instruction from a wait and has to be readable without parsing the sentence. It
-carries `failed_count` and `failed_titles`, and means
-the LLM provider refused the translation for a reason a retry cannot change (no
-credit left, a rejected key, an unknown model): the sources were excluded from the
-corpus with `excluded_reason: "translation_failed"`, and here there was nothing
-left. A source that keeps a usable transcript in another language is not refused —
-it is dropped from the corpus and recorded in the snapshot, and the generation
-runs on the rest. The lock behind it stops being terminal after an hour, so the
-refusal lifts on its own once the provider answers again (task-327).
+There is no `409` on this endpoint any more: the two situations that produced one
+are both gone. A source still being prepared is waited on rather than refused
+(task-360), and a source in a foreign language is read as it is (task-398), so no
+generation can be blocked by the state of a translation.
 
 A generation over a **single item** is free — its LLM cost is already inside what
 the item cost to ingest — so `out_of_minutes` can only ever come back on

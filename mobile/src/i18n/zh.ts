@@ -198,12 +198,6 @@ export const zh: Catalog = {
   "artifacts.refusal.mediaEmpty": "该条目还没有文字记录，因此没有可用于生成的内容。",
   "artifacts.refusal.tooManySources": "这个文件夹有 {count} 个来源，超过了单次生成可读取的 {max} 个。请在更小的子文件夹上生成。",
   "artifacts.refusal.tooMuchText": "这里的文字对一次生成来说太多了。请在更小的子文件夹上生成。",
-  "artifacts.refusal.translationFailed":
-    "无法翻译这份文字记录，系统不会自动重试。请稍后再试。",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "这里唯一的来源无法翻译，系统不会自动重试。请稍后再试。",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "这 {count} 个来源都无法翻译，系统不会自动重试。请稍后再试。",
   "artifacts.refusal.generic": "无法开始此次生成，请重试。",
   "plan.hourlyRate": "约 {price}/小时",
   "plan.card.allowance": "每月 {duration}",
@@ -537,10 +531,6 @@ export const zh: Catalog = {
   "artifact.regenerateA11y": "重新生成此内容",
   "artifact.regenerating": "正在启动...",
   "artifact.regenerationQueued": "已重新开始生成，请稍后再回来查看。",
-  "artifact.anotherLanguage": "另一种语言",
-  "artifact.translatedFrom": "译自{language}",
-  "artifact.translationFailed": "暂无翻译 — 以{language}显示",
-  "artifact.translationFailedA11y": "暂无翻译。此内容以原语言（{language}）显示。",
   "artifact.section.keyPoints": "要点",
   "artifact.section.takeaway": "结论",
   "artifact.section.context": "背景",

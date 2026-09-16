@@ -207,12 +207,6 @@ export const ar: Catalog = {
   "artifacts.refusal.mediaEmpty": "لا يوجد نص مكتوب لهذا العنصر بعد، لذا لا شيء يمكن الإنشاء منه.",
   "artifacts.refusal.tooManySources": "يحتوي هذا المجلد على {count} مصدرًا، أي أكثر من {max} التي يمكن لعملية إنشاء واحدة قراءتها. أنشئ على مجلد فرعي أصغر.",
   "artifacts.refusal.tooMuchText": "النص هنا أكثر من أن تستوعبه عملية إنشاء واحدة. أنشئ على مجلد فرعي أصغر.",
-  "artifacts.refusal.translationFailed":
-    "لم تتم ترجمة هذا النص، ولن تُعاد المحاولة تلقائيًا. حاول مرة أخرى لاحقًا.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "لم تتم ترجمة المصدر الوحيد الموجود هنا، ولن تُعاد المحاولة تلقائيًا. حاول مرة أخرى لاحقًا.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "لم تتم ترجمة أي من هذه المصادر ({count})، ولن تُعاد المحاولة تلقائيًا. حاول مرة أخرى لاحقًا.",
   "artifacts.refusal.generic": "تعذّر بدء هذا الإنشاء. يرجى المحاولة مرة أخرى.",
   "plan.hourlyRate": "≈ {price} للساعة",
   "plan.card.allowance": "{duration} شهريًا",
@@ -558,10 +552,6 @@ export const ar: Catalog = {
   "artifact.regenerateA11y": "إعادة إنشاء هذا المحتوى",
   "artifact.regenerating": "جارٍ البدء...",
   "artifact.regenerationQueued": "أُعيد بدء الإنشاء. عُد بعد قليل.",
-  "artifact.anotherLanguage": "لغة أخرى",
-  "artifact.translatedFrom": "مترجَم من {language}",
-  "artifact.translationFailed": "الترجمة غير متاحة — معروض بـ{language}",
-  "artifact.translationFailedA11y": "الترجمة غير متاحة. يُعرض هذا المحتوى بلغته الأصلية، {language}.",
   "artifact.section.keyPoints": "النقاط الأساسية",
   "artifact.section.takeaway": "الخلاصة",
   "artifact.section.context": "السياق",

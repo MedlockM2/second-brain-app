@@ -209,12 +209,6 @@ export const pt: Catalog = {
   "artifacts.refusal.mediaEmpty": "Este item ainda não tem transcrição, por isso não há nada a partir do qual gerar.",
   "artifacts.refusal.tooManySources": "Esta pasta tem {count} fontes, acima das {max} que uma única geração consegue ler. Gere numa subpasta mais pequena.",
   "artifacts.refusal.tooMuchText": "Há demasiado texto aqui para uma única geração. Gere numa subpasta mais pequena.",
-  "artifacts.refusal.translationFailed":
-    "Não foi possível traduzir esta transcrição, e isso não será repetido automaticamente. Tente novamente mais tarde.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "Não foi possível traduzir a única fonte que existe aqui, e isso não será repetido automaticamente. Tente novamente mais tarde.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "Não foi possível traduzir nenhuma destas {count} fontes, e isso não será repetido automaticamente. Tente novamente mais tarde.",
   "artifacts.refusal.generic": "Não foi possível iniciar esta geração. Tente novamente.",
   "plan.hourlyRate": "≈ {price} por hora",
   "plan.card.allowance": "{duration} por mês",
@@ -566,10 +560,6 @@ export const pt: Catalog = {
   "artifact.regenerating": "A iniciar...",
   "artifact.regenerationQueued":
     "Geração reiniciada. Volte dentro de um momento.",
-  "artifact.anotherLanguage": "outra língua",
-  "artifact.translatedFrom": "Traduzido de {language}",
-  "artifact.translationFailed": "Tradução indisponível — mostrado em {language}",
-  "artifact.translationFailedA11y": "Tradução indisponível. Este conteúdo é mostrado na sua língua original, {language}.",
   "artifact.section.keyPoints": "Pontos-chave",
   "artifact.section.takeaway": "A reter",
   "artifact.section.context": "Contexto",

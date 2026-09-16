@@ -246,12 +246,6 @@ export const de: Catalog = {
     "Dieser Ordner hat {count} Quellen, mehr als die {max}, die eine einzelne Erstellung lesen kann. Erstelle es auf einem kleineren Unterordner.",
   "artifacts.refusal.tooMuchText":
     "Hier ist zu viel Text für eine einzelne Erstellung. Erstelle es auf einem kleineren Unterordner.",
-  "artifacts.refusal.translationFailed":
-    "Dieses Transkript konnte nicht übersetzt werden, und das wird nicht automatisch wiederholt. Versuche es später erneut.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "Die einzige Quelle hier konnte nicht übersetzt werden, und das wird nicht automatisch wiederholt. Versuche es später erneut.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "Keine dieser {count} Quellen konnte übersetzt werden, und das wird nicht automatisch wiederholt. Versuche es später erneut.",
   "artifacts.refusal.generic":
     "Diese Erstellung konnte nicht gestartet werden. Bitte versuche es erneut.",
   "plan.hourlyRate": "≈ {price} pro Stunde",
@@ -658,12 +652,6 @@ export const de: Catalog = {
   "artifact.regenerating": "Wird gestartet...",
   "artifact.regenerationQueued":
     "Erstellung neu gestartet. Schau in einem Moment wieder vorbei.",
-  "artifact.anotherLanguage": "eine andere Sprache",
-  "artifact.translatedFrom": "Übersetzt aus dem {language}",
-  "artifact.translationFailed":
-    "Übersetzung nicht verfügbar — angezeigt auf {language}",
-  "artifact.translationFailedA11y":
-    "Übersetzung nicht verfügbar. Dieser Inhalt wird in seiner Originalsprache angezeigt, {language}.",
   "artifact.section.keyPoints": "Kernpunkte",
   "artifact.section.takeaway": "Fazit",
   "artifact.section.context": "Kontext",

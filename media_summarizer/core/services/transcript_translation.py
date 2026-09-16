@@ -1,8 +1,14 @@
 """
 Source-agnostic transcript language detection and translation.
 
-This module implements the common pipeline step (task-192) that runs for EVERY
-source after a transcript is available and BEFORE artifact generation:
+This module serves the **reader**: the full text a user opens on a foreign media
+is translated into their reading language, in the background, and cached
+(``/raw-content``, ``core/services/raw_content_service.py``). Artifact generation
+does *not* come through here any more — it reads the original transcript and asks
+the model for the output language (task-398) — so nothing on the generation path
+waits on a translation.
+
+The step, which runs after a transcript is available:
 
 1. Detect the transcript language (ISO 639-1).
    - Prefer a reliable language tag exposed by the source (e.g. Deepgram
@@ -53,9 +59,6 @@ from media_summarizer.utils.translation_idempotence import (
     TranslationStatus,
     build_translation_fingerprint,
     get_translation_lock,
-    is_terminally_failed,
-    mark_translation_failed,
-    reserve_translation,
 )
 
 logger = logging.getLogger(__name__)
@@ -139,25 +142,6 @@ class TranscriptTranslationError(Exception):
         self.failure_kind = failure_kind
         self.refusal_reason = refusal_reason
         self.provider_status = provider_status
-
-
-class TranslationPermanentlyFailedError(Exception):
-    """Raised when the translation this caller needs will never be produced.
-
-    Distinct from :class:`TranslationInProgressError` on purpose: one means "wait
-    and ask again", this one means "stop asking". Callers that used to report
-    every missing translation as pending are what turned an exhausted OpenAI
-    balance into a media item stuck behind "Retry in a moment" (task-327).
-    """
-
-    def __init__(
-        self,
-        *,
-        error_message: Optional[str] = None,
-        message: str = "Translation failed permanently for this transcript",
-    ) -> None:
-        super().__init__(message)
-        self.error_message = error_message
 
 
 class TranslationInProgressError(Exception):
@@ -493,213 +477,6 @@ async def enqueue_translation_job(
             "job_id": job_id,
         },
     )
-
-
-async def resolve_or_enqueue_translated_transcript(
-    *,
-    transcript_s3_key: str,
-    transcript_text: str,
-    target_language: Optional[str],
-    source: Optional[str] = None,
-    source_language_hint: Optional[str] = None,
-    job_id: Optional[str] = None,
-    transcript_bucket: str = TRANSCRIPT_BUCKET,
-) -> TranslationOutcome:
-    """Resolve an effective transcript without making an LLM call in the API.
-
-    If translation is required but not cached, this function atomically reserves
-    and dispatches the asynchronous worker, then raises
-    :class:`TranslationInProgressError`. Concurrent callers only observe the
-    existing reservation and never enqueue a duplicate translation.
-
-    When the lock says the provider refused permanently, it raises
-    :class:`TranslationPermanentlyFailedError` instead, and reserves nothing: the
-    caller has to handle the source as unreadable-in-this-language rather than
-    tell the client to retry (task-327).
-    """
-    detected_language, detection_method = detect_language(
-        transcript_text,
-        source_hint=source_language_hint,
-    )
-    normalized_target = normalize_language_tag(target_language)
-
-    if not should_translate(detected_language, normalized_target):
-        log_event(
-            logger,
-            logging.INFO,
-            "translation.skipped",
-            "Transcript already in target language or target unsupported",
-            source=source,
-            detected_language=detected_language,
-            target_language=normalized_target,
-            detection_method=detection_method,
-            translated=False,
-        )
-        return TranslationOutcome(
-            transcript_s3_key=transcript_s3_key,
-            detected_language=detected_language,
-            detection_method=detection_method,
-            target_language=normalized_target,
-            is_translated=False,
-        )
-
-    assert detected_language is not None
-    assert normalized_target is not None
-
-    translated_key = build_translated_transcript_key(
-        transcript_s3_key=transcript_s3_key,
-        target_language=normalized_target,
-    )
-    fingerprint = build_translation_fingerprint(
-        transcript_s3_key=transcript_s3_key,
-        target_language=normalized_target,
-    )
-
-    try:
-        translation_lock = await get_translation_lock(fingerprint)
-    except Exception as exc:
-        log_event(
-            logger,
-            logging.WARNING,
-            "translation.lock_read_failed",
-            "Failed to read translation lock; relying on atomic reservation",
-            error_type=type(exc).__name__,
-            detail=str(exc)[:200],
-        )
-        translation_lock = None
-
-    try:
-        cache_hit = await s3.object_exists(
-            bucket=transcript_bucket,
-            key=translated_key,
-        )
-    except Exception as exc:
-        log_event(
-            logger,
-            logging.WARNING,
-            "translation.cache_lookup_failed",
-            "Translated transcript existence check failed",
-            error_type=type(exc).__name__,
-            detail=str(exc)[:200],
-        )
-        cache_hit = False
-
-    if cache_hit:
-        log_event(
-            logger,
-            logging.INFO,
-            "translation.cache_hit",
-            "Reusing previously translated transcript",
-            source=source,
-            detected_language=detected_language,
-            target_language=normalized_target,
-            detection_method=detection_method,
-            translated=True,
-        )
-        return TranslationOutcome(
-            transcript_s3_key=translated_key,
-            detected_language=detected_language,
-            detection_method=detection_method,
-            target_language=normalized_target,
-            is_translated=True,
-        )
-
-    if translation_lock and translation_lock.status in (
-        TranslationStatus.QUEUED,
-        TranslationStatus.IN_PROGRESS,
-    ):
-        log_event(
-            logger,
-            logging.INFO,
-            "translation.in_flight_detected",
-            "Translation already in-flight; API request will retry later",
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            translation_status=translation_lock.status,
-        )
-        raise TranslationInProgressError(status=translation_lock.status)
-
-    if is_terminally_failed(translation_lock):
-        log_event(
-            logger,
-            logging.WARNING,
-            "translation.permanently_failed_detected",
-            "Translation failed permanently; not reserving another attempt",
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            failure_kind=translation_lock.failure_kind,
-            detail=(translation_lock.error_message or "")[:200],
-        )
-        raise TranslationPermanentlyFailedError(
-            error_message=translation_lock.error_message
-        )
-
-    retry_missing_done_translation = bool(
-        translation_lock and translation_lock.status == TranslationStatus.DONE
-    )
-    try:
-        reserved = await reserve_translation(
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            allow_done_retry=retry_missing_done_translation,
-        )
-    except Exception as exc:
-        raise TranscriptTranslationError(
-            f"translation_reservation_failed: {type(exc).__name__}: {exc}"
-        ) from exc
-
-    if reserved:
-        try:
-            await enqueue_translation_job(
-                transcript_s3_key=transcript_s3_key,
-                target_language=normalized_target,
-                source_language_hint=source_language_hint,
-                source=source,
-                job_id=job_id,
-            )
-        except Exception as exc:
-            await mark_translation_failed(
-                transcript_s3_key=transcript_s3_key,
-                target_language=normalized_target,
-                error_message=(
-                    f"translation_enqueue_failed: {type(exc).__name__}: {str(exc)[:200]}"
-                ),
-            )
-            raise TranscriptTranslationError(
-                f"translation_enqueue_failed: {type(exc).__name__}: {exc}"
-            ) from exc
-
-        log_event(
-            logger,
-            logging.INFO,
-            "translation.async_enqueued",
-            "Translation reserved and dispatched asynchronously",
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            source=source,
-            queue=TRANSCRIPT_TRANSLATION_QUEUE,
-        )
-
-    pending_status = TranslationStatus.QUEUED
-    if not reserved:
-        # The reservation was refused: either someone else holds it, or the gate
-        # itself refused a permanently failed lock. Re-reading is what tells the
-        # two apart, and only the first one is worth waiting for.
-        try:
-            current_lock = await get_translation_lock(fingerprint)
-        except Exception:
-            current_lock = None
-        if is_terminally_failed(current_lock):
-            raise TranslationPermanentlyFailedError(
-                error_message=current_lock.error_message
-            )
-        if current_lock and current_lock.status in (
-            TranslationStatus.QUEUED,
-            TranslationStatus.IN_PROGRESS,
-        ):
-            pending_status = current_lock.status
-
-    raise TranslationInProgressError(status=pending_status)
 
 
 async def ensure_translated_transcript(

@@ -210,12 +210,6 @@ export const nl: Catalog = {
   "artifacts.refusal.mediaEmpty": "Dit item heeft nog geen transcript, dus er is niets om uit te genereren.",
   "artifacts.refusal.tooManySources": "Deze map heeft {count} bronnen, meer dan de {max} die één generatie kan lezen. Genereer op een kleinere submap.",
   "artifacts.refusal.tooMuchText": "Er staat hier te veel tekst voor één generatie. Genereer op een kleinere submap.",
-  "artifacts.refusal.translationFailed":
-    "Dit transcript kon niet worden vertaald, en dat wordt niet automatisch opnieuw geprobeerd. Probeer het later opnieuw.",
-  "artifacts.refusal.sourcesTranslationFailed.one":
-    "De enige bron hier kon niet worden vertaald, en dat wordt niet automatisch opnieuw geprobeerd. Probeer het later opnieuw.",
-  "artifacts.refusal.sourcesTranslationFailed.other":
-    "Geen van deze {count} bronnen kon worden vertaald, en dat wordt niet automatisch opnieuw geprobeerd. Probeer het later opnieuw.",
   "artifacts.refusal.generic": "Deze generatie kon niet worden gestart. Probeer het opnieuw.",
   "plan.hourlyRate": "≈ {price} per uur",
   "plan.card.allowance": "{duration} per maand",
@@ -566,10 +560,6 @@ export const nl: Catalog = {
   "artifact.regenerating": "Starten...",
   "artifact.regenerationQueued":
     "Genereren opnieuw gestart. Kom straks terug.",
-  "artifact.anotherLanguage": "een andere taal",
-  "artifact.translatedFrom": "Vertaald uit het {language}",
-  "artifact.translationFailed": "Vertaling niet beschikbaar — weergegeven in het {language}",
-  "artifact.translationFailedA11y": "Vertaling niet beschikbaar. Deze inhoud wordt weergegeven in de oorspronkelijke taal, {language}.",
   "artifact.section.keyPoints": "Kernpunten",
   "artifact.section.takeaway": "Om te onthouden",
   "artifact.section.context": "Context",
