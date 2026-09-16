@@ -1,9 +1,10 @@
 ---
 id: task-394
 title: Réutiliser entre comptes les artefacts déjà générés pour un même contenu média
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-10 12:36'
+updated_date: '2026-09-16 16:56'
 labels:
   - backend
   - artifacts
