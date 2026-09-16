@@ -4,6 +4,13 @@ Media idempotence utilities using DynamoDB.
 Canonical schema (MEDIA_IDEMPOTENCE_TABLE, default "media_idempotence"):
 - PK: media_key (S)
 - Attributes: status (reserved|processed|failed), job_id, created_at, updated_at
+
+`failed` is a *record*, not a lock. `reserved` and `processed` both mean "a job
+owns this content, do not start a second one"; `failed` means the opposite -- the
+last attempt produced nothing, so the content is unowned and the next submission
+must try again. Until task-399 the reservation refused to write over a `failed`
+row, which turned one bad fetch into a permanent verdict on that URL for every
+account that would ever share it.
 """
 from __future__ import annotations
 
@@ -19,6 +26,21 @@ from media_summarizer.utils.env import required_env
 logger = logging.getLogger(__name__)
 
 MEDIA_IDEMPOTENCE_TABLE = required_env("MEDIA_IDEMPOTENCE_TABLE")
+
+#: The one ledger state that does not own its content.
+STATUS_FAILED = "failed"
+
+
+def is_failed_row(row: Optional[Dict[str, Any]]) -> bool:
+    """``True`` when this ledger row records a failure and owns nothing.
+
+    The predicate a caller uses before reusing an existing row: a `failed` row is
+    the trace of an attempt that produced no transcript, so reusing the job behind
+    it would hand the caller an instant failure without anything being re-read.
+    """
+    if not row:
+        return False
+    return str(row.get("status") or "").strip().lower() == STATUS_FAILED
 
 
 def _now_iso() -> str:
@@ -55,6 +77,12 @@ async def reserve_or_skip(
     Reserve media identity key globally.
 
     Returns True if reserved, False if duplicate.
+
+    A `failed` row is written over rather than treated as a duplicate: the job it
+    names produced no transcript, so nothing is being deduplicated against and the
+    new job becomes the owner of the content (task-399). Only `reserved` and
+    `processed` refuse the write, which is what "somebody is already on it" and
+    "the transcript exists" respectively mean.
     """
     identity_key = _resolve_identity_key(media_key)
 
@@ -70,13 +98,17 @@ async def reserve_or_skip(
         session = database_async.get_session()
         async with session.resource(
             "dynamodb",
-            
+
             region_name=database_async.AWS_REGION,
         ) as dynamodb:
             table = await dynamodb.Table(MEDIA_IDEMPOTENCE_TABLE)
             await table.put_item(
                 Item=item,
-                ConditionExpression="attribute_not_exists(media_key)",
+                ConditionExpression=(
+                    "attribute_not_exists(media_key) OR #st = :failed"
+                ),
+                ExpressionAttributeNames={"#st": "status"},
+                ExpressionAttributeValues={":failed": STATUS_FAILED},
             )
         logger.info("Reserved media key %s (job_id=%s)", identity_key, job_id)
         return True

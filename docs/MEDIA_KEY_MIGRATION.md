@@ -20,6 +20,13 @@ completion: URL-derived `media_key`.
   and updates watcher jobs directly to terminal states; it is no longer coupled
   to completion-content emails.
 - Email worker has been removed. Completion is fully decoupled from notifications.
+- A `media_idempotence` row deduplicates only while it owns its content:
+  `reserved` (a job is in flight) and `processed` (the transcript exists) are
+  reused, `failed` is not. A submission landing on a `failed` row takes the row
+  over with its own job and re-reads the source. Before task-399 the reservation
+  refused to write over a `failed` row, so a single bad fetch — an anti-robot 405
+  — was a permanent verdict on that URL for every account that would ever share
+  it.
 
 ## Environment Variables
 

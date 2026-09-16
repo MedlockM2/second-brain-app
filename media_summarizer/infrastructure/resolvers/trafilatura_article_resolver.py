@@ -36,6 +36,7 @@ from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
     normalize_transcript_text,
 )
+from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +54,13 @@ API_ARTICLE_FETCH_TIMEOUT_SECONDS = float(
 DEFAULT_ARTICLE_MAX_HTML_BYTES = max(
     1024, int(os.environ.get("ARTICLE_EXTRACT_MAX_HTML_BYTES", "2000000"))
 )
+#: We read a page the way a reader's browser would. The honest crawler string this
+#: used to send was refused outright by anti-robot edges -- a 405 on a `GET` for a
+#: page that serves 200 to a browser (task-399). `ARTICLE_EXTRACT_USER_AGENT`
+#: remains the knob; the default now belongs to everyone who fetches a public page.
 DEFAULT_ARTICLE_USER_AGENT = os.environ.get(
     "ARTICLE_EXTRACT_USER_AGENT",
-    "media-summarizer/article-extractor (+https://media-summarizer.local)",
+    BROWSER_USER_AGENT,
 )
 
 _SUPPORTED_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
@@ -64,6 +69,20 @@ _SUPPORTED_CONTENT_TYPES = ("text/html", "application/xhtml+xml")
 def _is_supported_content_type(content_type: str) -> bool:
     value = (content_type or "").lower()
     return any(token in value for token in _SUPPORTED_CONTENT_TYPES)
+
+
+def _http_failure(status_code: int) -> Tuple[ArticleFetchErrorCode, bool]:
+    """``(code, retryable)`` for an HTTP status the page answered with.
+
+    Three cases, and they are three different sentences for the reader: 429 is
+    throttling and worth retrying, a 5xx is a passing outage, and any other 4xx is
+    the publisher's answer -- the same answer the next attempt would get.
+    """
+    if status_code == 429:
+        return ArticleFetchErrorCode.HTTP_RATE_LIMITED, True
+    if status_code >= 500:
+        return ArticleFetchErrorCode.HTTP_SERVER_ERROR, True
+    return ArticleFetchErrorCode.HTTP_CLIENT_ERROR, False
 
 
 def _word_count(text: str) -> int:
@@ -143,12 +162,11 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
                     final_url = str(response.url)
 
                     if status_code >= 400:
+                        code, retryable = _http_failure(status_code)
                         raise ArticleFetchError(
-                            ArticleFetchErrorCode.HTTP_ERROR,
+                            code,
                             details="article_http_error",
-                            # A 5xx may pass; a 404 or a 403 is the publisher's
-                            # answer and will be the same answer next time.
-                            retryable=status_code >= 500,
+                            retryable=retryable,
                             http_status=status_code,
                             final_url=final_url,
                         )
