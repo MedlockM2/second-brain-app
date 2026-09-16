@@ -3,9 +3,10 @@ id: task-393
 title: >-
   Fonder l'identité d'un fichier envoyé sur son contenu réel plutôt que sur son
   nom et sa taille
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-10 12:36'
+updated_date: '2026-09-16 16:17'
 labels:
   - backend
   - ingestion
