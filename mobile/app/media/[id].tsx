@@ -32,7 +32,7 @@ import { t, useTranslation } from "../../src/i18n";
  *    Digest pager renders too — with its chrome on, which is this route's own
  *    safe area and title bar.
  * 4. On "failed": shows a failure banner with the error message, plus — when the
- *    failure is one of the eight that mean the source itself is not handled yet —
+ *    failure is one of the seven that mean the source itself is not handled yet —
  *    a card offering to request support for it (`SourceSupportRequestCard`).
  * 5. On 5-minute timeout: stops polling and shows a "taking longer" message.
  *
@@ -168,7 +168,7 @@ export default function MediaDetailScreen() {
             <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
             <Text style={styles.refreshButtonText}>{t("media.refresh")}</Text>
           </Pressable>
-          {/* Only for the eight codes that actually mean "we don't handle this
+          {/* Only for the seven codes that actually mean "we don't handle this
               source yet", and identical on iOS and Android. It draws nothing at
               all otherwise, which is why it is unconditional here. */}
           <SourceSupportRequestCard

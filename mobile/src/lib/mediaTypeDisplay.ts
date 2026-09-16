@@ -21,6 +21,10 @@ export function getMediaTypeIcon(
     case "youtube_video":
     case "short_video":
       return "play-circle-outline";
+    // A publication made of pictures, so the stacked-photos glyph rather than
+    // the single-frame one: a carousel is the common case (task-385).
+    case "image_post":
+      return "images-outline";
     case "audio_file":
     case "audio":
       return "musical-notes-outline";

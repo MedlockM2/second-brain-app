@@ -80,7 +80,6 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
   GEO_RESTRICTED: "mediaError.geoRestricted",
   AGE_RESTRICTED: "mediaError.ageRestricted",
   LIVE_CONTENT_UNSUPPORTED: "mediaError.liveContentUnsupported",
-  IMAGE_POST_UNSUPPORTED: "mediaError.imagePostUnsupported",
   NO_TRANSCRIBABLE_MEDIA: "mediaError.noTranscribableMedia",
   NO_TRANSCRIPT_AVAILABLE: "mediaError.noTranscriptAvailable",
   POST_TEXT_EMPTY: "mediaError.postTextEmpty",
@@ -117,7 +116,7 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
  * sentence — and therefore the only ones the detail screen offers to request
  * support for (task-381).
  *
- * Eight of the twenty-four `MediaFailureCode` members. The sixteen left out are
+ * Seven of the twenty-two `MediaFailureCode` members. The fifteen left out are
  * left out for a reason, and each reason is a different one:
  *
  * - `MEDIA_UNAVAILABLE`, `GEO_RESTRICTED`, `AGE_RESTRICTED` — the source *is*
@@ -133,7 +132,6 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
  */
 const SOURCE_SUPPORT_REQUESTABLE_CODES: ReadonlySet<string> = new Set([
   "LIVE_CONTENT_UNSUPPORTED",
-  "IMAGE_POST_UNSUPPORTED",
   "NOT_AN_ARTICLE_PAGE",
   "ARTICLE_TEXT_NOT_FOUND",
   "DOCUMENT_PARSE_FAILED",

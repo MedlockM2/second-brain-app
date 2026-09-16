@@ -694,7 +694,6 @@ components:
             - GEO_RESTRICTED
             - AGE_RESTRICTED
             - LIVE_CONTENT_UNSUPPORTED
-            - IMAGE_POST_UNSUPPORTED
             - NO_TRANSCRIBABLE_MEDIA
             - NO_TRANSCRIPT_AVAILABLE
             - POST_TEXT_EMPTY
