@@ -133,9 +133,12 @@ class ArtifactCreateResponse(ArtifactDetailResponse):
 
     - ``created`` — a generation was queued for these sources.
     - ``retried`` — a previously failed entry for the same sources was rerun.
-    - ``reused`` — an artifact already covered these sources; nothing was queued
-      and no counter moved. This is the normal answer for a second request on a
-      media item, and for a folder whose sources have not changed.
+    - ``reused`` — a generation already covered these sources, so nothing was
+      queued. The normal answer for a second request on a media item, for a folder
+      whose sources have not changed, and — since task-394 — for the first request
+      of an account over content another account already generated this artifact
+      for. It says nothing about the allowance: only an entry this account already
+      held consumes none of it.
     - ``collapsed`` — two concurrent taps, and this one lost the write; the entry
       returned is the one already in flight.
     """
@@ -244,11 +247,19 @@ async def create_artifact(
     Not every request generates: an artifact already covering the same set of
     sources answers as-is (task-316 owner decision), which is why a media item
     yields one artifact per type for good and a folder only regenerates once
-    its sources have changed.
+    its sources have changed. Since task-394 that also holds *across accounts* for a
+    media scope — the second account to ask for the same type in the same language
+    over the same content is served by the generation the first one paid for.
 
-    The order of the checks matters: a request nothing runs for must consume
-    nothing, so the quota is debited *after* the reuse verdict is known and never
-    before (task-269 §10.3).
+    What decides the debit is therefore not whether a generation ran, but whether
+    this account gains an entry it did not have. It is charged for an artifact
+    another account's generation answers: the request was honoured, the account now
+    holds the artifact, and the avoided provider call is the operator's saving rather
+    than free allowance. Only an entry the account *already holds* consumes nothing.
+
+    The order of the checks still matters, for the other reason: a denied request must
+    leave no entry, so the quota is checked after planning and before the write
+    (task-269 §10.3).
     """
     scope = _parse_scope((payload.scope or "").strip().lower())
     artifact_type = (payload.artifact_type or "").strip().lower()
@@ -282,10 +293,10 @@ async def create_artifact(
             parameters=payload.parameters,
         )
 
-        # Quota comes after the reuse verdict and before the write: a request an
-        # existing artifact answers must consume nothing, and a denied request
-        # must leave no entry.
-        if not plan.reuses_existing:
+        # Quota comes after planning and before the write: an account already
+        # holding this entry must not be charged for it a second time, and a denied
+        # request must leave no entry behind.
+        if not plan.already_owned:
             quota_result = await quota_enforcer.check_generation_allowed(
                 current_user.id,
                 scope=scope.value,
@@ -315,13 +326,17 @@ async def create_artifact(
             ArtifactGenerationOutcome.REUSED,
             ArtifactGenerationOutcome.COLLAPSED,
         ):
-            # Nothing was queued, so nothing is charged — for a reuse because the
-            # artifact was already paid for, for a collapse because the request
-            # that won the write is the one being charged.
+            # Nothing was queued. The status code says exactly that and nothing about
+            # the debit: a reuse across accounts is charged, it just did not start a
+            # generation.
             response.status_code = status.HTTP_200_OK
-        else:
-            # `retried` lands here too, and charges nothing extra: the token is the
-            # artifact id, which the failed first attempt already debited.
+
+        if not plan.already_owned:
+            # Charged on every outcome, because on every outcome but this one the
+            # account gains an entry it did not hold. `retried` and `collapsed` cost
+            # nothing extra all the same: the token is the entry id, so the first
+            # attempt's debit — or the concurrent request that won the write — is the
+            # only one that moves a counter.
             await quota_enforcer.record_generation(
                 current_user.id,
                 scope=scope.value,

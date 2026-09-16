@@ -488,3 +488,47 @@ def generate_uploaded_file_media_key(
         f"{owner_user_id.strip()}#content={content_fingerprint.strip()}"
     )
     return generate_media_key(locator)
+
+
+#: Prefixes a file's content key *used to* be built with, before task-393 re-keyed
+#: every upload through `generate_uploaded_file_media_key` above. **Nothing produces
+#: these shapes any more**: an upload is now an opaque `mkey_v1_<digest>`, exactly
+#: like a public locator, so this tuple no longer matches anything the API writes.
+#: Kept only as the record of what `is_account_scoped_media_key` was reading -- see
+#: that function for what the mismatch costs, and task-403 for the fix.
+ACCOUNT_SCOPED_MEDIA_KEY_PREFIXES: Tuple[str, ...] = ("doc:", "audio:")
+
+
+def is_account_scoped_media_key(*, media_key: str, owner_user_id: str) -> bool:
+    """Whether this content identity belongs to one account rather than to the web.
+
+    **Currently answers False for every upload, which is a known defect and not the
+    intent -- see task-403.** It was written against the pre-task-393 key shapes
+    (`doc:{user_id}:...`, `audio:{user_id}:...`), recognising an upload on two
+    independent grounds: the prefix, and the account appearing literally in the
+    material. task-393 landed in the same dispatch and re-keyed uploads through
+    `generate_uploaded_file_media_key`, which hashes the owner *into* an opaque
+    `mkey_v1_<digest>` -- so both grounds fail at once and an upload is now
+    indistinguishable from public content to this predicate.
+
+    What the mismatch costs is a pointless indirection, not isolation. The upload
+    exclusion was enforced twice over and only this half broke: an upload's key still
+    carries the account inside the hashed material, so the same file sent by two
+    people is two distinct content ids with two unrelated shared ids, and there is
+    nothing cross-account to be found under either (the task-394 exclusion holds,
+    verified at merge). The surviving cost is that `mutualizes_generation` now builds,
+    for every uploaded file, a shared row that only ever serves the one account that
+    asked for it.
+
+    The fix is for the upload recipe to *declare* that its content is account-scoped
+    -- a distinct key prefix or an explicit flag -- rather than for this function to
+    guess it from a digest, which is impossible by construction. Until then, do not
+    add a caller that reads a False here as "this content is shareable web content".
+    """
+    key = (media_key or "").strip()
+    if not key:
+        return False
+    if key.startswith(ACCOUNT_SCOPED_MEDIA_KEY_PREFIXES):
+        return True
+    owner = (owner_user_id or "").strip()
+    return bool(owner) and owner in key

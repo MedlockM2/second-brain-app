@@ -58,6 +58,7 @@ Operational behavior now implemented in runtime:
 - a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=`
 - every generation writes a **new immutable entry** carrying a snapshot of the sources it read; nothing is overwritten, nothing is invalidated, and adding or removing a media from a folder changes no existing entry
 - an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters`; a folder regenerates only when its contents changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
+- **a media-scoped generation is paid for once per content, not once per account** (task-394). Under each account's entry sits a *shared generation* keyed on the content alone — the same hash minus the user — so the second account to ask for the same type in the same language over the same content is served by the generation the first one paid for, with no provider call. It applies to every media-scope type, `review_blurb` included, and to folder scope not at all. Two things it deliberately does not change: **the listing** (an account still sees only the entries it asked for; a shared generation is indexed under a scope key no account can produce and is not addressable through the API), and **the quota** (an account is debited whether or not a generation ran, because it gains an artifact either way — the avoided provider call is the operator's saving). Artifacts over a **user-uploaded file** are excluded, since the content identity of an upload is itself account-scoped
 - ownership is checked by comparing the entry's `user_id`, not by resolving a media item — a folder artifact has none
 - a media-scoped request still accepts a user-owned `media_item_id`, but storage and
   history use `(user_id, media_key)` internally, so the same user's saves of one
@@ -284,13 +285,19 @@ apart:
 |---|---|---|---|
 | `created` | `202` | First request for this source set: entry written and queued | debited |
 | `retried` | `202` | The entry for this key had `failed`, so it is reclaimed and queued again | debited (idempotent on `artifact_id`, so a retry of the same id charges nothing extra) |
-| `reused` | `200` | An artifact already covers this source set; nothing is queued | untouched |
-| `collapsed` | `200` | A concurrent identical request won the conditional write; this one hands back the winner | untouched |
+| `reused` | `200` | A generation already covers this source set; nothing is queued | **untouched** if the caller already held this entry; **debited** if it was another account's generation that answered (task-394) |
+| `collapsed` | `200` | A concurrent identical request won the conditional write; this one hands back the winner | untouched (the winner is the one charged, under the same `artifact_id`) |
 
 `reused` and `collapsed` are deliberately distinct: the first says "this content
-was already generated, possibly days ago", the second says "this was the same
-tap". Both leave every quota counter untouched, and both are logged under their
-own event (`artifact.reused`, `artifact.collapsed`).
+was already generated, possibly days ago and possibly for somebody else", the
+second says "this was the same tap". Both are logged under their own event
+(`artifact.reused`, `artifact.shared_generation_reused`, `artifact.collapsed`).
+
+The status code says whether a **generation** was started, never whether the quota
+moved. Those became two different questions with cross-account reuse: an account
+being handed an artifact another account paid the provider for gains that artifact,
+so it is charged for it, and the `200` only means no model was called. What is never
+charged twice is an entry the caller already holds.
 
 **A source still being prepared is not a refusal** (task-360). A request whose
 transcription has not finished is *accepted*: the entry is written `queued`
@@ -832,7 +839,8 @@ HTTP mapping rules:
 - `media_key` must be deterministic from canonical URL normalization.
 - Processing is idempotent for equivalent normalized URLs; saving is intentionally
   non-idempotent and creates a fresh library row on every successful request.
-- Artifact creation generates **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet, or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
+- Artifact creation writes an entry **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet, or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
+- A **provider call** is made only when `(scope, media_key, artifact_type, parameters, sorted source ids)` — the same material without the user — has no live generation yet. So an account can gain an entry (and be debited for it) without any model being called, and one generation of one content is what every account's entry over that content reads. Artifacts over a user-uploaded file are outside this rule: their content identity is account-scoped, so they are never served to another account.
 - Timestamps use ISO-8601 UTC strings.
 - `request_id` must be returned in error payload and response header.
 

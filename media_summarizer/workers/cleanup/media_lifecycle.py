@@ -50,6 +50,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from boto3.dynamodb.types import TypeDeserializer
 from botocore.exceptions import ClientError
 
+from media_summarizer.core.models.media_artifact import (
+    ArtifactScope,
+    build_content_scope_key,
+    build_scope_key,
+)
 from media_summarizer.core.services import (
     cover_capture,
     media_purge_service,
@@ -139,6 +144,15 @@ async def purge_media_item(
                 media_content_ids=[media_key],
             )
         )
+
+    # The generations shared between accounts go with the *content*, not with this
+    # save: called unconditionally because the rule ("no save anywhere references this
+    # media_key any more") lives in one place, and that place re-checks it (task-394).
+    counts.update(
+        await media_purge_service.purge_shared_artifacts_for_content(
+            content_ids=[media_key],
+        )
+    )
 
     content_job_id = last_job_id
     if not references and not content_job_id:
@@ -510,7 +524,19 @@ async def run_reconciliation() -> Dict[str, Any]:
         user_id = str(row.get("user_id") or "")
         media_key = str(row.get("media_key") or "")
         if user_id and media_key:
-            library_content_scopes.add(f"{user_id}#media#{media_key}")
+            # Two keys per save, both through the builders so this set cannot drift
+            # from what the write path produces: the account's own scope, and the
+            # content scope the shared generations of that media live under
+            # (task-394). Leaving the second out would make every shared row look
+            # like a fresh orphan and keep the gauge's alarm permanently breaching.
+            library_content_scopes.add(
+                build_scope_key(
+                    user_id=user_id, scope=ArtifactScope.MEDIA, scope_id=media_key
+                )
+            )
+            library_content_scopes.add(
+                build_content_scope_key(scope=ArtifactScope.MEDIA, scope_id=media_key)
+            )
         per_user[user_id] = per_user.get(user_id, 0) + 1
         last_job_id = row.get("last_job_id")
         if last_job_id:

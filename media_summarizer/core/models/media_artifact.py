@@ -13,6 +13,18 @@ gets one artifact per type and per ``parameters`` — its source set never chang
 A folder gets a new entry only when its contents changed, which is why the
 gap between an entry's ``sources`` snapshot and the folder's current contents
 *is* the history rather than a defect to repair.
+
+Since task-394 a media-scoped artifact is generated **once per content**, not once
+per account, and the same record type plays two roles:
+
+- a **shared generation** — the row the worker generates into, keyed on the content
+  alone (no ``user_id`` in its ``artifact_id``) and indexed under a scope key no
+  account can produce (:data:`CONTENT_SCOPE_OWNER`). It owns the S3 object;
+- a **pointer** — one row per account that asked, keyed exactly as before, carrying
+  ``shared_artifact_id``. It is what a listing returns, so an account keeps seeing
+  only what it asked for.
+
+A folder artifact has neither role: it stays a single per-account row.
 """
 
 from __future__ import annotations
@@ -67,16 +79,34 @@ class ArtifactScope(str, Enum):
     FOLDER = "folder"
 
 
+#: The ``user_id`` segment of a **shared generation**'s scope key. A Cognito subject
+#: is a UUID, so no account can ever produce this segment: that is what makes a
+#: user's listing query structurally unable to return a shared row, even though the
+#: row it points at is the same generation another account is served by (task-394).
+#: It also makes the shared rows of one content item enumerable — the purge needs
+#: that, and a content-addressed ``artifact_id`` is not enumerable from the content.
+CONTENT_SCOPE_OWNER = "@content"
+
+
 def build_scope_key(*, user_id: str, scope: "ArtifactScope | str", scope_id: str) -> str:
     """Hash key of the ``scope-index`` GSI.
 
-    ``user_id`` is part of it on purpose: isolation between users becomes
+    ``user_id`` is part of it on purpose: isolation of the **listing** becomes
     structural, so a listing query cannot reach another account's scope. That is
     what replaces the old ownership check, which resolved the artifact's media
     item — impossible for a folder artifact, which has no media.
+
+    It no longer isolates the generated *content*, which is deliberately shared
+    between accounts for a media scope (task-394): what a user sees is what they
+    asked for, and what the provider is paid for is one generation per content.
     """
     scope_value = scope.value if isinstance(scope, ArtifactScope) else str(scope)
     return f"{user_id}#{scope_value}#{scope_id}"
+
+
+def build_content_scope_key(*, scope: "ArtifactScope | str", scope_id: str) -> str:
+    """Scope key of a shared generation: the content's own, owned by no account."""
+    return build_scope_key(user_id=CONTENT_SCOPE_OWNER, scope=scope, scope_id=scope_id)
 
 
 def content_scope_id_from_scope_key(scope_key: str) -> str:
@@ -90,6 +120,11 @@ def content_scope_id_from_scope_key(scope_key: str) -> str:
     _, _, remainder = scope_key.partition("#")
     _, _, scope_id = remainder.partition("#")
     return scope_id
+
+
+def is_content_scope_key(scope_key: str) -> bool:
+    """Whether this key addresses a shared generation rather than an account's scope."""
+    return scope_key.startswith(f"{CONTENT_SCOPE_OWNER}#")
 
 
 class ArtifactStorageRef(BaseModel):
@@ -140,11 +175,24 @@ class MediaArtifactRecord(BaseModel):
     # Deterministic, derived from (user, scope, scope_id, type, parameters,
     # sorted source ids) by ``artifact_service.build_artifact_id`` — never random,
     # and carrying no time component: the same request always lands on this id.
+    # A shared generation drops the user from that material
+    # (``build_shared_artifact_id``), which is the whole of cross-account reuse.
     artifact_id: str
+    #: Who this row belongs to. On a **pointer** it is the account that asked, and
+    #: the only thing ownership is checked against. On a **shared generation** it is
+    #: merely the account whose request triggered it — kept for cost attribution and
+    #: for the log line, never an ownership claim: a shared row is not addressable
+    #: through the API at all.
     user_id: str
     scope: ArtifactScope
     scope_id: str
     scope_key: str
+    #: Set on a **pointer**: the content-addressed generation that answers it. All
+    #: the mutable state of that generation (status, storage, title, usage) lives on
+    #: the shared row, and a pointer mirrors it once it is terminal; while it is in
+    #: flight, a read resolves the shared row. ``None`` on a shared generation and
+    #: on every folder artifact.
+    shared_artifact_id: Optional[str] = None
     artifact_type: MediaArtifactType
     status: MediaArtifactStatus = MediaArtifactStatus.QUEUED
     parameters: Dict[str, Any] = Field(default_factory=dict)
@@ -173,6 +221,16 @@ class MediaArtifactRecord(BaseModel):
     updated_at: datetime = Field(default_factory=_now_utc)
     completed_at: Optional[datetime] = None
 
+    @property
+    def is_shared_generation(self) -> bool:
+        """Whether this row is the content-addressed generation, not an account's.
+
+        Read off ``scope_key`` rather than off a flag: the key is the one attribute
+        the GSI projects, so a row obtained from a listing page can be recognised
+        without a read of the base table.
+        """
+        return is_content_scope_key(self.scope_key)
+
     def to_dynamodb_item(self) -> Dict[str, Any]:
         item: Dict[str, Any] = {
             "artifact_id": self.artifact_id,
@@ -191,6 +249,8 @@ class MediaArtifactRecord(BaseModel):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+        if self.shared_artifact_id:
+            item["shared_artifact_id"] = self.shared_artifact_id
         if self.title:
             item["title"] = self.title
         if self.storage is not None:
