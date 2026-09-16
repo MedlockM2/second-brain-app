@@ -29,13 +29,7 @@ import {
   TouchTarget,
   Typography,
 } from "../../src/constants/theme";
-import {
-  LOCALE_ENDONYMS,
-  t,
-  tCount,
-  useTranslation,
-  type TranslationKey,
-} from "../../src/i18n";
+import { t, tCount, useTranslation, type TranslationKey } from "../../src/i18n";
 
 /**
  * Artifact detail screen.
@@ -82,7 +76,6 @@ type LoadState =
       type: ArtifactKind;
       payload: ArtifactPayload;
       sourceTitle: string | null;
-      translation: TranslationInfo | null;
     }
   | { status: "error"; message: string }
   | { status: "pending"; message: string }
@@ -97,30 +90,7 @@ type LoadState =
 interface ArtifactPayload {
   generated_at?: string;
   source?: Record<string, unknown>;
-  translation?: Record<string, unknown>;
   content?: unknown;
-}
-
-/** Translation provenance attached to a translated artifact (task-192). */
-interface TranslationInfo {
-  isTranslated: boolean;
-  translatedFrom: string | null;
-  targetLanguage: string | null;
-  translationFailed: boolean;
-}
-
-/** English display names for the 11 V1 reading languages (task-189). */
-/**
- * The languages a transcript can be translated from, named in their own script
- * — `LOCALE_ENDONYMS`, the same map the two language pickers read, rather than
- * a third list of English exonyms that could drift from them.
- */
-const LANGUAGE_DISPLAY_NAMES: Record<string, string> = LOCALE_ENDONYMS;
-
-function languageDisplayName(code: string | null): string {
-  if (!code) return t("artifact.anotherLanguage");
-  const normalized = code.trim().toLowerCase();
-  return LANGUAGE_DISPLAY_NAMES[normalized] ?? code.toUpperCase();
 }
 
 const KIND_LABEL_KEYS: Record<ArtifactKind, TranslationKey> = {
@@ -180,13 +150,11 @@ export default function ArtifactDetailScreen() {
       const kind = normalizeArtifactKind(response.artifact_type);
       const payload = response.content as ArtifactPayload;
       const sourceTitle = pickSourceTitle(payload);
-      const translation = pickTranslationInfo(payload);
       setState({
         status: "ready",
         type: kind,
         payload,
         sourceTitle,
-        translation,
       });
       if (!engagementReportedRef.current) {
         engagementReportedRef.current = true;
@@ -431,7 +399,6 @@ export default function ArtifactDetailScreen() {
             {state.sourceTitle ? (
               <Text style={styles.heroTitle}>{state.sourceTitle}</Text>
             ) : null}
-            <TranslationBadge translation={state.translation} />
           </View>
 
           <View
@@ -448,55 +415,6 @@ export default function ArtifactDetailScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
-  );
-}
-
-// --- Translation badge ---
-
-function TranslationBadge({
-  translation,
-}: {
-  translation: TranslationInfo | null;
-}) {
-  if (!translation) return null;
-
-  // Translation was attempted but failed: surface the fallback to the user.
-  if (translation.translationFailed) {
-    const fromName = languageDisplayName(translation.translatedFrom);
-    return (
-      <View
-        style={[styles.translationBadge, styles.translationBadgeFailed]}
-        accessibilityRole="text"
-        accessibilityLabel={t("artifact.translationFailedA11y", {
-          language: fromName,
-        })}
-      >
-        <Ionicons
-          name="alert-circle-outline"
-          size={14}
-          color={Colors.error}
-        />
-        <Text style={[styles.translationBadgeText, styles.translationBadgeTextFailed]}>
-          {t("artifact.translationFailed", { language: fromName })}
-        </Text>
-      </View>
-    );
-  }
-
-  if (!translation.isTranslated) return null;
-
-  const fromName = languageDisplayName(translation.translatedFrom);
-  return (
-    <View
-      style={styles.translationBadge}
-      accessibilityRole="text"
-      accessibilityLabel={t("artifact.translatedFrom", { language: fromName })}
-    >
-      <Ionicons name="language-outline" size={14} color={Colors.textMain} />
-      <Text style={styles.translationBadgeText}>
-        {t("artifact.translatedFrom", { language: fromName })}
-      </Text>
-    </View>
   );
 }
 
@@ -1021,28 +939,6 @@ function pickSourceTitle(payload: ArtifactPayload | undefined): string | null {
   return null;
 }
 
-function pickTranslationInfo(
-  payload: ArtifactPayload | undefined,
-): TranslationInfo | null {
-  const translation = payload?.translation;
-  if (!translation || typeof translation !== "object") return null;
-  const t = translation as Record<string, unknown>;
-  const isTranslated = t["is_translated"] === true;
-  const translationFailed = t["translation_failed"] === true;
-  // Nothing to show when the transcript was already in the target language and
-  // no translation failure occurred.
-  if (!isTranslated && !translationFailed) return null;
-  const translatedFrom =
-    typeof t["translated_from"] === "string" && t["translated_from"]
-      ? (t["translated_from"] as string)
-      : typeof t["detected_language"] === "string"
-        ? (t["detected_language"] as string)
-        : null;
-  const targetLanguage =
-    typeof t["target_language"] === "string" ? (t["target_language"] as string) : null;
-  return { isTranslated, translatedFrom, targetLanguage, translationFailed };
-}
-
 function pickString(obj: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const v = obj[key];
@@ -1280,28 +1176,6 @@ const styles = StyleSheet.create({
     letterSpacing: Typography.display.letterSpacing,
     lineHeight: 38,
   },
-  translationBadge: {
-    flexDirection: "row",
-    alignSelf: "flex-start",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  translationBadgeFailed: {
-    backgroundColor: Colors.errorContainer,
-  },
-  translationBadgeText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-  },
-  translationBadgeTextFailed: {
-    color: Colors.error,
-  },
-
   section: {
     marginBottom: Spacing.lg,
   },
