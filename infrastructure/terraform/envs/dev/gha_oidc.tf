@@ -68,7 +68,7 @@ locals {
 variable "github_repository" {
   description = "owner/repo whose Actions jobs may assume the dev deploy role."
   type        = string
-  default     = "MedlockM/second-brain-app"
+  default     = "MedlockM2/second-brain-app"
 }
 
 variable "github_ref" {

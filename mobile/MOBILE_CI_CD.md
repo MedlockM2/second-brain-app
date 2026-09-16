@@ -1782,7 +1782,7 @@ eas build:list --platform all --status errored --limit 20 --json --non-interacti
 and opens **one GitHub issue per errored build id**, carrying the build page URL,
 the platform, `appVersion (appBuildVersion)`, the build profile, the commit hash
 and subject, the `error.errorCode`/`message` EAS attached to the build, and an
-`@MedlockM` mention.
+`@MedlockM2` mention.
 
 **`build:list` resolves `app.config.ts`, and that once required
 `EXPO_PUBLIC_API_BASE_URL` in the environment — a non-obvious coupling that cost

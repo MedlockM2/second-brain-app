@@ -292,7 +292,7 @@ jobs:
             TITLE="EAS build errored: ${PLATFORM} ${APP_VERSION} (${APP_BUILD_VERSION}) — ${ID}"
             BODY_FILE="${RUNNER_TEMP}/issue-${ID}.md"
             {
-              echo "@MedlockM — an EAS build errored, and nothing else in the pipeline says so."
+              echo "@MedlockM2 — an EAS build errored, and nothing else in the pipeline says so."
               echo "\`mobile-ota-or-build.yml\` starts builds with \`--no-wait\` and goes green as"
               echo "soon as the build is *scheduled*, so this issue is the only signal."
               echo ""

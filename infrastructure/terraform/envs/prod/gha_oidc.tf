@@ -45,7 +45,7 @@ variable "shared_ecr_repository_arn" {
 variable "github_repository" {
   description = "owner/repo whose Actions jobs may assume the prod deploy role."
   type        = string
-  default     = "MedlockM/second-brain-app"
+  default     = "MedlockM2/second-brain-app"
 }
 
 variable "github_environment" {
