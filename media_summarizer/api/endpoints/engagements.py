@@ -53,6 +53,11 @@ class RecentEngagementResponse(BaseModel):
     kind: str
     id: str
     title: Optional[str] = None
+    # Media tiles only, and only when ``title`` is null: the key of the label the
+    # client renders as "<label> — <created_at>" in the reader's language
+    # (task-400). ``created_at`` is the media's save date, not the engagement's.
+    title_label_key: Optional[str] = None
+    created_at: Optional[str] = None
     engaged_at: str
     creator_name: Optional[str] = None
     image_url: Optional[str] = None
@@ -125,6 +130,10 @@ async def list_recent_engagements(
                     kind=entry.kind,
                     id=entry.id,
                     title=entry.title,
+                    title_label_key=entry.title_label_key,
+                    created_at=(
+                        entry.saved_at.isoformat() if entry.saved_at else None
+                    ),
                     engaged_at=entry.engaged_at.isoformat(),
                     creator_name=entry.creator_name,
                     image_url=entry.image_url,

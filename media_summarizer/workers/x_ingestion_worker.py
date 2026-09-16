@@ -26,8 +26,8 @@ from media_summarizer.core.media_ingestion.media_metadata import (
     select_creator,
 )
 from media_summarizer.core.media_ingestion.title_derivation import (
-    derive_media_title,
     first_sentence,
+    select_title,
 )
 from media_summarizer.core.models.failure_codes import MediaFailureCode
 from media_summarizer.core.services.transcript_formatting import (
@@ -300,21 +300,20 @@ async def _upload_transcript(job_id: str, text: str) -> str:
     return transcript_s3_key
 
 
-def _build_titles(lookup_result: Dict[str, Any]) -> tuple[str, str]:
+def _build_titles(lookup_result: Dict[str, Any]) -> tuple[str, Optional[str]]:
     """Return ``(podcast_title, episode_title)`` for one X post.
 
     The post body is the only human-written text X exposes, so its first
     sentence is the title and the handle never is. Now routed through the shared
     derivation (task-266): the local first-line/truncate pair predated it, and a
-    body that normalises to nothing lands on the "X post — <date>" label instead
-    of the raw tweet id.
+    body that normalises to nothing yields no title at all rather than the raw
+    tweet id -- the library row already carries the ``x_post`` label key the save
+    gave it, and the app renders it with the save date (task-400).
     """
     username = str(lookup_result.get("author_username") or "").strip()
     podcast_title = f"X - @{username}" if username else "X post"
-    episode_title = derive_media_title(
+    episode_title = select_title(
         [first_sentence(str(lookup_result.get("text") or ""))],
-        media_type="article",
-        source_platform="x",
         authors=[username, lookup_result.get("author_name")],
     )
     return podcast_title, episode_title
@@ -476,7 +475,9 @@ async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
         lookup_result=lookup_result,
     )
 
-    job.title = episode_title
+    # Only overwrite what the save stored when the post actually names itself.
+    if episode_title:
+        job.title = episode_title
     # Display name first, handle second: both identify the same account, and the
     # tile shows one line (task-302 §7.3).
     x_creator = select_creator(

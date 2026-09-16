@@ -756,4 +756,23 @@ export const fr: Catalog = {
   "startupError.body":
     "Une erreur inattendue a interrompu le démarrage de l'application. Un nouvel essai suffit généralement à repartir.",
   "startupError.retryA11y": "Réessayer de démarrer l'application",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "Vidéo YouTube",
+  "mediaTitle.label.podcastEpisode": "Épisode de podcast",
+  "mediaTitle.label.article": "Article",
+  "mediaTitle.label.video": "Vidéo",
+  "mediaTitle.label.imagePost": "Publication photo",
+  "mediaTitle.label.instagramVideo": "Vidéo Instagram",
+  "mediaTitle.label.tiktokVideo": "Vidéo TikTok",
+  "mediaTitle.label.instagramPost": "Publication Instagram",
+  "mediaTitle.label.xPost": "Publication X",
+  "mediaTitle.label.audioNote": "Note audio",
+  "mediaTitle.label.voiceNote": "Message vocal",
+  "mediaTitle.label.sharedNote": "Note partagée",
+  "mediaTitle.label.document": "Document",
+  "mediaTitle.label.photo": "Photo",
+  "mediaTitle.label.savedItem": "Élément enregistré",
+
+  "folder.sourceOpenA11y": "Ouvrir {title}",
 };

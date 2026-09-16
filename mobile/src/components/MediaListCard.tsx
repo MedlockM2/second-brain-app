@@ -20,6 +20,7 @@ import {
 import type { MediaType } from "../types/media";
 import type { AnchorRect } from "./AnchoredContextMenu";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
+import { resolveMediaTitle } from "../lib/mediaTitle";
 import {
   MediaFailureBadge,
   describeWithFailure,
@@ -116,6 +117,11 @@ const EXCERPT_MAX_CHARS = 220;
 export interface MediaCardItem {
   media_item_id: string;
   title?: string | null;
+  /**
+   * Set instead of `title` on a media nothing named: the vignette builds its
+   * name from this key and `created_at` (task-400).
+   */
+  title_label_key?: string | null;
   /** The subtitle. Falls back to the domain of `source_url` when absent. */
   creator_name?: string | null;
   media_type?: MediaType | string | null;
@@ -203,10 +209,11 @@ export function MediaListCard<T extends MediaCardItem>({
   const timeAgo = getRelativeTime(item.created_at);
   const icon = getMediaTypeIcon(mediaType);
 
-  // The backend always stores a non-empty, human-readable title (task-266), so
-  // there is nothing left to invent here. The previous fallback rendered the
-  // raw source URL, which duplicated the domain line right below it.
-  const displayTitle = item.title;
+  // Whatever the row holds, or the label key it carries instead read as
+  // "<label> — <save date>" in the reader's language (task-400). Never the raw
+  // source URL, which the previous fallback drew and which duplicated the domain
+  // line right below it.
+  const displayTitle = resolveMediaTitle(item);
 
   const creator = item.creator_name?.trim() ?? "";
   const subtitle = creator || displayDomain;
@@ -260,12 +267,12 @@ export function MediaListCard<T extends MediaCardItem>({
       accessibilityLabel={describeWithFailure(
         creator
           ? t("mediaCard.a11yByCreator", {
-              title: displayTitle ?? "",
+              title: displayTitle,
               creator,
               type: mediaTypeLabel,
             })
           : t("mediaCard.a11yFromDomain", {
-              title: displayTitle ?? "",
+              title: displayTitle,
               type: mediaTypeLabel,
               domain: displayDomain,
             }),

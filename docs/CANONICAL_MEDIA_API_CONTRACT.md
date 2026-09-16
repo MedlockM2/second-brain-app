@@ -194,9 +194,21 @@ Response (`MediaStatusResponse`):
 
 `media_item.title` is the `title` attribute of the durable `user_media` row, i.e. the exact value
 `GET /api/media` returns for the same item — the detail header and the list vignette read one field,
-not two. It is nullable (a row whose metadata has not resolved yet has none); clients degrade to the
-source URL, never to a URL path segment, which used to surface raw provider ids such as a Spotify
-episode id as a title.
+not two. It is nullable: nothing the source exposed survived the derivation rules
+(`media_summarizer/core/media_ingestion/title_derivation.py`). Never a URL path segment, which used
+to surface raw provider ids such as a Spotify episode id as a title.
+
+**`title_label_key` names an untitled media (task-400).** It is set on exactly the rows whose `title`
+is null, and it is the *key* of a label — `photo`, `article`, `podcast_episode`, `instagram_video`,
+`x_post`, `voice_note`, `saved_item`… — not a label. The client renders `<label> — <created_at>` from
+its own catalogues, in the reader's language and with a locale-formatted date; the backend builds no
+such string, because storing one freezes English and a C-locale date into the row (an fr-FR tester
+saw `Article — 10 Sep 2026`). `title` always wins when both are present, so a worker that later
+learns the real title needs no cleanup write. A client that does not know a key falls back to its own
+"Untitled". The same pair travels on every contract that carries a media title: `GET /api/media`
+(list), `GET /api/media/{id}` (detail), `GET /api/search/transcripts` (hits) and
+`GET /api/engagements/recent` (media tiles, where `created_at` is the media's save date, not the
+engagement's).
 
 #### Ingestion failure contract
 

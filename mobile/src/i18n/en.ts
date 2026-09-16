@@ -843,4 +843,32 @@ export const en = {
   "startupError.body":
     "An unexpected error interrupted the app while it was starting. Trying again usually gets you back in.",
   "startupError.retryA11y": "Try starting the app again",
+
+  // --- The name of a media nothing named (task-400) ---
+  // The backend stores a label *key* and the save date, never a sentence: this
+  // is where the two become one, in the reader's language and with the date
+  // written the way their locale writes it. A catalogue is free to reorder the
+  // two halves or to change the separator — `ja` and `zh` parenthesise the date
+  // rather than dashing it.
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "YouTube video",
+  "mediaTitle.label.podcastEpisode": "Podcast episode",
+  "mediaTitle.label.article": "Article",
+  "mediaTitle.label.video": "Video",
+  "mediaTitle.label.imagePost": "Image post",
+  "mediaTitle.label.instagramVideo": "Instagram video",
+  "mediaTitle.label.tiktokVideo": "TikTok video",
+  "mediaTitle.label.instagramPost": "Instagram post",
+  "mediaTitle.label.xPost": "X post",
+  "mediaTitle.label.audioNote": "Audio note",
+  "mediaTitle.label.voiceNote": "Voice note",
+  "mediaTitle.label.sharedNote": "Shared note",
+  "mediaTitle.label.document": "Document",
+  "mediaTitle.label.photo": "Photo",
+  // Reached by a source the pipeline could not place, and by a label key a
+  // newer backend sends that this build does not know.
+  "mediaTitle.label.savedItem": "Saved item",
+
+  // --- A source row inside a folder ---
+  "folder.sourceOpenA11y": "Open {title}",
 } as const;

@@ -108,6 +108,7 @@ async def save_media_for_user(
     user_id: str,
     media_key: str,
     title: Optional[str] = None,
+    title_label_key: Optional[str] = None,
     creator_name: Optional[str] = None,
     source_url: Optional[str] = None,
     source_platform: Optional[str] = None,
@@ -123,6 +124,10 @@ async def save_media_for_user(
 
     Every call represents a distinct user save and therefore creates a fresh
     opaque id. Pipeline idempotence remains separate and keyed by ``media_key``.
+
+    ``title`` and ``title_label_key`` are the two halves of one decision made by
+    `derive_stored_title`: a real title, or the key of the label the app renders
+    with the save date (task-400). Exactly one of them is set.
 
     Raises:
         DurableMediaWriteError: the row could not be written. Callers on the save
@@ -152,6 +157,7 @@ async def save_media_for_user(
         media_item_id=media_item_id,
         media_key=media_key,
         title=title,
+        title_label_key=title_label_key,
         creator_name=creator_name,
         source_url=source_url,
         source_platform=source_platform,
@@ -257,12 +263,14 @@ def display_attributes_from_job(job: ProcessingJob) -> Dict[str, Any]:
 
     Shared by the worker mirror and by a deduplicated save, because both answer
     the same question -- what does this content actually look like -- and a save
-    that skipped the pipeline has nothing but the placeholder derived at
-    submission time ("Article — 09 Sep 2026", no creator, no cover) until this is
-    applied.
+    that skipped the pipeline has nothing but what was known at submission time
+    (often no title at all, just the label key the app draws, no creator, no
+    cover) until this is applied.
 
     Only non-empty values are returned, so a job that does not know a field
-    cannot blank out what another one resolved.
+    cannot blank out what another one resolved. That is also what keeps a generic
+    title correct: a job with no title of its own leaves ``title`` unset and the
+    row's ``title_label_key`` keeps being the thing the app renders.
     """
     attributes: Dict[str, Any] = {}
     for source_attr, target_attr in (

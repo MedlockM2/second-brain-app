@@ -101,6 +101,17 @@ class UserMediaRecord(BaseModel):
 
     # --- display metadata ----------------------------------------------------
     title: Optional[str] = None
+    # What to call the item when nothing named it (task-400). A stable key --
+    # ``photo``, ``article``, ``x_post``, ``saved_item``... -- that the app maps to
+    # its own catalogues and renders as "<label> — <saved_at>" in the reader's
+    # language. Building that sentence here would freeze English and a C-locale
+    # date into the row, which is what an fr-FR tester saw as "Article — 10 Sep
+    # 2026".
+    #
+    # `title` wins whenever it is set: a worker that later learns the real title
+    # writes it and this key simply stops being read, so no write has to remove it
+    # (``update_attributes`` cannot REMOVE anyway).
+    title_label_key: Optional[str] = None
     # Who publishes the media, not who wrote it: a channel, a show, a site, an
     # account (task-302 §7.3). One field, publisher-first -- in five of six
     # sources the entity a reader recognises is the publisher, not a person.
@@ -191,6 +202,7 @@ class UserMediaRecord(BaseModel):
         }
         optional: Dict[str, Any] = {
             "title": self.title,
+            "title_label_key": self.title_label_key,
             "creator_name": self.creator_name,
             "source_url": self.source_url,
             "source_platform": self.source_platform,

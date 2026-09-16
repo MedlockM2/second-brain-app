@@ -74,15 +74,19 @@ class RecentEngagement:
 
     Both kinds share ``kind`` / ``id`` / ``title`` / ``engaged_at``. Media entries
     carry ``creator_name``, ``image_url`` and ``media_type`` (the fallback icon
-    needs the type); folder entries carry ``item_count`` and up to
-    ``MAX_PREVIEW_IMAGES`` covers. A folder with no covered item returns an
-    empty list, and the client draws its accent-surface fallback.
+    needs the type), plus ``title_label_key`` and ``saved_at`` -- the pair a tile
+    needs to name a media nothing named (task-400); folder entries carry
+    ``item_count`` and up to ``MAX_PREVIEW_IMAGES`` covers. A folder with no
+    covered item returns an empty list, and the client draws its accent-surface
+    fallback. A folder always has a name, so it never carries a label key.
     """
 
     kind: str
     id: str
     engaged_at: datetime
     title: Optional[str] = None
+    title_label_key: Optional[str] = None
+    saved_at: Optional[datetime] = None
     creator_name: Optional[str] = None
     image_url: Optional[str] = None
     media_type: Optional[str] = None
@@ -200,6 +204,11 @@ async def list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> Lis
                 id=media_item_id,
                 engaged_at=engaged_at,
                 title=_as_optional_str(item.get("title")),
+                # Both projected by the `engaged-index` alongside the title, so a
+                # media nothing named is still nameable from the tile's own payload
+                # -- no per-tile row read (task-400).
+                title_label_key=_as_optional_str(item.get("title_label_key")),
+                saved_at=_parse_instant(item.get("saved_at")),
                 creator_name=_as_optional_str(item.get("creator_name")),
                 image_url=_as_optional_str(item.get("thumbnail_url")),
                 media_type=_as_optional_str(item.get("media_type")),

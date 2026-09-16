@@ -641,4 +641,23 @@ export const pt: Catalog = {
   "startupError.body":
     "Um erro inesperado interrompeu o início da aplicação. Normalmente, basta tentar novamente.",
   "startupError.retryA11y": "Tentar iniciar a aplicação novamente",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "Vídeo do YouTube",
+  "mediaTitle.label.podcastEpisode": "Episódio de podcast",
+  "mediaTitle.label.article": "Artigo",
+  "mediaTitle.label.video": "Vídeo",
+  "mediaTitle.label.imagePost": "Publicação com imagens",
+  "mediaTitle.label.instagramVideo": "Vídeo do Instagram",
+  "mediaTitle.label.tiktokVideo": "Vídeo do TikTok",
+  "mediaTitle.label.instagramPost": "Publicação do Instagram",
+  "mediaTitle.label.xPost": "Publicação no X",
+  "mediaTitle.label.audioNote": "Nota de áudio",
+  "mediaTitle.label.voiceNote": "Mensagem de voz",
+  "mediaTitle.label.sharedNote": "Nota partilhada",
+  "mediaTitle.label.document": "Documento",
+  "mediaTitle.label.photo": "Foto",
+  "mediaTitle.label.savedItem": "Item guardado",
+
+  "folder.sourceOpenA11y": "Abrir {title}",
 };

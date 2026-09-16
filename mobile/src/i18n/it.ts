@@ -640,4 +640,23 @@ export const it: Catalog = {
   "startupError.body":
     "Un errore inatteso ha interrotto l'avvio dell'app. Di solito basta riprovare.",
   "startupError.retryA11y": "Riprova ad avviare l'app",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "Video di YouTube",
+  "mediaTitle.label.podcastEpisode": "Episodio di podcast",
+  "mediaTitle.label.article": "Articolo",
+  "mediaTitle.label.video": "Video",
+  "mediaTitle.label.imagePost": "Post con immagini",
+  "mediaTitle.label.instagramVideo": "Video di Instagram",
+  "mediaTitle.label.tiktokVideo": "Video di TikTok",
+  "mediaTitle.label.instagramPost": "Post di Instagram",
+  "mediaTitle.label.xPost": "Post su X",
+  "mediaTitle.label.audioNote": "Nota audio",
+  "mediaTitle.label.voiceNote": "Messaggio vocale",
+  "mediaTitle.label.sharedNote": "Nota condivisa",
+  "mediaTitle.label.document": "Documento",
+  "mediaTitle.label.photo": "Foto",
+  "mediaTitle.label.savedItem": "Elemento salvato",
+
+  "folder.sourceOpenA11y": "Apri {title}",
 };

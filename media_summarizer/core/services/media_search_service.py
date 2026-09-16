@@ -290,6 +290,11 @@ async def load_display_details(
             continue
         details[media_item_id] = {
             "title": record.title,
+            # An untitled media is named by the app from this key and
+            # ``created_at``, exactly as in the library list (task-400). Reading it
+            # off the row is also why the index may keep an empty title for such a
+            # media without the hit rendering blank.
+            "title_label_key": record.title_label_key,
             "creator_name": record.creator_name,
             "media_type": record.media_type,
             "media_image": record.thumbnail_url,
@@ -347,6 +352,9 @@ def _record_to_search_result(record: UserMediaRecord) -> Dict[str, Any]:
     return {
         "media_item_id": record.media_item_id,
         "title": record.title,
+        # Null whenever `title` is set. When it is not, this is what the app names
+        # the row, together with `created_at` (task-400).
+        "title_label_key": record.title_label_key,
         "review_blurb": (
             record.review_blurb.model_dump() if record.review_blurb else None
         ),

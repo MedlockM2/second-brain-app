@@ -200,9 +200,17 @@ export interface MediaItemContract {
   /**
    * Display title of the durable library row — the same field `MediaListItem`
    * carries, so the detail header and the inbox vignette render one value. Null
-   * while the item's metadata has not resolved yet.
+   * on a media nothing named, which `title_label_key` names instead.
    */
   title?: string | null;
+  /**
+   * Set on exactly the rows whose `title` is null: the *key* of a label
+   * (`photo`, `article`, `x_post`…), never a label (task-400). The app builds
+   * "<label> — <created_at>" from it through `lib/mediaTitle.resolveMediaTitle`,
+   * in the reader's language — the backend no longer builds that string, and
+   * never knew which language to build it in.
+   */
+  title_label_key?: string | null;
   /**
    * Cover image, already resolved into a fetchable URL by the API — a re-hosted
    * cover is stored as an `s3://` locator server-side and signed on read, so a
@@ -291,6 +299,8 @@ export interface ReviewBlurb {
 export interface MediaListItem {
   media_item_id: string;
   title?: string | null;
+  /** See `MediaItemContract.title_label_key`: the pair travels on both. */
+  title_label_key?: string | null;
   /**
    * Triage card mirrored from the `review_blurb` artifact (task-323), for a
    * surface that has to say what a source is about without opening it.

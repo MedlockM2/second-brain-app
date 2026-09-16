@@ -640,4 +640,23 @@ export const hi: Catalog = {
   "startupError.body":
     "ऐप शुरू होते समय एक अनपेक्षित त्रुटि आ गई। दोबारा कोशिश करने से आमतौर पर काम बन जाता है।",
   "startupError.retryA11y": "ऐप को फिर से शुरू करने की कोशिश करें",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "यूट्यूब वीडियो",
+  "mediaTitle.label.podcastEpisode": "पॉडकास्ट एपिसोड",
+  "mediaTitle.label.article": "लेख",
+  "mediaTitle.label.video": "वीडियो",
+  "mediaTitle.label.imagePost": "तस्वीरों वाली पोस्ट",
+  "mediaTitle.label.instagramVideo": "इंस्टाग्राम वीडियो",
+  "mediaTitle.label.tiktokVideo": "टिकटॉक वीडियो",
+  "mediaTitle.label.instagramPost": "इंस्टाग्राम पोस्ट",
+  "mediaTitle.label.xPost": "एक्स पोस्ट",
+  "mediaTitle.label.audioNote": "ऑडियो नोट",
+  "mediaTitle.label.voiceNote": "वॉइस मैसेज",
+  "mediaTitle.label.sharedNote": "साझा किया गया नोट",
+  "mediaTitle.label.document": "दस्तावेज़",
+  "mediaTitle.label.photo": "तस्वीर",
+  "mediaTitle.label.savedItem": "सहेजा गया आइटम",
+
+  "folder.sourceOpenA11y": "{title} खोलें",
 };

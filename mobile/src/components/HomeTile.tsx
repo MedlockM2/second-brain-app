@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Colors, Typography, Spacing, BorderRadius } from "../constants/theme";
 import type { MediaType } from "../types/media";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
+import { resolveMediaTitle } from "../lib/mediaTitle";
 import {
   MediaFailureBadge,
   describeWithFailure,
@@ -99,6 +100,17 @@ export type HomeTileItem =
       kind: "media";
       id: string;
       title: string | null;
+      /**
+       * Set instead of `title` on a media nothing named, together with `savedAt`:
+       * the tile reads them as "<label> — <save date>" through
+       * `lib/mediaTitle.resolveMediaTitle` (task-400). Resolved here rather than
+       * by the two builders that assemble these tiles, so the name follows a
+       * language change on the next render like every other string on screen —
+       * both rows are memoised on their payloads, which no locale change touches.
+       */
+      titleLabelKey: string | null;
+      /** ISO 8601 save date of the media, half of the name above. */
+      savedAt: string | null;
       creator: string | null;
       /** Already a fetchable URL: the API signs re-hosted covers on read. */
       imageUrl: string | null;
@@ -293,9 +305,11 @@ function FolderMosaic({
 
 function tileTitle(item: HomeTileItem): string {
   if (item.kind === "folder") return item.name;
-  // The backend stores a non-empty, human-readable title (task-266); the guard
-  // covers the window before an item's metadata has resolved.
-  return item.title?.trim() || t("common.untitled");
+  return resolveMediaTitle({
+    title: item.title,
+    title_label_key: item.titleLabelKey,
+    created_at: item.savedAt,
+  });
 }
 
 function tileSubtitle(item: HomeTileItem): string {
@@ -324,7 +338,7 @@ function describeTile(item: HomeTileItem): string {
     });
   }
   const creator = item.creator?.trim();
-  const title = item.title?.trim() || t("common.untitled");
+  const title = tileTitle(item);
   const label = creator
     ? t("home.tile.a11yByCreator", { title, creator })
     : title;

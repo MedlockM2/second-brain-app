@@ -683,4 +683,23 @@ export const ar: Catalog = {
   "startupError.body":
     "أدّى خطأ غير متوقع إلى مقاطعة بدء التطبيق. عادةً ما تكفي المحاولة مرة أخرى للعودة.",
   "startupError.retryA11y": "إعادة محاولة بدء التطبيق",
+
+  "mediaTitle.generic": "{label} — {date}",
+  "mediaTitle.label.youtubeVideo": "فيديو يوتيوب",
+  "mediaTitle.label.podcastEpisode": "حلقة بودكاست",
+  "mediaTitle.label.article": "مقالة",
+  "mediaTitle.label.video": "فيديو",
+  "mediaTitle.label.imagePost": "منشور صور",
+  "mediaTitle.label.instagramVideo": "فيديو إنستغرام",
+  "mediaTitle.label.tiktokVideo": "فيديو تيك توك",
+  "mediaTitle.label.instagramPost": "منشور إنستغرام",
+  "mediaTitle.label.xPost": "منشور على إكس",
+  "mediaTitle.label.audioNote": "ملاحظة صوتية",
+  "mediaTitle.label.voiceNote": "رسالة صوتية",
+  "mediaTitle.label.sharedNote": "ملاحظة مشتركة",
+  "mediaTitle.label.document": "مستند",
+  "mediaTitle.label.photo": "صورة",
+  "mediaTitle.label.savedItem": "عنصر محفوظ",
+
+  "folder.sourceOpenA11y": "فتح {title}",
 };

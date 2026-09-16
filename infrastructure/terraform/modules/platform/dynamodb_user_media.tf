@@ -109,6 +109,11 @@ resource "aws_dynamodb_table" "user_media_v1" {
   # TTL sweeps it -- the signal disappears with its subject, which is the whole
   # reason task-303 stores it here instead of in an activity table.
   # user_id / media_item_id come for free: DynamoDB always projects the base keys.
+  #
+  # `title_label_key` and `saved_at` travel with the title because a media nothing
+  # named has no title at all since task-400: the tile is drawn from the label key
+  # and the save date, so leaving either out of the projection would make a
+  # "Continue learning" tile the one surface that has to read the row back.
   global_secondary_index {
     name            = "engaged-index"
     hash_key        = "user_id"
@@ -116,6 +121,8 @@ resource "aws_dynamodb_table" "user_media_v1" {
     projection_type = "INCLUDE"
     non_key_attributes = [
       "title",
+      "title_label_key",
+      "saved_at",
       "creator_name",
       "thumbnail_url",
       "media_type",
