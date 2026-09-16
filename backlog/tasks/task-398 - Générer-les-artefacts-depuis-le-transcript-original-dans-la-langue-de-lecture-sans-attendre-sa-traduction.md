@@ -3,9 +3,10 @@ id: TASK-398
 title: >-
   Générer les artefacts depuis le transcript original dans la langue de lecture,
   sans attendre sa traduction
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 12:27'
+updated_date: '2026-09-16 17:35'
 labels:
   - backend
   - artifacts
