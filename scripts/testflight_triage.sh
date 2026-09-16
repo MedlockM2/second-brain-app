@@ -14,7 +14,11 @@
 #   --no-deliver      Écrit le rapport sur disque sans le pousser à la session Pro.
 #
 # Prérequis:
-#   - claude-bedrock sur le PATH (le travail lourd ne consomme pas le quota Pro)
+#   - claude sur le PATH. Depuis le 2026-09-15, remplace claude-bedrock : c'est le
+#     profil par défaut de ce poste (~/.claude), authentifié sur le compte Mirakl,
+#     qui porte le travail lourd. La session de délivrance (testflight_session.sh)
+#     est isolée dans un CLAUDE_CONFIG_DIR séparé, sur le compte Pro perso — voir
+#     le commentaire de sa fonction claude_pro() pour le détail de la séparation.
 #   - une clé App Store Connect résolvable (cf. mobile/MOBILE_CI_CD.md)
 #   - worktree.baseRef = "head" dans .claude/settings.json
 #   - une session Pro nommée « TestFlight Feedback » vivante, pour la délivrance
@@ -60,12 +64,6 @@ done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
-
-if ! command -v claude-bedrock >/dev/null 2>&1; then
-  echo "Error: claude-bedrock is not available on PATH." >&2
-  echo "Un service systemd hérite d'un PATH minimal — vérifier Environment=PATH dans l'unité." >&2
-  exit 1
-fi
 
 # `claude-bedrock` n'est qu'un wrapper qui fait `exec claude`, et sur cette machine
 # ~/.local/bin/claude est un lien vers ~/snap/code/<révision>/.local/share/claude/
@@ -148,45 +146,38 @@ fi
 
 if [ "${DELIVER}" = false ]; then
   PROMPT="${PROMPT}
-NE DÉLIVRE PAS le rapport : écris-le sur disque et arrête-toi là. N'appelle ni ListAgents ni SendMessage. L'absence de délivrance est ici voulue, donc ce n'est pas un échec — termine avec succès."
+NE DÉLIVRE PAS le rapport : écris-le sur disque et arrête-toi là. N'appelle pas ./scripts/testflight_session.sh deliver. L'absence de délivrance est ici voulue, donc ce n'est pas un échec — termine avec succès."
 fi
 
 # La session de décision est le seul canal vers le téléphone de l'owner, et elle ne
 # survit ni à un redémarrage ni à un arrêt de la machine. Les runs des 5 et 6
 # septembre 2026 ont préparé du code que personne n'a vu, et celui du 7 a écrit un
 # rapport que personne n'a reçu : à chaque fois la session était simplement morte.
-# On la relève ici, avant le run. L'agent, lui, ne peut pas le faire — son
-# environnement Bedrock produirait une session sur le mauvais compte — alors que
-# testflight_session.sh désarme précisément ces variables. Démarrage idempotent.
-if [ "${DELIVER}" = true ]; then
-  if ! ./scripts/testflight_session.sh status >/dev/null 2>&1; then
-    echo "Session « TestFlight Feedback » arrêtée — démarrage avant le run."
-    if ./scripts/testflight_session.sh start; then
-      # Laisser la session s'enregistrer avant que l'agent appelle ListAgents.
-      sleep 20
-    else
-      echo "Avertissement: démarrage de la session impossible." >&2
-      echo "Le run continue — le rapport sera écrit sur disque, la sortie sera non-zéro." >&2
-    fi
-  fi
-fi
+#
+# Décision du 2026-09-16 : ne plus la relever ici, par avance. Le faire avant le
+# run l'exposait inutilement à la veille de la machine pendant toute la durée du
+# triage et des correctifs task-mobile (dépasse régulièrement 10 min) — exactement
+# ce qui a tué une session de test restée inactive une nuit entière. Depuis que
+# testflight_session.sh isole le compte Pro perso via CLAUDE_CONFIG_DIR (2026-09-15),
+# l'agent feedback-triage peut démarrer cette session lui-même, en Phase 7, au
+# moment précis où il a un rapport à délivrer — voir .claude/agents/feedback-
+# triage.md. Rien à faire ici.
 
 RUN_LOG="$(mktemp)"
 trap 'rm -f "${RUN_LOG}"' EXIT
 
-# `claude-bedrock`, jamais `claude` : le travail lourd ne touche pas le quota Pro. Les
+# `claude`, plus `claude-bedrock` depuis le 2026-09-15 : ce run tourne désormais sur
+# le profil par défaut de ce poste (~/.claude, compte Mirakl), pas sur Bedrock. Les
 # agents task-mobile qui écrivent les correctifs sont lancés *dans ce processus* par
-# l'outil Agent, donc ils héritent de CLAUDE_CODE_USE_BEDROCK et tournent sur Bedrock
-# eux aussi — c'est ce que prouvent, en négatif, les refus IAM
-# `bedrock:InvokeModelWithResponseStream` des 5 et 6 septembre 2026.
+# l'outil Agent et héritent donc du même profil — aucune variable à désarmer ici,
+# contrairement à testflight_session.sh qui isole son propre compte (Pro perso) via
+# CLAUDE_CONFIG_DIR pour ne jamais retomber sur ce profil par défaut.
 #
-# Piège, parce que ce dépôt porte désormais les deux conventions : task-mobile déclare
-# `model: opus`, un **alias**, et il doit le rester. Sous Bedrock l'alias se résout en
-# `us.anthropic.claude-opus-5`. Y écrire l'identifiant complet `claude-opus-5` — comme
-# le fait scripts/testflight_session.sh, où c'est au contraire indispensable — casserait
-# le run côté Bedrock. Les deux réglages sont justes, chacun de son côté de la barrière.
+# `model: opus` dans les définitions task-mobile reste un **alias** : sous ce profil
+# il se résout normalement, sans le piège de résolution Bedrock documenté par
+# ailleurs pour scripts/testflight_session.sh.
 set +e
-claude-bedrock --agent feedback-triage \
+claude --agent feedback-triage \
   --dangerously-skip-permissions \
   -p "${PROMPT}" 2>&1 | tee "${RUN_LOG}"
 AGENT_STATUS=${PIPESTATUS[0]}

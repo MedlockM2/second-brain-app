@@ -4,9 +4,10 @@
 # Sa procédure est dans .claude/agents/feedback-decisions.md.
 #
 # Usage:
-#   ./scripts/testflight_session.sh start     # démarre si elle ne tourne pas déjà
-#   ./scripts/testflight_session.sh status    # état, et l'URL Remote Control
-#   ./scripts/testflight_session.sh restart   # après une mise à jour de Claude Code
+#   ./scripts/testflight_session.sh start             # démarre si elle ne tourne pas déjà
+#   ./scripts/testflight_session.sh deliver <rapport>  # démarre avec le rapport, ou le transmet
+#   ./scripts/testflight_session.sh status            # état, et l'URL Remote Control
+#   ./scripts/testflight_session.sh restart           # après une mise à jour de Claude Code
 #   ./scripts/testflight_session.sh stop
 #   ./scripts/testflight_session.sh logs
 #
@@ -38,6 +39,24 @@
 #    Le contexte d'une session qui vit des jours finit compacté. La procédure de
 #    go/no-go doit donc être une définition d'agent, relue à chaque tour, pas un
 #    prompt de démarrage qui s'évapore.
+#
+# 5. `CLAUDE_CONFIG_DIR`, ajouté le 2026-09-15.
+#    Sur ce poste, le profil par défaut (~/.claude) est authentifié sur le compte
+#    Mirakl de l'employeur — c'est désormais lui qui porte le travail lourd
+#    (scripts/testflight_triage.sh, `claude` nu, plus de claude-bedrock). Sans cette
+#    variable, cette session « Pro » démarrerait donc sur le compte Mirakl et non
+#    sur l'abonnement personnel. CLAUDE_CONFIG_DIR isole entièrement credentials,
+#    settings et MCP user-scope dans un répertoire à part : s'y logguer une fois
+#    avec le compte perso (`CLAUDE_CONFIG_DIR="$HOME/.claude-pro-perso" claude auth
+#    login`) suffit, c'est permanent.
+#
+#    Effet de bord découvert le 2026-09-16, en cassant un run réel : `ListAgents` et
+#    `SendMessage` ne voient que les sessions de leur propre CLAUDE_CONFIG_DIR. Un
+#    agent tournant sous le profil par défaut (le triage) ne peut donc **jamais**
+#    atteindre cette session par ces outils, aucun moyen de contourner — vérifié
+#    aussi côté CLI : `claude --resume <id> --bg` sur une session déjà vivante crée
+#    toujours une copie, id complet ou pas, jamais une injection en place. D'où
+#    `deliver` ci-dessous plutôt qu'un `SendMessage` tenté depuis l'agent de triage.
 
 set -euo pipefail
 
@@ -45,10 +64,12 @@ SESSION_NAME="TestFlight Feedback"
 MODEL="claude-opus-5"
 AGENT="feedback-decisions"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PRO_CONFIG_DIR="${HOME}/.claude-pro-perso"
 
-# Le compte Pro, jamais Bedrock : cf. note 1 ci-dessus.
+# Le compte Pro perso, jamais Mirakl ni Bedrock : cf. notes 1 et 5 ci-dessus.
 claude_pro() {
-  env -u CLAUDE_CODE_USE_BEDROCK -u AWS_BEARER_TOKEN_BEDROCK -u ANTHROPIC_MODEL claude "$@"
+  env -u CLAUDE_CODE_USE_BEDROCK -u AWS_BEARER_TOKEN_BEDROCK -u ANTHROPIC_MODEL \
+    CLAUDE_CONFIG_DIR="${PRO_CONFIG_DIR}" claude "$@"
 }
 
 # `claude agents --json` rend deux identifiants distincts et non interchangeables :
@@ -73,6 +94,13 @@ for row in rows if isinstance(rows, list) else []:
 }
 
 start_session() {
+  # Les apostrophes du texte par défaut cassent le parsing si on les met dans
+  # ${1:-...} directement (nombre impair de guillemets simples dans le mot par
+  # défaut) : affectation à part.
+  local prompt="${1:-}"
+  if [ -z "${prompt}" ]; then
+    prompt="Tu es la session de pilotage des décisions sur les feedbacks beta TestFlight. Reste disponible et n'entreprends rien tant qu'un rapport n'arrive pas. Réponds en une ligne que tu es prête."
+  fi
   local existing
   existing="$(session_field sessionId)"
   if [ -n "${existing}" ]; then
@@ -87,7 +115,43 @@ start_session() {
     --remote-control "${SESSION_NAME}" \
     --agent "${AGENT}" \
     --model "${MODEL}" \
-    "Tu es la session de pilotage des décisions sur les feedbacks beta TestFlight. Reste disponible et n'entreprends rien tant qu'un rapport n'arrive pas. Réponds en une ligne que tu es prête."
+    "${prompt}"
+}
+
+# Point d'entrée du triage (feedback-triage.md, Phase 7). Ne jamais laisser ce
+# dernier appeler ListAgents/SendMessage lui-même : cf. note 5 plus haut, ça ne
+# peut pas fonctionner depuis son profil. Deux cas :
+#   - session absente (le cas normal, puisqu'on ne la démarre plus qu'ici) :
+#     démarrage à froid avec le rapport comme prompt initial, aucun SendMessage ;
+#   - session déjà vivante (run répété le même jour, ou owner en cours de revue) :
+#     un jetable tourne *dans* le profil Pro perso via claude_pro, donc il voit sa
+#     sœur et peut lui parler par SendMessage -- la frontière de profil n'existe
+#     plus puisqu'il n'y en a qu'un des deux côtés cette fois.
+deliver_report() {
+  local report_path="${1:-}"
+  if [ -z "${report_path}" ]; then
+    echo "Usage: $0 deliver <chemin-du-rapport>" >&2
+    return 1
+  fi
+  if [ ! -f "${report_path}" ]; then
+    echo "Erreur: rapport introuvable: ${report_path}" >&2
+    return 1
+  fi
+
+  local existing
+  existing="$(session_field sessionId)"
+
+  if [ -z "${existing}" ]; then
+    start_session "Le triage TestFlight vient de se terminer. Lis ${report_path} et prépare le go/no-go à présenter à l'owner."
+    return $?
+  fi
+
+  echo "Session « ${SESSION_NAME} » déjà en cours — délivrance par SendMessage."
+  cd "${REPO_ROOT}"
+  claude_pro -p \
+    "Utilise ListAgents pour vérifier la présence de la session nommée exactement « ${SESSION_NAME} », puis envoie-lui avec SendMessage ce message : « Nouveau rapport de triage TestFlight disponible : ${report_path}. Lis-le et prépare le go/no-go. » Réponds en une ligne confirmant l'envoi ou l'échec." \
+    --allowedTools "ListAgents,SendMessage" \
+    --dangerously-skip-permissions
 }
 
 stop_session() {
@@ -103,6 +167,9 @@ stop_session() {
 case "${1:-status}" in
   start)
     start_session
+    ;;
+  deliver)
+    deliver_report "${2:-}"
     ;;
   stop)
     stop_session
@@ -134,7 +201,7 @@ case "${1:-status}" in
     echo "URL Remote Control (téléphone) : voir la ligne « /remote-control is active » de $0 logs"
     ;;
   *)
-    echo "Usage: $0 {start|stop|restart|status|logs}" >&2
+    echo "Usage: $0 {start|deliver <rapport>|stop|restart|status|logs}" >&2
     exit 1
     ;;
 esac
