@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vignette média en cours de traitement — trois variantes (task-401)</title>
+<!--
+  Maquette autonome : aucune balise <link>, <script> ni <img>, donc aucune requête
+  réseau. Les animations sont de vraies animations CSS — ouvre ce fichier dans un
+  navigateur pour les voir tourner, une capture figée ne rend rien du sujet.
+
+  Police et icônes : même convention que
+  mobile-design-mockups/home_unsorted_review_card/code.html — pile système
+  équivalente à ce que l'app rend (aucune police custom chargée), glyphes Ionicons
+  extraits de la fonte que l'app embarque (@expo/vector-icons, Ionicons.ttf,
+  512 unités/em) via fontTools SVGPathPen + retournement en Y, reportés dans des
+  <symbol viewBox="0 0 512 512">.
+
+  Toutes les couleurs, rayons, ombres, espacements, tailles de texte et mesures de
+  tuile viennent de mobile/src/constants/theme.ts et de
+  mobile/src/components/HomeTile.tsx, recopiés tels quels ci-dessous.
+-->
+<style>
+  :root {
+    /* --- Colors (theme.ts) --- */
+    --primary: #ffcb05;
+    --on-primary: #1c1b1a;
+    --primary-tint: rgba(255, 203, 5, 0.05); /* Colors.primaryTint, déjà un token */
+    --background: #fcf9f6;
+    --surface: #ffffff;
+    --surface-container: #f1edea;
+    --surface-container-high: #ebe7e5;
+    --surface-container-low: #f7f3f0;
+    --text-main: #2b2d42;
+    --text-muted: #8d99ae;
+    --text-subtle: #5c6880;
+    --outline-variant: #c8c7bd;
+    --error: #ba1a1a;
+    --on-error: #ffffff;
+
+    /* --- Spacing (theme.ts) --- */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    --space-xxl: 48px;
+
+    /* --- BorderRadius (theme.ts) --- */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+
+    /* --- Shadows.soft (theme.ts) --- */
+    --shadow-soft: 0 8px 24px rgba(43, 45, 66, 0.04);
+
+    /* --- Géométrie de HomeTile.tsx, textuellement recopiée --- */
+    --tile-width: 200px;           /* TILE_WIDTH */
+    --tile-cover-h: 113px;         /* TILE_COVER_HEIGHT */
+    --tile-gap: var(--space-md);   /* TILE_GAP = Spacing.md */
+    --tile-title-lh: 20px;         /* TILE_TITLE_LINE_HEIGHT */
+    --tile-subtitle-lh: 18px;      /* TILE_SUBTITLE_LINE_HEIGHT */
+    /* TILE_HEIGHT = COVER_H + Spacing.sm + 3*title_lh + Spacing.xs + subtitle_lh
+       = 113 + 8 + 60 + 4 + 18 = 203 */
+    --tile-height: 203px;
+
+    --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: var(--space-xl) var(--space-lg) var(--space-xxl);
+    background: var(--surface-container-high);
+    color: var(--text-main);
+    font-family: var(--font-system);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 var(--space-sm); }
+  h2 { font-size: 20px; font-weight: 600; margin: var(--space-xxl) 0 var(--space-xs); }
+  h3 { font-size: 16px; font-weight: 600; margin: var(--space-lg) 0 var(--space-sm); }
+  p, li { font-size: 16px; line-height: 1.6; color: var(--text-main); margin: 0 0 var(--space-sm); max-width: 78ch; }
+  .lede { color: var(--text-subtle); }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--surface-container-low);
+    border-radius: var(--radius-sm);
+    padding: 1px 4px;
+  }
+
+  .panel { background: var(--surface); border-radius: var(--radius-xl); padding: var(--space-lg); margin-bottom: var(--space-lg); }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+  .swatch {
+    display: flex; align-items: center; gap: var(--space-sm);
+    background: var(--surface-container-low);
+    border-radius: var(--radius-full);
+    padding: var(--space-xs) var(--space-md) var(--space-xs) var(--space-xs);
+    font-size: 13px; color: var(--text-subtle);
+  }
+  .swatch i { width: var(--space-lg); height: var(--space-lg); border-radius: var(--radius-full); display: block; }
+
+  .cells { display: flex; flex-wrap: wrap; gap: var(--space-lg); align-items: flex-start; }
+  .cell { display: flex; flex-direction: column; gap: var(--space-sm); }
+  .caption { font-size: 13px; font-weight: 500; color: var(--text-subtle); margin: 0; max-width: 460px; }
+  .caption b { color: var(--text-main); font-weight: 600; }
+
+  .frame {
+    background: var(--background);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg) 0;
+  }
+
+  .row-label {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: 0 var(--space-lg) var(--space-md);
+  }
+  .row-label span { font-size: 20px; font-weight: 600; color: var(--text-main); }
+
+  .tile-row { display: flex; gap: var(--tile-gap); padding: 0 var(--space-md); }
+
+  .ic { display: block; flex: 0 0 auto; fill: currentColor; }
+  .amber { color: var(--primary); }
+  .ink { color: var(--text-main); }
+  .muted { color: var(--text-muted); }
+
+  /* ================================================================
+     HomeTile — géométrie et styles réels (HomeTile.tsx, styles L336-396)
+     ================================================================ */
+  .tile { width: var(--tile-width); height: var(--tile-height); }
+  .cover {
+    position: relative;
+    width: var(--tile-width);
+    height: var(--tile-cover-h);
+    border-radius: var(--radius-lg);
+    background: var(--surface-container-low);
+    overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cover.photo-a { background: linear-gradient(135deg, #d9c48a 0%, #8a7350 55%, #4b3f30 100%); }
+  .cover.photo-b { background: linear-gradient(135deg, #93a8b8 0%, #4d6a80 55%, #263846 100%); }
+  .cover-icon { width: 28px; height: 28px; color: var(--text-muted); }
+
+  .title {
+    font-size: 15px; font-weight: 500; line-height: var(--tile-title-lh);
+    color: var(--text-main); margin: var(--space-sm) 0 0;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  }
+  .subtitle {
+    font-size: 13px; font-weight: 400; line-height: var(--tile-subtitle-lh);
+    color: var(--text-subtle); margin: var(--space-xs) 0 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .subtitle.status-text { color: var(--text-subtle); }
+
+  /* --- Badge d'échec réel, MediaFailureBadge.tsx, pour référence directe --- */
+  .badge-status {
+    position: absolute;
+    display: flex; align-items: center; gap: var(--space-xs);
+    width: max-content;
+    padding: 2px var(--space-sm); /* Spacing.xs/2 vertical, Spacing.sm horizontal */
+    border-radius: var(--radius-md);
+    font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .badge-status .ic { width: 13px; height: 13px; flex-shrink: 0; } /* Typography.small.fontSize */
+  .badge-fail {
+    top: var(--space-sm); inset-inline-start: var(--space-sm);
+    background: var(--error); color: var(--on-error);
+  }
+
+  /* ================================================================
+     Variante A — Badge sync ambre (sibling de MediaFailureBadge)
+     Même position, même forme, même taille d'icône ; fond primary au lieu
+     d'error, glyphe sync (plein) qui tourne en continu.
+     ================================================================ */
+  .badge-a {
+    top: var(--space-sm); inset-inline-start: var(--space-sm);
+    background: var(--primary); color: var(--on-primary);
+  }
+  .badge-a .ic { animation: tile-spin 1.4s linear infinite; }
+  @keyframes tile-spin { to { transform: rotate(360deg); } }
+
+  /* ================================================================
+     Variante B — Balayage flou (expo-blur + Animated, sans icône)
+     Bande translucide floutée qui balaie le cover ; le sous-titre, vide
+     tant que le créateur n'est pas connu, porte le texte d'état.
+     ================================================================ */
+  .blur-sweep {
+    position: absolute; inset-block: 0; inset-inline-start: 0;
+    width: 90px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    animation: tile-sweep 1.9s ease-in-out infinite;
+  }
+  @keyframes tile-sweep {
+    from { transform: translateX(-100px); }
+    to   { transform: translateX(210px); }
+  }
+
+  /* ================================================================
+     Variante C — Pastille pouls (bas, centrée) + titre remplacé
+     Toute la pastille respire (échelle + opacité) ; le glyphe pulse est
+     immobile, c'est la pastille entière qui porte le mouvement.
+     ================================================================ */
+  .badge-c {
+    bottom: var(--space-sm); left: 50%;
+    background: var(--primary); color: var(--on-primary);
+    animation: tile-breathe 1.8s ease-in-out infinite;
+  }
+  @keyframes tile-breathe {
+    0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.88; }
+    50%      { transform: translateX(-50%) scale(1.06); opacity: 1; }
+  }
+  .title.status-title { color: var(--text-main); }
+
+  .spec { margin: 0; padding: 0; list-style: none; }
+  .spec li { font-size: 13px; line-height: 1.6; color: var(--text-subtle); margin: 0; padding-inline-start: var(--space-md); position: relative; }
+  .spec li::before {
+    content: ""; position: absolute; inset-inline-start: 0; top: 9px;
+    width: var(--space-xs); height: var(--space-xs);
+    border-radius: var(--radius-full); background: var(--primary);
+  }
+  .spec b { color: var(--text-main); font-weight: 600; }
+  .cols { display: flex; flex-wrap: wrap; gap: var(--space-lg); }
+  .cols > * { flex: 1 1 340px; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="ion-sync" viewBox="0 0 512 512"><path d="M230 63Q239 61 258.5 61.5Q278 62 287 64Q372 78 419 150Q451 197 451 253V262L460 253Q470 243 473 242Q480 238 487 242Q493 245 495 252Q497 259 493 265Q490 270 467.5 291.5Q445 313 443 314Q435 317 429 314Q426 312 401 288.5Q376 265 375 263Q372 255 376 248Q378 245 381.5 242.5Q385 240 390 240Q398 240 401 244Q402 246 411 254L419 261L418 252Q417 213 401 182Q388 157 368 138Q326 98 269 93.5Q212 89 164 121Q148 132 132 149Q122 160 115 160Q103 160 100 148Q98 140 107 129Q157 73 230 63ZM69 198Q69 198 69 198Q76 194 83 198Q86 200 111 223.5Q136 247 137 249Q138 252 138 257Q138 263 133.5 267.5Q129 272 122 272Q115 272 102 260Q102 260 93 251V259Q93 293 109 326Q132 376 181 401Q230 426 284 416Q341 406 383 359Q389 352 396 352Q405 352 409.5 359Q414 366 411 374Q404 389 375 411Q321 451 255 451Q210 451 169 430Q121 406 92 362Q63 318 61 263Q61 263 60 251L51 260Q36 275 26 271Q19 267 17 260Q15 253 19 247Q22 243 44.5 221Q67 199 69 198Z"/></symbol>
+  <symbol id="ion-pulse" viewBox="0 0 512 512"><path d="M171 49Q171 49 171 49Q185 44 191 58Q192 61 217.5 216Q243 371 244 372.5Q245 374 265.5 301Q286 228 288 222Q291 213 298 210Q302 207 308 209Q314 211 317 215Q319 218 333 261Q333 261 347 304H367H386L390 298Q397 283 412.5 276.5Q428 270 443 274Q465 279 474 297Q491 330 464 355Q450 369 429 368Q416 367 405 360Q395 353 390 342Q390 342 386 336H361Q335 336 332 335Q325 333 322 327Q320 324 313 301Q311 295 309 290Q307 285 306 282Q305 279 305 279Q305 279 280 366Q255 453 254 456Q251 462 244 463Q232 467 226 456Q224 452 198.5 298.5Q173 145 173 144Q173 144 170 156Q167 168 161.5 188.5Q156 209 150 234Q127 325 126 328Q123 334 116 335Q113 336 78.5 336Q44 336 40.5 334Q37 332 35 328Q26 315 40 306Q40 306 44 304H72H100L130 181Q161 59 162 56Q165 51 171 49Z"/></symbol>
+  <symbol id="ion-alert-circle" viewBox="0 0 512 512"><path d="M242 49Q312 44 370 82Q387 94 403 110Q453 159 463 232Q464 239 464 256Q464 273 463 280Q453 353 403 403Q353 453 280 463Q273 464 256 464Q239 464 232 463Q159 453 109 403Q59 353 50 281Q40 206 82 142Q110 101 151.5 76.5Q193 52 242 49ZM266 147Q258 142 250 145Q240 148 236 158Q234 162 237 229Q240 293 242 296Q246 305 256 305Q262 305 267 301Q270 297 271 290.5Q272 284 274 244Q278 162 276 157Q273 151 266 147ZM262 329Q262 329 262 329Q256 327 250 329Q236 333 236 348Q236 357 243 363Q256 375 269 363Q276 357 276 348Q276 333 262 329Z"/></symbol>
+  <symbol id="ion-document-text-outline" viewBox="0 0 512 512"><path d="M192 32Q241 32 249.5 33Q258 34 266 38Q272 41 348 117Q424 193 426 199Q431 207 431.5 220Q432 233 432 320Q432 425 430 431.5Q428 438 424.5 445.5Q421 453 413 461Q405 469 397 473Q386 479 372 479.5Q358 480 256 480Q154 480 140 479.5Q126 479 115 473Q107 469 99 461Q91 453 87.5 445.5Q84 438 82 431.5Q80 425 80 256Q80 87 82 80.5Q84 74 87.5 66.5Q91 59 99 51Q107 43 115 39Q123 35 128.5 34Q134 33 192 32ZM240 121V64H190Q140 64 136 65Q116 70 113 91Q112 97 112 256Q112 415 113 421Q115 438 131 445L136 448H256H376L382 445Q397 437 399 421Q400 415 400 320V225L340 224Q279 224 275 222Q262 218 252.5 207.5Q243 197 241 184Q240 179 240 121ZM331 192H377L325 139L272 87V134L273 181L275 185Q277 188 281 190Q285 192 331 192ZM169 274Q172 272 257 272L342 273L345 275Q350 279 351 285Q354 298 342 303Q340 304 256 304Q172 304 170 303Q160 299 160 288Q160 278 169 274ZM169 353Q169 353 169 353Q171 352 256 352Q341 352 343 354Q350 357 351 363Q352 366 352 367Q354 372 348 379Q346 381 342.5 382.5Q339 384 256 384Q173 384 169 382Q163 379 161 372Q158 360 169 353Z"/></symbol>
+  <symbol id="ion-play-circle-outline" viewBox="0 0 512 512"><path d="M241 49Q256 48 269 49Q351 54 407 113Q452 161 462 228Q464 238 464 256Q464 274 462 284Q454 339 421 382Q405 405 382 421Q339 454 284 462Q274 464 256 464Q238 464 228 462Q173 454 130 421Q107 405 91 382Q58 339 50 284Q48 274 48 256Q48 238 50 228Q58 174 91 130Q107 108 130 91Q181 53 241 49ZM284 82Q278 81 261.5 80.5Q245 80 240 81Q212 84 193 92Q149 109 119.5 145Q90 181 82 229Q81 238 81 256Q81 274 82 283Q89 326 114 360Q139 394 178 414Q214 432 256 432Q298 432 334 414Q372 394 397 360.5Q422 327 430 284Q431 275 431 256.5Q431 238 430 229Q420 169 378 129Q338 92 284 82ZM207 177Q207 177 207 177Q210 175 213.5 176.5Q217 178 274 212.5Q331 247 333 249Q336 252 336 256Q336 260 333 263Q330 266 274 300Q218 334 214 335Q210 337 207 335Q204 333 202 330.5Q200 328 200 256Q200 184 202 181.5Q204 179 207 177Z"/></symbol>
+  <symbol id="ion-headset-outline" viewBox="0 0 512 512"><path d="M233 33Q240 33 255.5 33Q271 33 278 33Q345 41 400 88Q474 151 480 244Q481 275 467 325Q454 365 444 390Q430 422 406 445Q390 462 372 471Q343 485 317 477Q301 472 287 460Q272 446 279 427Q280 422 324.5 344.5Q369 267 372 263Q380 252 396 252Q405 252 418 260Q435 270 443 280Q445 283 446 278Q446 277 446 274Q456 222 424 166Q400 123 358 96Q316 69 269 65Q216 60 166 88.5Q116 117 88 166Q64 209 64 255Q64 277 67 282Q68 283 69 280Q77 270 94 260Q107 252 116 252Q132 252 140 263Q143 267 187.5 344.5Q232 422 233 427Q240 446 225 460Q211 472 195 477Q151 491 106 446Q91 431 80 413Q67 391 51 342Q30 280 32 244Q37 174 82 118Q98 98 118 82Q170 40 233 33ZM108 289Q96 296 93 303Q88 312 88 330Q88 349 94 368Q107 403 132 426Q162 455 184 447Q188 445 196 441L203 437L202 434Q200 431 159 358.5Q118 286 117 285Q116 284 108 289ZM413 295Q413 295 413 295Q410 292 403 288Q403 288 396 284L395 286Q394 288 352 362Q310 436 309.5 436.5Q309 437 312.5 439Q316 441 321 443.5Q326 446 328 447Q340 451 358.5 441.5Q377 432 392 414Q415 385 423 352Q427 329 423 312Q420 301 413 295Z"/></symbol>
+</svg>
+
+<header>
+  <h1>Vignette média en cours de traitement — trois variantes</h1>
+  <p class="lede">
+    task-401. Le problème rapporté : une vignette de « Ajouts récents » qui vient
+    d'être sauvegardée affiche « Sans titre » et rien d'autre — aucun signal qu'elle
+    est en cours de traitement, à moins de l'ouvrir. Les trois variantes ci-dessous
+    ajoutent ce signal <b>par le mouvement</b>, sur la géométrie réelle de
+    <code>HomeTile</code> (200×113 le cover, 203 la tuile entière), avec les valeurs
+    de <code>mobile/src/constants/theme.ts</code>. Ouvre ce fichier dans un
+    navigateur : les animations sont réelles. L'argumentaire — règles citées,
+    implémentations de référence, ce que chaque variante abandonne — est dans
+    <code>README.md</code>, à côté.
+  </p>
+</header>
+
+<section class="panel">
+  <h3>Les tokens employés, et rien d'autre</h3>
+  <ul class="swatches">
+    <li class="swatch"><i style="background:var(--primary)"></i> primary #ffcb05</li>
+    <li class="swatch"><i style="background:var(--error)"></i> error #ba1a1a</li>
+    <li class="swatch"><i style="background:var(--surface)"></i> surface #ffffff</li>
+    <li class="swatch"><i style="background:var(--surface-container-low)"></i> surfaceContainerLow #f7f3f0</li>
+    <li class="swatch"><i style="background:var(--text-main)"></i> textMain #2b2d42</li>
+    <li class="swatch"><i style="background:var(--text-subtle)"></i> textSubtle #5c6880</li>
+    <li class="swatch"><i style="background:var(--text-muted)"></i> textMuted #8d99ae</li>
+  </ul>
+  <p class="caption" style="margin-top:var(--space-md);max-width:78ch">
+    Tuile : 200×113 le cover (<code>TILE_WIDTH</code>/<code>TILE_COVER_HEIGHT</code>),
+    203 la tuile entière (<code>TILE_HEIGHT</code>, réservé — pas mesuré au contenu).
+    Titre 15/500, 3 lignes max, <code>marginTop: Spacing.sm</code>. Sous-titre 13/400,
+    1 ligne, <code>marginTop: Spacing.xs</code>. Badge de statut : icône et texte
+    13px (<code>Typography.small</code>), <code>gap: Spacing.xs</code>,
+    <code>paddingHorizontal: Spacing.sm</code>, <code>borderRadius: BorderRadius.md</code> —
+    exactement la forme de <code>MediaFailureBadge</code>.
+  </p>
+</section>
+
+<h2>État actuel — la référence, pas une variante</h2>
+<p class="lede">
+  <code>HomeTile</code>, <code>mobile/src/components/HomeTile.tsx</code>. La tuile de
+  droite est en cours de traitement (<code>status: "processing"</code>) : elle
+  affiche <code>t("common.untitled")</code> (« Sans titre ») et rien de plus. Rien ne
+  la distingue visuellement de sa voisine résolue, sinon le texte du titre lui-même —
+  ce que l'owner décrit exactement.
+</p>
+<div class="frame">
+  <div class="row-label"><span>Ajouts récents</span></div>
+  <div class="tile-row">
+    <div class="cell">
+      <div class="tile">
+        <div class="cover photo-a"></div>
+        <div class="title">Le mythe de la productivité</div>
+        <div class="subtitle">Basecamp Blog</div>
+      </div>
+    </div>
+    <div class="cell">
+      <div class="tile">
+        <div class="cover"><svg class="ic cover-icon"><use href="#ion-document-text-outline"/></svg></div>
+        <div class="title">Sans titre</div>
+        <div class="subtitle"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Pour rappel — le seul marqueur qui existe aujourd'hui</h2>
+<p class="lede">
+  <code>MediaFailureBadge</code> : le seul statut qui a une traduction visuelle sur la
+  tuile est <code>"failed"</code>. Il vit en <code>position: absolute</code>,
+  <code>top</code>/<code>start: Spacing.sm</code>, fond <code>Colors.error</code>,
+  glyphe Ionicons <b>plein</b> <code>alert-circle</code>, texte
+  <code>t("mediaStatus.failedBadge")</code> (« ÉCHEC »). Les trois variantes
+  s'appuient sur cette même grammaire de badge pour rester cohérentes avec l'app,
+  sauf B qui n'en porte pas.
+</p>
+<div class="frame">
+  <div class="tile-row" style="padding-bottom:var(--space-md)">
+    <div class="cell">
+      <div class="tile">
+        <div class="cover photo-b">
+          <div class="badge-status badge-fail">
+            <svg class="ic"><use href="#ion-alert-circle"/></svg>
+            <span>ÉCHEC</span>
+          </div>
+        </div>
+        <div class="title">Sans titre</div>
+        <div class="subtitle"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>A — « Badge sync ambre »</h2>
+<div class="cols">
+  <div class="panel">
+    <h3>Ce que la variante pose</h3>
+    <ul class="spec">
+      <li>Même position, même forme, même taille que <code>MediaFailureBadge</code> : <code>top</code>/<code>start: Spacing.sm</code>, <code>gap: Spacing.xs</code>, <code>paddingHorizontal: Spacing.sm</code>, <code>borderRadius: BorderRadius.md</code>.</li>
+      <li>Fond <b><code>Colors.primary</code></b> (au lieu d'<code>error</code>), texte/icône <b><code>Colors.onPrimary</code></b> (au lieu d'<code>onError</code>).</li>
+      <li>Icône : <b><code>sync</code></b> (glyphe plein, 13 px = <code>Typography.small.fontSize</code>, comme <code>alert-circle</code>), qui tourne en continu — seul élément animé.</li>
+      <li>Texte : « EN COURS », même registre que « ÉCHEC » (majuscules, terse).</li>
+      <li>Le titre n'est pas touché : il reste « Sans titre » tant que la métadonnée n'est pas résolue, exactement comme aujourd'hui.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>Ce qu'elle abandonne</h3>
+    <ul class="spec">
+      <li>La rareté de l'ambre : si plusieurs imports sont en cours dans la même rangée, la rangée devient un mur de pastilles ambre (cellule ci-dessous).</li>
+      <li>La visibilité au premier balayage : un badge de 13 px dans un coin peut être manqué pendant un swipe rapide de la rangée horizontale — le texte du titre, lui, ne dit toujours rien.</li>
+    </ul>
+  </div>
+</div>
+<div class="cells">
+  <div class="cell">
+    <p class="caption">Une tuile en cours, en contexte à côté d'une tuile résolue</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"></div>
+            <div class="title">Le mythe de la productivité</div>
+            <div class="subtitle">Basecamp Blog</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover">
+              <svg class="ic cover-icon"><use href="#ion-headset-outline"/></svg>
+              <div class="badge-status badge-a">
+                <svg class="ic"><use href="#ion-sync"/></svg>
+                <span>EN COURS</span>
+              </div>
+            </div>
+            <div class="title">Sans titre</div>
+            <div class="subtitle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption">Trois tuiles en cours dans la même rangée — <b>le mur d'ambre</b>, la tension à charge de la variante</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a">
+              <div class="badge-status badge-a"><svg class="ic"><use href="#ion-sync"/></svg><span>EN COURS</span></div>
+            </div>
+            <div class="title">Sans titre</div><div class="subtitle"></div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover">
+              <svg class="ic cover-icon"><use href="#ion-headset-outline"/></svg>
+              <div class="badge-status badge-a"><svg class="ic"><use href="#ion-sync"/></svg><span>EN COURS</span></div>
+            </div>
+            <div class="title">Sans titre</div><div class="subtitle"></div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-b">
+              <div class="badge-status badge-a"><svg class="ic"><use href="#ion-sync"/></svg><span>EN COURS</span></div>
+            </div>
+            <div class="title">Sans titre</div><div class="subtitle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption">État final une fois résolue — le badge disparaît, rien ne reste</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover"><svg class="ic cover-icon"><use href="#ion-headset-outline"/></svg></div>
+            <div class="title">Épisode 42 — L'économie de l'attention</div>
+            <div class="subtitle">Sciences en marche</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>B — « Balayage flou »</h2>
+<div class="cols">
+  <div class="panel">
+    <h3>Ce que la variante pose</h3>
+    <ul class="spec">
+      <li>Aucun badge, aucune icône : une bande translucide floutée (<code>rgba(255,255,255,0.4)</code> + flou 6px) balaie le cover en boucle, laissant l'image réelle visible en dessous.</li>
+      <li>Le sous-titre — vide tant que le créateur n'est pas connu — porte le texte d'état : « Traitement en cours », même taille/couleur que le sous-titre normal (<code>textSubtle</code>, 13 px).</li>
+      <li>Le titre n'est pas touché, il reste « Sans titre ».</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>Ce qu'elle abandonne</h3>
+    <ul class="spec">
+      <li>Un idiome entièrement nouveau pour l'app : aucun shimmer/balayage n'existe ailleurs, donc rien à quoi le rattacher visuellement au-delà de la Top Bar.</li>
+      <li>Sans icône ni titre changé, le signal repose sur une ligne de 13 px sous le titre — la moins visible des trois au premier coup d'œil si le sous-titre est ignoré.</li>
+      <li>Coût d'animation à vérifier : <code>expo-blur</code> sur Android a un rendu plus coûteux que sur iOS ; l'animer en continu sur plusieurs tuiles visibles à la fois n'a jamais été mesuré dans ce dépôt.</li>
+    </ul>
+  </div>
+</div>
+<div class="cells">
+  <div class="cell">
+    <p class="caption">Une tuile en cours, en contexte à côté d'une tuile résolue</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"></div>
+            <div class="title">Le mythe de la productivité</div>
+            <div class="subtitle">Basecamp Blog</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-b">
+              <div class="blur-sweep"></div>
+            </div>
+            <div class="title">Sans titre</div>
+            <div class="subtitle status-text">Traitement en cours</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption">Trois tuiles en cours — le balayage reste discret, l'image reste lisible en dessous</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"><div class="blur-sweep"></div></div>
+            <div class="title">Sans titre</div><div class="subtitle status-text">Traitement en cours</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover"><svg class="ic cover-icon"><use href="#ion-play-circle-outline"/></svg><div class="blur-sweep"></div></div>
+            <div class="title">Sans titre</div><div class="subtitle status-text">Traitement en cours</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-b"><div class="blur-sweep"></div></div>
+            <div class="title">Sans titre</div><div class="subtitle status-text">Traitement en cours</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption">État final une fois résolue — le balayage s'arrête, le sous-titre reprend son rôle normal</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-b"></div>
+            <div class="title">Comment fonctionne la mémoire</div>
+            <div class="subtitle">Chaîne Neurosciences</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>C — « Pastille pouls »</h2>
+<div class="cols">
+  <div class="panel">
+    <h3>Ce que la variante pose</h3>
+    <ul class="spec">
+      <li>Pastille bas-centre (pas le coin de <code>MediaFailureBadge</code>) : même forme de badge, fond <code>Colors.primary</code>, texte/icône <code>onPrimary</code>.</li>
+      <li>Icône : <b><code>pulse</code></b> (glyphe plein), immobile — c'est <b>toute la pastille</b> qui respire (échelle 1 → 1,06, opacité 0,88 → 1), pas seulement le glyphe.</li>
+      <li>Le titre est <b>remplacé</b> par la phrase d'état : « Traitement en cours… », dans le même style que le titre normal (15/500, <code>textMain</code>, 3 lignes max) — c'est la variante qui répond le plus directement au reproche du titre générique.</li>
+    </ul>
+  </div>
+  <div class="panel">
+    <h3>Ce qu'elle abandonne</h3>
+    <ul class="spec">
+      <li>La cohérence de placement avec <code>MediaFailureBadge</code> : deux ancrages différents pour deux pastilles de statut sur la même tuile (haut-coin pour l'échec, bas-centre pour le traitement), à moins d'unifier plus tard.</li>
+      <li>La sobriété : pastille qui respire + phrase de titre disent la même chose deux fois — c'est la plus « habillée » des trois, pour un état qui survient à chaque sauvegarde.</li>
+    </ul>
+  </div>
+</div>
+<div class="cells">
+  <div class="cell">
+    <p class="caption">Une tuile en cours, en contexte à côté d'une tuile résolue</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"></div>
+            <div class="title">Le mythe de la productivité</div>
+            <div class="subtitle">Basecamp Blog</div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-b">
+              <div class="badge-status badge-c"><svg class="ic"><use href="#ion-pulse"/></svg><span>EN COURS</span></div>
+            </div>
+            <div class="title status-title">Traitement en cours…</div>
+            <div class="subtitle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption">Trois tuiles en cours — le mur d'ambre existe aussi ici, en plus petit (pastille, pas tout le cover)</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"><div class="badge-status badge-c"><svg class="ic"><use href="#ion-pulse"/></svg><span>EN COURS</span></div></div>
+            <div class="title status-title">Traitement en cours…</div><div class="subtitle"></div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover"><svg class="ic cover-icon"><use href="#ion-document-text-outline"/></svg><div class="badge-status badge-c"><svg class="ic"><use href="#ion-pulse"/></svg><span>EN COURS</span></div></div>
+            <div class="title status-title">Traitement en cours…</div><div class="subtitle"></div>
+          </div>
+        </div>
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-b"><div class="badge-status badge-c"><svg class="ic"><use href="#ion-pulse"/></svg><span>EN COURS</span></div></div>
+            <div class="title status-title">Traitement en cours…</div><div class="subtitle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption">État final une fois résolue — la pastille disparaît, le vrai titre revient</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover"><svg class="ic cover-icon"><use href="#ion-document-text-outline"/></svg></div>
+            <div class="title">Le mythe de la productivité</div>
+            <div class="subtitle">Basecamp Blog</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Les trois variantes, côte à côte</h2>
+<p class="lede">Même tuile (cover photo, item en cours), pour comparer la coque et le mouvement.</p>
+<div class="cells">
+  <div class="cell">
+    <p class="caption"><b>A — Badge sync ambre</b> · coin haut, glyphe qui tourne</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"><div class="badge-status badge-a"><svg class="ic"><use href="#ion-sync"/></svg><span>EN COURS</span></div></div>
+            <div class="title">Sans titre</div><div class="subtitle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption"><b>B — Balayage flou</b> · aucune icône, sous-titre repris</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"><div class="blur-sweep"></div></div>
+            <div class="title">Sans titre</div><div class="subtitle status-text">Traitement en cours</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cell">
+    <p class="caption"><b>C — Pastille pouls</b> · bas-centre, toute la pastille respire, titre remplacé</p>
+    <div class="frame">
+      <div class="tile-row">
+        <div class="cell">
+          <div class="tile">
+            <div class="cover photo-a"><div class="badge-status badge-c"><svg class="ic"><use href="#ion-pulse"/></svg><span>EN COURS</span></div></div>
+            <div class="title status-title">Traitement en cours…</div><div class="subtitle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Ce qu'aucune variante ne touche</h2>
+<div class="panel">
+  <ul class="spec">
+    <li><b><code>TILE_WIDTH</code> (200) et <code>TILE_COVER_HEIGHT</code> (113) sont inchangés</b> — la géométrie de la tuile ne bouge pas, seul un élément se superpose au cover ou remplace le texte du titre.</li>
+    <li><b>Le contrat d'accessibilité</b> — une seule cible tactile, un seul <code>accessibilityLabel</code> — n'est pas rouvert ici ; l'extension du label (<code>describeWithFailure</code> a un équivalent à écrire pour l'état « en cours ») est une note pour l'implémentation, pas un choix de cette maquette.</li>
+    <li><b>L'exclusivité avec <code>MediaFailureBadge</code></b> : un item <code>"failed"</code> ne montre jamais le badge de traitement, et réciproquement — les deux lisent le même champ <code>status</code>, à des valeurs disjointes.</li>
+    <li>Aucune variante ne suppose de mise à jour « en vivant » : sans polling ni websocket sur la liste (<code>useMediaPolling</code>), l'animation continue de tourner jusqu'au prochain <code>refetch()</code> au focus de l'écran, même si le traitement s'est terminé entre-temps côté serveur.</li>
+  </ul>
+</div>
+
+</body>
+</html>
