@@ -217,12 +217,16 @@ Test on at least one small viewport (320px width, e.g. iPhone SE) and one standa
 Run the whole section on **both** an iOS and an Android device: nothing here is
 platform-gated, so a difference between the two is a bug.
 
-To produce a failure on one of the eight requestable codes, share an **Instagram
-photo post** — it fails as `IMAGE_POST_UNSUPPORTED`. For a code *outside* the list,
-share a **deleted or private YouTube video** (`MEDIA_UNAVAILABLE`).
+To produce a failure on one of the seven requestable codes, share a **direct link
+to an image file** (e.g. a `…/foo.jpg` URL) — the article worker fetches it, sees
+`image/jpeg` and refuses it as `NOT_AN_ARTICLE_PAGE`. This is the same source
+`MD-25` of `docs/testing/manual-e2e-validation-matrix.md` uses. An Instagram photo
+post no longer serves here: since task-384 it is ingested through the text of its
+images and succeeds. For a code *outside* the list, share a **deleted or private
+YouTube video** (`MEDIA_UNAVAILABLE`).
 
 ### Failure Marker on the Vignettes
-- [ ] After the Instagram photo fails, the Library row for it shows a red FAILED pill next to its type badge
+- [ ] After the image-file link fails, the Library row for it shows a red FAILED pill next to its type badge
 - [ ] The pill is legible on a VIDEO / SHORT row too, where the type badge is itself reddish
 - [ ] The same item's tile in Home > "Recently added" shows the marker over its cover
 - [ ] A tile in Home > "Continue learning" never shows the marker
@@ -233,7 +237,7 @@ share a **deleted or private YouTube video** (`MEDIA_UNAVAILABLE`).
 - [ ] No horizontal overflow on a 320px viewport with the marker present
 
 ### Source Request Block (media detail, failed state)
-- [ ] Opening the failed Instagram item shows, under the error sentence and the Refresh button, a card reading "This media source isn't supported yet."
+- [ ] Opening the failed image-file item shows, under the error sentence and the Refresh button, a card reading "This media source isn't supported yet."
 - [ ] The card carries exactly one button, "Request this source", at least 48px tall
 - [ ] Neither the source URL nor any failure code appears anywhere on the screen
 - [ ] Opening the failed YouTube item (`MEDIA_UNAVAILABLE`) shows the error sentence and Refresh, and **no** card

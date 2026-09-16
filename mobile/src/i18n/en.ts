@@ -69,6 +69,9 @@ export const en = {
   "mediaType.article": "ARTICLE",
   "mediaType.video": "VIDEO",
   "mediaType.short": "SHORT",
+  // An Instagram photo post or carousel: the badge names what the source is — a
+  // set of pictures — and never how it was read (task-385).
+  "mediaType.imagePost": "PHOTOS",
   "mediaType.audio": "AUDIO",
   "mediaType.text": "TEXT",
   "mediaType.document": "DOC",
@@ -246,7 +249,6 @@ export const en = {
   "mediaError.geoRestricted": "This media isn't available in the region we import from.",
   "mediaError.ageRestricted": "This media is behind an age check we can't pass.",
   "mediaError.liveContentUnsupported": "Live content can't be imported. Try again once the recording is published.",
-  "mediaError.imagePostUnsupported": "This post is a photo, so there's nothing to transcribe.",
   "mediaError.noTranscribableMedia": "This link has no audio, video or captions to work from.",
   "mediaError.noTranscriptAvailable": "No transcript could be obtained for this media.",
   "mediaError.postTextEmpty": "This post has no text to save.",
@@ -262,7 +264,7 @@ export const en = {
   "mediaError.internal": "Something went wrong on our side. Please try importing this again.",
 
   // --- Asking us to support the source of a media we could not import ---
-  // Shown under the failure message for the eight codes where "not supported yet"
+  // Shown under the failure message for the seven codes where "not supported yet"
   // is true (see `SOURCE_SUPPORT_REQUESTABLE_CODES`). The last two are not shown
   // on screen: they are the subject and the body of the report that gets filed.
   "sourceRequest.title": "This media source isn't supported yet.",

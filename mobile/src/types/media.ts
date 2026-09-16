@@ -5,16 +5,26 @@
  */
 
 /**
- * `document` and `audio` are what the two upload endpoints store on the library
- * row (task-264), and the list endpoint returns that value as-is. They are not
- * part of the canonical MediaType enum, so they only ever show up in a list
- * payload — the detail endpoint normalizes them to `article` / `audio_file`.
+ * What a payload can put in `media_type`, which is more than the canonical enum
+ * holds.
+ *
+ * `image_post` is an Instagram photo post or carousel, read through the text of
+ * its images (task-384). It is a canonical member — the list rows carry it and
+ * the detail endpoint answers it — so it gets a badge, a label and a glyph of
+ * its own like every other source type.
+ *
+ * `document` and `audio` are the two that are not: they are what the upload
+ * endpoints store on the library row (task-264), and the list endpoint returns
+ * that value as-is. Being outside the canonical enum, they only ever show up in
+ * a list payload — the detail endpoint normalizes them to `article` /
+ * `audio_file`.
  */
 export type MediaType =
   | "podcast_episode"
   | "article"
   | "youtube_video"
   | "short_video"
+  | "image_post"
   | "audio_file"
   | "shared_text"
   | "document"
@@ -132,7 +142,6 @@ export type MediaFailureCode =
   | "GEO_RESTRICTED"
   | "AGE_RESTRICTED"
   | "LIVE_CONTENT_UNSUPPORTED"
-  | "IMAGE_POST_UNSUPPORTED"
   | "NO_TRANSCRIBABLE_MEDIA"
   | "NO_TRANSCRIPT_AVAILABLE"
   | "POST_TEXT_EMPTY"

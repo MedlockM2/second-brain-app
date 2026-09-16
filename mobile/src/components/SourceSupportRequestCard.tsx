@@ -56,7 +56,7 @@ interface SourceSupportRequestCardProps {
   mediaItemId: string;
   /**
    * The code the job failed with, straight from `mediaData.processing_job`. The
-   * card renders nothing at all unless it is one of the eight for which "this
+   * card renders nothing at all unless it is one of the seven for which "this
    * source isn't supported yet" is a true statement.
    */
   errorCode?: MediaFailureCode | null;

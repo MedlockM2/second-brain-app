@@ -350,6 +350,8 @@ function getMediaTypeLabel(type: MediaType): string {
       return t("mediaType.video");
     case "short_video":
       return t("mediaType.short");
+    case "image_post":
+      return t("mediaType.imagePost");
     case "audio_file":
     case "audio":
       return t("mediaType.audio");
@@ -369,7 +371,12 @@ function getMediaTypeBgColor(type: MediaType): string {
     case "youtube_video":
     case "short_video":
       return Colors.errorContainer;
+    // The two tinted badges are reserved for media that *plays* — amber for a
+    // podcast, red for a video. A photo post is read, like an article, so it
+    // takes the same tonal surface: what tells it apart is its own word and its
+    // own glyph, not a third hue competing with those two.
     case "article":
+    case "image_post":
       return Colors.surfaceContainerHigh;
     default:
       return Colors.surfaceContainerHigh;
