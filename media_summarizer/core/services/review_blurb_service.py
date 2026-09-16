@@ -101,10 +101,11 @@ async def trigger_review_blurb_generation(
         )
         artifact, outcome = await commit_artifact_generation(plan)
 
-        # A second save of the same content by the same user hashes to the same
-        # artifact_id, so it is answered by REUSED and its own row was never
-        # written to. Repairing it from the stored object costs one S3 read and
-        # spends nothing on the model.
+        # REUSED means the blurb of this content already exists — a second save by
+        # the same user (same artifact_id) or another account's save that already
+        # paid for the generation (task-394). Either way this row was never written
+        # to, and repairing it from the stored object costs one S3 read and spends
+        # nothing on the model.
         if outcome == ArtifactGenerationOutcome.REUSED:
             await copy_review_blurb_to_library_row(
                 record=artifact,

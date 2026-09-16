@@ -97,6 +97,46 @@ async def reclaim_failed_artifact(record: MediaArtifactRecord) -> bool:
         raise
 
 
+async def mirror_shared_artifact(record: MediaArtifactRecord) -> bool:
+    """Write the verdict of a shared generation onto the pointer that reads it.
+
+    Conditional on the pointer still being in flight, which is the whole point: the
+    mirror is decided from a read of the shared row a moment earlier, so between that
+    read and this write the pointer may have been reclaimed for a rerun or already
+    mirrored by a concurrent reader. Refusing rather than overwriting keeps the
+    pointer's own lifecycle authoritative — a stale ``failed`` verdict can never
+    stamp out a generation that has since restarted.
+
+    Returns ``False`` when the write was refused. Callers treat that as "somebody
+    else got there first", never as an error: the read they are serving still shows
+    the shared row's state.
+    """
+    session = database_async.get_session()
+    try:
+        async with session.resource(
+            "dynamodb",
+            region_name=database_async.AWS_REGION,
+        ) as dynamodb:
+            table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
+            await table.put_item(
+                Item=record.to_dynamodb_item(),
+                ConditionExpression=(
+                    "attribute_exists(artifact_id) "
+                    "AND (#st = :queued OR #st = :generating)"
+                ),
+                ExpressionAttributeNames={"#st": "status"},
+                ExpressionAttributeValues={
+                    ":queued": "queued",
+                    ":generating": "generating",
+                },
+            )
+            return True
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
+
+
 async def update_media_artifact(record: MediaArtifactRecord) -> MediaArtifactRecord:
     session = database_async.get_session()
     async with session.resource(

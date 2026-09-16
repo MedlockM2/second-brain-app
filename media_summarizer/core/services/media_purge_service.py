@@ -13,10 +13,19 @@ The two paths *must* delete the same things. Media-scoped artifacts are owned by
 retained row for that content remains. That is why this module exists instead of
 a second copy of the same logic in the worker.
 
-Artifacts remain isolated by user even though their media scope is content-based:
-the artifact id and scope key both include ``user_id``. Transcripts are globally
-deduplicated, so the stream caller checks for remaining ``media_key`` references
-before asking this module to remove job objects.
+An artifact is deleted at two different levels since task-394, and the difference is
+who paid for the object:
+
+- **an account's entry** goes with the account's scope, always. When it points at a
+  shared generation it owns no S3 object, so deleting it deletes a row and nothing
+  else — the object still answers every other account.
+- **a shared generation** goes with the *content*, exactly like the transcript: only
+  once no save anywhere still references that ``media_key``. Deleting it earlier would
+  take the object out from under another account's entry.
+
+Transcripts are globally deduplicated for the same reason, which is why the stream
+caller checks for remaining ``media_key`` references before asking this module to
+remove job objects.
 """
 
 from __future__ import annotations
@@ -27,6 +36,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 from media_summarizer.core.models.media_artifact import (
     ArtifactScope,
     MediaArtifactRecord,
+    build_content_scope_key,
     build_scope_key,
 )
 from media_summarizer.utils import (
@@ -54,11 +64,17 @@ async def purge_artifacts_for_scopes(
     media_content_ids: Iterable[str] = (),
     folder_ids: Iterable[str] = (),
 ) -> Dict[str, int]:
-    """Delete every artifact of the given scopes, plus their S3 objects.
+    """Delete every artifact of the given scopes, plus the S3 objects they own.
 
     Folder scopes are passed explicitly because a folder's artifacts hang off
     the folder, not off any media item: an account erasure that only walked media
     items would leave every folder artifact behind.
+
+    "The objects they own" is the whole subtlety. A media entry pointing at a shared
+    generation owns no object — the object belongs to the generation, which serves
+    other accounts and is purged with the *content*, by
+    :func:`purge_shared_artifacts_for_content`. A folder artifact and an artifact over
+    an uploaded file own theirs outright.
     """
     counts: Dict[str, int] = {}
     scopes = [
@@ -71,25 +87,88 @@ async def purge_artifacts_for_scopes(
             scope_key=build_scope_key(user_id=user_id, scope=scope, scope_id=scope_id)
         )
         for record in records:
-            for bucket, key in _storage_refs([record]):
-                await s3.delete_object(bucket, key)
-                _bump(counts, "artifact_objects_deleted")
+            _bump(counts, "artifact_objects_deleted", await _delete_owned_object(record))
             await media_artifacts.delete_media_artifact(record.artifact_id)
             _bump(counts, "artifact_rows_deleted")
 
     return counts
 
 
-def _storage_refs(
-    records: Iterable[MediaArtifactRecord],
-) -> List[Tuple[str, str]]:
-    """Deduplicated (bucket, key) pairs. Records without storage never generated."""
-    refs: Dict[Tuple[str, str], None] = {}
-    for record in records:
-        storage = record.storage
-        if storage and storage.bucket and storage.key:
-            refs[(storage.bucket, storage.key)] = None
-    return list(refs.keys())
+async def purge_shared_artifacts_for_content(
+    *,
+    content_ids: Iterable[str],
+    ignore_user_id: Optional[str] = None,
+) -> Dict[str, int]:
+    """Delete the shared generations of content nobody holds any more (task-394).
+
+    Content-level, not account-level: one generation answers every account that asked,
+    so it survives until the last save of that ``media_key`` is gone — the same rule
+    the transcript and the re-hosted cover already follow. Nothing else in the codebase
+    can decide this, which is why the check lives here rather than in each caller: both
+    of them would otherwise have to re-derive it, and the account purge would get it
+    wrong.
+
+    ``ignore_user_id`` is what makes it usable from an account erasure. That path runs
+    the artifact purge *before* it deletes the account's library rows, so the rows about
+    to disappear are still readable and would look like a live reference to every
+    content the account held.
+    """
+    from media_summarizer.utils import user_media as user_media_store
+
+    counts: Dict[str, int] = {}
+    for content_id in sorted({cid for cid in content_ids if cid}):
+        holders = [
+            row
+            for row in await user_media_store.list_by_media_key(
+                content_id, include_deleted=True
+            )
+            if row.user_id != ignore_user_id
+        ]
+        if holders:
+            _bump(counts, "shared_artifacts_kept_still_referenced")
+            continue
+
+        records, _ = await media_artifacts.list_artifacts_by_scope(
+            scope_key=build_content_scope_key(
+                scope=ArtifactScope.MEDIA, scope_id=content_id
+            )
+        )
+        for record in records:
+            _bump(
+                counts,
+                "shared_artifact_objects_deleted",
+                await _delete_owned_object(record),
+            )
+            await media_artifacts.delete_media_artifact(record.artifact_id)
+            _bump(counts, "shared_artifact_rows_deleted")
+
+    return counts
+
+
+async def _delete_owned_object(listed: MediaArtifactRecord) -> int:
+    """Delete the S3 object of one artifact row, if that row is the one that owns it.
+
+    The row has to be re-read from the base table: ``scope-index`` projects neither
+    ``storage`` nor ``shared_artifact_id``, so a listed record carries no storage ref
+    at all — which is why artifact objects used to survive every purge silently. Both
+    attributes are needed here, and one ``GetItem`` per row to be deleted is a price
+    only the purge pays.
+
+    Returns how many objects were deleted: 0 or 1, so the caller can add it to its
+    counters directly.
+    """
+    record = await media_artifacts.get_media_artifact_by_id(listed.artifact_id)
+    if record is None or record.storage is None:
+        return 0
+    if record.shared_artifact_id is not None:
+        # A pointer. The object belongs to the generation it mirrors, which other
+        # accounts read through their own pointers.
+        return 0
+    storage = record.storage
+    if not storage.bucket or not storage.key:
+        return 0
+    await s3.delete_object(storage.bucket, storage.key)
+    return 1
 
 
 # ---------------------------------------------------------------------------

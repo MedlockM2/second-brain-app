@@ -269,6 +269,16 @@ async def _purge_artifacts(
             folder_ids=[folder.id for folder in folders],
         )
     )
+    # The generations this account's entries pointed at are shared with the accounts
+    # that asked for the same thing (task-394), so they go only if nobody else holds
+    # the content. This account's own library rows are still in the table at this point
+    # — they are deleted a few steps later — hence `ignore_user_id`.
+    report.merge(
+        await media_purge_service.purge_shared_artifacts_for_content(
+            content_ids=inventory.media_keys,
+            ignore_user_id=user_id,
+        )
+    )
 
 
 # ---------------------------------------------------------------------------

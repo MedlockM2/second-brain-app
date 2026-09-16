@@ -37,7 +37,10 @@ export class ArtifactService {
    *
    * A request whose sources already produced an artifact answers that artifact
    * instead of generating a second one, so this call is safe to fire twice: it
-   * comes back with `generation_outcome: "reused"` and no minute is charged.
+   * comes back with `generation_outcome: "reused"` and the entry the account
+   * already holds, which consumes nothing. Note that `reused` alone does not mean
+   * free — it also answers the first request of this account over content someone
+   * else already generated for, and that one is charged.
    */
   static async generateArtifact(
     scope: ArtifactScope,

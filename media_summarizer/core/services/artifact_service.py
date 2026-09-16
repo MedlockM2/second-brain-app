@@ -21,6 +21,30 @@ the older ones, and nothing is ever overwritten or invalidated. The single
 exception is an entry that *failed* — it holds no artifact to reuse, so a request
 for the same key reclaims it and generates again rather than being barred forever
 by one transient provider error.
+
+Since task-394 that rule crosses accounts for a **media** scope: everything the id
+hashes except ``user_id`` is already content identity — ``effective_scope_id`` is
+the deduplicated ``media_key`` and the source ids are content ids — so two accounts
+asking for the same type, in the same language, over the same content were paying
+for two generations of identical text. They no longer do, and the request is served
+by two rows instead of one:
+
+- a **shared generation**, keyed on the content alone
+  (:func:`build_shared_artifact_id`) and indexed under a scope key no account can
+  produce (``@content#media#…``). It is what the worker generates into and what owns
+  the S3 object. Exactly one exists per (content, type, parameters);
+- a **pointer**, one per account that asked, keyed exactly as before
+  (:func:`build_artifact_id`) and carrying ``shared_artifact_id``. It is the only
+  row the API addresses, so a listing still shows an account nothing but what it
+  asked for.
+
+Two consequences, both deliberate. The quota no longer depends on whether a
+generation ran: it is debited whenever an account gains an entry, and the avoided
+provider call accrues to the operator rather than as free allowance to whoever
+happened to ask second. And a scope that is *not* content-addressed keeps a single
+per-account row with no indirection at all: a folder artifact (its scope id is a
+folder id, owned by one account) and an artifact over a user-uploaded file (whose
+content id names its owner — see :func:`mutualizes_generation`).
 """
 
 from __future__ import annotations
@@ -51,11 +75,13 @@ from media_summarizer.core.models.media_artifact import (
     MediaArtifactRecord,
     MediaArtifactStatus,
     MediaArtifactType,
+    build_content_scope_key,
     build_scope_key,
     content_scope_id_from_scope_key,
 )
 from media_summarizer.core.models.processing_job import JobStatus
 from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
+from media_summarizer.core.services.media_identity import is_account_scoped_media_key
 from media_summarizer.core.services.transcript_translation import (
     detect_language,
     job_source_language_hint,
@@ -418,11 +444,11 @@ def build_artifact_id(
     parameters: Dict[str, Any],
     source_media_item_ids: List[str],
 ) -> str:
-    """Deterministic id — the whole of the reuse mechanism.
+    """Deterministic id of **one account's entry** — the whole of the reuse mechanism.
 
-    The key is **what the user asked for**: owner, scope, artifact type,
-    parameters, and the sorted set of sources behind it. Two requests collide
-    exactly when an existing artifact already answers the second one, and that
+    The key is *what this user asked for*: owner, scope, artifact type, parameters,
+    and the sorted set of sources behind it. Two requests from the same account
+    collide exactly when its existing entry already answers the second one, and that
     collision is what makes reuse a single ``GetItem``.
 
     Deliberately *not* in the hash:
@@ -438,6 +464,11 @@ def build_artifact_id(
     ``parameters`` carries the reading language, so two reading languages are two
     different ids and therefore two legitimate entries. The decision is about
     regenerating, not about translating.
+
+    ``user_id`` stays in it, and stays first: this id is what the account's own
+    listing and detail routes address, so it must be unguessable from another
+    account's request. What is *generated* is keyed without it — see
+    :func:`build_shared_artifact_id`.
     """
     material = "|".join(
         [
@@ -450,6 +481,61 @@ def build_artifact_id(
         ]
     )
     return f"art_{_sha256_text(material)[:32]}"
+
+
+def build_shared_artifact_id(
+    *,
+    scope: ArtifactScope,
+    scope_id: str,
+    artifact_type: MediaArtifactType,
+    parameters: Dict[str, Any],
+    source_media_item_ids: List[str],
+) -> str:
+    """Deterministic id of **the generation itself** — the same material minus the owner.
+
+    Two accounts asking for the same type, in the same language, over the same
+    content land on this one id, which is what makes the second request cost no
+    provider call (task-394). Nothing else about the material changes, so the
+    properties of :func:`build_artifact_id` carry over unchanged: no time, no
+    ``generator_version``, and the language still part of the key.
+
+    The ``shared_`` prefix has no code behind it and is not parsed anywhere. It is
+    there so a row in the table can be told apart from an account's entry by looking
+    at it, which is what a purge or an incident investigation actually does.
+    """
+    material = "|".join(
+        [
+            scope.value,
+            scope_id,
+            artifact_type.value,
+            _stable_json(parameters),
+            ",".join(sorted(source_media_item_ids)),
+        ]
+    )
+    return f"shared_{_sha256_text(material)[:32]}"
+
+
+def mutualizes_generation(
+    *,
+    scope: ArtifactScope,
+    content_scope_id: str,
+    user_id: str,
+) -> bool:
+    """Whether this request's generation is shared between accounts.
+
+    Media scope only — a folder's scope id is a folder id, which belongs to one
+    account and means nothing to another — and only over content whose identity is
+    not itself account-scoped, i.e. never over a file a user uploaded.
+
+    The upload exclusion is enforced twice over, which is why it cannot be worked
+    around from here: this returns False, *and* an upload's content id carries the
+    account (:func:`is_account_scoped_media_key`) so the same file sent by two people
+    is two content ids with two unrelated shared ids. What this test buys is the
+    absence of a pointer indirection nothing could ever share.
+    """
+    return scope == ArtifactScope.MEDIA and not is_account_scoped_media_key(
+        media_key=content_scope_id, owner_user_id=user_id
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -870,9 +956,11 @@ async def list_scope_artifacts(
     ``limit`` as a ceiling and paginates on the cursor, and at one internal entry
     per media the difference is at most one row per page.
 
-    It is also where a wait that ran out is ended (task-360). Doing it on read is
-    what makes the deadline felt at the only moment it matters — someone is looking
-    at the tile — instead of at the next nightly pass.
+    It is also where an in-flight entry is brought up to date, which covers two
+    things a projected row cannot say on its own: a wait that ran out is ended
+    (task-360), and a pointer whose shared generation has finished is mirrored
+    (task-394). Doing both on read is what makes them felt at the only moment they
+    matter — someone is looking at the tile — instead of at the next nightly pass.
     """
     records, next_cursor = await media_artifacts.list_artifacts_by_scope(
         scope_key=build_scope_key(
@@ -888,74 +976,171 @@ async def list_scope_artifacts(
         for record in records
         if record.artifact_type not in INTERNAL_ARTIFACT_TYPES
     ]
-    return await end_overdue_waits(visible), next_cursor
+    # In parallel: a scope holds at most one in-flight entry per type, and the
+    # terminal ones cost nothing here.
+    return list(
+        await asyncio.gather(*(refresh_listed_artifact(record) for record in visible))
+    ), next_cursor
 
 
-async def end_overdue_waits(
-    records: List[MediaArtifactRecord],
-) -> List[MediaArtifactRecord]:
-    """Fail the entries whose wait for their sources ran out, in place.
+async def refresh_listed_artifact(
+    listed: MediaArtifactRecord,
+) -> MediaArtifactRecord:
+    """Bring one listed entry up to date, or hand it back untouched.
 
-    Two-step on purpose. ``scope-index`` projects ``created_at`` but not
-    ``awaiting_expires_at``, and the two differ for a reclaimed entry — it keeps its
-    original position in the history while its deadline restarts — so the projected
-    date can only *rule out* an expiry, never confirm one. Ruling out is enough to
-    make the common poll free: a wait under way costs no read here, and only a
-    ``queued`` entry older than the timeout is fetched to be judged on its real
-    deadline.
+    A terminal entry is already the whole truth and costs no read at all, which is
+    what keeps a history page at one DynamoDB query. An in-flight one is not: the
+    ``scope-index`` projection carries neither ``awaiting_expires_at`` nor
+    ``shared_artifact_id``, so the two things that can have happened since — its wait
+    expired, or the generation it points at finished — are only readable on the base
+    row. That read is the price of the poll, and it is bounded: at most one in-flight
+    entry per artifact type per scope.
 
-    Never fatal: a listing that cannot end a wait still shows the history.
+    Never fatal: a listing that cannot refresh an entry still shows the history.
+    """
+    if listed.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return listed
+
+    try:
+        record = await media_artifacts.get_media_artifact_by_id(listed.artifact_id)
+        if record is None:
+            return listed
+        ended = await _end_overdue_wait(record)
+        if ended is not None:
+            return ended
+        return await resolve_through_shared_generation(record)
+    except Exception as exc:  # noqa: BLE001 - a listing must still answer
+        logger.warning(
+            "Could not refresh the listed artifact %s: %s", listed.artifact_id, exc
+        )
+        return listed
+
+
+async def _end_overdue_wait(
+    record: MediaArtifactRecord,
+) -> Optional[MediaArtifactRecord]:
+    """Fail an entry whose wait for its sources ran out. ``None`` when it had not.
+
+    The wait lives on the account's own entry — its deadline, and the ``preparation``
+    lines of its snapshot — never on a shared generation, which is only ever armed
+    once every source is readable.
     """
     now = _now_utc()
-    cutoff = now - timedelta(seconds=AWAITING_SOURCES_TIMEOUT_SECONDS)
-    suspects = [
-        index
-        for index, record in enumerate(records)
-        if record.status == MediaArtifactStatus.QUEUED and record.created_at <= cutoff
-    ]
-    if not suspects:
-        return records
+    if not _is_awaiting_overdue(record, now=now):
+        return None
+    if not await media_artifacts.fail_awaiting_artifact(
+        artifact_id=record.artifact_id,
+        error_code=ERROR_CODE_PREPARATION_TIMEOUT,
+        error_message=(
+            "The sources of this generation were still being prepared "
+            "when the request expired."
+        ),
+    ):
+        return None
+    log_event(
+        logger,
+        logging.WARNING,
+        "artifact.wait_expired",
+        "Artifact wait ended: its sources were still not readable",
+        artifact_id=record.artifact_id,
+        artifact_type=record.artifact_type.value,
+        timeout_seconds=AWAITING_SOURCES_TIMEOUT_SECONDS,
+    )
+    return record.model_copy(
+        update={
+            "status": MediaArtifactStatus.FAILED,
+            "error_code": ERROR_CODE_PREPARATION_TIMEOUT,
+            "awaiting_expires_at": None,
+            "completed_at": now,
+            "updated_at": now,
+        }
+    )
 
-    updated = list(records)
-    for index in suspects:
-        artifact_id = updated[index].artifact_id
-        try:
-            full = await media_artifacts.get_media_artifact_by_id(artifact_id)
-            if full is None or not _is_awaiting_overdue(full, now=now):
-                continue
-            if not await media_artifacts.fail_awaiting_artifact(
-                artifact_id=artifact_id,
-                error_code=ERROR_CODE_PREPARATION_TIMEOUT,
-                error_message=(
-                    "The sources of this generation were still being prepared "
-                    "when the request expired."
-                ),
-            ):
-                continue
-        except Exception as exc:  # noqa: BLE001 - a listing must still answer
-            logger.warning(
-                "Could not end the overdue wait of artifact %s: %s", artifact_id, exc
-            )
-            continue
-        log_event(
-            logger,
-            logging.WARNING,
-            "artifact.wait_expired",
-            "Artifact wait ended: its sources were still not readable",
-            artifact_id=artifact_id,
-            artifact_type=updated[index].artifact_type.value,
-            timeout_seconds=AWAITING_SOURCES_TIMEOUT_SECONDS,
-        )
-        updated[index] = updated[index].model_copy(
+
+async def resolve_through_shared_generation(
+    pointer: MediaArtifactRecord,
+) -> MediaArtifactRecord:
+    """The state an account's entry is really in, read off the generation it points at.
+
+    A pointer holds no generation of its own (task-394): the status, the storage ref,
+    the title and the source snapshot all belong to the shared row. While that row is
+    in flight the answer is computed and not stored — the account's entry is
+    ``generating`` because the generation is. Once it is terminal the answer is
+    *written through* onto the pointer, which is what makes every later read of it
+    free again and what lets the content route serve the object with no second hop.
+
+    The write-through is conditional on the pointer still being in flight, so a
+    request that reclaimed it in the meantime is never overwritten by a verdict
+    prepared before the reclaim.
+
+    Three kinds of record are returned untouched, and each for its own reason: a
+    **terminal** one is already the mirror (or a wait this account's row ended on its
+    own), so it costs no read; one still **awaiting its sources** has no generation to
+    resolve yet, since nothing is armed until the last source is readable (task-360);
+    and one with no ``shared_artifact_id`` at all *is* its own generation — every
+    folder artifact, and every artifact over a user-uploaded file.
+    """
+    if pointer.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return pointer
+    if pointer.awaiting_expires_at is not None:
+        return pointer
+    shared_id = pointer.shared_artifact_id
+    if not shared_id:
+        return pointer
+
+    shared = await media_artifacts.get_media_artifact_by_id(shared_id)
+    if shared is None:
+        # The generation row is gone (a purge, or a manual deletion) while the
+        # pointer remains. Nothing is running, so the entry is terminal — said here
+        # rather than written, since the pointer has no artifact to hand out either
+        # way and a request for the same type will arm a fresh generation.
+        return pointer.model_copy(
             update={
                 "status": MediaArtifactStatus.FAILED,
-                "error_code": ERROR_CODE_PREPARATION_TIMEOUT,
-                "awaiting_expires_at": None,
-                "completed_at": now,
-                "updated_at": now,
+                "error_code": ERROR_CODE_GENERATION_STALLED,
             }
         )
-    return updated
+    if shared.status in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return pointer.model_copy(update={"status": shared.status})
+
+    mirrored = _mirror_of_shared_generation(pointer=pointer, shared=shared)
+    await media_artifacts.mirror_shared_artifact(mirrored)
+    return mirrored
+
+
+def _mirror_of_shared_generation(
+    *,
+    pointer: MediaArtifactRecord,
+    shared: MediaArtifactRecord,
+) -> MediaArtifactRecord:
+    """The pointer as it looks once its shared generation is terminal.
+
+    Everything the generation produced is copied — including ``storage``, so the
+    account reads the one object that was generated, and ``sources``, so its snapshot
+    names the exact text the model saw rather than the preparation it was waiting on.
+
+    Two things are deliberately not copied. ``llm_usage`` stays on the generation: it
+    is what the provider was actually paid once, and duplicating it onto every
+    pointer would make any sum over the table count the same euros twice.
+    ``created_at`` stays the account's own, since it is the history's sort key and
+    the entry belongs where the account asked for it.
+    """
+    return pointer.model_copy(
+        update={
+            "status": shared.status,
+            "storage": shared.storage,
+            "title": shared.title or pointer.title,
+            "source_count": shared.source_count,
+            "sources": shared.sources,
+            "generator_version": shared.generator_version,
+            "error_code": shared.error_code,
+            "error_message": shared.error_message,
+            "completed_at": shared.completed_at,
+            "updated_at": _now_utc(),
+            "awaiting_expires_at": None,
+            "lease_expires_at": None,
+        }
+    )
 
 
 async def latest_internal_artifact_status(
@@ -995,16 +1180,70 @@ async def latest_internal_artifact_status(
     # Newest first, so the first internal entry seen is the current one.
     for record in records:
         if record.artifact_type in INTERNAL_ARTIFACT_TYPES:
-            return await _bounded_internal_status(record)
+            return await _internal_status(record)
     return None
 
 
-async def _bounded_internal_status(
-    record: MediaArtifactRecord,
-) -> MediaArtifactStatus:
-    """The entry's status, with an in-flight one that stopped moving turned terminal.
+async def _internal_status(listed: MediaArtifactRecord) -> MediaArtifactStatus:
+    """Status of one listed internal entry, resolved and bounded.
 
-    The age bound that makes ``pending`` finite (task-391). An internal entry is
+    Resolved because the entry the account holds is a pointer and the generation is
+    the shared row (task-394); bounded because an internal generation that stopped
+    moving must become terminal rather than answer "the preview is being written" for
+    ever (task-391). The two are one read path: the row to judge, and to end, is the
+    one that actually generates.
+
+    A terminal projected status short-circuits everything, which is what keeps the
+    common media read free.
+
+    Never raises: a media detail response must still answer if the entry cannot be
+    judged or ended, and it then reports what the index said.
+    """
+    if listed.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return listed.status
+
+    try:
+        pointer = await media_artifacts.get_media_artifact_by_id(listed.artifact_id)
+        if pointer is None:
+            # The row is gone (the purge script deletes them) while the index still
+            # lists it. Nothing is generating, so terminal is the honest answer.
+            return MediaArtifactStatus.FAILED
+
+        generation = pointer
+        if pointer.shared_artifact_id:
+            shared = await media_artifacts.get_media_artifact_by_id(
+                pointer.shared_artifact_id
+            )
+            if shared is None:
+                return MediaArtifactStatus.FAILED
+            generation = shared
+
+        status = await _bounded_internal_status(generation)
+        if status not in _IN_FLIGHT_ARTIFACT_STATUSES and generation is not pointer:
+            # Write the verdict through onto the pointer, exactly like a user-facing
+            # entry: the account's row is what the next read looks at, and what the
+            # blurb repair path reads the storage ref off.
+            refreshed = await media_artifacts.get_media_artifact_by_id(
+                generation.artifact_id
+            )
+            if refreshed is not None:
+                await media_artifacts.mirror_shared_artifact(
+                    _mirror_of_shared_generation(pointer=pointer, shared=refreshed)
+                )
+        return status
+    except Exception as exc:  # noqa: BLE001 - a media read must still answer
+        logger.warning(
+            "Could not resolve internal artifact %s: %s", listed.artifact_id, exc
+        )
+        return listed.status
+
+
+async def _bounded_internal_status(
+    full: MediaArtifactRecord,
+) -> MediaArtifactStatus:
+    """The generation's status, with an in-flight one that stopped moving turned terminal.
+
+    The age bound that makes ``pending`` finite (task-391). An internal generation is
     queued by a hook that tries once and gives up, so nothing in the codebase ever
     revisits it: a lost SQS message left it ``queued``, and a worker killed after its
     last redelivery left it ``generating`` with a dead lease. Both used to be
@@ -1012,40 +1251,17 @@ async def _bounded_internal_status(
     what the reader needs — the tile settles, and the entry becomes reclaimable, so
     the next trigger for this content generates again instead of reusing a corpse.
 
-    Two-step like :func:`end_overdue_waits`, and for the same reason: ``scope-index``
-    projects ``created_at`` but neither ``updated_at`` nor ``lease_expires_at``, and a
-    reclaimed entry keeps the ``created_at`` of the first attempt while its own clock
-    restarts. The projected date can therefore only rule an expiry *out* — which is
-    enough to make the common read free, since a preview generated minutes ago never
-    reaches the base table.
+    Takes the full row, never a projected one: the judgement is made on ``updated_at``
+    and ``lease_expires_at``, and the index projects neither.
 
     Never raises: a media detail response must still answer if the entry cannot be
-    judged or ended, and it then reports what the index said.
+    ended, and it then reports what the row said.
     """
-    if record.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
-        return record.status
+    if full.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return full.status
 
     now = _now_utc()
     stale_before = now - timedelta(seconds=INTERNAL_GENERATION_STALL_SECONDS)
-    if record.created_at > stale_before:
-        return record.status
-
-    try:
-        full = await media_artifacts.get_media_artifact_by_id(record.artifact_id)
-    except Exception as exc:  # noqa: BLE001 - a media read must still answer
-        logger.warning(
-            "Could not read internal artifact %s to bound its age: %s",
-            record.artifact_id,
-            exc,
-        )
-        return record.status
-
-    if full is None:
-        # The row is gone (the purge script deletes them) while the index still
-        # lists it. Nothing is generating anything, so terminal is the honest answer.
-        return MediaArtifactStatus.FAILED
-    if full.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
-        return full.status
     if full.updated_at > stale_before:
         return full.status
     if full.lease_expires_at is not None and full.lease_expires_at > now:
@@ -1095,7 +1311,23 @@ async def _bounded_internal_status(
 async def get_media_artifact_record(
     artifact_id: str,
 ) -> Optional[MediaArtifactRecord]:
-    return await media_artifacts.get_media_artifact_by_id(artifact_id)
+    """One entry, as the API must see it. The only read behind the two GET routes.
+
+    Two things happen here that a raw table read does not do:
+
+    - a **shared generation** answers ``None``. Its ``user_id`` is the account that
+      triggered it, so the ownership comparison in the routes would otherwise let that
+      one account address a row that belongs to no account — and read a ``scope_key``
+      naming a content id instead of its library row. A shared row is reachable only
+      through an entry that points at it (task-394);
+    - an entry whose generation has finished is resolved and mirrored, so opening an
+      artifact answers with its content even when no listing has refreshed the entry
+      yet.
+    """
+    record = await media_artifacts.get_media_artifact_by_id(artifact_id)
+    if record is None or record.is_shared_generation:
+        return None
+    return await resolve_through_shared_generation(record)
 
 
 # ---------------------------------------------------------------------------
@@ -1106,17 +1338,26 @@ async def get_media_artifact_record(
 class ArtifactGenerationOutcome(str, Enum):
     """What a committed request actually did. Four cases, never conflated.
 
-    ``REUSED`` and ``COLLAPSED`` both mean "no generation was started, and no
-    counter moves", but they are not the same fact and the caller must be able to
-    tell them apart: one is an artifact that already existed over the same
-    sources, the other is the second of two taps racing on the same write.
+    ``REUSED`` and ``COLLAPSED`` both mean "no generation was started", but they are
+    not the same fact and the caller must be able to tell them apart: one is a
+    generation that already covered these sources, the other is the second of two
+    taps racing on the same write.
+
+    Since task-394 the outcome no longer decides the debit. A reuse across accounts
+    still hands an artifact to an account that did not have one, so it is charged;
+    what the mutualization saves is the provider call, and that saving is the
+    operator's. Only two things consume nothing: an entry this account already holds,
+    and a collapse (the request that won the write is the one charged). The endpoint
+    reads that off ``ArtifactGenerationPlan.already_owned`` and off the debit's
+    idempotency token, not off this value.
     """
 
-    #: A new entry was written and enqueued.
+    #: A new entry was written and a generation enqueued for it.
     CREATED = "created"
     #: A previously failed entry for the same key was reclaimed and re-enqueued.
     RETRIED = "retried"
-    #: An artifact already covering these sources answered the request.
+    #: A generation already covering these sources answered the request — this
+    #: account's own earlier entry, or the one another account already paid for.
     REUSED = "reused"
     #: A concurrent identical request won the conditional write; this one lost.
     COLLAPSED = "collapsed"
@@ -1125,28 +1366,45 @@ class ArtifactGenerationOutcome(str, Enum):
 class ArtifactGenerationPlan:
     """Everything decided before anything is written.
 
-    Split in two on purpose: the quota must be checked *after* the reuse verdict
-    (a request answered by an existing artifact consumes nothing) and *before* the
-    write (a denied request leaves no entry). Planning and committing as separate
-    steps is what lets the endpoint express that order without an extra read
+    Split in two on purpose: the quota must be checked *after* the ownership verdict
+    (an account already holding the entry it asks for must not be charged twice) and
+    *before* the write (a denied request leaves no entry). Planning and committing as
+    separate steps is what lets the endpoint express that order without an extra read
     (task-269 §10.3).
+
+    Two records, because a media artifact is generated once per content and held once
+    per account (task-394): ``entry`` is the row this account gets, ``generation`` is
+    the row the worker generates into. For a folder artifact, and for an artifact over
+    a user-uploaded file, they are the *same object* — there is nothing to share, so
+    there is no indirection.
     """
 
     def __init__(
         self,
         *,
-        reused: Optional[MediaArtifactRecord],
-        record: Optional[MediaArtifactRecord],
-        message: Optional[Dict[str, Any]],
-        reclaims_failed: bool = False,
+        owned: Optional[MediaArtifactRecord] = None,
+        entry: Optional[MediaArtifactRecord] = None,
+        entry_reclaims_failed: bool = False,
+        generation: Optional[MediaArtifactRecord] = None,
+        generation_reclaims_failed: bool = False,
+        message: Optional[Dict[str, Any]] = None,
         awaits_sources: bool = False,
     ) -> None:
-        self.reused = reused
-        self.record = record
+        #: The account's entry already answers this request, so nothing is written
+        #: and nothing is charged: it was charged when the account acquired it.
+        self.owned = owned
+        #: The row this account will hold. Addressed by the API, listed in the
+        #: history, and the token the debit is keyed on.
+        self.entry = entry
+        #: ``entry`` carries the id of a failed row to overwrite in place, rather
+        #: than an id nothing is stored under yet.
+        self.entry_reclaims_failed = entry_reclaims_failed
+        #: The row to generate into, or ``None`` when a generation that already
+        #: exists answers the request — the whole point of the mutualization: the
+        #: account gains an entry, the provider is not called.
+        self.generation = generation
+        self.generation_reclaims_failed = generation_reclaims_failed
         self.message = message
-        #: ``record`` carries the id of a failed entry to overwrite in place,
-        #: rather than an id nothing is stored under yet.
-        self.reclaims_failed = reclaims_failed
         #: The entry is written but **not** enqueued: at least one source is still
         #: being prepared, and a completion event resumes it (task-360). The debit
         #: happens here all the same — the request was accepted, and the resume
@@ -1155,9 +1413,14 @@ class ArtifactGenerationPlan:
         self.awaits_sources = awaits_sources
 
     @property
-    def reuses_existing(self) -> bool:
-        """True when an existing artifact answers the request, so nothing runs."""
-        return self.reused is not None
+    def already_owned(self) -> bool:
+        """True when this account already holds the entry it is asking for.
+
+        The only case that consumes nothing. A request served by *another* account's
+        generation does consume: the account gains an entry it did not have, and the
+        avoided provider call is the operator's saving, not free allowance.
+        """
+        return self.owned is not None
 
 
 async def plan_artifact_generation(
@@ -1170,16 +1433,27 @@ async def plan_artifact_generation(
     resolution: ScopeResolution,
     parameters: Optional[Dict[str, Any]] = None,
 ) -> ArtifactGenerationPlan:
-    """Decide whether an artifact already answers this request, or what to write.
+    """Decide whether anything has to be generated, and what has to be written.
 
-    The lookup has **no time bound**: the id is derived from the sources alone, so
-    an entry found here is an artifact generated over exactly these sources,
-    whenever that happened. Reusing it is the answer — no generation, no debit.
-    Only a *failed* entry is not an answer, and it is reclaimed instead.
+    Two lookups, in this order, and both without any time bound — the ids are
+    derived from the sources alone, so what they find was generated over exactly
+    these sources, whenever that happened:
 
-    A resolution that still has sources in preparation plans the same entry under
-    the same id — the id hashes the sources the artifact *will* read, not the ones
-    already readable — and simply leaves it un-enqueued (task-360).
+    1. **the account's own entry.** Found and not failed, it *is* the answer: nothing
+       is written and nothing is charged.
+    2. **the shared generation for this content** (media scope, content not
+       account-scoped). Found and not failed, the account gets an entry pointing at
+       it — mirrored if it is already terminal, in flight if it is still running —
+       and the provider is not called a second time (task-394).
+
+    Only a *failed* row is not an answer, on either side, and it is reclaimed
+    instead.
+
+    A resolution that still has sources in preparation writes the account's entry
+    under the same id — the id hashes the sources the artifact *will* read, not the
+    ones already readable — and arms no generation at all (task-360). The wait is the
+    account's, so its deadline and its ``preparation`` snapshot live on its own row;
+    a shared generation is only ever armed once every source is readable.
     """
     if not ARTIFACT_GENERATION_ENABLED:
         raise ArtifactGenerationDisabledError("Artifact generation is disabled.")
@@ -1271,9 +1545,9 @@ async def plan_artifact_generation(
             scope_id=scope_id,
             source_count=existing.source_count,
         )
-        return ArtifactGenerationPlan(reused=existing, record=None, message=None)
+        return ArtifactGenerationPlan(owned=existing)
 
-    record = MediaArtifactRecord(
+    entry = MediaArtifactRecord(
         artifact_id=artifact_id,
         user_id=user_id,
         scope=resolved_scope,
@@ -1303,42 +1577,160 @@ async def plan_artifact_generation(
             else None
         ),
     )
+    entry_reclaims_failed = existing is not None
 
-    if resolution.is_awaiting:
+    if not mutualizes_generation(
+        scope=resolved_scope, content_scope_id=effective_scope_id, user_id=user_id
+    ):
+        # Nothing to share: this row *is* the generation, exactly as before task-394.
+        if resolution.is_awaiting:
+            _log_awaiting(entry, resolution=resolution)
+            return ArtifactGenerationPlan(
+                entry=entry,
+                entry_reclaims_failed=entry_reclaims_failed,
+                awaits_sources=True,
+            )
+        return ArtifactGenerationPlan(
+            entry=entry,
+            entry_reclaims_failed=entry_reclaims_failed,
+            generation=entry,
+            message=build_generation_message(
+                record=entry,
+                resolution=resolution,
+                content_scope_id=effective_scope_id,
+            ),
+        )
+
+    shared_id = build_shared_artifact_id(
+        scope=resolved_scope,
+        scope_id=effective_scope_id,
+        artifact_type=resolved_type,
+        parameters=normalized_parameters,
+        source_media_item_ids=source_ids,
+    )
+    entry.shared_artifact_id = shared_id
+    shared_existing = await media_artifacts.get_media_artifact_by_id(shared_id)
+
+    if shared_existing is not None and shared_existing.status != MediaArtifactStatus.FAILED:
+        # The generation this request needs already exists — finished, or running for
+        # somebody else. Either way the provider is not called again: the account
+        # gains an entry mirroring it (terminal) or waiting on it (in flight).
+        if shared_existing.status in _IN_FLIGHT_ARTIFACT_STATUSES:
+            served = entry
+        else:
+            served = _mirror_of_shared_generation(pointer=entry, shared=shared_existing)
         log_event(
             logger,
             logging.INFO,
-            "artifact.awaiting_sources",
-            "Artifact request accepted while its sources are still being prepared",
-            artifact_id=record.artifact_id,
+            "artifact.shared_generation_reused",
+            "Existing generation of this content answered the request: nothing queued",
+            artifact_id=entry.artifact_id,
+            shared_artifact_id=shared_id,
             artifact_type=resolved_type.value,
+            artifact_status=shared_existing.status.value,
             scope=resolved_scope.value,
             scope_id=scope_id,
-            source_count=record.source_count,
-            pending_count=len(resolution.pending),
-            preparations=sorted(
-                {source.preparation for source in resolution.pending}
-            ),
-            awaiting_expires_at=record.awaiting_expires_at.isoformat()
-            if record.awaiting_expires_at
-            else None,
+            source_count=served.source_count,
         )
         return ArtifactGenerationPlan(
-            reused=None,
-            record=record,
-            # No message: a waiting entry is not enqueued, and the message the
-            # generation eventually needs cannot be built yet — it carries the
-            # transcript keys that do not exist.
-            message=None,
-            reclaims_failed=existing is not None,
+            entry=served, entry_reclaims_failed=entry_reclaims_failed
+        )
+
+    if resolution.is_awaiting:
+        # No generation is armed while a source is still being prepared, so the
+        # account's own row carries the wait. Its expected ``shared_artifact_id`` is
+        # stored all the same: that is what the resume verifies before arming.
+        _log_awaiting(entry, resolution=resolution)
+        return ArtifactGenerationPlan(
+            entry=entry,
+            entry_reclaims_failed=entry_reclaims_failed,
             awaits_sources=True,
         )
 
+    shared = build_shared_generation_record(
+        shared_artifact_id=shared_id,
+        user_id=user_id,
+        scope=resolved_scope,
+        scope_id=scope_id,
+        content_scope_id=effective_scope_id,
+        artifact_type=resolved_type,
+        parameters=normalized_parameters,
+        generator_version=generator_version,
+        resolution=resolution,
+        created_at=shared_existing.created_at if shared_existing is not None else now,
+    )
     return ArtifactGenerationPlan(
-        reused=None,
-        record=record,
-        message=build_generation_message(record=record, resolution=resolution),
-        reclaims_failed=existing is not None,
+        entry=entry,
+        entry_reclaims_failed=entry_reclaims_failed,
+        generation=shared,
+        generation_reclaims_failed=shared_existing is not None,
+        message=build_generation_message(
+            record=shared,
+            resolution=resolution,
+            content_scope_id=effective_scope_id,
+        ),
+    )
+
+
+def build_shared_generation_record(
+    *,
+    shared_artifact_id: str,
+    user_id: str,
+    scope: ArtifactScope,
+    scope_id: str,
+    content_scope_id: str,
+    artifact_type: MediaArtifactType,
+    parameters: Dict[str, Any],
+    generator_version: str,
+    resolution: ScopeResolution,
+    created_at: Optional[datetime] = None,
+) -> MediaArtifactRecord:
+    """The row a shared generation is written into.
+
+    Indexed under ``@content#media#<content id>``, a scope key no account can produce,
+    so it lives in the same GSI as the entries — which is what makes the generations of
+    one content item enumerable for a purge — while being unreachable from any
+    account's listing query.
+
+    ``user_id`` and ``scope_id`` are the *triggering* account and its library row.
+    They are attribution, not ownership: they say who caused the provider call, which
+    is what the cost log and the ``review_blurb`` fan-out start from. Nothing checks
+    them, and this row is not addressable through the API.
+    """
+    now = _now_utc()
+    return MediaArtifactRecord(
+        artifact_id=shared_artifact_id,
+        user_id=user_id,
+        scope=scope,
+        scope_id=scope_id,
+        scope_key=build_content_scope_key(scope=scope, scope_id=content_scope_id),
+        artifact_type=artifact_type,
+        status=MediaArtifactStatus.QUEUED,
+        parameters=parameters,
+        generator_version=generator_version,
+        source_count=len(resolution.sources),
+        sources=resolution.snapshot(),
+        created_at=created_at or now,
+        updated_at=now,
+    )
+
+
+def _log_awaiting(record: MediaArtifactRecord, *, resolution: ScopeResolution) -> None:
+    log_event(
+        logger,
+        logging.INFO,
+        "artifact.awaiting_sources",
+        "Artifact request accepted while its sources are still being prepared",
+        artifact_id=record.artifact_id,
+        artifact_type=record.artifact_type.value,
+        scope=record.scope.value,
+        scope_id=record.scope_id,
+        source_count=record.source_count,
+        pending_count=len(resolution.pending),
+        preparations=sorted({source.preparation for source in resolution.pending}),
+        awaiting_expires_at=record.awaiting_expires_at.isoformat()
+        if record.awaiting_expires_at
+        else None,
     )
 
 
@@ -1357,6 +1749,7 @@ def build_generation_message(
     *,
     record: MediaArtifactRecord,
     resolution: ScopeResolution,
+    content_scope_id: str,
 ) -> Dict[str, Any]:
     """The SQS payload of one generation.
 
@@ -1364,8 +1757,14 @@ def build_generation_message(
     is what lets a deferred request produce it at resume time from the very same
     code as an immediate one — the entry says what to generate, the fresh
     resolution says which text to read.
+
+    ``record`` is the row the worker will generate into: the shared generation for a
+    media artifact, the account's own row for a folder one. ``content_scope_id`` is
+    passed rather than parsed off ``scope_key`` because it is what the prompt cache
+    keys on, and the cache must be shared by the five types of one request whichever
+    role the row plays.
     """
-    effective_scope_id = content_scope_id_from_scope_key(record.scope_key)
+    effective_scope_id = content_scope_id
     return {
         "artifact_id": record.artifact_id,
         "user_id": record.user_id,
@@ -1413,79 +1812,181 @@ def build_generation_message(
 async def commit_artifact_generation(
     plan: ArtifactGenerationPlan,
 ) -> Tuple[MediaArtifactRecord, ArtifactGenerationOutcome]:
-    """Write the entry and enqueue it, or hand back what already answers the request.
+    """Write what the plan decided, and enqueue the generation if it armed one.
 
-    The outcome is the caller's contract. ``REUSED`` and ``COLLAPSED`` both forbid
-    debiting any counter, and they say different things: the first is a cache hit
-    on identical sources, the second is one of two concurrent taps losing the
-    conditional write. ``RETRIED`` reruns a failed entry under its own id, so a
-    caller keying its debit on ``artifact_id`` charges the generation once, not
+    Two writes for a media artifact, in this order and for this reason: the **shared
+    generation** first, because its conditional write is the exactly-once gate for the
+    provider call — across accounts, not just across two taps of one thumb — and then
+    the account's **entry**, which is what the API hands back. Losing the first means
+    somebody else's request is generating what this one needs, so this one enqueues
+    nothing and its entry is adapted to what actually exists. Losing the second means
+    a concurrent identical request from the same account already wrote it.
+
+    The order also fails safe: an entry written with no generation behind it would be
+    a spinner nobody ends, whereas a generation written with no entry behind it is a
+    row the next request for that content adopts.
+
+    The outcome is the caller's contract. ``REUSED`` means no generation was armed
+    because one already covers these sources — the account still gains an entry, and
+    is still charged for it (task-394). ``COLLAPSED`` means this request lost the
+    write of its own entry to an identical concurrent one. ``RETRIED`` reruns under the
+    same entry id, so a caller keying its debit on ``artifact_id`` charges once, not
     once per attempt.
 
-    A waiting plan takes the same write and stops there: the entry exists, is
-    ``queued``, and is what the history and the tile read; the enqueue happens once
-    its last source becomes readable, from ``artifact_wait_service`` (task-360).
+    A waiting plan writes the entry and stops there: it is ``queued``, it is what the
+    history and the tile read, and the generation is armed once its last source
+    becomes readable, from ``artifact_wait_service`` (task-360).
     """
-    if plan.reused is not None:
-        return plan.reused, ArtifactGenerationOutcome.REUSED
-    if plan.record is None or (plan.message is None and not plan.awaits_sources):
+    if plan.owned is not None:
+        # Already held. Resolved before being handed back, so a request repeated
+        # while the generation it points at finished answers with the finished state
+        # rather than with a stale ``queued``.
+        return (
+            await resolve_through_shared_generation(plan.owned),
+            ArtifactGenerationOutcome.REUSED,
+        )
+    if plan.entry is None:
         raise ArtifactServiceError("Artifact generation plan is empty.")
 
-    record = plan.record
-    if plan.reclaims_failed:
+    entry = plan.entry
+    generation = plan.generation
+    shares_generation = generation is not None and generation is not entry
+    generation_armed = False
+
+    if shares_generation and generation is not None:
+        generation, generation_armed = await arm_shared_generation(
+            record=generation,
+            reclaims_failed=plan.generation_reclaims_failed,
+        )
+        if not generation_armed:
+            # Somebody else's request armed it between the plan and this write. Its
+            # generation answers ours, so ours sends nothing and its entry reflects
+            # the row that actually exists.
+            entry = _entry_served_by(entry=entry, shared=generation)
+
+    if plan.entry_reclaims_failed:
         # Conditional on the row still being `failed`: if a concurrent request
-        # already reclaimed it, that request owns the generation and this one has
-        # nothing left to do.
-        if not await media_artifacts.reclaim_failed_artifact(record):
-            return await _collapsed_onto_existing(record.artifact_id)
+        # already reclaimed it, that request owns the entry and this one has nothing
+        # left to write.
+        entry_written = await media_artifacts.reclaim_failed_artifact(entry)
     else:
         try:
-            await media_artifacts.create_media_artifact(record)
+            await media_artifacts.create_media_artifact(entry)
+            entry_written = True
         except media_artifacts.ArtifactAlreadyExistsError:
-            return await _collapsed_onto_existing(record.artifact_id)
+            entry_written = False
 
-    if plan.message is None:
-        # Nothing to send, and nothing to undo either: the entry is legitimately
-        # `queued` with no message in flight. The outcome still distinguishes a
-        # first request from a retry, because that is what the caller debits on.
-        return record, (
-            ArtifactGenerationOutcome.RETRIED
-            if plan.reclaims_failed
-            else ArtifactGenerationOutcome.CREATED
-        )
+    if not shares_generation:
+        # The entry *is* the generation: one write decided both.
+        generation_armed = entry_written and plan.message is not None
 
-    try:
-        await sqs.send_message(
-            queue_name=get_artifact_queue(record.artifact_type),
-            message_body=plan.message,
-        )
-    except Exception as exc:
-        await fail_artifact_generation(
-            artifact_id=record.artifact_id,
-            error_message=f"artifact_enqueue_failed: {exc}",
-            error_code="INTERNAL_ERROR",
-        )
-        raise
+    if generation_armed and plan.message is not None and generation is not None:
+        try:
+            await sqs.send_message(
+                queue_name=get_artifact_queue(generation.artifact_type),
+                message_body=plan.message,
+            )
+        except Exception as exc:
+            await fail_artifact_generation(
+                artifact_id=generation.artifact_id,
+                error_message=f"artifact_enqueue_failed: {exc}",
+                error_code="INTERNAL_ERROR",
+            )
+            raise
+
+    if not entry_written:
+        return await _collapsed_onto_existing(entry.artifact_id)
+
+    if plan.generation is None:
+        # An existing generation answers this request: the entry was written, the
+        # provider was not called. This is the mutualization, seen from the caller.
+        return entry, ArtifactGenerationOutcome.REUSED
 
     outcome = (
         ArtifactGenerationOutcome.RETRIED
-        if plan.reclaims_failed
+        if plan.entry_reclaims_failed
         else ArtifactGenerationOutcome.CREATED
     )
+    if not generation_armed:
+        outcome = ArtifactGenerationOutcome.REUSED
+    elif plan.message is not None and generation is not None:
+        log_event(
+            logger,
+            logging.INFO,
+            "artifact.enqueued",
+            "Artifact generation enqueued",
+            artifact_id=entry.artifact_id,
+            shared_artifact_id=generation.artifact_id if shares_generation else None,
+            artifact_type=entry.artifact_type.value,
+            scope=entry.scope.value,
+            scope_id=entry.scope_id,
+            source_count=generation.source_count,
+            queue=get_artifact_queue(generation.artifact_type),
+            outcome=outcome.value,
+        )
+    return entry, outcome
+
+
+async def arm_shared_generation(
+    *,
+    record: MediaArtifactRecord,
+    reclaims_failed: bool,
+) -> Tuple[MediaArtifactRecord, bool]:
+    """Take ownership of the single generation of this content, or find who has it.
+
+    Returns ``(row, armed)``. ``armed`` is the right to send the message: exactly one
+    caller gets it per generation, because both writes are conditional — a create on
+    ``attribute_not_exists``, a reclaim on the row still being ``failed``. Whoever
+    loses reads back the row that won and generates nothing.
+
+    Public because there are two ways to arm a generation and both must go through
+    this single gate: a request whose sources are readable straight away
+    (:func:`commit_artifact_generation`) and one resumed once its last source landed
+    (``artifact_wait_service``).
+    """
+    if reclaims_failed:
+        if await media_artifacts.reclaim_failed_artifact(record):
+            return record, True
+    else:
+        try:
+            await media_artifacts.create_media_artifact(record)
+            return record, True
+        except media_artifacts.ArtifactAlreadyExistsError:
+            pass
+
+    existing = await media_artifacts.get_media_artifact_by_id(record.artifact_id)
+    if existing is None:
+        raise ArtifactServiceError(
+            "Shared generation was claimed concurrently but cannot be read back."
+        )
     log_event(
         logger,
         logging.INFO,
-        "artifact.enqueued",
-        "Artifact generation enqueued",
-        artifact_id=record.artifact_id,
-        artifact_type=record.artifact_type.value,
-        scope=record.scope.value,
-        scope_id=record.scope_id,
-        source_count=record.source_count,
-        queue=get_artifact_queue(record.artifact_type),
-        outcome=outcome.value,
+        "artifact.shared_generation_collapsed",
+        "Another request armed the generation of this content first; reusing it",
+        artifact_id=existing.artifact_id,
+        artifact_type=existing.artifact_type.value,
+        artifact_status=existing.status.value,
+        scope_id=existing.scope_id,
     )
-    return record, outcome
+    return existing, False
+
+
+def _entry_served_by(
+    *,
+    entry: MediaArtifactRecord,
+    shared: MediaArtifactRecord,
+) -> MediaArtifactRecord:
+    """The account's entry as it must be written, given the generation serving it.
+
+    A generation still running leaves the entry ``queued``: the read path reports the
+    generation's own status until it is terminal. A terminal one is mirrored straight
+    away, so the entry is born ``ready`` with the storage ref and the account's very
+    next read costs one query.
+    """
+    if shared.status in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return entry
+    return _mirror_of_shared_generation(pointer=entry, shared=shared)
 
 
 async def _collapsed_onto_existing(
@@ -1743,16 +2244,20 @@ async def _mirror_review_blurb_onto_content_rows(
     record: MediaArtifactRecord,
     blurb: Optional[ReviewBlurb],
 ) -> None:
-    """Copy a finished blurb onto every row of its owner that holds the content.
+    """Copy a finished blurb onto every row that holds the content, whoever owns it.
 
     ``artifact_id`` is keyed on the *content* (the deduplicated ``media_key``), never
-    on the save, so a single entry answers every save the same user made of the same
-    URL — while the generation was triggered from whichever of those rows asked
-    first. Writing onto ``scope_id`` alone therefore leaves the other rows blank
-    while the shared entry reports ``ready``, which is the media contract announcing
-    a card that exists nowhere (task-391). The second save is not exotic: it is what
-    happens whenever a user re-files a source while the first blurb is still being
-    generated.
+    on the save, so a single generation answers every save of the same URL — by the
+    same user, and since task-394 by any user. Writing onto ``scope_id`` alone
+    therefore leaves the other rows blank while the entry reports ``ready``, which is
+    the media contract announcing a card that exists nowhere (task-391). Neither case
+    is exotic: the first is a user re-filing a source while its blurb is still
+    generating, the second is two accounts saving the same video.
+
+    The fan-out is cross-account for the same reason the artifact is: the blurb is a
+    property of the content, so every row displaying that content displays the same
+    card. Each row is written under **its own** ``user_id`` — the copy is a per-row
+    attribute write, never an ownership transfer.
 
     Best-effort like the single-row copy it wraps: the artifact is sealed by the time
     this runs, and ``copy_review_blurb_to_library_row`` remains the repair path for a
@@ -1761,21 +2266,19 @@ async def _mirror_review_blurb_onto_content_rows(
     if blurb is None:
         return
 
-    targets = [record.scope_id]
+    targets = [(record.user_id, record.scope_id)]
     content_id = content_scope_id_from_scope_key(record.scope_key)
-    if content_id and content_id != record.scope_id:
+    if content_id:
         try:
             from media_summarizer.utils import user_media as user_media_store
 
-            rows = await user_media_store.list_for_user_by_media_key(
-                record.user_id, content_id
-            )
+            rows = await user_media_store.list_by_media_key(content_id)
         except Exception as exc:
             log_event(
                 logger,
                 logging.WARNING,
                 "artifact.review_blurb_fanout_failed",
-                "Could not list the owner's saves of this content; copying onto the "
+                "Could not list the saves of this content; copying onto the "
                 "requesting row only",
                 artifact_id=record.artifact_id,
                 media_item_id=record.scope_id,
@@ -1784,12 +2287,14 @@ async def _mirror_review_blurb_onto_content_rows(
             )
             rows = []
         targets.extend(
-            row.media_item_id for row in rows if row.media_item_id != record.scope_id
+            (row.user_id, row.media_item_id)
+            for row in rows
+            if (row.user_id, row.media_item_id) != (record.user_id, record.scope_id)
         )
 
-    for media_item_id in targets:
+    for user_id, media_item_id in targets:
         await _mirror_review_blurb_onto_library_row(
-            user_id=record.user_id,
+            user_id=user_id,
             media_item_id=media_item_id,
             blurb=blurb,
             artifact_id=record.artifact_id,

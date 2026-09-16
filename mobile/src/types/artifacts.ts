@@ -63,9 +63,11 @@ export interface ArtifactDetail extends ArtifactSummary {
  *
  * - `created`: a generation was queued over these sources.
  * - `retried`: an entry that had failed over these sources was rerun.
- * - `reused`: an artifact already covered these sources; nothing was queued and
- *   no minute was charged. This is the normal answer to a second request on a
- *   media item, and to a folder whose sources have not changed.
+ * - `reused`: a generation already covered these sources, so nothing was queued.
+ *   The normal answer to a second request on a media item, to a folder whose
+ *   sources have not changed, and to the first request of an account over content
+ *   another account already generated this artifact for. It says nothing about the
+ *   allowance: only an artifact this account already held is free.
  * - `collapsed`: two concurrent taps, and this one lost the race; the entry
  *   returned is the one already in flight.
  */

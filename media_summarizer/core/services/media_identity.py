@@ -434,3 +434,40 @@ def generate_article_media_key(
         f"{canonical_url.strip()}#text-sha256={content_fingerprint.strip()}"
     )
     return generate_media_key(locator)
+
+
+#: Prefixes the content key of a file a user uploaded is built with, as opposed to
+#: the opaque `mkey_v1_<digest>` of a public locator. Declared next to the recipes
+#: because a key's *shape* is the only thing that says whether its content belongs
+#: to one account -- see `is_account_scoped_media_key`.
+ACCOUNT_SCOPED_MEDIA_KEY_PREFIXES: Tuple[str, ...] = ("doc:", "audio:")
+
+
+def is_account_scoped_media_key(*, media_key: str, owner_user_id: str) -> bool:
+    """Whether this content identity belongs to one account rather than to the web.
+
+    True for a file a user uploaded, keyed on the account *and* the file
+    (`doc:{user_id}:...`, `audio:{user_id}:...`). False for anything fetched from a
+    public locator, whose key is `generate_media_key`'s digest of that locator and
+    carries no account.
+
+    Recognised on two independent grounds -- the upload prefix, and the account
+    appearing in the material -- so a renamed prefix alone does not make an upload
+    look like public content.
+
+    What this predicate is *not*: it is not what keeps one account's uploads out of
+    another's. That is the key itself, which carries the account and is therefore
+    different for the same file sent by two people -- so an artifact over an upload
+    has no cross-account identity to be found under, whatever a caller believes
+    (task-394 exclusion). This only lets a caller skip work it knows can never be
+    shared. **Anyone changing the uploaded-file recipe so the account stops being
+    visible in the key must revisit this function**: the isolation still holds, but
+    callers lose the ability to see it and will do that pointless work.
+    """
+    key = (media_key or "").strip()
+    if not key:
+        return False
+    if key.startswith(ACCOUNT_SCOPED_MEDIA_KEY_PREFIXES):
+        return True
+    owner = (owner_user_id or "").strip()
+    return bool(owner) and owner in key
