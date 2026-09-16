@@ -3,9 +3,10 @@ id: TASK-402
 title: >-
   Implémenter l'indicateur de traitement en cours de la vignette média selon la
   maquette retenue (task-401)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 13:12'
+updated_date: '2026-09-16 16:14'
 labels:
   - mobile
   - ui
