@@ -831,7 +831,12 @@ components:
     MissingUpload:
       description: >
         No object at the submitted upload_key — the PUT never happened, the key
-        expired, or it was already consumed by an earlier submission.
+        expired, or it was already consumed by an earlier submission. Same status
+        when S3 reports no digest of the uploaded bytes to build the file's content
+        identity from (multipart upload, KMS or client-supplied encryption key):
+        the reason is in the X-Upload-Error-Code header
+        (upload_fingerprint_multipart, upload_fingerprint_encrypted,
+        upload_fingerprint_missing) and the fix is to send the file again.
       content:
         application/json:
           schema:

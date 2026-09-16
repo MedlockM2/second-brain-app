@@ -16,8 +16,11 @@ pattern as `endpoints/bug_reports.py`.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from enum import Enum
@@ -94,6 +97,10 @@ from media_summarizer.core.services.durable_media_service import (
     resolve_job_for_record,
     save_media_for_user,
     user_holds_media,
+)
+from media_summarizer.core.services.media_identity import (
+    UploadedFileKind,
+    generate_uploaded_file_media_key,
 )
 from media_summarizer.core.services.media_search_service import (
     DEFAULT_SORT_DIRECTION,
@@ -186,6 +193,30 @@ class UploadTarget(str, Enum):
     SHARED_AUDIO = "shared_audio"
 
 
+class UploadFingerprintFailure(str, Enum):
+    """Why S3 could not hand back an identity of the bytes a client uploaded.
+
+    Stable values: they are logged and returned in ``X-Upload-Error-Code``, so a
+    log search and a client branch keep meaning the same thing. Each member is a
+    case where the value S3 reports is *not* a function of the body alone — see
+    ``_upload_content_fingerprint``.
+    """
+
+    #: S3 reported neither an ETag nor an additional checksum for the object, or
+    #: reported an ETag whose shape is not a digest we recognise.
+    MISSING = "upload_fingerprint_missing"
+    #: The ETag (or the only checksum stored) was computed over parts rather than
+    #: over the whole body -- the `"<hex>-<n>"` shape of a multipart upload. Its
+    #: value depends on how the transfer was split, so identical bytes can produce
+    #: two different ones.
+    MULTIPART = "upload_fingerprint_multipart"
+    #: The object is encrypted with a key S3 manages for us (SSE-KMS, DSSE-KMS) or
+    #: one the client supplied (SSE-C). The ETag is then an opaque digest of the
+    #: ciphertext, not the MD5 of the plaintext, and no additional checksum was
+    #: stored to fall back on.
+    ENCRYPTED = "upload_fingerprint_encrypted"
+
+
 @dataclass(frozen=True)
 class StagedUpload:
     """An object a client PUT, once vouched for against the caller and the ceiling."""
@@ -195,11 +226,109 @@ class StagedUpload:
     file_name: str
     size_bytes: int
     content_type: str
-    etag: str
+    #: Identity of the bytes, algorithm-labelled (`md5-<hex>`, `sha256-<hex>`).
+    #: Comes from S3 -- this API never holds the body -- and is guaranteed to be a
+    #: function of the content alone: `_resolve_staged_upload` refuses the
+    #: submission rather than handing back a value that is not.
+    content_fingerprint: str
+
+
+#: An ETag or a checksum computed part by part carries a `-<part count>` suffix.
+_COMPOSITE_DIGEST_RE = re.compile(r"-\d+$")
+
+#: An ETag is the MD5 of the body only when S3 stored the object either in the
+#: clear or under SSE-S3. `head_object` omits the field entirely for an unencrypted
+#: object, hence the empty string.
+_ETAG_IS_BODY_MD5_ENCRYPTION = frozenset({"", "AES256"})
+
+#: 32 lowercase hex characters: the shape of an MD5, and the only ETag shape worth
+#: reading as one.
+_MD5_HEX_RE = re.compile(r"^[0-9a-f]{32}$")
+
+#: Additional checksums S3 can carry for an object, strongest first, with the
+#: label each one gets in the fingerprint. Unlike the ETag these are taken on the
+#: plaintext, so they survive any encryption mode -- which is exactly what makes
+#: them the fallback when the ETag cannot be read as the body's MD5. S3 stores a
+#: full-object `ChecksumCRC64NVME` on its own for uploads that ask for no
+#: checksum at all, so this fallback is real and not theoretical: verified on the
+#: dev documents bucket, where a raw presigned PUT and a multipart upload of the
+#: same 27 bytes both reported `ChecksumCRC64NVME: ZGEHrG1waXA=`,
+#: `ChecksumType: FULL_OBJECT`.
+_S3_CHECKSUM_FIELDS: tuple[tuple[str, str], ...] = (
+    ("ChecksumSHA256", "sha256"),
+    ("ChecksumSHA1", "sha1"),
+    ("ChecksumCRC64NVME", "crc64nvme"),
+    ("ChecksumCRC32C", "crc32c"),
+    ("ChecksumCRC32", "crc32"),
+)
 
 
 def _staging_bucket_for(target: UploadTarget) -> str:
     return DOCUMENT_BUCKET if target is UploadTarget.DOCUMENT else AUDIO_BUCKET
+
+
+def _upload_content_fingerprint(
+    metadata: Dict[str, Any],
+) -> str | UploadFingerprintFailure:
+    """The identity of an uploaded object's bytes, read from S3's own metadata.
+
+    This API never sees the body -- the client PUTs it straight to S3 -- so the
+    fingerprint has to come from S3. Two sources, and the order between them is
+    the point:
+
+    1. **The ETag**, when it really is the MD5 of the body. That holds for a
+       single-part PUT of an object S3 kept in the clear or under SSE-S3, which is
+       what every upload here is: a presigned URL authorizes ``PutObject`` and
+       nothing else, and both staging buckets pin SSE-S3
+       (``infrastructure/terraform/modules/platform/s3.tf``). Preferred because it
+       is the strongest digest S3 offers here and is identical for identical bytes
+       whatever the client did or did not send.
+    2. **An additional checksum**, when it covers the whole object. Taken on the
+       plaintext, so it stays a content identity under any encryption mode, and
+       present even when nobody asked: S3 computes a full-object CRC64NVME by
+       itself. This is what carries the two cases where the ETag stops being the
+       body's MD5.
+
+    Everything else is refused rather than assumed away (task-393). A digest
+    computed part by part -- the ``"<hex>-<n>"`` shape, or ``ChecksumType``
+    ``COMPOSITE`` -- is a function of how the transfer was split, not of the
+    content; an ETag under SSE-KMS/DSSE-KMS/SSE-C is a digest of the ciphertext.
+    Returning such a value would silently reintroduce the defect this replaced --
+    a key that does not identify the content -- so the caller turns the failure
+    into a 422 rather than into a wrong library entry.
+    """
+    etag = str(metadata.get("ETag") or "").strip().strip('"').lower()
+    encryption = str(metadata.get("ServerSideEncryption") or "").strip()
+    client_key_encrypted = bool(metadata.get("SSECustomerAlgorithm"))
+    etag_is_composite = bool(etag) and bool(_COMPOSITE_DIGEST_RE.search(etag))
+    checksums_cover_parts = (
+        str(metadata.get("ChecksumType") or "").strip().upper() == "COMPOSITE"
+    )
+
+    if (
+        _MD5_HEX_RE.match(etag)
+        and not client_key_encrypted
+        and encryption in _ETAG_IS_BODY_MD5_ENCRYPTION
+    ):
+        return f"md5-{etag}"
+
+    if not checksums_cover_parts:
+        for field, label in _S3_CHECKSUM_FIELDS:
+            raw = str(metadata.get(field) or "").strip()
+            if not raw or _COMPOSITE_DIGEST_RE.search(raw):
+                continue
+            try:
+                digest = base64.b64decode(raw, validate=True).hex()
+            except (binascii.Error, ValueError):
+                continue
+            if digest:
+                return f"{label}-{digest}"
+
+    if etag_is_composite or checksums_cover_parts:
+        return UploadFingerprintFailure.MULTIPART
+    if client_key_encrypted or encryption not in _ETAG_IS_BODY_MD5_ENCRYPTION:
+        return UploadFingerprintFailure.ENCRYPTED
+    return UploadFingerprintFailure.MISSING
 
 
 def _max_upload_bytes_for(target: UploadTarget) -> int:
@@ -289,6 +418,11 @@ async def _resolve_staged_upload(
     object must exist -- a submission whose PUT never landed says so, instead of
     failing in a worker two minutes later -- and the ceiling is enforced on the
     size S3 reports, never on a figure the client claims.
+
+    Last, the object gets a content fingerprint, which is what every upload flow
+    builds its ``media_key`` from (task-393). It is derived here rather than in each
+    flow so that a case where S3's digest is not a function of the body cannot be
+    handled in one flow and forgotten in another.
     """
     key = (upload_key or "").strip()
     if not key:
@@ -338,15 +472,38 @@ async def _resolve_staged_upload(
             detail=f"File too large. Maximum size: {max_bytes // (1024 * 1024)}MB",
         )
 
+    fingerprint = _upload_content_fingerprint(metadata)
+    if isinstance(fingerprint, UploadFingerprintFailure):
+        # No fallback on the file's name and size: that is precisely the key that
+        # confounded two different documents and re-charged the same one twice
+        # (task-393). A submission we cannot identify is refused, loudly, so the
+        # cause shows up in the logs instead of in a user's library.
+        log_event(
+            logger,
+            logging.ERROR,
+            "media.upload.fingerprint_unavailable",
+            "S3 reported no content fingerprint for a staged upload; submission refused",
+            user_id=user_id,
+            upload_target=target.value,
+            s3_bucket=bucket,
+            s3_key=key,
+            error_code=fingerprint.value,
+            server_side_encryption=str(metadata.get("ServerSideEncryption") or ""),
+        )
+        await _discard_staged_upload(bucket, key)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Uploaded file has no content fingerprint. Please send it again.",
+            headers={"X-Upload-Error-Code": fingerprint.value},
+        )
+
     return StagedUpload(
         bucket=bucket,
         key=key,
         file_name=file_name,
         size_bytes=size_bytes,
         content_type=str(metadata.get("ContentType") or "application/octet-stream"),
-        # Single-part PUT under SSE-S3, so the ETag is the MD5 of the body: a
-        # content fingerprint the API gets without ever reading the bytes.
-        etag=str(metadata.get("ETag") or "").strip('"'),
+        content_fingerprint=fingerprint,
     )
 
 
@@ -1395,10 +1552,16 @@ async def upload_document(
                 headers={"X-Quota-Error-Code": quota_result.error_code or ""},
             )
 
-        # Media key for idempotence (user + filename + size). Computed before the
-        # job so it can seed the durable library id. The size is the one S3 reports
-        # for the uploaded object, so the key is the same it has always been.
-        media_key = f"doc:{user.id}:{file_name}:{staged.size_bytes}"
+        # Content identity of this document: the fingerprint of its bytes, inside
+        # this account (task-393). Neither the file's name nor its size is in it --
+        # the two together identify no content, so `report.pdf` overwrote
+        # `report.pdf`. Computed before the job so it can seed the durable library
+        # id.
+        media_key = generate_uploaded_file_media_key(
+            kind=UploadedFileKind.DOCUMENT,
+            owner_user_id=user.id,
+            content_fingerprint=staged.content_fingerprint,
+        )
 
         # Title stored right away (task-266): the cleaned filename when it says
         # something -- "Grant Deed_Security.pdf" reads "Grant Deed Security" --
@@ -1573,10 +1736,15 @@ async def upload_audio(
                 headers={"X-Quota-Error-Code": quota_result.error_code or ""},
             )
 
-        # Same content-key convention as the document upload. The library id is
+        # Same content-key convention as the document upload: the fingerprint of
+        # the bytes, scoped to this account (task-393). The library id is
         # independent and random, so re-uploading creates another save even when
         # the content key is identical.
-        media_key = f"audio:{user.id}:{file_name}:{staged.size_bytes}"
+        media_key = generate_uploaded_file_media_key(
+            kind=UploadedFileKind.AUDIO,
+            owner_user_id=user.id,
+            content_fingerprint=staged.content_fingerprint,
+        )
 
         # Cleaned filename when it carries a name of its own, otherwise
         # "Audio note — <date>" (task-266). A voice memo exported as
@@ -1831,16 +1999,13 @@ async def ingest_shared_content(
 
             content_size_bytes = staged.size_bytes
 
-            # Content fingerprint for deduplication. A single-part PUT under SSE-S3
-            # gives an ETag that is the MD5 of the body, so the API keeps a real
-            # content identity — the same share sent twice still lands on the same
-            # `media_key` — without ever holding the bytes to hash them.
-            content_hash = staged.etag
-            if not content_hash:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Uploaded audio has no content fingerprint. Please share it again.",
-                )
+            # Content fingerprint for deduplication: the identity of the bytes S3
+            # holds, derived in `_resolve_staged_upload` for every upload flow
+            # alike (task-393). The same share sent twice lands on the same
+            # `media_key` without this API ever holding the bytes to hash them; a
+            # fingerprint that would not be a function of the content is refused
+            # there, so there is nothing left to check here.
+            content_hash = staged.content_fingerprint
 
             # Consumption check. The duration comes from the container over a
             # presigned GET, so the refusal below stays exact. The debit itself

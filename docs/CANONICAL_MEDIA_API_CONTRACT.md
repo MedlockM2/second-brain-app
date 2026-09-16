@@ -715,6 +715,17 @@ Response (`UploadAudioResponse`, `202 Accepted`):
   `400`, empty object `400`, over the ceiling `413`. Extension and size are checked twice, once at
   `upload-url` (so a refusal costs no transfer) and once at submission against what S3 actually
   holds.
+- **The content identity of an uploaded file is a fingerprint of its bytes, inside the account**
+  (task-393). The API never sees the body, so the fingerprint comes from S3: the object's ETag when
+  it is the MD5 of the body (single-part PUT, SSE-S3 — pinned on both staging buckets), otherwise a
+  full-object checksum S3 stored for it. Consequences a client can rely on: the same file submitted
+  twice under two different names is one content, and two different files that happen to share a
+  name and a byte count are two. The owner is part of the identity, so two accounts uploading
+  identical bytes share neither content nor artifacts. When S3 reports no digest that is a function
+  of the body alone — a multipart upload, or an object encrypted with a KMS or client-supplied key —
+  the submission is refused with `422` and an `X-Upload-Error-Code` header
+  (`upload_fingerprint_multipart`, `upload_fingerprint_encrypted`, `upload_fingerprint_missing`)
+  rather than being keyed on something that does not identify it.
 - A consumption refusal carries the `X-Quota-Error-Code` header (`out_of_minutes` or
   `item_too_long`), exactly like the URL and shared-content entrypoints. For an audio upload the
   duration is read from the object over a presigned GET (a few Range requests) before the debit, so

@@ -463,6 +463,12 @@ async def get_object_metadata(bucket: str, key: str) -> Dict[str, Any]:
     """
     Get metadata for an S3 object.
 
+    ``ChecksumMode=ENABLED`` is asked for because S3 omits the ``Checksum*``
+    fields otherwise, and the upload path reads them: they are the content
+    fingerprint it falls back on when an object's ETag is not the MD5 of its body
+    (``api/endpoints/media.py``, ``_upload_content_fingerprint``). It costs nothing
+    on an object that carries no checksum -- the fields are simply absent.
+
     Args:
         bucket: S3 bucket name
         key: S3 object key
@@ -475,7 +481,9 @@ async def get_object_metadata(bucket: str, key: str) -> Dict[str, Any]:
     """
     try:
         async with session.create_client("s3", **_client_kwargs()) as s3:
-            response = await s3.head_object(Bucket=bucket, Key=key)
+            response = await s3.head_object(
+                Bucket=bucket, Key=key, ChecksumMode="ENABLED"
+            )
             log_event(
                 logger,
                 logging.DEBUG,
