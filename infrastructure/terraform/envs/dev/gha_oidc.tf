@@ -66,9 +66,15 @@ locals {
 }
 
 variable "github_repository" {
-  description = "owner/repo whose Actions jobs may assume the dev deploy role."
+  # Not plain "owner/repo": this repo has use_immutable_subject=true (GitHub API
+  # repos/{owner}/{repo}/actions/oidc/customization/sub, confirmed not togglable
+  # off on this account), so every sub claim GitHub mints carries the numeric
+  # owner and repository ids appended with "@" — verified against CloudTrail on
+  # a rejected AssumeRoleWithWebIdentity call. A plain "MedlockM2/second-brain-app"
+  # value here never matches, regardless of how correct the owner/repo text is.
+  description = "owner@owner_id/repo@repo_id whose Actions jobs may assume the dev deploy role (GitHub's immutable-subject sub claim format)."
   type        = string
-  default     = "MedlockM2/second-brain-app"
+  default     = "MedlockM2@329711260/second-brain-app@1372086630"
 }
 
 variable "github_ref" {

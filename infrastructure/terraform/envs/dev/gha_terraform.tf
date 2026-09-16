@@ -68,7 +68,8 @@ data "aws_iam_policy_document" "gha_terraform_assume" {
     # Same shape as the deploy role: StringLike over a value that holds no wildcard,
     # so it is exactly as tight as StringEquals. var.github_repository and
     # var.github_ref are declared in gha_oidc.tf and default to
-    # MedlockM2/second-brain-app and refs/heads/main.
+    # MedlockM2@329711260/second-brain-app@1372086630 (immutable-subject format,
+    # see the comment on that variable) and refs/heads/main.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
