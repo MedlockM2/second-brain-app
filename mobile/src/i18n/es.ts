@@ -59,6 +59,9 @@ export const es: Catalog = {
   // --- Marca de importación fallida, compartida por la lista y el mosaico ---
   "mediaStatus.failedBadge": "FALLÓ",
   "mediaStatus.a11yFailed": "{label}. La importación ha fallado.",
+  // --- Procesamiento en curso, en el mosaico de inicio (task-402) ---
+  "mediaStatus.processingSubtitle": "Procesando",
+  "mediaStatus.a11yProcessing": "{label}. Procesando.",
   "mediaActions.move.label": "Mover",
   "mediaActions.rename.label": "Renombrar",
   "mediaActions.delete.label": "Eliminar",

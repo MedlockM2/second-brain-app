@@ -86,6 +86,13 @@ export const en = {
   // existing ones have no failed variant to keep in step.
   "mediaStatus.failedBadge": "FAILED",
   "mediaStatus.a11yFailed": "{label}. Import failed.",
+  // --- The still-processing state of a Home tile (task-402) ---
+  // Sentence case, unlike `failedBadge`: the retained mockup variant carries no
+  // badge at all and prints this in the tile's own subtitle line, in the same
+  // style the creator would have. `a11yProcessing` wraps the built label, like
+  // `a11yFailed`, because the subtitle is not announced.
+  "mediaStatus.processingSubtitle": "Processing",
+  "mediaStatus.a11yProcessing": "{label}. Processing.",
 
   // --- Actions on a media item: long press in Library, `…` on its own page ---
   "mediaActions.move.label": "Move",

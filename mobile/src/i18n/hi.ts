@@ -56,6 +56,9 @@ export const hi: Catalog = {
   // --- इम्पोर्ट विफल होने का निशान, लाइब्रेरी पंक्ति और होम टाइल दोनों के लिए ---
   "mediaStatus.failedBadge": "विफल",
   "mediaStatus.a11yFailed": "{label}. इम्पोर्ट विफल रहा।",
+  // --- प्रोसेसिंग चल रही है, होम टाइल पर (task-402) ---
+  "mediaStatus.processingSubtitle": "प्रोसेस हो रहा है",
+  "mediaStatus.a11yProcessing": "{label}. प्रोसेस हो रहा है।",
   "mediaActions.move.label": "ले जाएँ",
   "mediaActions.rename.label": "नाम बदलें",
   "mediaActions.delete.label": "हटाएँ",

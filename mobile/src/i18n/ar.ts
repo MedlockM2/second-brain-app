@@ -56,6 +56,9 @@ export const ar: Catalog = {
   // --- علامة فشل الاستيراد، مشتركة بين صفّ المكتبة وبطاقة الصفحة الرئيسية ---
   "mediaStatus.failedBadge": "فشل",
   "mediaStatus.a11yFailed": "{label}. فشل الاستيراد.",
+  // --- حالة المعالجة الجارية، على بطاقة الصفحة الرئيسية (task-402) ---
+  "mediaStatus.processingSubtitle": "جارٍ المعالجة",
+  "mediaStatus.a11yProcessing": "{label}. جارٍ المعالجة.",
   "mediaActions.move.label": "نقل",
   "mediaActions.rename.label": "إعادة تسمية",
   "mediaActions.delete.label": "حذف",

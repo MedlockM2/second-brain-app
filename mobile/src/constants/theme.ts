@@ -48,6 +48,19 @@ export const Colors = {
   highlight: "#fff0b3",
   onHighlight: "#1c1b1a",
 
+  /**
+   * The sheer white of the band that sweeps a cover still being processed
+   * (`MediaProcessingSweep`, task-402, variant B "Balayage flou").
+   *
+   * White at 40 %, the value the task-401 mockup settled on. It is a token and
+   * not an inline literal for the reason `primaryTint` is one: a translucent
+   * material belongs beside the palette it is made of. Deliberately sheer — the
+   * chosen variant lets the picture stay readable underneath rather than hiding
+   * it behind an opaque skeleton, because a personal photo's cover is already
+   * the final content while its metadata is still resolving.
+   */
+  processingVeil: "rgba(255, 255, 255, 0.4)",
+
   error: "#ba1a1a",
   onError: "#ffffff",
   errorContainer: "#ffdad6",

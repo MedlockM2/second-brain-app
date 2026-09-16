@@ -10,6 +10,11 @@ import {
   describeWithFailure,
   isFailedLibraryStatus,
 } from "./MediaFailureBadge";
+import {
+  MediaProcessingSweep,
+  describeWithProcessing,
+  isProcessingLibraryStatus,
+} from "./MediaProcessingSweep";
 import { t, tCount } from "../i18n";
 
 /**
@@ -18,9 +23,12 @@ import { t, tCount } from "../i18n";
  * One component for "Continue learning" and "Recently added" alike: a large
  * cover, the title on up to three lines, the creator on one muted line. There is
  * no type badge and no timestamp — the rows are short and ordered, so neither
- * earns its space, and dropping them is what lets the title breathe. The one
- * exception is a failed import, marked over the cover (task-381): it is the only
- * thing about a tile that the user cannot find out by looking at it.
+ * earns its space, and dropping them is what lets the title breathe. The two
+ * exceptions are both about where an import stands, which is the one thing about
+ * a tile that the user cannot find out by looking at it: a failed one is marked
+ * over the cover (task-381), and one still on its way is swept by a blurred band
+ * with the state in its subtitle (task-402). Exactly one of the two can show at
+ * a time — see `tileStatusMarker`.
  *
  * Its height is fixed (`TILE_HEIGHT`) rather than driven by its own text, so the
  * row it sits in is the same height whichever kinds of tile it holds — see the
@@ -111,8 +119,9 @@ export type HomeTileItem =
       cacheKey: string;
       mediaType: MediaType;
       /**
-       * Lifecycle of the library entry, of which the tile reads one value:
-       * `failed` earns a marker over the cover (task-381).
+       * Lifecycle of the library entry, of which the tile reads two values:
+       * `failed` earns a marker over the cover (task-381), and a non-terminal
+       * one earns the processing sweep (task-402).
        *
        * Optional, and set by "Recently added" alone. The engagement row that feeds
        * "Continue learning" carries no status on the wire — an item you have
@@ -170,6 +179,7 @@ function TileCover({ item }: { item: HomeTileItem }): React.JSX.Element {
 
   const uri = item.imageUrl?.trim() ?? "";
   const showCover = uri.length > 0 && failedId !== item.id;
+  const marker = tileStatusMarker(item);
 
   return (
     <View style={styles.cover}>
@@ -195,14 +205,37 @@ function TileCover({ item }: { item: HomeTileItem }): React.JSX.Element {
 
       {/* Over the cover rather than under the title: the tile has no meta row to
           put it in, and the two text lines below are already spoken for by the
-          title and the creator. */}
-      {isFailedLibraryStatus(item.status) ? (
+          title and the creator. One branch per marker off a single value, so the
+          badge and the sweep can never be drawn on the same cover. */}
+      {marker === "failed" ? (
         <View style={styles.failureMarker} pointerEvents="none">
           <MediaFailureBadge />
         </View>
       ) : null}
+      {marker === "processing" ? (
+        <MediaProcessingSweep width={TILE_WIDTH} />
+      ) : null}
     </View>
   );
+}
+
+/**
+ * Which of the two status markers a tile shows, or neither — resolved in one
+ * place so the answer cannot be "both".
+ *
+ * The two predicates are already disjoint (`failed` on one side, the three
+ * non-terminal statuses on the other), but reading them into a single value is
+ * what keeps them that way: the cover and the accessibility label then branch on
+ * the same answer instead of each asking their own pair of questions. A folder
+ * has no import of its own, so it never carries a marker.
+ */
+type TileStatusMarker = "failed" | "processing" | null;
+
+function tileStatusMarker(item: HomeTileItem): TileStatusMarker {
+  if (item.kind === "folder") return null;
+  if (isFailedLibraryStatus(item.status)) return "failed";
+  if (isProcessingLibraryStatus(item.status)) return "processing";
+  return null;
 }
 
 /**
@@ -298,8 +331,23 @@ function tileTitle(item: HomeTileItem): string {
   return item.title?.trim() || t("common.untitled");
 }
 
+/**
+ * The one muted line under the title: the item count for a folder, the creator
+ * for a media — and the processing state while there is one.
+ *
+ * The state takes that line rather than getting one of its own, which is the
+ * whole reason the retained variant needs no badge: the line is empty for as long
+ * as the creator is unresolved, which is most of the window this state lasts. It
+ * takes it even when a creator *is* known, because the tile reserves exactly one
+ * subtitle line and, for the few seconds it lasts, where the import stands is the
+ * more useful of the two facts — the creator is not going anywhere and comes back
+ * with the next refetch. Styled like any other subtitle, per the mockup.
+ */
 function tileSubtitle(item: HomeTileItem): string {
   if (item.kind === "folder") return formatItemCount(item.itemCount);
+  if (tileStatusMarker(item) === "processing") {
+    return t("mediaStatus.processingSubtitle");
+  }
   return item.creator?.trim() ?? "";
 }
 
@@ -328,7 +376,14 @@ function describeTile(item: HomeTileItem): string {
   const label = creator
     ? t("home.tile.a11yByCreator", { title, creator })
     : title;
-  return describeWithFailure(label, isFailedLibraryStatus(item.status));
+  // Still one label, and still one clause at most: the marker decides which
+  // wrapper applies, the same way it decides what is drawn over the cover. The
+  // sweep and the subtitle are both invisible to a screen reader — the sweep is
+  // `accessible={false}` and this label replaces the tile's children — so this is
+  // the only place the state is announced.
+  const marker = tileStatusMarker(item);
+  if (marker === "processing") return describeWithProcessing(label, true);
+  return describeWithFailure(label, marker === "failed");
 }
 
 // --- Styles ---

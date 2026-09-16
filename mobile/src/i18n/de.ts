@@ -60,6 +60,9 @@ export const de: Catalog = {
   // --- Markierung für fehlgeschlagenen Import, für Liste und Kachel ---
   "mediaStatus.failedBadge": "FEHLER",
   "mediaStatus.a11yFailed": "{label}. Import fehlgeschlagen.",
+  // --- Laufende Verarbeitung, auf der Startseiten-Kachel (task-402) ---
+  "mediaStatus.processingSubtitle": "Wird verarbeitet",
+  "mediaStatus.a11yProcessing": "{label}. Wird verarbeitet.",
   "mediaActions.move.label": "Verschieben",
   "mediaActions.rename.label": "Umbenennen",
   "mediaActions.delete.label": "Löschen",

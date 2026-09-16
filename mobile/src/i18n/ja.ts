@@ -56,6 +56,9 @@ export const ja: Catalog = {
   // --- 取り込み失敗のマーカー。ライブラリの行とホームのタイルで共用 ---
   "mediaStatus.failedBadge": "失敗",
   "mediaStatus.a11yFailed": "{label}。取り込みに失敗しました。",
+  // --- 処理中の状態。ホームのタイルに表示（task-402） ---
+  "mediaStatus.processingSubtitle": "処理中",
+  "mediaStatus.a11yProcessing": "{label}。処理中です。",
   "mediaActions.move.label": "移動",
   "mediaActions.rename.label": "名前を変更",
   "mediaActions.delete.label": "削除",

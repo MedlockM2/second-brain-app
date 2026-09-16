@@ -56,6 +56,9 @@ export const it: Catalog = {
   // --- Indicatore di importazione fallita, per la lista e per la tessera ---
   "mediaStatus.failedBadge": "ERRORE",
   "mediaStatus.a11yFailed": "{label}. Importazione fallita.",
+  // --- Elaborazione in corso, sulla tessera della home (task-402) ---
+  "mediaStatus.processingSubtitle": "Elaborazione in corso",
+  "mediaStatus.a11yProcessing": "{label}. Elaborazione in corso.",
   "mediaActions.move.label": "Sposta",
   "mediaActions.rename.label": "Rinomina",
   "mediaActions.delete.label": "Elimina",

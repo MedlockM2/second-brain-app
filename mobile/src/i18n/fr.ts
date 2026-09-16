@@ -67,6 +67,9 @@ export const fr: Catalog = {
   // --- Marqueur d'import échoué, partagé par la liste et la tuile d'accueil ---
   "mediaStatus.failedBadge": "ÉCHEC",
   "mediaStatus.a11yFailed": "{label}. Import échoué.",
+  // --- Traitement en cours, sur la tuile d'accueil (task-402) ---
+  "mediaStatus.processingSubtitle": "Traitement en cours",
+  "mediaStatus.a11yProcessing": "{label}. Traitement en cours.",
   "mediaActions.move.label": "Déplacer",
   "mediaActions.rename.label": "Renommer",
   "mediaActions.delete.label": "Supprimer",

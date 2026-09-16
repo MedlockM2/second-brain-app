@@ -56,6 +56,9 @@ export const nl: Catalog = {
   // --- Markering voor een mislukte import, voor de lijst en de tegel ---
   "mediaStatus.failedBadge": "MISLUKT",
   "mediaStatus.a11yFailed": "{label}. Import mislukt.",
+  // --- Verwerking bezig, op de tegel van de startpagina (task-402) ---
+  "mediaStatus.processingSubtitle": "Wordt verwerkt",
+  "mediaStatus.a11yProcessing": "{label}. Wordt verwerkt.",
   "mediaActions.move.label": "Verplaatsen",
   "mediaActions.rename.label": "Hernoemen",
   "mediaActions.delete.label": "Verwijderen",
