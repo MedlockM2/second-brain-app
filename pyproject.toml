@@ -60,6 +60,10 @@ dev = [
     # Required by the E2E suite only (tests/e2e/, run via `pytest -m e2e`).
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    # Required by scripts/testflight_feedback.py to sign the App Store Connect
+    # API JWT (`import jwt`). Distinct from python-jose above, which the app
+    # itself uses and which exposes no top-level `jwt` module.
+    "pyjwt>=2.9.0",
     # Keep worker modules importable for local checks and the E2E suite. Pillow
     # carries the same ceiling as the worker extra so both resolve to one
     # version in the lock.
