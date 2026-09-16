@@ -3,7 +3,7 @@ id: TASK-399
 title: >-
   Lire les articles web protégés contre les robots et ne plus figer une URL en
   échec pour tous les comptes
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 12:34'
 labels:
@@ -39,8 +39,86 @@ Après déploiement : repartager le lien du 10/09 ; attendu un article lisible, 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le User-Agent par défaut de trafilatura_article_resolver.py est celui d'un navigateur courant, et une requête curl avec cette valeur sur la page d’accueil de boataround.com (qui répond 405 au User-Agent actuel) répond 200
-- [ ] #2 Un partage dont la ligne media_idempotence est failed ne passe plus par _build_duplicate_outcome : il réserve et relit la page ; reserved et completed restent réutilisés
-- [ ] #3 Les 4xx de page ne produisent plus PROVIDER_UNAVAILABLE ; 429 produit PROVIDER_RATE_LIMITED ; 5xx inchangés
-- [ ] #4 ruff et mypy passent sur les fichiers modifiés
+- [x] #1 Le User-Agent par défaut de trafilatura_article_resolver.py est celui d'un navigateur courant, et une requête curl avec cette valeur sur la page d’accueil de boataround.com (qui répond 405 au User-Agent actuel) répond 200
+- [x] #2 Un partage dont la ligne media_idempotence est failed ne passe plus par _build_duplicate_outcome : il réserve et relit la page ; reserved et completed restent réutilisés
+- [x] #3 Les 4xx de page ne produisent plus PROVIDER_UNAVAILABLE ; 429 produit PROVIDER_RATE_LIMITED ; 5xx inchangés
+- [x] #4 ruff et mypy passent sur les fichiers modifiés
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+### 1. User-Agent (AC #1)
+
+Un seul User-Agent « navigateur » pour tous les fetchs qui visent une page ou un
+asset publics, dans `media_summarizer/utils/http_user_agent.py`
+(`BROWSER_USER_AGENT`, un Chrome desktop courant). Les trois appelants gardent
+leur variable d'environnement comme point de réglage et n'en changent que le
+défaut :
+
+- `infrastructure/resolvers/trafilatura_article_resolver.py` (`ARTICLE_EXTRACT_USER_AGENT`) ;
+- `core/services/cover_capture.py` (`COVER_FETCH_USER_AGENT`) — la couverture d'un
+  article est hotlinkée depuis l'hôte même qui filtre les robots sur la page, et
+  l'ancienne valeur portait encore un token `Bot` ;
+- `workers/instagram_ingestion_worker.py`, qui lit la même variable.
+
+Vérification (2026-09-16, `curl -L`, `Accept: text/html,application/xhtml+xml`,
+valeur lue depuis le module) sur `https://www.boataround.com/` :
+`Mozilla/5.0 (Macintosh; …) Chrome/139.0.0.0 Safari/537.36` → **200** ;
+`media-summarizer/article-extractor (+https://media-summarizer.local)` → **405**.
+
+### 2. Une ligne `failed` ne verrouille plus une URL (AC #2)
+
+`failed` devient une trace, pas un verrou :
+
+- `utils/media_idempotence.py` : `reserve_or_skip` écrit par-dessus une ligne
+  `failed` (`attribute_not_exists(media_key) OR #st = :failed`) ; seuls
+  `reserved` et `processed` refusent l'écriture. Nouveau prédicat `is_failed_row`
+  + constante `STATUS_FAILED`.
+- `adapters/orchestrators.py::submit` : la lecture initiale du registre
+  court-circuite vers `_build_duplicate_outcome` seulement si la ligne n'est pas
+  `failed` ; sinon on log `media.ingest.failed_ledger_retried` et on continue par
+  le chemin normal (réservation + job propre, donc relecture de la source). Le
+  second point d'entrée (réservation refusée puis relecture) retente une fois la
+  réservation quand la ligne est passée `failed` entre les deux accès, au lieu de
+  servir l'échec qu'un autre job vient d'enregistrer.
+- `_fail_unreadable_article` perd sa branche `retryable` : elle existait
+  uniquement pour supprimer la réservation afin que l'URL ne reste pas figée, ce
+  que le point ci-dessus rend inutile. L'événement `episode_completion_status`
+  `failure` est désormais publié dans tous les cas — c'est lui qui ferme le
+  registre, termine les attentes d'artefacts et marque les watchers, que
+  la branche « réessayable » laissait en suspens. `retryable` reste dans le log.
+
+Effet de bord voulu sur le chemin RSS/podcast (`core/services/media_submission.py`) :
+une ligne `failed` y donne maintenant un vrai job au lieu d'un watcher sur un job
+mort.
+
+### 3. Codes d'échec HTTP (AC #3)
+
+`ArticleFetchErrorCode.HTTP_ERROR` est remplacé par trois raisons stables
+(`core/ports/article_content.py`), chacune mappée statiquement sur un
+`MediaFailureCode` **existant** — aucun nouveau code, aucune nouvelle chaîne i18n
+(`MEDIA_UNAVAILABLE` et `PROVIDER_RATE_LIMITED` sont déjà dans
+`mobile/src/lib/getFriendlyErrorMessage.ts`) :
+
+| statut | code fetch | MediaFailureCode | réessayable |
+| --- | --- | --- | --- |
+| 4xx hors 429 | `http_client_error` | `MEDIA_UNAVAILABLE` | non |
+| 429 | `http_rate_limited` | `PROVIDER_RATE_LIMITED` | oui |
+| 5xx | `http_server_error` | `PROVIDER_UNAVAILABLE` | oui (inchangé) |
+
+La classification vit dans `_http_failure()` du resolver ; `details` reste
+`article_http_error` et `error_metadata.http_status` continue de porter le statut
+exact.
+
+### 4. Contrôles
+
+`ruff check` et `mypy` propres sur les 7 fichiers touchés (AC #4).
+
+Hors de portée depuis le worktree, et donc non tenté : vérifier la sémantique de
+la condition DynamoDB contre la table `media_idempotence-dev` (aucune credential
+AWS dans ce sandbox) et le repartage du lien du 10/09, qui suppose l'image Lambda
+redéployée — c'est la note owner de la description.
+
+Aucun test automatisé ajouté (règle du dépôt) : les AC n'en demandaient pas.
+<!-- SECTION:NOTES:END -->

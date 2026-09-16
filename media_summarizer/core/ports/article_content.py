@@ -36,7 +36,16 @@ class ArticleFetchErrorCode(str, Enum):
     while the reader only needs to know whether to retry or to give up.
     """
 
-    HTTP_ERROR = "http_error"
+    #: The page answered 4xx: it is gone, forbidden, or refuses the method. The
+    #: same answer is what the next attempt gets, so it is a verdict, not an
+    #: outage -- and it is the *page* that is unavailable, not our extraction
+    #: chain, which is why 403/404/405/410/451 read as `MEDIA_UNAVAILABLE`
+    #: rather than "service unavailable" (task-399).
+    HTTP_CLIENT_ERROR = "http_client_error"
+    #: The page answered 429. Throttling, not a verdict: worth another try.
+    HTTP_RATE_LIMITED = "http_rate_limited"
+    #: The page answered 5xx. The publisher is having a bad minute.
+    HTTP_SERVER_ERROR = "http_server_error"
     NOT_HTML = "not_html"
     PAGE_TOO_LARGE = "page_too_large"
     EXTRACTION_FAILED = "extraction_failed"
@@ -50,10 +59,17 @@ class ArticleFetchErrorCode(str, Enum):
 #: and `ARTICLE_TEXT_NOT_FOUND` are also the two codes the detail screen offers a
 #: "request support for this source" action on, which is why a page that answered
 #: a PDF and a page whose body we could not find stay distinct here.
+#:
+#: Only *our* side of the chain being at fault reads as `PROVIDER_UNAVAILABLE`. A
+#: page answering 404 or 405 is the page's own answer, so it reads as
+#: `MEDIA_UNAVAILABLE` -- telling the reader that the service is down when the
+#: publisher simply refused us is the wrong sentence and invites a pointless retry.
 MEDIA_FAILURE_CODE_BY_ARTICLE_FETCH_ERROR: Dict[
     ArticleFetchErrorCode, MediaFailureCode
 ] = {
-    ArticleFetchErrorCode.HTTP_ERROR: MediaFailureCode.PROVIDER_UNAVAILABLE,
+    ArticleFetchErrorCode.HTTP_CLIENT_ERROR: MediaFailureCode.MEDIA_UNAVAILABLE,
+    ArticleFetchErrorCode.HTTP_RATE_LIMITED: MediaFailureCode.PROVIDER_RATE_LIMITED,
+    ArticleFetchErrorCode.HTTP_SERVER_ERROR: MediaFailureCode.PROVIDER_UNAVAILABLE,
     ArticleFetchErrorCode.NOT_HTML: MediaFailureCode.NOT_AN_ARTICLE_PAGE,
     ArticleFetchErrorCode.PAGE_TOO_LARGE: MediaFailureCode.ARTICLE_TEXT_NOT_FOUND,
     ArticleFetchErrorCode.EXTRACTION_FAILED: MediaFailureCode.ARTICLE_TEXT_NOT_FOUND,

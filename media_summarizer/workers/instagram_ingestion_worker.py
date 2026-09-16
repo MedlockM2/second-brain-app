@@ -92,6 +92,7 @@ from media_summarizer.infrastructure.resolvers.instagram_apify_resolver import (
 from media_summarizer.utils import database_async, s3, sqs
 from media_summarizer.utils.deepgram_dispatch import enqueue_deepgram_transcription
 from media_summarizer.utils.env import required_env
+from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
@@ -138,7 +139,7 @@ INSTAGRAM_IMAGE_MAX_BYTES = int(
 # they do on the cover path (`cover_capture`).
 _IMAGE_FETCH_USER_AGENT = os.environ.get(
     "COVER_FETCH_USER_AGENT",
-    "Mozilla/5.0 (compatible; MediaSummarizerBot/1.0)",
+    BROWSER_USER_AGENT,
 )
 
 

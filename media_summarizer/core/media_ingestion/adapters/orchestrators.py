@@ -507,7 +507,25 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         )
 
         existing = await episode_idempotence.already_processed(media_key=resolved.media_key)
-        if existing and existing.get("job_id"):
+        if episode_idempotence.is_failed_row(existing):
+            # A failed ledger row is a record of an attempt, not a verdict on the
+            # URL. Reusing the job behind it is what made one anti-robot 405 fail
+            # every later share of that link, for every account, without the page
+            # ever being read again (task-399). Falling through re-reserves the
+            # content under this submission's own job, which reads it afresh.
+            log_event(
+                logger,
+                logging.INFO,
+                "media.ingest.failed_ledger_retried",
+                "Previous attempt on this content failed; reading the source again",
+                job_id=(existing or {}).get("job_id"),
+                media_item_id=durable_media_item_id,
+                media_key=resolved.media_key,
+                resolver_key=resolved.resolver_key,
+                media_type=resolved.media_type.value,
+                source_platform=resolved.source_platform.value,
+            )
+        elif existing and existing.get("job_id"):
             log_event(
                 logger,
                 logging.INFO,
@@ -552,10 +570,25 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                 media_key=resolved.media_key,
                 job_id=job.id,
             )
+            duplicate: Optional[Dict[str, Any]] = None
             if not reservation_created:
                 duplicate = await episode_idempotence.already_processed(
                     media_key=resolved.media_key
                 )
+                if episode_idempotence.is_failed_row(duplicate):
+                    # The owning job failed between the read at the top of this
+                    # method and this write. Its content is unowned again, so the
+                    # reservation is retried once instead of serving this caller
+                    # the failure that was just recorded.
+                    reservation_created = await episode_idempotence.reserve_or_skip(
+                        media_key=resolved.media_key,
+                        job_id=job.id,
+                    )
+                    if not reservation_created:
+                        duplicate = await episode_idempotence.already_processed(
+                            media_key=resolved.media_key
+                        )
+            if not reservation_created:
                 if duplicate:
                     return await _build_duplicate_outcome(
                         user_id=command.user.user_id,
@@ -1078,12 +1111,14 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         for a queue to do: either the text is here and this stores it, or the page
         could not be read and this records why.
 
-        The failed branch is where the reservation matters. A page that answered a
-        503 or timed out must not leave `media_idempotence` holding a terminal
-        `failed` row: the URL-derived key is the only identity a failure has, and a
-        `failed` row under it would answer every later save of that URL with the
-        same failure without ever re-reading the page. So a transient cause
-        *releases* the reservation and a verdict on the page itself keeps it.
+        A failure records itself and stops there. It used to matter enormously
+        whether the cause was transient, because a `failed` ledger row under the
+        URL-derived key answered every later save of that URL with the same
+        failure: a transient cause therefore had to *delete* the reservation to
+        avoid freezing the link. Since task-399 a `failed` row owns nothing and the
+        next submission writes over it, so both causes take the same path -- and
+        the failure event is published either way, which is what ends the artifact
+        waits and the watchers that a released reservation used to leave hanging.
         """
         if resolved.raw_text is None:
             return await self._fail_unreadable_article(
@@ -1190,24 +1225,19 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         # spinner into the localized failed tile the reader already knows.
         await database_async.update_processing_job(job)
 
-        if retryable:
-            # Deletes the row while it is still `reserved`, so the next save of
-            # this URL reads the page again instead of inheriting this outage.
-            await episode_idempotence.release_reservation(
-                media_key=resolved.media_key,
-                job_id=job.id,
-            )
-        else:
-            await sqs.send_message(
-                queue_name=DEFAULT_EPISODE_COMPLETED_EVENTS_QUEUE,
-                message_body={
-                    "event_type": "episode_completion_status",
-                    "status": "failure",
-                    "media_key": resolved.media_key,
-                    "canonical_job_id": job.id,
-                    "reason": failure_code.value,
-                },
-            )
+        # Closes the content ledger on `failed`, ends the artifact waits and marks
+        # the watchers. The next save of this URL takes the row over and reads the
+        # page again, whatever the cause was (task-399).
+        await sqs.send_message(
+            queue_name=DEFAULT_EPISODE_COMPLETED_EVENTS_QUEUE,
+            message_body={
+                "event_type": "episode_completion_status",
+                "status": "failure",
+                "media_key": resolved.media_key,
+                "canonical_job_id": job.id,
+                "reason": failure_code.value,
+            },
+        )
 
         log_event(
             logger,

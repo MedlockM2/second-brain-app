@@ -43,6 +43,7 @@ from media_summarizer.core.media_ingestion.media_metadata import (
     parse_cover_locator,
 )
 from media_summarizer.utils import s3
+from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
@@ -73,10 +74,14 @@ EVENT_CAPTURE_FAILED = "media_cover.capture_failed"
 EVENT_CAPTURED = "media_cover.captured"
 EVENT_DELETE_FAILED = "media_cover.delete_failed"
 
-# A browser-ish agent: several CDNs answer 403 to the default httpx UA.
+# Several CDNs answer 403 to the default httpx UA, and an article's cover is
+# hotlinked from the very host that may be filtering robots on the page itself --
+# so this is the same browser agent the article reader announces (task-399). The
+# previous value still carried a `Bot` token, which is the one thing an anti-robot
+# edge looks at.
 _COVER_USER_AGENT = os.environ.get(
     "COVER_FETCH_USER_AGENT",
-    "Mozilla/5.0 (compatible; MediaSummarizerBot/1.0)",
+    BROWSER_USER_AGENT,
 )
 
 
