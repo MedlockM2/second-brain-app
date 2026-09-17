@@ -3,10 +3,10 @@ id: TASK-403
 title: >-
   Faire déclarer par la recette de clé d'upload que son contenu est scopé au
   compte
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 16:56'
-updated_date: '2026-09-17 12:00'
+updated_date: '2026-09-17 16:19'
 labels:
   - backend
   - artifacts
