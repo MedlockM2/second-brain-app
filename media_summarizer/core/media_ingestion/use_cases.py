@@ -30,6 +30,7 @@ from media_summarizer.core.media_ingestion.title_derivation import (
 )
 from media_summarizer.core.services.media_identity import (
     derive_media_identity,
+    generate_account_scoped_media_key,
     generate_media_key,
 )
 
@@ -69,6 +70,11 @@ def _share_locator(
     and two users sharing identical bytes get two medias, two transcriptions and
     two sets of artifacts. Shared *text* keeps an unscoped locator — it is not a
     file upload, and its mutualisation is decided elsewhere.
+
+    A locator built with an owner is keyed through
+    ``generate_account_scoped_media_key``, never through ``generate_media_key``: once
+    the locator is hashed, the prefix is the only readable trace left of the scoping
+    (task-403).
     """
     owner_scope = (owner_user_id or "").strip()
     scope = f"{owner_scope}/" if owner_scope else ""
@@ -216,7 +222,9 @@ class IngestSharedContentUseCase:
                 owner_user_id=command.user.user_id,
             )
             resolved = ResolvedMedia(
-                media_key=generate_media_key(locator),
+                # Account-scoped identity, declared as such: a shared voice note is
+                # a file this account sent (task-403).
+                media_key=generate_account_scoped_media_key(locator),
                 normalized_url=locator,
                 media_family=MediaFamily.AUDIO,
                 media_type=MediaType.AUDIO_FILE,

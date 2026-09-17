@@ -190,8 +190,9 @@ class MediaArtifactRecord(BaseModel):
     #: Set on a **pointer**: the content-addressed generation that answers it. All
     #: the mutable state of that generation (status, storage, title, usage) lives on
     #: the shared row, and a pointer mirrors it once it is terminal; while it is in
-    #: flight, a read resolves the shared row. ``None`` on a shared generation and
-    #: on every folder artifact.
+    #: flight, a read resolves the shared row. ``None`` on a shared generation, on
+    #: every folder artifact, and on an artifact over a file the account sent — that
+    #: content id belongs to one account, so the row *is* the generation.
     shared_artifact_id: Optional[str] = None
     artifact_type: MediaArtifactType
     status: MediaArtifactStatus = MediaArtifactStatus.QUEUED

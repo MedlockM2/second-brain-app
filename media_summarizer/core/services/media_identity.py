@@ -14,6 +14,17 @@ two host tables deciding the same question is how they come to disagree.
 a chain of per-domain branches (task-392): whether a URL is an article decides
 whether its text is fetched before its identity is settled, so it cannot be a
 classification default.
+
+A content key comes in one of two families, told apart by its prefix and by nothing
+else (task-403):
+
+- `mkey_v1_<digest>` -- built from a public locator. Every account that saves that
+  content lands on it, which is what makes one processing and one artifact
+  generation serve them all;
+- `acct_mkey_v1_<digest>` -- built from material that carries the account, i.e. a
+  file the user sent. No other account can compute it. The prefix is the recipe
+  *declaring* what it hashed: the account itself is inside the digest and cannot be
+  read back, so a reader has nothing else to go on.
 """
 
 from __future__ import annotations
@@ -370,12 +381,49 @@ def canonicalize_media_url(url: str) -> str:
     return urlunsplit((scheme, netloc, path, query, ""))
 
 
+#: Prefix of a content identity anybody may land on: what is hashed behind it is a
+#: public locator, so two accounts computing the same digest are pointing at the same
+#: public thing and one processing serves both. The version is what a decision to
+#: re-key every media would bump.
+SHARED_MEDIA_KEY_PREFIX = "mkey_v1_"
+
+#: Prefix of a content identity that belongs to **one account**. The account is part
+#: of the hashed material and stays unreadable there (task-393); this prefix is the
+#: recipe *declaring* that it is in there, and it is the only thing a reader has to go
+#: on -- a digest says nothing about what went into it, so a predicate that tries to
+#: recognise an upload by inspecting the key can only ever be wrong (task-403).
+ACCOUNT_SCOPED_MEDIA_KEY_PREFIX = "acct_mkey_v1_"
+
+
+def _content_key(*, prefix: str, material: str) -> str:
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    return f"{prefix}{digest}"
+
+
 def generate_media_key(canonical_url: str) -> str:
-    """Generate a deterministic media key from a canonical URL."""
+    """The content identity of a **public** locator, shared by every account.
+
+    Any recipe whose material carries the account goes through
+    :func:`generate_account_scoped_media_key` instead. The prefix is what separates
+    the two families, and nothing downstream can tell them apart otherwise.
+    """
     if not isinstance(canonical_url, str) or not canonical_url.strip():
         raise ValueError("canonical URL must be a non-empty string")
-    digest = hashlib.sha256(canonical_url.encode("utf-8")).hexdigest()
-    return f"mkey_v1_{digest}"
+    return _content_key(prefix=SHARED_MEDIA_KEY_PREFIX, material=canonical_url)
+
+
+def generate_account_scoped_media_key(locator: str) -> str:
+    """The content identity of material that carries the account it belongs to.
+
+    Same digest as any other key -- the account is hashed in and never readable -- and
+    a different prefix, which is the recipe declaring what it hashed. That declaration
+    is what lets :func:`is_account_scoped_media_key` answer at all: reading the digest
+    for a user id cannot work, and reading the *locator* is not an option either since
+    only the key travels with a request.
+    """
+    if not isinstance(locator, str) or not locator.strip():
+        raise ValueError("locator must be a non-empty string")
+    return _content_key(prefix=ACCOUNT_SCOPED_MEDIA_KEY_PREFIX, material=locator)
 
 
 def derive_media_identity(media_url: str) -> Tuple[str, str]:
@@ -475,6 +523,12 @@ def generate_uploaded_file_media_key(
       it, and it is the opposite choice from a public URL, whose identity is the
       URL alone precisely so that everybody shares one processing.
 
+    The key is emitted through :func:`generate_account_scoped_media_key`, so the
+    recipe also *says* that the account is in the material. Both halves matter and
+    neither replaces the other: the hashed owner is what makes two accounts two
+    contents, the prefix is what lets a reader know it without being able to see it
+    (task-403).
+
     ``content_fingerprint`` is expected to carry its algorithm (``md5-<hex>``,
     ``sha256-<hex>``): the label is what keeps two fingerprints of the same bytes
     taken with different algorithms from ever being compared as equal.
@@ -487,48 +541,20 @@ def generate_uploaded_file_media_key(
         f"upload:{UPLOAD_CONTENT_IDENTITY_VERSION}:{kind.value}:"
         f"{owner_user_id.strip()}#content={content_fingerprint.strip()}"
     )
-    return generate_media_key(locator)
+    return generate_account_scoped_media_key(locator)
 
 
-#: Prefixes a file's content key *used to* be built with, before task-393 re-keyed
-#: every upload through `generate_uploaded_file_media_key` above. **Nothing produces
-#: these shapes any more**: an upload is now an opaque `mkey_v1_<digest>`, exactly
-#: like a public locator, so this tuple no longer matches anything the API writes.
-#: Kept only as the record of what `is_account_scoped_media_key` was reading -- see
-#: that function for what the mismatch costs, and task-403 for the fix.
-ACCOUNT_SCOPED_MEDIA_KEY_PREFIXES: Tuple[str, ...] = ("doc:", "audio:")
-
-
-def is_account_scoped_media_key(*, media_key: str, owner_user_id: str) -> bool:
+def is_account_scoped_media_key(*, media_key: str) -> bool:
     """Whether this content identity belongs to one account rather than to the web.
 
-    **Currently answers False for every upload, which is a known defect and not the
-    intent -- see task-403.** It was written against the pre-task-393 key shapes
-    (`doc:{user_id}:...`, `audio:{user_id}:...`), recognising an upload on two
-    independent grounds: the prefix, and the account appearing literally in the
-    material. task-393 landed in the same dispatch and re-keyed uploads through
-    `generate_uploaded_file_media_key`, which hashes the owner *into* an opaque
-    `mkey_v1_<digest>` -- so both grounds fail at once and an upload is now
-    indistinguishable from public content to this predicate.
+    Reads the declaration the recipe made -- :data:`ACCOUNT_SCOPED_MEDIA_KEY_PREFIX`
+    -- and nothing else. A key is a digest: the account an upload's identity is built
+    around is in there, unreadable, which is the point (task-393). So the only honest
+    answer comes from the recipe saying which family it produced; a predicate that
+    tried to spot the account in the key answered False for every upload, because
+    there is nothing to spot (task-403).
 
-    What the mismatch costs is a pointless indirection, not isolation. The upload
-    exclusion was enforced twice over and only this half broke: an upload's key still
-    carries the account inside the hashed material, so the same file sent by two
-    people is two distinct content ids with two unrelated shared ids, and there is
-    nothing cross-account to be found under either (the task-394 exclusion holds,
-    verified at merge). The surviving cost is that `mutualizes_generation` now builds,
-    for every uploaded file, a shared row that only ever serves the one account that
-    asked for it.
-
-    The fix is for the upload recipe to *declare* that its content is account-scoped
-    -- a distinct key prefix or an explicit flag -- rather than for this function to
-    guess it from a digest, which is impossible by construction. Until then, do not
-    add a caller that reads a False here as "this content is shareable web content".
+    True means: no other account can ever compute this content id, so there is nothing
+    cross-account to reuse and nothing to share a generation with.
     """
-    key = (media_key or "").strip()
-    if not key:
-        return False
-    if key.startswith(ACCOUNT_SCOPED_MEDIA_KEY_PREFIXES):
-        return True
-    owner = (owner_user_id or "").strip()
-    return bool(owner) and owner in key
+    return (media_key or "").strip().startswith(ACCOUNT_SCOPED_MEDIA_KEY_PREFIX)

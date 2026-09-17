@@ -44,7 +44,8 @@ provider call accrues to the operator rather than as free allowance to whoever
 happened to ask second. And a scope that is *not* content-addressed keeps a single
 per-account row with no indirection at all: a folder artifact (its scope id is a
 folder id, owned by one account) and an artifact over a user-uploaded file (whose
-content id names its owner — see :func:`mutualizes_generation`).
+content id is built around its owner and declares it — see
+:func:`mutualizes_generation`).
 """
 
 from __future__ import annotations
@@ -519,7 +520,6 @@ def mutualizes_generation(
     *,
     scope: ArtifactScope,
     content_scope_id: str,
-    user_id: str,
 ) -> bool:
     """Whether this request's generation is shared between accounts.
 
@@ -528,13 +528,16 @@ def mutualizes_generation(
     not itself account-scoped, i.e. never over a file a user uploaded.
 
     The upload exclusion is enforced twice over, which is why it cannot be worked
-    around from here: this returns False, *and* an upload's content id carries the
-    account (:func:`is_account_scoped_media_key`) so the same file sent by two people
-    is two content ids with two unrelated shared ids. What this test buys is the
-    absence of a pointer indirection nothing could ever share.
+    around from here: this returns False, *and* an upload's content id is built around
+    the account, so the same file sent by two people is two content ids with two
+    unrelated shared ids. The recipe declares the scoping in the key's prefix
+    (:func:`is_account_scoped_media_key`) — a digest cannot be inspected for it, and
+    guessing was what made every upload build a pointer to a generation nobody else
+    could ever reach (task-403). What this test buys is the absence of that
+    indirection.
     """
     return scope == ArtifactScope.MEDIA and not is_account_scoped_media_key(
-        media_key=content_scope_id, owner_user_id=user_id
+        media_key=content_scope_id
     )
 
 
@@ -1580,7 +1583,7 @@ async def plan_artifact_generation(
     entry_reclaims_failed = existing is not None
 
     if not mutualizes_generation(
-        scope=resolved_scope, content_scope_id=effective_scope_id, user_id=user_id
+        scope=resolved_scope, content_scope_id=effective_scope_id
     ):
         # Nothing to share: this row *is* the generation, exactly as before task-394.
         if resolution.is_awaiting:

@@ -95,8 +95,11 @@ class UserMediaRecord(BaseModel):
     # --- identity / ownership (write-once, by the create path only) ----------
     user_id: str
     media_item_id: str
-    # Content identity (mkey_v1_<sha256>). Maps a library row back to the global
-    # processing ledger and to other users' copies of the same content.
+    # Content identity. Maps a library row back to the global processing ledger and
+    # to other users' copies of the same content. Two shapes, and the prefix is what
+    # tells them apart: `mkey_v1_<sha256>` for content a public locator names, which
+    # every account shares, and `acct_mkey_v1_<sha256>` for a file this account sent,
+    # which no other account can compute (see `services/media_identity.py`).
     media_key: str
 
     # --- display metadata ----------------------------------------------------
