@@ -92,9 +92,15 @@ if ! command -v npx >/dev/null 2>&1; then
   echo ""
 fi
 
+# Interpréteur du venv en dur, jamais "python3" du PATH : un agent launchd lance ce
+# script via `bash -lc`, et /etc/profile y invoque path_helper, qui remet /usr/bin
+# devant .venv/bin — silencieusement, sans casser le script, juste en faisant
+# retomber l'import de PyJWT sur le python système qui ne l'a pas.
+PYTHON="${REPO_ROOT}/.venv/bin/python3"
+
 # Échec rapide sur les credentials : zéro appel API, et cela évite de dépenser un
 # run d'agent complet pour découvrir qu'un .p8 a bougé.
-if ! python3 scripts/testflight_feedback.py --check-credentials; then
+if ! "${PYTHON}" scripts/testflight_feedback.py --check-credentials; then
   echo "Error: credentials App Store Connect inutilisables — triage interrompu." >&2
   exit 1
 fi

@@ -115,6 +115,7 @@ start_session() {
     --remote-control "${SESSION_NAME}" \
     --agent "${AGENT}" \
     --model "${MODEL}" \
+    --dangerously-skip-permissions \
     "${prompt}"
 }
 
