@@ -463,8 +463,11 @@ def build_artifact_id(
       prompt does **not** invalidate anything already generated.
 
     ``parameters`` carries the reading language, so two reading languages are two
-    different ids and therefore two legitimate entries. The decision is about
-    regenerating, not about translating.
+    different ids and therefore two legitimate entries. What fills the second one is
+    *not* a second generation, though: it is the first one translated
+    (``artifact_translation_service``, task-395). The id recipe is what makes that
+    possible — the translation lands on exactly the id a native request in that
+    language computes, so it is found by reuse like any other entry.
 
     ``user_id`` stays in it, and stays first: this id is what the account's own
     listing and detail routes address, so it must be unguessable from another
@@ -940,6 +943,7 @@ async def list_scope_artifacts(
     scope: ArtifactScope,
     scope_id: str,
     content_scope_id: Optional[str] = None,
+    reading_language: Optional[str] = None,
     limit: Optional[int] = None,
     cursor: Optional[str] = None,
 ) -> Tuple[List[MediaArtifactRecord], Optional[str]]:
@@ -964,6 +968,14 @@ async def list_scope_artifacts(
     (task-360), and a pointer whose shared generation has finished is mirrored
     (task-394). Doing both on read is what makes them felt at the only moment they
     matter — someone is looking at the tile — instead of at the next nightly pass.
+
+    And it is where a media whose artifacts exist in another language than the
+    reader's gets them translated rather than regenerated (task-395). This request
+    *is* the opening of a media — the detail screen issues it on mount — and it
+    already holds the whole scope, internal entries included, so the decision costs
+    no extra query. The entries armed are returned with the page: they are the newest
+    of their type, so the tile spins and the poll it starts brings the translation in
+    without a second trip to the screen.
     """
     records, next_cursor = await media_artifacts.list_artifacts_by_scope(
         scope_key=build_scope_key(
@@ -974,16 +986,66 @@ async def list_scope_artifacts(
         limit=limit,
         cursor=cursor,
     )
+    armed = await _arm_reading_language_translations(
+        user_id=user_id,
+        scope=scope,
+        scope_id=scope_id,
+        content_scope_id=content_scope_id or scope_id,
+        reading_language=reading_language,
+        listed=records,
+        cursor=cursor,
+    )
     visible = [
         record
         for record in records
         if record.artifact_type not in INTERNAL_ARTIFACT_TYPES
     ]
     # In parallel: a scope holds at most one in-flight entry per type, and the
-    # terminal ones cost nothing here.
-    return list(
+    # terminal ones cost nothing here. The armed entries skip it — they were just
+    # read from the base table, so there is nothing a refresh could add.
+    refreshed = list(
         await asyncio.gather(*(refresh_listed_artifact(record) for record in visible))
-    ), next_cursor
+    )
+    return [
+        *(
+            record
+            for record in armed
+            if record.artifact_type not in INTERNAL_ARTIFACT_TYPES
+        ),
+        *refreshed,
+    ], next_cursor
+
+
+async def _arm_reading_language_translations(
+    *,
+    user_id: str,
+    scope: ArtifactScope,
+    scope_id: str,
+    content_scope_id: str,
+    reading_language: Optional[str],
+    listed: List[MediaArtifactRecord],
+    cursor: Optional[str],
+) -> List[MediaArtifactRecord]:
+    """Translate this media's artifacts into the reader's language, on its opening.
+
+    Three guards, and each rules out a case where the question does not arise: a
+    **folder** scope has no content identity to translate under, a **later page** is
+    not an opening (the first one already decided, and a media scope holds a handful
+    of entries anyway), and a reader with **no reading language** is served in the
+    language of the sources.
+    """
+    if scope != ArtifactScope.MEDIA or cursor is not None or not reading_language:
+        return []
+
+    from media_summarizer.core.services import artifact_translation_service
+
+    return await artifact_translation_service.translate_scope_artifacts_for_reader(
+        user_id=user_id,
+        scope_id=scope_id,
+        content_scope_id=content_scope_id,
+        reading_language=reading_language,
+        listed=listed,
+    )
 
 
 async def refresh_listed_artifact(
@@ -1659,7 +1721,8 @@ async def plan_artifact_generation(
         artifact_type=resolved_type,
         parameters=normalized_parameters,
         generator_version=generator_version,
-        resolution=resolution,
+        sources=resolution.snapshot(),
+        source_count=len(resolution.sources),
         created_at=shared_existing.created_at if shared_existing is not None else now,
     )
     return ArtifactGenerationPlan(
@@ -1685,7 +1748,8 @@ def build_shared_generation_record(
     artifact_type: MediaArtifactType,
     parameters: Dict[str, Any],
     generator_version: str,
-    resolution: ScopeResolution,
+    sources: List[ArtifactSource],
+    source_count: int,
     created_at: Optional[datetime] = None,
 ) -> MediaArtifactRecord:
     """The row a shared generation is written into.
@@ -1699,6 +1763,10 @@ def build_shared_generation_record(
     They are attribution, not ownership: they say who caused the provider call, which
     is what the cost log and the ``review_blurb`` fan-out start from. Nothing checks
     them, and this row is not addressable through the API.
+
+    The snapshot is passed rather than derived from a resolution: a translation is
+    armed from another entry's snapshot and never resolves a scope at all (task-395),
+    so requiring one here would mean reading transcripts this row will not look at.
     """
     now = _now_utc()
     return MediaArtifactRecord(
@@ -1711,8 +1779,8 @@ def build_shared_generation_record(
         status=MediaArtifactStatus.QUEUED,
         parameters=parameters,
         generator_version=generator_version,
-        source_count=len(resolution.sources),
-        sources=resolution.snapshot(),
+        source_count=source_count,
+        sources=sources,
         created_at=created_at or now,
         updated_at=now,
     )
@@ -1865,7 +1933,7 @@ async def commit_artifact_generation(
             # Somebody else's request armed it between the plan and this write. Its
             # generation answers ours, so ours sends nothing and its entry reflects
             # the row that actually exists.
-            entry = _entry_served_by(entry=entry, shared=generation)
+            entry = entry_served_by(entry=entry, shared=generation)
 
     if plan.entry_reclaims_failed:
         # Conditional on the row still being `failed`: if a concurrent request
@@ -1975,7 +2043,7 @@ async def arm_shared_generation(
     return existing, False
 
 
-def _entry_served_by(
+def entry_served_by(
     *,
     entry: MediaArtifactRecord,
     shared: MediaArtifactRecord,
@@ -1986,6 +2054,11 @@ def _entry_served_by(
     generation's own status until it is terminal. A terminal one is mirrored straight
     away, so the entry is born ``ready`` with the storage ref and the account's very
     next read costs one query.
+
+    Public for the same reason :func:`arm_shared_generation` is: two things now build
+    a pointer over a generation somebody else armed — a request
+    (:func:`commit_artifact_generation`) and a translation planned into the reading
+    language (``artifact_translation_service``) — and both must produce the same row.
     """
     if shared.status in _IN_FLIGHT_ARTIFACT_STATUSES:
         return entry
@@ -2247,7 +2320,7 @@ async def _mirror_review_blurb_onto_content_rows(
     record: MediaArtifactRecord,
     blurb: Optional[ReviewBlurb],
 ) -> None:
-    """Copy a finished blurb onto every row that holds the content, whoever owns it.
+    """Copy a finished blurb onto the rows that hold the content and read its language.
 
     ``artifact_id`` is keyed on the *content* (the deduplicated ``media_key``), never
     on the save, so a single generation answers every save of the same URL — by the
@@ -2261,6 +2334,13 @@ async def _mirror_review_blurb_onto_content_rows(
     property of the content, so every row displaying that content displays the same
     card. Each row is written under **its own** ``user_id`` — the copy is a per-row
     attribute write, never an ownership transfer.
+
+    It stops at the language, though, and that is the whole reason this filters
+    (task-395): the same content now has one blurb per reading language, so copying a
+    French card onto the row of somebody reading Spanish would replace a correct card
+    with an unreadable one — and the newest generation would always win. The
+    requesting row is exempt from the lookup: the entry's language *is* that
+    account's, since its id was computed from it.
 
     Best-effort like the single-row copy it wraps: the artifact is sealed by the time
     this runs, and ``copy_review_blurb_to_library_row`` remains the repair path for a
@@ -2289,11 +2369,14 @@ async def _mirror_review_blurb_onto_content_rows(
                 detail=str(exc)[:200],
             )
             rows = []
-        targets.extend(
-            (row.user_id, row.media_item_id)
-            for row in rows
-            if (row.user_id, row.media_item_id) != (record.user_id, record.scope_id)
-        )
+        for row in rows:
+            if (row.user_id, row.media_item_id) == (record.user_id, record.scope_id):
+                continue
+            if not await _reads_artifact_language(
+                user_id=row.user_id, record=record
+            ):
+                continue
+            targets.append((row.user_id, row.media_item_id))
 
     for user_id, media_item_id in targets:
         await _mirror_review_blurb_onto_library_row(
@@ -2302,6 +2385,40 @@ async def _mirror_review_blurb_onto_content_rows(
             blurb=blurb,
             artifact_id=record.artifact_id,
         )
+
+
+async def _reads_artifact_language(
+    *,
+    user_id: str,
+    record: MediaArtifactRecord,
+) -> bool:
+    """Whether this account reads in the language the artifact was written in.
+
+    ``None`` on both sides is a match, not an absence of one: an account that set no
+    reading language is served whatever came out of the sources, which is exactly
+    what an entry carrying no declared language holds.
+
+    A profile that cannot be read answers ``False``. Skipping the copy leaves the
+    tile without its card, which the account can repair by asking; writing a card in
+    a language it may not read cannot be repaired at all.
+    """
+    from media_summarizer.core.services.transcript_translation import (
+        normalize_language_tag,
+    )
+
+    artifact_language = normalize_language_tag(record.parameters.get("language"))
+    try:
+        from media_summarizer.utils import database_async
+
+        user = await database_async.get_user_by_id(user_id)
+    except Exception:
+        return False
+    if user is None:
+        return False
+    return (
+        normalize_language_tag(getattr(user, "reading_language", None))
+        == artifact_language
+    )
 
 
 async def copy_review_blurb_to_library_row(

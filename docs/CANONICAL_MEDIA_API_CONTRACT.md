@@ -395,6 +395,31 @@ emitted by the model, which is what tells two entries of the same type apart.
 `sources` is **not** in this response — it is only returned when one entry is
 opened.
 
+**At media scope, this request is also what translates a media's artifacts into the
+caller's reading language** (task-395). The language is part of the `artifact_id`
+hash, so an account reading in another language than the one an artifact was written
+in has no entry of its own — and filling that gap by generating again would re-read
+the whole transcript to rewrite a text of a few hundred words. Instead the existing
+entry is *translated*: a `queued` entry appears in this very response, the client's
+usual poll follows it to `ready`, and the model reads only the finished payload.
+
+Three consequences the client can rely on:
+
+- **changing the reading language costs nothing.** `PATCH /api/auth/me` translates
+  nothing; the trigger is *opening* a media, so a library of 500 items translates
+  only what is actually read.
+- **a translation is a new entry, and the original stays.** The history is
+  append-only: both entries are listed, each with its own `artifact_id`, and the
+  original keeps being served to the accounts reading in its language. It also means
+  the tile is answered by the translated entry from then on — `POST /api/artifacts`
+  for that type in that language returns `200 reused`, never a second generation.
+- **reopening translates nothing again.** The translated entry carries exactly the id
+  the reading language computes, so its presence in the page is the whole check.
+
+`review_blurb` is included, which is what makes the library preview follow the
+reading language too: the translated card is copied onto the library rows whose owner
+reads that language, and onto those only.
+
 ### 5) GET /api/artifacts/{artifact_id}
 
 The same fields plus the scope and the immutable source snapshot:

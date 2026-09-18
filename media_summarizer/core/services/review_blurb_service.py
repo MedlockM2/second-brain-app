@@ -82,7 +82,8 @@ async def trigger_review_blurb_generation(
         # anywhere else, since ingestion completes once and there is no retry loop
         # behind this call. It also keeps the language part of ``artifact_id``, so
         # changing reading language yields a new blurb rather than silently reusing
-        # the old one.
+        # the old one — filled by translating this one when the media is opened,
+        # never by reading the transcript again (task-395).
         resolution = await resolve_scope_sources(
             user_id=user_id,
             scope=ArtifactScope.MEDIA,
