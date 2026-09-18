@@ -3,9 +3,10 @@ id: TASK-405
 title: >-
   Refléter dans l'app la fin du traitement d'un média sans action de
   l'utilisateur, selon le benchmark validé (task-404)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-17 15:35'
+updated_date: '2026-09-18 12:58'
 labels:
   - mobile
   - ux
