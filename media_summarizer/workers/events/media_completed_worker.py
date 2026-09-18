@@ -213,15 +213,18 @@ async def _load_summary_content(summary_s3_key: Optional[str]) -> Optional[Dict[
 
 async def process_event(message: Dict[str, Any]) -> None:
     body = json.loads(message.get("Body", "{}"))
-    # Accept canonical and legacy event types
+    # One accepted spelling, not a family of them: everything below runs once per
+    # accepted message -- the ledger close, the watcher fan-out, the indexing and
+    # the "ready" notification -- so a producer publishing the same completion under
+    # a second accepted name is a second run of all four, one push each.
     event_type = body.get("event_type")
-    if event_type not in ("episode_completion_status", "media_completed", "episode_completed"):
+    if event_type != "episode_completion_status":
         logger.warning(f"Ignoring unknown event type: {event_type}")
         return
 
     # Accept both new and legacy field names
     media_key = body.get("media_key") or body.get("episode_guid")
-    status = body.get("status", "success")  # legacy events have no status field; treat as success
+    status = body.get("status", "success")
     media_title = body.get("media_title") or body.get("episode_title")
     summary_s3_key = body.get("summary_s3_key")
     transcription_s3_key = body.get("transcription_s3_key")

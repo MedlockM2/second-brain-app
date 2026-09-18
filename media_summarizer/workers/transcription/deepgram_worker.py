@@ -518,9 +518,9 @@ async def _settle_audio_quota(
     This is the only place in the pipeline that knows the real duration of every
     transcription, whatever the platform it came from, so it is where consumption
     is made accurate (task-250 Layer 2). It deliberately does *not* live in the
-    media-completed events consumer: the completion event is published twice
-    (`episode_completion_status` and `episode_completed`), so debiting there
-    would charge every job twice.
+    media-completed events consumer, which is fed by an at-least-once queue and is
+    a fan-out join point: a debit belongs where the provider's own answer is read,
+    once per transcription.
 
     Every message that reaches this worker is a transcription we are paying for,
     so every message settles. There used to be a `quota_source_platform` opt-out
@@ -802,6 +802,15 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         job.set_processing_duration("transcription", int(transcription_duration))
         await database_async.update_processing_job(job)
 
+    # Mark the canonical job as completed now that transcription is done.
+    if job:
+        job.mark_completed()
+        await database_async.update_processing_job(job)
+
+    # Exactly one event, and published once the job holds its final state: the
+    # consumer closes the content ledger, fans out to watchers, indexes and sends
+    # the "ready" notification from it, so a second message repeats all four --
+    # a second push included. Algolia indexing is enqueued by that consumer.
     await sqs.send_message(
         queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
         message_body={
@@ -813,37 +822,6 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
             "transcription_metadata": transcription_metadata,
         },
     )
-
-    # Search indexing (Algolia) is enqueued centrally by the media-completed
-    # events consumer once it receives this episode_completion_status event.
-
-    # Mark the canonical job as completed now that transcription is done.
-    if job:
-        job.mark_completed()
-        await database_async.update_processing_job(job)
-
-    # Publish episode_completed event for watcher fan-out via media_completed_worker.
-    # This enables watchers of shared media keys to get their jobs finalized.
-    try:
-        await sqs.send_message(
-            queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
-            message_body={
-                "event_type": "episode_completed",
-                "media_key": message_body.get("media_key"),
-                "canonical_job_id": job_id,
-                "transcription_s3_key": transcript_s3_key,
-            },
-        )
-    except Exception as e:
-        log_event(
-            logger,
-            logging.WARNING,
-            "event.publish_failed",
-            "Failed to publish episode_completed event for watcher fan-out",
-            job_id=job_id,
-            media_key=message_body.get("media_key"),
-            exc_info=e,
-        )
 
     log_event(
         logger,
