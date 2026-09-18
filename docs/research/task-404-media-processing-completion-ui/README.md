@@ -1,12 +1,20 @@
 ---
-owner_decision: pending
+owner_decision: ok
 ---
 
 # Benchmark : refléter dans l'app la fin du traitement d'un média sans action de l'utilisateur
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture)_
+**Decision**: ok c'est bien ce que tu recommandes mais je veux que la notification push soit envoyée quelque soit la durée de traitement du media à partir du moment où l'user a quitté l'app
+
+Cette décision retient les six livrables **A, B, C, D, E et F**, avec deux écarts par rapport à la recommandation telle qu'elle est écrite plus bas :
+
+1. **D n'est pas séparable.** La recommandation présente le push visible comme opportuniste et coupable du lot ; la décision le rend obligatoire. Le déclencheur est l'utilisateur qui a quitté l'app, **et la durée du traitement n'entre pas dans la condition** : pas de seuil, pas de « seulement si le traitement dépasse N secondes ». Le reste du livrable D tient (compteur jamais un titre, suppression de bannière au premier plan avec `refetch` silencieux, second canal Android).
+2. **F est retenu, pas coupé.** Le marqueur « en cours » ne doit pas vivre seulement sur l'Accueil : il est porté aussi sur Recherche / Bibliothèque (`MediaListCard`, les 3 rendus de lignes de `search.tsx`), avec le même sondage borné que l'Accueil. La lecture de §7.9 selon laquelle l'owner « peut le couper » est donc tranchée dans l'autre sens — un média fraîchement sauvegardé ne doit ressembler à un média prêt sur aucune des deux surfaces.
+
+Inchangé et confirmé : l'ordre de A (corriger `isProcessingLibraryStatus` d'abord, c'est le bug bloquant), le périmètre de E (rien de plus pour l'échec), et tout §7.10 (hors périmètre).
+
 **Validated at**: _(date ISO à remplir par l'owner)_
 
 ---
@@ -33,12 +41,12 @@ Six arguments, dans l'ordre de force.
 - **C. Ajouter un rafraîchissement sur `AppState` → `active`.** Trou actuel démontré : `useFocusEffect` ne se redéclenche **pas** quand l'app revient du fond alors que l'onglet est déjà focalisé. L'idiome existe déjà quatre fois dans le dépôt (`AuthContext.tsx:291`, `useDeviceTimezoneSync.ts:79`, `usePushNotifications.ts:62`, `share-confirmation.tsx:112`). JS pur.
 - **D. Produire une notification visible « média prêt » depuis `media_completed_worker.py`** vers `push-notification-queue`, consommée par le `push_notification_worker.py` existant. Corps = **un compteur, jamais un titre de média** : contrainte héritée de `docs/research/task-368-push-delivery/README.md` (le personnel Expo peut voir le contenu). Côté client, `setNotificationHandler` supprime la bannière quand l'app est au premier plan et déclenche un `refetch` silencieux à la place ; en arrière-plan la notification s'affiche, et le tap route vers le média. Un second canal Android est nécessaire (`ANDROID_CHANNEL_ID` est figé à `"digest"` dans `mobile/src/services/pushNotificationService.ts:50`) — c'est un appel JS, donc OTA.
 - **E. Ne rien faire pour l'échec au-delà de ce qui existe.** `isFailedLibraryStatus` et `MediaFailureBadge` couvrent déjà le statut terminal `failed` ; le sondage s'arrête dessus comme sur `ready`.
-- **F (séparable, priorité secondaire). Porter le même marqueur et le même sondage sur Recherche / Bibliothèque.** `MediaListCard` n'affiche **aucun** marqueur « en cours » aujourd'hui (§1.1) : un média fraîchement sauvegardé y ressemble à un média prêt. L'owner peut couper F sans rien retirer à la fermeture de la plainte du testeur, qui porte sur l'Accueil (§7.9).
+- **F (séparable, priorité secondaire). Porter le même marqueur et le même sondage sur Recherche / Bibliothèque.** `MediaListCard` n'affiche **aucun** marqueur « en cours » aujourd'hui (§1.1) : un média fraîchement sauvegardé y ressemble à un média prêt. L'owner peut couper F sans rien retirer à la fermeture de la plainte du testeur, qui porte sur l'Accueil (§7.9). — **Tranché : l'owner a retenu F. Voir `Owner Validation` → `Decision`, écart 2.**
 
 **Compromis explicitement acceptés.**
 
 - **Le sondage consomme des requêtes quand l'app est ouverte.** Borné à 8,8 appels par média en moyenne, 44 au maximum sur la distribution mesurée (§5.2), soit ≈ 46 Ko gzip (≈ 129 Ko brut) de données par média, la page de 20 lignes étant mesurée à 14,7 Ko brut / 5,2 Ko gzip (§5.1). Le guide Apple d'efficacité énergétique condamne le sondage par timer — mais il le condamne précisément sous la forme du timer qu'on oublie d'invalider : « *Forgetting to stop timers wastes lots of energy, and is one of the simplest problems to fix.* » Et il donne la sortie dans la même page : « *Use timers economically by specifying suitable timeouts.* », « *Invalidate repeating timers when they're no longer needed.* » Un sondage borné, désarmé par le contenu de la liste et vivant seulement sur un écran visible satisfait les trois règles ; c'est `MediaProcessingSweep` aujourd'hui qui les viole (§3.1, §4.2).
-- **Le push visible peut être du bruit.** Un utilisateur qui reste dans l'app pendant les 23 secondes de traitement recevrait une notification inutile. C'est pour cela que D suppose la suppression de bannière au premier plan, et c'est pour cela que **D est séparable de A-B-C** : si l'owner veut réduire le lot, A+B+C ferment intégralement la plainte du testeur et n'exigent **aucun** changement backend.
+- **Le push visible peut être du bruit.** Un utilisateur qui reste dans l'app pendant les 23 secondes de traitement recevrait une notification inutile. C'est pour cela que D suppose la suppression de bannière au premier plan, et c'est pour cela que **D est séparable de A-B-C** : si l'owner veut réduire le lot, A+B+C ferment intégralement la plainte du testeur et n'exigent **aucun** changement backend. — **Tranché : l'owner a rendu D obligatoire et indépendant de la durée. Voir `Owner Validation` → `Decision`, écart 1.**
 - **Rien n'est temps réel au sens strict.** L'utilisateur peut voir la vignette se figer jusqu'à 3 secondes après la fin réelle du traitement. Sur une médiane de 22,9 s de traitement, c'est 13 % de latence ajoutée sur la perception — et c'est la seule option qui n'ajoute ni build, ni brique.
 - **Le cas « traitement anormalement long » n'est pas résolu par le sondage** : au-delà de 5 minutes, c'est D (le push) ou le prochain focus qui rend la main. §7.4 le spécifie.
 
@@ -963,6 +971,9 @@ relance de permission n'est spécifiée.**
   un média fraîchement sauvegardé y ressemble à un média prêt. Livrable **F**, séparable et de priorité
   secondaire : porter le même marqueur et le même sondage borné sur cette surface. L'owner peut le couper sans
   toucher à la plainte du testeur, qui porte sur l'Accueil.
+  **Tranché : l'owner a retenu F — le marqueur est porté sur cette surface, avec le même sondage borné que
+  l'Accueil. Les 3 rendus de lignes de `search.tsx` (`:367`, `:691`, `:896`) passent tous par `MediaListCard`,
+  donc le marqueur s'y ajoute en un seul point. Voir `Owner Validation` → `Decision`, écart 2.**
 - **Détail d'un média**, **Digest**, **détail de dossier**, **détail complété** ont déjà leur sondage borné
   (§1.1). Rien à changer.
 - **Triage « non classés »** ne relit délibérément jamais, pour ne pas renuméroter la file sous le doigt de
