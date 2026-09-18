@@ -299,7 +299,6 @@ async def _purge_media_objects(
                 job.id,
                 transcription_s3_key=job.transcription_s3_key,
                 audio_s3_key=job.audio_s3_key,
-                summary_s3_key=job.summary_s3_key,
                 quiz_s3_key=job.quiz_s3_key,
             )
 

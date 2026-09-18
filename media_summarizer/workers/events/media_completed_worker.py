@@ -36,7 +36,7 @@ from media_summarizer.core.services.push_notification_dispatch import (
 from media_summarizer.core.services.search_index_dispatch import (
     enqueue_transcript_indexing,
 )
-from media_summarizer.utils import media_idempotence, media_watchers, s3, sqs
+from media_summarizer.utils import media_idempotence, media_watchers, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
@@ -47,7 +47,6 @@ logger = logging.getLogger(__name__)
 # task-143 settled EPISODE_COMPLETED_EVENTS_QUEUE as the canonical name shared by
 # every producer, and pr.yml guards against the other spelling coming back.
 MEDIA_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
-SUMMARY_BUCKET = required_env("SUMMARY_BUCKET")
 
 # Backoff
 TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
@@ -194,23 +193,6 @@ async def _fail_waiting_artifacts(media_key: str, *, reason: str) -> None:
         )
 
 
-async def _load_summary_content(summary_s3_key: Optional[str]) -> Optional[Dict[str, Any]]:
-    if not summary_s3_key:
-        return None
-    try:
-        raw = await s3.download_file_to_memory(SUMMARY_BUCKET, summary_s3_key)
-        try:
-            data = json.loads(raw.decode("utf-8"))
-        except Exception:
-            # Non-JSON fallback
-            data = {"summary": raw.decode("utf-8", errors="ignore")}
-        # Prefer the inner "summary" field if present
-        return data.get("summary", data)
-    except Exception as e:
-        logger.warning(f"Failed to load summary content {summary_s3_key}: {e}")
-        return None
-
-
 async def process_event(message: Dict[str, Any]) -> None:
     body = json.loads(message.get("Body", "{}"))
     # One accepted spelling, not a family of them: everything below runs once per
@@ -222,11 +204,9 @@ async def process_event(message: Dict[str, Any]) -> None:
         logger.warning(f"Ignoring unknown event type: {event_type}")
         return
 
-    # Accept both new and legacy field names
-    media_key = body.get("media_key") or body.get("episode_guid")
+    media_key = body.get("media_key")
     status = body.get("status", "success")
-    media_title = body.get("media_title") or body.get("episode_title")
-    summary_s3_key = body.get("summary_s3_key")
+    media_title = body.get("media_title")
     transcription_s3_key = body.get("transcription_s3_key")
     canonical_job_id = body.get("canonical_job_id")
 
@@ -334,17 +314,13 @@ async def process_event(message: Dict[str, Any]) -> None:
             job_id = w.get("job_id")
             job = None
 
-            # Update processing job with S3 keys and status BEFORE sending email
+            # Update processing job status
             try:
                 job = await database_async.get_processing_job_by_id(job_id)
                 if job:
-                    if summary_s3_key:
-                        job.set_summary_location(summary_s3_key)
-
-
                     job.mark_completed()
                     await database_async.update_processing_job(job)
-                    logger.info(f"Updated processing job {job_id} with S3 keys")
+                    logger.info(f"Updated processing job {job_id}")
             except Exception as e:
                 logger.error(f"Failed to update processing job {job_id}: {e}")
 

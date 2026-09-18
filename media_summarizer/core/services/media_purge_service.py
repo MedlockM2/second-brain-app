@@ -181,7 +181,6 @@ async def purge_job_objects(
     *,
     transcription_s3_key: Optional[str] = None,
     audio_s3_key: Optional[str] = None,
-    summary_s3_key: Optional[str] = None,
     quiz_s3_key: Optional[str] = None,
 ) -> Dict[str, int]:
     """Every S3 object one job produced, plus the translation locks it owns.
@@ -234,11 +233,8 @@ async def purge_job_objects(
         await purge_prefix(document_bucket, f"{job_id}/"),
     )
 
-    # Pre-artifact jobs wrote their summary and quiz straight to a bucket instead
-    # of going through media_artifacts, so those keys only exist on the job row.
-    if summary_s3_key:
-        await s3.delete_object(required_env("SUMMARY_BUCKET"), summary_s3_key)
-        _bump(counts, "legacy_summary_objects_deleted")
+    # Pre-artifact jobs wrote their quiz straight to a bucket instead of going
+    # through media_artifacts, so that key only exists on the job row (task-406).
     if quiz_s3_key:
         await s3.delete_object(required_env("QUIZ_BUCKET"), quiz_s3_key)
         _bump(counts, "legacy_quiz_objects_deleted")

@@ -90,7 +90,6 @@ class ProcessingJob(BaseModel):
     # File locations
     audio_s3_key: Optional[str] = None
     transcription_s3_key: Optional[str] = None
-    summary_s3_key: Optional[str] = None
     quiz_s3_key: Optional[str] = None  # S3 key for generated quiz
 
     # Organization lives on the durable ``user_media`` row only (task-220). The
@@ -209,7 +208,6 @@ class ProcessingJob(BaseModel):
             "media_type",
             "audio_s3_key",
             "transcription_s3_key",
-            "summary_s3_key",
             "quiz_s3_key",
             "media_date_published",
             "extraction_metadata",
@@ -385,11 +383,6 @@ class ProcessingJob(BaseModel):
     def set_transcription_location(self, s3_key: str) -> None:
         """Set the S3 location of the transcription."""
         self.transcription_s3_key = s3_key
-        self.updated_at = datetime.now(timezone.utc)
-
-    def set_summary_location(self, s3_key: str) -> None:
-        """Set the S3 location of the summary."""
-        self.summary_s3_key = s3_key
         self.updated_at = datetime.now(timezone.utc)
 
     def set_transcription_metadata(self, metadata: Dict[str, Any]) -> None:
