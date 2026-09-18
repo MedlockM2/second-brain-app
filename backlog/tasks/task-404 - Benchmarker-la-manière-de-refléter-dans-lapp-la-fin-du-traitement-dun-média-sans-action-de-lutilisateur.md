@@ -52,3 +52,27 @@ Ce benchmark part de zéro. Il doit établir **comment une app mobile doit refl�
 - [ ] #8 Aucun chiffre inventé : tout nombre non sourcé ni mesuré est marqué comme estimation avec sa méthode de calcul.
 - [ ] #9 Le livrable est docs/research/task-404-media-processing-completion-ui/README.md, front-matter owner_decision: pending et section Owner Validation vide (champs Decision et Validated at prêts à être remplis).
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Mode : initial** (le dossier `docs/research/task-404-media-processing-completion-ui/` n'existait pas ; aucun `README.owner-rejected-*.md`, aucune demande de complément).
+
+Livrable produit : `docs/research/task-404-media-processing-completion-ui/README.md` (front-matter `owner_decision: pending`, section Owner Validation vide). Il couvre les neuf critères d'acceptation :
+
+- **§1 — inventaire** des 8 surfaces qui affichent un média non terminal, ce que chacune montre et quand elle relit l'état. Trois défauts distincts y sont établis, code à l'appui : (a) `inbox.tsx` ne relit la liste qu'au montage, au `useFocusEffect` et au pull-to-refresh, donc le balayage continue après la fin du traitement ; (b) aucun écouteur `AppState`, donc un retour d'arrière-plan sur un onglet déjà focalisé ne rafraîchit rien ; (c) `isProcessingLibraryStatus` teste `ingested`/`resolving`/`processing` alors que `GET /api/media` dérive son `status` de `UserMediaRecord.processing_status`, dont le domaine est `pending|processing|ready|failed` — les deux premières branches sont mortes et `pending`, l'état de tout média fraîchement enregistré, n'affiche **aucun** marqueur.
+- **§2 — durées réelles mesurées** sur `processing_jobs-dev` (87 jobs, fenêtre du 2026-08-14 au 2026-09-17, méthode de requête et calcul des percentiles documentés) : médiane 22,9 s, p90 40,2 s, p95 68,2 s, max 3 100 s ; 94,3 % des traitements sous 60 s ; les trois jobs au-delà de 1 000 s tombent dans le même incident fournisseur de huit minutes, donc le maximum hors incident sur 34 jours est de 100,6 s. Déclinaison par type de média, par plateforme, et latence de file.
+- **§3 — dix approches distinctes**, chaque affirmation sourcée par une URL et une date de consultation (2026-09-18), avec citations verbatim d'Apple, Google et Expo, plus quatre apps établies observées.
+- **§4 — grille par approche** : comportement utilisateur (délai, traitement long, échec, arrière-plan → premier plan, réseau faible ou absent), coût batterie et données, modifications backend/Terraform, coût de livraison mobile OTA vs build.
+- **§5 — coût AWS mensuel en EUR** à 100 / 1 000 / 10 000 utilisateurs actifs, à partir de deux coûts unitaires reconstruits pas à pas depuis les tarifs publics, avec hypothèses de dimensionnement A1–A7 explicitement étiquetées et une analyse de sensibilité.
+- **§6 — parité iOS / Android** traitée approche par approche, y compris la matrice de disponibilité des événements `AppState` de React Native.
+- **§7 — spécification du comportement attendu** seconde par seconde, du `pending` initial au statut terminal, avec les cas traitement anormalement long, échec, retour d'arrière-plan, absence de réseau et permission de notification refusée.
+- **§8** distingue explicitement ce qui est mesuré, ce qui est calculé de façon déterministe, ce qui est sourcé et ce qui est estimé avec sa méthode.
+- **§9** liste toutes les sources.
+
+**Recommandation soumise à l'owner** : combiner l'option 2 (rafraîchissement client borné et auto-terminant : 3 s pendant 60 s, puis 10 s jusqu'à 5 min, armé et désarmé par le contenu de la liste, plus un écouteur `AppState`) comme mécanisme *garanti*, et l'option 3 (notification push *visible* « média prêt » émise par le worker de complétion vers la file de notifications existante) comme mécanisme *opportuniste*. L'argument décisif est documenté en §4.0 : l'option 3 ne demande **aucun** changement Terraform (le nom de la file est déjà dans la map d'environnement partagée et la policy IAM des workers autorise déjà `sqs:SendMessage` dessus) et aucun changement natif côté app (`expo-notifications` est déjà installé et configuré), donc tout part en OTA ; le push *silencieux* (option 4) exigerait `enableBackgroundRemoteNotifications` et `expo-task-manager`, soit deux builds EAS sur un quota gratuit de 15 par mois et par plateforme.
+
+**Cette recommandation attend la validation de l'owner.** La tâche reste en `To Do` ; c'est le champ `owner_decision` du README qui pilote la suite (`ok` / `abandoned` / `redo` / `more`), conformément à `docs/BENCHMARK_OWNER_WORKFLOW.md`. Aucun code source n'a été modifié.
+
+Note de sécurité : `processing_jobs` porte un attribut `user_email`. Il n'a pas été projeté dans les requêtes de mesure et aucune valeur d'identité, aucun identifiant de compte et aucun secret n'apparaît dans le livrable.
+<!-- SECTION:NOTES:END -->
