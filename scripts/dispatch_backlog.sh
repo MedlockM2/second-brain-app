@@ -24,6 +24,14 @@
 
 set -euo pipefail
 
+# A locked screen on battery does not block macOS's idle sleep timer, which can be as
+# short as 1 minute — it will kill a mid-flight dispatch. Re-exec once under caffeinate
+# -i (idle-sleep guard, works on battery too) so the whole run survives.
+if [[ "${DISPATCH_CAFFEINATED:-0}" != "1" ]] && command -v caffeinate >/dev/null 2>&1; then
+  export DISPATCH_CAFFEINATED=1
+  exec caffeinate -i "$0" "$@"
+fi
+
 # Claude Code otherwise terminates background agents after 10 minutes in print
 # mode. Dispatcher tasks routinely take longer, so wait for them indefinitely.
 export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
