@@ -59,7 +59,7 @@ export const ja: Catalog = {
   // --- 処理中の状態。ホームのタイルに表示（task-402） ---
   "mediaStatus.processingSubtitle": "処理中",
   "mediaStatus.a11yProcessing": "{label}。処理中です。",
-  "notifications.mediaReadyChannel": "読む準備完了",
+  "notifications.mediaReadyChannel": "深掘りの準備完了",
   "mediaActions.move.label": "移動",
   "mediaActions.rename.label": "名前を変更",
   "mediaActions.delete.label": "削除",

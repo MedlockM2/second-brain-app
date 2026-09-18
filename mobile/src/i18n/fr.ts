@@ -70,7 +70,7 @@ export const fr: Catalog = {
   // --- Traitement en cours, sur la tuile d'accueil (task-402) ---
   "mediaStatus.processingSubtitle": "Traitement en cours",
   "mediaStatus.a11yProcessing": "{label}. Traitement en cours.",
-  "notifications.mediaReadyChannel": "Prêt à lire",
+  "notifications.mediaReadyChannel": "Prêt à approfondir",
   "mediaActions.move.label": "Déplacer",
   "mediaActions.rename.label": "Renommer",
   "mediaActions.delete.label": "Supprimer",

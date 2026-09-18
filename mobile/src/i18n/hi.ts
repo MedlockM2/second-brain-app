@@ -59,7 +59,7 @@ export const hi: Catalog = {
   // --- प्रोसेसिंग चल रही है, होम टाइल पर (task-402) ---
   "mediaStatus.processingSubtitle": "प्रोसेस हो रहा है",
   "mediaStatus.a11yProcessing": "{label}. प्रोसेस हो रहा है।",
-  "notifications.mediaReadyChannel": "पढ़ने के लिए तैयार",
+  "notifications.mediaReadyChannel": "गहराई से समझने के लिए तैयार",
   "mediaActions.move.label": "ले जाएँ",
   "mediaActions.rename.label": "नाम बदलें",
   "mediaActions.delete.label": "हटाएँ",

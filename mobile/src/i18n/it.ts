@@ -59,7 +59,7 @@ export const it: Catalog = {
   // --- Elaborazione in corso, sulla tessera della home (task-402) ---
   "mediaStatus.processingSubtitle": "Elaborazione in corso",
   "mediaStatus.a11yProcessing": "{label}. Elaborazione in corso.",
-  "notifications.mediaReadyChannel": "Pronto da leggere",
+  "notifications.mediaReadyChannel": "Pronto da approfondire",
   "mediaActions.move.label": "Sposta",
   "mediaActions.rename.label": "Rinomina",
   "mediaActions.delete.label": "Elimina",

@@ -304,10 +304,14 @@ async def process_event(message: Dict[str, Any]) -> None:
             user_id=canonical_job.user_id,
         )
         # The library id again, and for a second reason: it is what the tap on the
-        # notification opens.
+        # notification opens. The job's media_type comes along because the body
+        # names the category of what was processed (task-407) -- the job is where
+        # every ingestion path has written it by the time this event fires, and the
+        # producer tolerates it being absent.
         await enqueue_media_ready_notification(
             user_id=canonical_job.user_id,
             media_item_id=canonical_job.media_item_id,
+            media_type=canonical_job.media_type,
         )
         indexed_user_ids.add(canonical_job.user_id)
     elif not canonical_job_id:
@@ -400,6 +404,10 @@ async def process_event(message: Dict[str, Any]) -> None:
                     media_item_id=(
                         getattr(job, "media_item_id", None) if job else None
                     ),
+                    # This watcher's own job, not the canonical one: same content,
+                    # but the category is read from the row that belongs to the
+                    # person being told about it.
+                    media_type=(getattr(job, "media_type", None) if job else None),
                 )
                 indexed_user_ids.add(watcher_user_id)
 

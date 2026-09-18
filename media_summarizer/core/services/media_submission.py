@@ -112,6 +112,13 @@ async def submit_media_for_user(
         media_date_published=media_date_published,
         title=media_title,
         creator_name=creator_name,
+        # The same value the durable row above already carries. This path was the
+        # only ingestion path leaving the job's media_type empty, and the
+        # consequence surfaced with task-407: the completion notification reads the
+        # job, so an episode saved from the in-app podcast search was announced as a
+        # nameless "source" while the exact same episode saved from a shared Spotify
+        # link (which goes through the orchestrator) was announced as an episode.
+        media_type="podcast_episode",
         media_item_id=durable_media_item_id,
     )
 

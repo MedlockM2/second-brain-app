@@ -63,7 +63,7 @@ export const de: Catalog = {
   // --- Laufende Verarbeitung, auf der Startseiten-Kachel (task-402) ---
   "mediaStatus.processingSubtitle": "Wird verarbeitet",
   "mediaStatus.a11yProcessing": "{label}. Wird verarbeitet.",
-  "notifications.mediaReadyChannel": "Bereit zum Lesen",
+  "notifications.mediaReadyChannel": "Bereit zum Vertiefen",
   "mediaActions.move.label": "Verschieben",
   "mediaActions.rename.label": "Umbenennen",
   "mediaActions.delete.label": "Löschen",

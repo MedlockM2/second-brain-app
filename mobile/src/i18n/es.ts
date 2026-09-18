@@ -62,7 +62,7 @@ export const es: Catalog = {
   // --- Procesamiento en curso, en el mosaico de inicio (task-402) ---
   "mediaStatus.processingSubtitle": "Procesando",
   "mediaStatus.a11yProcessing": "{label}. Procesando.",
-  "notifications.mediaReadyChannel": "Listo para leer",
+  "notifications.mediaReadyChannel": "Listo para profundizar",
   "mediaActions.move.label": "Mover",
   "mediaActions.rename.label": "Renombrar",
   "mediaActions.delete.label": "Eliminar",

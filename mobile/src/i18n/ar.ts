@@ -59,7 +59,7 @@ export const ar: Catalog = {
   // --- حالة المعالجة الجارية، على بطاقة الصفحة الرئيسية (task-402) ---
   "mediaStatus.processingSubtitle": "جارٍ المعالجة",
   "mediaStatus.a11yProcessing": "{label}. جارٍ المعالجة.",
-  "notifications.mediaReadyChannel": "جاهز للقراءة",
+  "notifications.mediaReadyChannel": "جاهز للتعمّق",
   "mediaActions.move.label": "نقل",
   "mediaActions.rename.label": "إعادة تسمية",
   "mediaActions.delete.label": "حذف",
