@@ -10,16 +10,18 @@ announcement because the user asked for it, not because it was slow.
 
 **One notification per media per user**, emitted from the completion event, which
 is also the join point that already deduplicates a user appearing both as the
-submitter and as a watcher of the same content. So the count in the body is one by
-construction, and the field is still written as a count rather than a name — see
-below.
+submitter and as a watcher of the same content. So the body can speak of a single
+media in the singular, with no count to compute.
 
-**Nothing about the content travels.** Expo's push service relays the payload and
-its staff can read it while debugging, so the body says how many sources are ready
-and never which: no title, no creator, no source. That is the same rule the Digest
-notification follows (task-368), and it is why a notification cannot be assembled
-from the media's own title even though the worker has it in hand. ``data`` carries
-the library id, which is opaque and is what the app needs to open the right screen.
+**The body names the media's category, and nothing more.** Expo's push service
+relays the payload and its staff can read it while debugging, so the rule inherited
+from the Digest notification (task-368) stands: no title, no creator, **and no
+source platform** — "Your video has been processed", never "Your YouTube video".
+Naming the category is the compromise the owner settled on task-407: more useful
+than the count this used to carry ("1 source is ready."), which told the person
+nothing they did not already know, while still not revealing which service they
+feed on. ``data`` carries the library id, which is opaque and is what the app needs
+to open the right screen.
 
 **Failure is swallowed.** A completion event must not be replayed because a
 notification could not be scheduled: replaying it would re-index, re-blurb and
@@ -58,17 +60,77 @@ ANDROID_CHANNEL_MEDIA_READY = "media_ready"
 NOTIFICATION_TYPE_DIGEST = "digest"
 NOTIFICATION_TYPE_MEDIA_READY = "media_ready"
 
+#: The word the body puts after "Your", per value an ingestion path actually
+#: writes into ``media_type``.
+#:
+#: Keyed on what the *code* writes, not on the ``MediaType`` enum: the enum is not
+#: the contract here, because ``media_type`` is an ``Optional[str]`` on
+#: ``ProcessingJob`` and two paths write values that are not enum members at all --
+#: ``"document"`` (the upload handler in ``api/endpoints/media.py`` and
+#: ``workers/document_parsing/worker.py``) and ``"audio"`` (the audio upload
+#: handler). A map built from the enum would have quietly sent every parsed document
+#: and every uploaded audio file through the generic label, which is the whole point
+#: of enumerating the written values instead (task-407).
+#:
+#: Each label is a *category*, deliberately never a platform: ``youtube_video`` and
+#: ``short_video`` both read "video" because the body must not say which service the
+#: media came from.
+MEDIA_TYPE_LABELS = {
+    "podcast_episode": "podcast episode",
+    "article": "article",
+    "youtube_video": "video",
+    "short_video": "video",
+    "image_post": "image",
+    "audio_file": "audio",
+    "audio": "audio",
+    "shared_text": "note",
+    "document": "document",
+}
+
+#: What an unnamed media is called. Covers three cases that are all the same for the
+#: reader: no ``media_type`` on the job at all, ``MediaType.UNKNOWN``, and a value a
+#: future ingestion path writes without adding it above. The raw value is never
+#: interpolated into the body -- an internal token like ``short_video`` in a
+#: notification would be a leak of vocabulary, and a wrong one is worse than a vague
+#: one.
+GENERIC_MEDIA_LABEL = "source"
+
+
+def _media_label(media_type: Optional[str]) -> str:
+    """The category word for this media, or the generic one. Never the raw value."""
+    normalized = (media_type or "").strip().lower()
+    label = MEDIA_TYPE_LABELS.get(normalized)
+    if label:
+        return label
+    if normalized and normalized != "unknown":
+        # Not noise: an ingestion path writing a value this module does not know is
+        # a notification silently losing its specificity, and the only way to see it
+        # is from here. `media_type` is a declared field of the log schema.
+        log_event(
+            logger,
+            logging.WARNING,
+            "push_notification.media_ready_unlabelled_type",
+            "No notification label for this media_type; using the generic one",
+            media_type=normalized,
+        )
+    return GENERIC_MEDIA_LABEL
+
 
 async def enqueue_media_ready_notification(
     *,
     user_id: Optional[str],
     media_item_id: Optional[str],
+    media_type: Optional[str],
 ) -> bool:
-    """Tell one account that one of its sources is ready to read. Never raises.
+    """Tell one account that one of its sources is ready to deepen. Never raises.
 
     Returns whether a message was sent. Skipped, with a structured log, when the
     owner or the library id is missing: the first has no device to reach and the
     second is what a tap would open.
+
+    ``media_type`` is the job's own weakly-typed value and is allowed to be absent:
+    it only picks the word in the body, through :func:`_media_label`, and a media
+    whose category is unknown is still worth announcing.
 
     Whether the account has a registered device at all is not asked here — the
     consumer reads the token table itself, so an account that never granted the
@@ -94,9 +156,11 @@ async def enqueue_media_ready_notification(
                 "user_id": user_id,
                 # English, like the Digest notification: the backend does not know
                 # the reader's app language, and task-404 keeps a per-account locale
-                # out of scope (§7.10).
-                "title": "Ready to read",
-                "body": "1 source is ready.",
+                # out of scope (§7.10). The Android channel name the app creates is
+                # translated and must keep saying the same thing as this title
+                # (`notifications.mediaReadyChannel` in `mobile/src/i18n/`).
+                "title": "Ready to deepen",
+                "body": f"Your {_media_label(media_type)} has been processed.",
                 "channel_id": ANDROID_CHANNEL_MEDIA_READY,
                 "data": {
                     "type": NOTIFICATION_TYPE_MEDIA_READY,

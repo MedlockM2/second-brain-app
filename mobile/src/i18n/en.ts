@@ -99,7 +99,12 @@ export const en = {
   // what the user reads when deciding what to mute. The Digest channel reuses the
   // tab's own name; this one names the event, because there is no screen called
   // after it. Never shown inside the app.
-  "notifications.mediaReadyChannel": "Ready to read",
+  //
+  // Must keep saying what the notifications it carries say: the backend producer
+  // titles them "Ready to deepen" (`core/services/push_notification_dispatch.py`),
+  // and a channel labelled otherwise would make Android's settings name the
+  // category differently from the notifications inside it (task-407).
+  "notifications.mediaReadyChannel": "Ready to deepen",
 
   // --- Actions on a media item: long press in Library, `…` on its own page ---
   "mediaActions.move.label": "Move",
