@@ -3,9 +3,10 @@ id: TASK-404
 title: >-
   Benchmarker la manière de refléter dans l'app la fin du traitement d'un média
   sans action de l'utilisateur
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-17 15:35'
+updated_date: '2026-09-18 11:13'
 labels:
   - benchmark
   - mobile
