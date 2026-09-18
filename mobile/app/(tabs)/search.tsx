@@ -38,6 +38,8 @@ import {
   MediaListCard,
   type MediaCardItem,
 } from "../../src/components/MediaListCard";
+import { isProcessingLibraryStatus } from "../../src/components/MediaProcessingSweep";
+import { useProcessingRefresh } from "../../src/hooks/useProcessingRefresh";
 import {
   AnchoredContextMenu,
   type AnchorRect,
@@ -276,6 +278,25 @@ export default function SearchScreen() {
     }, [loadFolders, loadMedia]),
   );
 
+  /**
+   * Whether a library row on screen is still being processed.
+   *
+   * Gated on the query being empty because that is what decides which body is
+   * drawn: with something typed the rows are search hits, which carry no status
+   * (`hitToRow` sets none), so there would be nothing on screen for a re-read to
+   * settle. `loadMedia` alone is re-read — the folders have no lifecycle of their
+   * own, and refetching them every three seconds would cost a request per tick
+   * for a grid that cannot change.
+   */
+  const hasProcessingMedia =
+    !query.trim() && media.some((item) => isProcessingLibraryStatus(item.status));
+
+  const { isStalled: isProcessingStalled, rearm: rearmProcessingRefresh } =
+    useProcessingRefresh({
+      hasProcessing: hasProcessingMedia,
+      refetch: loadMedia,
+    });
+
   // Rebuilt from the flat list rather than stored: the parent links, the
   // alphabetical order and the subfolder counts all come from one pass, so a
   // renamed folder lands in its new place in the grid on the next render.
@@ -368,10 +389,14 @@ export default function SearchScreen() {
         item={row}
         excerpt={row.excerpt}
         onPress={noopOpenMedia}
+        // Carried too, for the same reason as the excerpt: the copy has to be the
+        // row it was lifted from, and a sweeping band over a still one would be
+        // the mismatch the lift exists to hide.
+        processingStalled={isProcessingStalled}
         style={styles.mediaPreviewCard}
       />
     ),
-    [],
+    [isProcessingStalled],
   );
 
   // Patched in place rather than refetched: the rename already returned the
@@ -478,7 +503,10 @@ export default function SearchScreen() {
     void Promise.all([loadFolders(), loadMedia()]).finally(() =>
       setIsRefreshing(false),
     );
-  }, [loadFolders, loadMedia]);
+    // The gesture is also what gives a spent refresh budget another one, as it is
+    // on the Home screen (task-404 §7.4).
+    rearmProcessingRefresh();
+  }, [loadFolders, loadMedia, rearmProcessingRefresh]);
 
   return (
     /* `collapsable={false}`: under `NativeTabs` the scrollable UIKit insets and
@@ -510,6 +538,7 @@ export default function SearchScreen() {
             onRetryMedia={handleRetryMedia}
             onOpenMedia={handleOpenMedia}
             onLongPressMedia={mediaActions.open}
+            processingStalled={isProcessingStalled}
             isRefreshing={isRefreshing}
             onRefresh={handleRefresh}
           />
@@ -628,6 +657,8 @@ interface LibraryStateProps {
   onOpenMedia: (mediaItemId: string) => void;
   /** Opens the row's actions menu — the same one the search results open. */
   onLongPressMedia: (item: MediaRow, anchor: AnchorRect) => void;
+  /** Forwarded to every row: the sweep stops moving once the budget is spent. */
+  processingStalled: boolean;
   isRefreshing: boolean;
   onRefresh: () => void;
 }
@@ -661,6 +692,7 @@ function LibraryState({
   onRetryMedia,
   onOpenMedia,
   onLongPressMedia,
+  processingStalled,
   isRefreshing,
   onRefresh,
 }: LibraryStateProps) {
@@ -692,6 +724,7 @@ function LibraryState({
           item={item}
           onPress={onOpenMedia}
           onLongPress={onLongPressMedia}
+          processingStalled={processingStalled}
           testID="library-media-card"
         />
       )}

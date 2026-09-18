@@ -73,7 +73,7 @@ tags:
 
 # The share is now in the row, either as the optimistic pending tile (which
 # shows the shared URL while the backend catches up) or as the confirmed media
-# tile once useMediaPolling has refetched on focus. Either way the row exists.
+# tile once useMediaList has been re-read. Either way the row exists.
 - assertVisible:
     text: "Recently added"
     timeout: 15000

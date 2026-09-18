@@ -21,11 +21,12 @@ import type { MediaType } from "../types/media";
 import type { AnchorRect } from "./AnchoredContextMenu";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
+import { MediaFailureBadge, describeWithFailure } from "./MediaFailureBadge";
 import {
-  MediaFailureBadge,
-  describeWithFailure,
-  isFailedLibraryStatus,
-} from "./MediaFailureBadge";
+  MediaProcessingSweep,
+  describeWithProcessing,
+} from "./MediaProcessingSweep";
+import { mediaStatusMarker } from "../lib/mediaStatusMarker";
 import { t } from "../i18n";
 import { getRelativeTime } from "../lib/relativeTime";
 import {
@@ -59,10 +60,14 @@ import {
  * `surfaceContainerLow`. There is no third state: an empty grey rectangle is the
  * anti-pattern the benchmark names (§6.3).
  *
- * The only processing state the row shows is the terminal one: a failed import
- * gets a marker beside its type badge (task-381). The stages on the way in are
- * deliberately absent — they resolve on their own within a minute or two, where a
- * failure is final and is the one thing worth knowing without opening the item.
+ * Both ends of the import lifecycle are marked, and exactly one at a time (see
+ * `mediaStatusMarker`): a failed one gets a marker beside its type badge
+ * (task-381), and one still on its way is swept over its cover with the state in
+ * place of its subtitle (task-405) — the same two markers the Home tile draws,
+ * because the Library is the other list a share lands in and the owner asked for
+ * the state to be readable on both. The row that carries a sweep also carries the
+ * bounded refresh that ends it: `useProcessingRefresh`, armed by the Library body
+ * of `search.tsx`.
  */
 
 /**
@@ -109,7 +114,7 @@ const EXCERPT_MAX_CHARS = 220;
  *
  * Narrower than `MediaListItem` on purpose. The search results render this same
  * card from a `SearchHit`, and a hit is not a library list row: it carries no
- * triage blurb and no processing status, and inventing values for fields it does
+ * triage blurb and no lifecycle status, and inventing values for fields it does
  * not have would be the first step back towards two vignettes. Both shapes
  * satisfy this, which is the whole point — the one field only a library row has
  * (`status`) is optional here, so a hit simply omits it and gets no marker.
@@ -133,9 +138,9 @@ export interface MediaCardItem {
   updated_at: string;
   /**
    * Lifecycle of the *library entry* (`pending | processing | ready | failed`),
-   * of which this row reads one value: `failed` earns a marker next to the type
-   * badge (task-381). The three others draw the row they always drew — an item on
-   * its way in is not news, and one that arrived is the norm.
+   * read through `mediaStatusMarker`: `failed` earns a marker next to the type
+   * badge (task-381), `pending` and `processing` earn the sweep over the cover
+   * (task-405), `ready` draws the row it always drew.
    *
    * Optional because a search hit has no status by contract: `hitToRow` does not
    * set the field, so a hit never carries a marker. A library row always does,
@@ -171,6 +176,13 @@ interface MediaListCardProps<T extends MediaCardItem> {
    */
   excerpt?: string | null;
   /**
+   * The refresh budget of `useProcessingRefresh` is spent and this list still
+   * holds something on its way: the sweep stops moving without going away
+   * (task-404 §7.4). Set by the Library body, which owns that budget; a search
+   * result never needs it, since a hit carries no status to sweep.
+   */
+  processingStalled?: boolean;
+  /**
    * Overrides the card's outer box. Used by the context menu to redraw this row
    * as a lifted copy on the measured rect, where the list margins would offset
    * it — nothing else has a reason to touch it.
@@ -185,6 +197,7 @@ export function MediaListCard<T extends MediaCardItem>({
   onPress,
   onLongPress,
   excerpt,
+  processingStalled = false,
   style,
   testID,
 }: MediaListCardProps<T>): React.JSX.Element {
@@ -216,14 +229,23 @@ export function MediaListCard<T extends MediaCardItem>({
   const displayTitle = resolveMediaTitle(item);
 
   const creator = item.creator_name?.trim() ?? "";
-  const subtitle = creator || displayDomain;
 
   const coverUrl = item.media_image?.trim() ?? "";
   const showCover = coverUrl.length > 0 && failedCoverId !== item.media_item_id;
 
-  // The import failed — not to be confused with `failedCoverId` right above,
-  // which is one picture that would not load on an otherwise healthy item.
-  const importFailed = isFailedLibraryStatus(item.status);
+  // Which end of the import lifecycle the row is at, if either. `failed` here is
+  // the *import* — not to be confused with `failedCoverId` above, which is one
+  // picture that would not load on an otherwise healthy item.
+  const marker = mediaStatusMarker(item.status);
+  const importFailed = marker === "failed";
+  const isProcessing = marker === "processing";
+
+  // The state takes the subtitle line while it lasts, as it does on the Home
+  // tile: the row has no third line, and where a media comes from is still true
+  // once it is ready, where this is only true now.
+  const subtitle = isProcessing
+    ? t("mediaStatus.processingSubtitle")
+    : creator || displayDomain;
 
   // Windowed, not merely truncated: `numberOfLines` cuts at the *end* of the
   // box, so a match further in than the lead budget would be off screen and the
@@ -264,19 +286,25 @@ export function MediaListCard<T extends MediaCardItem>({
       // where it exists. `Pressable` keeps the tap and the long press exclusive,
       // so opening the menu never also opens the media.
       accessibilityHint={onLongPress ? t("mediaCard.longPressHint") : undefined}
-      accessibilityLabel={describeWithFailure(
-        creator
-          ? t("mediaCard.a11yByCreator", {
-              title: displayTitle,
-              creator,
-              type: mediaTypeLabel,
-            })
-          : t("mediaCard.a11yFromDomain", {
-              title: displayTitle,
-              type: mediaTypeLabel,
-              domain: displayDomain,
-            }),
-        importFailed,
+      // One clause at most, and the marker decides which: the row's single label
+      // replaces its children, so neither the sweep (which is `accessible={false}`)
+      // nor the subtitle line is announced on its own.
+      accessibilityLabel={describeWithProcessing(
+        describeWithFailure(
+          creator
+            ? t("mediaCard.a11yByCreator", {
+                title: displayTitle,
+                creator,
+                type: mediaTypeLabel,
+              })
+            : t("mediaCard.a11yFromDomain", {
+                title: displayTitle,
+                type: mediaTypeLabel,
+                domain: displayDomain,
+              }),
+          importFailed,
+        ),
+        isProcessing,
       )}
       accessibilityRole="button"
     >
@@ -300,6 +328,14 @@ export function MediaListCard<T extends MediaCardItem>({
           ) : (
             <Ionicons name={icon} size={28} color={Colors.textMuted} />
           )}
+          {/* Over the cover, glyph included: a media on its way often has no
+              picture yet, and the sweep has to be visible on the fallback too. */}
+          {isProcessing ? (
+            <MediaProcessingSweep
+              width={COVER_WIDTH}
+              animated={!processingStalled}
+            />
+          ) : null}
         </View>
 
         <View style={styles.cardTextSection}>

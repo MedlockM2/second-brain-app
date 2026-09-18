@@ -17,8 +17,10 @@ import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
 import { useShareIntake } from "../../src/contexts/ShareIntentContext";
 import { usePurchases } from "../../src/contexts/PurchasesContext";
-import { useMediaPolling } from "../../src/hooks/useMediaPolling";
+import { useMediaList } from "../../src/hooks/useMediaList";
 import { useHomeSections } from "../../src/hooks/useHomeSections";
+import { useProcessingRefresh } from "../../src/hooks/useProcessingRefresh";
+import { isProcessingLibraryStatus } from "../../src/components/MediaProcessingSweep";
 import { t, tCount, useTranslation } from "../../src/i18n";
 import { AddSourceSheet } from "../../src/components/AddSourceSheet";
 import { UrlEntryDialog } from "../../src/components/UrlEntryDialog";
@@ -64,10 +66,15 @@ import type { RecentEngagement } from "../../src/types/engagements";
  * thing on this screen with a backlog behind it.
  *
  * Two sources feed it and each fails alone: "Recently added" comes from the
- * media list `useMediaPolling` holds, while `useHomeSections` brings the
+ * media list `useMediaList` holds, while `useHomeSections` brings the
  * engagement row and the folders behind the unsorted count. Only the very
  * first media fetch may show a full-screen spinner; no row ever shows one,
  * because a row with nothing to say is simply absent.
+ *
+ * The media list re-reads itself while a tile of "Recently added" is still being
+ * processed, and stops as soon as none is (`useProcessingRefresh`, task-405): a
+ * media shared from another app used to keep its loading marker until the user
+ * opened it and came back.
  *
  * Also hosts the ingestion gestures (task-264): a camera button that shoots
  * straight away, and an "add" button opening the choice between a link, a file
@@ -136,9 +143,30 @@ export default function InboxScreen() {
     refresh,
     refetch,
     retry,
-  } = useMediaPolling();
+  } = useMediaList();
   const { continueLearning, folders, refresh: refreshSections } =
     useHomeSections();
+
+  const recentTiles = useMemo(() => buildRecentlyAdded(items), [items]);
+
+  /**
+   * Whether a tile of "Recently added" is still being processed.
+   *
+   * Read off the twelve tiles the row actually holds rather than off the whole
+   * list: a media that fell past the cap is not on this screen, and polling for
+   * something the user cannot see is exactly the recurring request this app
+   * declined to make.
+   */
+  const hasProcessing = useMemo(
+    () =>
+      recentTiles.some(
+        (tile) => tile.kind === "media" && isProcessingLibraryStatus(tile.status),
+      ),
+    [recentTiles],
+  );
+
+  const { isStalled: isProcessingStalled, rearm: rearmProcessingRefresh } =
+    useProcessingRefresh({ hasProcessing, refetch });
 
   // Silent refetch when the screen gains focus (multi-device sync). Uses the
   // non-spinner variant so we don't show the pull-to-refresh indicator just
@@ -158,7 +186,11 @@ export default function InboxScreen() {
     // Both, together: the spinner belongs to the gesture, not to one endpoint,
     // and `refreshSections` never rejects.
     await Promise.all([refresh(), refreshSections()]);
-  }, [refresh, refreshSections]);
+    // The gesture is also what gives a spent refresh budget another one: a media
+    // that outlived it is still on its way, and pulling down is how the user asks
+    // again (task-404 §7.4).
+    rearmProcessingRefresh();
+  }, [refresh, refreshSections, rearmProcessingRefresh]);
 
   const handleUnsortedReviewPress = useCallback(() => {
     router.push("/media/unsorted-review");
@@ -255,8 +287,6 @@ export default function InboxScreen() {
     () => continueLearning.map(toEngagementTile),
     [continueLearning],
   );
-
-  const recentTiles = useMemo(() => buildRecentlyAdded(items), [items]);
 
   /**
    * How many media are waiting in the default folder.
@@ -356,6 +386,7 @@ export default function InboxScreen() {
             title={t("home.recentlyAdded")}
             tiles={recentTiles}
             onTilePress={handleTilePress}
+            processingStalled={isProcessingStalled}
           />
         )}
 
@@ -509,6 +540,11 @@ interface TileRowProps {
   title: string;
   tiles: HomeTileItem[];
   onTilePress: (item: HomeTileItem) => void;
+  /**
+   * Forwarded to every tile of the row. Only "Recently added" sets it: the
+   * engagement row carries no status, so none of its tiles has a marker to still.
+   */
+  processingStalled?: boolean;
 }
 
 /**
@@ -519,7 +555,14 @@ interface TileRowProps {
  * Ionicon rather than an emoji: Ionicons is the app's icon language everywhere
  * else, and an emoji renders differently on each platform.
  */
-function TileRow({ testID, icon, title, tiles, onTilePress }: TileRowProps) {
+function TileRow({
+  testID,
+  icon,
+  title,
+  tiles,
+  onTilePress,
+  processingStalled = false,
+}: TileRowProps) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -532,7 +575,13 @@ function TileRow({ testID, icon, title, tiles, onTilePress }: TileRowProps) {
         testID={testID}
         data={tiles}
         keyExtractor={(tile) => `${tile.kind}:${tile.id}`}
-        renderItem={({ item }) => <HomeTile item={item} onPress={onTilePress} />}
+        renderItem={({ item }) => (
+          <HomeTile
+            item={item}
+            onPress={onTilePress}
+            processingStalled={processingStalled}
+          />
+        )}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.rowContent}

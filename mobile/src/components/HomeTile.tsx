@@ -6,16 +6,12 @@ import { Colors, Typography, Spacing, BorderRadius } from "../constants/theme";
 import type { MediaType } from "../types/media";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
-import {
-  MediaFailureBadge,
-  describeWithFailure,
-  isFailedLibraryStatus,
-} from "./MediaFailureBadge";
+import { MediaFailureBadge, describeWithFailure } from "./MediaFailureBadge";
 import {
   MediaProcessingSweep,
   describeWithProcessing,
-  isProcessingLibraryStatus,
 } from "./MediaProcessingSweep";
+import { mediaStatusMarker, type MediaStatusMarker } from "../lib/mediaStatusMarker";
 import { t, tCount } from "../i18n";
 
 /**
@@ -131,9 +127,9 @@ export type HomeTileItem =
       cacheKey: string;
       mediaType: MediaType;
       /**
-       * Lifecycle of the library entry, of which the tile reads two values:
-       * `failed` earns a marker over the cover (task-381), and a non-terminal
-       * one earns the processing sweep (task-402).
+       * Lifecycle of the library entry, read through `mediaStatusMarker`: `failed`
+       * earns a marker over the cover (task-381), `pending` and `processing` earn
+       * the processing sweep (task-402), `ready` and an absent value earn neither.
        *
        * Optional, and set by "Recently added" alone. The engagement row that feeds
        * "Continue learning" carries no status on the wire — an item you have
@@ -154,9 +150,20 @@ export type HomeTileItem =
 interface HomeTileProps {
   item: HomeTileItem;
   onPress: (item: HomeTileItem) => void;
+  /**
+   * The refresh budget of `useProcessingRefresh` is spent and something on the row
+   * is still on its way. The processing marker then stops moving without going
+   * away (task-404 §7.4). Nothing else about the tile changes: this is not a
+   * failure, and the tile says nothing it did not say a second earlier.
+   */
+  processingStalled?: boolean;
 }
 
-export function HomeTile({ item, onPress }: HomeTileProps): React.JSX.Element {
+export function HomeTile({
+  item,
+  onPress,
+  processingStalled = false,
+}: HomeTileProps): React.JSX.Element {
   return (
     <Pressable
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
@@ -164,7 +171,7 @@ export function HomeTile({ item, onPress }: HomeTileProps): React.JSX.Element {
       accessibilityLabel={describeTile(item)}
       accessibilityRole="button"
     >
-      <TileCover item={item} />
+      <TileCover item={item} processingStalled={processingStalled} />
       <Text style={styles.title} numberOfLines={TILE_TITLE_MAX_LINES}>
         {tileTitle(item)}
       </Text>
@@ -179,7 +186,13 @@ export function HomeTile({ item, onPress }: HomeTileProps): React.JSX.Element {
 
 // --- Cover ---
 
-function TileCover({ item }: { item: HomeTileItem }): React.JSX.Element {
+function TileCover({
+  item,
+  processingStalled,
+}: {
+  item: HomeTileItem;
+  processingStalled: boolean;
+}): React.JSX.Element {
   // Keyed by tile id rather than a bare boolean: a horizontal `FlatList` cell is
   // recycled, and a failure recorded for the previous tile must not hide the
   // next one's cover.
@@ -225,29 +238,25 @@ function TileCover({ item }: { item: HomeTileItem }): React.JSX.Element {
         </View>
       ) : null}
       {marker === "processing" ? (
-        <MediaProcessingSweep width={TILE_WIDTH} />
+        <MediaProcessingSweep
+          width={TILE_WIDTH}
+          animated={!processingStalled}
+        />
       ) : null}
     </View>
   );
 }
 
 /**
- * Which of the two status markers a tile shows, or neither — resolved in one
- * place so the answer cannot be "both".
+ * Which of the two status markers a tile shows, or neither.
  *
- * The two predicates are already disjoint (`failed` on one side, the three
- * non-terminal statuses on the other), but reading them into a single value is
- * what keeps them that way: the cover and the accessibility label then branch on
- * the same answer instead of each asking their own pair of questions. A folder
- * has no import of its own, so it never carries a marker.
+ * A folder has no import of its own, so it never carries a marker; for a media
+ * the answer is `mediaStatusMarker`'s, shared with the library / search row so
+ * both surfaces read one status the same way.
  */
-type TileStatusMarker = "failed" | "processing" | null;
-
-function tileStatusMarker(item: HomeTileItem): TileStatusMarker {
+function tileStatusMarker(item: HomeTileItem): MediaStatusMarker {
   if (item.kind === "folder") return null;
-  if (isFailedLibraryStatus(item.status)) return "failed";
-  if (isProcessingLibraryStatus(item.status)) return "processing";
-  return null;
+  return mediaStatusMarker(item.status);
 }
 
 /**

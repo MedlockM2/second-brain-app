@@ -10,7 +10,7 @@ import type { Folder } from "../types/organization";
  *
  * The point of the hook is *independence*. Several screens' worth of content
  * share one scroll view, and a folders endpoint that 500s must not take the
- * engagement row down with it, nor blank the media list that `useMediaPolling`
+ * engagement row down with it, nor blank the media list that `useMediaList`
  * fetches separately. So each source keeps its own state and its own failure,
  * and a failure resolves to "this section has nothing", never to an exception
  * crossing into another one.
@@ -76,7 +76,7 @@ export function useHomeSections(): UseHomeSectionsResult {
     isMountedRef.current = true;
 
     // Deferred by a tick rather than called in the effect body, the same shape
-    // `useMediaPolling` uses: a `setState` reached synchronously from an effect
+    // `useMediaList` uses: a `setState` reached synchronously from an effect
     // cascades a render, and the lint rule that says so is on.
     let initialFetchTimer: ReturnType<typeof setTimeout> | null = null;
     if (isAuthenticated) {

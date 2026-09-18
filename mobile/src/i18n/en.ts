@@ -94,6 +94,13 @@ export const en = {
   "mediaStatus.processingSubtitle": "Processing",
   "mediaStatus.a11yProcessing": "{label}. Processing.",
 
+  // --- Android notification channels (task-405) ---
+  // The category label Android shows in the app's notification settings, which is
+  // what the user reads when deciding what to mute. The Digest channel reuses the
+  // tab's own name; this one names the event, because there is no screen called
+  // after it. Never shown inside the app.
+  "notifications.mediaReadyChannel": "Ready to read",
+
   // --- Actions on a media item: long press in Library, `…` on its own page ---
   "mediaActions.move.label": "Move",
   "mediaActions.rename.label": "Rename",

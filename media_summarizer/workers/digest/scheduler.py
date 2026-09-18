@@ -49,7 +49,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from media_summarizer.core.models.digest import DigestType
-from media_summarizer.core.services import digest_service
+from media_summarizer.core.services import digest_service, push_notification_dispatch
 from media_summarizer.utils import digest_db, push_token_db, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
@@ -149,9 +149,10 @@ def _notification_message(
     source, no excerpt. The count is enough to make the notification worth
     opening, and everything past that is behind the user's own authentication.
 
-    ``data`` is what the app routes on when the notification is opened — the
-    Digest tab to select, and the period so a stale notification opened days
-    later is still legible in logs.
+    ``data`` is what the app routes on when the notification is opened: ``type``
+    says which screen this notification is about — the app opens nothing for a
+    ``type`` it does not know — then the Digest tab to select, and the period so a
+    stale notification opened days later is still legible in logs.
     """
     plural = "item" if item_count == 1 else "items"
     if digest_type is DigestType.DAILY:
@@ -166,7 +167,9 @@ def _notification_message(
         "user_id": account.user_id,
         "title": title,
         "body": body,
+        "channel_id": push_notification_dispatch.ANDROID_CHANNEL_DIGEST,
         "data": {
+            "type": push_notification_dispatch.NOTIFICATION_TYPE_DIGEST,
             "digest_type": digest_type.value,
             "period_key": period_key,
         },

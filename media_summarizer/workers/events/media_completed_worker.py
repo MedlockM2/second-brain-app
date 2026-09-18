@@ -9,7 +9,11 @@ Media completed events consumer -- content ledger close, watcher fan-out, indexi
   that write the ledger stays at ``reserved`` and every later save of the same
   URL is parked in ``pending`` for ever (task-390).
 - For each media key, fetches watchers and marks their processing state
-- In V1, all user notifications are via mobile app polling; email notifications disabled
+- Announces the readable media to every user who saved it, with one push
+  notification each (task-405): a processing that finishes while the app is closed
+  has no other way to reach the person who asked for it. Success only — a failure
+  returns early below, and a save that could not be processed is news the user
+  finds in the app, not an interruption. Email notifications stay disabled.
 
 Search indexing (Algolia) is decoupled from the watcher loop:
 - The submitting user (resolved from the event's canonical_job_id) is ALWAYS indexed,
@@ -26,6 +30,9 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
+from media_summarizer.core.services.push_notification_dispatch import (
+    enqueue_media_ready_notification,
+)
 from media_summarizer.core.services.search_index_dispatch import (
     enqueue_transcript_indexing,
 )
@@ -293,6 +300,12 @@ async def process_event(message: Dict[str, Any]) -> None:
             media_item_id=canonical_job.media_item_id,
             user_id=canonical_job.user_id,
         )
+        # The library id again, and for a second reason: it is what the tap on the
+        # notification opens.
+        await enqueue_media_ready_notification(
+            user_id=canonical_job.user_id,
+            media_item_id=canonical_job.media_item_id,
+        )
         indexed_user_ids.add(canonical_job.user_id)
     elif not canonical_job_id:
         log_event(
@@ -332,7 +345,8 @@ async def process_event(message: Dict[str, Any]) -> None:
             except Exception as e:
                 logger.error(f"Failed to update processing job {job_id}: {e}")
 
-            # Mark watcher as processed (for deduplication; notifications via mobile polling in V1)
+            # Mark watcher as processed. Deduplication of the fan-out itself: the
+            # notification below is deduplicated separately, by `indexed_user_ids`.
             try:
                 await media_watchers.mark_watcher_processed(media_key, w.get("user_id"))
                 logger.info(f"Marked watcher {w.get('user_id')} as processed for media key {media_key}")
@@ -373,6 +387,16 @@ async def process_event(message: Dict[str, Any]) -> None:
                         getattr(job, "media_item_id", None) if job else None
                     ),
                     user_id=watcher_user_id,
+                )
+                # One notification per person, not per content: this user saved the
+                # media themselves and their own library row is what a tap opens.
+                # The dedup set is what stops the submitter being told twice when
+                # they are also a watcher of the same content.
+                await enqueue_media_ready_notification(
+                    user_id=watcher_user_id,
+                    media_item_id=(
+                        getattr(job, "media_item_id", None) if job else None
+                    ),
                 )
                 indexed_user_ids.add(watcher_user_id)
 

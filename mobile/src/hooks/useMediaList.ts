@@ -5,7 +5,7 @@ import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { t } from "../i18n";
 import type { MediaListItem } from "../types/media";
 
-export interface UseMediaPollingResult {
+export interface UseMediaListResult {
   /** Backend media items */
   items: MediaListItem[];
   /** Whether the initial fetch is in progress */
@@ -16,20 +16,27 @@ export interface UseMediaPollingResult {
   error: string | null;
   /** Pull-to-refresh handler — flips isRefreshing to drive the visible spinner */
   refresh: () => Promise<void>;
-  /** Silent background refetch — does NOT toggle isRefreshing (use on focus) */
+  /**
+   * Silent re-read of the list — does **not** toggle `isRefreshing`, so nothing
+   * on screen moves. Used on focus and by every tick of `useProcessingRefresh`,
+   * which is what lets a vignette settle from "on its way" to "ready" while the
+   * user is looking at it.
+   */
   refetch: () => Promise<void>;
   /** Retry after an error */
   retry: () => void;
 }
 
 /**
- * Custom hook that manages media list fetching without polling.
+ * The account's media list: fetched on mount, re-read on demand.
  *
- * V1 design: no recurring network requests while the inbox is open.
- * - Fetches once on mount
- * - Exposes refresh() for pull-to-refresh and focus-based refetch
+ * Nothing recurring lives here. *When* the list is worth re-reading is a question
+ * about what is on it and which screen is showing it, which is
+ * `useProcessingRefresh`'s job — it calls `refetch` on a bounded schedule for as
+ * long as a visible vignette is still being processed, and stops. This hook only
+ * has to make that re-read silent, which `refetch` is.
  */
-export function useMediaPolling(): UseMediaPollingResult {
+export function useMediaList(): UseMediaListResult {
   const { isAuthenticated } = useAuth();
 
   const [backendItems, setBackendItems] = useState<MediaListItem[]>([]);

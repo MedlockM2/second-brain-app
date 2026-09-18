@@ -59,6 +59,7 @@ export const nl: Catalog = {
   // --- Verwerking bezig, op de tegel van de startpagina (task-402) ---
   "mediaStatus.processingSubtitle": "Wordt verwerkt",
   "mediaStatus.a11yProcessing": "{label}. Wordt verwerkt.",
+  "notifications.mediaReadyChannel": "Klaar om te lezen",
   "mediaActions.move.label": "Verplaatsen",
   "mediaActions.rename.label": "Hernoemen",
   "mediaActions.delete.label": "Verwijderen",

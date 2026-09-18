@@ -1,4 +1,4 @@
-"""Push notification consumer: hands a Digest notification to Expo.
+"""Push notification consumer: hands a notification to Expo.
 
 The delivery path chosen by task-368 and validated by the owner is **Option 1 —
 Expo Push Service, one token per device, a single SQS consumer inside the
@@ -7,8 +7,15 @@ with ``DelaySeconds=900``**. This module is that consumer.
 
 Expo, and not APNs and FCM directly, because a direct integration means holding
 an APNs signing key and an FCM service account, minting JWTs, and writing two
-payload dialects — for a product whose entire push surface is two notifications
-a week. Expo already holds the credentials the EAS build was signed with.
+payload dialects — for a push surface of two Digest notifications a week and one
+line when a saved source becomes readable. Expo already holds the credentials the
+EAS build was signed with.
+
+**It knows nothing about what it is delivering.** A message names a title, a body,
+an Android channel and a ``data`` blob; which of those a Digest and a ready source
+put in them belongs to their producers (``workers/digest/scheduler.py`` and
+``core/services/push_notification_dispatch.py``). Adding a third kind of
+notification is a third producer, not a branch here.
 
 **Two message shapes on one queue.** A ``send`` message names a user and the
 notification to deliver; a ``receipt_check`` message names the tickets a previous
@@ -42,6 +49,7 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 import httpx
 
+from media_summarizer.core.services import push_notification_dispatch
 from media_summarizer.utils import push_token_db, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import (
@@ -82,18 +90,13 @@ ERROR_DEVICE_NOT_REGISTERED = "DeviceNotRegistered"
 #: a perfectly valid state.
 EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN", "").strip()
 
-#: The Android notification channel this notification belongs to. Created by the
-#: app in ``mobile/src/services/pushNotificationService.ts`` before it ever asks
-#: for a token, and the two strings must agree: a channel id Android does not know
-#: falls back to expo-notifications' own "Miscellaneous" channel
-#: (``BaseNotificationBuilder.FALLBACK_CHANNEL_ID``), so the notification still
-#: arrives but under a category the user cannot recognise — and the per-category
-#: mute Android offers stops working as a Digest mute.
-#:
-#: One channel, because the app sends one kind of notification. Named "digest"
-#: rather than "default" because the *name* is what Android shows in the app's
-#: notification settings, and a category called "default" tells the user nothing.
-ANDROID_CHANNEL_ID = "digest"
+#: The channel a message that names none falls back to. Both channels are declared
+#: in ``core/services/push_notification_dispatch.py``, next to the producer that
+#: needs them; this one is repeated here only as the default, because an Android
+#: payload with no ``channelId`` lands in expo-notifications' own "Miscellaneous"
+#: channel (``BaseNotificationBuilder.FALLBACK_CHANNEL_ID``) — a category the user
+#: cannot recognise, and one the per-category mute cannot be used on.
+DEFAULT_ANDROID_CHANNEL_ID = push_notification_dispatch.ANDROID_CHANNEL_DIGEST
 
 
 def _expo_headers() -> Dict[str, str]:
@@ -171,6 +174,7 @@ async def _handle_send(body: Dict[str, Any]) -> None:
         return
 
     data = body.get("data") or {}
+    channel_id = body.get("channel_id") or DEFAULT_ANDROID_CHANNEL_ID
     tokens = await push_token_db.list_tokens_for_user(user_id)
     if not tokens:
         # The normal state for an account that never granted the permission, or
@@ -181,7 +185,7 @@ async def _handle_send(body: Dict[str, Any]) -> None:
             "push_notification.no_device",
             "No registered device for this account",
             user_id=user_id,
-            digest_type=data.get("digest_type"),
+            notification_kind=data.get("type"),
         )
         return
 
@@ -196,7 +200,7 @@ async def _handle_send(body: Dict[str, Any]) -> None:
             "body": message_body,
             "data": data,
             "sound": "default",
-            "channelId": ANDROID_CHANNEL_ID,
+            "channelId": channel_id,
         }
         response = await _post_to_expo(EXPO_SEND_URL, payload)
 
@@ -248,7 +252,7 @@ async def _handle_send(body: Dict[str, Any]) -> None:
         "push_notification.sent",
         "Push notification handed to Expo",
         user_id=user_id,
-        digest_type=data.get("digest_type"),
+        notification_kind=data.get("type"),
         period_key=data.get("period_key"),
         device_count=len(tokens),
         accepted_count=len(accepted),

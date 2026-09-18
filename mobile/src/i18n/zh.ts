@@ -58,6 +58,7 @@ export const zh: Catalog = {
   // --- 处理中的状态，显示在首页图块上（task-402） ---
   "mediaStatus.processingSubtitle": "正在处理",
   "mediaStatus.a11yProcessing": "{label}。正在处理。",
+  "notifications.mediaReadyChannel": "可以阅读了",
   "mediaActions.move.label": "移动",
   "mediaActions.rename.label": "重命名",
   "mediaActions.delete.label": "删除",

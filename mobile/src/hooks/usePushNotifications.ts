@@ -1,5 +1,5 @@
 /**
- * The two things the app owes the Digest notification path: a registered device,
+ * The two things the app owes the push notification path: a registered device,
  * and somewhere to land when a notification is opened.
  *
  * Registration is attempted once per signed-in account, and retried on every
@@ -18,7 +18,10 @@ import { useCallback, useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
-import { registerForPushNotifications } from "../services/pushNotificationService";
+import {
+  MEDIA_READY_NOTIFICATION_TYPE,
+  registerForPushNotifications,
+} from "../services/pushNotificationService";
 
 export function usePushNotifications(userId: string | null): void {
   const router = useRouter();
@@ -86,16 +89,36 @@ export function usePushNotifications(userId: string | null): void {
     if (handledResponseRef.current === identifier) return;
     handledResponseRef.current = identifier;
 
-    // `data.digest_type` is written by `workers/digest/scheduler.py`. Anything
-    // that is not the weekly Digest opens the daily one — the tab has to open on
-    // something, and the daily is what the screen already defaults to.
-    const tab = content.data?.digest_type === "weekly" ? "weekly" : "daily";
+    // `data.type` is written by every producer on the backend
+    // (`core/services/push_notification_dispatch.py`) and says which screen the
+    // notification is about. A shape this does not recognise routes nowhere: the
+    // app has no default destination for a notification it cannot read, and
+    // opening a tab at random would be worse than opening none.
+    const { data } = content;
+    const target = ((): Parameters<typeof router.navigate>[0] | null => {
+      if (data?.type === MEDIA_READY_NOTIFICATION_TYPE) {
+        // The library id of the media that became readable. One notification per
+        // media, so there is always exactly one to open.
+        const mediaItemId = data.media_item_id;
+        if (typeof mediaItemId !== "string" || !mediaItemId) return null;
+        return `/media/${mediaItemId}`;
+      }
+      if (data?.type === "digest") {
+        // Anything that is not the weekly Digest opens the daily one — the tab has
+        // to open on something, and the daily is what the screen already defaults
+        // to.
+        const tab = data.digest_type === "weekly" ? "weekly" : "daily";
+        return { pathname: "/(tabs)/digest", params: { tab } };
+      }
+      return null;
+    })();
+    if (!target) return;
 
     // Deferred by a tick, exactly as `ShareIntentContext` defers its own: this
     // hook is mounted above the navigator, and on a cold start the effect can run
     // before the root navigation state exists.
     const timer = setTimeout(() => {
-      router.navigate({ pathname: "/(tabs)/digest", params: { tab } });
+      router.navigate(target);
     }, 0);
     return () => clearTimeout(timer);
   }, [lastResponse, router, userId]);

@@ -1,12 +1,13 @@
 /**
- * Device registration for Digest push notifications — the client half of the
- * delivery path task-368 settled on: **Expo Push Service, one token per device**.
+ * Device registration for push notifications — the client half of the delivery
+ * path task-368 settled on: **Expo Push Service, one token per device**.
  *
  * The app's entire role is to obtain that token and hand it to the backend. It
  * never sends a notification, never schedules one locally and never polls: the
- * decision of *when* a Digest is worth announcing belongs to
+ * decision of *when* something is worth announcing belongs to the backend —
  * `workers/digest/scheduler.py`, which knows the account's time zone and the
- * contents of the period.
+ * contents of the period, and `workers/events/media_completed_worker.py`, which
+ * knows when a saved media became readable.
  *
  * **A refusal is a normal outcome, not a failure.** Every path here resolves to
  * one of three outcomes, none of them throws at the caller for a permission
@@ -37,17 +38,34 @@ import { t } from "../i18n";
 export type PushRegistrationOutcome = "registered" | "denied" | "unavailable";
 
 /**
- * The Android notification channel every Digest notification belongs to.
+ * The `data.type` of a notification announcing that a saved media finished
+ * processing (task-404, livrable D).
  *
- * The same string is `ANDROID_CHANNEL_ID` in
- * `media_summarizer/workers/push_notification_worker.py`, which puts it in the
- * `channelId` of the Expo payload. A channel id Android does not know falls back
- * to expo-notifications' own "Miscellaneous" channel, so a mismatch would not
- * lose the notification — it would file it under a category the user cannot
- * recognise, and the per-category mute Android offers would stop working as a way
- * to mute the Digest.
+ * Read in two places, which is why it is exported: `useProcessingRefresh`, which
+ * turns one arriving in the foreground into a silent re-read of the list, and
+ * `usePushNotifications`, which routes a tap on it to the media rather than to the
+ * Digest. The producer is `enqueue_media_ready_notification` in
+ * `media_summarizer/core/services/push_notification_dispatch.py`.
  */
-const ANDROID_CHANNEL_ID = "digest";
+export const MEDIA_READY_NOTIFICATION_TYPE = "media_ready";
+
+/**
+ * The Android notification channel each kind of notification belongs to.
+ *
+ * The same two strings are in
+ * `media_summarizer/core/services/push_notification_dispatch.py`, which puts one
+ * of them in the `channelId` of the Expo payload. A channel id Android does not
+ * know falls back to expo-notifications' own "Miscellaneous" channel, so a
+ * mismatch would not lose the notification — it would file it under a category
+ * the user cannot recognise, and the per-category mute Android offers would stop
+ * working.
+ *
+ * Two channels rather than one because that mute is per channel: someone who is
+ * happy to be told a source is ready but does not want a daily Digest has to be
+ * able to say so, and a single category would make it one choice for both.
+ */
+const ANDROID_CHANNEL_DIGEST = "digest";
+const ANDROID_CHANNEL_MEDIA_READY = MEDIA_READY_NOTIFICATION_TYPE;
 
 /**
  * The token this process registered, or null.
@@ -72,19 +90,35 @@ let hasRequestedPermission = false;
 /**
  * How a notification arriving while the app is open should behave.
  *
- * Set at import time, before anything can arrive. Shown, because a Digest that
- * lands while the user is in the app is the same information as one that lands on
- * the lock screen, and tapping it is how they get to it. Silent and badgeless: it
- * is a daily summary, not a message, and nothing in this app ever sets a badge
- * count — so asking for the badge permission would be asking for something unused.
+ * Set at import time, before anything can arrive. A Digest is **shown**, because
+ * one that lands while the user is in the app is the same information as one that
+ * lands on the lock screen, and tapping it is how they get to it.
+ *
+ * A "media ready" notification is **not**: the user is already looking at the app,
+ * and what they want from it is the vignette settling, not a banner telling them
+ * to open a screen they have open. `useProcessingRefresh` listens for the same
+ * notification and re-reads the list silently, which is the whole of its
+ * foreground behaviour (task-404, livrable D). Suppressing it here is also what
+ * keeps the guarantee honest when the poll's budget is spent: a media that took
+ * ten minutes still resolves on screen, because the push arrives whatever the
+ * processing duration.
+ *
+ * Silent and badgeless in both cases: nothing in this app ever sets a badge count
+ * — so asking for the badge permission would be asking for something unused.
  */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const silent =
+      notification.request.content.data?.type === MEDIA_READY_NOTIFICATION_TYPE;
+    return {
+      shouldShowBanner: !silent,
+      // Not in the shade either: a notification the user cannot act on any better
+      // than by looking at the screen they are on has nothing to be kept for.
+      shouldShowList: !silent,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 /** The platform value the backend records, or null off a real device platform. */
@@ -95,7 +129,7 @@ function devicePlatform(): "ios" | "android" | null {
 }
 
 /**
- * Create the Digest channel on Android. A no-op everywhere else.
+ * Create the two channels on Android. A no-op everywhere else.
  *
  * Before the token is ever requested, so no notification can reach the device
  * ahead of the channel it names. Creating a channel that already exists is how
@@ -103,14 +137,20 @@ function devicePlatform(): "ios" | "android" | null {
  * an existing channel can change afterwards, everything else the user owns from
  * then on, which is why importance is set once and never adjusted.
  */
-async function ensureAndroidChannel(): Promise<void> {
+async function ensureAndroidChannels(): Promise<void> {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_DIGEST, {
     // The category label in Android's per-app notification settings. Reuses the
     // tab's own name so the user recognises what they are muting.
     name: t("tabs.digest"),
     // DEFAULT, not HIGH: a Digest belongs in the shade, not in a heads-up banner
     // over whatever the person is doing.
+    importance: Notifications.AndroidImportance.DEFAULT,
+  });
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_MEDIA_READY, {
+    name: t("notifications.mediaReadyChannel"),
+    // DEFAULT for the same reason, and it is the ceiling of what this one deserves
+    // anyway: the user asked for the media, so its arrival is expected news.
     importance: Notifications.AndroidImportance.DEFAULT,
   });
 }
@@ -142,7 +182,7 @@ export async function registerForPushNotifications(): Promise<PushRegistrationOu
   const platform = devicePlatform();
   if (!platform || !Config.EAS_PROJECT_ID) return "unavailable";
 
-  await ensureAndroidChannel();
+  await ensureAndroidChannels();
 
   if (!(await ensurePermission())) return "denied";
 

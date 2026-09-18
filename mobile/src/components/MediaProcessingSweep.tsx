@@ -32,15 +32,15 @@ import { t } from "../i18n";
  * well above a generic spinner's ~800 ms because "Amber Clarity … rejects the
  * frantic energy of modern social interfaces" (DESIGN.md §1).
  *
- * The band carries no text and no accessible node: the tile announces the state
- * inside its single label (see `describeWithProcessing`) and prints it in its
- * subtitle line, so a screen reader must not stop here as well.
+ * The band carries no text and no accessible node: the vignette announces the
+ * state inside its single label (see `describeWithProcessing`) and prints it in
+ * its subtitle line, so a screen reader must not stop here as well.
  *
- * One thing it cannot do is stop on its own. `useMediaPolling` fetches once on
- * mount and then only refetches when the screen regains focus ("V1 design: no
- * recurring network requests while the inbox is open"), so the sweep keeps
- * running until the next refetch even if the server finished in the meantime.
- * That is a property of the repo today, not of this component.
+ * It stops when the vignette stops being drawn with it, which `useProcessingRefresh`
+ * now guarantees: the list it sits in is re-read every few seconds for as long as
+ * anything on it is on its way, so a media that finished server-side loses its
+ * band on the next tick. `animated={false}` is the one case where the marker
+ * outlives the movement — see the prop.
  */
 
 /**
@@ -79,19 +79,33 @@ interface MediaProcessingSweepProps {
    * a frame with no band on it for no gain.
    */
   width: number;
+  /**
+   * Whether the band moves.
+   *
+   * `false` is the marker of a media still on its way once the refresh budget of
+   * `useProcessingRefresh` is spent: the movement stops, because an animation
+   * that runs for ever is the very complaint this work answers, but the marker
+   * stays, because a vignette that lost it would read as ready when it is not.
+   * The material is then the whole cover rather than a band — the same rendering
+   * the reduce-motion setting gets, and for the same reason: this variant carries
+   * neither badge nor icon, so the veil is the only signal it has.
+   */
+  animated?: boolean;
 }
 
 export function MediaProcessingSweep({
   width,
+  animated = true,
 }: MediaProcessingSweepProps): React.JSX.Element {
   const reduceMotion = useReduceMotion();
+  const still = !animated || reduceMotion;
   // Not a ref: an Animated.Value is created once and read during render, which
   // is exactly `useMemo` and not `useRef().current`.
   const progress = useMemo(() => new Animated.Value(0), []);
   const bandWidth = Math.round(width * SWEEP_BAND_RATIO);
 
   useEffect(() => {
-    if (reduceMotion) return;
+    if (still) return;
 
     const loop = Animated.loop(
       Animated.timing(progress, {
@@ -106,13 +120,13 @@ export function MediaProcessingSweep({
     // Stopped rather than left running: a horizontal `FlatList` cell is
     // recycled, and an animation nobody draws any more still burns frames.
     return () => loop.stop();
-  }, [progress, reduceMotion]);
+  }, [progress, still]);
 
-  // The user has asked the system for less motion, so the band stops being a
-  // band: the same material covers the whole cover, still sheer, still leaving
-  // the picture legible. Rendering nothing at all would drop the only signal
-  // this variant puts on the cover, since it carries neither badge nor icon.
-  if (reduceMotion) {
+  // No movement, for either of the two reasons: the user asked the system for
+  // less motion, or the refresh budget is spent. The band stops being a band and
+  // the same material covers the whole cover, still sheer, still leaving the
+  // picture legible.
+  if (still) {
     return (
       <View style={styles.overlay} pointerEvents="none" accessible={false}>
         <SweepMaterial />
@@ -215,17 +229,24 @@ function useReduceMotion(): boolean {
 /**
  * The library-entry statuses that are still on their way, and the only ones.
  *
- * Sibling of `isFailedLibraryStatus`, and disjoint from it by construction:
- * `ready_for_artifacts` is the norm and `failed` has its own marker, so neither
- * belongs here. `cancelled` is left out too, and that is a decision rather than
- * an omission — a cancelled import is not on its way any more, and sweeping its
- * cover would promise a result that is never coming. A vignette with no status
- * at all is a search hit or an engagement entry, which carry none by contract.
+ * A whitelist of the two, not a blacklist of the terminal pair, and the task-404
+ * decision (§7.1) is explicit about why: `GET /api/media` serves
+ * `UserMediaStatus`, whose whole domain is `pending | processing | ready |
+ * failed`, and the field is **nullable by contract** — `null` is what a row
+ * written by a future producer or degraded by `from_dynamodb_item` reads as. So
+ * `status !== "ready" && status !== "failed"` would sweep `null` for ever, on a
+ * media that is not on its way at all.
+ *
+ * `pending` is the state of every media that has just been saved and is
+ * therefore the one that matters most here: it used to fall outside this
+ * predicate, so a freshly shared source was drawn as a finished one — no band, no
+ * subtitle — until the first `mirror_job` moved it to `processing`.
+ *
+ * Sibling of `isFailedLibraryStatus` and disjoint from it by construction, which
+ * is what lets `mediaStatusMarker` answer with one value.
  */
 export function isProcessingLibraryStatus(status?: string | null): boolean {
-  return (
-    status === "ingested" || status === "resolving" || status === "processing"
-  );
+  return status === "pending" || status === "processing";
 }
 
 /**
