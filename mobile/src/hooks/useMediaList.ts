@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
 import { MediaService } from "../services/mediaService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { t } from "../i18n";
@@ -35,6 +36,11 @@ export interface UseMediaListResult {
  * `useProcessingRefresh`'s job — it calls `refetch` on a bounded schedule for as
  * long as a visible vignette is still being processed, and stops. This hook only
  * has to make that re-read silent, which `refetch` is.
+ *
+ * The one thing it does listen to is a save being created (`mediaSaveNotice`),
+ * because that is the one fact no schedule can infer: a list already read cannot
+ * poll for a media it has never seen. Still not a policy — one notice, one silent
+ * re-read.
  */
 export function useMediaList(): UseMediaListResult {
   const { isAuthenticated } = useAuth();
@@ -89,6 +95,18 @@ export function useMediaList(): UseMediaListResult {
       if (isMountedRef.current) {
         setIsLoading(false);
       }
+    });
+  }, [fetchMedia]);
+
+  // A save created after this list was read. It happens on every share that
+  // arrived on a signed-out session: the ingestion starts once the user has
+  // signed in, which is after this screen mounted and read itself, and the
+  // confirmation modal closes on either answer without waiting for it. This
+  // re-read is what puts the vignette on screen at all — `useProcessingRefresh`
+  // then takes over and settles it.
+  useEffect(() => {
+    return subscribeToMediaSaves(() => {
+      void fetchMedia();
     });
   }, [fetchMedia]);
 

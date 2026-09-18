@@ -74,7 +74,10 @@ import type { RecentEngagement } from "../../src/types/engagements";
  * The media list re-reads itself while a tile of "Recently added" is still being
  * processed, and stops as soon as none is (`useProcessingRefresh`, task-405): a
  * media shared from another app used to keep its loading marker until the user
- * opened it and came back.
+ * opened it and came back. Both sources also re-read themselves once when a save
+ * is created behind this screen (`mediaSaveNotice`), which no schedule can cover:
+ * a share that arrived on a signed-out session is ingested after this screen has
+ * mounted and read itself, so there was no vignette here to arm anything with.
  *
  * Also hosts the ingestion gestures (task-264): a camera button that shoots
  * straight away, and an "add" button opening the choice between a link, a file

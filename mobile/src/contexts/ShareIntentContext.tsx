@@ -24,6 +24,7 @@ import {
 } from "../services/sharedContentService";
 import { DirectUploadError } from "../services/presignedUpload";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
+import { announceMediaSave } from "../lib/mediaSaveNotice";
 import {
   getQuotaErrorCode,
   getQuotaErrorMessage,
@@ -189,6 +190,14 @@ interface ShareSubmissionTracking {
   appliedFolderId: string | null;
   /** Serializes the folder patches so only the last choice survives. */
   folderSync: Promise<void> | null;
+  /**
+   * True once the modal has let this reception go.
+   *
+   * The submission carries on — nothing is ever cancelled (task-389) — but its
+   * outcome no longer has a screen to land on, which is what decides who tells
+   * the user about it.
+   */
+  released: boolean;
 }
 
 function freshTracking(receptionId: number): ShareSubmissionTracking {
@@ -201,6 +210,7 @@ function freshTracking(receptionId: number): ShareSubmissionTracking {
     desiredFolderId: null,
     appliedFolderId: null,
     folderSync: null,
+    released: false,
   };
 }
 
@@ -851,7 +861,17 @@ export function ShareIntentProvider({
 
   /**
    * Record the save a submission created: what a folder picked during processing
-   * is applied to.
+   * is applied to, and the one moment the app knows a media exists that none of
+   * its lists has seen.
+   *
+   * Both halves are needed for a share that arrived on a signed-out session. The
+   * ingestion only starts once the user has signed in, so the Home screen has
+   * already read its list — from under the login screen it was sent to — by the
+   * time this save exists, and both answers to the folder question close the modal
+   * without waiting for it. Nothing else would ever tell that list to read itself
+   * again: `useProcessingRefresh` is armed by a vignette already on screen, and
+   * there is none. `announceMediaSave` is that missing sentence, and it says one
+   * thing once — see `mediaSaveNotice`.
    */
   const registerSave = useCallback(
     (mediaItemId: string, submittedFolderId: string | null) => {
@@ -859,11 +879,84 @@ export function ShareIntentProvider({
       tracking.saveCreated = true;
       tracking.mediaItemId = mediaItemId || null;
       tracking.appliedFolderId = submittedFolderId;
+      announceMediaSave();
       // The choice may have been made while this submission was still going out,
       // in which case this is what puts it on the save it just created.
       void syncFolder().catch(reportFolderFailure);
     },
     [reportFolderFailure, syncFolder],
+  );
+
+  /**
+   * Whether the modal is still standing in front of this reception, which is what
+   * decides where the outcome of its submission goes.
+   *
+   * Two things take the screen away from a submission still in flight, and
+   * neither cancels it: an answer to the folder question, which closes the modal,
+   * and a second share arriving before the first was answered, which starts a new
+   * reception. Both leave an outcome with nowhere to be drawn.
+   */
+  const isShowing = useCallback(
+    (reception: ShareSubmissionTracking): boolean =>
+      !reception.released &&
+      trackingRef.current.receptionId === reception.receptionId,
+    [],
+  );
+
+  /**
+   * The submission was accepted: the save exists.
+   *
+   * Recorded and announced whatever became of the modal, because both of those
+   * are about the save rather than about the screen. The intake is only moved to
+   * "success" when the modal is still showing this reception — writing a terminal
+   * state onto an intake that was let go would leave the provider claiming a
+   * content it no longer holds.
+   */
+  const reportSaveCreated = useCallback(
+    (
+      reception: ShareSubmissionTracking,
+      mediaItemId: string,
+      submittedFolderId: string | null,
+      deduplicated: boolean,
+    ) => {
+      registerSave(mediaItemId, submittedFolderId);
+      if (!isShowing(reception)) return;
+      setIntake((prev) => ({
+        ...prev,
+        status: "success",
+        message: null,
+        mediaItemId,
+        deduplicated,
+        quotaErrorCode: null,
+      }));
+    },
+    [isShowing, registerSave],
+  );
+
+  /**
+   * The submission was refused, or never arrived.
+   *
+   * Said out loud when the modal is gone, for the same reason a failed folder
+   * patch is: the answer to the folder question closes the screen the moment it is
+   * given, and a save that then fails behind it used to leave nothing at all — no
+   * tile on the Home screen and no account of why, which is indistinguishable from
+   * the app having quietly dropped the content.
+   */
+  const reportSaveFailed = useCallback(
+    (reception: ShareSubmissionTracking, error: unknown, fallback: string) => {
+      const { message, quotaErrorCode } = toSubmissionError(error, fallback);
+      if (!isShowing(reception)) {
+        Alert.alert(t("common.error"), message);
+        return;
+      }
+      setIntake((prev) => ({
+        ...prev,
+        status: "error",
+        message,
+        quotaErrorCode,
+      }));
+    },
+    [isShowing],
   );
 
   const selectFolder = useCallback(
@@ -893,6 +986,9 @@ export function ShareIntentProvider({
 
     const url = intake.url;
     const folderId = selectedFolder?.id ?? null;
+    // Captured before the call goes out: the outcome belongs to this reception,
+    // whatever the modal is standing in front of when it comes back.
+    const reception = trackingRef.current;
     setIntake((prev) => ({ ...prev, status: "submitting" }));
 
     try {
@@ -902,30 +998,19 @@ export function ShareIntentProvider({
         folder_id: folderId,
       });
 
-      registerSave(response.media_item_id, folderId);
-      setIntake((prev) => ({
-        ...prev,
-        status: "success",
-        message: null,
-        mediaItemId: response.media_item_id,
-        deduplicated: false,
-        quotaErrorCode: null,
-      }));
+      reportSaveCreated(reception, response.media_item_id, folderId, false);
       return response.media_item_id;
     } catch (error) {
-      const { message, quotaErrorCode } = toSubmissionError(
-        error,
-        t("share.saveLinkFailed"),
-      );
-      setIntake((prev) => ({
-        ...prev,
-        status: "error",
-        message,
-        quotaErrorCode,
-      }));
+      reportSaveFailed(reception, error, t("share.saveLinkFailed"));
       return null;
     }
-  }, [intake, isAuthenticated, registerSave, selectedFolder]);
+  }, [
+    intake,
+    isAuthenticated,
+    reportSaveCreated,
+    reportSaveFailed,
+    selectedFolder,
+  ]);
 
   /**
    * Submit shared content (text or audio) to the backend via ingest-shared-content.
@@ -949,6 +1034,7 @@ export function ShareIntentProvider({
     if (!isText && !isAudio) return null;
 
     const folderId = selectedFolder?.id ?? null;
+    const reception = trackingRef.current;
     setIntake((prev) => ({ ...prev, status: "submitting" }));
 
     try {
@@ -962,30 +1048,24 @@ export function ShareIntentProvider({
             folderId,
           });
 
-      registerSave(response.media_item_id, folderId);
-      setIntake((prev) => ({
-        ...prev,
-        status: "success",
-        message: null,
-        mediaItemId: response.media_item_id,
-        deduplicated: response.deduplicated ?? false,
-        quotaErrorCode: null,
-      }));
+      reportSaveCreated(
+        reception,
+        response.media_item_id,
+        folderId,
+        response.deduplicated ?? false,
+      );
       return response.media_item_id;
     } catch (error) {
-      const { message, quotaErrorCode } = toSubmissionError(
-        error,
-        t("share.saveContentFailed"),
-      );
-      setIntake((prev) => ({
-        ...prev,
-        status: "error",
-        message,
-        quotaErrorCode,
-      }));
+      reportSaveFailed(reception, error, t("share.saveContentFailed"));
       return null;
     }
-  }, [intake, isAuthenticated, registerSave, selectedFolder]);
+  }, [
+    intake,
+    isAuthenticated,
+    reportSaveCreated,
+    reportSaveFailed,
+    selectedFolder,
+  ]);
 
   /**
    * Upload the pending device file. The extension decided which endpoint it
@@ -1005,35 +1085,25 @@ export function ShareIntentProvider({
     }
 
     const folderId = selectedFolder?.id ?? null;
+    const reception = trackingRef.current;
     setIntake((prev) => ({ ...prev, status: "submitting" }));
 
     try {
       const response = await UploadService.upload(file, { folderId });
 
-      registerSave(response.media_item_id, folderId);
-      setIntake((prev) => ({
-        ...prev,
-        status: "success",
-        message: null,
-        mediaItemId: response.media_item_id,
-        deduplicated: false,
-        quotaErrorCode: null,
-      }));
+      reportSaveCreated(reception, response.media_item_id, folderId, false);
       return response.media_item_id;
     } catch (error) {
-      const { message, quotaErrorCode } = toSubmissionError(
-        error,
-        t("share.importFileFailed"),
-      );
-      setIntake((prev) => ({
-        ...prev,
-        status: "error",
-        message,
-        quotaErrorCode,
-      }));
+      reportSaveFailed(reception, error, t("share.importFileFailed"));
       return null;
     }
-  }, [intake, isAuthenticated, registerSave, selectedFolder]);
+  }, [
+    intake,
+    isAuthenticated,
+    reportSaveCreated,
+    reportSaveFailed,
+    selectedFolder,
+  ]);
 
   /**
    * Send the intake to the endpoint its content type belongs to.
@@ -1136,8 +1206,13 @@ export function ShareIntentProvider({
    * shared by mistake is removed from the inbox like any other. A submission
    * still in flight keeps its tracking too: it is `beginReception` that starts a
    * fresh one, so the folder patch that follows still lands on the right save.
+   *
+   * What the reception does lose is its screen, and it is marked for it: from
+   * here on its outcome goes to the lists and, if it failed, to an alert —
+   * `reportSaveCreated` and `reportSaveFailed` above.
    */
   const dismissIntake = useCallback(() => {
+    trackingRef.current.released = true;
     setIntake(INITIAL_STATE);
     setSelectedFolder(null);
     lastProcessedKeyRef.current = null;
