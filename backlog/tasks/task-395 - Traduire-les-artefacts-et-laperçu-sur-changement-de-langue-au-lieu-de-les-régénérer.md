@@ -3,10 +3,10 @@ id: task-395
 title: >-
   Traduire les artefacts et l'aperçu sur changement de langue au lieu de les
   régénérer
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-10 12:37'
-updated_date: '2026-09-18 10:32'
+updated_date: '2026-09-18 08:35'
 labels:
   - backend
   - artifacts
