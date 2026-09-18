@@ -3,10 +3,10 @@ id: TASK-407
 title: >-
   Reformuler la notification de fin de traitement pour qu'elle nomme le type de
   média
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-18 14:59'
-updated_date: '2026-09-18 18:20'
+updated_date: '2026-09-18 16:17'
 labels:
   - mobile
   - ux
