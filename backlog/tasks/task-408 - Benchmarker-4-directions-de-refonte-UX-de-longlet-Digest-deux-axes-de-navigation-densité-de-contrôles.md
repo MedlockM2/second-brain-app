@@ -66,3 +66,35 @@ La validation visuelle de la direction retenue se fait sur appareil, sur le proc
 - [ ] #10 Aucun chiffre inventé : tout nombre non sourcé ni mesuré est marqué comme estimation avec sa méthode de calcul.
 - [ ] #11 Le livrable est docs/research/task-408-digest-ux-refonte/README.md, front-matter owner_decision: pending et section Owner Validation vide (champs Decision et Validated at prêts à être remplis).
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Dispatch 2026-09-21, mode **initial** : aucun répertoire `docs/research/task-408-*` n'existait, donc
+aucun `README.owner-rejected-*.md` et aucun `complement-request-*.md` à intégrer.
+
+Livrable : `docs/research/task-408-digest-ux-refonte/README.md`, front-matter `owner_decision: pending`,
+section `Owner Validation` laissée vide (`Decision` et `Validated at` prêts à être remplis).
+**La recommandation attend la validation de l'owner** — la tâche reste `To Do` et n'est pas marquée Done.
+
+Quatre maquettes produites, une par direction, selon la convention du dépôt (`code.html` autonome sans
+`<link>`/`<script>`/`<img>`, variables CSS recopiées de `mobile/src/constants/theme.ts` avec commentaire
+de provenance, glyphes Ionicons extraits de la police livrée, cadres aux tailles logiques exactes) :
+
+- `mobile-design-mockups/digest_direction_a_sommaire/` — le digest est une liste, le média est un écran
+- `mobile-design-mockups/digest_direction_b_journal_continu/` — tout se lit sans quitter l'onglet
+- `mobile-design-mockups/digest_direction_c_pages_pleines/` — la pagination devient verticale
+- `mobile-design-mockups/digest_direction_d_fiche_unique/` — le carrousel reste, le scroll disparaît
+
+Recommandation soumise : **direction A**, repli **direction B** si l'owner refuse de sortir de l'onglet
+pour lire. C et D sont incluses pour que le choix de nature (onglet contemplatif / conserver le geste
+horizontal) puisse être fait sciemment.
+
+Les mesures des AC#7 et AC#8 ne sont pas estimées : chaque `code.html` a été rendu dans Chrome headless,
+puis mesuré via une copie jetable instrumentée (la convention interdit un `<script>` dans un `code.html`
+livré). Les chiffres qui portent l'argument : l'écran actuel consomme **448 pt sur 896** avant le contenu
+à 414x896 et **520 pt sur 568** à 320x568 ; A/B descendent à 202/212, C à 68/40, D à 182/192. Le §9 du
+README donne, pour chaque nombre, s'il est mesuré, lu dans le code, calculé, supposé ou compté.
+
+Aucun fichier de `mobile/` n'a été modifié : il a été lu pour l'inventaire (AC#1) et pour les tokens (AC#6).
+<!-- SECTION:NOTES:END -->
