@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
 import { EngagementService } from "../services/engagementService";
 import { OrganizationService } from "../services/organizationService";
 import type { RecentEngagement } from "../types/engagements";
@@ -71,6 +72,15 @@ export function useHomeSections(): UseHomeSectionsResult {
       setFolders(folders.value);
     }
   }, [isAuthenticated]);
+
+  // A save landing behind the screen moves the unsorted figure this hook feeds,
+  // for the same reason it moves the media list next to it: the save exists after
+  // the Home screen read itself. See `mediaSaveNotice`.
+  useEffect(() => {
+    return subscribeToMediaSaves(() => {
+      void refresh();
+    });
+  }, [refresh]);
 
   useEffect(() => {
     isMountedRef.current = true;
