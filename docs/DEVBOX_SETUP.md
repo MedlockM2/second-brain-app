@@ -128,7 +128,8 @@ manquent.
   et `CLAUDE_CONFIG_DIR="$HOME/.claude-bedrock"`, puis fait `exec claude "$@"`.
   À réécrire à la main, avec `chmod +x` et `mkdir -p ~/.claude-bedrock`.
   Troisième profil, isolé de `~/.claude` (compte Mirakl par défaut, §3) et de
-  `~/.claude-pro-perso` (abonnement personnel, `scripts/testflight_session.sh`) :
+  `~/.claude-personal` (abonnement personnel — l'alias `claude-perso` du `~/.zshrc`
+  et `scripts/testflight_session.sh` partagent ce même répertoire) :
   les trois partageraient sinon `~/.claude.json`, dont le cache
   `clientDataCacheSlots` retient le dernier modèle utilisé — `us.anthropic.claude-opus-5`
   sous Bedrock, que l'API Claude.ai des deux autres profils refuse ensuite (même
