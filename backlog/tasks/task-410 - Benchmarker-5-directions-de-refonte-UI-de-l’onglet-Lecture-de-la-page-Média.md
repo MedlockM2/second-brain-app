@@ -56,3 +56,42 @@ Créer le répertoire racine `mobile-design-mockups/media_reading_tab_refonte/`.
 - [ ] #9 Le README de recherche compare les cinq directions selon la lisibilité, la mise en valeur de la couverture, la densité de contrôles, la continuité de lecture, l’accessibilité et la faisabilité React Native, puis formule une recommandation et un repli.
 - [ ] #10 Le livrable de recherche est `docs/research/task-XX-media-reading-tab-refonte/README.md`, avec front-matter `owner_decision: pending` et une section `Owner Validation` prête à être complétée ; la tâche reste à `To Do` dans l’attente de cette décision.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Dispatch 2026-09-26, mode **initial** : aucun répertoire `docs/research/task-410-*` n’existait, donc aucun
+`README.owner-rejected-*.md` ni `complement-request-*.md` à intégrer.
+
+Livrable : `docs/research/task-410-media-reading-tab-refonte/README.md`, front-matter `owner_decision: pending`,
+section `Owner Validation` laissée vide (`Decision` et `Validated at` prêts à être remplis).
+**La recommandation attend la validation de l’owner** — la tâche reste `To Do` et n’est pas marquée Done.
+
+Maquettes : `mobile-design-mockups/media_reading_tab_refonte/`, un `README.md` d’index et cinq sous-répertoires,
+chacun avec un `code.html` autonome (aucun `<script>`, `<link>` ni `<img>`, aucune URL distante) et un `screen.png`
+rendu à 1200 px de large :
+
+- `direction_a_une/` — la couverture pleine largeur ouvre la page, l’aperçu devient le chapeau
+- `direction_b_pochette/` — la page devient une fiche, le texte s’ouvre dans une liseuse
+- `direction_c_bandeau_retractable/` — bandeau sous la barre d’état, qui se rétracte en vignette pendant la lecture
+- `direction_d_texte_dabord/` — vignette des listes, aperçu replié, texte au-dessus du pli
+- `direction_e_apercu_dabord/` — l’aperçu en tête, le texte à la demande, les commandes en bas
+
+Chaque page redessine l’écran actuel en référence, puis montre la direction à 414 x 896 pt et à 320 x 568 pt,
+en lecture, sans couverture (note audio), dans ses états (aperçu en préparation, échec du texte) et le cadrage
+de sa couverture pour un article, un podcast carré et un reel vertical. Les 51 cadres ont été mesurés par une
+sonde injectée dans une copie jetable rendue par Chrome headless : 0 pt de débordement horizontal partout,
+aucune cible tactile sous 48 pt.
+
+Recommandation soumise : **direction A**. Repli : **direction D** (la meilleure somme de rangs sans pondération,
+11 contre 13), écartée en premier choix parce que, telle que dessinée, elle replie l’aperçu (contraire à
+task-363) et réduit la couverture à 2 % de l’écran ; le README laisse à l’owner le réglage de son état initial.
+
+Constats à reprendre quelle que soit la décision : `media_image` et `creator_name` sont dans le contrat détail
+mais ne sont pas rendus ; le libellé d’accessibilité de `SourceChip` est codé en dur en anglais ;
+`CompletedDetailView` est aussi monté par le Digest, d’où la recommandation de faire passer task-409 avant
+task-411.
+
+Aucun fichier de `mobile/` ni de `media_summarizer/` n’a été modifié : ils ont été lus pour l’inventaire (AC#1),
+les tokens (AC#7) et le chemin de l’image (AC#2).
+<!-- SECTION:NOTES:END -->
