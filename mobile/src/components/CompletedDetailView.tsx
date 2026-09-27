@@ -19,8 +19,8 @@
  *     "L'essentiel" (Callout Aside)      ← `SourcePreview`
  *     Full text                          ← `TranscriptReader`
  *
- * Once the band has scrolled away, `MediaReaderBar` fades in over the top: back,
- * a thumbnail, the title, the segment folded to two glyphs, and the reading
+ * Once the Reader | AI segment has scrolled under the top edge, `MediaReaderBar`
+ * fades in over the top: back, a thumbnail, the title, the segment folded to two glyphs, and the reading
  * progress. It replaces the header and the sticky segment the page used to keep
  * on screen. Filing the item moved into the `…` menu with it.
  *
@@ -905,18 +905,13 @@ export function CompletedDetailView({
   });
   const barHeight = topInset + MEDIA_READER_BAR_HEIGHT;
 
-  // --- Scroll: the collapsed bar, its segment, the progress ---
+  // --- Scroll: the collapsed bar, the progress ---
   //
-  // Every threshold is a scroll offset. The bar is fully drawn once the bottom
-  // of the band reaches its own bottom edge, after fading in over the 48pt
-  // before; never earlier than 48pt of scroll, so a short fallback band does not
-  // start the page with a half-drawn bar.
-  const barShownAt = Math.max(Spacing.xxl, bandLayout.height - barHeight);
-  const barFadeFrom = barShownAt - Spacing.xxl;
-
-  // The page's own segment, measured where it lies in the scroll content. Its
-  // folded copy in the bar fades in while the pill slides under the bar, so
-  // there is always exactly one segment to tap.
+  // Every threshold is a scroll offset. The bar — title and folded segment
+  // together — fades in while the page's own Reader / AI segment slides under
+  // it, and not before: until then the page's title and segment are still on
+  // screen, and the bar would repeat them. So there is always exactly one title
+  // and one segment in view.
   const [tabsFrame, setTabsFrame] = useState<{
     y: number;
     height: number;
@@ -927,16 +922,21 @@ export function CompletedDetailView({
       current?.y === y && current.height === height ? current : { y, height },
     );
   }, []);
-  const miniTabsFadeFrom = tabsFrame
-    ? Math.max(barShownAt, tabsFrame.y + Spacing.md - barHeight)
+  // Before the segment is measured the bar stays hidden: `null` thresholds.
+  const barFadeFrom = tabsFrame
+    ? Math.max(0, tabsFrame.y + Spacing.md - barHeight)
     : null;
-  const miniTabsShownAt =
-    tabsFrame && miniTabsFadeFrom !== null
+  const barShownAt =
+    tabsFrame && barFadeFrom !== null
       ? Math.max(
-          miniTabsFadeFrom + 1,
+          barFadeFrom + 1,
           tabsFrame.y + tabsFrame.height - Spacing.md - barHeight,
         )
       : null;
+
+  // Where the cover band stops sitting under the status bar, which decides the
+  // colour of its icons now that the bar no longer arrives with that moment.
+  const bandLeavesStatusBarAt = bandLayout.height - topInset;
 
   // The reading progress runs over the whole page, so both heights are needed.
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -947,23 +947,14 @@ export function CompletedDetailView({
   const scrollY = useMemo(() => new Animated.Value(0), []);
   const barOpacity = useMemo(
     () =>
-      scrollY.interpolate({
-        inputRange: [barFadeFrom, barShownAt],
-        outputRange: [0, 1],
-        extrapolate: "clamp",
-      }),
-    [scrollY, barFadeFrom, barShownAt],
-  );
-  const miniTabsOpacity = useMemo(
-    () =>
-      miniTabsFadeFrom === null || miniTabsShownAt === null
+      barFadeFrom === null || barShownAt === null
         ? 0
         : scrollY.interpolate({
-            inputRange: [miniTabsFadeFrom, miniTabsShownAt],
+            inputRange: [barFadeFrom, barShownAt],
             outputRange: [0, 1],
             extrapolate: "clamp",
           }),
-    [scrollY, miniTabsFadeFrom, miniTabsShownAt],
+    [scrollY, barFadeFrom, barShownAt],
   );
   const progress = useMemo(
     () =>
@@ -976,11 +967,11 @@ export function CompletedDetailView({
   );
 
   // What the JS side has to know about the scroll, and nothing finer: whether
-  // the bar and its segment take touches (and are announced), which way the
-  // status bar goes, and the progress in announced steps. Each is set only as it
-  // changes, so a scroll re-renders the page a handful of times, not per frame.
+  // the bar takes touches (and is announced), which way the status bar goes,
+  // and the progress in announced steps. Each is set only as it changes, so a
+  // scroll re-renders the page a handful of times, not per frame.
   const [barVisible, setBarVisible] = useState(false);
-  const [miniTabsVisible, setMiniTabsVisible] = useState(false);
+  const [bandUnderStatusBar, setBandUnderStatusBar] = useState(true);
   const [progressPercent, setProgressPercent] = useState(0);
 
   // Rebuilt when a threshold moves — a picture that failed, a text that landed,
@@ -988,21 +979,18 @@ export function CompletedDetailView({
   // The offset itself stays on the native side; the listener only ever sees it
   // to decide the three values above.
   const handleScroll = useMemo(() => {
-    const barMidpoint = (barFadeFrom + barShownAt) / 2;
-    const miniTabsMidpoint =
-      miniTabsFadeFrom === null || miniTabsShownAt === null
+    const barMidpoint =
+      barFadeFrom === null || barShownAt === null
         ? null
-        : (miniTabsFadeFrom + miniTabsShownAt) / 2;
+        : (barFadeFrom + barShownAt) / 2;
     return Animated.event(
       [{ nativeEvent: { contentOffset: { y: scrollY } } }],
       {
         useNativeDriver: true,
         listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
           const offset = event.nativeEvent.contentOffset.y;
-          setBarVisible(offset >= barMidpoint);
-          setMiniTabsVisible(
-            miniTabsMidpoint !== null && offset >= miniTabsMidpoint,
-          );
+          setBarVisible(barMidpoint !== null && offset >= barMidpoint);
+          setBandUnderStatusBar(offset < bandLeavesStatusBarAt);
           const ratio = Math.min(Math.max(offset / maxScroll, 0), 1);
           setProgressPercent(
             Math.round((ratio * 100) / PROGRESS_ANNOUNCE_STEP) *
@@ -1011,38 +999,32 @@ export function CompletedDetailView({
         },
       },
     );
-  }, [
-    scrollY,
-    barFadeFrom,
-    barShownAt,
-    miniTabsFadeFrom,
-    miniTabsShownAt,
-    maxScroll,
-  ]);
+  }, [scrollY, barFadeFrom, barShownAt, bandLeavesStatusBarAt, maxScroll]);
 
   const scrollRef = useRef<ScrollView>(null);
 
-  // A tab picked from the collapsed bar — the only segment on screen once the
-  // page's own has slid under it — opens at its own top, right under the bar,
-  // rather than wherever a deep offset lands in content of another length. From
+  // A tab picked from the collapsed bar — the only segment on screen once it is
+  // shown, the page's own having slid under it — opens at its own top, right
+  // under the bar, rather than wherever a deep offset lands in content of another length. From
   // the page's own segment nothing moves.
   const handleTabChange = useCallback(
     (key: MediaDetailTabKey) => {
       setActiveTab(key);
-      if (miniTabsVisible && miniTabsShownAt !== null) {
-        scrollRef.current?.scrollTo({ y: miniTabsShownAt, animated: false });
+      if (barVisible && barShownAt !== null) {
+        scrollRef.current?.scrollTo({ y: barShownAt, animated: false });
       }
     },
-    [miniTabsVisible, miniTabsShownAt],
+    [barVisible, barShownAt],
   );
 
-  // Light over the picture, dark once the bar — or a tonal band — is under it.
+  // Light over the picture, dark once the picture — or a tonal band — has
+  // scrolled out from under it.
   // Only while this screen is the one in front: the entry stays on the status
   // bar's stack for as long as it is mounted, and a screen pushed over this one
   // would otherwise inherit light icons on its light background. Only under the
   // status bar, too: the carousel's band keeps the default dark icons.
   const isFocused = useIsFocused();
-  const statusBarStyle = cover && !barVisible ? "light" : "dark";
+  const statusBarStyle = cover && bandUnderStatusBar ? "light" : "dark";
 
   return (
     <View style={styles.container}>
@@ -1065,8 +1047,6 @@ export function CompletedDetailView({
         activeKey={activeTab}
         onTabChange={handleTabChange}
         tabsAccessibilityLabel={t("media.sectionsA11y")}
-        tabsOpacity={miniTabsOpacity}
-        tabsVisible={miniTabsVisible}
         progress={activeTab === "reader" ? progress : null}
         progressPercent={progressPercent}
       />

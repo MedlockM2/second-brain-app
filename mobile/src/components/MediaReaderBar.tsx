@@ -1,6 +1,6 @@
 /**
- * The media page once the cover has scrolled away: one bar instead of a header
- * and a sticky segment.
+ * The media page once its Reader / AI segment has scrolled away: one bar
+ * instead of a header and a sticky segment.
  *
  * Direction C of the task-410 benchmark, as retained for task-411. The band of
  * `MediaDetailHero` "retracts" into this: back, a 32pt thumbnail of the same
@@ -10,9 +10,9 @@
  *
  * It is a fixed layer over the page that fades in, not a block whose height
  * changes: only opacity and transforms run on the native driver, so the host
- * interpolates both fades from the scroll offset and hands them down. The
- * segment fades in on its own, later — only once the page's full segment has
- * slid under this bar — so the two never read as two controls side by side.
+ * interpolates the fade from the scroll offset and hands it down. The whole bar
+ * fades in at once, and only once the page's own Reader / AI segment slides
+ * under it — so the title and the segment are never on screen twice.
  *
  * Hidden means hidden to everyone: while transparent the bar takes no touches
  * and is out of the accessibility tree, so the controls over the cover under it
@@ -29,7 +29,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassSurface } from "./GlassSurface";
 import { ScreenTabs, type ScreenTab } from "./ScreenTabs";
 import { MediaCoverImage, type MediaCover } from "./MediaDetailHero";
 import {
@@ -69,8 +68,6 @@ interface MediaReaderBarProps<K extends string> {
   activeKey: K;
   onTabChange: (key: K) => void;
   tabsAccessibilityLabel: string;
-  tabsOpacity: Fade;
-  tabsVisible: boolean;
   /** 0 to 1; `null` hides the progress (the AI tab is not read through). */
   progress: Fade | null;
   /** The same progress, rounded, for screen readers. */
@@ -90,8 +87,6 @@ export function MediaReaderBar<K extends string>({
   activeKey,
   onTabChange,
   tabsAccessibilityLabel,
-  tabsOpacity,
-  tabsVisible,
   progress,
   progressPercent,
 }: MediaReaderBarProps<K>): React.JSX.Element {
@@ -102,7 +97,7 @@ export function MediaReaderBar<K extends string>({
       accessibilityElementsHidden={!visible}
       importantForAccessibility={visible ? "auto" : "no-hide-descendants"}
     >
-      <GlassSurface style={[styles.surface, { paddingTop: topInset }]}>
+      <View style={[styles.surface, { paddingTop: topInset }]}>
         <View style={styles.row}>
           <Pressable
             style={styles.backButton}
@@ -134,22 +129,13 @@ export function MediaReaderBar<K extends string>({
             {title}
           </Text>
 
-          <Animated.View
-            style={{ opacity: tabsOpacity }}
-            pointerEvents={tabsVisible ? "auto" : "none"}
-            accessibilityElementsHidden={!tabsVisible}
-            importantForAccessibility={
-              tabsVisible ? "auto" : "no-hide-descendants"
-            }
-          >
-            <ScreenTabs
-              tabs={tabs}
-              activeKey={activeKey}
-              onChange={onTabChange}
-              accessibilityLabel={tabsAccessibilityLabel}
-              iconOnly
-            />
-          </Animated.View>
+          <ScreenTabs
+            tabs={tabs}
+            activeKey={activeKey}
+            onChange={onTabChange}
+            accessibilityLabel={tabsAccessibilityLabel}
+            iconOnly
+          />
         </View>
 
         {progress !== null ? (
@@ -164,7 +150,7 @@ export function MediaReaderBar<K extends string>({
             />
           </View>
         ) : null}
-      </GlassSurface>
+      </View>
     </Animated.View>
   );
 }
@@ -179,8 +165,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
     ...Shadows.soft,
   },
+  // Opaque: the page scrolls under this bar, and a cover seen through it
+  // made the title unreadable.
   surface: {
     overflow: "hidden",
+    backgroundColor: Colors.background,
   },
   row: {
     flexDirection: "row",

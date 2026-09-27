@@ -8,7 +8,8 @@
  * one line carries the way back to the original and everything else worth
  * knowing about the source — date, duration, language, length — which the page
  * used to split between a chip, the hero and a second line above the transcript.
- * Once the band has scrolled away, `MediaReaderBar` takes over at the top.
+ * Once the Reader / AI segment has scrolled away, `MediaReaderBar` takes over
+ * at the top.
  *
  * ## The picture
  *
