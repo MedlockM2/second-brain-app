@@ -5,8 +5,10 @@
  * tabs: the text ("Reader") and artifact generation ("AI"). Everything it shows
  * comes from the `mediaData` prop — it reads no route parameter and holds no
  * polling of its own, so the same component renders the `/media/[id]` route and a
- * card of the Digest pager. That is the point of it living here rather than in
- * the route: a change to the media page lands in both by construction.
+ * page of the Digest carousel (`app/(tabs)/digest/[period].tsx`). That is the
+ * point of it living here rather than in the route: a change to the media page
+ * lands in both by construction, chrome included — the carousel shows the back
+ * and `…` buttons too (task-409).
  *
  * The composition is direction C of the task-410 benchmark, the owner's pick for
  * task-411, with the preview block of its direction A:
@@ -26,8 +28,8 @@
  * processing, timeout and failure states of the item on its way here.
  *
  * `useRouter()` stays — the folder picker and an artifact are pushed the
- * same way from a route as from a pager. What does not stay is any read of the
- * URL segment.
+ * same way from a route as from the carousel. What does not stay is any read of
+ * the URL segment.
  */
 
 import React, {
@@ -214,25 +216,32 @@ function resolveSourceLink(rawUrl: string): SourceLink | null {
 export interface CompletedDetailViewProps {
   mediaData: MediaStatusResponse;
   /**
-   * Leave the item. The header's back arrow, and where a deletion goes once
-   * there is nothing left to show.
+   * Leave the item: the back arrow over the cover and the one in the collapsed
+   * bar.
    */
   onBack: () => void;
   /**
-   * Whether the page carries its own top chrome: the cover drawn under the status
-   * bar and the status bar's style, the back and `…` buttons over the cover, and
-   * the back arrow of the collapsed bar. On by default, which is the route: it
-   * mounts this straight under the status bar. A pager turns it off, since it
-   * owns the top inset and shows one header above every card rather than one per
-   * card.
+   * The item was deleted from the `…` menu, once the server has confirmed it.
+   * Where that leaves the user is the host's call: the route goes back, the
+   * Digest carousel drops the page and stays on the period.
    */
-  showChrome?: boolean;
+  onDeleted: () => void;
+  /**
+   * Whether the page is mounted straight under the status bar, which is the
+   * route (the default): the cover then runs under the status bar, and the page
+   * sets the status bar's style — light over the picture, dark once the bar is
+   * under it. The Digest carousel mounts it under a band of its own instead, so
+   * there the page starts at 0 and leaves the status bar to the screen. Nothing
+   * else differs between the two: both carry the back and `…` buttons.
+   */
+  underStatusBar?: boolean;
 }
 
 export function CompletedDetailView({
   mediaData,
   onBack,
-  showChrome = true,
+  onDeleted,
+  underStatusBar = true,
 }: CompletedDetailViewProps): React.JSX.Element {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
@@ -314,9 +323,8 @@ export function CompletedDetailView({
   );
 
   // The preview belongs to an item, not to a mount. `/media/[id]` keeps this
-  // instance across a change of route parameter, and the Digest pager hands a
-  // page a new id the same way; without this the second item would inherit the
-  // first one's preview *and* its spent budget.
+  // instance across a change of route parameter; without this the second item
+  // would inherit the first one's preview *and* its spent budget.
   const previewItemId = media_item.media_item_id;
   const previewItemIdRef = useRef(previewItemId);
   useEffect(() => {
@@ -395,9 +403,9 @@ export function CompletedDetailView({
   // itself. The move is a row of this menu since the folder button left the top
   // of the page with the header it sat in (task-411).
   const mediaActions = useMediaActions<MediaItemContract>({
-    // Nothing left to show once the deletion is confirmed, so the screen leaves.
-    // The list it was opened from refetches on focus and comes back without it.
-    onDeleted: onBack,
+    // Nothing left to show once the deletion is confirmed: the host decides
+    // what replaces the page.
+    onDeleted,
     onRenamed: (_mediaItemId, title) => setRenamedTitle(title),
   });
 
@@ -851,7 +859,7 @@ export function CompletedDetailView({
   // --- The cover ---
   //
   // The one image of the detail contract. A failure is kept per item rather than
-  // as a flag: the Digest pager hands this instance another media, and a picture
+  // as a flag: the route can hand this instance another media, and a picture
   // that would not load for the previous one must not hide the next one's.
   const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
   const coverUrl = media_item.media_image?.trim() ?? "";
@@ -884,9 +892,10 @@ export function CompletedDetailView({
   // --- Layout under the status bar ---
   //
   // The route draws the band under the status bar and the collapsed bar over
-  // it. A pager owns that inset itself, so for it the page starts at 0.
+  // it. The Digest carousel starts the page under its own band, below the
+  // status bar, so there the page starts at 0.
   const insets = useSafeAreaInsets();
-  const topInset = showChrome ? insets.top : 0;
+  const topInset = underStatusBar ? insets.top : 0;
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const bandLayout = getCoverBandLayout({
     windowWidth,
@@ -1030,13 +1039,14 @@ export function CompletedDetailView({
   // Light over the picture, dark once the bar — or a tonal band — is under it.
   // Only while this screen is the one in front: the entry stays on the status
   // bar's stack for as long as it is mounted, and a screen pushed over this one
-  // would otherwise inherit light icons on its light background.
+  // would otherwise inherit light icons on its light background. Only under the
+  // status bar, too: the carousel's band keeps the default dark icons.
   const isFocused = useIsFocused();
   const statusBarStyle = cover && !barVisible ? "light" : "dark";
 
   return (
     <View style={styles.container}>
-      {showChrome && isFocused ? (
+      {underStatusBar && isFocused ? (
         <StatusBar style={statusBarStyle} animated />
       ) : null}
 
@@ -1046,7 +1056,7 @@ export function CompletedDetailView({
         topInset={topInset}
         opacity={barOpacity}
         visible={barVisible}
-        onBack={showChrome ? onBack : undefined}
+        onBack={onBack}
         title={displayTitle}
         cover={cover}
         onCoverError={handleCoverError}
@@ -1074,8 +1084,9 @@ export function CompletedDetailView({
           setContentHeight(height)
         }
         // One axis per drag, which is what makes this page swipeable when the
-        // Digest nests it in a horizontal pager: a drag that starts sideways is
-        // not half-absorbed here as a diagonal scroll before the pager takes it.
+        // Digest nests it in its horizontal carousel: a drag that starts sideways
+        // is not half-absorbed here as a diagonal scroll before the carousel
+        // takes it.
         // Never a constraint on the route, where this is the only scrollable and
         // there is nothing horizontal to lock out.
         directionalLockEnabled
@@ -1091,12 +1102,8 @@ export function CompletedDetailView({
           sourceHost={sourceLink?.host ?? null}
           onOpenSource={handleOpenSource}
           details={details}
-          onBack={showChrome ? onBack : undefined}
-          onActionsPress={
-            showChrome
-              ? (anchor) => mediaActions.open(menuTarget, anchor)
-              : undefined
-          }
+          onBack={onBack}
+          onActionsPress={(anchor) => mediaActions.open(menuTarget, anchor)}
         />
 
         {/* Intra-screen tabs. They scroll away with the page; the collapsed bar

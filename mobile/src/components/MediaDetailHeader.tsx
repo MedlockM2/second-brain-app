@@ -3,8 +3,10 @@
  * alone.
  *
  * The route (`app/media/[id].tsx`) draws it over its loading, processing,
- * timeout and failure states. The resolved item never uses it: its page opens
- * on the cover, and its back and `…` float over that picture
+ * timeout and failure states, and the Digest carousel
+ * (`app/(tabs)/digest/[period].tsx`) over the same states of a page and over
+ * its own loading, failure and empty states. The resolved item never uses it:
+ * its page opens on the cover, and its back and `…` float over that picture
  * (`MediaDetailHero`, task-411) before collapsing into `MediaReaderBar`. The
  * lifecycle states hold no title to seed a rename field with and nothing to file
  * yet, so the arrow is all they need.

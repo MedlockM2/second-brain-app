@@ -495,8 +495,6 @@ export const de: Catalog = {
   "unsortedReview.doneBody": "Alles, was wartete, ist erledigt.",
   "digest.daily": "Täglich",
   "digest.weekly": "Wöchentlich",
-  "digest.dailyTitle": "Dein Tag im Rückblick",
-  "digest.weeklyTitle": "Deine Woche im Rückblick",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Medium {current} von {total}",
   "digest.loadFailed": "Digest konnte nicht geladen werden",

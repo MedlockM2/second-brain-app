@@ -40,8 +40,8 @@ import { t, tCount } from "../i18n";
  * `memory-disk` policy.
  *
  * With no cover — or when loading one fails — the media-type glyph is drawn on
- * `surfaceContainerLow`. There is no third state: the empty grey rectangle at
- * `digest.tsx` is the anti-pattern the benchmark names by name (§6.3).
+ * `surfaceContainerLow`. There is no third state: an empty grey rectangle is
+ * the anti-pattern the benchmark names (§6.3).
  */
 
 /**

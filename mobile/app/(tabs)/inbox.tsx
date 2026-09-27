@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  Platform,
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -48,6 +47,7 @@ import {
   TouchTarget,
 } from "../../src/constants/theme";
 import { HOME_BLOCK_GAP } from "../../src/constants/homeRhythm";
+import { TAB_BAR_CLEARANCE } from "../../src/constants/tabBar";
 import type { MediaListItem, MediaType } from "../../src/types/media";
 import type { RecentEngagement } from "../../src/types/engagements";
 
@@ -93,30 +93,6 @@ import type { RecentEngagement } from "../../src/types/engagements";
  * extra tile is a cover to fetch on a screen that already has two rows.
  */
 const RECENTLY_ADDED_LIMIT = 12;
-
-/**
- * The band at the bottom of the screen the tab bar owns, and the one figure both
- * floating things on this screen measure themselves from.
- *
- * It is written down rather than measured: `NativeTabs` exposes no tab bar
- * height, because the bar is a `UITabBar` / Material `BottomNavigationView` the
- * system lays out itself (task-350).
- *
- * On iOS 26 the bar is a capsule detached from the screen edges with the content
- * passing under it, and this screen's `SafeAreaView` takes `edges={["top"]}`, so
- * the safe area runs all the way to the screen bottom — the 24 pt the buttons
- * used to sit at now lands *inside* the glass. `TouchTarget.large` is the strip
- * the capsule itself needs, and it is the same 64 the deleted Android branch of
- * `tabBarStyle` gave a bottom bar; `Spacing.lg` is the gap the capsule floats
- * above the screen bottom plus the room that keeps the buttons visibly off it
- * rather than tangent to it.
- *
- * On Android the native bottom navigation is opaque and `NativeTabs` already
- * wraps the screen in a `SafeAreaView` with the bottom inset applied, so there is
- * no glass to clear and the old 24 dp margin is still the whole of it.
- */
-const TAB_BAR_CLEARANCE =
-  Platform.OS === "ios" ? TouchTarget.large + Spacing.lg : Spacing.lg;
 
 export default function InboxScreen() {
   // The screen's copy is resolved on render, so it redraws with the language.

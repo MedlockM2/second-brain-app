@@ -95,20 +95,27 @@ export function usePushNotifications(userId: string | null): void {
     // app has no default destination for a notification it cannot read, and
     // opening a tab at random would be worse than opening none.
     const { data } = content;
-    const target = ((): Parameters<typeof router.navigate>[0] | null => {
+    const target = ((): Parameters<typeof router.navigate> | null => {
       if (data?.type === MEDIA_READY_NOTIFICATION_TYPE) {
         // The library id of the media that became readable. One notification per
         // media, so there is always exactly one to open.
         const mediaItemId = data.media_item_id;
         if (typeof mediaItemId !== "string" || !mediaItemId) return null;
-        return `/media/${mediaItemId}`;
+        return [`/media/${mediaItemId}`];
       }
       if (data?.type === "digest") {
-        // Anything that is not the weekly Digest opens the daily one — the tab has
-        // to open on something, and the daily is what the screen already defaults
-        // to.
-        const tab = data.digest_type === "weekly" ? "weekly" : "daily";
-        return { pathname: "/(tabs)/digest", params: { tab } };
+        // Straight into the carousel of the period the notification names,
+        // without going through the choice of a period (task-409). Anything that
+        // is not the weekly Digest opens the daily one — it has to open on
+        // something, and the daily is what the carousel defaults to.
+        // `withAnchor` puts the choice under the carousel even when this
+        // navigation is what builds the Digest stack (a cold start from the
+        // tap), so `‹` and the back gesture lead there.
+        const period = data.digest_type === "weekly" ? "weekly" : "daily";
+        return [
+          { pathname: "/(tabs)/digest/[period]", params: { period } },
+          { withAnchor: true },
+        ];
       }
       return null;
     })();
@@ -118,7 +125,7 @@ export function usePushNotifications(userId: string | null): void {
     // hook is mounted above the navigator, and on a cold start the effect can run
     // before the root navigation state exists.
     const timer = setTimeout(() => {
-      router.navigate(target);
+      router.navigate(...target);
     }, 0);
     return () => clearTimeout(timer);
   }, [lastResponse, router, userId]);

@@ -6,8 +6,11 @@
  * cover, excerpt, read time) it already gets from `GET /api/media/{id}`.
  */
 
+/** The two periods a digest covers, in the order the Digest tab offers them. */
+export type DigestPeriod = "daily" | "weekly";
+
 export interface Digest {
-  digest_type: "daily" | "weekly";
+  digest_type: DigestPeriod;
   /** Local date of the send for daily, elapsed ISO week for weekly. */
   period_key: string;
   /** The media of the period, oldest first. Empty when the period held none. */

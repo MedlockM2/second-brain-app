@@ -29,9 +29,11 @@ import { t, useTranslation } from "../../src/i18n";
  * 2. If the processing job is non-terminal, shows a "Generating text..." placeholder
  *    with a spinner. Polls every 3s until status becomes terminal.
  * 3. On "completed": hands the item to `CompletedDetailView`, the shared page the
- *    Digest pager renders too — with its chrome on: the page then draws its
- *    cover under this route's status bar, with back and `…` over it, in place of
- *    the `MediaDetailHeader` the states below carry.
+ *    Digest carousel renders too — here straight under the status bar: the page
+ *    draws its cover under it, with back and `…` over it, in place of the
+ *    `MediaDetailHeader` the states below carry. A deletion from its `…` menu
+ *    leaves the route: the list it was opened from refetches on focus and comes
+ *    back without the item.
  * 4. On "failed": shows a failure banner with the error message, plus — when the
  *    failure is one of the seven that mean the source itself is not handled yet —
  *    a card offering to request support for it (`SourceSupportRequestCard`).
@@ -198,6 +200,7 @@ export default function MediaDetailScreen() {
     <CompletedDetailView
       mediaData={mediaData}
       onBack={() => router.back()}
+      onDeleted={() => router.back()}
     />
   );
 }

@@ -420,8 +420,6 @@ export const hi: Catalog = {
   "unsortedReview.doneBody": "जो कुछ बाक़ी था, सब निपटा दिया गया है।",
   "digest.daily": "रोज़ाना",
   "digest.weekly": "साप्ताहिक",
-  "digest.dailyTitle": "आपका दिन एक नज़र में",
-  "digest.weeklyTitle": "आपका हफ़्ता एक नज़र में",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "{total} में से {current} मीडिया",
   "digest.loadFailed": "डाइजेस्ट लोड नहीं हो सका",
