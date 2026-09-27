@@ -1,13 +1,42 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: ok   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : refonte UX de l'onglet Digest (deux axes de navigation, densité de contrôles)
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: **Aucune des quatre directions telle quelle, ni la direction A recommandée.** Une solution propre à l'owner, rendue possible par la refonte de la page Média (task-410 direction C, livrée par task-411) : l'onglet Digest devient **un écran de choix de la période, puis un carrousel de pages Média complètes**. La page Média n'est pas redessinée pour le Digest : c'est le composant de task-411, inchangé.
+
+Pourquoi ce choix plutôt que A : depuis task-411, la page Média est l'écran de lecture que l'owner veut montrer. Le Digest la présente telle quelle au lieu de renvoyer vers elle depuis une liste. Le « trop plein de boutons » se règle en sortant le segment de période de l'écran de lecture, pas en supprimant le carrousel.
+
+**1. Écran de choix, racine de l'onglet — « deux piles de couvertures ».**
+
+- Le principe : chaque période est représentée par **un paquet de cartes**, fait des **couvertures des trois premiers médias** de la période (ordre de `media_item_ids`), empilées pour évoquer une pile. Chaque paquet porte le nom de sa période et son nombre de médias (la longueur de `media_item_ids`). L'écran contient deux paquets, **Quotidien** puis **Hebdomadaire**, et rien d'autre qu'un titre d'écran. Tout le paquet est la cible d'appui.
+- L'intention est un écran de choix plus expressif qu'une liste de deux lignes, où l'on voit ce qui attend dans chaque période. La forme exacte (disposition, décalage ou rotation des cartes, emplacement du nom et du compteur, matériaux, tailles) **revient à l'implémenteur** : elle doit sortir du design system Amber Clarity et des composants existants (`MediaCoverImage`, `GlassSurface`, les tokens de `theme.ts`), pas d'une maquette.
+- **Chargement retenu, et lui seul** : les deux digests (`GET /api/digest/daily` et `/weekly`) et la liste de la bibliothèque (`GET /api/media`, déjà appelée par l'Accueil), soit **3 requêtes**. Les couvertures sont les `media_image` des éléments de la liste dont l'identifiant figure dans le digest. **Pas** de fiche détail par couverture, et **aucun** changement côté serveur.
+- Couverture absente ou en échec : repli sur le glyphe du type de média, selon le même principe que `MediaDetailHero`. Période vide : paquet sans couverture, compteur à zéro ; l'appui ouvre l'état vide actuel, sans repli vers une autre période. Chargement ou erreur réseau : les deux paquets restent affichés et appuyables. Leurs couvertures sont un enrichissement : elles ne bloquent jamais le choix.
+- Pas de dates sur cet écran. Pour mémoire, l'hebdomadaire couvre la semaine lundi-dimanche **déjà terminée** annoncée par l'envoi du lundi 09:30, et non la semaine en cours (`digestService.ts`).
+- La période choisie n'est pas mémorisée : un démarrage à froid rouvre l'écran de choix.
+
+**2. Carrousel d'une période, poussé depuis l'écran de choix.**
+
+- **Une bande fixe dédiée, en haut de l'écran sous la barre d'état**, porte les points de pagination (`PaginationDots`) **et, à côté, le compteur de position** (« 3 / 7 »). Elle ne défile jamais, et rien ne s'y superpose : la barre repliée de la page Média s'affiche en dessous d'elle quand on lit. L'alternative « points posés sur la couverture » est écartée. La hauteur et l'habillage de la bande relèvent du design system.
+- **Supprimés du carrousel** : le segment `Quotidien` / `Hebdomadaire` (déplacé sur l'écran de choix) et le titre de période (« Votre journée en revue »).
+- **Chaque page est `CompletedDetailView` avec son chrome** : couverture, boutons `‹` et `…` posés dessus, métadonnées, segment Lecture / IA, « L'essentiel », texte complet, barre repliée au défilement. **Seule différence avec la route `/media/[id]`** : la couverture commence sous la bande des points au lieu de passer sous la barre d'état. Si `showChrome` ne peut pas exprimer « boutons présents, pas d'encart haut », le remplacer plutôt qu'empiler une seconde prop. Aucune branche morte ne doit subsister.
+- `‹` (sur la couverture et dans la barre repliée) ramène à l'écran de choix, tout comme le geste de retour d'iOS, **par le bord seulement**, pour ne pas voler le balayage horizontal du carrousel.
+- Le menu `…` reste complet (Renommer, Déplacer, Supprimer). **Un média supprimé depuis le Digest disparaît du carrousel**, et s'il n'en reste aucun, retour à l'écran de choix.
+- Montage paresseux, verrou d'axe (`directionalLockEnabled`), réserve de la barre d'onglets, états vide / chargement / échec de page : conservés tels que `digest.tsx` les fait aujourd'hui.
+
+**3. Notifications (task-369).** Une notification de digest ouvre **directement le carrousel de sa période**, sans passer par l'écran de choix. `‹` ramène ensuite à l'écran de choix.
+
+**Compromis accepté sciemment :** le carrousel horizontal et le défilement vertical dans la page **cohabitent toujours**. C'est le premier grief du testeur ; l'owner le garde en échange d'une page de lecture complète dans l'onglet. Ce qui est réglé, c'est la densité : un seul segment (Lecture / IA) reste dans l'écran de lecture, et le titre de période disparaît.
+
+**Livraison attendue** : JS/TS seulement (`expo-image` est déjà installé, et empiler des cartes ne demande que des styles), donc une mise à jour OTA. Si l'implémentation déplace malgré tout le fingerprint Expo, le dire.
+
+**Maquettes : volontairement aucune.** Cette décision est un principe, pas un dessin. Les croquis montrés à l'owner pendant l'arbitrage n'étaient que des illustrations rapides et ne sont **pas** dans le dépôt, exprès : ils ne sont pas fidèles au design de l'app. Pour l'AC#1 de task-409, citer cette section *Owner Validation* à la place d'un chemin de maquette. La référence visuelle, c'est l'app elle-même : la page Média livrée par task-411, le design system Amber Clarity (`mobile/src/constants/theme.ts`, `mobile-design-mockups/my_design_system/`) et les composants existants. Aucune maquette des directions A à D (`mobile-design-mockups/digest_direction_*`) ne s'applique. Les §4 à §8 et §12 de ce README décrivent des directions non retenues ; seuls l'inventaire du §1 et les sources restent utiles.
+
+**Validated at**: 2026-09-27
 
 ---
 
