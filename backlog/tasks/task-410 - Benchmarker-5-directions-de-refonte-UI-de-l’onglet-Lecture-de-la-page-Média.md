@@ -1,9 +1,10 @@
 ---
 id: TASK-410
 title: Benchmarker 5 directions de refonte UI de l’onglet Lecture de la page Média
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-26 12:18'
+updated_date: '2026-09-27 10:44'
 labels:
   - benchmark
   - mobile
