@@ -1,9 +1,10 @@
 ---
 id: TASK-409
 title: Refondre l'onglet Digest selon le benchmark validé (task-408)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-21 10:01'
+updated_date: '2026-09-27 15:10'
 labels:
   - mobile
   - ux
