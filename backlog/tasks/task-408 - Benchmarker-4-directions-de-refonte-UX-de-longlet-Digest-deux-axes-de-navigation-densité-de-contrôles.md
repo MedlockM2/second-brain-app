@@ -3,9 +3,10 @@ id: TASK-408
 title: >-
   Benchmarker 4 directions de refonte UX de l'onglet Digest (deux axes de
   navigation, densité de contrôles)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-21 10:01'
+updated_date: '2026-09-27 12:38'
 labels:
   - benchmark
   - mobile
