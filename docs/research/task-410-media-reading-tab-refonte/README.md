@@ -1,12 +1,12 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: ok   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : refonte UI de l’onglet « Lecture » de la page Média (cinq directions)
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l’owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
+**Decision**: Direction C bandeau retractable mais à la place de la section aperçu prévue par la direction C on utilise la partie 'l'essentiel' de la direction A
 **Validated at**: _(date ISO à remplir par l’owner)_
 
 ---
