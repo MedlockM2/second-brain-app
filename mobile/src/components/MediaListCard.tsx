@@ -19,7 +19,7 @@ import {
 } from "../constants/theme";
 import type { MediaType } from "../types/media";
 import type { AnchorRect } from "./AnchoredContextMenu";
-import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
+import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { MediaFailureBadge, describeWithFailure } from "./MediaFailureBadge";
 import {
@@ -381,31 +381,6 @@ export function MediaListCard<T extends MediaCardItem>({
 }
 
 // --- Helpers (kept in sync with the inbox vignette presentation) ---
-
-
-function getMediaTypeLabel(type: MediaType): string {
-  switch (type) {
-    case "podcast_episode":
-      return t("mediaType.podcast");
-    case "article":
-      return t("mediaType.article");
-    case "youtube_video":
-      return t("mediaType.video");
-    case "short_video":
-      return t("mediaType.short");
-    case "image_post":
-      return t("mediaType.imagePost");
-    case "audio_file":
-    case "audio":
-      return t("mediaType.audio");
-    case "shared_text":
-      return t("mediaType.text");
-    case "document":
-      return t("mediaType.document");
-    default:
-      return t("mediaType.link");
-  }
-}
 
 function getMediaTypeBgColor(type: MediaType): string {
   switch (type) {

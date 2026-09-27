@@ -10,6 +10,11 @@
  * Generic over the key type so a screen can drive it from its own union
  * (`"reader" | "ai"`, `"sources" | "ai"`, …) and get an exhaustive switch on the
  * other side.
+ *
+ * `iconOnly` is the same control folded to its glyphs, for a bar with no room
+ * for the labels: the collapsed bar of a media page (`MediaReaderBar`,
+ * task-411). Each tab is then a 48pt square, and its label leaves the screen
+ * but not the accessibility tree — it stays the tab's `accessibilityLabel`.
  */
 
 import React from "react";
@@ -43,6 +48,11 @@ interface ScreenTabsProps<K extends string> {
   onChange: (key: K) => void;
   /** Names the group for screen readers, e.g. "Media sections". */
   accessibilityLabel?: string;
+  /**
+   * Glyphs only, one 48pt square per tab. Every tab must then carry an `icon`;
+   * one that does not keeps its label rather than rendering an empty square.
+   */
+  iconOnly?: boolean;
 }
 
 export function ScreenTabs<K extends string>({
@@ -50,20 +60,26 @@ export function ScreenTabs<K extends string>({
   activeKey,
   onChange,
   accessibilityLabel,
+  iconOnly = false,
 }: ScreenTabsProps<K>): React.JSX.Element {
   return (
     <View
-      style={styles.container}
+      style={[styles.container, iconOnly && styles.containerIconOnly]}
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
     >
       {tabs.map((tab) => {
         const selected = tab.key === activeKey;
         const label = t(tab.labelKey);
+        const showLabel = !iconOnly || !tab.icon;
         return (
           <Pressable
             key={tab.key}
-            style={[styles.tab, selected && styles.tabSelected]}
+            style={[
+              styles.tab,
+              iconOnly && styles.tabIconOnly,
+              selected && styles.tabSelected,
+            ]}
             onPress={() => onChange(tab.key)}
             accessibilityRole="tab"
             accessibilityLabel={label}
@@ -76,12 +92,14 @@ export function ScreenTabs<K extends string>({
                 color={selected ? Colors.onPrimary : Colors.textMuted}
               />
             ) : null}
-            <Text
-              style={[styles.tabLabel, selected && styles.tabLabelSelected]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
+            {showLabel ? (
+              <Text
+                style={[styles.tabLabel, selected && styles.tabLabelSelected]}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+            ) : null}
           </Pressable>
         );
       })}
@@ -98,6 +116,10 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
     padding: Spacing.xs,
   },
+  // Sized by its squares rather than stretched across the row it sits in.
+  containerIconOnly: {
+    alignSelf: "center",
+  },
   tab: {
     flex: 1,
     flexDirection: "row",
@@ -107,6 +129,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.full,
     minHeight: TouchTarget.minimum,
+  },
+  tabIconOnly: {
+    flex: 0,
+    width: TouchTarget.minimum,
+    height: TouchTarget.minimum,
+    paddingHorizontal: 0,
   },
   tabSelected: {
     backgroundColor: Colors.primary,

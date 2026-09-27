@@ -1,17 +1,18 @@
 /**
- * The media screen's own title bar: back on the left, and on the right the two
- * things that can be done to the item — file it, or act on it.
+ * The media route's title bar while the item is on its way: the back arrow,
+ * alone.
  *
- * Both right-hand slots are optional and both are only filled once the item has
- * resolved. The loading, processing, timeout and failure states carry the back
- * arrow alone: they hold no title to seed a rename field with, and a menu whose
- * first row could not be prefilled is worse than no menu.
+ * The route (`app/media/[id].tsx`) draws it over its loading, processing,
+ * timeout and failure states. The resolved item never uses it: its page opens
+ * on the cover, and its back and `…` float over that picture
+ * (`MediaDetailHero`, task-411) before collapsing into `MediaReaderBar`. The
+ * lifecycle states hold no title to seed a rename field with and nothing to file
+ * yet, so the arrow is all they need.
  *
- * It lives in its own module because two hosts render it: the route
- * (`app/media/[id].tsx`) for those lifecycle states, and `CompletedDetailView`
- * for the resolved item. The bar stays hand-built rather than moving to
- * `ScreenHeader` — this header carries no title, and its two trailing slots do
- * not map onto that component's single trailing slot.
+ * The size of its button is exported: the glass buttons over the cover and the
+ * back arrow of the collapsed bar are the same control on another material, and
+ * one number is what keeps the arrow from jumping by a few points when the
+ * processing state hands over to the page.
  */
 
 import React from "react";
@@ -24,23 +25,20 @@ import {
   TouchTarget,
 } from "../constants/theme";
 import { t } from "../i18n";
-import { HeaderMenuButton } from "./ScreenHeader";
-import type { AnchorRect } from "./AnchoredContextMenu";
+
+/**
+ * The drawn size of a media-page top-bar button. The touch area reaches past
+ * `TouchTarget.minimum` through `MEDIA_HEADER_BUTTON_HIT_SLOP` rather than by
+ * growing the circle, which would make every bar taller.
+ */
+export const MEDIA_HEADER_BUTTON_SIZE = 44;
+export const MEDIA_HEADER_BUTTON_HIT_SLOP = Spacing.xs;
 
 export function MediaDetailHeader({
   onBack,
-  folderId,
-  onFolderPress,
-  onActionsPress,
 }: {
   onBack: () => void;
-  folderId?: string | null;
-  onFolderPress?: () => void;
-  /** Opens the rename/delete menu, anchored on the `…` that was tapped. */
-  onActionsPress?: (anchor: AnchorRect) => void;
 }): React.JSX.Element {
-  const hasFolder = !!folderId;
-
   return (
     <View style={styles.header}>
       <Pressable
@@ -48,58 +46,27 @@ export function MediaDetailHeader({
         onPress={onBack}
         accessibilityLabel={t("common.goBack")}
         accessibilityRole="button"
-        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        hitSlop={MEDIA_HEADER_BUTTON_HIT_SLOP}
       >
         <Ionicons name="arrow-back" size={24} color={Colors.textMain} />
       </Pressable>
-      <View style={styles.headerRightGroup}>
-        {onFolderPress && (
-          <Pressable
-            style={styles.headerButton}
-            onPress={onFolderPress}
-            accessibilityLabel={t("media.moveToFolderA11y")}
-            accessibilityRole="button"
-            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-          >
-            <Ionicons
-              name={hasFolder ? "folder" : "folder-outline"}
-              size={24}
-              color={hasFolder ? Colors.primary : Colors.textMain}
-            />
-          </Pressable>
-        )}
-        {onActionsPress && (
-          <HeaderMenuButton
-            onPress={onActionsPress}
-            accessibilityLabel={t("mediaActions.moreA11y")}
-            testID="media-header-actions"
-          />
-        )}
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Header - buttons meet 48px with hitSlop
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     minHeight: TouchTarget.comfortable,
   },
   headerButton: {
-    width: 44,
-    height: 44,
+    width: MEDIA_HEADER_BUTTON_SIZE,
+    height: MEDIA_HEADER_BUTTON_SIZE,
     borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
-  },
-  headerRightGroup: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
   },
 });

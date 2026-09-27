@@ -403,7 +403,7 @@ export const en = {
   // "Transcript" is gone from every line below on purpose (task-363): the reader
   // is looking at the text of a source, and whether it was typed or spoken is a
   // pipeline detail. The `transcript.` key prefix stays — only the copy moved.
-  "preview.heading": "Preview",
+  "preview.essentials": "Key points",
   "preview.pending": "The preview is being written…",
   "preview.unavailable": "No preview for this source.",
   "transcript.heading": "Full text",
@@ -649,7 +649,8 @@ export const en = {
   "media.movedToFolder": "Moved to folder",
   "media.removedFromFolder": "Removed from folder",
   "media.openFailed": "Couldn't open {host}",
-  "media.moveToFolderA11y": "Move to folder",
+  "media.openSourceA11y": "Open on {host}",
+  "media.readingProgressA11y": "Reading progress",
 
   // --- Folder detail ---
   "folder.tab.sources": "Sources",

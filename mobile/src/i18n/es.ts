@@ -317,7 +317,7 @@ export const es: Catalog = {
   "account.plan.resetDateUnknownA11y": "Fecha de recarga desconocida",
   "account.plan.minutesRuleTrial":
     "{rule} Los minutos de prueba no se recargan.",
-  "preview.heading": "Vista previa",
+  "preview.essentials": "Lo esencial",
   "preview.pending": "Se está redactando la vista previa…",
   "preview.unavailable": "No hay vista previa para esta fuente.",
   "transcript.heading": "Texto completo",
@@ -543,7 +543,8 @@ export const es: Catalog = {
   "media.movedToFolder": "Movido a una carpeta",
   "media.removedFromFolder": "Quitado de la carpeta",
   "media.openFailed": "No se ha podido abrir {host}",
-  "media.moveToFolderA11y": "Mover a una carpeta",
+  "media.openSourceA11y": "Abrir en {host}",
+  "media.readingProgressA11y": "Progreso de lectura",
   "folder.tab.sources": "Fuentes",
   "folder.tab.ai": "IA",
   "folder.sectionsA11y": "Secciones de la carpeta",
