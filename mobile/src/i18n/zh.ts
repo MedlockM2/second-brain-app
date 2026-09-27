@@ -401,6 +401,8 @@ export const zh: Catalog = {
   "unsortedReview.doneBody": "所有等待处理的内容都已处理完毕。",
   "digest.daily": "每日",
   "digest.weekly": "每周",
+  "digest.mediaCount.one": "{count} 个媒体",
+  "digest.mediaCount.other": "{count} 个媒体",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "第 {current} 项，共 {total} 项",
   "digest.loadFailed": "无法加载摘要",

@@ -420,6 +420,8 @@ export const nl: Catalog = {
   "unsortedReview.doneBody": "Alles wat klaarstond is afgehandeld.",
   "digest.daily": "Dagelijks",
   "digest.weekly": "Wekelijks",
+  "digest.mediaCount.one": "{count} medium",
+  "digest.mediaCount.other": "{count} media",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Item {current} van {total}",
   "digest.loadFailed": "De samenvatting kon niet worden geladen",

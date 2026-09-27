@@ -189,7 +189,8 @@ const styles = StyleSheet.create({
   // them; past that height the content scrolls instead of clipping.
   content: {
     flexGrow: 1,
-    gap: Spacing.md,
+    gap: Spacing.xl,
+    paddingTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     paddingBottom: TAB_BAR_CLEARANCE,
   },

@@ -504,6 +504,8 @@ export const fr: Catalog = {
   "unsortedReview.doneBody": "Tout ce qui attendait a été traité.",
   "digest.daily": "Quotidien",
   "digest.weekly": "Hebdomadaire",
+  "digest.mediaCount.one": "{count} média",
+  "digest.mediaCount.other": "{count} médias",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Média {current} sur {total}",
   "digest.loadFailed": "Impossible de charger le digest",

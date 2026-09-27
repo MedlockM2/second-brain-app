@@ -409,6 +409,8 @@ export const ja: Catalog = {
   "unsortedReview.doneBody": "待っていたものはすべて処理しました。",
   "digest.daily": "毎日",
   "digest.weekly": "毎週",
+  "digest.mediaCount.one": "{count}件のメディア",
+  "digest.mediaCount.other": "{count}件のメディア",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "{total} 件中 {current} 件目",
   "digest.loadFailed": "ダイジェストを読み込めませんでした",

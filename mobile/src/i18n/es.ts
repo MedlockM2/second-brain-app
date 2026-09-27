@@ -487,6 +487,8 @@ export const es: Catalog = {
   "unsortedReview.doneBody": "Todo lo que esperaba ya está resuelto.",
   "digest.daily": "Diario",
   "digest.weekly": "Semanal",
+  "digest.mediaCount.one": "{count} medio",
+  "digest.mediaCount.other": "{count} medios",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Medio {current} de {total}",
   "digest.loadFailed": "No se ha podido cargar el resumen",

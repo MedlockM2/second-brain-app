@@ -590,6 +590,8 @@ export const en = {
   // --- Digest tab ---
   "digest.daily": "Daily",
   "digest.weekly": "Weekly",
+  "digest.mediaCount.one": "{count} media item",
+  "digest.mediaCount.other": "{count} media",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Media {current} of {total}",
   "digest.loadFailed": "Failed to load digest",
