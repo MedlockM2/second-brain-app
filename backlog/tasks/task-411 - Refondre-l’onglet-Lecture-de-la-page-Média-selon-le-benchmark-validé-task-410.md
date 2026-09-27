@@ -3,9 +3,10 @@ id: TASK-411
 title: >-
   Refondre l’onglet Lecture de la page Média selon le benchmark validé
   (task-410)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-26 12:19'
+updated_date: '2026-09-27 11:08'
 labels:
   - mobile
   - ui
