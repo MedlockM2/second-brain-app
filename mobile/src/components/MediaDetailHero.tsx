@@ -192,9 +192,8 @@ interface MediaDetailHeroProps {
   onOpenSource: () => void;
   /** Date, duration, language, length — whichever are known, in that order. */
   details: readonly string[];
-  /** Omitted by a host that owns its own top chrome (the Digest pager). */
-  onBack?: () => void;
-  onActionsPress?: (anchor: AnchorRect) => void;
+  onBack: () => void;
+  onActionsPress: (anchor: AnchorRect) => void;
 }
 
 export function MediaDetailHero({
@@ -253,8 +252,6 @@ export function MediaDetailHero({
     </>
   );
 
-  const hasControls = !!onBack || !!onActionsPress;
-
   return (
     <View>
       <View style={[styles.band, { height: layout.height }]}>
@@ -287,25 +284,17 @@ export function MediaDetailHero({
         {/* The controls come first in the tree so a screen reader reaches back
             and the menu before the title; they sit at opposite ends of the band
             from it, so the order draws nothing over anything. */}
-        {hasControls ? (
-          <View
-            style={[styles.controls, { top: topInset + Spacing.sm }]}
-            pointerEvents="box-none"
-          >
-            {onBack ? (
-              <GlassButton
-                icon="arrow-back"
-                accessibilityLabel={t("common.goBack")}
-                onPress={onBack}
-              />
-            ) : (
-              <View />
-            )}
-            {onActionsPress ? (
-              <GlassMenuButton onPress={onActionsPress} />
-            ) : null}
-          </View>
-        ) : null}
+        <View
+          style={[styles.controls, { top: topInset + Spacing.sm }]}
+          pointerEvents="box-none"
+        >
+          <GlassButton
+            icon="arrow-back"
+            accessibilityLabel={t("common.goBack")}
+            onPress={onBack}
+          />
+          <GlassMenuButton onPress={onActionsPress} />
+        </View>
 
         {titleOnCover ? (
           // Invisible until measured: a title that turns out to need a third

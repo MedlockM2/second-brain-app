@@ -8,9 +8,10 @@
  * user to empty it.
  *
  * The pager is a `ScrollView horizontal pagingEnabled` from the core, one page per
- * screen width, active index derived from the scroll offset — the shape
- * `app/(tabs)/digest.tsx` already uses. No gesture or animation library is
- * involved, and none is wanted: paging is a native behaviour of the scroll view.
+ * screen width, active index derived from the scroll offset — the shape the
+ * Digest carousel (`app/(tabs)/digest/[period].tsx`) uses too. No gesture or
+ * animation library is involved, and none is wanted: paging is a native
+ * behaviour of the scroll view.
  *
  * Two things about this screen are unusual enough to be spelled out where they
  * happen: the queue is frozen at mount (see `load`), and every mutation of it

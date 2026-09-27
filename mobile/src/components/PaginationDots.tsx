@@ -6,8 +6,8 @@
  * rectangles whose sizes are recomputed on a page change; there is nothing here
  * an animation library or a pager component would do better.
  *
- * Colours are the ones `app/(tabs)/digest.tsx` already uses for its own dots, so
- * the two carousels of the app read as the same control.
+ * Shared by the two carousels of the app — the unsorted review and the Digest
+ * (`app/(tabs)/digest/[period].tsx`) — so both read as the same control.
  */
 
 import { StyleSheet, View } from "react-native";
@@ -113,9 +113,9 @@ export function PaginationDots({
     <View
       testID={testID}
       style={styles.row}
-      // Decoration: the position it encodes is spelled out in the header of the
-      // screen that hosts it, which is also the only place that can state it
-      // exactly — the row itself caps at seven.
+      // Decoration: the position it encodes is spelled out by the screen that
+      // hosts it — beside the dots in the Digest's band — which is also the only
+      // place that can state it exactly: the row itself caps at seven.
       accessible={false}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"

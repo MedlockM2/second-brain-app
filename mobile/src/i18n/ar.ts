@@ -414,8 +414,6 @@ export const ar: Catalog = {
   "unsortedReview.doneBody": "تمّت معالجة كل ما كان في الانتظار.",
   "digest.daily": "يومي",
   "digest.weekly": "أسبوعي",
-  "digest.dailyTitle": "يومك في سطور",
-  "digest.weeklyTitle": "أسبوعك في سطور",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "العنصر {current} من {total}",
   "digest.loadFailed": "تعذّر تحميل الملخّص",

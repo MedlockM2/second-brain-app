@@ -60,8 +60,7 @@ interface MediaReaderBarProps<K extends string> {
   opacity: Fade;
   /** Whether the bar currently takes touches and is announced. */
   visible: boolean;
-  /** Omitted by a host that owns its own navigation (the Digest pager). */
-  onBack?: () => void;
+  onBack: () => void;
   title: string;
   cover: MediaCover | null;
   onCoverError: () => void;
@@ -105,17 +104,15 @@ export function MediaReaderBar<K extends string>({
     >
       <GlassSurface style={[styles.surface, { paddingTop: topInset }]}>
         <View style={styles.row}>
-          {onBack ? (
-            <Pressable
-              style={styles.backButton}
-              onPress={onBack}
-              hitSlop={MEDIA_HEADER_BUTTON_HIT_SLOP}
-              accessibilityRole="button"
-              accessibilityLabel={t("common.goBack")}
-            >
-              <Ionicons name="arrow-back" size={24} color={Colors.textMain} />
-            </Pressable>
-          ) : null}
+          <Pressable
+            style={styles.backButton}
+            onPress={onBack}
+            hitSlop={MEDIA_HEADER_BUTTON_HIT_SLOP}
+            accessibilityRole="button"
+            accessibilityLabel={t("common.goBack")}
+          >
+            <Ionicons name="arrow-back" size={24} color={Colors.textMain} />
+          </Pressable>
 
           <View
             style={styles.thumb}

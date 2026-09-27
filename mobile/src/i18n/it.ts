@@ -419,8 +419,6 @@ export const it: Catalog = {
   "unsortedReview.doneBody": "Tutto quello che era in attesa è stato gestito.",
   "digest.daily": "Quotidiano",
   "digest.weekly": "Settimanale",
-  "digest.dailyTitle": "La tua giornata in sintesi",
-  "digest.weeklyTitle": "La tua settimana in sintesi",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Contenuto {current} di {total}",
   "digest.loadFailed": "Impossibile caricare il digest",

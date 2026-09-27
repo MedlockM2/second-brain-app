@@ -102,11 +102,20 @@ export interface PatchMediaResponse {
  */
 export class MediaService {
   /**
-   * Fetch the list of all media items for the current user.
+   * Fetch the first page of the current user's media, newest first.
    * GET /api/media
+   *
+   * `limit` is the page size, which the server clamps to 1-100 and defaults to
+   * 20 when it is left out.
    */
-  static async listMedia(): Promise<ListMediaResponse> {
-    return apiRequest<ListMediaResponse>("/api/media", { method: "GET" });
+  static async listMedia(
+    options: { limit?: number } = {},
+  ): Promise<ListMediaResponse> {
+    const query =
+      options.limit !== undefined ? `?limit=${String(options.limit)}` : "";
+    return apiRequest<ListMediaResponse>(`/api/media${query}`, {
+      method: "GET",
+    });
   }
 
   /**

@@ -590,8 +590,6 @@ export const en = {
   // --- Digest tab ---
   "digest.daily": "Daily",
   "digest.weekly": "Weekly",
-  "digest.dailyTitle": "Your Day in Review",
-  "digest.weeklyTitle": "Your Week in Review",
   "digest.position": "{current} / {total}",
   "digest.positionA11y": "Media {current} of {total}",
   "digest.loadFailed": "Failed to load digest",
