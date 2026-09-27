@@ -5,8 +5,8 @@
  * Lives here rather than in the menu component so every surface offering those
  * actions shares one implementation of the destructive path and of the rename
  * instead of three that can drift apart: the `All media` list of the library tab,
- * the sources list inside a folder, and the `…` in the header of a media
- * item's own page. Each surface only supplies what it alone knows — how to drop a
+ * the sources list inside a folder, and the `…` over the cover of a media item's
+ * own page. All three offer the same three rows. Each surface only supplies what it alone knows — how to drop a
  * row from the list it holds and how to put a new title on one, or, on a detail
  * screen holding no list, how to leave once the thing it shows is gone.
  *
@@ -107,15 +107,8 @@ export function useMediaActions<
    * has answered, so the list never displays a name the library does not hold.
    */
   onRenamed: (mediaItemId: string, title: string) => void;
-  /**
-   * Whether the menu offers "Move". Default `true`, and `false` on exactly one
-   * surface: the header of a media item's own page, whose folder button sits one
-   * slot to the left of the `…` and already opens this very picker. A row
-   * duplicating the control next to it would only make the menu longer.
-   */
-  canMove?: boolean;
 }): MediaActionsController<T> {
-  const { onDeleted, onRenamed, canMove = true } = options;
+  const { onDeleted, onRenamed } = options;
   const router = useRouter();
 
   // Visibility is tracked apart from the target on purpose. The menu defers the
@@ -321,9 +314,7 @@ export function useMediaActions<
       visible: isMenuVisible,
       target: target?.item ?? null,
       anchor,
-      actions: canMove
-        ? [moveAction, renameAction, deleteAction]
-        : [renameAction, deleteAction],
+      actions: [moveAction, renameAction, deleteAction],
       isBusy: isDeleting,
       onClose: closeMenu,
       testIDPrefix: "media-actions",

@@ -106,9 +106,9 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
  * `NativeTabs` already insets for.
  *
  * Taken off the pager's height rather than added to the page's scroll content:
- * the page is a shared component that owns its own padding, and the sticky tab
- * bar inside it has to stay visible, which a taller page under the capsule would
- * not guarantee.
+ * the page is a shared component that owns its own padding, and it measures its
+ * reading progress against its own height — a page running on under the capsule
+ * would report the end of its text as reached before it is on screen.
  */
 const TAB_BAR_CLEARANCE =
   Platform.OS === "ios" ? TouchTarget.large + Spacing.lg : Spacing.lg;

@@ -29,8 +29,9 @@ import { t, useTranslation } from "../../src/i18n";
  * 2. If the processing job is non-terminal, shows a "Generating text..." placeholder
  *    with a spinner. Polls every 3s until status becomes terminal.
  * 3. On "completed": hands the item to `CompletedDetailView`, the shared page the
- *    Digest pager renders too — with its chrome on, which is this route's own
- *    safe area and title bar.
+ *    Digest pager renders too — with its chrome on: the page then draws its
+ *    cover under this route's status bar, with back and `…` over it, in place of
+ *    the `MediaDetailHeader` the states below carry.
  * 4. On "failed": shows a failure banner with the error message, plus — when the
  *    failure is one of the seven that mean the source itself is not handled yet —
  *    a card offering to request support for it (`SourceSupportRequestCard`).

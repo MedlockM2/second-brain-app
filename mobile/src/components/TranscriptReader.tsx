@@ -1,13 +1,23 @@
 /**
- * The readable body of a media item: the "Reader" tab of `app/media/[id].tsx`.
+ * The readable body of a media item: the "Full text" section of the Reader tab
+ * of `CompletedDetailView`.
  *
  * Rendering only — fetching, translation polling and retrying live in the screen
  * that owns the state, and are handed over through `content`. That split is what
  * lets the screen keep loading (and keep a translation poll alive) while the
  * user is looking at another tab.
+ *
+ * It carries no metadata line of its own any more: language, duration and
+ * length sit once, under the page title, next to the date (task-411). The line
+ * that used to open this section repeated the duration the title already showed.
+ *
+ * Memoised because its parent re-renders as the page scrolls past the points
+ * where the collapsed bar and its tabs appear, and this is the one subtree whose
+ * size grows with the source: a long transcript is hundreds of `Text` nodes that
+ * have nothing to redraw when a bar fades in above them.
  */
 
-import React, { useMemo } from "react";
+import React, { memo, useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -17,8 +27,7 @@ import {
   TouchTarget,
   Typography,
 } from "../constants/theme";
-import { t, tCount } from "../i18n";
-import { formatDuration } from "../lib/formatDuration";
+import { t } from "../i18n";
 import type {
   MediaStatusResponse,
   ProcessingJobLifecycleStatus,
@@ -77,7 +86,7 @@ interface TranscriptReaderProps {
   onRetry: () => void;
 }
 
-export function TranscriptReader({
+export const TranscriptReader = memo(function TranscriptReader({
   transcript,
   processingStatus,
   content,
@@ -115,39 +124,9 @@ export function TranscriptReader({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>{t("transcript.heading")}</Text>
-
-      {/* Transcript metadata */}
-      <View style={styles.meta}>
-        {transcript.language && (
-          <View style={styles.metaItem}>
-            <Ionicons
-              name="language-outline"
-              size={14}
-              color={Colors.textMuted}
-            />
-            <Text style={styles.metaText}>
-              {transcript.language.toUpperCase()}
-            </Text>
-          </View>
-        )}
-        {transcript.duration_seconds && (
-          <View style={styles.metaItem}>
-            <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.metaText}>
-              {formatDuration(transcript.duration_seconds)}
-            </Text>
-          </View>
-        )}
-        {transcript.segments_count && (
-          <View style={styles.metaItem}>
-            <Ionicons name="list-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.metaText}>
-              {tCount("transcript.paragraphCount", transcript.segments_count)}
-            </Text>
-          </View>
-        )}
-      </View>
+      <Text style={styles.sectionTitle} accessibilityRole="header">
+        {t("transcript.heading")}
+      </Text>
 
       {/* When the transcript is ready, surface the actual content inline.
           Until it's ready (or if fetching the body fails), keep the status row
@@ -180,7 +159,7 @@ export function TranscriptReader({
       )}
     </View>
   );
-}
+});
 
 /**
  * Renders the transcript body as discrete paragraphs.
@@ -335,21 +314,6 @@ const styles = StyleSheet.create({
     fontWeight: Typography.headline.fontWeight,
     color: Colors.textMain,
     marginBottom: Spacing.md,
-  },
-  meta: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
-    marginBottom: Spacing.sm,
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-  },
-  metaText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
   },
   statusRow: {
     flexDirection: "row",

@@ -1,5 +1,5 @@
 /**
- * "Aperçu": what a source is about, above its full text on the Reader tab.
+ * "L'essentiel": what a source is about, above its full text on the Reader tab.
  *
  * The content is the triage card of the internal `review_blurb` artifact
  * (task-323), mirrored on the library row and served by
@@ -7,13 +7,20 @@
  * unsorted-review screen, so the answer to "what is in here again?" disappeared
  * the moment an item was sorted — which is precisely when it is asked.
  *
+ * Drawn as the *Callout Aside* of Amber Clarity — the 4pt amber bar on the 5%
+ * amber wash, the system's editorial "pull quote" — under a small "L'essentiel"
+ * label (task-411: the owner's pick for the Reader tab is direction C of the
+ * task-410 benchmark, with this block taken from its direction A). It replaced
+ * the "Aperçu" heading over a grey card: the block is the lede of the page, not
+ * one more section of it.
+ *
  * Rendering only: the owning screen holds the state and the bounded poll that
  * resolves the waiting state, the same split `TranscriptReader` already uses.
  *
- * The section is always present, in all three states. A preview being generated
+ * The block is always present, in all three states. A preview being generated
  * and a preview that will never exist look identical from the content alone
  * (both are a null blurb), so the status travels with it and the two get
- * different, honest lines instead of a section that silently vanishes. The
+ * different, honest lines instead of a block that silently vanishes. The
  * waiting line is the one that has to be earned: it is the only state that makes
  * a promise, so it is drawn only when the status actually makes that promise.
  */
@@ -28,12 +35,12 @@ import { t } from "../i18n";
 import type { MediaItemContract } from "../types/media";
 
 /**
- * What the section renders, once content and status have been reconciled.
+ * What the block renders, once content and status have been reconciled.
  *
  * `unavailable` is one state for every way of not having a preview — the
  * generation failed, it was lost, or the wait ran out — because they read the
  * same to someone looking at the page: there is nothing here, and nothing is
- * coming. What is *not* among them is a fourth, silent state where the section
+ * coming. What is *not* among them is a fourth, silent state where the block
  * waits with nothing behind it.
  */
 export type SourcePreviewState =
@@ -42,7 +49,7 @@ export type SourcePreviewState =
   | { status: "unavailable" };
 
 /**
- * Reconciles the two contract fields into the one thing the section draws.
+ * Reconciles the two contract fields into the one thing the block draws.
  *
  * Content wins: a blurb with a hook is a preview, whatever the artifact entry
  * says about itself.
@@ -81,70 +88,77 @@ export function SourcePreview({
   state: SourcePreviewState;
 }): React.JSX.Element {
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>{t("preview.heading")}</Text>
-      <View style={styles.card}>
-        {state.status === "ready" ? (
-          <>
-            <Text style={styles.hook}>{state.hook}</Text>
-            {/* The same bullets the triage card draws. One bullet style in the
-                app, and it lives in `Bullets`. */}
-            {state.points.length > 0 ? <Bullets items={state.points} /> : null}
-          </>
-        ) : state.status === "pending" ? (
-          <View style={styles.statusRow}>
-            <ActivityIndicator
-              size="small"
-              color={Colors.primary}
-              style={styles.statusGlyph}
-            />
-            <Text style={styles.statusText}>{t("preview.pending")}</Text>
-          </View>
-        ) : (
-          /* No button: the generation is internal and `POST /api/artifacts`
-             refuses this type outright, so there is nothing here a tap could
-             ask for. Leaving the screen and coming back re-reads the item, which
-             is what picks up a preview that landed late. A calm line, and the
-             full text below is untouched — the preview was never what the reader
-             came for. */
-          <View style={styles.statusRow}>
-            <Ionicons
-              name="information-circle-outline"
-              size={16}
-              color={Colors.textMuted}
-              style={styles.statusGlyph}
-            />
-            <Text style={styles.statusText}>{t("preview.unavailable")}</Text>
-          </View>
-        )}
-      </View>
+    <View style={styles.callout}>
+      {/* A header for screen readers: after the tabs, it is the next landmark
+          on the page, then "Full text". */}
+      <Text style={styles.label} accessibilityRole="header">
+        {t("preview.essentials")}
+      </Text>
+      {state.status === "ready" ? (
+        <>
+          <Text style={styles.hook}>{state.hook}</Text>
+          {/* The same bullets the triage card draws. One bullet style in the
+              app, and it lives in `Bullets`. */}
+          {state.points.length > 0 ? <Bullets items={state.points} /> : null}
+        </>
+      ) : state.status === "pending" ? (
+        <View style={styles.statusRow}>
+          <ActivityIndicator
+            size="small"
+            color={Colors.primary}
+            style={styles.statusGlyph}
+          />
+          <Text style={styles.statusText}>{t("preview.pending")}</Text>
+        </View>
+      ) : (
+        /* No button: the generation is internal and `POST /api/artifacts`
+           refuses this type outright, so there is nothing here a tap could
+           ask for. Leaving the screen and coming back re-reads the item, which
+           is what picks up a preview that landed late. A calm line, and the
+           full text below is untouched — the preview was never what the reader
+           came for. */
+        <View style={styles.statusRow}>
+          <Ionicons
+            name="information-circle-outline"
+            size={16}
+            color={Colors.textMuted}
+            style={styles.statusGlyph}
+          />
+          <Text style={styles.statusText}>{t("preview.unavailable")}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   /**
-   * The gap to the full text is the section's own: the Reader tab stacks the two
-   * blocks directly, and only this one knows how much air it needs under itself.
+   * The Callout Aside. The amber bar sits on the *start* edge, so it moves to
+   * the right in Arabic along with the text it introduces; only the two corners
+   * away from it are rounded. The bar is the one stroke of the page, and it is
+   * the design system's own component rather than a divider ("No-Line" rule).
+   *
+   * The gap to the full text is the block's own: the Reader tab stacks the two
+   * directly, and only this one knows how much air it needs under itself.
    */
-  container: {
-    marginBottom: Spacing.xl,
-  },
-  // Same heading treatment as the full-text section below, so the two read as
-  // two sections of one page rather than a card bolted on top.
-  sectionTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.md,
-  },
-  // A tonal shift, no border: the block separates itself from the reading canvas
-  // the way the triage card does ("No-Line" rule).
-  card: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
+  callout: {
+    borderStartWidth: Spacing.xs,
+    borderStartColor: Colors.primary,
+    backgroundColor: Colors.primaryTint,
+    borderTopEndRadius: BorderRadius.md,
+    borderBottomEndRadius: BorderRadius.md,
     padding: Spacing.md,
     gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  // `textSubtle`, not `textMuted`: a label to read, at 5.2:1 on the amber wash.
+  // The letter spacing is the one every small-caps label of the app uses.
+  label: {
+    fontSize: Typography.small.fontSize,
+    fontWeight: Typography.label.fontWeight,
+    color: Colors.textSubtle,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   // Body size, headline weight: the hook is a sentence to read, not a title, but
   // it has to lead the bullets under it. Both values are tokens.

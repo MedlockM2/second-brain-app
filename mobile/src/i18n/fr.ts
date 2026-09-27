@@ -331,7 +331,7 @@ export const fr: Catalog = {
   "account.plan.resetDateUnknownA11y": "Date de recharge inconnue",
   "account.plan.minutesRuleTrial":
     "{rule} Les minutes d'essai ne se rechargent pas.",
-  "preview.heading": "Aperçu",
+  "preview.essentials": "L'essentiel",
   "preview.pending": "L'aperçu est en cours de rédaction…",
   "preview.unavailable": "Pas d'aperçu pour cette source.",
   "transcript.heading": "Texte complet",
@@ -561,7 +561,8 @@ export const fr: Catalog = {
   "media.movedToFolder": "Déplacé vers un dossier",
   "media.removedFromFolder": "Retiré du dossier",
   "media.openFailed": "Impossible d'ouvrir {host}",
-  "media.moveToFolderA11y": "Déplacer vers un dossier",
+  "media.openSourceA11y": "Ouvrir sur {host}",
+  "media.readingProgressA11y": "Progression de la lecture",
   "folder.tab.sources": "Sources",
   "folder.tab.ai": "IA",
   "folder.sectionsA11y": "Sections du dossier",

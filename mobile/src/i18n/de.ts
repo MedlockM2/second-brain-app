@@ -325,7 +325,7 @@ export const de: Catalog = {
   "account.plan.resetDateUnknownA11y": "Zurücksetzungsdatum unbekannt",
   "account.plan.minutesRuleTrial":
     "{rule} Testminuten füllen sich nicht wieder auf.",
-  "preview.heading": "Vorschau",
+  "preview.essentials": "Das Wichtigste",
   "preview.pending": "Die Vorschau wird geschrieben …",
   "preview.unavailable": "Keine Vorschau für diese Quelle.",
   "transcript.heading": "Volltext",
@@ -551,7 +551,8 @@ export const de: Catalog = {
   "media.movedToFolder": "In einen Ordner verschoben",
   "media.removedFromFolder": "Aus dem Ordner entfernt",
   "media.openFailed": "{host} konnte nicht geöffnet werden",
-  "media.moveToFolderA11y": "In einen Ordner verschieben",
+  "media.openSourceA11y": "Auf {host} öffnen",
+  "media.readingProgressA11y": "Lesefortschritt",
   "folder.tab.sources": "Quellen",
   "folder.tab.ai": "KI",
   "folder.sectionsA11y": "Bereiche des Ordners",

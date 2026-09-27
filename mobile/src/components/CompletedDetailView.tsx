@@ -1,12 +1,26 @@
 /**
  * A media item that has finished processing, as a page.
  *
- * The hero title and its metadata, then two intra-screen tabs: the transcript
- * ("Reader") and artifact generation ("AI"). Everything it shows comes from the
- * `mediaData` prop — it reads no route parameter and holds no polling of its
- * own, so the same component renders the `/media/[id]` route and a card of the
- * Digest pager. That is the point of it living here rather than in the route:
- * a change to the media page lands in both by construction.
+ * The cover and what names the source (`MediaDetailHero`), then two intra-screen
+ * tabs: the text ("Reader") and artifact generation ("AI"). Everything it shows
+ * comes from the `mediaData` prop — it reads no route parameter and holds no
+ * polling of its own, so the same component renders the `/media/[id]` route and a
+ * card of the Digest pager. That is the point of it living here rather than in
+ * the route: a change to the media page lands in both by construction.
+ *
+ * The composition is direction C of the task-410 benchmark, the owner's pick for
+ * task-411, with the preview block of its direction A:
+ *
+ *     cover band (under the status bar; creator and title on glass; back and …)
+ *     source link · date · duration · language · length
+ *     Reader | AI
+ *     "L'essentiel" (Callout Aside)      ← `SourcePreview`
+ *     Full text                          ← `TranscriptReader`
+ *
+ * Once the band has scrolled away, `MediaReaderBar` fades in over the top: back,
+ * a thumbnail, the title, the segment folded to two glyphs, and the reading
+ * progress. It replaces the header and the sticky segment the page used to keep
+ * on screen. Filing the item moved into the `…` menu with it.
  *
  * The route keeps what belongs to a route: the fetch, and the loading,
  * processing, timeout and failure states of the item on its way here.
@@ -25,14 +39,18 @@ import React, {
 } from "react";
 import {
   Animated,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useAuth } from "../contexts/AuthContext";
@@ -45,9 +63,14 @@ import { formatDuration } from "../lib/formatDuration";
 import type { ArtifactTileState } from "./ArtifactTile";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ScreenTabs, type ScreenTab } from "./ScreenTabs";
-import { HeaderMenuGlyph } from "./ScreenHeader";
 import { AnchoredContextMenu } from "./AnchoredContextMenu";
-import { MediaDetailHeader } from "./MediaDetailHeader";
+import {
+  MediaDetailHero,
+  MediaHeroMenuGlyph,
+  getCoverBandLayout,
+  type MediaCover,
+} from "./MediaDetailHero";
+import { MediaReaderBar, MEDIA_READER_BAR_HEIGHT } from "./MediaReaderBar";
 import { RenameDialog } from "./RenameDialog";
 import { useMediaActions } from "../hooks/useMediaActions";
 import {
@@ -65,13 +88,14 @@ import {
   Spacing,
   BorderRadius,
 } from "../constants/theme";
-import { formatDate, t } from "../i18n";
+import { LOCALE_ENDONYMS, formatDate, t, tCount } from "../i18n";
+import { isSupportedLocale } from "../i18n/locales";
 import type {
   MediaStatusResponse,
   MediaItemContract,
   ArtifactType,
 } from "../types/media";
-import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
+import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { describeArtifactRefusal } from "../lib/artifactRefusal";
 import { mergeArtifactIntoHistory } from "../lib/artifactHistory";
@@ -125,6 +149,29 @@ const PREVIEW_POLL_DELAY_MS = 3000;
  */
 const PREVIEW_POLL_MAX_ATTEMPTS = 20;
 
+/**
+ * The reading progress is announced in steps of this many percent: fine enough
+ * to tell where one is, coarse enough that scrolling does not re-render the page
+ * on every frame to update a number nobody is listening to.
+ */
+const PROGRESS_ANNOUNCE_STEP = 10;
+
+/**
+ * The language of the text, as the metadata line names it.
+ *
+ * One of the app's eleven languages is named in its own script — "Français",
+ * "日本語" — which is how the text under it is written, and the same name the
+ * language settings use. Anything else keeps its code in capitals, as the page
+ * has always shown it: there is no localised name for it to fall back on.
+ */
+function describeLanguage(code: string | undefined): string | null {
+  const primary = code?.trim().split(/[-_]/)[0]?.toLowerCase();
+  if (!primary) return null;
+  return isSupportedLocale(primary)
+    ? LOCALE_ENDONYMS[primary]
+    : primary.toUpperCase();
+}
+
 /** An `original_url` that is actually a destination the OS can open. */
 type SourceLink = {
   /** The http(s) URL handed to `Linking.openURL`, verbatim. */
@@ -145,7 +192,7 @@ type SourceLink = {
  * `user_media-dev` on 2026-08-17: uploads carry no `source_url` attribute at all
  * (the API defaults it to `""`), and shared audio and text carry a synthetic
  * `share://<platform>/...` marker. Both return `null` here, which is what keeps
- * the chip inert rather than offering a tap that goes nowhere.
+ * the metadata line free of a link that goes nowhere.
  */
 function resolveSourceLink(rawUrl: string): SourceLink | null {
   const trimmed = rawUrl.trim();
@@ -172,10 +219,12 @@ export interface CompletedDetailViewProps {
    */
   onBack: () => void;
   /**
-   * Whether the page carries its own top chrome — the safe area and the title
-   * bar. On by default, which is the route: it mounts this straight under the
-   * status bar. A pager turns it off, since it owns the top inset and shows one
-   * header above every card rather than one per card.
+   * Whether the page carries its own top chrome: the cover drawn under the status
+   * bar and the status bar's style, the back and `…` buttons over the cover, and
+   * the back arrow of the collapsed bar. On by default, which is the route: it
+   * mounts this straight under the status bar. A pager turns it off, since it
+   * owns the top inset and shows one header above every card rather than one per
+   * card.
    */
   showChrome?: boolean;
 }
@@ -190,6 +239,10 @@ export function CompletedDetailView({
   const { media_item, processing_job } = mediaData;
 
   // --- Folder state ---
+  //
+  // Read back from the item on every return to the screen: the picker the `…`
+  // menu opens writes the move to the item, not to this screen. It is what the
+  // next "Move" preselects, and what the toast below compares against.
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(
     media_item.folder_id ?? null,
   );
@@ -329,16 +382,6 @@ export function CompletedDetailView({
     };
   }, []);
 
-  const handleFolderPress = useCallback(() => {
-    const params = new URLSearchParams();
-    params.set("mode", "move");
-    params.set("mediaItemId", media_item.media_item_id);
-    if (currentFolderId) {
-      params.set("currentFolderId", currentFolderId);
-    }
-    router.push(`/media/folder?${params.toString()}`);
-  }, [router, media_item.media_item_id, currentFolderId]);
-
   // The title as this screen shows it: whatever the library row holds, or the
   // label key it carries instead, read as "<label> — <save date>" in the reader's
   // language (task-400). The URL-then-"Untitled" chain that used to be here is
@@ -347,28 +390,29 @@ export function CompletedDetailView({
   const [renamedTitle, setRenamedTitle] = useState<string | null>(null);
   const displayTitle = renamedTitle ?? resolveMediaTitle(media_item);
 
-  // The header `…`, and what it offers: the rename and the delete a long press
-  // already offers in Library, reachable from the item itself. No "Move" row —
-  // the folder button one slot to its left opens that very picker.
+  // The `…` over the cover, and what it offers: the move, the rename and the
+  // delete a long press already offers in Library, reachable from the item
+  // itself. The move is a row of this menu since the folder button left the top
+  // of the page with the header it sat in (task-411).
   const mediaActions = useMediaActions<MediaItemContract>({
-    canMove: false,
     // Nothing left to show once the deletion is confirmed, so the screen leaves.
     // The list it was opened from refetches on focus and comes back without it.
     onDeleted: onBack,
     onRenamed: (_mediaItemId, title) => setRenamedTitle(title),
   });
 
-  // What the menu acts on, carrying the title currently on screen: a second
-  // rename has to start from the name the first one stored.
+  // What the menu acts on, carrying the title currently on screen — a second
+  // rename has to start from the name the first one stored — and the folder the
+  // item is in now, which the picker preselects.
   const menuTarget = useMemo<MediaItemContract>(
-    () => ({ ...media_item, title: displayTitle }),
-    [media_item, displayTitle],
+    () => ({ ...media_item, title: displayTitle, folder_id: currentFolderId }),
+    [media_item, displayTitle, currentFolderId],
   );
 
-  // The copy of the pressed control the menu lifts above its blur. A header
-  // button has no row to redraw, so it redraws itself: the `…` stays sharp and
-  // the card visibly hangs from it.
-  const renderActionsPreview = useCallback(() => <HeaderMenuGlyph />, []);
+  // The copy of the pressed control the menu lifts above its blur. A button has
+  // no row to redraw, so it redraws itself: the `…` stays sharp and the card
+  // visibly hangs from it.
+  const renderActionsPreview = useCallback(() => <MediaHeroMenuGlyph />, []);
 
   const [activeTab, setActiveTab] = useState<MediaDetailTabKey>("reader");
   // Artifacts are a per-scope append-only history: the media detail response
@@ -548,16 +592,8 @@ export function CompletedDetailView({
     [isAuthenticated, media_item.media_item_id],
   );
 
-  const displayDomain = (() => {
-    try {
-      return new URL(media_item.original_url).hostname.replace(/^www\./, "");
-    } catch {
-      return media_item.source_platform;
-    }
-  })();
-
   // The way back to the thing itself. `null` for anything we cannot open, in
-  // which case the chip below renders with no press behaviour and no glyph.
+  // which case the metadata line carries no link at all.
   const sourceLink = useMemo(
     () => resolveSourceLink(media_item.original_url),
     [media_item.original_url],
@@ -590,6 +626,17 @@ export function CompletedDetailView({
   const durationLabel = media_item.transcript?.duration_seconds
     ? formatDuration(media_item.transcript.duration_seconds)
     : null;
+
+  // Everything known about the source, on the one line under the title. The
+  // duration used to be printed twice — in the hero and again above the text.
+  const details = [
+    formattedDate,
+    durationLabel,
+    describeLanguage(media_item.transcript?.language),
+    media_item.transcript?.segments_count
+      ? tCount("transcript.paragraphCount", media_item.transcript.segments_count)
+      : null,
+  ].filter((detail): detail is string => !!detail);
 
   const mediaReady =
     media_item.status === "ready_for_artifacts" ||
@@ -801,36 +848,231 @@ export function CompletedDetailView({
     };
   }, [isAuthenticated, preview.status, previewItemId]);
 
+  // --- The cover ---
+  //
+  // The one image of the detail contract. A failure is kept per item rather than
+  // as a flag: the Digest pager hands this instance another media, and a picture
+  // that would not load for the previous one must not hide the next one's.
+  const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
+  const coverUrl = media_item.media_image?.trim() ?? "";
+  const cover = useMemo<MediaCover | null>(
+    () =>
+      coverUrl && failedCoverId !== media_item.media_item_id
+        ? {
+            uri: coverUrl,
+            cacheKey: `${media_item.media_item_id}:${media_item.updated_at}`,
+            recyclingKey: media_item.media_item_id,
+          }
+        : null,
+    [coverUrl, failedCoverId, media_item.media_item_id, media_item.updated_at],
+  );
+  const handleCoverError = useCallback(
+    () => setFailedCoverId(media_item.media_item_id),
+    [media_item.media_item_id],
+  );
+
+  // Over a picture, the eyebrow names who published it; the picture says the
+  // rest. Without one, the glyph standing in for it is decorative, so the type
+  // is written out in words (task-410 §2.3).
+  const creator = media_item.creator_name?.trim() ?? "";
+  const typeLabel = getMediaTypeLabel(media_item.media_type);
+  const eyebrow = cover
+    ? creator || typeLabel
+    : [typeLabel, creator].filter(Boolean).join(" · ");
+  const mediaTypeIcon = getMediaTypeIcon(media_item.media_type);
+
+  // --- Layout under the status bar ---
+  //
+  // The route draws the band under the status bar and the collapsed bar over
+  // it. A pager owns that inset itself, so for it the page starts at 0.
+  const insets = useSafeAreaInsets();
+  const topInset = showChrome ? insets.top : 0;
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const bandLayout = getCoverBandLayout({
+    windowWidth,
+    windowHeight,
+    topInset,
+    hasCover: cover !== null,
+  });
+  const barHeight = topInset + MEDIA_READER_BAR_HEIGHT;
+
+  // --- Scroll: the collapsed bar, its segment, the progress ---
+  //
+  // Every threshold is a scroll offset. The bar is fully drawn once the bottom
+  // of the band reaches its own bottom edge, after fading in over the 48pt
+  // before; never earlier than 48pt of scroll, so a short fallback band does not
+  // start the page with a half-drawn bar.
+  const barShownAt = Math.max(Spacing.xxl, bandLayout.height - barHeight);
+  const barFadeFrom = barShownAt - Spacing.xxl;
+
+  // The page's own segment, measured where it lies in the scroll content. Its
+  // folded copy in the bar fades in while the pill slides under the bar, so
+  // there is always exactly one segment to tap.
+  const [tabsFrame, setTabsFrame] = useState<{
+    y: number;
+    height: number;
+  } | null>(null);
+  const handleTabsLayout = useCallback((event: LayoutChangeEvent) => {
+    const { y, height } = event.nativeEvent.layout;
+    setTabsFrame((current) =>
+      current?.y === y && current.height === height ? current : { y, height },
+    );
+  }, []);
+  const miniTabsFadeFrom = tabsFrame
+    ? Math.max(barShownAt, tabsFrame.y + Spacing.md - barHeight)
+    : null;
+  const miniTabsShownAt =
+    tabsFrame && miniTabsFadeFrom !== null
+      ? Math.max(
+          miniTabsFadeFrom + 1,
+          tabsFrame.y + tabsFrame.height - Spacing.md - barHeight,
+        )
+      : null;
+
+  // The reading progress runs over the whole page, so both heights are needed.
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const maxScroll = Math.max(1, contentHeight - viewportHeight);
+
+  // Driven natively: the fades and the progress never wait on the JS thread.
+  const scrollY = useMemo(() => new Animated.Value(0), []);
+  const barOpacity = useMemo(
+    () =>
+      scrollY.interpolate({
+        inputRange: [barFadeFrom, barShownAt],
+        outputRange: [0, 1],
+        extrapolate: "clamp",
+      }),
+    [scrollY, barFadeFrom, barShownAt],
+  );
+  const miniTabsOpacity = useMemo(
+    () =>
+      miniTabsFadeFrom === null || miniTabsShownAt === null
+        ? 0
+        : scrollY.interpolate({
+            inputRange: [miniTabsFadeFrom, miniTabsShownAt],
+            outputRange: [0, 1],
+            extrapolate: "clamp",
+          }),
+    [scrollY, miniTabsFadeFrom, miniTabsShownAt],
+  );
+  const progress = useMemo(
+    () =>
+      scrollY.interpolate({
+        inputRange: [0, maxScroll],
+        outputRange: [0, 1],
+        extrapolate: "clamp",
+      }),
+    [scrollY, maxScroll],
+  );
+
+  // What the JS side has to know about the scroll, and nothing finer: whether
+  // the bar and its segment take touches (and are announced), which way the
+  // status bar goes, and the progress in announced steps. Each is set only as it
+  // changes, so a scroll re-renders the page a handful of times, not per frame.
+  const [barVisible, setBarVisible] = useState(false);
+  const [miniTabsVisible, setMiniTabsVisible] = useState(false);
+  const [progressPercent, setProgressPercent] = useState(0);
+
+  // Rebuilt when a threshold moves — a picture that failed, a text that landed,
+  // a rename that rewrapped the title — which re-attaches it to the scroll view.
+  // The offset itself stays on the native side; the listener only ever sees it
+  // to decide the three values above.
+  const handleScroll = useMemo(() => {
+    const barMidpoint = (barFadeFrom + barShownAt) / 2;
+    const miniTabsMidpoint =
+      miniTabsFadeFrom === null || miniTabsShownAt === null
+        ? null
+        : (miniTabsFadeFrom + miniTabsShownAt) / 2;
+    return Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+      {
+        useNativeDriver: true,
+        listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+          const offset = event.nativeEvent.contentOffset.y;
+          setBarVisible(offset >= barMidpoint);
+          setMiniTabsVisible(
+            miniTabsMidpoint !== null && offset >= miniTabsMidpoint,
+          );
+          const ratio = Math.min(Math.max(offset / maxScroll, 0), 1);
+          setProgressPercent(
+            Math.round((ratio * 100) / PROGRESS_ANNOUNCE_STEP) *
+              PROGRESS_ANNOUNCE_STEP,
+          );
+        },
+      },
+    );
+  }, [
+    scrollY,
+    barFadeFrom,
+    barShownAt,
+    miniTabsFadeFrom,
+    miniTabsShownAt,
+    maxScroll,
+  ]);
+
+  const scrollRef = useRef<ScrollView>(null);
+
+  // A tab picked from the collapsed bar — the only segment on screen once the
+  // page's own has slid under it — opens at its own top, right under the bar,
+  // rather than wherever a deep offset lands in content of another length. From
+  // the page's own segment nothing moves.
+  const handleTabChange = useCallback(
+    (key: MediaDetailTabKey) => {
+      setActiveTab(key);
+      if (miniTabsVisible && miniTabsShownAt !== null) {
+        scrollRef.current?.scrollTo({ y: miniTabsShownAt, animated: false });
+      }
+    },
+    [miniTabsVisible, miniTabsShownAt],
+  );
+
+  // Light over the picture, dark once the bar — or a tonal band — is under it.
+  // Only while this screen is the one in front: the entry stays on the status
+  // bar's stack for as long as it is mounted, and a screen pushed over this one
+  // would otherwise inherit light icons on its light background.
+  const isFocused = useIsFocused();
+  const statusBarStyle = cover && !barVisible ? "light" : "dark";
+
   return (
-    <DetailContainer showChrome={showChrome}>
-      {showChrome ? (
-        <MediaDetailHeader
-          onBack={onBack}
-          folderId={currentFolderId}
-          onFolderPress={handleFolderPress}
-          onActionsPress={(anchor) => mediaActions.open(menuTarget, anchor)}
-        />
+    <View style={styles.container}>
+      {showChrome && isFocused ? (
+        <StatusBar style={statusBarStyle} animated />
       ) : null}
 
-      {/* Toast feedback */}
-      {toast && (
-        <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
-          <Ionicons
-            name={toast.tone === "error" ? "alert-circle" : "checkmark-circle"}
-            size={16}
-            color={toast.tone === "error" ? Colors.error : Colors.primary}
-          />
-          <Text style={styles.toastText}>{toast.message}</Text>
-        </Animated.View>
-      )}
+      {/* Before the scroll view in the tree, so a screen reader meets it first
+          when it is shown; drawn over it by its own `zIndex`. */}
+      <MediaReaderBar
+        topInset={topInset}
+        opacity={barOpacity}
+        visible={barVisible}
+        onBack={showChrome ? onBack : undefined}
+        title={displayTitle}
+        cover={cover}
+        onCoverError={handleCoverError}
+        mediaTypeIcon={mediaTypeIcon}
+        tabs={MEDIA_DETAIL_TABS}
+        activeKey={activeTab}
+        onTabChange={handleTabChange}
+        tabsAccessibilityLabel={t("media.sectionsA11y")}
+        tabsOpacity={miniTabsOpacity}
+        tabsVisible={miniTabsVisible}
+        progress={activeTab === "reader" ? progress : null}
+        progressPercent={progressPercent}
+      />
 
-      <ScrollView
+      <Animated.ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        // The tab bar is child index 1: it stays pinned while a long transcript
-        // scrolls under it, so switching to AI never requires scrolling back up.
-        stickyHeaderIndices={[1]}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        onLayout={(event: LayoutChangeEvent) =>
+          setViewportHeight(event.nativeEvent.layout.height)
+        }
+        onContentSizeChange={(_width: number, height: number) =>
+          setContentHeight(height)
+        }
         // One axis per drag, which is what makes this page swipeable when the
         // Digest nests it in a horizontal pager: a drag that starts sideways is
         // not half-absorbed here as a diagonal scroll before the pager takes it.
@@ -838,38 +1080,32 @@ export function CompletedDetailView({
         // there is nothing horizontal to lock out.
         directionalLockEnabled
       >
-        {/* Hero Title & Metadata */}
-        <View style={styles.heroSection}>
-          <Text style={styles.heroTitle}>{displayTitle}</Text>
-          <View style={styles.metaRow}>
-            <SourceChip
-              icon={getMediaTypeIcon(media_item.media_type)}
-              label={displayDomain.toUpperCase()}
-              link={sourceLink}
-              onPress={handleOpenSource}
-            />
-            {formattedDate ? (
-              <>
-                <Text style={styles.metaDot}>{"•"}</Text>
-                <Text style={styles.metaText}>{formattedDate}</Text>
-              </>
-            ) : null}
-            {durationLabel ? (
-              <>
-                <Text style={styles.metaDot}>{"•"}</Text>
-                <Text style={styles.metaText}>{durationLabel}</Text>
-              </>
-            ) : null}
-          </View>
-        </View>
+        <MediaDetailHero
+          layout={bandLayout}
+          topInset={topInset}
+          cover={cover}
+          onCoverError={handleCoverError}
+          mediaTypeIcon={mediaTypeIcon}
+          eyebrow={eyebrow}
+          title={displayTitle}
+          sourceHost={sourceLink?.host ?? null}
+          onOpenSource={handleOpenSource}
+          details={details}
+          onBack={showChrome ? onBack : undefined}
+          onActionsPress={
+            showChrome
+              ? (anchor) => mediaActions.open(menuTarget, anchor)
+              : undefined
+          }
+        />
 
-        {/* Intra-screen tabs. Pinned by `stickyHeaderIndices` above, hence the
-            opaque background: the content scrolls underneath it. */}
-        <View style={styles.tabsBar}>
+        {/* Intra-screen tabs. They scroll away with the page; the collapsed bar
+            carries their folded copy from there. */}
+        <View style={styles.tabsBar} onLayout={handleTabsLayout}>
           <ScreenTabs
             tabs={MEDIA_DETAIL_TABS}
             activeKey={activeTab}
-            onChange={setActiveTab}
+            onChange={handleTabChange}
             accessibilityLabel={t("media.sectionsA11y")}
           />
         </View>
@@ -907,7 +1143,28 @@ export function CompletedDetailView({
             showSourceCount={false}
           />
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+
+      {/* Toast feedback, over the page and under where the collapsed bar ends,
+          so it covers neither the controls over the cover nor the bar. */}
+      {toast && (
+        <View
+          style={[
+            styles.toastLayer,
+            { top: barHeight + Spacing.sm },
+          ]}
+          pointerEvents="none"
+        >
+          <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
+            <Ionicons
+              name={toast.tone === "error" ? "alert-circle" : "checkmark-circle"}
+              size={16}
+              color={toast.tone === "error" ? Colors.error : Colors.primary}
+            />
+            <Text style={styles.toastText}>{toast.message}</Text>
+          </Animated.View>
+        </View>
+      )}
 
       {/* Screen level, outside the scroll view: both are modals belonging to the
           screen's state, and the menu's backdrop covers the whole page. */}
@@ -916,87 +1173,7 @@ export function CompletedDetailView({
         renderPreview={renderActionsPreview}
       />
       <RenameDialog {...mediaActions.renameProps} />
-    </DetailContainer>
-  );
-}
-
-// --- Sub-components ---
-
-/**
- * The page's outer box.
- *
- * With the chrome on it is a `SafeAreaView` claiming the top inset, which is
- * what the route needs: nothing sits between the status bar and this page.
- * Without it the host already owns that inset, so the box is a plain `View` — a
- * second safe area nested inside one would push the content down twice.
- */
-function DetailContainer({
-  showChrome,
-  children,
-}: {
-  showChrome: boolean;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  if (!showChrome) {
-    return <View style={styles.container}>{children}</View>;
-  }
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      {children}
-    </SafeAreaView>
-  );
-}
-
-/**
- * The domain chip under the hero title, and the way back to the original source.
- *
- * When the item has an openable https URL the chip *is* the tap target: it
- * already names the platform and sits under the title, so it only needs the
- * external-link glyph to read as openable — cheaper than a second control
- * competing with the artifacts card. When there is nothing to open it stays a
- * plain label: no glyph, no press, no disabled state.
- */
-function SourceChip({
-  icon,
-  label,
-  link,
-  onPress,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  label: string;
-  link: SourceLink | null;
-  onPress: () => void;
-}) {
-  const body = (
-    <>
-      <Ionicons name={icon} size={14} color={Colors.textMain} />
-      <Text style={styles.metaChipText}>{label}</Text>
-      {link ? (
-        <Ionicons name="open-outline" size={14} color={Colors.textMain} />
-      ) : null}
-    </>
-  );
-
-  if (!link) {
-    return <View style={styles.metaChip}>{body}</View>;
-  }
-
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.metaChip,
-        pressed && styles.metaChipPressed,
-      ]}
-      onPress={onPress}
-      accessibilityRole="link"
-      accessibilityLabel={`Open on ${link.host}`}
-      // The chip is ~25px tall by design; the slop takes the actual touch area
-      // past the 48px floor without inflating the pill, same trick as the
-      // header buttons.
-      hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
-    >
-      {body}
-    </Pressable>
+    </View>
   );
 }
 
@@ -1010,23 +1187,23 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  // No gutter and no bottom inset here: each block below owns the page gutter,
-  // because the AI tab is a shared component that carries its own.
-  scrollContent: {
-    paddingTop: Spacing.md,
-  },
 
   // Toast feedback
+  toastLayer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 2,
+  },
   toast: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    alignSelf: "center",
     backgroundColor: Colors.surfaceContainer,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
-    marginBottom: Spacing.sm,
   },
   toastText: {
     fontSize: Typography.small.fontSize,
@@ -1034,63 +1211,10 @@ const styles = StyleSheet.create({
     color: Colors.textMain,
   },
 
-  // Hero
-  heroSection: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.xl,
-  },
-  heroTitle: {
-    fontSize: Typography.display.fontSize,
-    fontWeight: Typography.display.fontWeight,
-    color: Colors.textMain,
-    letterSpacing: Typography.display.letterSpacing,
-    lineHeight: 38,
-    marginBottom: Spacing.sm,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  metaChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-  },
-  metaChipPressed: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  metaChipText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-    letterSpacing: 0.5,
-  },
-  metaDot: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-  metaText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  // Intra-screen tabs. The bar carries the page background because it is a
-  // sticky header: content scrolls underneath it.
+  // Intra-screen tabs, under the metadata line.
   tabsBar: {
-    backgroundColor: Colors.background,
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
+    paddingVertical: Spacing.md,
   },
   // The Reader tab only. The AI tab is `ArtifactsPanel`, which brings the same
   // gutter and the same bottom inset with it.

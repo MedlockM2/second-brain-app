@@ -27,10 +27,10 @@
  * in English and wrong in German.
  *
  * The two controls that fill those slots live here as well: `HeaderIconButton`
- * for a back or close, and `HeaderMenuButton` for the trailing `…`. The second
- * one is exported for the media screen too, whose header is still hand-built —
- * one component is what keeps the actions button at the same place and the same
- * size on both, without that screen having to move to `ScreenHeader` first.
+ * for a back or close, and `HeaderMenuButton` for the trailing `…`. The glyph of
+ * the second is exported on its own: the media page draws its `…` on glass over
+ * the cover (`MediaDetailHero`, task-411), a different control that must still
+ * read as the same action.
  */
 
 import React, { useRef, type ReactNode } from "react";
@@ -145,7 +145,7 @@ export function HeaderIconButton({
  * one: a horizontal `…` is what a top bar carries on both platforms, and the
  * vertical variant reads as an Android overflow menu pinned to the bar's corner.
  */
-const MENU_GLYPH = "ellipsis-horizontal" as const;
+export const MENU_GLYPH = "ellipsis-horizontal" as const;
 
 interface HeaderMenuButtonProps {
   /**
@@ -166,12 +166,9 @@ interface HeaderMenuButtonProps {
  * on the frame the menu opens, and a header that has just been laid out under a
  * notch or behind a toast reports a stale position.
  *
- * One component for both screens that carry it — a media item and a folder —
- * which is what makes the button land at the same place and offer the same 48pt
- * target on a header built by hand and on one built by `ScreenHeader`. The bare
- * glyph rather than the tonal circle of `HeaderIconButton`: this is a secondary
- * affordance sitting next to a primary navigation control, and the filled disc
- * would give it more weight than the back button it follows.
+ * The bare glyph rather than the tonal circle of `HeaderIconButton`: this is a
+ * secondary affordance sitting next to a primary navigation control, and the
+ * filled disc would give it more weight than the back button it follows.
  */
 export function HeaderMenuButton({
   onPress,
