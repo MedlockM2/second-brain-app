@@ -71,6 +71,12 @@
  * dozens of media. The price is that a page left three or more behind refetches
  * when it comes back, which no single swipe can cause.
  *
+ * What a refetch does not bring back is a fresh wait for a translation. Its
+ * budget is kept by the carousel (`TranslationBudgets`), not by the page, so a
+ * page that comes back into the window resumes the wait where it stood instead
+ * of starting it over (task-415). Leaving the screen and coming back, or
+ * bringing the app back to the foreground, is what grants a new one.
+ *
  * ## Deleting from here
  *
  * The `…` menu of a page is the page's own, whole: Move, Rename, Delete. A media
@@ -102,6 +108,7 @@ import { CompletedDetailView } from "../../../src/components/CompletedDetailView
 import { MediaDetailHeader } from "../../../src/components/MediaDetailHeader";
 import { PaginationDots } from "../../../src/components/PaginationDots";
 import { useMediaDetailPolling } from "../../../src/hooks/useMediaDetailPolling";
+import { TranslationBudgets } from "../../../src/hooks/useTranslationRefresh";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
 import { TAB_BAR_CLEARANCE } from "../../../src/constants/tabBar";
 import {
@@ -162,6 +169,9 @@ function DigestCarousel({
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  // The translation waits of the period's pages, which outlive the pages
+  // themselves: see "What gets mounted" at the top of the file.
+  const [translationBudgets] = useState(() => new TranslationBudgets());
   const pagerRef = useRef<ScrollView>(null);
 
   const fetchDigest = useCallback(async () => {
@@ -406,6 +416,7 @@ function DigestCarousel({
               mediaItemId={id}
               onBack={goToChoice}
               onDeleted={handleDeleted}
+              translationBudgets={translationBudgets}
             />
           ) : (
             <View key={id} style={styles.page} />
@@ -436,10 +447,12 @@ function DigestPage({
   mediaItemId,
   onBack,
   onDeleted,
+  translationBudgets,
 }: {
   mediaItemId: string;
   onBack: () => void;
   onDeleted: (mediaItemId: string) => void;
+  translationBudgets: TranslationBudgets;
 }): React.JSX.Element {
   const { state, mediaData, fetchError, processingError, processingMessage } =
     useMediaDetailPolling(mediaItemId);
@@ -457,6 +470,7 @@ function DigestPage({
           onBack={onBack}
           onDeleted={handleDeleted}
           underStatusBar={false}
+          translationBudgets={translationBudgets}
         />
       </View>
     );

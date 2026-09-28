@@ -639,6 +639,10 @@ export const hi: Catalog = {
   "share.signInFiles": "फ़ाइलें इम्पोर्ट करने के लिए साइन इन करना ज़रूरी है।",
   "transcript.translating": "पाठ अनूदित हो रहा है…",
   "transcript.translationFailed": "अनुवाद विफल रहा। मूल पाठ दिखाया जा रहा है।",
+  "transcript.translationStalled":
+    "अनुवाद अभी भी जारी है। इसमें सामान्य से ज़्यादा समय लग रहा है, इसलिए अनुवाद तैयार होने तक मूल पाठ दिखाया जा रहा है।",
+  "transcript.checkTranslation": "फिर से जाँचें",
+  "transcript.checkTranslationA11y": "जाँचें कि अनुवाद तैयार है या नहीं",
   "paywall.subtitle":
     "हर प्लान में सब कुछ मिलता है। फ़र्क़ सिर्फ़ इतना है कि आप कितना भेज सकते हैं।",
   "startupError.title": "ऐप शुरू नहीं हो सका",

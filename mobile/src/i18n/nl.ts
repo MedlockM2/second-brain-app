@@ -640,6 +640,10 @@ export const nl: Catalog = {
   "share.signInFiles": "Je moet ingelogd zijn om bestanden te importeren.",
   "transcript.translating": "Tekst wordt vertaald…",
   "transcript.translationFailed": "De vertaling is mislukt. De oorspronkelijke tekst wordt getoond.",
+  "transcript.translationStalled":
+    "De vertaling is nog bezig. Dit duurt langer dan gewoonlijk, dus tot die tijd wordt de oorspronkelijke tekst getoond.",
+  "transcript.checkTranslation": "Opnieuw controleren",
+  "transcript.checkTranslationA11y": "Controleren of de vertaling klaar is",
   "paywall.subtitle":
     "Elk abonnement kan alles. Ze verschillen alleen in hoeveel je stuurt.",
   "startupError.title": "De app kon niet starten",

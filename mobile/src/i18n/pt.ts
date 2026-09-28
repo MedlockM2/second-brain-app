@@ -640,6 +640,10 @@ export const pt: Catalog = {
   "share.signInFiles": "Tem de ter sessão iniciada para importar ficheiros.",
   "transcript.translating": "A traduzir o texto…",
   "transcript.translationFailed": "A tradução falhou. A mostrar o texto original.",
+  "transcript.translationStalled":
+    "A tradução ainda está em curso. Está a demorar mais do que o habitual, por isso é mostrado o texto original entretanto.",
+  "transcript.checkTranslation": "Verificar novamente",
+  "transcript.checkTranslationA11y": "Verificar se a tradução está pronta",
   "paywall.subtitle":
     "Todos os planos fazem tudo. Só diferem na quantidade que pode enviar.",
   "startupError.title": "Não foi possível iniciar a aplicação",

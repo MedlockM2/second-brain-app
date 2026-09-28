@@ -600,6 +600,10 @@ export const zh: Catalog = {
   "share.signInFiles": "需要登录后才能导入文件。",
   "transcript.translating": "正在翻译正文…",
   "transcript.translationFailed": "翻译失败，显示原始正文。",
+  "transcript.translationStalled":
+    "仍在翻译中。这次花的时间比平常长，翻译完成前先显示原始正文。",
+  "transcript.checkTranslation": "重新检查",
+  "transcript.checkTranslationA11y": "检查翻译是否已完成",
   "paywall.subtitle": "每个方案的功能都一样，区别只在你能发送多少。",
   "startupError.title": "应用无法启动",
   "startupError.body": "启动过程中发生意外错误。重试通常就能恢复。",

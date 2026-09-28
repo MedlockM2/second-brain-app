@@ -56,7 +56,7 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useAuth } from "../contexts/AuthContext";
-import { MediaService } from "../services/mediaService";
+import { MediaService, type RawContentResponse } from "../services/mediaService";
 import { ArtifactService } from "../services/artifactService";
 import type { ArtifactSummary } from "../types/artifacts";
 import { OrganizationService } from "../services/organizationService";
@@ -75,6 +75,10 @@ import {
 import { MediaReaderBar, MEDIA_READER_BAR_HEIGHT } from "./MediaReaderBar";
 import { RenameDialog } from "./RenameDialog";
 import { useMediaActions } from "../hooks/useMediaActions";
+import {
+  useTranslationRefresh,
+  type TranslationBudgets,
+} from "../hooks/useTranslationRefresh";
 import {
   TranscriptReader,
   type TranscriptContentState,
@@ -132,10 +136,29 @@ function buildInitialArtifactStates(): Record<ArtifactType, ArtifactTileState> {
 
 const ARTIFACT_POLL_INTERVAL_MS = 3000;
 
-/** Delay between polls when translation is pending (ms). */
-const TRANSLATION_POLL_DELAY_MS = 3000;
-/** Maximum number of translation polls before giving up. */
-const TRANSLATION_POLL_MAX_ATTEMPTS = 20;
+/**
+ * What a read of `/raw-content` says the Reader should show.
+ *
+ * The one reading of the response, shared by the first load and by the silent
+ * re-reads of the translation poll, so the two cannot drift apart. A pending
+ * translation is the original text *with* its pending status — never `ready`:
+ * how long the wait has lasted is the poll's business (`useTranslationRefresh`),
+ * and running out of patience does not turn the original into the translation.
+ */
+function resolveTranscriptContent(
+  response: RawContentResponse,
+): TranscriptContentState {
+  const content = (response.content ?? "").trim();
+  if (!content) return { status: "not_available" };
+  // Failed for good: the original, with the failure said.
+  if (response.translation?.translation_status === "failed") {
+    return { status: "translation_failed", content };
+  }
+  if (response.translation?.translation_pending === true) {
+    return { status: "translation_pending", content };
+  }
+  return { status: "ready", content };
+}
 
 /** Delay between polls while the source preview is still being generated (ms). */
 const PREVIEW_POLL_DELAY_MS = 3000;
@@ -235,6 +258,14 @@ export interface CompletedDetailViewProps {
    * else differs between the two: both carry the back and `…` buttons.
    */
   underStatusBar?: boolean;
+  /**
+   * Where the budget of the translation poll is kept, for a host that mounts
+   * and unmounts this page while its screen stays open — the Digest carousel,
+   * whose pages come and go with the swipes. Without it the budget lives with
+   * the mount, which is right for the route: there, a mount is the opening of
+   * the screen.
+   */
+  translationBudgets?: TranslationBudgets;
 }
 
 export function CompletedDetailView({
@@ -242,6 +273,7 @@ export function CompletedDetailView({
   onBack,
   onDeleted,
   underStatusBar = true,
+  translationBudgets,
 }: CompletedDetailViewProps): React.JSX.Element {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
@@ -653,121 +685,82 @@ export function CompletedDetailView({
 
   const transcriptStatus = media_item.transcript?.status;
 
-  const translationPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const translationPollCountRef = useRef(0);
+  // Every read of the text is numbered, and an answer older than the last one
+  // applied is dropped. The poll does not wait for a read before sending the
+  // next, so on a slow network two can be in flight — and a `pending` coming back
+  // after a `ready` must not put the translation back on its way.
+  const rawReadCountRef = useRef(0);
+  const rawReadAppliedRef = useRef(0);
+  const adoptRawRead = useCallback(
+    (read: number, next: TranscriptContentState) => {
+      if (!mountedRef.current || read < rawReadAppliedRef.current) return;
+      rawReadAppliedRef.current = read;
+      setRawContent(next);
+    },
+    [],
+  );
 
-  // Cleanup translation polling on unmount
-  useEffect(() => {
-    return () => {
-      if (translationPollRef.current) {
-        clearTimeout(translationPollRef.current);
-        translationPollRef.current = null;
-      }
-    };
-  }, []);
-
-  // The poll reschedules itself; going through a ref keeps the callback from
-  // referencing its own binding before it is declared.
-  const pollForTranslationRef = useRef<() => Promise<void>>(async () => undefined);
-
-  const pollForTranslation = useCallback(async () => {
-    if (!isAuthenticated || !mountedRef.current) return;
-    translationPollCountRef.current += 1;
-
+  // The read behind the translation poll: silent, so a tick leaves the text on
+  // screen where it is, and a failure changes nothing — the line above the text
+  // still says the translation is on its way, which is true.
+  const refreshRawContent = useCallback(async () => {
+    if (!isAuthenticated) return;
+    const read = ++rawReadCountRef.current;
     try {
       const response = await MediaService.getRawContent(
         media_item.media_item_id,
       );
-      if (!mountedRef.current) return;
-
-      const trimmed = (response.content ?? "").trim();
-      const isPending = response.translation?.translation_pending === true;
-      const translationStatus = response.translation?.translation_status;
-
-      if (!trimmed) {
-        setRawContent({ status: "not_available" });
-        return;
-      }
-
-      // If translation failed terminally, stop polling and show failure badge
-      if (translationStatus === "failed") {
-        setRawContent({ status: "translation_failed", content: trimmed });
-        return;
-      }
-
-      if (isPending && translationPollCountRef.current < TRANSLATION_POLL_MAX_ATTEMPTS) {
-        // Translation still in progress (queued/in_progress), show content and keep polling
-        setRawContent({ status: "translation_pending", content: trimmed });
-        translationPollRef.current = setTimeout(() => {
-          void pollForTranslationRef.current();
-        }, TRANSLATION_POLL_DELAY_MS);
-      } else {
-        // Translation ready (or max polls reached -- show whatever we have)
-        setRawContent({ status: "ready", content: trimmed });
-      }
+      adoptRawRead(read, resolveTranscriptContent(response));
     } catch {
-      // Silent fail during translation polling -- keep current state
-      if (translationPollCountRef.current < TRANSLATION_POLL_MAX_ATTEMPTS) {
-        translationPollRef.current = setTimeout(() => {
-          void pollForTranslationRef.current();
-        }, TRANSLATION_POLL_DELAY_MS);
-      }
+      // The next tick retries.
     }
-  }, [isAuthenticated, media_item.media_item_id]);
+  }, [isAuthenticated, media_item.media_item_id, adoptRawRead]);
 
-  useEffect(() => {
-    pollForTranslationRef.current = pollForTranslation;
-  }, [pollForTranslation]);
+  // The wait for a translation still being produced: a bounded, re-armable poll
+  // whose budget outlives a remount (task-415). Its end is `translation_stalled`
+  // below, never `ready`.
+  const translationRefresh = useTranslationRefresh({
+    mediaItemId: media_item.media_item_id,
+    isPending: rawContent.status === "translation_pending",
+    refetch: refreshRawContent,
+    budgets: translationBudgets,
+  });
 
+  const transcriptContent = useMemo<TranscriptContentState>(
+    () =>
+      rawContent.status === "translation_pending" && translationRefresh.isStalled
+        ? { status: "translation_stalled", content: rawContent.content }
+        : rawContent,
+    [rawContent, translationRefresh.isStalled],
+  );
+
+  // The first load, and the Retry of its error state: the one read that shows
+  // the loading line.
   const fetchRawContent = useCallback(async () => {
     if (!isAuthenticated) return;
     setRawContent({ status: "loading" });
-    translationPollCountRef.current = 0;
+    const read = ++rawReadCountRef.current;
 
     try {
       const response = await MediaService.getRawContent(
         media_item.media_item_id,
       );
-      if (!mountedRef.current) return;
-      const trimmed = (response.content ?? "").trim();
-      if (!trimmed) {
-        setRawContent({ status: "not_available" });
-        return;
-      }
-
-      const translationStatus = response.translation?.translation_status;
-
-      // If translation failed terminally, show content with failure badge (no polling)
-      if (translationStatus === "failed") {
-        setRawContent({ status: "translation_failed", content: trimmed });
-        return;
-      }
-
-      const isPending = response.translation?.translation_pending === true;
-      if (isPending) {
-        // Show the original transcript immediately, start polling for translation
-        setRawContent({ status: "translation_pending", content: trimmed });
-        translationPollRef.current = setTimeout(() => {
-          void pollForTranslationRef.current();
-        }, TRANSLATION_POLL_DELAY_MS);
-      } else {
-        setRawContent({ status: "ready", content: trimmed });
-      }
+      adoptRawRead(read, resolveTranscriptContent(response));
     } catch (err) {
-      if (!mountedRef.current) return;
       const httpStatus = (err as { status?: number } | undefined)?.status;
-      if (httpStatus === 404) {
-        setRawContent({ status: "not_available" });
-        return;
-      }
-      setRawContent({
-        status: "error",
-        message: getFriendlyErrorMessage(err, {
-          fallback: t("media.transcriptLoadFailed"),
-        }),
-      });
+      adoptRawRead(
+        read,
+        httpStatus === 404
+          ? { status: "not_available" }
+          : {
+              status: "error",
+              message: getFriendlyErrorMessage(err, {
+                fallback: t("media.transcriptLoadFailed"),
+              }),
+            },
+      );
     }
-  }, [isAuthenticated, media_item.media_item_id]);
+  }, [isAuthenticated, media_item.media_item_id, adoptRawRead]);
 
   // Whether the transcript fetch has already been kicked off for the media as it
   // currently stands. A flag rather than a read of `rawContent`: deciding from
@@ -1108,8 +1101,9 @@ export function CompletedDetailView({
             <TranscriptReader
               transcript={media_item.transcript}
               processingStatus={processing_job.status}
-              content={rawContent}
+              content={transcriptContent}
               onRetry={fetchRawContent}
+              onCheckTranslation={translationRefresh.rearm}
             />
           </View>
         ) : (

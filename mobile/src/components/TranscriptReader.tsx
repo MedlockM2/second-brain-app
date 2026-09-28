@@ -33,12 +33,20 @@ import type {
   ProcessingJobLifecycleStatus,
 } from "../types/media";
 
-/** Lifecycle of the transcript body, as fetched by the owning screen. */
+/**
+ * Lifecycle of the transcript body, as fetched by the owning screen.
+ *
+ * The three `translation_*` states carry the original text, and each says so
+ * above it: still being translated and polled, still being translated but no
+ * longer polled (`translation_stalled`, the poll's budget is spent — task-415),
+ * or failed for good. Only `ready` is shown as the text to read.
+ */
 export type TranscriptContentState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; content: string }
   | { status: "translation_pending"; content: string }
+  | { status: "translation_stalled"; content: string }
   | { status: "translation_failed"; content: string }
   | { status: "not_available" }
   | { status: "error"; message: string };
@@ -84,6 +92,8 @@ interface TranscriptReaderProps {
   processingStatus: ProcessingJobLifecycleStatus;
   content: TranscriptContentState;
   onRetry: () => void;
+  /** Look for the translation again, from the stalled line. */
+  onCheckTranslation: () => void;
 }
 
 export const TranscriptReader = memo(function TranscriptReader({
@@ -91,6 +101,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   processingStatus,
   content,
   onRetry,
+  onCheckTranslation,
 }: TranscriptReaderProps): React.JSX.Element {
   if (!transcript) {
     return (
@@ -132,7 +143,11 @@ export const TranscriptReader = memo(function TranscriptReader({
           Until it's ready (or if fetching the body fails), keep the status row
           so the user knows where things stand. */}
       {isReady ? (
-        <TranscriptContent state={content} onRetry={onRetry} />
+        <TranscriptContent
+          state={content}
+          onRetry={onRetry}
+          onCheckTranslation={onCheckTranslation}
+        />
       ) : (
         <View style={styles.statusRow}>
           {isProcessing && (
@@ -203,9 +218,11 @@ function TranscriptBody({ content }: { content: string }) {
 function TranscriptContent({
   state,
   onRetry,
+  onCheckTranslation,
 }: {
   state: TranscriptContentState;
   onRetry: () => void;
+  onCheckTranslation: () => void;
 }) {
   if (state.status === "ready") {
     return (
@@ -227,6 +244,43 @@ function TranscriptContent({
           <Text style={styles.translationPendingText}>
             {t("transcript.translating")}
           </Text>
+        </View>
+        <TranscriptBody content={state.content} />
+      </View>
+    );
+  }
+
+  // The poll's budget is spent and the translation is still on its way. The
+  // original stays readable, but under a line that says so in full, with a still
+  // glyph rather than the spinner — nothing is running any more — and the way to
+  // look again. Never the original on its own, which is what `ready` looks like.
+  if (state.status === "translation_stalled") {
+    return (
+      <View>
+        <View style={styles.translationStalledBanner}>
+          <View style={styles.translationStalledRow}>
+            <Ionicons
+              name="time-outline"
+              size={16}
+              color={Colors.textMuted}
+              style={styles.statusGlyph}
+            />
+            <Text style={styles.translationStalledText}>
+              {t("transcript.translationStalled")}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.checkTranslationButton}
+            onPress={onCheckTranslation}
+            accessibilityLabel={t("transcript.checkTranslationA11y")}
+            accessibilityRole="button"
+            testID="transcript-check-translation"
+          >
+            <Ionicons name="refresh" size={16} color={Colors.textMain} />
+            <Text style={styles.checkTranslationText}>
+              {t("transcript.checkTranslation")}
+            </Text>
+          </Pressable>
         </View>
         <TranscriptBody content={state.content} />
       </View>
@@ -344,6 +398,38 @@ const styles = StyleSheet.create({
     fontSize: Typography.small.fontSize,
     color: Colors.textMuted,
     fontStyle: "italic",
+  },
+  // One tone above the pending line, so the two read as different states.
+  translationStalledBanner: {
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  translationStalledRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  translationStalledText: {
+    flex: 1,
+    fontSize: Typography.small.fontSize,
+    color: Colors.textMain,
+  },
+  checkTranslationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    alignSelf: "flex-start",
+    minHeight: TouchTarget.minimum,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: BorderRadius.full,
+  },
+  checkTranslationText: {
+    fontSize: Typography.label.fontSize,
+    fontWeight: Typography.label.fontWeight,
+    color: Colors.textMain,
   },
   translationFailedBanner: {
     flexDirection: "row",

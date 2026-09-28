@@ -734,6 +734,10 @@ export const es: Catalog = {
   "transcript.translating": "Traduciendo el texto…",
   "transcript.translationFailed":
     "La traducción ha fallado. Se muestra el texto original.",
+  "transcript.translationStalled":
+    "La traducción sigue en curso. Está tardando más de lo habitual, así que se muestra el texto original mientras tanto.",
+  "transcript.checkTranslation": "Volver a comprobar",
+  "transcript.checkTranslationA11y": "Comprobar si la traducción está lista",
   "paywall.subtitle":
     "Todos los planes lo hacen todo. Solo se diferencian en cuánto puedes enviar.",
   "startupError.title": "La aplicación no pudo iniciarse",
