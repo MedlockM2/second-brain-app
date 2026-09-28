@@ -657,10 +657,22 @@ is **not** wired per source: all transcripts converge on
 `ProcessingJob.transcription_s3_key`, so one insertion point covers the whole
 matrix.
 
-**What it is for (task-398): the reader's full text, and nothing else.** Only
-`GET /api/media/{id}/raw-content` asks for a translated transcript, lazily, on
-first open (cache miss → atomic reservation → SQS enqueue → async worker), and it
-answers with the original text while the translation runs. **Artifact generation
+**What it is for (task-398): the reader's full text, and nothing else.** Two
+triggers ask for a translated transcript, both through the same atomic reservation
+(`transcript_translation.reserve_and_dispatch_translation`):
+
+- **At ingestion (task-414)** — the completion-events consumer, once the
+  transcript is uploaded and the job completed, arms the translation into the
+  reading language of the submitter and of every watcher
+  (`ingestion_translation_service.arm_transcript_translations`), so a foreign media
+  is translated before anyone opens it. Enqueue only: nothing waits on it.
+- **At read time, as a fallback** — `GET /api/media/{id}/raw-content` (cache miss
+  → atomic reservation → SQS enqueue → async worker) covers what ingestion could
+  not know: a reading language changed afterwards, or a save of already-processed
+  content by another account. It answers with the original text while the
+  translation runs.
+
+**Artifact generation
 does not come through here.** Each generator reads the source's *original*
 transcript and is told the output language through `parameters["language"]` (the
 requester's reading language) and `corpus.language_instruction`, so an artifact
@@ -672,18 +684,28 @@ previously ran in every ingestion worker before `job.mark_completed()` was
 **removed**, which eliminated the 45 s blocking timeout wasted on every long
 transcript. The `persist_detected_language()` side-effect moved into the async
 translation worker, and the artifact resolver detects the language locally for its
-corpus header.
+corpus header. task-414 brought the *start* of the translation back to ingestion
+without bringing the wait back: the arming runs in the completion-events consumer,
+after the ingestion job is already completed, and only enqueues.
 
 ### Pipeline position
 
 ```
 [any source worker] -> transcript in S3 (job.transcription_s3_key)
+        |              -> job completed -> [episode-completed-events]
         |
-        +--> GET /api/media/{id}/raw-content   (reader, task-398 unaffected)
+        +--> media_completed_worker (task-414, proactive)
+        |        1. reading language of submitter + watchers (deduplicated)
+        |        2. detect language (source tag, else one S3 read + langdetect)
+        |        3. reserve + enqueue [transcript-translation-queue]
+        |
+        +--> GET /api/media/{id}/raw-content   (reader, fallback)
         |        1. detect language
         |        2. decide translation
-        |        3. reserve + enqueue [transcript-translation-queue]
-        |        4. worker translates (GPT-5-nano) -> translated transcript in S3
+        |        3. read lock state; reserve + enqueue only if nobody did
+        |
+        +--> transcript-translation worker translates (GPT-5-nano)
+        |        -> translated transcript in S3
         |
         +--> POST /api/artifacts                (generation)
                  reads the ORIGINAL transcript; the reading language travels in
@@ -738,9 +760,12 @@ translation, so a refused one fails nothing but itself (task-398).
 | `TRANSLATION_MAX_RETRIES` | `3` | Retry attempts before fallback. |
 | `TRANSLATION_BACKOFF_BASE_SECONDS` | `1.0` | Exponential backoff base. |
 
-Ref: `core/services/transcript_translation.py::ensure_translated_transcript`,
-`core/services/raw_content_service.py` (the only caller that asks for a
-translation), `core/services/artifact_service.py::resolve_source` (reads the
+Ref: `core/services/transcript_translation.py::ensure_translated_transcript` and
+`::reserve_and_dispatch_translation` (the single enqueue gate),
+`core/services/ingestion_translation_service.py` (proactive trigger, called by
+`workers/events/media_completed_worker.py`),
+`core/services/raw_content_service.py` (fallback trigger),
+`core/services/artifact_service.py::resolve_source` (reads the
 original transcript, detects its language for the corpus header).
 
 ---
@@ -755,10 +780,13 @@ original transcript, detects its language for the corpus header).
 ### Purpose
 
 **The sole path for transcript translation** (task-203 removed the blocking prewarm
-from ingestion workers). When the mobile client calls `/raw-content` and no cached
-translation exists, the endpoint reserves a translation slot via the state machine
-(DynamoDB) and enqueues a job to this worker. The worker translates the transcript
-asynchronously (no API Gateway timeout constraint).
+from ingestion workers). Its messages come from two producers sharing one gate,
+`reserve_and_dispatch_translation`: the completion-events consumer at the end of
+every ingestion (task-414, reading language of each saver), and `/raw-content`
+when a reader needs a language nobody armed yet. Either reserves a translation
+slot via the state machine (DynamoDB) and enqueues a job to this worker. The
+worker translates the transcript asynchronously (no API Gateway timeout
+constraint).
 
 ### Translation State Machine (task-203)
 
@@ -777,7 +805,7 @@ Translation idempotence is enforced via a dedicated DynamoDB table
 
 | Operation | Who | Effect |
 |---|---|---|
-| `reserve_translation()` | `/raw-content` endpoint | Atomically creates `queued` record (ConditionExpression: `attribute_not_exists OR status=failed`). Only the first caller wins. |
+| `reserve_translation()` | `reserve_and_dispatch_translation()`, called by the completion-events consumer (task-414) and by `/raw-content` | Atomically creates `queued` record (ConditionExpression: `attribute_not_exists OR status=failed`). Only the first caller wins, whichever trigger it is. |
 | `mark_translation_in_progress()` | Translation worker (on start) | `queued -> in_progress` |
 | `mark_translation_done()` | Translation worker (on success) | `-> done` |
 | `mark_translation_failed()` | Translation worker (on terminal failure) | `-> failed` (allows retry on next access) |
