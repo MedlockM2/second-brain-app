@@ -1,9 +1,10 @@
 ---
 id: TASK-413
 title: Intégrer Sentry pour le crash et error reporting de l'app mobile
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 21:28'
+updated_date: '2026-09-28 08:05'
 labels:
   - mobile
 dependencies: []

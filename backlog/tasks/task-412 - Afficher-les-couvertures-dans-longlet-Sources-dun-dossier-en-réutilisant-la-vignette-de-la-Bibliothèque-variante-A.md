@@ -3,9 +3,10 @@ id: TASK-412
 title: >-
   Afficher les couvertures dans l'onglet Sources d'un dossier en réutilisant la
   vignette de la Bibliothèque (variante A)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 21:01'
+updated_date: '2026-09-28 08:05'
 labels:
   - mobile
   - ux

@@ -3,9 +3,10 @@ id: TASK-415
 title: >-
   Aligner le sondage de traduction du transcript sur le pattern
   budget/ré-armement de useProcessingRefresh (task-404/405)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 21:46'
+updated_date: '2026-09-28 08:05'
 labels:
   - mobile
 dependencies: []

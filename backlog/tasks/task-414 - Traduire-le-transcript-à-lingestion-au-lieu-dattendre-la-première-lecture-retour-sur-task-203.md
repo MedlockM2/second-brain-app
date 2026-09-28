@@ -3,9 +3,10 @@ id: TASK-414
 title: >-
   Traduire le transcript à l'ingestion au lieu d'attendre la première lecture
   (retour sur task-203)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 21:28'
+updated_date: '2026-09-28 08:05'
 labels:
   - ingestion
 dependencies: []
