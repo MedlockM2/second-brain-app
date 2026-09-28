@@ -90,8 +90,8 @@ if [ "${UNTRACKED_COUNT}" -gt 0 ]; then
   echo ""
 fi
 
-if ! command -v claude >/dev/null 2>&1; then
-  echo "Error: claude is not available on PATH." >&2
+if ! command -v claude-bedrock >/dev/null 2>&1; then
+  echo "Error: claude-bedrock is not available on PATH." >&2
   exit 1
 fi
 
@@ -212,7 +212,7 @@ if [ "$TEST_MODE" = true ]; then
   echo "  Both modify media_summarizer/core/constants.py → conflict guaranteed."
   echo ""
 
-  claude --agent backlog-dispatcher \
+  claude-bedrock --agent backlog-dispatcher \
     --dangerously-skip-permissions \
     -p "MODE TEST : dispatche UNIQUEMENT les tâches task-82 et task-83 (labels test-dispatch).
 Ignore toutes les autres tâches du backlog.
@@ -227,7 +227,7 @@ else
   echo "  Mode: ${MODE}"
   echo ""
 
-  claude --agent backlog-dispatcher \
+  claude-bedrock --agent backlog-dispatcher \
     --dangerously-skip-permissions \
     -p "Dispatche jusqu'à ${MAX_DISPATCH} tâches du backlog en parallèle.
 Tâches verrouillées par dispatchable:false — ne jamais les sélectionner : ${NON_DISPATCHABLE_IDS}.
