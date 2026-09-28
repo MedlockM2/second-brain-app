@@ -663,5 +663,8 @@ export const it: Catalog = {
   "mediaTitle.label.photo": "Foto",
   "mediaTitle.label.savedItem": "Elemento salvato",
 
-  "folder.sourceOpenA11y": "Apri {title}",
+  "folder.section.folders": "Cartelle",
+  "folder.section.sources": "Fonti · {count}",
+  "folder.subfolderA11y": "Apri la cartella {name}, {items}",
+  "folder.subfolderWithChildrenA11y": "Apri la cartella {name}, {items}, {folders}",
 };

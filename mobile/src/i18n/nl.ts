@@ -664,5 +664,8 @@ export const nl: Catalog = {
   "mediaTitle.label.photo": "Foto",
   "mediaTitle.label.savedItem": "Bewaard item",
 
-  "folder.sourceOpenA11y": "{title} openen",
+  "folder.section.folders": "Mappen",
+  "folder.section.sources": "Bronnen · {count}",
+  "folder.subfolderA11y": "Map {name} openen, {items}",
+  "folder.subfolderWithChildrenA11y": "Map {name} openen, {items}, {folders}",
 };

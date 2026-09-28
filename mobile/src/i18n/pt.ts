@@ -664,5 +664,8 @@ export const pt: Catalog = {
   "mediaTitle.label.photo": "Foto",
   "mediaTitle.label.savedItem": "Item guardado",
 
-  "folder.sourceOpenA11y": "Abrir {title}",
+  "folder.section.folders": "Pastas",
+  "folder.section.sources": "Fontes · {count}",
+  "folder.subfolderA11y": "Abrir a pasta {name}, {items}",
+  "folder.subfolderWithChildrenA11y": "Abrir a pasta {name}, {items}, {folders}",
 };

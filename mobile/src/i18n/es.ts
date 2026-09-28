@@ -758,5 +758,8 @@ export const es: Catalog = {
   "mediaTitle.label.photo": "Foto",
   "mediaTitle.label.savedItem": "Elemento guardado",
 
-  "folder.sourceOpenA11y": "Abrir {title}",
+  "folder.section.folders": "Carpetas",
+  "folder.section.sources": "Fuentes · {count}",
+  "folder.subfolderA11y": "Abrir la carpeta {name}, {items}",
+  "folder.subfolderWithChildrenA11y": "Abrir la carpeta {name}, {items}, {folders}",
 };

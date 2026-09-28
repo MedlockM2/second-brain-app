@@ -38,10 +38,12 @@ import {
  * Uniform media row for a vertical library list: the cover, the media type and
  * the age, the title, then the creator. Tapping it opens the media detail.
  *
- * The one media vignette of the Library tab, and deliberately the only one: the
- * list of everything saved and the list of search hits show the same items, and
- * two components drawing them were two apps (task-375). A search hit passes one
- * extra prop — the transcript excerpt that matched — and is otherwise this row.
+ * The one media vignette of a vertical media list, and deliberately the only
+ * one: the Library, its search hits and the Sources tab of a folder show the same
+ * items, and a component per surface was one app per surface (task-375, then
+ * task-412 for the folder page, whose rows had kept an icon and a title). A
+ * search hit passes one extra prop — the transcript excerpt that matched — and is
+ * otherwise this row; a folder page passes nothing the Library does not.
  *
  * The second line holds `creator_name` and falls back to the source domain: five
  * sources can never have a creator (shared text, documents, audio files), and a
@@ -66,16 +68,21 @@ import {
  * place of its subtitle (task-405) — the same two markers the Home tile draws,
  * because the Library is the other list a share lands in and the owner asked for
  * the state to be readable on both. The row that carries a sweep also carries the
- * bounded refresh that ends it: `useProcessingRefresh`, armed by the Library body
- * of `search.tsx`.
+ * bounded refresh that ends it: `useProcessingRefresh`, armed by each list that
+ * hosts this row — the Library body of `search.tsx` and the Sources tab of
+ * `media/folders/[id].tsx`.
+ *
+ * `SubfolderCard` draws the same box, token for token, for the subfolders a
+ * folder page lists above its sources: a change to this card's outer box is a
+ * change to that one too.
  */
 
 /**
  * 112 x 63 is exactly 16:9, wide enough to read a thumbnail on a phone.
  *
  * Exported because the unsorted review draws the same cover on a card of its
- * own: sharing the numbers is what stops the two surfaces drifting into two
- * slightly different thumbnails for the same picture.
+ * own, and `SubfolderCard` its collage in the same frame: sharing the numbers is
+ * what stops those surfaces drifting into slightly different thumbnails.
  */
 export const COVER_WIDTH = 112;
 export const COVER_HEIGHT = 63;
@@ -178,8 +185,9 @@ interface MediaListCardProps<T extends MediaCardItem> {
   /**
    * The refresh budget of `useProcessingRefresh` is spent and this list still
    * holds something on its way: the sweep stops moving without going away
-   * (task-404 §7.4). Set by the Library body, which owns that budget; a search
-   * result never needs it, since a hit carries no status to sweep.
+   * (task-404 §7.4). Set by the list that owns that budget — the Library body,
+   * or the Sources tab of a folder; a search result never needs it, since a hit
+   * carries no status to sweep.
    */
   processingStalled?: boolean;
   /**

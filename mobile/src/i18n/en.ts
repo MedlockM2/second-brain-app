@@ -889,6 +889,13 @@ export const en = {
   // newer backend sends that this build does not know.
   "mediaTitle.label.savedItem": "Saved item",
 
-  // --- A source row inside a folder ---
-  "folder.sourceOpenA11y": "Open {title}",
+  // --- The Sources tab of a folder: group captions and subfolder cards ---
+  // The captions only show when the folder has subfolders; `{count}` is the
+  // number of sources stored directly in the folder.
+  "folder.section.folders": "Folders",
+  "folder.section.sources": "Sources · {count}",
+  // `{items}` and `{folders}` are the already-pluralised `common.itemCount` and
+  // `folders.childCount` the card shows under the name.
+  "folder.subfolderA11y": "Open folder {name}, {items}",
+  "folder.subfolderWithChildrenA11y": "Open folder {name}, {items}, {folders}",
 } as const;

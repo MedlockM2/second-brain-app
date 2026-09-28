@@ -710,5 +710,8 @@ export const ar: Catalog = {
   "mediaTitle.label.photo": "صورة",
   "mediaTitle.label.savedItem": "عنصر محفوظ",
 
-  "folder.sourceOpenA11y": "فتح {title}",
+  "folder.section.folders": "المجلدات",
+  "folder.section.sources": "المصادر · {count}",
+  "folder.subfolderA11y": "فتح المجلد {name}، {items}",
+  "folder.subfolderWithChildrenA11y": "فتح المجلد {name}، {items}، {folders}",
 };

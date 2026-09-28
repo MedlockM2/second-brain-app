@@ -766,5 +766,8 @@ export const de: Catalog = {
   "mediaTitle.label.photo": "Foto",
   "mediaTitle.label.savedItem": "Gespeichertes Element",
 
-  "folder.sourceOpenA11y": "{title} öffnen",
+  "folder.section.folders": "Ordner",
+  "folder.section.sources": "Quellen · {count}",
+  "folder.subfolderA11y": "Ordner {name} öffnen, {items}",
+  "folder.subfolderWithChildrenA11y": "Ordner {name} öffnen, {items}, {folders}",
 };

@@ -7,8 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
-  type StyleProp,
-  type ViewStyle,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,22 +23,22 @@ import {
   type ArtifactTileState,
 } from "../../../src/components/ArtifactTile";
 import { ArtifactsPanel } from "../../../src/components/ArtifactsPanel";
-import {
-  AnchoredContextMenu,
-  type AnchorRect,
-} from "../../../src/components/AnchoredContextMenu";
+import { AnchoredContextMenu } from "../../../src/components/AnchoredContextMenu";
+import { MediaListCard } from "../../../src/components/MediaListCard";
+import { isProcessingLibraryStatus } from "../../../src/components/MediaProcessingSweep";
 import { RenameDialog } from "../../../src/components/RenameDialog";
 import { ScreenTabs, type ScreenTab } from "../../../src/components/ScreenTabs";
+import { SubfolderCard } from "../../../src/components/SubfolderCard";
 import { useMediaActions } from "../../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../../src/hooks/useFolderActions";
+import { useProcessingRefresh } from "../../../src/hooks/useProcessingRefresh";
 import { describeArtifactRefusal } from "../../../src/lib/artifactRefusal";
 import { mergeArtifactIntoHistory } from "../../../src/lib/artifactHistory";
 import { sameSourceSet } from "../../../src/lib/artifactSources";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
-import { getMediaTypeIcon } from "../../../src/lib/mediaTypeDisplay";
-import { resolveMediaTitle } from "../../../src/lib/mediaTitle";
 import {
   buildFolderTree,
+  groupMediaBySubtree,
   type FolderNode,
 } from "../../../src/lib/folderTree";
 import {
@@ -47,7 +46,6 @@ import {
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
 } from "../../../src/constants/theme";
 import { t, useTranslation } from "../../../src/i18n";
@@ -57,17 +55,23 @@ import {
   HeaderMenuButton,
   HeaderMenuGlyph,
 } from "../../../src/components/ScreenHeader";
-import type { ArtifactType, MediaListItem, MediaType } from "../../../src/types/media";
+import type { ArtifactType, MediaListItem } from "../../../src/types/media";
 
 /**
  * Folders explorer — single folder view, split in two intra-screen tabs
  * along the NotebookLM reference of task-263.
  *
- * **Sources** is a bare list: one line per entry, an icon and a truncated title,
- * subfolders before media. The rich `MediaListCard` is deliberately not
- * used here — it belongs to the inbox and to search, where a vignette carries
- * metadata the user is scanning for; inside a folder the user is picking a
- * source out of a list they already know.
+ * **Sources** lists what the folder holds, subfolders before media, as the
+ * Library lists it (task-412, variant A of the folder Sources mockups): every
+ * source is a `MediaListCard`, the Library's own vignette reused as is — cover,
+ * type badge, age, two-line title, creator — and every subfolder a
+ * `SubfolderCard` of the same gabarit, whose frame is a collage of the covers
+ * it holds. In a folder of reels, where every row used to carry the same play
+ * glyph, the covers are what tells the sources apart. When there are subfolders
+ * the two groups are captioned, "Folders" then "Sources · N"; a folder of
+ * sources only needs no caption. The vignette brings its import markers along,
+ * and the bounded refresh that ends a processing sweep is armed here as it is
+ * in the Library.
  *
  * **AI** generates artifacts over the **whole folder** (subfolders
  * included, as the backend resolves the folder and all its descendants), then
@@ -92,9 +96,9 @@ import type { ArtifactType, MediaListItem, MediaType } from "../../../src/types/
 const ARTIFACT_POLL_INTERVAL_MS = 3000;
 
 /**
- * The lifted copy of a pressed row is inert — the context menu draws it with
- * `pointerEvents="none"` — but `SourceRow` requires a tap handler, so this is
- * the one it gets.
+ * The lifted copy of a pressed card is inert — the context menu draws it with
+ * `pointerEvents="none"` — but `MediaListCard` requires a tap handler, so this
+ * is the one it gets.
  */
 const noopOpenMedia = () => {};
 
@@ -105,9 +109,20 @@ const FOLDER_TABS: readonly ScreenTab<FolderTabKey>[] = [
   { key: "ai", labelKey: "folder.tab.ai", icon: "sparkles-outline" },
 ];
 
+/**
+ * A group caption, drawn only when the folder has subfolders to set apart. Its
+ * copy is resolved at render time, never stored here, so a change of interface
+ * language redraws it.
+ */
+type CaptionListRow =
+  | { kind: "caption"; key: "folders" }
+  | { kind: "caption"; key: "sources"; count: number };
+
 interface FolderListRow {
   kind: "folder";
   node: FolderNode;
+  /** Every source under the subfolder, descendants included: its collage. */
+  subtreeMedia: readonly MediaListItem[];
 }
 
 interface MediaListRow {
@@ -115,7 +130,18 @@ interface MediaListRow {
   media: MediaListItem;
 }
 
-type Row = FolderListRow | MediaListRow;
+type Row = CaptionListRow | FolderListRow | MediaListRow;
+
+function rowKey(row: Row): string {
+  switch (row.kind) {
+    case "caption":
+      return `caption:${row.key}`;
+    case "folder":
+      return `folder:${row.node.id}`;
+    case "media":
+      return `media:${row.media.media_item_id}`;
+  }
+}
 
 function buildInitialArtifactStates(): Record<ArtifactType, ArtifactTileState> {
   return ARTIFACT_TILES.reduce(
@@ -137,11 +163,12 @@ export default function FolderDetailScreen() {
 
   const [activeTab, setActiveTab] = useState<FolderTabKey>("sources");
   const [childFolders, setChildFolders] = useState<FolderNode[]>([]);
-  const [media, setMedia] = useState<MediaListItem[]>([]);
-  // Every media a generation over this folder would read: descendants
-  // included, which is exactly the scope the backend resolves. The Sources list
-  // below shows only the direct children, so the two cannot share one state.
-  const [scopeMediaIds, setScopeMediaIds] = useState<readonly string[]>([]);
+  // The folder's `getFolderMedia` response as it came: descendants included,
+  // newest first. Held whole because three things read it — the sources stored
+  // directly here, which the Sources list shows; the subtree of each subfolder,
+  // which its collage is drawn from; and every media id, which is exactly the
+  // scope a generation over this folder reads.
+  const [folderMedia, setFolderMedia] = useState<MediaListItem[]>([]);
   const [title, setTitle] = useState<string>(params.name ?? "Folder");
   // The folder itself, as the tree knows it. Held because the header menu
   // needs more than a name: the subfolders a deletion would take with it,
@@ -172,12 +199,7 @@ export default function FolderDetailScreen() {
         setChildFolders([]);
       }
 
-      // The backend folder filter includes descendants; keep only the media
-      // stored directly in this folder so sub-folders own their own items.
-      setMedia(
-        folderMedia.filter((item) => item.folder_id === folderId),
-      );
-      setScopeMediaIds(folderMedia.map((item) => item.media_item_id));
+      setFolderMedia(folderMedia);
     } catch (err) {
       setError(
         getFriendlyErrorMessage(err, {
@@ -226,17 +248,82 @@ export default function FolderDetailScreen() {
     load().finally(() => setIsLoading(false));
   }, [load]);
 
+  // The backend folder filter includes descendants; the list keeps only the
+  // media stored directly in this folder, so subfolders own their own items.
+  const media = useMemo(
+    () => folderMedia.filter((item) => item.folder_id === folderId),
+    [folderMedia, folderId],
+  );
+  const scopeMediaIds = useMemo(
+    () => folderMedia.map((item) => item.media_item_id),
+    [folderMedia],
+  );
+
+  // What each subfolder card draws its collage from, regrouped from the
+  // response already on screen: no request per subfolder.
+  const subtreeMediaByFolder = useMemo(
+    () => groupMediaBySubtree(childFolders, folderMedia),
+    [childFolders, folderMedia],
+  );
+
+  /**
+   * The silent re-read the processing refresh ticks on: the media only, since a
+   * folder has no lifecycle of its own, and never the full-screen spinner — a
+   * tick must leave the cards where they are. A failed tick changes nothing on
+   * screen, where the card still truthfully says "on its way", and the next one
+   * retries.
+   */
+  const refreshMedia = useCallback(async () => {
+    if (!isAuthenticated || !folderId) return;
+    try {
+      setFolderMedia(await OrganizationService.getFolderMedia(folderId));
+    } catch {
+      // Deliberately silent, see above.
+    }
+  }, [isAuthenticated, folderId]);
+
+  /**
+   * Whether a source card on screen is still being processed. Read off the
+   * direct sources, and only while the Sources tab is the one drawn: a
+   * subfolder's collage carries no sweep, and the AI tab shows no card at all.
+   */
+  const hasProcessingMedia =
+    activeTab === "sources" &&
+    !isLoading &&
+    !error &&
+    media.some((item) => isProcessingLibraryStatus(item.status));
+
+  // The same bounded schedule as the Library: a fast minute, then a slower
+  // tick, up to a budget after which the sweep stands still (task-404 §7.4).
+  const { isStalled: isProcessingStalled, rearm: rearmProcessingRefresh } =
+    useProcessingRefresh({
+      hasProcessing: hasProcessingMedia,
+      refetch: refreshMedia,
+    });
+
+  // Pull-to-refresh reloads the folder under the list already on screen, and is
+  // one of the gestures that grants a spent refresh budget another one, as it is
+  // in the Library.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    void load().finally(() => setIsRefreshing(false));
+    rearmProcessingRefresh();
+  }, [load, rearmProcessingRefresh]);
+
+  // Removed from the whole response, not only from the list: a deleted media
+  // also leaves the scope a generation over this folder would read.
   const handleMediaDeleted = useCallback((mediaItemId: string) => {
-    setMedia((current) =>
+    setFolderMedia((current) =>
       current.filter((item) => item.media_item_id !== mediaItemId),
     );
   }, []);
 
   // Patched in place rather than refetched: the rename already returned the
-  // stored title, and the row has to carry it before the user leaves the screen.
+  // stored title, and the card has to carry it before the user leaves the screen.
   const handleMediaRenamed = useCallback(
     (mediaItemId: string, title: string) => {
-      setMedia((current) =>
+      setFolderMedia((current) =>
         current.map((item) =>
           item.media_item_id === mediaItemId ? { ...item, title } : item,
         ),
@@ -245,25 +332,28 @@ export default function FolderDetailScreen() {
     [],
   );
 
-  // The long-press menu of a source row. A move out of this folder needs no
+  // The long-press menu of a source card. A move out of this folder needs no
   // handling here: the focus refetch above runs when the picker is popped, and
-  // the row is gone because the folder no longer holds that media.
+  // the card is gone because the folder no longer holds that media.
   const mediaActions = useMediaActions({
     onDeleted: handleMediaDeleted,
     onRenamed: handleMediaRenamed,
   });
 
-  // The copy of the pressed row the menu lifts above its blur: the same row,
-  // with the list margins dropped so it lands exactly on its measured rect.
+  // The copy of the pressed card the menu lifts above its blur: the same card,
+  // with its own margins dropped so it lands exactly on its measured rect. The
+  // stall is carried too — a sweeping band lifted over a still one would be the
+  // very mismatch the lift exists to hide.
   const renderSourcePreview = useCallback(
     (item: MediaListItem) => (
-      <SourceRow
-        media={item}
+      <MediaListCard
+        item={item}
         onPress={noopOpenMedia}
-        style={styles.sourceRowPreview}
+        processingStalled={isProcessingStalled}
+        style={styles.sourceCardPreview}
       />
     ),
-    [],
+    [isProcessingStalled],
   );
 
   // Patched in place rather than refetched: the rename already returned the
@@ -299,12 +389,25 @@ export default function FolderDetailScreen() {
   const managedFolder =
     folder && folder.is_default !== true ? folder : null;
 
+  // Subfolders first, then the sources. The captions only exist to set the two
+  // groups apart, so a folder without subfolders is one caption-less list.
   const rows = useMemo<Row[]>(() => {
+    const folderRows = childFolders.map(
+      (node): Row => ({
+        kind: "folder",
+        node,
+        subtreeMedia: subtreeMediaByFolder.get(node.id) ?? [],
+      }),
+    );
+    const mediaRows = media.map((m): Row => ({ kind: "media", media: m }));
+    if (folderRows.length === 0) return mediaRows;
     return [
-      ...childFolders.map((node): Row => ({ kind: "folder", node })),
-      ...media.map((m): Row => ({ kind: "media", media: m })),
+      { kind: "caption", key: "folders" },
+      ...folderRows,
+      { kind: "caption", key: "sources", count: media.length },
+      ...mediaRows,
     ];
-  }, [childFolders, media]);
+  }, [childFolders, media, subtreeMediaByFolder]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -366,29 +469,48 @@ export default function FolderDetailScreen() {
       ) : activeTab === "sources" ? (
         <FlatList
           data={rows}
-          keyExtractor={(row) =>
-            row.kind === "folder" ? `folder:${row.node.id}` : `media:${row.media.media_item_id}`
-          }
-          renderItem={({ item }) =>
-            item.kind === "folder" ? (
-              <FolderRow node={item.node} onPress={handleOpenFolder} />
-            ) : (
-              <SourceRow
-                media={item.media}
-                onPress={handleOpenMedia}
-                onLongPress={mediaActions.open}
-              />
-            )
-          }
-          ListHeaderComponent={
-            rows.length > 0 ? (
-              <Text style={styles.sectionTitle}>
-                {t("folder.tab.sources")}
-              </Text>
-            ) : null
-          }
+          keyExtractor={rowKey}
+          renderItem={({ item }) => {
+            switch (item.kind) {
+              case "caption":
+                return (
+                  <Text style={styles.sectionTitle} accessibilityRole="header">
+                    {item.key === "folders"
+                      ? t("folder.section.folders")
+                      : t("folder.section.sources", { count: item.count })}
+                  </Text>
+                );
+              case "folder":
+                return (
+                  <SubfolderCard
+                    node={item.node}
+                    subtreeMedia={item.subtreeMedia}
+                    onPress={handleOpenFolder}
+                    testID={`folder-source-folder-${item.node.id}`}
+                  />
+                );
+              case "media":
+                return (
+                  <MediaListCard
+                    item={item.media}
+                    onPress={handleOpenMedia}
+                    onLongPress={mediaActions.open}
+                    processingStalled={isProcessingStalled}
+                    testID={`folder-source-media-${item.media.media_item_id}`}
+                  />
+                );
+            }
+          }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
           ListEmptyComponent={<EmptyState />}
           testID="folder-sources-list"
         />
@@ -705,99 +827,6 @@ function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
 
 // --- Sub-components ---
 
-interface FolderRowProps {
-  node: FolderNode;
-  onPress: (node: FolderNode) => void;
-}
-
-function FolderRow({ node, onPress }: FolderRowProps) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.sourceRow, pressed && styles.sourceRowPressed]}
-      onPress={() => onPress(node)}
-      testID={`folder-source-folder-${node.id}`}
-      accessibilityLabel={`Open folder ${node.name}`}
-      accessibilityRole="button"
-    >
-      <View style={styles.sourceIconContainer}>
-        <Ionicons name="folder" size={20} color={Colors.primary} />
-      </View>
-      <Text style={styles.sourceTitle} numberOfLines={1}>
-        {node.name}
-      </Text>
-      <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-    </Pressable>
-  );
-}
-
-interface SourceRowProps {
-  media: MediaListItem;
-  onPress: (mediaItemId: string) => void;
-  /**
-   * Opens the row's actions menu — move, rename or delete the source — with the
-   * row's own window rect, which is what the menu anchors itself to. Omitted for
-   * the inert copy the menu lifts above its blur.
-   */
-  onLongPress?: (media: MediaListItem, anchor: AnchorRect) => void;
-  /**
-   * Overrides the row's outer box, so the lifted copy can drop the list margins
-   * the measured rect already excludes.
-   */
-  style?: StyleProp<ViewStyle>;
-}
-
-function SourceRow({ media, onPress, onLongPress, style }: SourceRowProps) {
-  const mediaType = (media.media_type ?? "unknown") as MediaType;
-  const rowRef = useRef<View>(null);
-  // The same name every other surface shows, built from the label key and the
-  // save date when the row holds no title (task-400). The source URL that used
-  // to stand in here is gone: it is not a name, and it read as one.
-  const title = resolveMediaTitle(media);
-
-  // Measured on the gesture rather than on layout: a `FlatList` cell moves with
-  // every scroll, so the only rect the menu can trust is the one taken when the
-  // press was recognised.
-  const handleLongPress = () => {
-    if (!onLongPress) return;
-    rowRef.current?.measureInWindow((x, y, width, height) => {
-      onLongPress(media, { x, y, width, height });
-    });
-  };
-
-  return (
-    <Pressable
-      ref={rowRef}
-      style={({ pressed }) => [
-        styles.sourceRow,
-        pressed && styles.sourceRowPressed,
-        style,
-      ]}
-      onPress={() => onPress(media.media_item_id)}
-      onLongPress={onLongPress ? handleLongPress : undefined}
-      testID={`folder-source-media-${media.media_item_id}`}
-      accessibilityLabel={t("folder.sourceOpenA11y", { title })}
-      // The gesture is invisible, so a screen reader is told about it — and only
-      // where it exists. `Pressable` keeps the tap and the long press exclusive,
-      // so opening the menu never also opens the media.
-      accessibilityHint={
-        onLongPress ? t("mediaCard.longPressHint") : undefined
-      }
-      accessibilityRole="button"
-    >
-      <View style={styles.sourceIconContainer}>
-        <Ionicons
-          name={getMediaTypeIcon(mediaType)}
-          size={20}
-          color={Colors.primary}
-        />
-      </View>
-      <Text style={styles.sourceTitle} numberOfLines={1}>
-        {title}
-      </Text>
-    </Pressable>
-  );
-}
-
 function EmptyState() {
   return (
     <View style={styles.emptyContainer}>
@@ -820,64 +849,37 @@ const styles = StyleSheet.create({
   },
   // One page gutter for the whole screen, `Spacing.lg`, the same the header
   // already used and the same `ArtifactsPanel` brings to the AI tab: the tab bar
-  // and the source rows line up with the tiles under them.
+  // and the cards of the Sources list line up with the tiles under them.
   tabsContainer: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.md,
   },
+  // The cards bring their own `Spacing.md` side margin, the Library's gutter;
+  // the list adds the difference so they land on this screen's `Spacing.lg`,
+  // under the tabs, without either card being told about this page.
   listContent: {
+    paddingHorizontal: Spacing.lg - Spacing.md,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.xxl,
   },
-  // The Sources list header. The uppercase muted caption stays confined to it —
-  // the AI tab's headings are section openers and use `Typography.headline`.
+  // A group caption of the Sources list. The uppercase muted caption stays
+  // confined to it — the AI tab's headings are section openers and use
+  // `Typography.headline`. Side margin as the cards', so it starts where they do.
   sectionTitle: {
     fontSize: Typography.label.fontSize,
     fontWeight: "700",
     color: Colors.textMuted,
     textTransform: "uppercase",
     letterSpacing: 0.5,
-    marginHorizontal: Spacing.lg,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-
-  // Source row: one icon, one truncated title, nothing else.
-  sourceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    minHeight: TouchTarget.comfortable,
-    ...Shadows.soft,
-  },
-  sourceRowPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  // The row as the context menu redraws it: the list margins are what the
-  // measured rect already excludes, so keeping them would shift the copy.
-  sourceRowPreview: {
+  // The card as the context menu redraws it: its margins are what the measured
+  // rect already excludes, so keeping them would shift the copy.
+  sourceCardPreview: {
     marginHorizontal: 0,
     marginBottom: 0,
-  },
-  sourceIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sourceTitle: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
   },
 
   // Centered states

@@ -663,5 +663,8 @@ export const hi: Catalog = {
   "mediaTitle.label.photo": "तस्वीर",
   "mediaTitle.label.savedItem": "सहेजा गया आइटम",
 
-  "folder.sourceOpenA11y": "{title} खोलें",
+  "folder.section.folders": "फ़ोल्डर",
+  "folder.section.sources": "स्रोत · {count}",
+  "folder.subfolderA11y": "फ़ोल्डर {name} खोलें, {items}",
+  "folder.subfolderWithChildrenA11y": "फ़ोल्डर {name} खोलें, {items}, {folders}",
 };
