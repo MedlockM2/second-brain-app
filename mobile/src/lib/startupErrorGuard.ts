@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { captureCaughtError } from "./crashReporting";
+
 /**
  * The net under a JavaScript error that happens outside a React render.
  *
@@ -23,9 +25,16 @@ import { useSyncExternalStore } from "react";
  *    instead of the process dying.
  * 2. Hermes' promise rejection tracker — rejections nobody handled. React Native
  *    installs this one itself, but only under `__DEV__`
- *    (`Libraries/Core/polyfillPromise.js`), so in a release build an unhandled
- *    rejection is entirely silent today. `@sentry/react-native` reaches for the
- *    same two hooks, in the same order, for the same reason.
+ *    (`Libraries/Core/polyfillPromise.js`), so without this hook an unhandled
+ *    rejection in a release build would be entirely silent.
+ *
+ * **This module is the only owner of both hooks, Sentry included.**
+ * `@sentry/react-native` reaches for the same two hooks, in the same order, for
+ * the same reason — and installing both would break the fallback whichever way
+ * they stacked (the reasons are spelled out in `crashReporting.ts`). So Sentry's
+ * own handlers are switched off at init, and everything caught here is sent to
+ * Sentry from `logStartupFailure`, plus the non-fatal errors that pass straight
+ * through. Nothing about when the fallback shows has changed.
  *
  * **A rejection is logged, never shown.** It does not end the process, and the
  * app is full of deliberate fire-and-forget calls whose failure is recoverable:
@@ -34,8 +43,8 @@ import { useSyncExternalStore } from "react";
  * refuses — the state the observed prewarm was in. Turning that into a
  * full-screen error the user meets on their next launch would be a worse bug than
  * the one this module fixes. So the fallback is reserved for the errors that
- * would otherwise kill the process, and the rejections go to the log, which is
- * more than they had before.
+ * would otherwise kill the process, and the rejections go to the log and to
+ * Sentry, which is more than they had before.
  *
  * Installed from the module scope of `app/_layout.tsx`, next to the splash hold,
  * so it is armed before any provider mounts and for every entry point at once —
@@ -96,14 +105,20 @@ function asError(value: unknown): Error {
 }
 
 /**
- * The diagnostic channel: one line per caught failure, whether or not it ends up
- * on screen. `console.error` is what reaches the device log in a release build,
- * and the LogBox in development.
+ * The diagnostic channel: one report per caught failure, whether or not it ends
+ * up on screen. Two sinks. Sentry is the one that reaches us from a tester's
+ * phone, and it goes first so this failure's own log line is not recorded as a
+ * breadcrumb of itself. `console.error` is what reaches the device log in a
+ * release build, and the LogBox in development.
+ *
+ * Every origin goes through here — the render boundary in `app/_layout.tsx`
+ * included — so no caught failure can reach one sink and miss the other.
  */
 export function logStartupFailure(
   value: unknown,
   origin: StartupFailureOrigin,
 ): void {
+  captureCaughtError(value, origin);
   console.error(`[startup-guard] caught ${origin}:`, value);
 }
 
@@ -136,7 +151,10 @@ function installFatalErrorHandler(): void {
     // A non-fatal error is already handled gracefully by the runtime — reported,
     // then execution continues — so it passes straight through, unlogged here to
     // avoid saying the same thing twice, and without taking the screen over.
+    // The runtime's report stays on the device, though, so it is sent to Sentry:
+    // that is the one sink it would otherwise never reach.
     if (!isFatal) {
+      captureCaughtError(error, "non-fatal-error");
       forward(previous, error, isFatal);
       return;
     }

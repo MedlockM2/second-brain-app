@@ -121,10 +121,13 @@ The app does NOT use the AppTrackingTransparency framework because no tracking o
 | SDK/Service | Data Accessed | Purpose |
 |-------------|---------------|---------|
 | Expo | Device info, crash data | App framework, OTA updates |
+| Sentry (`@sentry/react-native`) | Crash data: stack trace, device model, OS version, app version/build, recent in-app events | Crash and error reporting |
 | Deepgram (server-side only) | Audio content from URLs | Transcription |
 | OpenAI (server-side only) | Text content | AI generation |
 
 Note: Deepgram and OpenAI are called server-side only (from our backend), not from the app directly. They do not have SDKs embedded in the app binary.
+
+Sentry *is* embedded in the app (task-413) and is covered by the existing "Crash Data — Not linked to identity" answer above. That answer holds only while the app never attaches an identity to Sentry: `src/lib/crashReporting.ts` runs with `sendDefaultPii: false` and never calls `Sentry.setUser`. Adding either would make crash data linked to the user, and this declaration would have to change with it.
 
 ---
 

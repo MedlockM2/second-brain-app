@@ -121,12 +121,13 @@ The following categories are NOT collected:
 
 **No data is shared with third parties** for purposes outside of providing the core Service.
 
-Note on server-side processing: Our backend sends content to Deepgram (transcription) and OpenAI (AI generation) to provide core app functionality. Per Google's Data Safety guidance, server-side API calls to service providers acting as data processors on our behalf are disclosed as follows:
+Note on processors: Our backend sends content to Deepgram (transcription) and OpenAI (AI generation) to provide core app functionality, and the app itself sends crash reports to Sentry. Per Google's Data Safety guidance, transfers to service providers acting as data processors on our behalf are disclosed as follows:
 
 | Service Provider | Data Processed | Purpose | Retained by Provider |
 |-----------------|----------------|---------|---------------------|
 | Deepgram | Audio from submitted URLs | Transcription | No (deleted after processing) |
 | OpenAI | Text content | AI artifact generation | No (API usage, not used for training) |
+| Sentry (SDK in the app, task-413) | Crash logs and diagnostics: stack trace, device model, OS version, app version/build, recent in-app events; no account identifier | Crash and error reporting (the "Crash logs" answer above) | Yes, for the project's event retention period (within the 6 months stated in the privacy policy) |
 
 These are **not** considered "sharing" under Google Play Data Safety because these providers act as processors under our instructions and do not use the data for independent purposes.
 

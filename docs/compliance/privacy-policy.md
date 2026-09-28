@@ -132,6 +132,7 @@ We share data with the following third-party services solely for the purpose of 
 | Deepgram | Audio content from URLs | Transcription |
 | OpenAI | Text content, transcripts | AI artifact generation |
 | Expo | Push notification token, notification text (a count) | Delivering digest notifications |
+| Sentry | Crash and error reports: the error and where in the app it happened, device model, operating system version, app version and build, and the in-app events just before it (no account identifier) | Diagnosing crashes and errors |
 | Amazon Web Services | All stored data | Infrastructure hosting |
 
 We do NOT:

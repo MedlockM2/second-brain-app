@@ -53,7 +53,7 @@ Configure these in GitHub repository Settings > Secrets and variables > Actions:
 
 ### Secrets (required)
 
-**`EXPO_TOKEN` is the only one, and it was provisioned on 2026-09-02** at
+**`EXPO_TOKEN` is the only one every workflow needs, and it was provisioned on 2026-09-02** at
 `17:13:47Z` — verified with `gh secret list`, which now returns seven secrets.
 The last blocker on this workflow is therefore lifted for `eas build`. It has not
 been exercised through Actions yet: every `Mobile Build & Distribute` run on
@@ -63,6 +63,11 @@ under the old trigger contract and all of them dead on authentication.
 | Secret | Description | Status |
 |--------|-------------|--------|
 | `EXPO_TOKEN` | Expo access token for EAS CLI authentication. Both build jobs assert it in their first step | **Set 2026-09-02.** Rotation procedure in [Owner prerequisite](#owner-prerequisite-expo_token) |
+| `SENTRY_AUTH_TOKEN` | Sentry organization auth token. Used only by the OTA source-map upload step of `mobile-ota-or-build.yml`; native builds read their own copy from the EAS environment | **Not set yet** (task-413). See [Crash Reporting (Sentry)](#crash-reporting-sentry) |
+
+`SENTRY_AUTH_TOKEN` was added by task-413 and is not needed to *publish*: a
+missing one fails only the upload step that runs after `eas update`, with an
+error naming the command to set it.
 
 Four secrets that used to be listed here are gone, none of them replaced:
 
@@ -80,6 +85,9 @@ Four secrets that used to be listed here are gone, none of them replaced:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SLACK_WEBHOOK_URL` | Slack incoming webhook for failure notifications | (none - Slack alerts disabled if unset) |
+| `SENTRY_ORG` | Sentry organization slug, for the OTA source-map upload. **Required** by that step, which fails without it | (none) |
+| `SENTRY_PROJECT` | Sentry project slug, same step, same rule | (none) |
+| `SENTRY_URL` | Sentry endpoint, only for an org hosted somewhere other than the default | `https://sentry.io/` |
 
 ## Initial Setup
 
@@ -833,8 +841,8 @@ defined on both sides**. Today none is, and that is what makes the setup sound:
   copies them out of `build.internal.env` with `jq` into `$GITHUB_ENV` before
   publishing, so the update path reads them from the one source the build path
   reads.
-- The RevenueCat keys live **only** in the EAS environments. Both paths get them
-  from the server side, automatically.
+- The RevenueCat keys and `EXPO_PUBLIC_SENTRY_DSN` live **only** in the EAS
+  environments. Both paths get them from the server side, automatically.
 
 If that ever stops holding, the symptom is an update that publishes cleanly,
 installs cleanly, and fails every network call. The workflow catches it by asking
@@ -1737,6 +1745,131 @@ authentication and the build path without spending a store submission. Note that
 `EXPO_TOKEN` only unblocks `eas build`; `eas submit` additionally needs the App
 Store Connect API key and the Google Play service account, which live on EAS's
 side (`eas credentials`), not in GitHub secrets.
+
+## Crash Reporting (Sentry)
+
+Added by task-413. The app reports crashes and caught errors to Sentry, and every
+build and every OTA update uploads the source maps that turn a Sentry stack trace
+back into TypeScript. This section lists what that needs outside the repository
+and where each piece lives. None of it is in a tracked file.
+
+### The app side, in one paragraph
+
+`app/_layout.tsx` calls `initCrashReporting()` (`src/lib/crashReporting.ts`)
+at module scope, right before `installStartupErrorGuard()`. **The guard remains
+the only owner of `ErrorUtils.setGlobalHandler` and of the Hermes rejection
+tracker.** Sentry's own `reactNativeErrorHandlersIntegration` is replaced by
+one with both hooks off, and the guard forwards what it catches:
+
+- fatal errors: level `fatal`, not handled;
+- render errors from the root `ErrorBoundary`: level `fatal`, not handled;
+- unhandled rejections: level `error`, handled;
+- non-fatal global errors: level `error`, handled.
+
+The fallback screen shows exactly when it did before. Native crashes are
+reported by the native SDKs, which need no JS hook. **Without a DSN nothing
+initialises**, which is the normal state of the E2E builds and of a local
+`expo start`.
+
+### Variables and where they live
+
+| Name | Store | Environments | Visibility | Read by |
+|---|---|---|---|---|
+| `EXPO_PUBLIC_SENTRY_DSN` | EAS environment variable | `production`, `preview` | **Plain text or Sensitive, never Secret** | `app.config.ts` into `extra.sentryDsn`, then `Config.SENTRY_DSN` |
+| `SENTRY_ORG` | EAS environment variable | `production`, `preview` | Plain text | sentry-cli, in the native build phases |
+| `SENTRY_PROJECT` | EAS environment variable | `production`, `preview` | Plain text | same |
+| `SENTRY_AUTH_TOKEN` | EAS environment variable | `production`, `preview` | **Secret** | same |
+| `SENTRY_AUTH_TOKEN` | GitHub repository secret | - | - | the OTA upload step of `mobile-ota-or-build.yml` |
+| `SENTRY_ORG`, `SENTRY_PROJECT` | GitHub repository variables | - | - | same step |
+| `SENTRY_URL` (optional) | GitHub repository variable | - | - | same step; defaults to `https://sentry.io/` |
+
+`production` is the EAS environment of both the `internal` and the `production`
+build profiles. `preview` is the environment of the `preview` profile.
+
+Three rules, each preventing a specific failure:
+
+- **The DSN must not be Secret.** `extra` is a fingerprint input, and CI hashes
+  it with `eas fingerprint:generate -e internal` on a GitHub runner, which cannot
+  read Secret values. A Secret DSN would hash differently on the runner and on the
+  builder, and the build would die in `CONFIGURE_EXPO_UPDATES` (see
+  [Every fingerprint source must be in the repository](#every-fingerprint-source-must-be-in-the-repository)).
+  A DSN only lets someone *send* events to the project. It ships inside every
+  binary anyway.
+- **The auth token must be Secret, and `app.config.ts` must never read it.** It
+  can write to the Sentry organisation. The resolved config is computed on every
+  machine and embedded in the app, so the token reaches sentry-cli straight from
+  the build environment, never through the config. The same goes for org and
+  project: the `@sentry/react-native/expo` plugin is declared without props and
+  falls back to the environment. The `Missing config for organization, project`
+  warning it prints on every config resolve is expected.
+- **`EXPO_PUBLIC_SENTRY_DSN` exists only on the EAS side**, never in `eas.json`,
+  like the RevenueCat keys. That keeps the build and update paths reading one
+  value (see
+  [`--environment` is mandatory on SDK 55](#--environment-is-mandatory-on-sdk-55-and-the-two-paths-disagree-on-precedence)).
+
+The `development` EAS environment needs none of these. A development client
+loads its bundle and manifest from Metro on your machine, so its `extra` comes
+from `mobile/.env`. To report from a local session, put `EXPO_PUBLIC_SENTRY_DSN`
+there. Events then carry the `development` environment.
+
+### Which builds upload source maps
+
+A failed upload **fails the build**, so every profile that uploads needs the
+three build-time variables set in its EAS environment *before* the build starts.
+
+| Build | Uploads? | Why |
+|---|---|---|
+| `development`, `development-simulator` | No: `SENTRY_DISABLE_AUTO_UPLOAD=true` in the `development` profile's `env` block, inherited by `extends` | Debug binary, bundle served by Metro, nothing to upload, and no token in that environment |
+| `preview` | Yes | EAS environment `preview` |
+| `internal` | Yes | EAS environment `production` |
+| `production` | Yes | EAS environment `production` |
+| E2E (`mobile-e2e-maestro.yml`) | No: the same flag on both build steps | No token on the runner, and the iOS build is `-configuration Release`, which would otherwise upload |
+
+On iOS the plugin wraps the "Bundle React Native code and images" phase and adds
+an "Upload Debug Symbols to Sentry" phase, which uploads the dSYMs too. On Android
+it applies `sentry.gradle`, which skips debug variants.
+
+### OTA updates
+
+An update's bundle is produced on the GitHub runner, not in a build, so no build
+phase uploads its map. The step "Upload the update's source maps to Sentry" in
+`mobile-ota-or-build.yml` runs `npx sentry-expo-upload-sourcemaps dist` after
+every publish. `eas update` exports into `mobile/dist/` with source maps by
+default. Matching is by **debug ID**, stamped into each bundle by
+`getSentryExpoConfig` in `metro.config.js`. Matching by release would be wrong:
+an update runs under the release of the binary it lands on.
+
+After a manual `eas update` from a laptop, upload the same way from `mobile/`:
+export `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_URL` and `SENTRY_AUTH_TOKEN` in
+your shell (the token from wherever you keep it, never a file in the repo), then
+run `npx sentry-expo-upload-sourcemaps dist`.
+
+### What each event carries
+
+| Field | Value | Source |
+|---|---|---|
+| environment | the build's update channel (`preview`, `internal`, `production`); `development` under `__DEV__`; `local` for a release build made outside EAS | `crashReporting.ts` |
+| release / dist | `com.secondbrainlabs.core@<version>+<build>` / `<build>` | the SDK, from the native app |
+| `api.host` tag | the API host the build talks to, which answers "dev or prod?" directly: `preview` and `internal` use the -dev API, `production` the prod one | `Config.API_BASE_URL` |
+| `ota.update_id`, `ota.embedded_launch` tags | which bundle was running: two OTA updates on one build share release and dist | `expo-updates` |
+| `startup_guard.origin` tag | `fatal-error`, `render`, `unhandled-rejection` or `non-fatal-error` | the guard |
+
+HTTP breadcrumbs keep method, path and status but drop the query string, which
+is where a search term and a presigned URL's signature travel. No user identity
+is ever attached. The store privacy answers ("Crash Data — Not linked to
+identity") depend on that: see `docs/compliance/apple-app-privacy.md`.
+
+### Adding Sentry moved the fingerprint
+
+The native module, the plugin's build phases and the new `extra.sentryDsn` key
+all feed the fingerprint. So the first push to `main` after task-413 builds
+**both platforms** instead of publishing an OTA, and no binary installed before
+it will ever report to Sentry. Two consequences for the order of operations:
+
+1. Set the EAS variables **before** that push. Otherwise both builds fail on the
+   upload and burn two of the free tier's monthly builds.
+2. Set the DSN before that push too. Adding or changing it later moves `extra`,
+   and with it the fingerprint, and costs another pair of builds.
 
 ## Observability & Failure Handling
 

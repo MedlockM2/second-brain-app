@@ -379,6 +379,35 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
       // already-installed build over the air: both platforms need a new EAS
       // build. See the runtimeVersion comment above.
       "expo-notifications",
+      // Crash and error reporting (task-413). The plugin writes
+      // `ios/sentry.properties` and `android/sentry.properties`, wraps the Xcode
+      // "Bundle React Native code and images" phase with `sentry-xcode.sh`, adds
+      // an "Upload Debug Symbols to Sentry" phase, and applies `sentry.gradle` to
+      // the app module. Those build steps upload the release bundle's source map
+      // (and the dSYMs on iOS) at `eas build` time, so a Sentry stack trace
+      // points at our TypeScript instead of at `main.jsbundle:1:48213`.
+      //
+      // **Deliberately a bare string: no `organization`, no `project`, no
+      // `authToken`.** Without them the plugin prints "Missing config for
+      // organization, project. Environment variables will be used as a fallback
+      // during the build" on every config resolve — expected, and on stderr, so
+      // it never reaches the JSON eas-cli parses. The build then reads
+      // `SENTRY_ORG`, `SENTRY_PROJECT` and `SENTRY_AUTH_TOKEN` from the EAS
+      // environment the profile targets. Putting org and project here would
+      // work, but reading them from `process.env` would make them a fingerprint
+      // input for no benefit, and the token must never be in config at all: this
+      // file is resolved on every machine and its output is embedded in the
+      // app. See MOBILE_CI_CD.md, "Crash Reporting (Sentry)".
+      //
+      // A failed upload fails the build. The `development` profile sets
+      // `SENTRY_DISABLE_AUTO_UPLOAD=true` in eas.json (a Debug binary served by
+      // Metro has no bundle to upload), and so do the local E2E builds of
+      // mobile-e2e-maestro.yml. Every other profile uploads, which is why the
+      // three variables have to exist before a build is launched.
+      //
+      // It moves the fingerprint (a new native module, new build phases), so
+      // Sentry cannot reach an already-installed build over the air.
+      "@sentry/react-native/expo",
       [
         "expo-share-intent",
         {
@@ -449,6 +478,19 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
       revenueCatAppleKey: process.env.EXPO_PUBLIC_REVENUCAT_APPLE_KEY || "",
       revenueCatGoogleKey: process.env.EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY || "",
       feedbackUrl: process.env.EXPO_PUBLIC_FEEDBACK_URL || "",
+      // Where crash and error reports go (task-413), read at runtime by
+      // src/lib/crashReporting.ts. Empty means Sentry is not initialised at all,
+      // which is what a local `expo start` without the variable and the E2E
+      // builds get. A DSN is a write-only ingest key that ships inside every
+      // binary, but it is still not written into the repository: it lives only
+      // in the EAS environments, like the RevenueCat keys above.
+      //
+      // Its EAS visibility must be "Plain text" or "Sensitive", never "Secret".
+      // `extra` is a fingerprint input and CI computes the fingerprint with
+      // `eas fingerprint:generate`, which can only read non-secret variables; a
+      // Secret DSN would hash as empty on the runner and as the real value on the
+      // builder, and the build would die in CONFIGURE_EXPO_UPDATES.
+      sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
       eas: {
         projectId: easProjectId,
       },
