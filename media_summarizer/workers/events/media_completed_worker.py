@@ -14,6 +14,10 @@ Media completed events consumer -- content ledger close, watcher fan-out, indexi
   has no other way to reach the person who asked for it. Success only — a failure
   returns early below, and a save that could not be processed is news the user
   finds in the app, not an interruption. Email notifications stay disabled.
+- Arms the full-text translation into the reading language of the submitter and
+  of every watcher (task-414), so a foreign media is already translated when it is
+  first opened. Enqueue only, through the same atomic reservation as
+  ``/raw-content``; the translation runs in ``transcript_translation_worker``.
 
 Search indexing (Algolia) is decoupled from the watcher loop:
 - The submitting user (resolved from the event's canonical_job_id) is ALWAYS indexed,
@@ -130,6 +134,49 @@ async def _trigger_review_blurb(
             media_item_id=media_item_id,
             user_id=user_id,
             error=str(exc),
+        )
+
+
+async def _arm_transcript_translations(
+    *,
+    canonical_job: Any,
+    transcription_s3_key: Optional[str],
+    watchers: Optional[list],
+) -> None:
+    """Start the full-text translation now rather than at first read (task-414).
+
+    Called here, not in the ingestion workers, for the reason task-203 removed the
+    prewarm from them: the job this event reports on is already completed, so
+    nothing the translation takes can hold it up. The accounts are the submitter
+    and every watcher, i.e. everyone whose save this ingestion answers; the
+    transcript key is the canonical job's, the one ``/raw-content`` reads for all
+    of them.
+
+    Swallows everything: ``/raw-content`` still arms whatever this missed, and a
+    completion event must not be replayed because a translation could not start.
+    """
+    user_ids = [canonical_job.user_id] + [
+        w.get("user_id") for w in (watchers or []) if w.get("user_id")
+    ]
+    try:
+        from media_summarizer.core.services.ingestion_translation_service import (
+            arm_transcript_translations,
+        )
+
+        await arm_transcript_translations(
+            job=canonical_job,
+            user_ids=user_ids,
+            transcript_s3_key=transcription_s3_key,
+        )
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "translation.ingestion_arm_failed",
+            "Failed to arm transcript translations at ingestion (non-fatal)",
+            job_id=getattr(canonical_job, "id", None),
+            error_type=type(exc).__name__,
+            error=str(exc)[:200],
         )
 
 
@@ -267,6 +314,13 @@ async def process_event(message: Dict[str, Any]) -> None:
             logger.error(f"Failed to load canonical job {canonical_job_id}: {e}")
 
     if canonical_job and canonical_job.user_id:
+        # First of the per-content hooks: the translation is the slowest thing a
+        # reader will wait on (60-90 s), so it gets the earliest start.
+        await _arm_transcript_translations(
+            canonical_job=canonical_job,
+            transcription_s3_key=transcription_s3_key,
+            watchers=watchers,
+        )
         await enqueue_transcript_indexing(
             media_item_id=canonical_job.media_item_id or canonical_job_id,
             job_id=canonical_job_id,

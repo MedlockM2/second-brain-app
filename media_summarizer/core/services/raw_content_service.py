@@ -5,11 +5,17 @@ Raw content is the source material (transcript, extracted text, OCR result)
 stored in S3 under the processing job's transcription_s3_key.
 This service downloads that content and formats it into readable text.
 
-Translation architecture (task-200):
+Translation architecture (task-200, task-414):
 - /raw-content NEVER calls LLM translation synchronously.
+- The translation into the reading language of every account that saved the
+  media is already armed at ingestion (``ingestion_translation_service``), so on
+  first open it is usually done or in flight -- this path then only reads state.
 - If a cached translation exists in S3, it is returned immediately.
 - If not, the original transcript is returned with translation_pending=true
-  and an async job is dispatched via SQS to the transcript-translation-worker.
+  and, when nobody armed it yet (a reading language changed after ingestion, a
+  reader whose save was not part of the ingestion), an async job is dispatched
+  via SQS to the transcript-translation-worker. Same atomic reservation as the
+  ingestion hook, so the two triggers never enqueue the same couple twice.
 - The mobile client polls /raw-content until the translation is ready.
 
 Formatting architecture (task-232, benchmark task-231 option B):
@@ -29,12 +35,12 @@ from media_summarizer.core.services.transcript_formatting import (
     normalize_transcript_text,
 )
 from media_summarizer.core.services.transcript_translation import (
-    TRANSCRIPT_TRANSLATION_QUEUE,
+    TranslationDispatchOutcome,
     build_translated_transcript_key,
     detect_language,
-    enqueue_translation_job,
     job_source_language_hint,
     normalize_language_tag,
+    reserve_and_dispatch_translation,
     should_translate,
 )
 from media_summarizer.utils import s3
@@ -45,8 +51,6 @@ from media_summarizer.utils.translation_idempotence import (
     build_translation_fingerprint,
     get_translation_lock,
     is_terminally_failed,
-    mark_translation_failed,
-    reserve_translation,
 )
 
 logger = logging.getLogger(__name__)
@@ -405,63 +409,29 @@ async def _resolve_translation(
             "_translated_s3_key": translated_key,
         }
 
-    # Attempt atomic reservation (only the first caller wins)
-    try:
-        reserved = await reserve_translation(
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            allow_done_retry=retry_missing_done_translation,
-        )
-    except Exception as exc:
-        log_event(
-            logger,
-            logging.WARNING,
-            "raw_content.translation_reserve_failed",
-            "Failed to reserve translation; treating as already in-flight",
-            error_type=type(exc).__name__,
-            detail=str(exc)[:200],
-        )
-        reserved = False
-
-    if reserved:
-        # We won the reservation -- enqueue the translation job
-        dispatched = await _enqueue_translation_job(
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            source_language_hint=source_language_hint,
-            source=source_platform or None,
-            job_id=getattr(job, "id", None),
-        )
-        if dispatched:
-            log_event(
-                logger,
-                logging.INFO,
-                "raw_content.translation_enqueued",
-                "Translation reserved and async job dispatched",
-                transcript_s3_key=transcript_s3_key,
-                target_language=normalized_target,
-                detected_language=detected_language,
-            )
-        else:
-            return {
-                "is_translated": False,
-                "translated_from": None,
-                "target_language": normalized_target,
-                "detected_language": detected_language,
-                "detection_method": detection_method,
-                "translation_pending": False,
-                "translation_status": TranslationStatus.FAILED,
-            }
-    else:
-        log_event(
-            logger,
-            logging.INFO,
-            "raw_content.translation_already_reserved",
-            "Translation already reserved by another caller; not re-enqueuing",
-            transcript_s3_key=transcript_s3_key,
-            target_language=normalized_target,
-            detected_language=detected_language,
-        )
+    # Atomic reservation + enqueue: the same gate the ingestion hook goes through
+    # (task-414), so a translation armed at ingestion is never enqueued twice.
+    # Losing the race (or a reservation error) means someone else owns the couple:
+    # report it as queued and let the next poll read the real state.
+    outcome = await reserve_and_dispatch_translation(
+        transcript_s3_key=transcript_s3_key,
+        target_language=normalized_target,
+        source_language_hint=source_language_hint,
+        source=source_platform or None,
+        job_id=getattr(job, "id", None),
+        trigger="raw_content",
+        allow_done_retry=retry_missing_done_translation,
+    )
+    if outcome == TranslationDispatchOutcome.DISPATCH_FAILED:
+        return {
+            "is_translated": False,
+            "translated_from": None,
+            "target_language": normalized_target,
+            "detected_language": detected_language,
+            "detection_method": detection_method,
+            "translation_pending": False,
+            "translation_status": TranslationStatus.FAILED,
+        }
 
     return {
         "is_translated": False,
@@ -472,50 +442,6 @@ async def _resolve_translation(
         "translation_pending": True,
         "translation_status": TranslationStatus.QUEUED,
     }
-
-
-async def _enqueue_translation_job(
-    *,
-    transcript_s3_key: str,
-    target_language: str,
-    source_language_hint: Optional[str],
-    source: Optional[str],
-    job_id: Optional[str],
-) -> bool:
-    """Enqueue a translation job to the transcript-translation-queue.
-
-    Best-effort: failures are logged but do not break /raw-content.
-    The next request will re-attempt the dispatch.
-    """
-    try:
-        await enqueue_translation_job(
-            transcript_s3_key=transcript_s3_key,
-            target_language=target_language,
-            source_language_hint=source_language_hint,
-            source=source,
-            job_id=job_id,
-        )
-        return True
-    except Exception as exc:
-        await mark_translation_failed(
-            transcript_s3_key=transcript_s3_key,
-            target_language=target_language,
-            error_message=(
-                f"translation_enqueue_failed: {type(exc).__name__}: {str(exc)[:200]}"
-            ),
-        )
-        log_event(
-            logger,
-            logging.ERROR,
-            "raw_content.translation_enqueue_failed",
-            "Failed to enqueue translation job; next request will retry",
-            queue=TRANSCRIPT_TRANSLATION_QUEUE,
-            transcript_s3_key=transcript_s3_key,
-            target_language=target_language,
-            error_type=type(exc).__name__,
-            detail=str(exc)[:200],
-        )
-        return False
 
 
 def _detect_source_format(media_type: str, source_platform: str, transcript_s3_key: str) -> str:

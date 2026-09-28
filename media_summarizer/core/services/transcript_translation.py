@@ -2,8 +2,13 @@
 Source-agnostic transcript language detection and translation.
 
 This module serves the **reader**: the full text a user opens on a foreign media
-is translated into their reading language, in the background, and cached
-(``/raw-content``, ``core/services/raw_content_service.py``). Artifact generation
+is translated into their reading language, in the background, and cached. The
+translation is armed at ingestion for every account that saved the media
+(``core/services/ingestion_translation_service.py``, task-414), so it is ready
+when the media is first opened; ``/raw-content``
+(``core/services/raw_content_service.py``) stays the fallback for a language
+nobody asked for at ingestion. Both go through
+:func:`reserve_and_dispatch_translation`. Artifact generation
 does *not* come through here any more — it reads the original transcript and asks
 the model for the output language (task-398) — so nothing on the generation path
 waits on a translation.
@@ -42,6 +47,7 @@ import asyncio
 import logging
 import os
 import time
+from enum import Enum
 from io import BytesIO
 from typing import Any, Dict, Optional, Tuple
 
@@ -59,6 +65,8 @@ from media_summarizer.utils.translation_idempotence import (
     TranslationStatus,
     build_translation_fingerprint,
     get_translation_lock,
+    mark_translation_failed,
+    reserve_translation,
 )
 
 logger = logging.getLogger(__name__)
@@ -458,6 +466,22 @@ class TranslationOutcome:
         }
 
 
+class TranslationDispatchOutcome(str, Enum):
+    """What :func:`reserve_and_dispatch_translation` did. Stable, logged values."""
+
+    #: This caller won the reservation and the SQS message was sent.
+    ENQUEUED = "enqueued"
+    #: The couple is already queued, in progress, done, or permanently failed:
+    #: another caller owns it and no message was sent.
+    ALREADY_RESERVED = "already_reserved"
+    #: The reservation write itself errored. Nothing was sent; the caller treats
+    #: the couple as in flight, and the next access retries the reservation.
+    RESERVATION_FAILED = "reservation_failed"
+    #: Reserved, but the SQS send failed. The lock was moved to a transient
+    #: ``failed`` so the next access may reserve it again.
+    DISPATCH_FAILED = "dispatch_failed"
+
+
 async def enqueue_translation_job(
     *,
     transcript_s3_key: str,
@@ -477,6 +501,104 @@ async def enqueue_translation_job(
             "job_id": job_id,
         },
     )
+
+
+async def reserve_and_dispatch_translation(
+    *,
+    transcript_s3_key: str,
+    target_language: str,
+    source_language_hint: Optional[str],
+    source: Optional[str],
+    job_id: Optional[str],
+    trigger: str,
+    allow_done_retry: bool = False,
+) -> TranslationDispatchOutcome:
+    """The one gate every translation request goes through (task-203, task-414).
+
+    Two callers ask for a translation: the ingestion completion hook, which arms
+    it as soon as the transcript exists, and ``/raw-content``, which remains the
+    fallback for a reader whose language nobody asked for at ingestion. Both go
+    through the same atomic reservation on ``(transcript_s3_key, target_language)``,
+    so whichever comes first enqueues and the other one reads the state — the
+    proactive and the lazy trigger can never enqueue the same couple twice.
+
+    Never raises and never waits on the translation itself: one conditional
+    ``PutItem`` and one ``SendMessage``. ``trigger`` only labels the logs.
+    """
+    try:
+        reserved = await reserve_translation(
+            transcript_s3_key=transcript_s3_key,
+            target_language=target_language,
+            allow_done_retry=allow_done_retry,
+        )
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "translation.reserve_failed",
+            "Failed to reserve translation; treating as already in-flight",
+            trigger=trigger,
+            transcript_s3_key=transcript_s3_key,
+            target_language=target_language,
+            error_type=type(exc).__name__,
+            detail=str(exc)[:200],
+        )
+        return TranslationDispatchOutcome.RESERVATION_FAILED
+
+    if not reserved:
+        log_event(
+            logger,
+            logging.INFO,
+            "translation.already_reserved",
+            "Translation already reserved by another caller; not re-enqueuing",
+            trigger=trigger,
+            transcript_s3_key=transcript_s3_key,
+            target_language=target_language,
+        )
+        return TranslationDispatchOutcome.ALREADY_RESERVED
+
+    try:
+        await enqueue_translation_job(
+            transcript_s3_key=transcript_s3_key,
+            target_language=target_language,
+            source_language_hint=source_language_hint,
+            source=source,
+            job_id=job_id,
+        )
+    except Exception as exc:
+        # Transient by default: an SQS hiccup must leave the couple reservable.
+        await mark_translation_failed(
+            transcript_s3_key=transcript_s3_key,
+            target_language=target_language,
+            error_message=(
+                f"translation_enqueue_failed: {type(exc).__name__}: {str(exc)[:200]}"
+            ),
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "translation.enqueue_failed",
+            "Failed to enqueue translation job; next access will retry",
+            trigger=trigger,
+            queue=TRANSCRIPT_TRANSLATION_QUEUE,
+            transcript_s3_key=transcript_s3_key,
+            target_language=target_language,
+            error_type=type(exc).__name__,
+            detail=str(exc)[:200],
+        )
+        return TranslationDispatchOutcome.DISPATCH_FAILED
+
+    log_event(
+        logger,
+        logging.INFO,
+        "translation.enqueued",
+        "Translation reserved and async job dispatched",
+        trigger=trigger,
+        transcript_s3_key=transcript_s3_key,
+        target_language=target_language,
+        job_id=job_id,
+    )
+    return TranslationDispatchOutcome.ENQUEUED
 
 
 async def ensure_translated_transcript(
