@@ -855,6 +855,10 @@ export const en = {
   "transcript.translating": "Translating the text...",
   "transcript.translationFailed":
     "Translation failed. Showing the original text.",
+  "transcript.translationStalled":
+    "Still translating. It is taking longer than usual, so the original text is shown until the translation is ready.",
+  "transcript.checkTranslation": "Check again",
+  "transcript.checkTranslationA11y": "Check whether the translation is ready",
   "paywall.subtitle":
     "Every plan does everything. They differ only in how much you send.",
 

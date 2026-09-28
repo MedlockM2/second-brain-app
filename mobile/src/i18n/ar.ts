@@ -628,6 +628,10 @@ export const ar: Catalog = {
   "share.signInFiles": "يجب تسجيل الدخول لاستيراد الملفات.",
   "transcript.translating": "جارٍ ترجمة النص…",
   "transcript.translationFailed": "فشلت الترجمة. يُعرض النص الأصلي.",
+  "transcript.translationStalled":
+    "لا تزال الترجمة جارية. تستغرق وقتًا أطول من المعتاد، لذا يُعرض النص الأصلي إلى أن تصبح الترجمة جاهزة.",
+  "transcript.checkTranslation": "التحقق مجددًا",
+  "transcript.checkTranslationA11y": "التحقق مما إذا كانت الترجمة جاهزة",
   "paywall.subtitle":
     "كل الخطط تقدّم كل شيء. الفرق الوحيد هو مقدار ما يمكنك إرساله.",
   "common.itemCount.zero": "لا عناصر",

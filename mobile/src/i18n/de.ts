@@ -742,6 +742,10 @@ export const de: Catalog = {
   "transcript.translating": "Text wird übersetzt …",
   "transcript.translationFailed":
     "Die Übersetzung ist fehlgeschlagen. Es wird der Originaltext angezeigt.",
+  "transcript.translationStalled":
+    "Die Übersetzung läuft noch. Sie dauert länger als gewöhnlich, deshalb wird bis dahin der Originaltext angezeigt.",
+  "transcript.checkTranslation": "Erneut prüfen",
+  "transcript.checkTranslationA11y": "Prüfen, ob die Übersetzung fertig ist",
   "paywall.subtitle":
     "Jeder Tarif kann alles. Sie unterscheiden sich nur darin, wie viel du sendest.",
   "startupError.title": "Die App konnte nicht starten",

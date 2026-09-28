@@ -613,6 +613,10 @@ export const ja: Catalog = {
   "share.signInFiles": "ファイルを読み込むにはサインインが必要です。",
   "transcript.translating": "本文を翻訳中…",
   "transcript.translationFailed": "翻訳に失敗しました。元の本文を表示しています。",
+  "transcript.translationStalled":
+    "まだ翻訳中です。いつもより時間がかかっているため、翻訳が完了するまで元の本文を表示しています。",
+  "transcript.checkTranslation": "もう一度確認",
+  "transcript.checkTranslationA11y": "翻訳が完了したか確認する",
   "paywall.subtitle": "どのプランでもすべての機能を使えます。違うのは送れる量だけです。",
   "startupError.title": "アプリを起動できませんでした",
   "startupError.body":

@@ -639,6 +639,10 @@ export const it: Catalog = {
   "share.signInFiles": "Devi aver effettuato l'accesso per importare file.",
   "transcript.translating": "Traduzione del testo…",
   "transcript.translationFailed": "La traduzione non è riuscita. Viene mostrato il testo originale.",
+  "transcript.translationStalled":
+    "La traduzione è ancora in corso. Sta impiegando più del solito, quindi nel frattempo viene mostrato il testo originale.",
+  "transcript.checkTranslation": "Controlla di nuovo",
+  "transcript.checkTranslationA11y": "Controlla se la traduzione è pronta",
   "paywall.subtitle":
     "Ogni piano fa tutto. Si differenziano solo per quanto puoi inviare.",
   "startupError.title": "L'app non è riuscita ad avviarsi",
