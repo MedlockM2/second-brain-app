@@ -638,5 +638,8 @@ export const ja: Catalog = {
   "mediaTitle.label.photo": "写真",
   "mediaTitle.label.savedItem": "保存した項目",
 
-  "folder.sourceOpenA11y": "{title}を開く",
+  "folder.section.folders": "フォルダ",
+  "folder.section.sources": "ソース · {count}",
+  "folder.subfolderA11y": "フォルダ {name} を開く、{items}",
+  "folder.subfolderWithChildrenA11y": "フォルダ {name} を開く、{items}、{folders}",
 };

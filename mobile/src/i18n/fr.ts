@@ -779,5 +779,8 @@ export const fr: Catalog = {
   "mediaTitle.label.photo": "Photo",
   "mediaTitle.label.savedItem": "Élément enregistré",
 
-  "folder.sourceOpenA11y": "Ouvrir {title}",
+  "folder.section.folders": "Dossiers",
+  "folder.section.sources": "Sources · {count}",
+  "folder.subfolderA11y": "Ouvrir le dossier {name}, {items}",
+  "folder.subfolderWithChildrenA11y": "Ouvrir le dossier {name}, {items}, {folders}",
 };

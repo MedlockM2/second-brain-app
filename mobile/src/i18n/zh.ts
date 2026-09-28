@@ -623,5 +623,8 @@ export const zh: Catalog = {
   "mediaTitle.label.photo": "照片",
   "mediaTitle.label.savedItem": "已保存的内容",
 
-  "folder.sourceOpenA11y": "打开 {title}",
+  "folder.section.folders": "文件夹",
+  "folder.section.sources": "来源 · {count}",
+  "folder.subfolderA11y": "打开文件夹 {name}，{items}",
+  "folder.subfolderWithChildrenA11y": "打开文件夹 {name}，{items}，{folders}",
 };

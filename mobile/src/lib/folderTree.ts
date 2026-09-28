@@ -81,6 +81,42 @@ export function buildFolderTree(
   return { roots, defaultFolder, nodeById };
 }
 
+/**
+ * The media of `media` that live under each of `children`, keyed by child id:
+ * the rows stored in the child itself *and* in any of its descendants, in the
+ * order `media` holds them.
+ *
+ * For a folder page, which already holds every one of those rows: the folder
+ * filter of `GET /api/media` is inclusive of descendants, so what a subfolder
+ * card shows about its content is a regrouping of the page's own response, not
+ * a request per subfolder. A child that holds nothing is present with an empty
+ * list, so a caller never has to tell "empty" from "missing".
+ */
+export function groupMediaBySubtree<T extends { folder_id?: string | null }>(
+  children: readonly FolderNode[],
+  media: readonly T[],
+): Map<string, T[]> {
+  // Every folder of every subtree, mapped to the child whose subtree it is in.
+  const ownerByFolderId = new Map<string, string>();
+  const claim = (node: FolderNode, ownerId: string) => {
+    ownerByFolderId.set(node.id, ownerId);
+    for (const child of node.children) claim(child, ownerId);
+  };
+
+  const grouped = new Map<string, T[]>();
+  for (const child of children) {
+    grouped.set(child.id, []);
+    claim(child, child.id);
+  }
+
+  for (const item of media) {
+    const ownerId = item.folder_id ? ownerByFolderId.get(item.folder_id) : null;
+    if (ownerId) grouped.get(ownerId)?.push(item);
+  }
+
+  return grouped;
+}
+
 /** One user folder, named by the full trail down to it. */
 export interface FolderPath {
   id: string;
