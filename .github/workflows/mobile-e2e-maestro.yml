@@ -187,6 +187,12 @@ jobs:
           EXPO_PUBLIC_E2E_MODE: "true"
           EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
           EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY: ${{ secrets.E2E_REVENUECAT_TEST_KEY }}
+          # No Sentry here (task-413): no EXPO_PUBLIC_SENTRY_DSN, so the app
+          # never initialises it, and no source-map upload from sentry.gradle —
+          # this runner holds no Sentry token, and a failed upload fails the
+          # build. sentry.gradle already skips debug variants; this states it
+          # rather than relying on the variant name.
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
         run: |
           npm uninstall expo-dev-client --no-save --ignore-scripts
           npx expo prebuild --platform android --clean
@@ -376,6 +382,12 @@ jobs:
           EXPO_PUBLIC_E2E_MODE: "true"
           EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
           EXPO_PUBLIC_REVENUCAT_APPLE_KEY: ${{ secrets.E2E_REVENUECAT_TEST_KEY }}
+          # No Sentry here (task-413): no EXPO_PUBLIC_SENTRY_DSN, so the app
+          # never initialises it. And this one is load-bearing: the build below
+          # is `-configuration Release`, so without the flag `sentry-xcode.sh`
+          # and the "Upload Debug Symbols to Sentry" phase would both try to
+          # upload, find no token on this runner, and fail the build.
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
         run: |
           npm uninstall expo-dev-client --no-save --ignore-scripts
           npx expo prebuild --platform ios --clean

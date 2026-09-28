@@ -54,4 +54,13 @@ export const Config = {
    * do nothing at all.
    */
   EAS_PROJECT_ID: (extra.eas?.projectId as string) || "",
+  /**
+   * Where crash and error reports are sent (`src/lib/crashReporting.ts`).
+   *
+   * Empty rather than throwing, like the project id: a build without it reports
+   * nothing and otherwise behaves exactly the same. That is the normal state of
+   * a local `expo start` without the variable and of the E2E builds, which set
+   * none on purpose. The value lives only in the EAS environments.
+   */
+  SENTRY_DSN: (extra.sentryDsn as string) || "",
 } as const;

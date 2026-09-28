@@ -132,8 +132,9 @@ jobs:
       #   update (utils/expoCli.js spawnExpoCommand)       -> { ...process.env,  ...serverEnvVars     }  EAS env wins
       # So the two agree only while no EXPO_PUBLIC_* key is defined on both
       # sides. Today none is: the API URL and the Google client IDs live only in
-      # eas.json, the RevenueCat keys only in the EAS environments. Keep it that
-      # way — `eas env:list production` is the owner check.
+      # eas.json, the RevenueCat keys and the Sentry DSN only in the EAS
+      # environments. Keep it that way — `eas env:list production` is the owner
+      # check.
       - name: Load the internal profile's EXPO_PUBLIC_* variables
         working-directory: mobile
         run: |
@@ -247,6 +248,60 @@ jobs:
             --platform ${{ matrix.platform }} \
             --runtime-version "${{ steps.fingerprint.outputs.hash }}"
 
+      # Crash reporting (task-413). A native build uploads its own source map
+      # from inside the EAS builder (the build phases the `@sentry/react-native/expo`
+      # plugin adds). An OTA update has no such phase: the bundle is produced
+      # right here, by `eas update`, which exports into `mobile/dist/` with
+      # source maps on (`--source-maps` defaults to `true` in eas-cli 22). Without
+      # this step, every error raised by JS that
+      # arrived over the air would show up in Sentry as minified frames.
+      #
+      # The match is by debug ID (stamped by `getSentryExpoConfig` in
+      # metro.config.js), not by release: an update runs under the release and
+      # dist of the binary it lands on, which already has a different map.
+      #
+      # `always()` + the publish outcome, rather than plain sequencing: the maps
+      # of a published update are wanted even when the manifest check above
+      # failed, because that update is being served until someone rolls it back.
+      #
+      # It fails the job when the configuration is missing. The update is
+      # already out by then, so failing rolls nothing back — it is what makes a
+      # missing token visible instead of silently shipping unreadable crashes.
+      - name: Upload the update's source maps to Sentry
+        id: sourcemaps
+        if: always() && steps.update.outcome == 'success'
+        working-directory: mobile
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          # Optional repository variable, for an org hosted outside the default
+          # sentry.io endpoint. Set explicitly either way, so the upload script
+          # never falls back to resolving the Expo config for it.
+          SENTRY_URL: ${{ vars.SENTRY_URL || 'https://sentry.io/' }}
+        run: |
+          set -euo pipefail
+          MISSING=()
+          [[ -n "${SENTRY_AUTH_TOKEN}" ]] || MISSING+=("secret SENTRY_AUTH_TOKEN")
+          [[ -n "${SENTRY_ORG}" ]] || MISSING+=("variable SENTRY_ORG")
+          [[ -n "${SENTRY_PROJECT}" ]] || MISSING+=("variable SENTRY_PROJECT")
+          if [[ "${#MISSING[@]}" -gt 0 ]]; then
+            echo "::error::Cannot upload the update's source maps to Sentry: missing repository ${MISSING[*]}." \
+                 "The update itself is published. Set them with 'gh secret set SENTRY_AUTH_TOKEN'" \
+                 "and 'gh variable set SENTRY_ORG' / 'gh variable set SENTRY_PROJECT'" \
+                 "(see mobile/MOBILE_CI_CD.md, \"Crash Reporting (Sentry)\"), then re-upload from a" \
+                 "local 'eas update' export with 'npx sentry-expo-upload-sourcemaps dist'."
+            exit 1
+          fi
+          # `eas update` 22.0.0 exports into `dist/` with `--source-maps` by
+          # default. The upload script only *warns* when it finds no map and
+          # still exits 0, so the absence is checked here instead.
+          if ! find dist -name '*.map' -print -quit 2>/dev/null | grep -q .; then
+            echo "::error::No source map under mobile/dist/ after 'eas update': nothing to upload."
+            exit 1
+          fi
+          npx sentry-expo-upload-sourcemaps dist
+
       # `--auto-submit` picks the submit profile named after the build profile,
       # i.e. `internal` -> TestFlight + Play internal track. It is scheduled
       # server-side the moment the build starts, which is why `--no-wait` is
@@ -284,6 +339,7 @@ jobs:
             if [[ "${{ steps.decision.outputs.route }}" == "update" ]]; then
               echo "- Matching finished build: \`${{ steps.decision.outputs.matched_build_id }}\`"
               echo "- Published an OTA update on the \`internal\` channel (EAS environment \`production\`)."
+              echo "- Sentry source-map upload: \`${{ steps.sourcemaps.outcome }}\`"
               echo "- Rollback: \`cd mobile && eas update:rollback\`"
             else
               echo "- No finished \`internal\` build carries this fingerprint."

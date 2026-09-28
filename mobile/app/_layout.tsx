@@ -11,12 +11,18 @@ import { PurchasesProvider } from "../src/contexts/PurchasesContext";
 import { StartupErrorGate } from "../src/components/StartupErrorGate";
 import { StartupErrorScreen } from "../src/components/StartupErrorScreen";
 import { usePushNotifications } from "../src/hooks/usePushNotifications";
+import { initCrashReporting } from "../src/lib/crashReporting";
 import {
   clearStartupFailure,
   installStartupErrorGuard,
   logStartupFailure,
 } from "../src/lib/startupErrorGuard";
 import { Colors } from "../src/constants/theme";
+
+// Crash reporting first, so the guard's very first report has somewhere to go.
+// Sentry installs no global hook of its own: the guard below stays the only
+// owner of both, and forwards what it catches. See `crashReporting.ts`.
+initCrashReporting();
 
 // Arm the global error handlers before anything mounts. A JavaScript error
 // outside a render used to end the process — React Native's release handler for a
@@ -98,8 +104,8 @@ function PushNotificationGate(): null {
  * `StartupErrorGate` — see `startupErrorGuard.ts` for why one net cannot do both.
  */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
-  // In an effect rather than in the render body: the log has to happen once per
-  // error, not once per render pass.
+  // In an effect rather than in the render body: the log, and the Sentry event
+  // that goes with it, have to happen once per error, not once per render pass.
   useEffect(() => {
     logStartupFailure(error, "render");
   }, [error]);
