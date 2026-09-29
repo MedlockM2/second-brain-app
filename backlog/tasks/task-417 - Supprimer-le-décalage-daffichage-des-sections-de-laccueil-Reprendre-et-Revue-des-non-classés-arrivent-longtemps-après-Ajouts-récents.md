@@ -3,9 +3,10 @@ id: TASK-417
 title: >-
   Supprimer le décalage d'affichage des sections de l'accueil (Reprendre et
   Revue des non classés arrivent longtemps après Ajouts récents)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 10:09'
+updated_date: '2026-09-29 10:48'
 labels:
   - mobile
   - backend
