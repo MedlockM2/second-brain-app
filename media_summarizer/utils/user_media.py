@@ -352,13 +352,62 @@ async def list_for_folder(user_id: str, folder_id: Optional[str]) -> List[UserMe
     return records
 
 
+async def count_for_folder(user_id: str, folder_id: Optional[str]) -> int:
+    """How many visible library rows sit directly in **one** folder.
+
+    ``Select="COUNT"`` on the folder LSI, with the soft-delete filter moved from
+    Python to DynamoDB: the answer is a number, so a folder holding a thousand
+    items costs a bounded response instead of a thousand items on the wire. The
+    filter is applied before ``Count`` is computed, and ``deleted_at`` is in the
+    index (``projection_type = "ALL"``), so the figure means the same thing
+    :func:`list_for_folder` would have counted.
+
+    This is what a *single* folder's figure is read with, and the Home screen's
+    unsorted count is the one that matters (task-417): it used to come out of
+    :func:`count_media_per_folder`, which reads the whole partition — the very
+    read ``GET /api/media`` is already performing, in parallel, on the same open.
+
+    ``folder_id=None`` counts the rows that sit outside any folder.
+    """
+    table_name = user_media_table_name()
+    prefix = f"{folder_id or NO_FOLDER_SEGMENT}#"
+    session = database_async.get_session()
+    total = 0
+    async with session.resource(
+        "dynamodb",
+        region_name=database_async.AWS_REGION,
+    ) as dynamodb:
+        table = await dynamodb.Table(table_name)
+        kwargs: Dict[str, Any] = {
+            "IndexName": "folder-index",
+            "KeyConditionExpression": (
+                Key("user_id").eq(user_id) & Key("folder_sort_key").begins_with(prefix)
+            ),
+            "FilterExpression": Attr("deleted_at").not_exists(),
+            "Select": "COUNT",
+            "ConsistentRead": True,
+        }
+        while True:
+            resp = await table.query(**kwargs)
+            total += int(resp.get("Count", 0))
+            last_key = resp.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+    return total
+
+
 async def count_media_per_folder(user_id: str) -> Dict[str, int]:
-    """Number of visible library rows per folder id.
+    """Number of visible library rows per folder id, for **every** folder at once.
 
     One Query for the whole user rather than one per folder: a user has a handful
     of folders and a bounded library, so scanning the partition once is cheaper
     than N LSI queries. Rows with no folder are counted under
     ``NO_FOLDER_SEGMENT``.
+
+    Only ``GET /api/folders`` calls this, and only because the folder screens draw
+    a figure on every folder they list. A caller that wants *one* folder's figure
+    wants :func:`count_for_folder`.
     """
     counts: Dict[str, int] = {}
     for record in await list_library_for_user(user_id):

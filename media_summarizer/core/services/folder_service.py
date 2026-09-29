@@ -8,7 +8,7 @@ and media-to-folder assignment.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from media_summarizer.core.models.folder import (
     MAX_FOLDER_DEPTH,
@@ -52,15 +52,33 @@ def normalize_folder_name(raw: Optional[str]) -> str:
 async def ensure_default_folder(user_id: str) -> Folder:
     """Return the user's default 'Uncategorized' folder, creating it if absent."""
     folders = await database_async.get_folders_by_user_id(user_id)
+    default, _ = await _resolve_default_folder(user_id, folders)
+    return default
+
+
+async def _resolve_default_folder(
+    user_id: str, folders: List[Folder]
+) -> Tuple[Folder, List[Folder]]:
+    """Pick the default folder out of an already-read folder list, creating it once.
+
+    The list goes in and the list *including* the default comes back out, because
+    every use case in this module needs both: the default folder to file something
+    under, and the whole set to compute depth, descendants or a listing. Reading
+    the partition once and passing it here is what those use cases used to not do
+    — each called :func:`ensure_default_folder`, which reads the folders itself,
+    and then read them a second time (task-417).
+
+    The write only ever happens on the very first call of an account's life, when
+    the default folder does not exist yet; every later call is pure.
+    """
     for f in folders:
         if f.is_default:
-            return f
+            return f, folders
 
-    # Create the default folder
     default = Folder.create_default(user_id)
     await database_async.create_folder(default)
     logger.info(f"Created default folder {default.id} for user {user_id}")
-    return default
+    return default, [*folders, default]
 
 
 # ---- Depth calculation ----
@@ -114,10 +132,11 @@ async def create_folder(
     - parent exists and belongs to user (if specified)
     - depth does not exceed MAX_FOLDER_DEPTH
     """
-    # Ensure default folder exists first
-    await ensure_default_folder(user_id)
-
-    all_folders = await database_async.get_folders_by_user_id(user_id)
+    # One read of the folder partition, shared by the default-folder guarantee and
+    # by the depth validation below.
+    _default, all_folders = await _resolve_default_folder(
+        user_id, await database_async.get_folders_by_user_id(user_id)
+    )
     folders_by_id = {f.id: f for f in all_folders}
 
     # Validate parent
@@ -155,9 +174,16 @@ async def list_folders(user_id: str) -> List[Dict[str, Any]]:
     counted from the durable ``user_media`` library (task-220). Counting there
     rather than from ``processing_jobs`` is the whole point: an item whose job has
     expired still belongs to its folder, and the count must say so.
+
+    The counts cost one full read of the user's library partition, which is why
+    this is **not** what the Home screen's unsorted figure comes from any more
+    (task-417): it asks :func:`count_unsorted` for the one number it draws. The
+    folder screens list every folder with a figure on each, so they genuinely need
+    all of them and this read is theirs.
     """
-    _default = await ensure_default_folder(user_id)  # Side-effect: creates if missing
-    all_folders = await database_async.get_folders_by_user_id(user_id)
+    _default, all_folders = await _resolve_default_folder(
+        user_id, await database_async.get_folders_by_user_id(user_id)
+    )
     counts = await user_media_store.count_media_per_folder(user_id)
 
     result = []
@@ -181,9 +207,36 @@ async def count_media_in_folder(user_id: str, folder_id: str) -> int:
     """Number of library items stored directly in one folder.
 
     Single ``folder-index`` query on the durable table, so the count is right even
-    for items whose processing job is long gone.
+    for items whose processing job is long gone. The query asks DynamoDB for a
+    ``COUNT`` rather than for the rows: nothing here looks at an item.
     """
-    return len(await user_media_store.list_for_folder(user_id, folder_id))
+    return await user_media_store.count_for_folder(user_id, folder_id)
+
+
+async def count_unsorted(user_id: str) -> Dict[str, Any]:
+    """The default folder and how many items are waiting in it. THE Home figure.
+
+    The whole server cost of the Home screen's unsorted-review card, and it is two
+    bounded queries: one read of the folder partition to identify the default
+    folder, then one ``folder-index`` ``COUNT`` on it.
+
+    It exists because the Home used to read ``GET /api/folders`` for this single
+    number (task-324), which meant a full ``ConsistentRead`` pass over the user's
+    whole library partition — issued in parallel with the identical pass
+    ``GET /api/media`` makes on the same open, and with a third one when the
+    "Continue learning" row happens to hold a folder. That triple read is what made
+    the card and the engagement row land visibly later than the media list
+    (task-417).
+
+    The folder is identified by ``is_default``, never by its name: the stored name
+    is ``Uncategorized`` and the UI says "Unsorted", so matching on either is what
+    task-297 ruled out.
+    """
+    default = await ensure_default_folder(user_id)
+    return {
+        "folder_id": default.id,
+        "media_count": await user_media_store.count_for_folder(user_id, default.id),
+    }
 
 
 async def update_folder(
@@ -267,8 +320,9 @@ async def delete_folder(user_id: str, folder_id: str) -> Dict[str, Any]:
     if folder.is_default:
         raise ValueError("Cannot delete the default folder")
 
-    default = await ensure_default_folder(user_id)
-    all_folders = await database_async.get_folders_by_user_id(user_id)
+    default, all_folders = await _resolve_default_folder(
+        user_id, await database_async.get_folders_by_user_id(user_id)
+    )
 
     # Collect all descendant folder IDs (including the folder itself)
     descendant_ids = _get_descendant_ids(folder_id, all_folders)

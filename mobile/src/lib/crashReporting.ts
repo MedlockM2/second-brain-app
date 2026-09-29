@@ -248,3 +248,81 @@ export function addPipelineBreadcrumb(
     // Nothing to do about a reporter that throws while reporting a trail.
   }
 }
+
+/**
+ * The three sources the Home screen opens with, each named after the block it
+ * fills: the media list behind "Recently added", the engagement row behind
+ * "Continue learning", and the count on the unsorted-review card.
+ *
+ * They are the three the task-417 waterfall compares, which is why they are a
+ * closed union and not a free string: a typo would put one span of one open in a
+ * bucket of its own and the comparison is the whole point.
+ */
+export type HomeSection =
+  | "recently_added"
+  | "continue_learning"
+  | "unsorted_count";
+
+/** An open section span. `end` is safe to call twice and never throws. */
+export interface HomeSectionSpan {
+  end: (outcome: "ok" | "error") => void;
+}
+
+const NOOP_HOME_SECTION_SPAN: HomeSectionSpan = { end: () => {} };
+
+/**
+ * `SpanStatusCode`, which `@sentry/react-native` re-exports the *type* of but not
+ * the constants. Two magic numbers rather than a dependency on an internal path
+ * of `@sentry/core`; the values are part of the wire protocol, not of a build.
+ */
+const SPAN_STATUS_OK = 1;
+const SPAN_STATUS_ERROR = 2;
+
+/**
+ * Measures one Home block from the moment its request leaves to the moment its
+ * answer is committed to the state the screen renders from (task-417).
+ *
+ * The automatic HTTP spans already time the request; what they cannot say is how
+ * long the *screen* waited, which is the number this task is about — the two
+ * sections that arrive late used to be gated on each other rather than on their
+ * own endpoint, and only a span that ends at the `setState` shows that.
+ *
+ * `onlyIfParent` is what attaches this to the navigation transaction Expo Router
+ * already opens (`navigationIntegration`) instead of starting a transaction of its
+ * own: a span with no parent would report a refresh fired minutes later as if it
+ * were an app open. A child span also holds the idle navigation transaction open
+ * until it ends, so the waterfall contains the whole wait rather than the first
+ * second of it. When there is no parent — a pull-to-refresh, a focus re-read —
+ * nothing is recorded and the returned handle is inert.
+ *
+ * A no-op without a DSN and it never throws, same as the two functions above:
+ * instrumentation must not be able to fail the thing it measures.
+ */
+export function startHomeSectionSpan(section: HomeSection): HomeSectionSpan {
+  if (!Config.SENTRY_DSN) return NOOP_HOME_SECTION_SPAN;
+  try {
+    const span = Sentry.startInactiveSpan({
+      name: `home.${section}`,
+      op: "ui.load",
+      onlyIfParent: true,
+      attributes: { "home.section": section },
+    });
+    let ended = false;
+    return {
+      end(outcome) {
+        if (ended) return;
+        ended = true;
+        try {
+          span.setStatus({
+            code: outcome === "ok" ? SPAN_STATUS_OK : SPAN_STATUS_ERROR,
+          });
+          span.end();
+        } catch {
+          // Nothing to do about a reporter that throws while closing a span.
+        }
+      },
+    };
+  } catch {
+    return NOOP_HOME_SECTION_SPAN;
+  }
+}

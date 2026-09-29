@@ -1,38 +1,45 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { startHomeSectionSpan } from "../lib/crashReporting";
 import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
 import { EngagementService } from "../services/engagementService";
 import { OrganizationService } from "../services/organizationService";
 import type { RecentEngagement } from "../types/engagements";
-import type { Folder } from "../types/organization";
 
 /**
  * The two data sources the Home screen owns beyond its media list.
  *
- * The point of the hook is *independence*. Several screens' worth of content
- * share one scroll view, and a folders endpoint that 500s must not take the
- * engagement row down with it, nor blank the media list that `useMediaList`
- * fetches separately. So each source keeps its own state and its own failure,
- * and a failure resolves to "this section has nothing", never to an exception
- * crossing into another one.
+ * The point of the hook is *independence*, and until task-417 it only half held:
+ * one `Promise.allSettled` awaited both calls before either `setState`, so both
+ * sections were cadenced by the slower endpoint and appeared together, long after
+ * the media list. Each call now commits on its own resolution — the failure
+ * isolation the hook was written for is unchanged (a folders endpoint that 500s
+ * must not take the engagement row down with it, nor blank the media list
+ * `useMediaList` fetches separately), only the shared await is gone.
  *
- * Neither exposes a loading flag on purpose: no section here may render a
- * spinner. A row with nothing to show is simply absent, which is the same thing
- * the screen does for an empty row and therefore needs no extra state.
+ * **Each source does expose whether its first answer has landed**, which is the
+ * one thing this hook used to refuse. A section that is absent and then present
+ * displaces whatever sits below it, and the unsorted card sits *above* both rows,
+ * so an arrival was moving content the user had already started reading. The flags
+ * are what lets the screen hold the space until the answer is in. They latch on
+ * the first resolution and never go back: a later refresh, whatever it costs,
+ * happens under the content already on screen. After that first answer an empty
+ * section is absent exactly as before — a new account has nothing to continue, and
+ * no placeholder should imply otherwise.
  *
- * The folders are fetched for one reason only: they carry their own
- * `media_count`, which is where the unsorted review button's figure comes from
- * (task-324) — the Home no longer calls the digest endpoint just to put a number
- * on a card.
+ * The unsorted figure is fetched as a figure (`getUnsortedCount`), not extracted
+ * from a listing of every folder: see that method for why the two are different
+ * reads on the server.
  */
 export interface UseHomeSectionsResult {
   /** "Continue learning", in the order the server returned. Empty hides it. */
   continueLearning: RecentEngagement[];
-  /**
-   * The user's folders, read for the unsorted count on the review button.
-   * They no longer feed any row of tiles (task-348).
-   */
-  folders: Folder[];
+  /** Whether `GET /api/engagements/recent` has answered once since mount. */
+  hasLoadedContinueLearning: boolean;
+  /** How many items wait in the default folder — the unsorted card's figure. */
+  unsortedCount: number;
+  /** Whether `GET /api/folders/unsorted-count` has answered once since mount. */
+  hasLoadedUnsortedCount: boolean;
   /** Refetch both. Never rejects. */
   refresh: () => Promise<void>;
 }
@@ -46,32 +53,87 @@ export function useHomeSections(): UseHomeSectionsResult {
   const [continueLearning, setContinueLearning] = useState<RecentEngagement[]>(
     [],
   );
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [hasLoadedContinueLearning, setHasLoadedContinueLearning] =
+    useState(false);
+  const [unsortedCount, setUnsortedCount] = useState(0);
+  const [hasLoadedUnsortedCount, setHasLoadedUnsortedCount] = useState(false);
 
   const isMountedRef = useRef(true);
+  // Read by the fetchers to decide whether this round is still part of the first
+  // paint, which is what earns a span. A ref and not the state above: the state
+  // a closure captured is the state of its render, and the second fetch of an
+  // open is fired from the same render as the first.
+  const engagementSettledRef = useRef(false);
+  const unsortedSettledRef = useRef(false);
 
-  const refresh = useCallback(async () => {
+  const refreshContinueLearning = useCallback(async () => {
     if (!isAuthenticated) return;
-
-    // `allSettled`, not `all`: one rejection must leave the other result usable.
-    // The two calls are independent and issued together so the screen costs one
-    // round trip, not two sequential ones.
-    const [recent, folders] = await Promise.allSettled([
-      EngagementService.listRecent(CONTINUE_LEARNING_LIMIT),
-      OrganizationService.getUserFolders(),
-    ]);
-
-    if (!isMountedRef.current) return;
-
-    // A rejection keeps the previous value rather than clearing it: a refresh
-    // that fails should leave the screen as the user last saw it, not empty it.
-    if (recent.status === "fulfilled") {
-      setContinueLearning(recent.value);
-    }
-    if (folders.status === "fulfilled") {
-      setFolders(folders.value);
+    // Opened before the request and closed on the commit, so the span measures
+    // what the screen waited for and not just what the network took. Only while
+    // the first answer is still missing: a refresh lands under content that is
+    // already readable and has nothing to do with opening the screen.
+    const span = engagementSettledRef.current
+      ? null
+      : startHomeSectionSpan("continue_learning");
+    try {
+      const recent = await EngagementService.listRecent(CONTINUE_LEARNING_LIMIT);
+      if (isMountedRef.current) {
+        setContinueLearning(recent);
+        setHasLoadedContinueLearning(true);
+        engagementSettledRef.current = true;
+      }
+      // Ended whether or not the screen is still mounted: an open span holds the
+      // navigation transaction open until Sentry's own final timeout, and a tab
+      // left before its answer arrived is a fact worth having in the waterfall.
+      span?.end("ok");
+    } catch {
+      // Swallowed, and deliberately not rethrown: this must not reach the other
+      // source, `useMediaList`, or the `Promise.all` the pull-to-refresh gesture
+      // awaits. A failure keeps the previous value rather than clearing it — a
+      // refresh that fails leaves the screen as the user last saw it.
+      //
+      // The flag is set anyway: it means "this source has answered once", and a
+      // failure is an answer. Holding the space open after a 500 would reserve it
+      // for content that is not coming.
+      if (isMountedRef.current) {
+        setHasLoadedContinueLearning(true);
+        engagementSettledRef.current = true;
+      }
+      span?.end("error");
     }
   }, [isAuthenticated]);
+
+  const refreshUnsortedCount = useCallback(async () => {
+    if (!isAuthenticated) return;
+    const span = unsortedSettledRef.current
+      ? null
+      : startHomeSectionSpan("unsorted_count");
+    try {
+      const count = await OrganizationService.getUnsortedCount();
+      if (isMountedRef.current) {
+        setUnsortedCount(count);
+        setHasLoadedUnsortedCount(true);
+        unsortedSettledRef.current = true;
+      }
+      span?.end("ok");
+    } catch {
+      if (isMountedRef.current) {
+        setHasLoadedUnsortedCount(true);
+        unsortedSettledRef.current = true;
+      }
+      span?.end("error");
+    }
+  }, [isAuthenticated]);
+
+  /**
+   * Both, issued together and committed apart. `Promise.all` over two calls that
+   * each resolve to nothing and never reject: it is here so the caller can await
+   * "both are done" for its pull-to-refresh spinner, and it is no longer a gate on
+   * either `setState`.
+   */
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshContinueLearning(), refreshUnsortedCount()]);
+  }, [refreshContinueLearning, refreshUnsortedCount]);
 
   // A save landing behind the screen moves the unsorted figure this hook feeds,
   // for the same reason it moves the media list next to it: the save exists after
@@ -101,5 +163,11 @@ export function useHomeSections(): UseHomeSectionsResult {
     };
   }, [isAuthenticated, refresh]);
 
-  return { continueLearning, folders, refresh };
+  return {
+    continueLearning,
+    hasLoadedContinueLearning,
+    unsortedCount,
+    hasLoadedUnsortedCount,
+    refresh,
+  };
 }

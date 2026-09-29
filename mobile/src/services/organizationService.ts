@@ -14,6 +14,11 @@ interface FolderListResponse {
   folders: Folder[];
 }
 
+interface UnsortedCountResponse {
+  folder_id: string;
+  media_count: number;
+}
+
 /**
  * What deleting a folder actually did, straight off `DELETE /api/folders/:id`.
  */
@@ -45,6 +50,29 @@ export class OrganizationService {
       method: "GET",
     });
     return response.folders;
+  }
+
+  /**
+   * How many items are waiting in the default folder — the Home screen's figure.
+   * GET /api/folders/unsorted-count
+   *
+   * A call of its own rather than the count carried by `getUserFolders`, because
+   * on the server the two are not the same read: the listing puts a figure on
+   * every folder and pays a full pass over the user's library to do it, in
+   * parallel with the identical pass `GET /api/media` makes on the same open,
+   * which is what made the Home's unsorted card land visibly late (task-417).
+   * Screens that list folders still use `getUserFolders` and still get every
+   * count.
+   *
+   * The default folder is identified server-side by its `is_default` flag, never
+   * by its name (task-297).
+   */
+  static async getUnsortedCount(): Promise<number> {
+    const response = await apiRequest<UnsortedCountResponse>(
+      "/api/folders/unsorted-count",
+      { method: "GET" },
+    );
+    return response.media_count;
   }
 
   /**
