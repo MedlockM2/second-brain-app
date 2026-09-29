@@ -1857,7 +1857,82 @@ run `npx sentry-expo-upload-sourcemaps dist`.
 HTTP breadcrumbs keep method, path and status but drop the query string, which
 is where a search term and a presigned URL's signature travel. No user identity
 is ever attached. The store privacy answers ("Crash Data — Not linked to
-identity") depend on that: see `docs/compliance/apple-app-privacy.md`.
+identity") depend on that: see `docs/compliance/apple-app-privacy.md`. For the
+same reason, `Sentry.setUser` is never called and must stay that way unless
+that declaration (Apple and Google Play both) is updated to match — see
+"Anonymous per-installation context: deliberately not done" below.
+
+### App Hangs (iOS) & ANR (Android)
+
+The four `startup_guard.origin` capture paths above only ever see something
+that *threw*. A freeze that never throws — the app sits unresponsive and the
+only report is a screenshot and a timestamp, like the unresolved
+`AK1DS3kTae8nm6GpVzLveTg` beta feedback that motivated a chunk of this work —
+reaches none of them.
+
+Both platforms already catch this, on by default in the installed SDK version,
+with nothing to configure beyond making the defaults explicit in
+`crashReporting.ts`:
+
+- **iOS**: `enableAppHangTracking` (default `true`) with
+  `appHangTimeoutInterval` (default `2` seconds) — the main thread blocked for
+  longer than that is reported as its own event, distinct from a crash.
+- **Android**: ANR detection is native (`io.sentry.android.core.AnrIntegration`)
+  and stays on as long as `enableNativeCrashHandling` is not set to `false`,
+  which it is not here. There is no JS-level option for it in this SDK
+  version.
+
+### Pipeline breadcrumbs
+
+`crashReporting.ts` exports `addPipelineBreadcrumb(category, message, data?)`,
+a no-op without a DSN like every other export there. It marks the steps of the
+ingestion/processing/translation pipeline that the SDK's own automatic
+breadcrumbs (HTTP calls, console) never see, so a crash or a hang report shows
+which step was in flight:
+
+| Category | Where |
+|---|---|
+| `share.received`, `share.classified` | `ShareIntentContext.processShareIntent` |
+| `save.created`, `save.failed` | `ShareIntentContext.registerSave` / `reportSaveFailed` |
+| `processing.armed`, `processing.stalled`, `processing.completed` | `useProcessingRefresh` |
+| `translation.resumed`, `translation.stalled`, `translation.rearmed` | `useTranslationRefresh` |
+
+### Performance tracing
+
+`tracesSampleRate: 1.0` — full sampling while the beta's volume is low, to
+revisit once the tester count makes sampling worth the quota it saves.
+`Sentry.reactNativeTracingIntegration({ traceFetch: true, traceXHR: true })`
+is registered with both HTTP instrumentations on, because this SDK version
+defaults `traceFetch` to `false` and it was not yet confirmed which of the two
+this app's network calls actually go through — check the Performance tab
+after a run with a DSN set, and drop whichever one shows no spans.
+
+Expo Router has no dedicated Sentry integration; `app/_layout.tsx` wires
+`expo-router`'s `useNavigationContainerRef()` into
+`Sentry.reactNavigationIntegration()` (via `registerNavigationContainer`,
+exported from `crashReporting.ts`) so route changes appear as transactions.
+The root layout itself is wrapped, `export default Sentry.wrap(RootLayout)`.
+
+### Anonymous per-installation context: deliberately not done
+
+`Sentry.setUser` was considered, to tell "one user crashing repeatedly" from
+"many users crashing once" — and dropped. `apple-app-privacy.md` ties the
+"Crash Data — Not linked to identity" answer explicitly to `crashReporting.ts`
+never calling it; adding even a purpose-built random UUID unrelated to the
+account would flip that declaration on both Apple and Google Play. No such
+anonymous identifier exists elsewhere in the app to begin with — RevenueCat's
+`appUserID` is bound to the real account id the moment a user signs in
+(`purchaseService.ts`), and the push token is documented as linked to
+identity. If this is revisited, budget for updating both compliance docs
+alongside the code.
+
+### Alert: new issue after a release
+
+A Sentry alert rule notifies by email when a new distinct issue is created —
+the practical proxy for "something regressed after a release", tuned for a
+low-volume beta where "a new issue" and "a real regression" are usually the
+same thing. A metric alert scoped to crash-free rate would be closer to that
+goal directly but generally needs a paid Sentry plan.
 
 ### Adding Sentry moved the fingerprint
 

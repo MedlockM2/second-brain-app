@@ -25,6 +25,7 @@ import {
 import { DirectUploadError } from "../services/presignedUpload";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { announceMediaSave } from "../lib/mediaSaveNotice";
+import { addPipelineBreadcrumb } from "../lib/crashReporting";
 import {
   getQuotaErrorCode,
   getQuotaErrorMessage,
@@ -487,6 +488,10 @@ export function ShareIntentProvider({
       if (lastProcessedKeyRef.current === intentKey) return;
       lastProcessedKeyRef.current = intentKey;
 
+      addPipelineBreadcrumb("share.received", "Share intent received", {
+        type: intent.type,
+      });
+
       // Clear dedup after 5 seconds to allow re-sharing the same content
       setTimeout(() => {
         if (lastProcessedKeyRef.current === intentKey) {
@@ -712,6 +717,10 @@ export function ShareIntentProvider({
         return;
       }
 
+      addPipelineBreadcrumb("share.classified", "Share intent classified", {
+        type: intent.type,
+      });
+
       // A mapped reception is a new one: whatever the previous share created is
       // no longer this modal's business.
       beginReception();
@@ -879,6 +888,10 @@ export function ShareIntentProvider({
       tracking.saveCreated = true;
       tracking.mediaItemId = mediaItemId || null;
       tracking.appliedFolderId = submittedFolderId;
+      addPipelineBreadcrumb("save.created", "Media save registered", {
+        mediaItemId,
+        folderId: submittedFolderId,
+      });
       announceMediaSave();
       // The choice may have been made while this submission was still going out,
       // in which case this is what puts it on the save it just created.
@@ -945,6 +958,10 @@ export function ShareIntentProvider({
   const reportSaveFailed = useCallback(
     (reception: ShareSubmissionTracking, error: unknown, fallback: string) => {
       const { message, quotaErrorCode } = toSubmissionError(error, fallback);
+      addPipelineBreadcrumb("save.failed", "Media save failed", {
+        message,
+        quotaErrorCode,
+      });
       if (!isShowing(reception)) {
         Alert.alert(t("common.error"), message);
         return;

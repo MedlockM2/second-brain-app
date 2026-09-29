@@ -75,6 +75,13 @@ const CAPTURE_SHAPES: Record<CaughtErrorOrigin, CaptureShape> = {
   },
 };
 
+/**
+ * Created unconditionally, DSN or not, so `registerNavigationContainer` below
+ * always has something to call — it only reaches Sentry once `Sentry.init`
+ * below has actually run.
+ */
+export const navigationIntegration = Sentry.reactNavigationIntegration();
+
 let initialised = false;
 
 /**
@@ -163,6 +170,17 @@ export function initCrashReporting(): void {
       // Default already, spelled out: no IP address, no user identity. The
       // privacy policy lists Sentry as a processor of crash data on that basis.
       sendDefaultPii: false,
+      // Both already default on iOS/Android respectively, spelled out because
+      // this is the net a fatal/rejection/render capture cannot be: a freeze
+      // that never throws (the unresolved `AK1DS3kTae8nm6GpVzLveTg` feedback).
+      // Android has no JS-level equivalent option — its ANR detection is
+      // native and on by default as long as `enableNativeCrashHandling` (also
+      // default) stays true, which it does here.
+      enableAppHangTracking: true,
+      appHangTimeoutInterval: 2,
+      // Full sampling while the beta's volume is low; revisit once the
+      // tester count grows enough to make sampling worth the quota it saves.
+      tracesSampleRate: 1.0,
       initialScope: { tags: resolveTags() },
       beforeBreadcrumb: scrubBreadcrumb,
       integrations: [
@@ -170,6 +188,11 @@ export function initCrashReporting(): void {
           onerror: false,
           onunhandledrejection: false,
         }),
+        // `traceFetch` and `traceXHR` both on: this app's HTTP calls could go
+        // through either RN's `fetch` or its XHR polyfill, and enabling both
+        // costs nothing extra per call (a request only ever takes one path).
+        Sentry.reactNativeTracingIntegration({ traceFetch: true, traceXHR: true }),
+        navigationIntegration,
       ],
     });
   } catch (error) {
@@ -195,5 +218,33 @@ export function captureCaughtError(
     });
   } catch {
     // Nothing to do about a reporter that throws while reporting a throw.
+  }
+}
+
+/**
+ * Wires Expo Router's navigation container to Sentry so route changes show up
+ * as transactions/spans in Performance. Called once from `app/_layout.tsx`.
+ */
+export function registerNavigationContainer(ref: unknown): void {
+  if (!Config.SENTRY_DSN) return;
+  navigationIntegration.registerNavigationContainer(ref);
+}
+
+/**
+ * One entry in the trail leading up to a crash or a hang, for the steps the
+ * SDK's own automatic breadcrumbs (HTTP, console) never see: what the
+ * ingestion/processing/translation pipeline itself was doing. A no-op
+ * without a DSN, and it never throws, same as `captureCaughtError`.
+ */
+export function addPipelineBreadcrumb(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
+  if (!Config.SENTRY_DSN) return;
+  try {
+    Sentry.addBreadcrumb({ category, message, level: "info", data });
+  } catch {
+    // Nothing to do about a reporter that throws while reporting a trail.
   }
 }

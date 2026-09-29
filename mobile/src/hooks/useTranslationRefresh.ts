@@ -63,6 +63,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { useIsFocused } from "expo-router";
+import { addPipelineBreadcrumb } from "../lib/crashReporting";
 
 /** The tick of the first minute. Same interval as every other poll in the app. */
 const FAST_INTERVAL_MS = 3000;
@@ -217,6 +218,9 @@ export function useTranslationRefresh({
     if (!isFocusedRef.current || !isPendingRef.current) return;
 
     const key = mediaItemIdRef.current;
+    addPipelineBreadcrumb("translation.resumed", "Translation refresh resumed", {
+      mediaItemId: key,
+    });
     const openedAt = budgets.resume(key, Date.now());
 
     const schedule = () => {
@@ -227,6 +231,11 @@ export function useTranslationRefresh({
         // Out of budget, translation still pending. The line stays, the
         // movement stops, and one of the three triggers can grant another.
         timerRef.current = null;
+        addPipelineBreadcrumb(
+          "translation.stalled",
+          "Translation refresh budget exhausted",
+          { mediaItemId: key, elapsed },
+        );
         setIsStalled(true);
         return;
       }
@@ -250,6 +259,9 @@ export function useTranslationRefresh({
 
   const rearm = useCallback(() => {
     if (!isFocusedRef.current || !isPendingRef.current) return;
+    addPipelineBreadcrumb("translation.rearmed", "Translation refresh rearmed", {
+      mediaItemId: mediaItemIdRef.current,
+    });
     budgets.grant(mediaItemIdRef.current, Date.now());
     void refetchRef.current();
     resume();
@@ -258,6 +270,10 @@ export function useTranslationRefresh({
   /** The screen came back — into view, or to the foreground. */
   const rearmScreen = useCallback(() => {
     if (!isFocusedRef.current) return;
+    addPipelineBreadcrumb(
+      "translation.rearmed",
+      "Translation refresh rearmed on screen return",
+    );
     // Every media of the screen, this one settled or not: the pages the host
     // has unmounted are not here to hear the trigger.
     budgets.grantAll(Date.now());

@@ -63,6 +63,7 @@ import { AppState } from "react-native";
 import { useFocusEffect } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { MEDIA_READY_NOTIFICATION_TYPE } from "../services/pushNotificationService";
+import { addPipelineBreadcrumb } from "../lib/crashReporting";
 
 /** The tick of the first minute. Same interval as every other poll in the app. */
 const FAST_INTERVAL_MS = 3000;
@@ -143,6 +144,7 @@ export function useProcessingRefresh({
     // the list settled, or the user moved on.
     if (!isFocusedRef.current || !hasProcessingRef.current) return;
 
+    addPipelineBreadcrumb("processing.armed", "Processing refresh armed");
     budgetStartedAtRef.current = Date.now();
     setIsStalled(false);
 
@@ -152,6 +154,11 @@ export function useProcessingRefresh({
         // Out of budget with something still on its way. The marker stays, the
         // movement stops, and one of the four triggers can grant another budget.
         timerRef.current = null;
+        addPipelineBreadcrumb(
+          "processing.stalled",
+          "Processing refresh budget exhausted",
+          { elapsed },
+        );
         setIsStalled(true);
         return;
       }
@@ -175,8 +182,12 @@ export function useProcessingRefresh({
   // Armed by what the list holds, and disarmed the moment it holds nothing
   // non-terminal — which is the tick right after the server finished.
   useEffect(() => {
+    const wasProcessing = hasProcessingRef.current;
     hasProcessingRef.current = hasProcessing;
     if (!hasProcessing) {
+      if (wasProcessing) {
+        addPipelineBreadcrumb("processing.completed", "Processing refresh disarmed");
+      }
       stop();
       return;
     }

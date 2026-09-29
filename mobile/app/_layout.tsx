@@ -1,7 +1,8 @@
 import { useEffect } from "react";
-import { Stack, type ErrorBoundaryProps } from "expo-router";
+import { Stack, useNavigationContainerRef, type ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import * as Sentry from "@sentry/react-native";
 import { ShareIntentProvider as ExpoShareIntentProvider } from "expo-share-intent";
 import { I18nProvider } from "../src/i18n";
 import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
@@ -11,7 +12,7 @@ import { PurchasesProvider } from "../src/contexts/PurchasesContext";
 import { StartupErrorGate } from "../src/components/StartupErrorGate";
 import { StartupErrorScreen } from "../src/components/StartupErrorScreen";
 import { usePushNotifications } from "../src/hooks/usePushNotifications";
-import { initCrashReporting } from "../src/lib/crashReporting";
+import { initCrashReporting, registerNavigationContainer } from "../src/lib/crashReporting";
 import {
   clearStartupFailure,
   installStartupErrorGuard,
@@ -132,13 +133,21 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
  *
  * Expo Router uses this as the entry point for all navigation.
  */
-export default function RootLayout() {
+function RootLayout() {
+  const navigationRef = useNavigationContainerRef();
+
+  useEffect(() => {
+    registerNavigationContainer(navigationRef);
+  }, [navigationRef]);
+
   return (
     <StartupErrorGate>
       <AppProviders />
     </StartupErrorGate>
   );
 }
+
+export default Sentry.wrap(RootLayout);
 
 /**
  * Wraps the entire app with providers in this order:
