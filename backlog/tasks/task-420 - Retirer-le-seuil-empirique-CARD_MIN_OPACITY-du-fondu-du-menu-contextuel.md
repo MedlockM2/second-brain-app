@@ -1,9 +1,10 @@
 ---
 id: TASK-420
 title: Retirer le seuil empirique CARD_MIN_OPACITY du fondu du menu contextuel
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 13:24'
+updated_date: '2026-09-29 16:31'
 labels:
   - mobile
   - cleanup
