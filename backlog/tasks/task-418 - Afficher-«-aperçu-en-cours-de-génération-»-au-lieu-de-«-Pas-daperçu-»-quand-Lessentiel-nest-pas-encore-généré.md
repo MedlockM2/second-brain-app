@@ -3,9 +3,10 @@ id: TASK-418
 title: >-
   Afficher « aperçu en cours de génération » au lieu de « Pas d'aperçu » quand
   L'essentiel n'est pas encore généré
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 10:21'
+updated_date: '2026-09-29 10:41'
 labels:
   - mobile
   - backend
