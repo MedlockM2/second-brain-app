@@ -34,8 +34,14 @@ export type TranslationStatusValue =
 
 /**
  * Translation metadata from the backend (task-192 / task-200 / task-203).
+ *
+ * Three of these fields drive the Reader's "View the original" toggle (task-419):
+ * `is_translated` says whether the body on screen is a translation at all — which
+ * is the only thing that makes the control exist — and `translated_from` /
+ * `target_language` name the two languages it switches between.
  */
 export interface TranslationMetadata {
+  /** Whether the `content` of this response is a translation, not the source text. */
   is_translated: boolean;
   translated_from?: string | null;
   target_language?: string | null;
@@ -46,6 +52,16 @@ export interface TranslationMetadata {
   /** Explicit state machine status (task-203). More granular than translation_pending. */
   translation_status?: TranslationStatusValue;
 }
+
+/**
+ * Which body a read of `/raw-content` asks for (task-419).
+ *
+ * `translated` is the default: the cached translation into the account's reading
+ * language when there is one, the source text otherwise. `original` is the source
+ * text whatever has been translated — what the Reader's "View the original"
+ * control reads — and comes back with no translation metadata.
+ */
+export type RawContentVariant = "translated" | "original";
 
 /**
  * Response shape for GET /api/media/:id/raw-content.
@@ -59,6 +75,8 @@ export interface RawContentResponse {
   media_type?: string | null;
   source_format?: string | null;
   translation?: TranslationMetadata | null;
+  /** Which body this response carries, echoing the requested variant. */
+  variant?: RawContentVariant;
 }
 
 /**
@@ -149,12 +167,20 @@ export class MediaService {
    * extracted article body, OCR result, …). Available once processing has
    * progressed enough to produce content; returns 404 otherwise.
    * GET /api/media/:mediaItemId/raw-content
+   *
+   * `variant: "original"` asks for the source text of a media whose body is
+   * served translated (task-419). It is left out of the default read on purpose:
+   * that one runs on every open of the Reader tab and on every tick of the
+   * translation poll, and it must stay the single-bodied response it has always
+   * been.
    */
   static async getRawContent(
     mediaItemId: string,
+    options: { variant?: RawContentVariant } = {},
   ): Promise<RawContentResponse> {
+    const query = options.variant ? `?variant=${options.variant}` : "";
     return apiRequest<RawContentResponse>(
-      `/api/media/${encodeURIComponent(mediaItemId)}/raw-content`,
+      `/api/media/${encodeURIComponent(mediaItemId)}/raw-content${query}`,
       { method: "GET" },
     );
   }

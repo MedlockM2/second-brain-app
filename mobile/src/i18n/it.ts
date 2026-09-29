@@ -643,6 +643,12 @@ export const it: Catalog = {
     "La traduzione è ancora in corso. Sta impiegando più del solito, quindi nel frattempo viene mostrato il testo originale.",
   "transcript.checkTranslation": "Controlla di nuovo",
   "transcript.checkTranslationA11y": "Controlla se la traduzione è pronta",
+  "transcript.viewOriginal": "Vedi l'originale ({language})",
+  "transcript.viewOriginalA11y": "Mostra il testo originale ({language})",
+  "transcript.viewTranslation": "Vedi la traduzione ({language})",
+  "transcript.viewTranslationA11y": "Mostra il testo tradotto ({language})",
+  "transcript.originalLoadFailed":
+    "Non è stato possibile caricare il testo originale.",
   "paywall.subtitle":
     "Ogni piano fa tutto. Si differenziano solo per quanto puoi inviare.",
   "startupError.title": "L'app non è riuscita ad avviarsi",

@@ -10,6 +10,12 @@
  * It carries no metadata line of its own any more: language, duration and
  * length sit once, under the page title, next to the date (task-411). The line
  * that used to open this section repeated the duration the title already showed.
+ * That is also where the language of the body shown here is announced, which is
+ * why the switch below hands its state to the screen rather than keeping it: the
+ * two have to agree.
+ *
+ * The title row can carry one control, `translationToggle`: on a media served
+ * translated, the way back to what was actually said (task-419).
  *
  * Memoised because its parent re-renders as the page scrolls past the points
  * where the collapsed bar and its tabs appear, and this is the one subtree whose
@@ -63,6 +69,29 @@ type TranscriptParagraph = {
 };
 
 /**
+ * The switch between the translation and the source text, on the title row.
+ *
+ * `null` on the prop when there is nothing to switch to — a media already in the
+ * reading language, or a translation that has not landed yet — and then nothing
+ * is rendered at all, not a disabled control (task-419).
+ *
+ * The screen decides all of it: what the two bodies are, which one is on screen,
+ * and whether a read of the source text is in flight. This component only names
+ * the language the tap switches *to*, which is what the label says.
+ */
+export type TranscriptTranslationToggle = {
+  /** Whether the body currently on screen is the source text. */
+  showingOriginal: boolean;
+  /** Short tag of the language the tap switches to, for the visible label ("EN"). */
+  languageCode: string;
+  /** Its name, for the label a screen reader reads out ("English"). */
+  languageName: string;
+  /** A read of the source text is in flight; the pill shows it and ignores taps. */
+  busy: boolean;
+  onToggle: () => void;
+};
+
+/**
  * Splits the API's plain-text transcript into renderable paragraphs.
  *
  * The backend guarantees paragraphs are separated by a blank line and that no
@@ -94,6 +123,11 @@ interface TranscriptReaderProps {
   onRetry: () => void;
   /** Look for the translation again, from the stalled line. */
   onCheckTranslation: () => void;
+  /**
+   * The translation / source-text switch on the title row, or `null` when the
+   * body on screen is not a translation and there is nothing to switch to.
+   */
+  translationToggle: TranscriptTranslationToggle | null;
 }
 
 export const TranscriptReader = memo(function TranscriptReader({
@@ -102,6 +136,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   content,
   onRetry,
   onCheckTranslation,
+  translationToggle,
 }: TranscriptReaderProps): React.JSX.Element {
   if (!transcript) {
     return (
@@ -135,9 +170,18 @@ export const TranscriptReader = memo(function TranscriptReader({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle} accessibilityRole="header">
-        {t("transcript.heading")}
-      </Text>
+      {/* The title, and to its right the switch between the translation and the
+          source text. The switch sits here rather than under the text because it
+          governs the whole section, and the section can be hundreds of
+          paragraphs long — a control at the bottom would never be seen. */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle} accessibilityRole="header">
+          {t("transcript.heading")}
+        </Text>
+        {translationToggle ? (
+          <TranslationToggle toggle={translationToggle} />
+        ) : null}
+      </View>
 
       {/* When the transcript is ready, surface the actual content inline.
           Until it's ready (or if fetching the body fails), keep the status row
@@ -175,6 +219,47 @@ export const TranscriptReader = memo(function TranscriptReader({
     </View>
   );
 });
+
+/**
+ * The pill on the title row that swaps the translation for the source text.
+ *
+ * Deliberately the same pill as the "Check again" of the stalled line: one shape
+ * for the two secondary controls this section can carry, rather than a third
+ * button style in the same view.
+ *
+ * The label names the language it switches *to* — "View the original (EN)" while
+ * the translation is on screen, "View the translation (FR)" once it is not — so
+ * a tap's outcome is readable before making it. The spoken label spells that
+ * language out in full, where there is no width to save.
+ */
+function TranslationToggle({
+  toggle,
+}: {
+  toggle: TranscriptTranslationToggle;
+}): React.JSX.Element {
+  const { showingOriginal, languageCode, languageName, busy } = toggle;
+  return (
+    <Pressable
+      style={[styles.checkTranslationButton, styles.headerPill]}
+      onPress={busy ? undefined : toggle.onToggle}
+      accessibilityLabel={
+        showingOriginal
+          ? t("transcript.viewTranslationA11y", { language: languageName })
+          : t("transcript.viewOriginalA11y", { language: languageName })
+      }
+      accessibilityRole="button"
+      accessibilityState={{ busy }}
+      testID="transcript-toggle-original"
+    >
+      {busy ? <ActivityIndicator size="small" color={Colors.textMain} /> : null}
+      <Text style={styles.checkTranslationText}>
+        {showingOriginal
+          ? t("transcript.viewTranslation", { language: languageCode })
+          : t("transcript.viewOriginal", { language: languageCode })}
+      </Text>
+    </Pressable>
+  );
+}
 
 /**
  * Renders the transcript body as discrete paragraphs.
@@ -363,11 +448,20 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.sm,
   },
+  // The title and the translation switch share a row. The margin that used to
+  // sit under the title belongs to the row now: with the pill in it, the row is
+  // what the text has to clear.
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
   sectionTitle: {
+    flex: 1,
     fontSize: Typography.headline.fontSize,
     fontWeight: Typography.headline.fontWeight,
     color: Colors.textMain,
-    marginBottom: Spacing.md,
   },
   statusRow: {
     flexDirection: "row",
@@ -430,6 +524,13 @@ const styles = StyleSheet.create({
     fontSize: Typography.label.fontSize,
     fontWeight: Typography.label.fontWeight,
     color: Colors.textMain,
+  },
+  // Where the same pill sits when it is on the title row instead of inside a
+  // banner: centred against the title rather than pinned to the top of the row,
+  // and never squeezed — the title is what gives way if the label is long.
+  headerPill: {
+    alignSelf: "center",
+    flexShrink: 0,
   },
   translationFailedBanner: {
     flexDirection: "row",

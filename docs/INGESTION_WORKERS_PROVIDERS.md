@@ -839,7 +839,7 @@ each enqueued a separate translation job.
 6. On unexpected error: marks state `-> failed` and re-raises (SQS may retry via
    visibility timeout, but the state machine ensures no thundering herd).
 
-### `/raw-content` contract (task-200, updated task-203)
+### `/raw-content` contract (task-200, updated task-203, task-419)
 
 The `GET /api/media/:id/raw-content` endpoint **never** calls LLM translation
 synchronously. Its behavior:
@@ -851,11 +851,40 @@ synchronously. Its behavior:
 | Cached translation exists in S3 | Translated content | `{is_translated: true, translation_pending: false, translation_status: "done", ...}` |
 | Translation queued/in_progress | **Original content** (immediate) | `{is_translated: false, translation_pending: true, translation_status: "queued"\|"in_progress", ...}` |
 | Translation failed | **Original content** | `{is_translated: false, translation_pending: true, translation_status: "queued", ...}` (re-attempts reservation) |
+| `?variant=original` (task-419) | **Original content**, whatever is cached | `null` — no translation resolved at all |
 
 When the client receives `translation_pending: true`, it displays the original
 content immediately and polls `/raw-content` every ~3 seconds until either:
 - `translation_pending: false` (translation done), or
 - `translation_status: "failed"` (stop polling, show failure badge).
+
+#### Variant selection (`?variant=`, task-419)
+
+`variant` picks which body the response carries, and every response echoes the
+one it served in a top-level `variant` field:
+
+- `translated` — the default, and the only behaviour before task-419: the whole
+  table above.
+- `original` — the source text even when a translation is cached, for the "View
+  the original" switch on the Reader's "Full text" title row. It resolves **no**
+  translation: no language detection, no read of the translation lock, no atomic
+  reservation, no download of the translated object. A read of the source text
+  must never arm or re-arm a translation, and the client needs nothing from that
+  metadata — the switch only exists once a default read has answered
+  `is_translated: true`, so the languages are already in hand.
+
+The original is always reachable because `build_translated_transcript_key()`
+derives the translated key from `job.transcription_s3_key`: the two bodies are
+two objects, and `job.transcription_s3_key` is unconditionally the source one.
+This is a choice of body in the response, not a second store.
+
+Two bodies in one response was the alternative, and was rejected on weight: the
+default read is the hot path (every open of the Reader tab, plus one read per
+tick of the translation poll — up to 20 per wait), and carrying the source text
+alongside the translation would double all of them to serve a control most
+readers never tap, on transcripts that reach hundreds of kilobytes. The tap pays
+one request instead, and pays it once: the mobile screen keeps the source text in
+state, so switching back and forth afterwards costs no network.
 
 The translation worker typically completes within 10-90 seconds depending on
 transcript length.

@@ -617,6 +617,11 @@ export const ja: Catalog = {
     "まだ翻訳中です。いつもより時間がかかっているため、翻訳が完了するまで元の本文を表示しています。",
   "transcript.checkTranslation": "もう一度確認",
   "transcript.checkTranslationA11y": "翻訳が完了したか確認する",
+  "transcript.viewOriginal": "原文を表示（{language}）",
+  "transcript.viewOriginalA11y": "原文を表示する（{language}）",
+  "transcript.viewTranslation": "翻訳を表示（{language}）",
+  "transcript.viewTranslationA11y": "翻訳文を表示する（{language}）",
+  "transcript.originalLoadFailed": "原文を読み込めませんでした。",
   "paywall.subtitle": "どのプランでもすべての機能を使えます。違うのは送れる量だけです。",
   "startupError.title": "アプリを起動できませんでした",
   "startupError.body":

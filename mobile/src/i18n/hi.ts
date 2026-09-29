@@ -643,6 +643,11 @@ export const hi: Catalog = {
     "अनुवाद अभी भी जारी है। इसमें सामान्य से ज़्यादा समय लग रहा है, इसलिए अनुवाद तैयार होने तक मूल पाठ दिखाया जा रहा है।",
   "transcript.checkTranslation": "फिर से जाँचें",
   "transcript.checkTranslationA11y": "जाँचें कि अनुवाद तैयार है या नहीं",
+  "transcript.viewOriginal": "मूल पाठ देखें ({language})",
+  "transcript.viewOriginalA11y": "मूल पाठ दिखाएँ ({language})",
+  "transcript.viewTranslation": "अनुवाद देखें ({language})",
+  "transcript.viewTranslationA11y": "अनूदित पाठ दिखाएँ ({language})",
+  "transcript.originalLoadFailed": "मूल पाठ लोड नहीं हो सका।",
   "paywall.subtitle":
     "हर प्लान में सब कुछ मिलता है। फ़र्क़ सिर्फ़ इतना है कि आप कितना भेज सकते हैं।",
   "startupError.title": "ऐप शुरू नहीं हो सका",

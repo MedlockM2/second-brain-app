@@ -859,6 +859,15 @@ export const en = {
     "Still translating. It is taking longer than usual, so the original text is shown until the translation is ready.",
   "transcript.checkTranslation": "Check again",
   "transcript.checkTranslationA11y": "Check whether the translation is ready",
+  // The switch on the "Full text" title row, on a media served translated
+  // (task-419). `{language}` is the language the tap switches *to*: a short tag
+  // on the pill, where the row has a title to share, and the language's own name
+  // in the label a screen reader reads out.
+  "transcript.viewOriginal": "View the original ({language})",
+  "transcript.viewOriginalA11y": "Show the original text ({language})",
+  "transcript.viewTranslation": "View the translation ({language})",
+  "transcript.viewTranslationA11y": "Show the translated text ({language})",
+  "transcript.originalLoadFailed": "The original text could not be loaded.",
   "paywall.subtitle":
     "Every plan does everything. They differ only in how much you send.",
 

@@ -759,6 +759,12 @@ export const fr: Catalog = {
     "Traduction toujours en cours. Elle prend plus de temps que d'habitude : le texte original est affiché en attendant.",
   "transcript.checkTranslation": "Vérifier à nouveau",
   "transcript.checkTranslationA11y": "Vérifier si la traduction est prête",
+  "transcript.viewOriginal": "Voir l'original ({language})",
+  "transcript.viewOriginalA11y": "Afficher le texte original ({language})",
+  "transcript.viewTranslation": "Voir la traduction ({language})",
+  "transcript.viewTranslationA11y": "Afficher le texte traduit ({language})",
+  "transcript.originalLoadFailed":
+    "Le texte original n'a pas pu être chargé.",
   "paywall.subtitle":
     "Chaque formule fait tout. Elles ne diffèrent que par ce que vous pouvez envoyer.",
   "startupError.title": "L'application n'a pas pu démarrer",
