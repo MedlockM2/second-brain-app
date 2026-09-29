@@ -23,6 +23,7 @@ import os
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -1025,17 +1026,84 @@ _ARTIFACT_STATUS_TO_REVIEW_BLURB_STATUS = {
     MediaArtifactStatus.FAILED: CanonicalReviewBlurbStatus.FAILED,
 }
 
-# A job that has stopped moving. Past it, an absent internal entry can no longer
-# be "not triggered yet".
+# A job that has stopped moving. Past it, an absent internal entry is either a
+# trigger that has not run yet -- it runs *after* the job, off the completion
+# event -- or one that was lost; `_REVIEW_BLURB_TRIGGER_GRACE_SECONDS` is what
+# separates the two.
 _TERMINAL_JOB_LIFECYCLES = (
     CanonicalJobLifecycle.COMPLETED,
     CanonicalJobLifecycle.FAILED,
     CanonicalJobLifecycle.CANCELLED,
 )
 
+# How long after the end of processing an *absent* internal entry still means "not
+# requested yet" rather than "lost" (task-418). The trigger does not run inside the
+# job: the job completes, an event is published, SQS delivers it to the
+# `media_completed_events` worker, and the worker's `_trigger_review_blurb` is what
+# writes the `queued` entry. Every read that lands inside that window used to be
+# answered `failed`, which is doubly wrong -- the generation is not lost, and the
+# client arms no poll on a terminal verdict, so the preview that arrives a second
+# later was only picked up by leaving the screen and coming back.
+#
+# 20 s is that path, measured rather than rounded. On `-dev`, the 72 saves that hold
+# both instants put `entry.created_at - job.completed_at` at 2.0 s minimum, 9.4 s
+# median, 11.2 s at p90 and 11.9 s at maximum -- the spread is a cold start of the
+# 256 MB container-image worker, since the queue has no delivery delay and its
+# event-source mapping long-polls, and the worker's own work before the write (job
+# read, watcher list, translations armed, transcript indexing enqueued, then the scope
+# resolution's S3 transcript read) is round trips, not computation. 20 s is 1.7x the
+# slowest sample observed, which is the margin a cold start deserves.
+#
+# It stays a third of the client's wait (`PREVIEW_POLL_MAX_ATTEMPTS` x
+# `PREVIEW_POLL_DELAY_MS` = 60 s in `mobile/src/components/CompletedDetailView.tsx`)
+# on purpose: a generation that really was lost must turn terminal *while the reader
+# is still polling*, so the section answers in the same visit instead of leaving a
+# spinner the client eventually abandons on its own ceiling.
+_REVIEW_BLURB_TRIGGER_GRACE_SECONDS = int(
+    os.environ.get("REVIEW_BLURB_TRIGGER_GRACE_SECONDS", "20")
+)
+
+
+def _as_aware_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """UTC-normalise an instant so an age comparison can never raise."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _within_review_blurb_trigger_grace(
+    record: UserMediaRecord,
+    job: Optional[ProcessingJob],
+) -> bool:
+    """Is the end of processing recent enough that the trigger may not have run yet?
+
+    ``job.completed_at`` is the instant the pipeline stopped, i.e. the instant the
+    completion event was published, so it is the only reference that measures the
+    delivery window rather than something adjacent to it. It is absent on a row whose
+    operational job has expired, and on a save that never ran a job at all (a
+    deduplicated one); ``record.updated_at`` then stands in. That fallback is a
+    ceiling, not an equivalent -- a background write bumps it, so it can only make
+    the row look *younger* than it is, which at worst keeps a lost generation
+    ``pending`` for one more grace window.
+
+    Both absent means no instant to measure, and the honest answer is then "not
+    recent": the grace exists to cover a window that just opened, and a row that
+    cannot date itself is not evidence of one. Naive timestamps are UTC-normalised so
+    a legacy writer's value can never make a subtraction raise.
+    """
+    completed_at = job.completed_at if job is not None else None
+    reference = _as_aware_utc(completed_at) or _as_aware_utc(record.updated_at)
+    if reference is None:
+        return False
+    age = (datetime.now(timezone.utc) - reference).total_seconds()
+    return age < _REVIEW_BLURB_TRIGGER_GRACE_SECONDS
+
 
 async def _resolve_review_blurb_status(
     record: UserMediaRecord,
+    job: Optional[ProcessingJob],
     job_status: CanonicalJobLifecycle,
 ) -> CanonicalReviewBlurbStatus:
     """How the source preview's generation went, read off the artifact entry.
@@ -1046,9 +1114,13 @@ async def _resolve_review_blurb_status(
     swallows every error, so the only honest source is the internal entry of the
     media scope -- which the artifact history listing deliberately hides.
 
-    No entry at all is read against the pipeline: still running means the trigger
-    has not fired yet (``pending``), already over means it fired and was lost
-    (``failed``, which ``scripts/backfill_review_blurbs.py`` repairs).
+    No entry at all is read against the pipeline, on both sides of the job's end.
+    Still running means the trigger has not fired yet (``pending``). Over means it
+    should have fired -- but it fires *off* the completion event, not inside the job,
+    so a read that lands within ``_REVIEW_BLURB_TRIGGER_GRACE_SECONDS`` of the end of
+    processing is still ahead of the trigger and stays ``pending``; only past that
+    window is the generation taken to be lost (``failed``, which
+    ``scripts/backfill_review_blurbs.py`` repairs).
 
     ``pending`` is bounded on the other side too: an entry stuck in flight past
     ``INTERNAL_GENERATION_STALL_SECONDS`` is ended by the read itself and comes back
@@ -1060,10 +1132,12 @@ async def _resolve_review_blurb_status(
         content_scope_id=record.media_key or record.media_item_id,
     )
     if artifact_status is None:
+        if job_status not in _TERMINAL_JOB_LIFECYCLES:
+            return CanonicalReviewBlurbStatus.PENDING
         return (
-            CanonicalReviewBlurbStatus.FAILED
-            if job_status in _TERMINAL_JOB_LIFECYCLES
-            else CanonicalReviewBlurbStatus.PENDING
+            CanonicalReviewBlurbStatus.PENDING
+            if _within_review_blurb_trigger_grace(record, job)
+            else CanonicalReviewBlurbStatus.FAILED
         )
     return _ARTIFACT_STATUS_TO_REVIEW_BLURB_STATUS.get(
         artifact_status, CanonicalReviewBlurbStatus.PENDING
@@ -2194,7 +2268,9 @@ async def get_media_item(
         # already on the row, and its status is the one thing only the artifact
         # scope knows. This is the single read path that pays for that query --
         # the reader tab is where the preview is shown.
-        review_blurb_status = await _resolve_review_blurb_status(record, job_status)
+        review_blurb_status = await _resolve_review_blurb_status(
+            record, job, job_status
+        )
 
         return CanonicalMediaStatusResponse(
             media_item=_build_media_item_contract(

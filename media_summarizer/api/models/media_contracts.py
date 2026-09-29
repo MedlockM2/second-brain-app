@@ -128,10 +128,16 @@ class ReviewBlurbStatus(str, Enum):
     section in place and re-read in a moment".
 
     ``FAILED`` also covers the case where *no* internal entry exists at all on a
-    media whose processing is over. The trigger is best-effort
-    (``core/services/review_blurb_service.py`` swallows every error), so a missing
-    entry is not "not started yet", it is a generation that was lost —
+    media whose processing is over **and has been over for a while**. The trigger is
+    best-effort (``core/services/review_blurb_service.py`` swallows every error), so a
+    long-missing entry is a generation that was lost —
     ``scripts/backfill_review_blurbs.py`` is what repairs it.
+
+    A *just*-missing entry is the opposite answer: the trigger runs off the completion
+    event, after the job, so there is a short window in which processing is over and
+    nothing has been requested yet. Reads inside it answer ``PENDING`` — see the grace
+    window in ``api/endpoints/media.py`` — because that is the state that keeps the
+    client re-reading, and the preview lands seconds later.
     """
 
     PENDING = "pending"
