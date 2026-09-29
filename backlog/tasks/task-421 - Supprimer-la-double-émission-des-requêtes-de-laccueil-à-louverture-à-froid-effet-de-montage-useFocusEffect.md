@@ -3,9 +3,10 @@ id: TASK-421
 title: >-
   Supprimer la double émission des requêtes de l'accueil à l'ouverture à froid
   (effet de montage + useFocusEffect)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 13:57'
+updated_date: '2026-09-29 16:33'
 labels:
   - mobile
   - performance
