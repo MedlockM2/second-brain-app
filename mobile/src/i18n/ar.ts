@@ -632,6 +632,11 @@ export const ar: Catalog = {
     "لا تزال الترجمة جارية. تستغرق وقتًا أطول من المعتاد، لذا يُعرض النص الأصلي إلى أن تصبح الترجمة جاهزة.",
   "transcript.checkTranslation": "التحقق مجددًا",
   "transcript.checkTranslationA11y": "التحقق مما إذا كانت الترجمة جاهزة",
+  "transcript.viewOriginal": "عرض النص الأصلي ({language})",
+  "transcript.viewOriginalA11y": "إظهار النص الأصلي ({language})",
+  "transcript.viewTranslation": "عرض الترجمة ({language})",
+  "transcript.viewTranslationA11y": "إظهار النص المترجم ({language})",
+  "transcript.originalLoadFailed": "تعذّر تحميل النص الأصلي.",
   "paywall.subtitle":
     "كل الخطط تقدّم كل شيء. الفرق الوحيد هو مقدار ما يمكنك إرساله.",
   "common.itemCount.zero": "لا عناصر",

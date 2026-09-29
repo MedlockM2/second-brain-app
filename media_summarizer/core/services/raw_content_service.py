@@ -5,6 +5,13 @@ Raw content is the source material (transcript, extracted text, OCR result)
 stored in S3 under the processing job's transcription_s3_key.
 This service downloads that content and formats it into readable text.
 
+Variant selection (task-419):
+- The reader can ask for the source text of a translated media instead of its
+  translation (``variant="original"``). The translated object's S3 key is derived
+  deterministically from the original's, so the original never stops being
+  reachable from ``job.transcription_s3_key``: this is a choice of body in the
+  response, not a second store.
+
 Translation architecture (task-200, task-414):
 - /raw-content NEVER calls LLM translation synchronously.
 - The translation into the reading language of every account that saved the
@@ -28,7 +35,7 @@ Formatting architecture (task-232, benchmark task-231 option B):
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from media_summarizer.core.models import ProcessingJob
 from media_summarizer.core.services.transcript_formatting import (
@@ -57,6 +64,17 @@ logger = logging.getLogger(__name__)
 
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 
+#: Which body a read of the raw content asks for (task-419).
+#:
+#: ``translated`` is the default and the only behaviour there has ever been: the
+#: cached translation into the reader's ``reading_language`` when one exists, the
+#: source text otherwise. ``original`` is always the source text, whatever has
+#: been translated -- what the reader asks for from the "View the original"
+#: control of the Reader tab.
+RawContentVariant = Literal["translated", "original"]
+DEFAULT_RAW_CONTENT_VARIANT: RawContentVariant = "translated"
+
+
 class RawContentNotAvailableError(Exception):
     """Raised when raw content is not yet available for a media item."""
 
@@ -73,17 +91,20 @@ class RawContentResponse:
         media_type: Optional[str] = None,
         source_format: Optional[str] = None,
         translation: Optional[dict] = None,
+        variant: RawContentVariant = DEFAULT_RAW_CONTENT_VARIANT,
     ):
         self.content = content
         self.content_type = content_type
         self.media_type = media_type
         self.source_format = source_format
         self.translation = translation
+        self.variant = variant
 
 
 async def get_raw_content(
     job: ProcessingJob,
     reading_language: Optional[str] = None,
+    variant: RawContentVariant = DEFAULT_RAW_CONTENT_VARIANT,
 ) -> RawContentResponse:
     """
     Retrieve and format the raw content for a media item.
@@ -102,10 +123,16 @@ async def get_raw_content(
       to the transcript-translation-worker via SQS.
     - No LLM call is ever made synchronously in this code path.
 
+    Variant behavior (task-419):
+    - ``translated`` (the default): everything above.
+    - ``original``: the source text, with no translation resolved at all.
+
     Args:
         job: The ProcessingJob containing the S3 key reference.
         reading_language: The user's preferred reading language (ISO 639-1),
             if any.
+        variant: Which body to serve. ``original`` returns the source text even
+            when a translation is cached, and carries no translation metadata.
 
     Returns:
         RawContentResponse with formatted content.
@@ -146,7 +173,25 @@ async def get_raw_content(
     effective_text = raw_text
     translation_metadata: Optional[dict] = None
 
-    if reading_language:
+    # A read of the `original` variant is the source text and nothing else.
+    #
+    # Why a variant selector rather than both bodies in every response: the
+    # default read is the hot path — it runs on every open of the Reader tab, and
+    # again on each tick of the translation poll (up to 20 reads per wait,
+    # task-415). Carrying the source text alongside the translation would double
+    # the weight of every one of those reads to serve a control most readers never
+    # tap, on transcripts that run to hundreds of kilobytes for a long podcast.
+    # The tap pays one request instead, and pays it once: the client keeps the
+    # source text in the screen's state, so switching back and forth afterwards
+    # costs no network at all.
+    #
+    # The source read is also the cheaper of the two. It resolves no translation,
+    # so it spends no language detection, no read of the translation lock and no
+    # atomic reservation — a read of the source text must not arm or re-arm a
+    # translation. Nothing is lost by it: the control that sends this request only
+    # exists once a default read has come back saying `is_translated: true`, so
+    # the client already holds every language this response could name.
+    if reading_language and variant == "translated":
         translation_metadata = await _resolve_translation(
             job=job,
             transcript_s3_key=transcript_s3_key,
@@ -203,6 +248,7 @@ async def get_raw_content(
         media_type=media_type or None,
         source_format=source_format,
         translation=translation_metadata,
+        variant=variant,
     )
 
 

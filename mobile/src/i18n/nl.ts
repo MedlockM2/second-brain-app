@@ -644,6 +644,12 @@ export const nl: Catalog = {
     "De vertaling is nog bezig. Dit duurt langer dan gewoonlijk, dus tot die tijd wordt de oorspronkelijke tekst getoond.",
   "transcript.checkTranslation": "Opnieuw controleren",
   "transcript.checkTranslationA11y": "Controleren of de vertaling klaar is",
+  "transcript.viewOriginal": "Origineel bekijken ({language})",
+  "transcript.viewOriginalA11y": "De originele tekst weergeven ({language})",
+  "transcript.viewTranslation": "Vertaling bekijken ({language})",
+  "transcript.viewTranslationA11y": "De vertaalde tekst weergeven ({language})",
+  "transcript.originalLoadFailed":
+    "De originele tekst kon niet worden geladen.",
   "paywall.subtitle":
     "Elk abonnement kan alles. Ze verschillen alleen in hoeveel je stuurt.",
   "startupError.title": "De app kon niet starten",

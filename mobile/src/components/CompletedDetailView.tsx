@@ -56,7 +56,11 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useAuth } from "../contexts/AuthContext";
-import { MediaService, type RawContentResponse } from "../services/mediaService";
+import {
+  MediaService,
+  type RawContentResponse,
+  type TranslationMetadata,
+} from "../services/mediaService";
 import { ArtifactService } from "../services/artifactService";
 import type { ArtifactSummary } from "../types/artifacts";
 import { OrganizationService } from "../services/organizationService";
@@ -82,6 +86,7 @@ import {
 import {
   TranscriptReader,
   type TranscriptContentState,
+  type TranscriptTranslationToggle,
 } from "./TranscriptReader";
 import {
   SourcePreview,
@@ -160,6 +165,29 @@ function resolveTranscriptContent(
   return { status: "ready", content };
 }
 
+/**
+ * Where the Reader stands on showing the source text of a translated media
+ * (task-419).
+ *
+ * `content` outlives `shown`: the text is read once and kept, so the switch back
+ * and every switch after it costs no network. `loading` is only ever true for the
+ * one read that fetches it.
+ */
+type OriginalTextState = {
+  /** The source text once read, or `null` while it has never been asked for. */
+  content: string | null;
+  /** Whether the source text is the body on screen. */
+  shown: boolean;
+  /** A read of `?variant=original` is in flight. */
+  loading: boolean;
+};
+
+const NO_ORIGINAL_TEXT: OriginalTextState = {
+  content: null,
+  shown: false,
+  loading: false,
+};
+
 /** Delay between polls while the source preview is still being generated (ms). */
 const PREVIEW_POLL_DELAY_MS = 3000;
 /**
@@ -189,12 +217,24 @@ const PROGRESS_ANNOUNCE_STEP = 10;
  * language settings use. Anything else keeps its code in capitals, as the page
  * has always shown it: there is no localised name for it to fall back on.
  */
-function describeLanguage(code: string | undefined): string | null {
+function describeLanguage(code: string | null | undefined): string | null {
   const primary = code?.trim().split(/[-_]/)[0]?.toLowerCase();
   if (!primary) return null;
   return isSupportedLocale(primary)
     ? LOCALE_ENDONYMS[primary]
     : primary.toUpperCase();
+}
+
+/**
+ * The same language as a short tag — "EN", "FR", "JA".
+ *
+ * What the translation switch puts in its visible label, where the row it sits on
+ * has a title to share and no width to give to "Français". The name spelled out
+ * is what the screen reader gets instead (task-419).
+ */
+function languageTag(code: string | null | undefined): string | null {
+  const primary = code?.trim().split(/[-_]/)[0]?.toUpperCase();
+  return primary || null;
 }
 
 /** An `original_url` that is actually a destination the OS can open. */
@@ -476,6 +516,28 @@ export function CompletedDetailView({
   const [rawContent, setRawContent] = useState<TranscriptContentState>({
     status: "idle",
   });
+  // What the last read of `/raw-content` said about translation. Kept beside the
+  // text rather than folded into it: it answers two questions the text does not
+  // — whether the body on screen is a translation (so whether the switch exists
+  // at all) and which language to announce for it.
+  const [translation, setTranslation] = useState<TranslationMetadata | null>(
+    null,
+  );
+  // The source text of a media served translated, once the reader has asked for
+  // it. Held next to the translation rather than replacing it, so going back is a
+  // re-render and not a second request — and so is every switch after that.
+  const [original, setOriginal] = useState<OriginalTextState>(NO_ORIGINAL_TEXT);
+
+  // The source text belongs to an item. `/media/[id]` keeps this instance across
+  // a change of route parameter, and nothing else would clear a text that is no
+  // longer the one being read — the same reason the preview is re-seeded above,
+  // and guarded the same way so the effect only ever fires on a real change.
+  const originalItemIdRef = useRef(media_item.media_item_id);
+  useEffect(() => {
+    if (originalItemIdRef.current === media_item.media_item_id) return;
+    originalItemIdRef.current = media_item.media_item_id;
+    setOriginal(NO_ORIGINAL_TEXT);
+  }, [media_item.media_item_id]);
 
   useEffect(() => {
     return () => {
@@ -667,17 +729,6 @@ export function CompletedDetailView({
     ? formatDuration(media_item.transcript.duration_seconds)
     : null;
 
-  // Everything known about the source, on the one line under the title. The
-  // duration used to be printed twice — in the hero and again above the text.
-  const details = [
-    formattedDate,
-    durationLabel,
-    describeLanguage(media_item.transcript?.language),
-    media_item.transcript?.segments_count
-      ? tCount("transcript.paragraphCount", media_item.transcript.segments_count)
-      : null,
-  ].filter((detail): detail is string => !!detail);
-
   const mediaReady =
     media_item.status === "ready_for_artifacts" ||
     processing_job.status === "ready_for_artifacts" ||
@@ -692,10 +743,15 @@ export function CompletedDetailView({
   const rawReadCountRef = useRef(0);
   const rawReadAppliedRef = useRef(0);
   const adoptRawRead = useCallback(
-    (read: number, next: TranscriptContentState) => {
+    (
+      read: number,
+      next: TranscriptContentState,
+      meta: TranslationMetadata | null,
+    ) => {
       if (!mountedRef.current || read < rawReadAppliedRef.current) return;
       rawReadAppliedRef.current = read;
       setRawContent(next);
+      setTranslation(meta);
     },
     [],
   );
@@ -710,7 +766,11 @@ export function CompletedDetailView({
       const response = await MediaService.getRawContent(
         media_item.media_item_id,
       );
-      adoptRawRead(read, resolveTranscriptContent(response));
+      adoptRawRead(
+        read,
+        resolveTranscriptContent(response),
+        response.translation ?? null,
+      );
     } catch {
       // The next tick retries.
     }
@@ -734,6 +794,139 @@ export function CompletedDetailView({
     [rawContent, translationRefresh.isStalled],
   );
 
+  // --- The translation, and the way back to what was actually said (task-419) ---
+  //
+  // Only `ready` can carry the switch. Every other state is either the original
+  // already — a translation still on its way, stalled, or failed for good, each
+  // under a line that says so — or no text at all: there is nothing to switch
+  // between, and a disabled control would only raise the question.
+  const isTranslationOnScreen =
+    transcriptContent.status === "ready" && translation?.is_translated === true;
+
+  // The source language as the server read it, falling back to what the item says
+  // about its own transcript. The two can disagree: `detected_language` comes from
+  // a detection run over the text at read time, `transcript.language` from
+  // whichever provider produced it.
+  const sourceLanguage =
+    translation?.translated_from ??
+    translation?.detected_language ??
+    media_item.transcript?.language ??
+    null;
+  const targetLanguage = translation?.target_language ?? null;
+
+  // The text on screen, which is the translation unless the reader has asked for
+  // the source and it has arrived.
+  const showingOriginal = isTranslationOnScreen && original.shown;
+  const readerContent = useMemo<TranscriptContentState>(
+    () =>
+      transcriptContent.status === "ready" &&
+      original.shown &&
+      original.content !== null
+        ? { status: "ready", content: original.content }
+        : transcriptContent,
+    [transcriptContent, original.shown, original.content],
+  );
+
+  /**
+   * Switch between the translation and the source text.
+   *
+   * The source text is read once and kept, so only the first tap goes to the
+   * network; from there both directions are a re-render. A read that fails leaves
+   * the translation where it is and says so through the screen's toast — losing
+   * the text one was reading would be a worse answer than not getting the other
+   * one.
+   */
+  const handleToggleOriginal = useCallback(() => {
+    if (original.shown) {
+      setOriginal((current) => ({ ...current, shown: false }));
+      return;
+    }
+    if (original.content !== null) {
+      setOriginal((current) => ({ ...current, shown: true }));
+      return;
+    }
+    if (original.loading || !isAuthenticated) return;
+    setOriginal((current) => ({ ...current, loading: true }));
+
+    void (async () => {
+      try {
+        const response = await MediaService.getRawContent(
+          media_item.media_item_id,
+          { variant: "original" },
+        );
+        if (!mountedRef.current) return;
+        const content = (response.content ?? "").trim();
+        if (!content) {
+          setOriginal((current) => ({ ...current, loading: false }));
+          showToast(t("transcript.originalLoadFailed"), "error");
+          return;
+        }
+        setOriginal({ content, shown: true, loading: false });
+      } catch (err) {
+        if (!mountedRef.current) return;
+        setOriginal((current) => ({ ...current, loading: false }));
+        showToast(
+          getFriendlyErrorMessage(err, {
+            fallback: t("transcript.originalLoadFailed"),
+          }),
+          "error",
+        );
+      }
+    })();
+  }, [
+    original.shown,
+    original.content,
+    original.loading,
+    isAuthenticated,
+    media_item.media_item_id,
+    showToast,
+  ]);
+
+  // The switch itself, or nothing. It names the language it switches *to*, so
+  // both halves have to be nameable: without a language to put in the label there
+  // is no honest way to say where a tap leads.
+  const translationToggle = useMemo<TranscriptTranslationToggle | null>(() => {
+    if (!isTranslationOnScreen) return null;
+    const next = showingOriginal ? targetLanguage : sourceLanguage;
+    const languageCode = languageTag(next);
+    const languageName = describeLanguage(next);
+    if (!languageCode || !languageName) return null;
+    return {
+      showingOriginal,
+      languageCode,
+      languageName,
+      busy: original.loading,
+      onToggle: handleToggleOriginal,
+    };
+  }, [
+    isTranslationOnScreen,
+    showingOriginal,
+    sourceLanguage,
+    targetLanguage,
+    original.loading,
+    handleToggleOriginal,
+  ]);
+
+  // Everything known about the source, on the one line under the title. The
+  // duration used to be printed twice — in the hero and again above the text.
+  //
+  // The language named there is the one the text on screen is written in, which
+  // is the reading language while a translation is what the section shows, and
+  // the source language the rest of the time — the switch above moves it. It used
+  // to always name the source language, even under a translated body.
+  const details = [
+    formattedDate,
+    durationLabel,
+    describeLanguage(
+      isTranslationOnScreen && !showingOriginal
+        ? (targetLanguage ?? sourceLanguage)
+        : sourceLanguage,
+    ),
+    media_item.transcript?.segments_count
+      ? tCount("transcript.paragraphCount", media_item.transcript.segments_count)
+      : null,
+  ].filter((detail): detail is string => !!detail);
+
   // The first load, and the Retry of its error state: the one read that shows
   // the loading line.
   const fetchRawContent = useCallback(async () => {
@@ -745,7 +938,11 @@ export function CompletedDetailView({
       const response = await MediaService.getRawContent(
         media_item.media_item_id,
       );
-      adoptRawRead(read, resolveTranscriptContent(response));
+      adoptRawRead(
+        read,
+        resolveTranscriptContent(response),
+        response.translation ?? null,
+      );
     } catch (err) {
       const httpStatus = (err as { status?: number } | undefined)?.status;
       adoptRawRead(
@@ -758,6 +955,7 @@ export function CompletedDetailView({
                 fallback: t("media.transcriptLoadFailed"),
               }),
             },
+        null,
       );
     }
   }, [isAuthenticated, media_item.media_item_id, adoptRawRead]);
@@ -1101,9 +1299,10 @@ export function CompletedDetailView({
             <TranscriptReader
               transcript={media_item.transcript}
               processingStatus={processing_job.status}
-              content={transcriptContent}
+              content={readerContent}
               onRetry={fetchRawContent}
               onCheckTranslation={translationRefresh.rearm}
+              translationToggle={translationToggle}
             />
           </View>
         ) : (

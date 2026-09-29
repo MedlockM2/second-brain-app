@@ -746,6 +746,12 @@ export const de: Catalog = {
     "Die Übersetzung läuft noch. Sie dauert länger als gewöhnlich, deshalb wird bis dahin der Originaltext angezeigt.",
   "transcript.checkTranslation": "Erneut prüfen",
   "transcript.checkTranslationA11y": "Prüfen, ob die Übersetzung fertig ist",
+  "transcript.viewOriginal": "Original ansehen ({language})",
+  "transcript.viewOriginalA11y": "Originaltext anzeigen ({language})",
+  "transcript.viewTranslation": "Übersetzung ansehen ({language})",
+  "transcript.viewTranslationA11y": "Übersetzten Text anzeigen ({language})",
+  "transcript.originalLoadFailed":
+    "Der Originaltext konnte nicht geladen werden.",
   "paywall.subtitle":
     "Jeder Tarif kann alles. Sie unterscheiden sich nur darin, wie viel du sendest.",
   "startupError.title": "Die App konnte nicht starten",

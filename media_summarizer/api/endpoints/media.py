@@ -110,7 +110,9 @@ from media_summarizer.core.services.media_search_service import (
 )
 from media_summarizer.core.services.quota_enforcer import check_submission_allowed
 from media_summarizer.core.services.raw_content_service import (
+    DEFAULT_RAW_CONTENT_VARIANT,
     RawContentNotAvailableError,
+    RawContentVariant,
     get_raw_content,
 )
 from media_summarizer.core.services.short_url_resolver import resolve_tiktok_short_link
@@ -2446,7 +2448,17 @@ class RawContentResponse(BaseModel):
             "detection_method, translation_pending, translation_status. "
             "translation_status is one of: queued, in_progress, done, failed, null. "
             "When translation_pending is true (status queued/in_progress), "
-            "the client should poll again. On status=failed, do not poll."
+            "the client should poll again. On status=failed, do not poll. "
+            "Always null when variant=original: that read resolves no translation."
+        ),
+    )
+    variant: RawContentVariant = Field(
+        DEFAULT_RAW_CONTENT_VARIANT,
+        description=(
+            "Which body this response carries (task-419), echoing the ?variant= "
+            "query parameter: 'translated' (the default) is the cached translation "
+            "when one exists and the source text otherwise; 'original' is always "
+            "the source text."
         ),
     )
 
@@ -2457,6 +2469,7 @@ class RawContentResponse(BaseModel):
 async def get_media_raw_content(
     media_item_id: str,
     request: Request,
+    variant: RawContentVariant = DEFAULT_RAW_CONTENT_VARIANT,
     current_user: AuthUser = Depends(get_current_user),
 ):
     """Retrieve the raw content (transcript, extracted text, or OCR result) for a media item.
@@ -2469,6 +2482,15 @@ async def get_media_raw_content(
 
     The response format is consistent: plain text whose paragraphs are separated
     by a blank line. Clients split on blank lines to render paragraphs.
+
+    Query Parameters:
+        variant: Which body to serve (task-419). Left out, or ``translated``, the
+            answer is what it has always been: the cached translation into the
+            caller's ``reading_language`` when one exists, the source text
+            otherwise. ``original`` serves the source text even when a
+            translation is cached — the "View the original" control of the Reader
+            tab — and resolves no translation, so it neither reads nor arms one.
+            Anything else is a 422.
     """
     token = bind_log_context(user_id=current_user.id, media_item_id=media_item_id)
     try:
@@ -2492,7 +2514,11 @@ async def get_media_raw_content(
                 detail="Raw content is no longer available for this media item",
             )
 
-        raw = await get_raw_content(job, reading_language=current_user.reading_language)
+        raw = await get_raw_content(
+            job,
+            reading_language=current_user.reading_language,
+            variant=variant,
+        )
 
         log_event(
             logger,
@@ -2503,6 +2529,7 @@ async def get_media_raw_content(
             source_format=raw.source_format,
             content_length=len(raw.content),
             is_translated=(raw.translation or {}).get("is_translated", False),
+            variant=raw.variant,
         )
 
         return RawContentResponse(
@@ -2513,6 +2540,7 @@ async def get_media_raw_content(
             media_type=raw.media_type,
             source_format=raw.source_format,
             translation=raw.translation,
+            variant=raw.variant,
         )
 
     except RawContentNotAvailableError as exc:
