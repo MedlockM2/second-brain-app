@@ -72,6 +72,10 @@ import type { RecentEngagement } from "../../src/types/engagements";
  * row and the unsorted count, now on two independent requests (task-417). Only the
  * very first media fetch may show a full-screen spinner.
  *
+ * Each hook reads itself when this screen gains focus, and that single path is the
+ * whole of what an open costs: three requests leave, not six (task-421). This
+ * screen's own focus effect is left with the entitlements alone.
+ *
  * The other two blocks hold their own space while their first answer is in flight
  * — `SectionPlaceholder` below — instead of appearing out of nothing once it
  * lands. The three requests leave together but land whenever they land, and the
@@ -160,18 +164,20 @@ export default function InboxScreen() {
   const { isStalled: isProcessingStalled, rearm: rearmProcessingRefresh } =
     useProcessingRefresh({ hasProcessing, refetch });
 
-  // Silent refetch when the screen gains focus (multi-device sync). Uses the
-  // non-spinner variant so we don't show the pull-to-refresh indicator just
-  // because the user navigated back to this tab.
-  // Entitlements come along for the ride: the minutes warning lives in this
-  // header, and minutes are spent by imports made from this very screen, so
-  // reading the figure fetched at sign-in would keep the banner a period behind.
+  // Entitlements, on focus: the minutes warning lives in this header, and minutes
+  // are spent by imports made from this very screen, so reading the figure fetched
+  // at sign-in would keep the banner a period behind.
+  //
+  // The three data sources are deliberately **not** here. Each hook hangs its own
+  // read on its own `useFocusEffect`, which is the one path an open goes through;
+  // calling them from this callback as well is what made a cold open issue all
+  // three requests twice, since it fires in the same tick as a mount effect
+  // (task-421). The multi-device sync this used to be about is unchanged — it just
+  // lives in the hooks now.
   useFocusEffect(
     useCallback(() => {
-      refetch();
-      void refreshSections();
       void refreshEntitlements();
-    }, [refetch, refreshSections, refreshEntitlements]),
+    }, [refreshEntitlements]),
   );
 
   const handleRefresh = useCallback(async () => {

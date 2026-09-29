@@ -1944,10 +1944,14 @@ Three properties to know before reading a waterfall:
 - **First paint only.** Each hook keeps a "has answered once" ref and opens a span
   only while it is still false, so later refreshes add nothing to the trace even
   when a transaction happens to be open.
-- **Two spans of the same name in one open is not a bug in the instrumentation.**
-  `inbox.tsx` fires its `useFocusEffect` re-read in the same tick as each hook's
-  own mount fetch, so a cold open issues every one of the three requests twice.
-  The spans make that visible; removing the duplication is not part of task-417.
+- **One span of each name per open, and two is a regression.** A cold open used to
+  issue every one of the three requests twice: `inbox.tsx` fired its
+  `useFocusEffect` re-read in the same tick as each hook's own mount fetch. The
+  spans are what made that visible, and task-421 removed it — `useMediaList` and
+  `useHomeSections` each hang their one automatic read on their own
+  `useFocusEffect`, which a tab gains as it mounts, and the screen's focus effect
+  is left with the entitlements. A waterfall with two `home.recently_added` spans
+  in it is therefore something to fix, not an artefact of the instrumentation.
 
 Status is `ok` on a commit and `error` on a rejected request — a failure still
 ends the span, because how long a section took to fail is what says whether the
