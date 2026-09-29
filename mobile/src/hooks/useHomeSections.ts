@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { startHomeSectionSpan } from "../lib/crashReporting";
 import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
@@ -60,9 +61,10 @@ export function useHomeSections(): UseHomeSectionsResult {
 
   const isMountedRef = useRef(true);
   // Read by the fetchers to decide whether this round is still part of the first
-  // paint, which is what earns a span. A ref and not the state above: the state
-  // a closure captured is the state of its render, and the second fetch of an
-  // open is fired from the same render as the first.
+  // paint, which is what earns a span. A ref and not the two flags above: both
+  // fetchers are `useCallback`s keyed on the session alone, so a state read from
+  // their bodies would be the one captured by the render that built them — still
+  // `false` on every later round, and every refresh would earn a span.
   const engagementSettledRef = useRef(false);
   const unsortedSettledRef = useRef(false);
 
@@ -130,6 +132,9 @@ export function useHomeSections(): UseHomeSectionsResult {
    * each resolve to nothing and never reject: it is here so the caller can await
    * "both are done" for its pull-to-refresh spinner, and it is no longer a gate on
    * either `setState`.
+   *
+   * Always two real requests, however recently the last pair answered: pulling down
+   * is how the user asks again, so nothing on this path may judge a round redundant.
    */
   const refresh = useCallback(async () => {
     await Promise.all([refreshContinueLearning(), refreshUnsortedCount()]);
@@ -144,24 +149,32 @@ export function useHomeSections(): UseHomeSectionsResult {
     });
   }, [refresh]);
 
+  // Mount lifetime and nothing else — what the commits above test before touching
+  // state. Its own effect, with no dependency: it used to share one with the
+  // initial fetch, so a session change flipped it to false and back while the
+  // screen had gone nowhere.
   useEffect(() => {
     isMountedRef.current = true;
-
-    // Deferred by a tick rather than called in the effect body, the same shape
-    // `useMediaList` uses: a `setState` reached synchronously from an effect
-    // cascades a render, and the lint rule that says so is on.
-    let initialFetchTimer: ReturnType<typeof setTimeout> | null = null;
-    if (isAuthenticated) {
-      initialFetchTimer = setTimeout(() => {
-        void refresh();
-      }, 0);
-    }
-
     return () => {
-      if (initialFetchTimer) clearTimeout(initialFetchTimer);
       isMountedRef.current = false;
     };
-  }, [isAuthenticated, refresh]);
+  }, []);
+
+  /**
+   * Both sources' one automatic read, the same shape `useMediaList` uses: a tab
+   * gains focus as it mounts, so this covers the open as well as every return to
+   * the tab, and there is no mount effect beside it. The pair used to have one, and
+   * because the screen's own focus effect called `refresh` in the same tick, a cold
+   * open issued both requests twice (task-421).
+   *
+   * Nothing shows for a re-read: `refresh` drives no spinner, and the two flags
+   * latch on the first answer and never go back.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
 
   return {
     continueLearning,

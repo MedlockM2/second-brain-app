@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
 import { startHomeSectionSpan } from "../lib/crashReporting";
 import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
@@ -10,19 +11,22 @@ import type { MediaListItem } from "../types/media";
 export interface UseMediaListResult {
   /** Backend media items */
   items: MediaListItem[];
-  /** Whether the initial fetch is in progress */
+  /** Whether the first read has yet to answer */
   isLoading: boolean;
   /** Whether a pull-to-refresh is in progress (drives RefreshControl) */
   isRefreshing: boolean;
   /** User-friendly error message, or null */
   error: string | null;
-  /** Pull-to-refresh handler — flips isRefreshing to drive the visible spinner */
+  /**
+   * Pull-to-refresh handler — flips isRefreshing to drive the visible spinner, and
+   * always issues a real request, however recently the last one answered.
+   */
   refresh: () => Promise<void>;
   /**
    * Silent re-read of the list — does **not** toggle `isRefreshing`, so nothing
-   * on screen moves. Used on focus and by every tick of `useProcessingRefresh`,
-   * which is what lets a vignette settle from "on its way" to "ready" while the
-   * user is looking at it.
+   * on screen moves. What the hook's own focus read runs, and what every tick of
+   * `useProcessingRefresh` calls, which is what lets a vignette settle from "on its
+   * way" to "ready" while the user is looking at it.
    */
   refetch: () => Promise<void>;
   /** Retry after an error */
@@ -30,7 +34,16 @@ export interface UseMediaListResult {
 }
 
 /**
- * The account's media list: fetched on mount, re-read on demand.
+ * The account's media list: read once every time the screen holding it gains
+ * focus, and re-read on demand.
+ *
+ * **One request per open.** The automatic read hangs on `useFocusEffect` and
+ * nowhere else. A mount effect used to sit beside it, and since a tab gains focus
+ * *as* it mounts, the two fired in the same tick: a cold open issued
+ * `GET /api/media` twice, for one list (task-421). The focus path alone covers
+ * both occasions that matter — the open, and the return to the tab, which is the
+ * multi-device sync the effect exists for — so it is the only one left. Nothing
+ * here is deduplicated by a delay or a guard; there is simply one caller.
  *
  * Nothing recurring lives here. *When* the list is worth re-reading is a question
  * about what is on it and which screen is showing it, which is
@@ -55,9 +68,10 @@ export function useMediaList(): UseMediaListResult {
   /**
    * Whether this source has answered once since mount, read by `fetchMedia` to
    * decide whether the round it is starting is still part of the Home's first
-   * paint — the only one worth a span. A ref and not state: the two fetches an
-   * open fires (the mount effect and the screen's focus effect) are closures of
-   * the same render.
+   * paint — the only one worth a span. A ref and not state: `fetchMedia` is a
+   * `useCallback` keyed on the session alone, so a state read from its body would
+   * be the one captured by the render that built it — still `false` on every later
+   * round, and every refresh would earn a span it is not entitled to.
    */
   const settledRef = useRef(false);
 
@@ -94,7 +108,11 @@ export function useMediaList(): UseMediaListResult {
   }, [isAuthenticated]);
 
   /**
-   * Public refresh function (pull-to-refresh / focus refetch).
+   * The pull-to-refresh gesture, and only it: the one entry that shows a spinner.
+   *
+   * Always a real request — it goes straight to `fetchMedia` with nothing in
+   * between. Pulling down is how the user asks again, including one second after an
+   * answer landed, so nothing here may decide the round is redundant.
    */
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -129,26 +147,36 @@ export function useMediaList(): UseMediaListResult {
     });
   }, [fetchMedia]);
 
-  // Initial fetch on mount
+  // Mount lifetime and nothing else — what the commits above test before touching
+  // state. Its own effect, with no dependency: it used to share one with the
+  // initial fetch, so a session change flipped it to false and back while the
+  // screen had gone nowhere.
   useEffect(() => {
     isMountedRef.current = true;
-
-    let initialFetchTimer: ReturnType<typeof setTimeout> | null = null;
-    if (isAuthenticated) {
-      initialFetchTimer = setTimeout(() => {
-        void fetchMedia().finally(() => {
-          if (isMountedRef.current) {
-            setIsLoading(false);
-          }
-        });
-      }, 0);
-    }
-
     return () => {
-      if (initialFetchTimer) clearTimeout(initialFetchTimer);
       isMountedRef.current = false;
     };
-  }, [isAuthenticated, fetchMedia]);
+  }, []);
+
+  /**
+   * The list's one automatic read, and the whole of what a cold open costs: a tab
+   * gains focus as it mounts, so this covers the open as well as every return to
+   * the tab. No mount effect beside it — see the note at the top of this file.
+   *
+   * `fetchMedia` and not `refresh`: a focus re-read must leave the rows where they
+   * are, and the `RefreshControl` spinner belongs to the gesture. Ending
+   * `isLoading` here is what takes the screen's one spinner down, so the first
+   * answer — success or failure — is what the blank screen lasts.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void fetchMedia().finally(() => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      });
+    }, [fetchMedia]),
+  );
 
   return {
     items: backendItems,
