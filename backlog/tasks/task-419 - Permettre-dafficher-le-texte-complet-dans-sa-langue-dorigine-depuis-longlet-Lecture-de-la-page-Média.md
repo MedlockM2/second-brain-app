@@ -3,9 +3,10 @@ id: TASK-419
 title: >-
   Permettre d'afficher le texte complet dans sa langue d'origine depuis l'onglet
   Lecture de la page Média
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 10:25'
+updated_date: '2026-09-29 10:47'
 labels:
   - mobile
   - backend
