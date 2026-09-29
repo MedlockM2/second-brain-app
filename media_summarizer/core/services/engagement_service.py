@@ -243,8 +243,14 @@ async def _hydrate_folders(user_id: str, entries: List[RecentEngagement]) -> Non
 
     One partition read for the whole row rather than one ``folder-index`` query per
     folder: up to twelve queries returning full items is more payload for less
-    information, and this is the same read ``GET /api/folders`` already performs on
-    every Inbox open. Skipped entirely when the capped row holds no folder.
+    information, and the row needs the newest covers of each folder, not just a
+    count. Skipped entirely when the capped row holds no folder, which is the
+    common case.
+
+    It used to be free on the Home screen, because ``GET /api/folders`` was reading
+    the same partition on every open anyway; since task-417 it no longer is, and
+    this read is now the only one of its kind left on that screen — visible in the
+    ``home.continue_learning`` span whenever the row holds a folder.
     """
     folder_ids = {entry.id for entry in entries if entry.kind == KIND_FOLDER}
     if not folder_ids:

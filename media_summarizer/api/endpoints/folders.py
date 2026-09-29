@@ -113,6 +113,22 @@ class FolderListResponse(BaseModel):
     count: int
 
 
+class UnsortedCountResponse(BaseModel):
+    """What the Home screen's unsorted-review card draws, and nothing else.
+
+    A response of its own rather than a flag on ``GET /api/folders``: the two reads
+    have nothing in common on the server. This one is two bounded queries, the
+    listing is a full pass over the user's library partition to put a figure on
+    every folder (task-417).
+    """
+
+    status: str = "success"
+    #: The default ("Uncategorized") folder, created here on the first call of an
+    #: account's life like every other folder read does.
+    folder_id: str
+    media_count: int
+
+
 class FolderDeleteResponse(BaseModel):
     status: str = "success"
     deleted_folders: int
@@ -181,6 +197,31 @@ async def list_folders(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to list folders",
+        )
+
+
+@router.get("/unsorted-count", response_model=UnsortedCountResponse)
+async def count_unsorted(
+    current_user: AuthUser = Depends(get_current_user),
+) -> UnsortedCountResponse:
+    """How many items are waiting in the default folder.
+
+    The Home screen's one folder-shaped question. Declared before the
+    ``/{folder_id}`` routes so a literal path segment is never read as an id — the
+    module has no ``GET /{folder_id}`` today, and this keeps it safe to add one.
+    """
+    try:
+        result = await folder_service.count_unsorted(user_id=current_user.id)
+        return UnsortedCountResponse(
+            status="success",
+            folder_id=result["folder_id"],
+            media_count=result["media_count"],
+        )
+    except Exception as e:
+        logger.error(f"Error counting unsorted media: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to count unsorted media",
         )
 
 

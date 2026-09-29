@@ -27,10 +27,12 @@ import { MinutesWarningBanner } from "../../src/components/MinutesWarningBanner"
 import { FreeTrialNotice } from "../../src/components/FreeTrialNotice";
 import {
   HomeTile,
+  TILE_COVER_HEIGHT,
   TILE_GAP,
+  TILE_HEIGHT,
+  TILE_WIDTH,
   type HomeTileItem,
 } from "../../src/components/HomeTile";
-import { buildFolderTree } from "../../src/lib/folderTree";
 import {
   capturePhotoToImport,
   pickFileToImport,
@@ -65,11 +67,17 @@ import type { RecentEngagement } from "../../src/types/engagements";
  * held by the entry into the triage of the default folder, which is the one
  * thing on this screen with a backlog behind it.
  *
- * Two sources feed it and each fails alone: "Recently added" comes from the
- * media list `useMediaList` holds, while `useHomeSections` brings the
- * engagement row and the folders behind the unsorted count. Only the very
- * first media fetch may show a full-screen spinner; no row ever shows one,
- * because a row with nothing to say is simply absent.
+ * Three sources feed it and each fails alone: "Recently added" comes from the
+ * media list `useMediaList` holds, while `useHomeSections` brings the engagement
+ * row and the unsorted count, now on two independent requests (task-417). Only the
+ * very first media fetch may show a full-screen spinner.
+ *
+ * The other two blocks hold their own space while their first answer is in flight
+ * — `SectionPlaceholder` below — instead of appearing out of nothing once it
+ * lands. The three requests leave together but land whenever they land, and the
+ * unsorted card sits *above* both rows, so an arrival used to push content the
+ * user had already started reading. Held space only ever means "not answered yet":
+ * once a source has answered, an empty section is absent exactly as before.
  *
  * The media list re-reads itself while a tile of "Recently added" is still being
  * processed, and stops as soon as none is (`useProcessingRefresh`, task-405): a
@@ -123,8 +131,13 @@ export default function InboxScreen() {
     refetch,
     retry,
   } = useMediaList();
-  const { continueLearning, folders, refresh: refreshSections } =
-    useHomeSections();
+  const {
+    continueLearning,
+    hasLoadedContinueLearning,
+    unsortedCount,
+    hasLoadedUnsortedCount,
+    refresh: refreshSections,
+  } = useHomeSections();
 
   const recentTiles = useMemo(() => buildRecentlyAdded(items), [items]);
 
@@ -267,20 +280,6 @@ export default function InboxScreen() {
     [continueLearning],
   );
 
-  /**
-   * How many media are waiting in the default folder.
-   *
-   * Read off the folders `useHomeSections` already fetched, so the figure
-   * costs no request of its own. `buildFolderTree` is what identifies the
-   * folder — by its `is_default` flag, never by its label: the stored name is
-   * `Uncategorized`, the UI says "Unsorted", and matching on either is what
-   * task-297 ruled out.
-   */
-  const unsortedCount = useMemo(
-    () => buildFolderTree(folders).defaultFolder?.media_count ?? 0,
-    [folders],
-  );
-
   // Loading state — the only spinner on this screen, and only on the very first
   // media fetch. Every later refresh happens under the existing content.
   if (isLoading) {
@@ -322,6 +321,10 @@ export default function InboxScreen() {
   }
 
   const hasAnything = continueTiles.length > 0 || recentTiles.length > 0;
+  // Not while a source can still turn out to have something: the empty state says
+  // "share something to get started", and saying it over a block that is still
+  // loading would be both wrong and one more thing to take away a moment later.
+  const showEmptyState = !hasAnything && hasLoadedContinueLearning;
 
   return (
     <SafeAreaView testID="inbox-screen" style={styles.container} edges={["top"]}>
@@ -353,10 +356,18 @@ export default function InboxScreen() {
         <FreeTrialNotice />
         <MinutesWarningBanner />
 
-        <UnsortedReviewButton
-          count={unsortedCount}
-          onPress={handleUnsortedReviewPress}
-        />
+        {/* The card's own space, held from the first paint: it sits above both
+            rows, so it is the one block whose late arrival pushed content the user
+            was already reading. Once the count is in, the card is drawn or — at
+            zero — nothing is, exactly as before. */}
+        {hasLoadedUnsortedCount ? (
+          <UnsortedReviewButton
+            count={unsortedCount}
+            onPress={handleUnsortedReviewPress}
+          />
+        ) : (
+          <UnsortedReviewPlaceholder />
+        )}
 
         {recentTiles.length > 0 && (
           <TileRow
@@ -369,20 +380,30 @@ export default function InboxScreen() {
           />
         )}
 
-        {/* Absent entirely when there is nothing to continue: no heading, no
-            empty box, no placeholder tiles. A brand-new account has engaged with
-            nothing, and entries age out of the server's window on their own. */}
-        {continueTiles.length > 0 && (
-          <TileRow
-            testID="home-continue-learning-row"
+        {/* Once answered, absent entirely when there is nothing to continue: no
+            heading, no empty box, no placeholder tiles. A brand-new account has
+            engaged with nothing, and entries age out of the server's window on
+            their own. Until then the row holds its exact height, heading included,
+            so the tiles do not drop into place under a heading that was not there
+            a frame earlier. */}
+        {hasLoadedContinueLearning ? (
+          continueTiles.length > 0 && (
+            <TileRow
+              testID="home-continue-learning-row"
+              icon="play-circle"
+              title={t("home.continueLearning")}
+              tiles={continueTiles}
+              onTilePress={handleTilePress}
+            />
+          )
+        ) : (
+          <TileRowPlaceholder
             icon="play-circle"
             title={t("home.continueLearning")}
-            tiles={continueTiles}
-            onTilePress={handleTilePress}
           />
         )}
 
-        {!hasAnything && <EmptyState />}
+        {showEmptyState && <EmptyState />}
       </ScrollView>
 
       {/* box-none: the row now spans the full width, so without this it would
@@ -565,6 +586,95 @@ function TileRow({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.rowContent}
       />
+    </View>
+  );
+}
+
+// --- First-paint placeholders (task-417) ---
+
+/**
+ * What a block of this screen shows while its own first answer is in flight.
+ *
+ * Two of the three sources answer after the media list does, and the screen used
+ * to render nothing at all for them until they did — so the column grew under the
+ * user's eyes, and the unsorted card, which sits above both rows, pushed tiles
+ * that were already on screen. These hold the exact height of what they stand in
+ * for, so the swap costs no movement.
+ *
+ * They are tonal plates and nothing else: no spinner, no text, no amber. A
+ * spinner per block would put three of them on one screen, and text would be one
+ * more string to translate into twelve languages for something that is visible for
+ * a fraction of a second. `surfaceContainer` on `background` is the shift DESIGN.md
+ * prescribes for exactly this — a surface that is *there* without being content —
+ * and the tile covers reuse `surfaceContainerLow`, which is already what a real
+ * tile with no cover is drawn on.
+ *
+ * Invisible to a screen reader, which reads content and has no use for the absence
+ * of any: nothing here is announced, and nothing here is focusable.
+ */
+const PLACEHOLDER_TILES = 2;
+
+function UnsortedReviewPlaceholder() {
+  return (
+    <View
+      testID="home-unsorted-review-placeholder"
+      style={styles.reviewDeck}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {/* The same three plates in the same order as the card itself, so the
+          silhouette is the one that is about to be there. The front surface has no
+          children, which is what leaves it at its own `minHeight` — the height the
+          loaded card settles at too. */}
+      <View style={styles.reviewDeckPlateBack} />
+      <View style={styles.reviewDeckPlateMid} />
+      <View style={styles.reviewDeckSurface}>
+        <View style={styles.placeholderIconPlate} />
+        <View style={styles.placeholderLabelBar} />
+      </View>
+    </View>
+  );
+}
+
+/**
+ * The heading is the real one, with its real icon and its real string: it is what
+ * makes the swap free. A skeleton bar in its place would be a different height
+ * than the text that replaces it, which is the very shift this exists to remove.
+ */
+function TileRowPlaceholder({
+  icon,
+  title,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+}) {
+  return (
+    <View
+      testID="home-continue-learning-placeholder"
+      style={styles.section}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View style={styles.sectionHeaderRow}>
+        <Ionicons name={icon} size={18} color={Colors.primary} />
+        <Text style={styles.sectionTitle} numberOfLines={1}>
+          {title}
+        </Text>
+      </View>
+      {/* A plain View, not a FlatList: nothing here scrolls, and the second plate
+          is cut by `overflow` at the edge the way the real row's second tile is
+          cut by the viewport. */}
+      <View style={styles.placeholderRow}>
+        {Array.from({ length: PLACEHOLDER_TILES }, (_, index) => (
+          <View key={index} style={styles.placeholderTile}>
+            <View style={styles.placeholderCover} />
+            <View style={styles.placeholderTextLine} />
+            <View
+              style={[styles.placeholderTextLine, styles.placeholderTextLineShort]}
+            />
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -841,6 +951,52 @@ const styles = StyleSheet.create({
   rowContent: {
     paddingHorizontal: Spacing.md,
     gap: TILE_GAP,
+  },
+
+  // First-paint placeholders (task-417). Every dimension is borrowed from the
+  // thing it stands in for — the deck's own plate styles above, the tile module's
+  // exported geometry — so neither can be retuned without the other following.
+  placeholderIconPlate: {
+    width: TouchTarget.minimum,
+    height: TouchTarget.minimum,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceContainer,
+  },
+  placeholderLabelBar: {
+    // Half the card, which is about what the label takes on one line; a bar the
+    // full remaining width would read as a loaded card with its text missing.
+    width: "50%",
+    height: Spacing.md,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainer,
+  },
+  placeholderRow: {
+    flexDirection: "row",
+    // Same gutter and same gap as `rowContent`, so the first plate starts where
+    // the first tile will.
+    paddingHorizontal: Spacing.md,
+    gap: TILE_GAP,
+    height: TILE_HEIGHT,
+    overflow: "hidden",
+  },
+  placeholderTile: {
+    width: TILE_WIDTH,
+    height: TILE_HEIGHT,
+  },
+  placeholderCover: {
+    width: TILE_WIDTH,
+    height: TILE_COVER_HEIGHT,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceContainerLow,
+  },
+  placeholderTextLine: {
+    height: Spacing.md,
+    marginTop: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.surfaceContainer,
+  },
+  placeholderTextLineShort: {
+    width: "60%",
   },
 
   // Floating ingestion controls (task-264)

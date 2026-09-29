@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { startHomeSectionSpan } from "../lib/crashReporting";
 import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
 import { MediaService } from "../services/mediaService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
@@ -51,6 +52,14 @@ export function useMediaList(): UseMediaListResult {
   const [error, setError] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
+  /**
+   * Whether this source has answered once since mount, read by `fetchMedia` to
+   * decide whether the round it is starting is still part of the Home's first
+   * paint — the only one worth a span. A ref and not state: the two fetches an
+   * open fires (the mount effect and the screen's focus effect) are closures of
+   * the same render.
+   */
+  const settledRef = useRef(false);
 
   /**
    * Fetch media list from the backend (one-shot).
@@ -58,19 +67,29 @@ export function useMediaList(): UseMediaListResult {
   const fetchMedia = useCallback(async () => {
     if (!isAuthenticated) return;
 
+    // "Recently added" is the third block of the task-417 waterfall, and the one
+    // the other two are compared against: it is also what gates the screen's only
+    // spinner, so its span is the length of the blank screen.
+    const span = settledRef.current
+      ? null
+      : startHomeSectionSpan("recently_added");
     try {
       const response = await MediaService.listMedia();
       if (isMountedRef.current) {
         setBackendItems(response.items);
         setError(null);
+        settledRef.current = true;
       }
+      span?.end("ok");
     } catch (err) {
       if (isMountedRef.current) {
         const message = getFriendlyErrorMessage(err, {
           fallback: t("home.loadFailed"),
         });
         setError(message);
+        settledRef.current = true;
       }
+      span?.end("error");
     }
   }, [isAuthenticated]);
 

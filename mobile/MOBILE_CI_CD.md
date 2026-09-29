@@ -1913,6 +1913,46 @@ Expo Router has no dedicated Sentry integration; `app/_layout.tsx` wires
 exported from `crashReporting.ts`) so route changes appear as transactions.
 The root layout itself is wrapped, `export default Sentry.wrap(RootLayout)`.
 
+#### Custom spans: the Home screen's three sections
+
+`startHomeSectionSpan(section)` in `crashReporting.ts` is the one custom span
+helper (task-417). Each span opens when a section's request leaves and closes on
+the `setState` that commits the answer — not when the HTTP response arrives,
+which is what the automatic `http.client` spans already measure. The gap between
+the two is the thing task-417 was about: the two late sections used to be gated
+on each other rather than on their own endpoint, and only a span that ends at the
+commit shows it.
+
+| Span name | `op` | Opened in | Endpoint underneath |
+|---|---|---|---|
+| `home.recently_added` | `ui.load` | `useMediaList.fetchMedia` | `GET /api/media` |
+| `home.continue_learning` | `ui.load` | `useHomeSections.refreshContinueLearning` | `GET /api/engagements/recent` |
+| `home.unsorted_count` | `ui.load` | `useHomeSections.refreshUnsortedCount` | `GET /api/folders/unsorted-count` |
+
+Each also carries a `home.section` attribute with the same suffix, so the three
+can be grouped without parsing the name.
+
+Three properties to know before reading a waterfall:
+
+- **`onlyIfParent: true`.** A section span is only recorded when a transaction is
+  already open — in practice the Expo Router navigation transaction of the Home
+  screen. A pull-to-refresh or a focus re-read minutes later records nothing,
+  which is deliberate: an orphan span would become a transaction of its own and
+  be indistinguishable from an app open. A child span also holds the *idle*
+  navigation transaction open until it ends (up to Sentry's 30 s final timeout),
+  so the trace contains the whole wait rather than its first second.
+- **First paint only.** Each hook keeps a "has answered once" ref and opens a span
+  only while it is still false, so later refreshes add nothing to the trace even
+  when a transaction happens to be open.
+- **Two spans of the same name in one open is not a bug in the instrumentation.**
+  `inbox.tsx` fires its `useFocusEffect` re-read in the same tick as each hook's
+  own mount fetch, so a cold open issues every one of the three requests twice.
+  The spans make that visible; removing the duplication is not part of task-417.
+
+Status is `ok` on a commit and `error` on a rejected request — a failure still
+ends the span, because how long a section took to fail is what says whether the
+user waited on it.
+
 ### Anonymous per-installation context: deliberately not done
 
 `Sentry.setUser` was considered, to tell "one user crashing repeatedly" from
