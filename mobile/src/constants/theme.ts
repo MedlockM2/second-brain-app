@@ -61,6 +61,33 @@ export const Colors = {
    */
   processingVeil: "rgba(255, 255, 255, 0.4)",
 
+  /**
+   * The fill of a strip of text laid over a media's cover — the title band of
+   * `MediaDetailHero`, the caption of `DigestCoverStack`.
+   *
+   * `background` at 72 %, the value the task-410 mockup gives the band
+   * (`direction_c_bandeau_retractable`: `background: rgba(252, 249, 246, 0.72)`
+   * under a `backdrop-filter`). It is a token for the reason `processingVeil` is
+   * one: a translucent material belongs beside the palette it is made of, and
+   * two components draw the same strip.
+   *
+   * It is the **contrast floor** of those strips, and it is painted over the
+   * `GlassSurface` material rather than under it — the order CSS gives a
+   * `background` over a `backdrop-filter`. Over it, no matter what the material
+   * below resolves to, `textMain` measures 6.5:1 against a black cover and
+   * 13.0:1 against a white one, so text sits above 4.5:1 on any picture. That is
+   * what the material alone cannot promise: Liquid Glass adapts to what it
+   * covers and a photograph can leave it drawing close to nothing, which is the
+   * degradation the task-410 benchmark predicted for this direction
+   * ("lisibilité du titre dépendante du matériau sur iOS").
+   *
+   * 72 % is also the ceiling on legibility here: `textSubtle` only reaches
+   * 2.7:1 against a black cover through it, which is why a strip on a cover
+   * writes its small-caps line in `textMain` and keeps `textSubtle` for the same
+   * line drawn on the page.
+   */
+  coverTitleVeil: "rgba(252, 249, 246, 0.72)",
+
   error: "#ba1a1a",
   onError: "#ffffff",
   errorContainer: "#ffdad6",

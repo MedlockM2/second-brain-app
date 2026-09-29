@@ -12,9 +12,12 @@
  * Three cards as wide as the screen's gutters allow, the first media in front
  * and upright, the two others behind it, each raised a step and tilted a few
  * degrees in opposite directions so their edges show above and beside it — a
- * deck left on a table, not a fan. The front card carries the caption on a strip
- * of the same `GlassSurface` the media page lays its title on over the cover:
- * the period's name, and its count on an amber pill. The cards carry
+ * deck left on a table, not a fan. The front card carries the caption on the same
+ * strip the media page lays its title on over a cover: `Colors.coverTitleVeil`
+ * over the `GlassSurface` material, the wash on top, because the material adapts
+ * to the picture under it and cannot promise `textMain` any contrast of its own
+ * (`MediaDetailHero`, "The title strip, and why it does not trust the material").
+ * On the strip: the period's name, and its count on an amber pill. The cards carry
  * `Shadows.soft` because they are the one thing on the screen that floats over
  * something else; no stroke separates them (the No-Line rule of Amber Clarity).
  *
@@ -258,6 +261,9 @@ export function DigestCoverStack({
               />
               {index === 0 ? (
                 <GlassSurface style={styles.caption}>
+                  {/* Over the material, under the text: the contrast floor the
+                      material cannot promise on a cover it has no say over. */}
+                  <View style={styles.captionVeil} pointerEvents="none" />
                   <Text style={styles.label} numberOfLines={1}>
                     {label}
                   </Text>
@@ -366,6 +372,13 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: BorderRadius.xl,
     borderBottomRightRadius: BorderRadius.xl,
     overflow: "hidden",
+  },
+  // Absolute so it does not take part in the row's layout, and first in the tree
+  // so the label and the pill are drawn over it. The strip's `overflow: hidden`
+  // clips it to the card's bottom corners.
+  captionVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.coverTitleVeil,
   },
   label: {
     flex: 1,

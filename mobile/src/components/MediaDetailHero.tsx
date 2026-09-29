@@ -3,8 +3,9 @@
  *
  * Direction C of the task-410 benchmark ("Bandeau rétractable"), the one the
  * owner picked for task-411. The band runs under the status bar; the creator and
- * the title sit at the bottom of the picture on a strip of the `GlassSurface`
- * material; back and `…` float over its top on the same material. Under the band,
+ * the title sit at the bottom of the picture on a strip of `Colors.coverTitleVeil`
+ * over the `GlassSurface` material; back and `…` float over its top on the same
+ * material, bare. Under the band,
  * one line carries the way back to the original and everything else worth
  * knowing about the source — date, duration, language, length — which the page
  * used to split between a chip, the hero and a second line above the transcript.
@@ -30,6 +31,31 @@
  * sits under it. The glyph is decorative (2.6:1 on its tone), so the eyebrow
  * writes the type out in that case. While a picture is loading the band keeps
  * its full size as a bare tonal frame: no spinner, no placeholder.
+ *
+ * ## The title strip, and why it does not trust the material
+ *
+ * The strip is `Colors.coverTitleVeil` — the mockup's 72 % wash — painted over
+ * the `GlassSurface` material, not under it: that is the order CSS gives a
+ * `background` over a `backdrop-filter`, and the only order that bounds the
+ * contrast. `GlassSurface` was written for two surfaces over *scrolling content*;
+ * a strip over an arbitrary photograph is a third site, and the material cannot
+ * carry it alone. Liquid Glass adapts to what it covers, so over a bright busy
+ * picture it can draw close to nothing and leave dark text on dark leaves — the
+ * degradation the benchmark predicted for this direction, and the one two beta
+ * reports arrived on. With the wash on top, `textMain` never drops below 6.5:1
+ * whatever the material resolves to; `textSubtle` would only reach 2.7:1 through
+ * it, so the small-caps line switches to `textMain` while it is on the cover and
+ * keeps `textSubtle` when it is drawn on the page instead.
+ *
+ * The strip is also why the pre-measure pass is a plain `View` and never a
+ * `GlassSurface`. An `opacity` below 1 on a glass view, or on any of its
+ * ancestors, stops its material rendering at all — the constraint
+ * `AnchoredContextMenu`'s `CARD_MIN_OPACITY` is named for — and
+ * `expo-glass-effect` installs the effect on the view's first layout pass only,
+ * so a band laid out while invisible stayed an untinted empty box for the rest of
+ * the page's life. Which of the two the user got depended on whether the measure
+ * landed before that pass: the same media opened twice came up two different
+ * ways. Measuring with no material in the tree removes the race.
  *
  * ## The status bar
  *
@@ -236,10 +262,17 @@ export function MediaDetailHero({
     );
   };
 
-  const titleBlock = (
+  // `onCover` only changes the colour of the small-caps line — the wash the strip
+  // is drawn on leaves `textSubtle` at 2.7:1 over a dark picture, while on the
+  // page it is the 5.3:1 that token exists for. Nothing about it changes the
+  // measure, so a line count taken in one placement holds in the other.
+  const renderTitleBlock = (onCover: boolean) => (
     <>
       {eyebrow ? (
-        <Text style={styles.eyebrow} numberOfLines={2}>
+        <Text
+          style={[styles.eyebrow, onCover && styles.eyebrowOnCover]}
+          numberOfLines={2}
+        >
           {eyebrow}
         </Text>
       ) : null}
@@ -298,18 +331,33 @@ export function MediaDetailHero({
         </View>
 
         {titleOnCover ? (
-          // Invisible until measured: a title that turns out to need a third
-          // line is drawn under the band from its first visible frame instead
-          // of jumping there.
-          <GlassSurface
-            style={[styles.titleBand, measuredLines === null && styles.unmeasured]}
-          >
-            {titleBlock}
-          </GlassSurface>
+          measuredLines === null ? (
+            // Invisible until measured: a title that turns out to need a third
+            // line is drawn under the band from its first visible frame instead
+            // of jumping there. A plain `View`, never a `GlassSurface` — an
+            // `opacity` of 0 on a glass view is what stops its material
+            // rendering for good, and that is what made the same media come up
+            // two different ways.
+            <View
+              style={[styles.titleBand, styles.unmeasured]}
+              pointerEvents="none"
+            >
+              {renderTitleBlock(true)}
+            </View>
+          ) : (
+            <GlassSurface style={styles.titleBand}>
+              {/* Over the material, under the text: the floor the material
+                  cannot promise on a picture it has no say over. */}
+              <View style={styles.titleVeil} pointerEvents="none" />
+              {renderTitleBlock(true)}
+            </GlassSurface>
+          )
         ) : null}
       </View>
 
-      {titleOnCover ? null : <View style={styles.titleBelow}>{titleBlock}</View>}
+      {titleOnCover ? null : (
+        <View style={styles.titleBelow}>{renderTitleBlock(false)}</View>
+      )}
 
       {sourceHost || details.length > 0 ? (
         <View style={styles.metaLine}>
@@ -476,6 +524,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     overflow: "hidden",
   },
+  // The strip's contrast floor. Absolute so it does not take part in the
+  // measure, and first in the tree so the text is drawn over it.
+  titleVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.coverTitleVeil,
+  },
   unmeasured: {
     opacity: 0,
   },
@@ -483,8 +537,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  // `textSubtle`: a line to read, at 5.3:1 on the page and on the glass tint.
-  // The letter spacing is the one every small-caps label of the app uses.
+  // `textSubtle`: a line to read, at 5.3:1 on the page. The letter spacing is the
+  // one every small-caps label of the app uses.
   eyebrow: {
     fontSize: Typography.small.fontSize,
     fontWeight: Typography.label.fontWeight,
@@ -492,6 +546,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
     marginBottom: Spacing.xs,
+  },
+  // On the cover, `textSubtle` measures 2.7:1 through the wash against a dark
+  // picture, so the line takes the title's colour — 6.5:1 at worst. Size, weight
+  // and caps still set it apart from the title it sits over.
+  eyebrowOnCover: {
+    color: Colors.textMain,
   },
   // The display title the page has always had, 38pt leading included.
   title: {
