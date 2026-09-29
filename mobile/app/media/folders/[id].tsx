@@ -38,6 +38,7 @@ import { sameSourceSet } from "../../../src/lib/artifactSources";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
 import {
   buildFolderTree,
+  getDefaultFolderLabel,
   groupMediaBySubtree,
   type FolderNode,
 } from "../../../src/lib/folderTree";
@@ -191,7 +192,11 @@ export default function FolderDetailScreen() {
       const current = nodeById.get(folderId);
       setFolder(current ?? null);
       if (current) {
-        setTitle(current.name);
+        // The default folder is titled the way every other surface names it:
+        // its stored name is `Uncategorized`, which is not a label to show.
+        setTitle(
+          current.is_default === true ? getDefaultFolderLabel() : current.name,
+        );
         setChildFolders(
           [...current.children].sort((a, b) => a.name.localeCompare(b.name)),
         );

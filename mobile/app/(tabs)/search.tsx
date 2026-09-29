@@ -28,7 +28,7 @@ import { MediaService } from "../../src/services/mediaService";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
   buildFolderTree,
-  DEFAULT_FOLDER_LABEL,
+  getDefaultFolderLabel,
   DEFAULT_FOLDER_TINT,
   type FolderNode,
 } from "../../src/lib/folderTree";
@@ -465,11 +465,14 @@ export default function SearchScreen() {
   // It is excluded from `roots` by `buildFolderTree` (which sorts them), so
   // pin it in front under its display label -- same pattern as the folders
   // explorer.
+  // The label is a dependency, not a constant read inside the memo: switching
+  // the interface language then has to relabel the pinned row.
+  const defaultFolderLabel = getDefaultFolderLabel();
   const sortedFolders = useMemo(() => {
     const { roots, defaultFolder } = folderTree;
     if (!defaultFolder) return roots;
-    return [{ ...defaultFolder, name: DEFAULT_FOLDER_LABEL }, ...roots];
-  }, [folderTree]);
+    return [{ ...defaultFolder, name: defaultFolderLabel }, ...roots];
+  }, [folderTree, defaultFolderLabel]);
 
   // Matched against what is typed, not against the debounced query: the filter
   // is a pass over a list already in memory, so it has no reason to wait on the

@@ -20,7 +20,7 @@ import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 import { OrganizationService } from "../services/organizationService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
-import { DEFAULT_FOLDER_LABEL, type FolderNode } from "../lib/folderTree";
+import { getDefaultFolderLabel, type FolderNode } from "../lib/folderTree";
 import { t, tCount } from "../i18n";
 import type {
   AnchoredContextMenuProps,
@@ -229,17 +229,13 @@ export function useFolderActions(options: {
     // of them is destroyed. The subfolders *are*, so when there are any they
     // are counted — "and its 3 subfolders" is the part a user cannot see from
     // a tile that shows only a folder glyph and a name.
+    const unsorted = getDefaultFolderLabel();
     const body = [
-      t("folderActions.deleteBody", {
-        name: folder.name,
-        unsorted: DEFAULT_FOLDER_LABEL,
-      }),
+      t("folderActions.deleteBody", { name: folder.name, unsorted }),
       folder.descendantCount > 0
-        ? tCount(
-            "folderActions.deleteSubfolders",
-            folder.descendantCount,
-            { unsorted: DEFAULT_FOLDER_LABEL },
-          )
+        ? tCount("folderActions.deleteSubfolders", folder.descendantCount, {
+            unsorted,
+          })
         : null,
     ]
       .filter((part): part is string => part !== null)

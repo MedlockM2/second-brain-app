@@ -42,7 +42,7 @@ export const it: Catalog = {
   "mediaType.podcast": "PODCAST",
   "mediaType.article": "ARTICOLO",
   "mediaType.video": "VIDEO",
-  "mediaType.short": "BREVE",
+  "mediaType.short": "SHORT",
   "mediaType.imagePost": "FOTO",
   "mediaType.audio": "AUDIO",
   "mediaType.text": "TESTO",

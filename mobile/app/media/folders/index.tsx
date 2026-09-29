@@ -16,7 +16,7 @@ import { MediaService } from "../../../src/services/mediaService";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
 import {
   buildFolderTree,
-  DEFAULT_FOLDER_LABEL,
+  getDefaultFolderLabel,
   DEFAULT_FOLDER_TINT,
   type FolderNode,
 } from "../../../src/lib/folderTree";
@@ -117,10 +117,13 @@ export default function FoldersExplorerScreen() {
   }, [load]);
 
   // Default folder gets pinned to the top of the list, under its display label.
+  // That label is a dependency of the memo, not a constant read inside it:
+  // switching the interface language has to relabel the pinned tile.
+  const defaultFolderLabel = getDefaultFolderLabel();
   const listData = useMemo(() => {
     if (!defaultFolder) return roots;
-    return [{ ...defaultFolder, name: DEFAULT_FOLDER_LABEL }, ...roots];
-  }, [defaultFolder, roots]);
+    return [{ ...defaultFolder, name: defaultFolderLabel }, ...roots];
+  }, [defaultFolder, roots, defaultFolderLabel]);
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>

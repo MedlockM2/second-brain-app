@@ -5,8 +5,14 @@ import type { Catalog } from "./runtime";
  *
  * Machine-produced from `en`, which stays the reference: every key it declares
  * has to be here, and `Catalog` makes a missing one a `tsc` error rather than a
- * raw key on screen. Product names (Reader, Mix, Audio-Heavy), platform names
- * and the app's own name are not translated.
+ * raw key on screen.
+ *
+ * What is never translated: the app's own name, platform and store names
+ * (App Store, Play Store, X, YouTube), the subscription tier names rendered by
+ * `lib/subscriptionDisplay.ts` (Reader, Mix, Audio-Heavy) and the names of
+ * platform formats and of the app's own features (Short, Digest). A common word
+ * that happens to read like one of those is translated like any other:
+ * `media.tab.reader` is the reading mode of a source, not the Reader tier.
  */
 export const fr: Catalog = {
   "common.ok": "OK",
@@ -53,7 +59,7 @@ export const fr: Catalog = {
   "mediaType.podcast": "PODCAST",
   "mediaType.article": "ARTICLE",
   "mediaType.video": "VIDÉO",
-  "mediaType.short": "COURT",
+  "mediaType.short": "SHORT",
   "mediaType.imagePost": "PHOTOS",
   "mediaType.audio": "AUDIO",
   "mediaType.text": "TEXTE",
@@ -519,7 +525,7 @@ export const fr: Catalog = {
   "folderPicker.title": "Dossier",
   "folderPicker.saveA11y": "Enregistrer la sélection",
   "folderPicker.searchPlaceholder": "Rechercher",
-  "folderPicker.unsorted": "Non trié",
+  "folderPicker.unsorted": "Non classé",
   "folderPicker.myFolders": "Mes dossiers",
   "folderPicker.createA11y": "Créer un dossier",
   "folderPicker.namePlaceholder": "Nom du dossier",
@@ -639,13 +645,13 @@ export const fr: Catalog = {
   "paywall.unexpectedError":
     "Une erreur inattendue est survenue. Veuillez réessayer.",
   "purchaseError.storeProblem":
-    "La boutique n'a pas pu finaliser l'achat. Veuillez réessayer dans un instant.",
+    "Le store n'a pas pu finaliser l'achat. Veuillez réessayer dans un instant.",
   "purchaseError.notAllowed":
     "Les achats sont désactivés sur cet appareil. Vérifiez les restrictions de votre appareil, puis réessayez.",
   "purchaseError.paymentInvalid":
-    "Votre paiement n'a pas pu être prélevé. Vérifiez le moyen de paiement de votre compte boutique, puis réessayez.",
+    "Votre paiement n'a pas pu être prélevé. Vérifiez le moyen de paiement de votre compte store, puis réessayez.",
   "purchaseError.alreadyOwned":
-    "Vous avez déjà cet abonnement. Il est actif sur le compte boutique qui l'a acheté.",
+    "Vous avez déjà cet abonnement. Il est actif sur le compte store qui l'a acheté.",
   "purchaseError.failed":
     "L'achat n'a pas pu aboutir. Rien ne vous a été facturé. Veuillez réessayer.",
   "paywall.renewalTerms":
@@ -781,7 +787,7 @@ export const fr: Catalog = {
   "mediaTitle.label.instagramVideo": "Vidéo Instagram",
   "mediaTitle.label.tiktokVideo": "Vidéo TikTok",
   "mediaTitle.label.instagramPost": "Publication Instagram",
-  "mediaTitle.label.xPost": "Publication X",
+  "mediaTitle.label.xPost": "Post X",
   "mediaTitle.label.audioNote": "Note audio",
   "mediaTitle.label.voiceNote": "Message vocal",
   "mediaTitle.label.sharedNote": "Note partagée",

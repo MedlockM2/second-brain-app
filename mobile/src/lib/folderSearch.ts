@@ -1,4 +1,4 @@
-import { DEFAULT_FOLDER_LABEL, type FolderNode } from "./folderTree";
+import { getDefaultFolderLabel, type FolderNode } from "./folderTree";
 
 /**
  * Fold a name down to what a search should compare: no case, no diacritics.
@@ -25,9 +25,10 @@ export function normalizeForSearch(value: string): string {
  * a folder holds are out of scope.
  *
  * Callers pass the flat `nodeById` values of `buildFolderTree`, so a nested
- * folder surfaces exactly like a root one. The default folder is matched on
- * the label the user has actually seen ("Unsorted"), never on its stored
- * `Uncategorized` name, and is returned carrying that label.
+ * folder surfaces exactly like a root one. The default folder is matched on the
+ * label the user has actually seen — the translated `getDefaultFolderLabel()`,
+ * never its stored `Uncategorized` name — and is returned carrying that label,
+ * so a French user finds it by typing "non classé".
  */
 export function filterFoldersByName(
   folders: Iterable<FolderNode>,
@@ -41,11 +42,11 @@ export function filterFoldersByName(
   if (tokens.length === 0) return [];
 
   const matches: FolderNode[] = [];
+  // Read once per call, not per folder: the label is the same for all of them.
+  const defaultLabel = getDefaultFolderLabel();
 
   for (const folder of folders) {
-    const displayName = folder.is_default
-      ? DEFAULT_FOLDER_LABEL
-      : folder.name;
+    const displayName = folder.is_default ? defaultLabel : folder.name;
     const haystack = normalizeForSearch(displayName);
 
     if (tokens.every((token) => haystack.includes(token))) {

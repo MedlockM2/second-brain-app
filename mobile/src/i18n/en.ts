@@ -68,6 +68,9 @@ export const en = {
   "mediaType.podcast": "PODCAST",
   "mediaType.article": "ARTICLE",
   "mediaType.video": "VIDEO",
+  // The name of a platform format, not an adjective about duration: every
+  // locale keeps "SHORT" (ja, zh and hi in their own script). "COURT", "KURZ"
+  // or "BREVE" would be describing a length nobody calls a Short.
   "mediaType.short": "SHORT",
   // An Instagram photo post or carousel: the badge names what the source is — a
   // set of pictures — and never how it was read (task-385).
@@ -556,6 +559,9 @@ export const en = {
   // --- Bottom tab bar ---
   "tabs.home": "Home",
   "tabs.search": "Search",
+  // The name of the feature, kept as such by every locale: translated by the
+  // language's word for "summary" it collides with `artifacts.type.summaryShort`,
+  // and two different things in the app end up carrying one name.
   "tabs.digest": "Digest",
   // --- Home tab ---
   "home.loading": "Loading your inbox...",

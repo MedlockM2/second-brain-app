@@ -1,11 +1,24 @@
 import { Colors } from "../constants/theme";
+import { t } from "../i18n";
 import type { Folder } from "../types/organization";
 
 /**
  * Label shown for the backend default folder, whose stored name is
  * `Uncategorized`. Only the display differs; the backend name is untouched.
+ *
+ * One source of truth, and a translated one: `folderPicker.unsorted`, which the
+ * folder picker already renders. A hard-coded "Unsorted" here was reaching the
+ * delete confirmation and the folder search of every locale, so a French user
+ * read "passent dans Unsorted" and typing "non classé" matched nothing.
+ *
+ * A function rather than a constant because the catalogue is installed at
+ * runtime: read once at module load it would freeze the fallback locale. `t`
+ * lives outside React (see `i18n/runtime.ts`), so this module stays a plain one
+ * — every other `lib/` copy module calls it the same way.
  */
-export const DEFAULT_FOLDER_LABEL = "Unsorted";
+export function getDefaultFolderLabel(): string {
+  return t("folderPicker.unsorted");
+}
 
 /**
  * Tint of the default folder wherever it is listed, so it reads as a system
@@ -31,8 +44,9 @@ export interface FolderNode extends Folder {
  * Build a navigable tree of user folders from the flat folder list returned
  * by the backend.
  *
- * - The default folder (stored as `Uncategorized`, shown as "Unsorted") is kept
- *   so unsorted media stay reachable; callers decide how to surface it.
+ * - The default folder (stored as `Uncategorized`, shown under
+ *   `getDefaultFolderLabel()`) is kept so unsorted media stay reachable;
+ *   callers decide how to surface it.
  * - `directCountById` lets the caller seed the per-folder media counts that
  *   were computed client-side (the folder list endpoint does not return them).
  */
