@@ -3,9 +3,10 @@ id: TASK-416
 title: >-
   Combler la dérive .env.example (6 variables non déclarées, guard CI rouge sur
   main)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 09:55'
+updated_date: '2026-09-29 10:01'
 labels:
   - backend
   - cleanup
@@ -42,8 +43,19 @@ Documentation utile : le docstring de `scripts/check_env_example_complete.py` ex
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Pour chacune des 6 variables, une conclusion tracée (dans la description finale de la tâche) : conservée + documentée dans .env.example, ou lecture supprimée du code parce que morte/inutile — avec la justification tirée de git blame/git log -S
-- [ ] #2 python scripts/check_env_example_complete.py termine en exit 0 sur le worktree de la tâche
-- [ ] #3 Chaque variable conservée apparaît dans .env.example sous la forme d'une ligne commentée dans la section pertinente, au format déjà utilisé par les entrées voisines (ex. # COVER_FETCH_TIMEOUT_SECONDS=10)
-- [ ] #4 ruff et mypy restent propres sur media_summarizer/ après tout retrait de code mort éventuel
+- [x] #1 Pour chacune des 6 variables, une conclusion tracée (dans la description finale de la tâche) : conservée + documentée dans .env.example, ou lecture supprimée du code parce que morte/inutile — avec la justification tirée de git blame/git log -S
+- [x] #2 python scripts/check_env_example_complete.py termine en exit 0 sur le worktree de la tâche
+- [x] #3 Chaque variable conservée apparaît dans .env.example sous la forme d'une ligne commentée dans la section pertinente, au format déjà utilisé par les entrées voisines (ex. # COVER_FETCH_TIMEOUT_SECONDS=10)
+- [x] #4 ruff et mypy restent propres sur media_summarizer/ après tout retrait de code mort éventuel
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Conclusions par variable (7, pas 6 : le titre sous-compte). Toutes CONSERVÉES : code actif, lu via os.environ.get avec défaut fonctionnel. Toutes introduites le 2026-09-10, après le branchement du guard en CI (2026-08-13) : elles sont passées parce que main n'était pas protégée à ce moment-là.
+- ARTICLE_FETCH_TIMEOUT_SECONDS : ad2795d8 (task-392), timeout de fetch d'article sous la limite gateway de 30 s. Ajoutée dans la section 8 SOURCES/Article.
+- ARTIFACT_INTERNAL_STALL_SECONDS : 44ca2a5 (task-390), délai avant qu'un artefact 'generating' passe en stalled. Ajoutée dans la section 15 WORKER TUNING.
+- INSTAGRAM_IMAGE_PARSE_MAX_IMAGES / _PARSE_BUDGET_SECONDS / _FETCH_TIMEOUT_SECONDS / _MAX_BYTES : bff7920d (task-384), bornes du parsing d'images Instagram. Ajoutées dans la section 8 SOURCES/Instagram.
+- MEDIA_IDEMPOTENCE_RECONCILE_APPLY : e644c6e (task-390), flag d'écriture du script de réconciliation (dry-run par défaut). Ajoutée dans la section 5 DATABASE.
+Guard check_env_example_complete.py : exit 0 (247 variables). ruff et mypy propres. Commit 4abfb60, merge 421dc75.
+<!-- SECTION:NOTES:END -->
