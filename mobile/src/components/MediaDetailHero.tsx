@@ -23,8 +23,8 @@
  * current phone — and 16:9 on the shorter 16:9-class screens (iPhone SE, and the
  * 320pt width in Display Zoom), where a 4:3 band would take close to half the
  * screen. On a 16:9 band the title no longer fits on the picture and moves under
- * it, onto the page background; it does the same on a 4:3 band once it needs
- * more than two lines, which is what large Dynamic Type sizes do to it.
+ * it, onto the page background. On a 4:3 band it always stays on the picture,
+ * whatever its length: past two lines it is cut with an ellipsis, never moved.
  *
  * With no picture — none in the contract, or one that failed to load — the band
  * shrinks to 96pt of `surfaceContainerLow` carrying the type glyph, and the title
@@ -47,15 +47,18 @@
  * it, so the small-caps line switches to `textMain` while it is on the cover and
  * keeps `textSubtle` when it is drawn on the page instead.
  *
- * The strip is also why the pre-measure pass is a plain `View` and never a
- * `GlassSurface`. An `opacity` below 1 on a glass view, or on any of its
- * ancestors, stops its material rendering at all — the constraint
+ * The strip never carries an `opacity` below 1, and there is nothing left in this
+ * file that would want to give it one. An `opacity` under 1 on a glass view, or on
+ * any of its ancestors, stops its material rendering at all — the constraint
  * `AnchoredContextMenu`'s `CARD_MIN_OPACITY` is named for — and
- * `expo-glass-effect` installs the effect on the view's first layout pass only,
- * so a band laid out while invisible stayed an untinted empty box for the rest of
- * the page's life. Which of the two the user got depended on whether the measure
- * landed before that pass: the same media opened twice came up two different
- * ways. Measuring with no material in the tree removes the race.
+ * `expo-glass-effect` installs the effect on the view's first layout pass only, so
+ * a band laid out while invisible stayed an untinted empty box for the rest of the
+ * page's life. That is what made the same media come up two different ways: the
+ * strip used to be hidden at `opacity: 0` until the title's line count came back,
+ * and which rendering the user got depended on whether that measure landed before
+ * the first layout pass. Truncating instead of relocating removed the measure, and
+ * with it the hidden pass and the race — the placement is known from the band's
+ * shape before the first frame.
  *
  * ## The status bar
  *
@@ -69,15 +72,13 @@
  * it.
  */
 
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
-  type NativeSyntheticEvent,
   type StyleProp,
-  type TextLayoutEventData,
 } from "react-native";
 import { Image, type ImageStyle } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -136,10 +137,35 @@ const FALLBACK_BAND_HEIGHT = Spacing.xxl * 2;
 const FALLBACK_GLYPH_SIZE = 32;
 
 /**
- * Past two lines the title covers most of the picture it sits on: it moves under
- * the band instead (task-410 §12, large text sizes).
+ * Past two lines the title covers most of the picture it sits on, so it is cut
+ * there with an ellipsis rather than moved off the picture.
+ *
+ * task-410 §12 had it relocate under the band instead, and a beta tester read the
+ * two placements as a glitch ("et parfois le texte apparait en dessous de
+ * l'image ???"): the rule keyed on a line count nothing on screen shows, so the
+ * same page looked like two. The owner chose truncation on 2026-09-29 — one
+ * placement for every title.
+ *
+ * The tail of a long title is then not readable anywhere on the page: the
+ * collapsed `MediaReaderBar` cuts it to a single line too. That is the accepted
+ * cost of one placement, and it is why the `Text` carries an explicit
+ * `accessibilityLabel` — sighted readers lose the tail, a screen reader does not.
  */
 const MAX_TITLE_LINES_ON_COVER = 2;
+
+/**
+ * 28pt, where `Typography.display` is 32: the page's own title size, four points
+ * under the display style it otherwise borrows weight and letter spacing from.
+ *
+ * Not a change to `Typography.display` itself — `StartupErrorScreen` is the other
+ * caller and has nothing to do with this band. Smaller is worth the most here
+ * precisely because the title is clamped: it is roughly a word more per line
+ * before the ellipsis lands, on the placement that cannot spill onto a third.
+ */
+const TITLE_FONT_SIZE = 28;
+
+/** The 1.19 leading ratio of the 32/38 pair this size replaces. */
+const TITLE_LINE_HEIGHT = 33;
 
 /** The opacity the scrim starts from under the status bar, per the mockup. */
 const SCRIM_MAX_OPACITY = 0.5;
@@ -237,35 +263,21 @@ export function MediaDetailHero({
   onBack,
   onActionsPress,
 }: MediaDetailHeroProps): React.JSX.Element {
-  // How many lines the title takes, for the title it was measured on: a rename
-  // has to be measured again before it is trusted.
-  const [titleFit, setTitleFit] = useState<{
-    title: string;
-    lines: number;
-  } | null>(null);
-  const measuredLines = titleFit?.title === title ? titleFit.lines : null;
-  const titleOnCover =
-    layout.shape === "tall" &&
-    cover !== null &&
-    (measuredLines === null || measuredLines <= MAX_TITLE_LINES_ON_COVER);
+  // Known before the first frame, from the band's shape and whether there is a
+  // picture at all — never from how long the title turns out to be. So there is
+  // no measure, nothing to wait for, and no pass to hide: the strip is drawn on
+  // the first frame in its final placement.
+  const titleOnCover = layout.shape === "tall" && cover !== null;
 
-  // Both placements have the same width, so a measure taken in one holds in the
-  // other and the title cannot bounce between them.
-  const handleTitleLayout = (
-    event: NativeSyntheticEvent<TextLayoutEventData>,
-  ) => {
-    const lines = event.nativeEvent.lines.length;
-    setTitleFit((previous) =>
-      previous?.title === title && previous.lines === lines
-        ? previous
-        : { title, lines },
-    );
-  };
-
-  // `onCover` only changes the colour of the small-caps line — the wash the strip
-  // is drawn on leaves `textSubtle` at 2.7:1 over a dark picture, while on the
-  // page it is the 5.3:1 that token exists for. Nothing about it changes the
-  // measure, so a line count taken in one placement holds in the other.
+  // `onCover` carries the two things that differ between the placements. The
+  // colour of the small-caps line: the wash the strip is drawn on leaves
+  // `textSubtle` at 2.7:1 over a dark picture, while on the page it is the 5.3:1
+  // that token exists for. And the clamp: on the picture the title is cut at
+  // `MAX_TITLE_LINES_ON_COVER` so it never swallows the cover, whereas on the page
+  // it has the room to run as long as it needs and is given no limit.
+  //
+  // `accessibilityLabel` restates the title because of that clamp — the tail is
+  // cut for the eye, never for a screen reader.
   const renderTitleBlock = (onCover: boolean) => (
     <>
       {eyebrow ? (
@@ -279,7 +291,12 @@ export function MediaDetailHero({
       <Text
         style={styles.title}
         accessibilityRole="header"
-        onTextLayout={handleTitleLayout}
+        accessibilityLabel={title}
+        numberOfLines={onCover ? MAX_TITLE_LINES_ON_COVER : undefined}
+        // `tail` is React Native's default, written out because it is the only
+        // mode that behaves correctly on Android above one line (task-231 §11.5):
+        // leaving it implicit invites someone to try `middle` or `head` here.
+        ellipsizeMode="tail"
       >
         {title}
       </Text>
@@ -331,27 +348,12 @@ export function MediaDetailHero({
         </View>
 
         {titleOnCover ? (
-          measuredLines === null ? (
-            // Invisible until measured: a title that turns out to need a third
-            // line is drawn under the band from its first visible frame instead
-            // of jumping there. A plain `View`, never a `GlassSurface` — an
-            // `opacity` of 0 on a glass view is what stops its material
-            // rendering for good, and that is what made the same media come up
-            // two different ways.
-            <View
-              style={[styles.titleBand, styles.unmeasured]}
-              pointerEvents="none"
-            >
-              {renderTitleBlock(true)}
-            </View>
-          ) : (
-            <GlassSurface style={styles.titleBand}>
-              {/* Over the material, under the text: the floor the material
-                  cannot promise on a picture it has no say over. */}
-              <View style={styles.titleVeil} pointerEvents="none" />
-              {renderTitleBlock(true)}
-            </GlassSurface>
-          )
+          <GlassSurface style={styles.titleBand}>
+            {/* Over the material, under the text: the floor the material
+                cannot promise on a picture it has no say over. */}
+            <View style={styles.titleVeil} pointerEvents="none" />
+            {renderTitleBlock(true)}
+          </GlassSurface>
         ) : null}
       </View>
 
@@ -524,14 +526,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     overflow: "hidden",
   },
-  // The strip's contrast floor. Absolute so it does not take part in the
-  // measure, and first in the tree so the text is drawn over it.
+  // The strip's contrast floor. Absolute so it does not take part in the strip's
+  // layout, and first in the tree so the text is drawn over it.
   titleVeil: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: Colors.coverTitleVeil,
-  },
-  unmeasured: {
-    opacity: 0,
   },
   titleBelow: {
     paddingHorizontal: Spacing.lg,
@@ -553,12 +552,14 @@ const styles = StyleSheet.create({
   eyebrowOnCover: {
     color: Colors.textMain,
   },
-  // The display title the page has always had, 38pt leading included.
+  // The display title, at `TITLE_FONT_SIZE` rather than the 32pt of
+  // `Typography.display`: the weight and the letter spacing of the display style,
+  // four points smaller. Leading follows at the 1.19 ratio the 32/38 pair had.
   title: {
-    fontSize: Typography.display.fontSize,
+    fontSize: TITLE_FONT_SIZE,
     fontWeight: Typography.display.fontWeight,
     letterSpacing: Typography.display.letterSpacing,
-    lineHeight: 38,
+    lineHeight: TITLE_LINE_HEIGHT,
     color: Colors.textMain,
   },
   // Where the lifecycle header puts its arrow, so the button does not move when

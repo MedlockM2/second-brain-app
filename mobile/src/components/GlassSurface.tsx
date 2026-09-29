@@ -20,7 +20,9 @@
  *   installs the effect on the view's first layout pass only — so a surface that
  *   was ever laid out invisible stays an untinted empty box. Fade a wrapper, not
  *   this (`AnchoredContextMenu`'s `CARD_MIN_OPACITY`), or keep the surface out of
- *   the tree until it is meant to be seen (`MediaDetailHero`'s pre-measure pass).
+ *   the tree until it is meant to be seen. `MediaDetailHero`'s title band is the
+ *   site that paid for this one: it was hidden at `opacity: 0` while its title was
+ *   being measured, and came up an untinted box whenever the measure lost the race.
  *
  * Three branches, and none of them is a degradation of the one above — each is
  * the best material the platform can actually draw:
