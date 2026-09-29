@@ -3,8 +3,9 @@
  *
  * Direction C of the task-410 benchmark ("Bandeau rétractable"), the one the
  * owner picked for task-411. The band runs under the status bar; the creator and
- * the title sit at the bottom of the picture on a strip of the `GlassSurface`
- * material; back and `…` float over its top on the same material. Under the band,
+ * the title sit at the bottom of the picture on a strip of `Colors.coverTitleVeil`
+ * over the `GlassSurface` material; back and `…` float over its top on the same
+ * material, bare. Under the band,
  * one line carries the way back to the original and everything else worth
  * knowing about the source — date, duration, language, length — which the page
  * used to split between a chip, the hero and a second line above the transcript.
@@ -22,14 +23,42 @@
  * current phone — and 16:9 on the shorter 16:9-class screens (iPhone SE, and the
  * 320pt width in Display Zoom), where a 4:3 band would take close to half the
  * screen. On a 16:9 band the title no longer fits on the picture and moves under
- * it, onto the page background; it does the same on a 4:3 band once it needs
- * more than two lines, which is what large Dynamic Type sizes do to it.
+ * it, onto the page background. On a 4:3 band it always stays on the picture,
+ * whatever its length: past two lines it is cut with an ellipsis, never moved.
  *
  * With no picture — none in the contract, or one that failed to load — the band
  * shrinks to 96pt of `surfaceContainerLow` carrying the type glyph, and the title
  * sits under it. The glyph is decorative (2.6:1 on its tone), so the eyebrow
  * writes the type out in that case. While a picture is loading the band keeps
  * its full size as a bare tonal frame: no spinner, no placeholder.
+ *
+ * ## The title strip, and why it does not trust the material
+ *
+ * The strip is `Colors.coverTitleVeil` — the mockup's 72 % wash — painted over
+ * the `GlassSurface` material, not under it: that is the order CSS gives a
+ * `background` over a `backdrop-filter`, and the only order that bounds the
+ * contrast. `GlassSurface` was written for two surfaces over *scrolling content*;
+ * a strip over an arbitrary photograph is a third site, and the material cannot
+ * carry it alone. Liquid Glass adapts to what it covers, so over a bright busy
+ * picture it can draw close to nothing and leave dark text on dark leaves — the
+ * degradation the benchmark predicted for this direction, and the one two beta
+ * reports arrived on. With the wash on top, `textMain` never drops below 6.5:1
+ * whatever the material resolves to; `textSubtle` would only reach 2.7:1 through
+ * it, so the small-caps line switches to `textMain` while it is on the cover and
+ * keeps `textSubtle` when it is drawn on the page instead.
+ *
+ * The strip never carries an `opacity` below 1, and there is nothing left in this
+ * file that would want to give it one. An `opacity` under 1 on a glass view, or on
+ * any of its ancestors, stops its material rendering at all — the constraint
+ * `AnchoredContextMenu`'s `CARD_MIN_OPACITY` is named for — and
+ * `expo-glass-effect` installs the effect on the view's first layout pass only, so
+ * a band laid out while invisible stayed an untinted empty box for the rest of the
+ * page's life. That is what made the same media come up two different ways: the
+ * strip used to be hidden at `opacity: 0` until the title's line count came back,
+ * and which rendering the user got depended on whether that measure landed before
+ * the first layout pass. Truncating instead of relocating removed the measure, and
+ * with it the hidden pass and the race — the placement is known from the band's
+ * shape before the first frame.
  *
  * ## The status bar
  *
@@ -43,15 +72,13 @@
  * it.
  */
 
-import React, { useRef, useState } from "react";
+import React, { useRef } from "react";
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
-  type NativeSyntheticEvent,
   type StyleProp,
-  type TextLayoutEventData,
 } from "react-native";
 import { Image, type ImageStyle } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -110,10 +137,35 @@ const FALLBACK_BAND_HEIGHT = Spacing.xxl * 2;
 const FALLBACK_GLYPH_SIZE = 32;
 
 /**
- * Past two lines the title covers most of the picture it sits on: it moves under
- * the band instead (task-410 §12, large text sizes).
+ * Past two lines the title covers most of the picture it sits on, so it is cut
+ * there with an ellipsis rather than moved off the picture.
+ *
+ * task-410 §12 had it relocate under the band instead, and a beta tester read the
+ * two placements as a glitch ("et parfois le texte apparait en dessous de
+ * l'image ???"): the rule keyed on a line count nothing on screen shows, so the
+ * same page looked like two. The owner chose truncation on 2026-09-29 — one
+ * placement for every title.
+ *
+ * The tail of a long title is then not readable anywhere on the page: the
+ * collapsed `MediaReaderBar` cuts it to a single line too. That is the accepted
+ * cost of one placement, and it is why the `Text` carries an explicit
+ * `accessibilityLabel` — sighted readers lose the tail, a screen reader does not.
  */
 const MAX_TITLE_LINES_ON_COVER = 2;
+
+/**
+ * 28pt, where `Typography.display` is 32: the page's own title size, four points
+ * under the display style it otherwise borrows weight and letter spacing from.
+ *
+ * Not a change to `Typography.display` itself — `StartupErrorScreen` is the other
+ * caller and has nothing to do with this band. Smaller is worth the most here
+ * precisely because the title is clamped: it is roughly a word more per line
+ * before the ellipsis lands, on the placement that cannot spill onto a third.
+ */
+const TITLE_FONT_SIZE = 28;
+
+/** The 1.19 leading ratio of the 32/38 pair this size replaces. */
+const TITLE_LINE_HEIGHT = 33;
 
 /** The opacity the scrim starts from under the status bar, per the mockup. */
 const SCRIM_MAX_OPACITY = 0.5;
@@ -211,42 +263,40 @@ export function MediaDetailHero({
   onBack,
   onActionsPress,
 }: MediaDetailHeroProps): React.JSX.Element {
-  // How many lines the title takes, for the title it was measured on: a rename
-  // has to be measured again before it is trusted.
-  const [titleFit, setTitleFit] = useState<{
-    title: string;
-    lines: number;
-  } | null>(null);
-  const measuredLines = titleFit?.title === title ? titleFit.lines : null;
-  const titleOnCover =
-    layout.shape === "tall" &&
-    cover !== null &&
-    (measuredLines === null || measuredLines <= MAX_TITLE_LINES_ON_COVER);
+  // Known before the first frame, from the band's shape and whether there is a
+  // picture at all — never from how long the title turns out to be. So there is
+  // no measure, nothing to wait for, and no pass to hide: the strip is drawn on
+  // the first frame in its final placement.
+  const titleOnCover = layout.shape === "tall" && cover !== null;
 
-  // Both placements have the same width, so a measure taken in one holds in the
-  // other and the title cannot bounce between them.
-  const handleTitleLayout = (
-    event: NativeSyntheticEvent<TextLayoutEventData>,
-  ) => {
-    const lines = event.nativeEvent.lines.length;
-    setTitleFit((previous) =>
-      previous?.title === title && previous.lines === lines
-        ? previous
-        : { title, lines },
-    );
-  };
-
-  const titleBlock = (
+  // `onCover` carries the two things that differ between the placements. The
+  // colour of the small-caps line: the wash the strip is drawn on leaves
+  // `textSubtle` at 2.7:1 over a dark picture, while on the page it is the 5.3:1
+  // that token exists for. And the clamp: on the picture the title is cut at
+  // `MAX_TITLE_LINES_ON_COVER` so it never swallows the cover, whereas on the page
+  // it has the room to run as long as it needs and is given no limit.
+  //
+  // `accessibilityLabel` restates the title because of that clamp — the tail is
+  // cut for the eye, never for a screen reader.
+  const renderTitleBlock = (onCover: boolean) => (
     <>
       {eyebrow ? (
-        <Text style={styles.eyebrow} numberOfLines={2}>
+        <Text
+          style={[styles.eyebrow, onCover && styles.eyebrowOnCover]}
+          numberOfLines={2}
+        >
           {eyebrow}
         </Text>
       ) : null}
       <Text
         style={styles.title}
         accessibilityRole="header"
-        onTextLayout={handleTitleLayout}
+        accessibilityLabel={title}
+        numberOfLines={onCover ? MAX_TITLE_LINES_ON_COVER : undefined}
+        // `tail` is React Native's default, written out because it is the only
+        // mode that behaves correctly on Android above one line (task-231 §11.5):
+        // leaving it implicit invites someone to try `middle` or `head` here.
+        ellipsizeMode="tail"
       >
         {title}
       </Text>
@@ -298,18 +348,18 @@ export function MediaDetailHero({
         </View>
 
         {titleOnCover ? (
-          // Invisible until measured: a title that turns out to need a third
-          // line is drawn under the band from its first visible frame instead
-          // of jumping there.
-          <GlassSurface
-            style={[styles.titleBand, measuredLines === null && styles.unmeasured]}
-          >
-            {titleBlock}
+          <GlassSurface style={styles.titleBand}>
+            {/* Over the material, under the text: the floor the material
+                cannot promise on a picture it has no say over. */}
+            <View style={styles.titleVeil} pointerEvents="none" />
+            {renderTitleBlock(true)}
           </GlassSurface>
         ) : null}
       </View>
 
-      {titleOnCover ? null : <View style={styles.titleBelow}>{titleBlock}</View>}
+      {titleOnCover ? null : (
+        <View style={styles.titleBelow}>{renderTitleBlock(false)}</View>
+      )}
 
       {sourceHost || details.length > 0 ? (
         <View style={styles.metaLine}>
@@ -476,15 +526,18 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     overflow: "hidden",
   },
-  unmeasured: {
-    opacity: 0,
+  // The strip's contrast floor. Absolute so it does not take part in the strip's
+  // layout, and first in the tree so the text is drawn over it.
+  titleVeil: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: Colors.coverTitleVeil,
   },
   titleBelow: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  // `textSubtle`: a line to read, at 5.3:1 on the page and on the glass tint.
-  // The letter spacing is the one every small-caps label of the app uses.
+  // `textSubtle`: a line to read, at 5.3:1 on the page. The letter spacing is the
+  // one every small-caps label of the app uses.
   eyebrow: {
     fontSize: Typography.small.fontSize,
     fontWeight: Typography.label.fontWeight,
@@ -493,12 +546,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: Spacing.xs,
   },
-  // The display title the page has always had, 38pt leading included.
+  // On the cover, `textSubtle` measures 2.7:1 through the wash against a dark
+  // picture, so the line takes the title's colour — 6.5:1 at worst. Size, weight
+  // and caps still set it apart from the title it sits over.
+  eyebrowOnCover: {
+    color: Colors.textMain,
+  },
+  // The display title, at `TITLE_FONT_SIZE` rather than the 32pt of
+  // `Typography.display`: the weight and the letter spacing of the display style,
+  // four points smaller. Leading follows at the 1.19 ratio the 32/38 pair had.
   title: {
-    fontSize: Typography.display.fontSize,
+    fontSize: TITLE_FONT_SIZE,
     fontWeight: Typography.display.fontWeight,
     letterSpacing: Typography.display.letterSpacing,
-    lineHeight: 38,
+    lineHeight: TITLE_LINE_HEIGHT,
     color: Colors.textMain,
   },
   // Where the lifecycle header puts its arrow, so the button does not move when

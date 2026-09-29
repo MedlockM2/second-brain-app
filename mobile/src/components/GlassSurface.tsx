@@ -1,7 +1,28 @@
 /**
- * The translucent backdrop of the two surfaces in the app that ask for one: the
- * floating search pill of the library screen and the card of the media context
- * menu.
+ * The translucent backdrop of the surfaces in the app that ask for one: the
+ * floating search pill of the library screen, the card of the media context menu,
+ * the round back and `…` buttons over a media's cover, and the two strips of text
+ * laid over a cover (`MediaDetailHero`'s title band, `DigestCoverStack`'s
+ * caption).
+ *
+ * Two things this component does not give its caller, and both have already cost
+ * a bug:
+ *
+ * - **No contrast.** Every branch below is translucent, and the iOS 26 one adapts
+ *   to what it covers, so none of them guarantees any opacity at all. Over
+ *   scrolling content — the pill and the menu card, what this was written for —
+ *   that is fine, because the page under it is a known light tone. Over a
+ *   photograph it is not: the title band came up as dark text on bare leaves
+ *   until it painted `Colors.coverTitleVeil` over the material itself. A caller
+ *   that lays text on a picture owns its own contrast floor.
+ * - **No tolerance for alpha.** An `opacity` below 1 on the surface, or on any of
+ *   its ancestors, stops the material rendering at all, and `expo-glass-effect`
+ *   installs the effect on the view's first layout pass only — so a surface that
+ *   was ever laid out invisible stays an untinted empty box. Fade a wrapper, not
+ *   this (`AnchoredContextMenu`'s `CARD_MIN_OPACITY`), or keep the surface out of
+ *   the tree until it is meant to be seen. `MediaDetailHero`'s title band is the
+ *   site that paid for this one: it was hidden at `opacity: 0` while its title was
+ *   being measured, and came up an untinted box whenever the measure lost the race.
  *
  * Three branches, and none of them is a degradation of the one above — each is
  * the best material the platform can actually draw:
