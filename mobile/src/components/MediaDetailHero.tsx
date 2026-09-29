@@ -50,10 +50,9 @@
  * The strip never carries an `opacity` below 1, and there is nothing left in this
  * file that would want to give it one. An `opacity` under 1 on a glass view, or on
  * any of its ancestors, stops its material rendering at all — the constraint
- * `AnchoredContextMenu`'s `CARD_MIN_OPACITY` is named for — and
- * `expo-glass-effect` installs the effect on the view's first layout pass only, so
- * a band laid out while invisible stayed an untinted empty box for the rest of the
- * page's life. That is what made the same media come up two different ways: the
+ * `GlassSurface` states for every one of its callers — and `expo-glass-effect`
+ * installs the effect on the view's first layout pass only, so a band laid out
+ * while invisible stayed an untinted empty box for the rest of the page's life. That is what made the same media come up two different ways: the
  * strip used to be hidden at `opacity: 0` until the title's line count came back,
  * and which rendering the user got depended on whether that measure landed before
  * the first layout pass. Truncating instead of relocating removed the measure, and

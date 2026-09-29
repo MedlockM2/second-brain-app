@@ -18,11 +18,16 @@
  * - **No tolerance for alpha.** An `opacity` below 1 on the surface, or on any of
  *   its ancestors, stops the material rendering at all, and `expo-glass-effect`
  *   installs the effect on the view's first layout pass only — so a surface that
- *   was ever laid out invisible stays an untinted empty box. Fade a wrapper, not
- *   this (`AnchoredContextMenu`'s `CARD_MIN_OPACITY`), or keep the surface out of
- *   the tree until it is meant to be seen. `MediaDetailHero`'s title band is the
- *   site that paid for this one: it was hidden at `opacity: 0` while its title was
- *   being measured, and came up an untinted box whenever the measure lost the race.
+ *   was ever laid out invisible stays an untinted empty box. There is therefore no
+ *   alpha a surface can be faded through, and no wrapper that can be faded around
+ *   one: a caller keeps the surface out of the tree until it is meant to be seen,
+ *   and fully opaque for as long as it is in it. Whatever appearance it wants then
+ *   goes on a transform, which leaves the effect alone, or on the children drawn
+ *   over the material, which the constraint does not reach — `AnchoredContextMenu`
+ *   opens its menu card on both, and is the shape to copy. `MediaDetailHero`'s
+ *   title band is the site that paid for this one: it was hidden at `opacity: 0`
+ *   while its title was being measured, and came up an untinted box whenever the
+ *   measure lost the race.
  *
  * Three branches, and none of them is a degradation of the one above — each is
  * the best material the platform can actually draw:

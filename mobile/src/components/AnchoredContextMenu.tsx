@@ -26,6 +26,22 @@
  * needs no gesture library either: it is one scale-and-fade with no continuous
  * gesture, which the `Animated` API of React Native core does.
  *
+ * That scale-and-fade is arranged around one constraint of the card's material,
+ * and the arrangement is the point. `expo-glass-effect` draws nothing at all under
+ * an `opacity` below 1 — on the glass view or on any view above it — and installs
+ * its effect on the first layout pass only, so a card ever laid out faded comes up
+ * an untinted box and stays one for as long as it is on screen. That is the defect
+ * `MediaDetailHero`'s title band was reported for on 2026-09-29, on the same
+ * material. So nothing above the material is given an opacity here, not even a
+ * value picked for being high enough to survive: the card is mounted for exactly
+ * the span of the animation — nothing renders while `visible` is false, and the
+ * caller holds it true until the exit has played — and it is fully opaque on every
+ * frame of it. What moves is the scale, which a transform carries without touching
+ * the effect, and the fade sits on the rows drawn *over* the material, inside the
+ * glass view where the constraint does not reach (the disabled rows already dim
+ * themselves there). Nothing is left tuned to an alpha that the next version of the
+ * library, or another screen density, could stop honouring.
+ *
  * The orchestration — which thing is targeted, the destructive confirmation, the
  * network calls — belongs to `useMediaActions` / `useFolderActions`; this file
  * is the surface only.
@@ -141,20 +157,6 @@ const SCREEN_EDGE = Spacing.md;
 /** How much the pressed view grows as it lifts. Enough to read, not a jump. */
 const PREVIEW_SCALE = 1.04;
 
-/**
- * Where the card's fade starts, and the reason it is not zero.
- *
- * `expo-glass-effect` documents that an `opacity` of `0` on the glass view **or
- * on any of its ancestors** stops the material rendering at all — and
- * `cardWrapper`, whose opacity the entry animation drives, is exactly such an
- * ancestor. A literal `opacity: progress` therefore produced a menu card that
- * came up as a plain untinted view: a failure mode that reads as a styling
- * mistake rather than as a documented constraint, which is why it is named here.
- * Starting the fade a hair above zero keeps the material in the render tree for
- * the whole animation while being invisible on the first frame.
- */
-const CARD_MIN_OPACITY = 0.05;
-
 const OPEN_DURATION = 160;
 const CLOSE_DURATION = 120;
 
@@ -191,8 +193,8 @@ export function AnchoredContextMenu<T>({
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   // One value drives the whole appearance: the backdrop opacity, the lift of the
-  // pressed view and the scale of the card. Not a ref — it is created once and
-  // read during render, which is what `useMemo` is for.
+  // pressed view, the scale of the card and the fade of its rows. Not a ref — it
+  // is created once and read during render, which is what `useMemo` is for.
   const progress = useMemo(() => new Animated.Value(0), []);
 
   // Reset before playing: a menu closed by its own exit ends at 0, but one the
@@ -235,12 +237,6 @@ export function AnchoredContextMenu<T>({
   const cardScale = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0.92, 1],
-  });
-  // Same fade as before, floored at `CARD_MIN_OPACITY` so the glass card is
-  // never handed the one value its material refuses to draw on.
-  const cardOpacity = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [CARD_MIN_OPACITY, 1],
   });
 
   /**
@@ -334,13 +330,15 @@ export function AnchoredContextMenu<T>({
           {renderPreview(target)}
         </Animated.View>
 
+        {/* This view is an ancestor of the glass card, so it animates a transform
+            and nothing else: an `opacity` here — at any value below 1, however
+            close — is the material gone. */}
         <Animated.View
           style={[
             styles.cardWrapper,
             {
               top,
               left,
-              opacity: cardOpacity,
               transform: [{ scale: cardScale }],
               transformOrigin: opensDown ? "top left" : "bottom left",
             },
@@ -348,28 +346,33 @@ export function AnchoredContextMenu<T>({
           testID={`${testIDPrefix}-menu`}
         >
           <GlassSurface style={styles.card}>
-            {actions.map((action, index) => (
-              <Fragment key={action.key}>
-                {/* The one line in the card, and the only thing separating the
-                    destructive action from the reversible ones. */}
-                {action.destructive && index > 0 ? (
-                  <View style={styles.divider} />
-                ) : null}
-                <MenuRow
-                  icon={action.icon}
-                  label={action.label}
-                  onPress={
-                    action.closesMenu
-                      ? () => requestClose(action.onPress)
-                      : action.onPress
-                  }
-                  disabled={isBusy}
-                  isBusy={action.isBusy}
-                  destructive={action.destructive}
-                  testID={action.testID}
-                />
-              </Fragment>
-            ))}
+            {/* The fade, on the far side of the material from the constraint:
+                these rows are drawn *over* the glass, and dimming them leaves the
+                effect alone — the same place `rowDisabled` already dims from. */}
+            <Animated.View style={{ opacity: progress }}>
+              {actions.map((action, index) => (
+                <Fragment key={action.key}>
+                  {/* The one line in the card, and the only thing separating the
+                      destructive action from the reversible ones. */}
+                  {action.destructive && index > 0 ? (
+                    <View style={styles.divider} />
+                  ) : null}
+                  <MenuRow
+                    icon={action.icon}
+                    label={action.label}
+                    onPress={
+                      action.closesMenu
+                        ? () => requestClose(action.onPress)
+                        : action.onPress
+                    }
+                    disabled={isBusy}
+                    isBusy={action.isBusy}
+                    destructive={action.destructive}
+                    testID={action.testID}
+                  />
+                </Fragment>
+              ))}
+            </Animated.View>
           </GlassSurface>
         </Animated.View>
       </View>
