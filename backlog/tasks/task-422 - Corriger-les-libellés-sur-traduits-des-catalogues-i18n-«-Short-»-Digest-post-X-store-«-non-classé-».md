@@ -3,9 +3,10 @@ id: TASK-422
 title: >-
   Corriger les libellés sur-traduits des catalogues i18n : « Short », Digest,
   post X, store, « non classé »
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 16:53'
+updated_date: '2026-09-29 19:49'
 labels:
   - mobile
   - ux
