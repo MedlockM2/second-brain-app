@@ -316,8 +316,15 @@ repo.
 
 Créé à la main le 2026-09-11, **hors Terraform**, et lu par personne : ni Lambda,
 ni Terraform, ni code applicatif. Sa seule raison d'être est qu'un humain remonte
-une machine. Il porte quinze clés : les sept `EXPO_PUBLIC_*` ci-dessus, les deux
-clés Apple de §1 avec leur Key ID, et les trois valeurs de `claude-bedrock`.
+une machine. Il porte **dix-neuf clés** : les **huit** `EXPO_PUBLIC_*` ci-dessus
+(dont `EXPO_PUBLIC_SENTRY_DSN`, ajouté le 2026-09-29), les deux clés Apple de §1
+avec leur Key ID, les trois valeurs de `claude-bedrock`, et les trois clés Sentry
+(`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`).
+
+**Note sur les scopes du token Sentry** : le token stocké porte 16 scopes incluant
+`org:admin`, `project:admin` et `event:admin`. Avant toute utilisation en
+production, vérifier que les scopes sont restreints au minimum requis (`project:read`
++ `event:read` suffisent pour `scripts/sentry_issue.py`).
 
 Restaurer les deux `.p8` et le wrapper Bedrock, sans qu'aucune valeur ne passe
 par un fichier intermédiaire ni par la ligne de commande :
@@ -362,6 +369,15 @@ a sourcé cet `env` fait lire au code la mauvaise région, et l'erreur se prése
 comme une table DynamoDB absente. C'est pourquoi la clé est stockée sous
 `BEDROCK_AWS_REGION` dans le secret : elle ne peut pas repeupler `AWS_REGION` par
 accident, seul le wrapper la remet sous son vrai nom.
+
+### Le secret `media-summarizer-devbox-mobile-env`
+
+Créé en même temps que `media-summarizer-devbox`, ce secret de secours porte 8 clés
+: les huit `EXPO_PUBLIC_*` (dont `EXPO_PUBLIC_SENTRY_DSN`), et rien d'autre. Il
+sert de secours mobile isolé : si les variables d'environnement EAS sont perdues ou
+corrompues, `eas env:pull` peut être remplacé par une injection depuis ce secret
+AWS, exactement comme §6 le fait pour le `.env` racine. Il ne porte ni les clés
+Apple, ni Sentry, ni Bedrock — seulement les valeurs publiques du build mobile.
 
 ---
 

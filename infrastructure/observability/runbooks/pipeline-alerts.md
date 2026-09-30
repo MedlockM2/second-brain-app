@@ -699,6 +699,51 @@ an object while `processing_jobs` rows were expiring:
 
 ---
 
+## From a Sentry Issue
+
+**Tool:** `scripts/sentry_issue.py`
+
+Mobile app crashes and freezes are reported to Sentry, not to CloudWatch. The app
+deliberately never calls `Sentry.setUser` (per `docs/compliance/apple-app-privacy.md`,
+to keep the "Crash Data — Not linked to identity" declaration true), so a Sentry
+issue carries no `user_id` and no account information. The only join key to the
+backend is the **`mediaItemId`** recorded in the `save.created` breadcrumb when
+a share is submitted.
+
+### Investigation Path
+
+1. **Read the issue and its latest event:**
+   ```bash
+   ./scripts/sentry_issue.py --issue-id SECOND-BRAIN-APP-XY
+   ```
+   The script displays tags (`release`, `dist`, `ota.update_id`, `ota.embedded_launch`,
+   `api.host`, `environment`) that attribute the crash to an exact bundle, and all
+   breadcrumbs with pipeline categories highlighted (`share.*`, `save.*`,
+   `processing.*`, `translation.*`).
+
+2. **Extract the `mediaItemId` from the `save.created` breadcrumb:**
+   The script automatically extracts this value and generates a ready-to-copy
+   CloudWatch Insights query:
+   ```
+   filter job_id = "<mediaItemId>"
+   ```
+   Since `media_item_id == job_id` in the current model, this query traces the
+   backend processing for the media item that crashed the app.
+
+3. **Run the query on backend log groups** to see the job's lifecycle, any errors
+   during artifact generation, and the final outcome.
+
+### What Sentry Cannot Provide
+
+- **No identity:** the app never calls `Sentry.setUser`, so no crash can be tied
+  back to a user account. This is deliberate and documented in the App Privacy
+  declaration.
+- **No query strings:** HTTP breadcrumbs have their query strings removed by
+  `scrubBreadcrumb` (`mobile/src/lib/crashReporting.ts:143-149`) to avoid logging
+  search terms (`?q=`) and presigned upload signatures.
+
+---
+
 ## General Diagnostic Queries
 
 ### End-to-End Job Trace
