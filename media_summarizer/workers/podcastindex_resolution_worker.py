@@ -228,7 +228,6 @@ async def _try_rss_transcript_short_circuit(
         "source_detail": "rss_podcast_transcript_tag",
         "language": None,
         "segments_count": count_paragraphs(normalized_text),
-        "duration_seconds": 0,
     }
 
     job.set_transcription_location(transcript_s3_key)

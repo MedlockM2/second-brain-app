@@ -258,6 +258,33 @@ async def user_holds_media(
     )
 
 
+def media_duration_seconds(job: ProcessingJob) -> Optional[float]:
+    """The media's own length as the pipeline established it, or None.
+
+    Two keys carry it, both named `audio_duration_seconds`:
+
+    - ``transcription_metadata``: the length of the audio Deepgram processed
+      (its ``metadata.duration``), so the measured length of every podcast,
+      upload, voice note, reel and caption-less clip it transcribed;
+    - ``extraction_metadata``: the length a platform reported before any
+      transcription (yt-dlp on the TikTok direct-media path).
+
+    Nothing else is a media length. A transcript that did not come from audio
+    (article, post, document, photo, native captions) has no duration here, and
+    None is what tells the app to show none rather than a guess.
+    """
+    for metadata in (job.transcription_metadata, job.extraction_metadata):
+        if not isinstance(metadata, dict):
+            continue
+        try:
+            seconds = float(metadata.get("audio_duration_seconds") or 0)
+        except (TypeError, ValueError):
+            continue
+        if seconds > 0:
+            return seconds
+    return None
+
+
 def display_attributes_from_job(job: ProcessingJob) -> Dict[str, Any]:
     """The content metadata a job carries, as durable-row attributes.
 
@@ -285,16 +312,13 @@ def display_attributes_from_job(job: ProcessingJob) -> Dict[str, Any]:
         if value:
             attributes[target_attr] = value
 
-    # The media's own length, not any of the job's *processing* durations. The
-    # extraction workers publish it under this key; job.total_duration is how long
-    # the pipeline took and must never end up here.
-    metadata = job.extraction_metadata or {}
-    raw_duration = metadata.get("audio_duration_seconds")
-    if raw_duration:
-        try:
-            attributes["duration_seconds"] = int(raw_duration)
-        except (TypeError, ValueError):
-            pass
+    # The media's own length, not any of the job's *processing* durations:
+    # job.total_duration and job.transcription_duration are how long the pipeline
+    # took and must never end up here. Copied onto the row because the job
+    # expires and the row is what the detail screen falls back to.
+    duration = int(media_duration_seconds(job) or 0)
+    if duration > 0:
+        attributes["duration_seconds"] = duration
     return attributes
 
 

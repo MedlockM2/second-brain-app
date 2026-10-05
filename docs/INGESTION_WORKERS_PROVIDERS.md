@@ -372,7 +372,7 @@ Workflow split inside the resolver:
 
 Guards on the parsing loop, all in `instagram_ingestion_worker.py`: at most `INSTAGRAM_IMAGE_PARSE_MAX_IMAGES` (10) slides, a wall-clock budget of `INSTAGRAM_IMAGE_PARSE_BUDGET_SECONDS` (240 s) that stops the loop before the Lambda ceiling, a `INSTAGRAM_IMAGE_MAX_BYTES` (20 MB) cap per download, and each temporary file deleted right after it is parsed.
 
-The job completes in place: transcript uploaded to `TRANSCRIPT_BUCKET` as `{job_id}.md` (the `.md` suffix is what makes `raw_content_service` leave the section headings alone), `set_transcription_metadata(provider=…, images_parsed=…, duration_seconds=0, source="instagram_image_ocr")`, `mark_completed`, then a success `episode_completion_status` event — the same shape `x_ingestion_worker` uses for a text-only post. `job.media_type` becomes `image_post`, which the detail endpoint maps to the canonical `MediaType.IMAGE_POST`.
+The job completes in place: transcript uploaded to `TRANSCRIPT_BUCKET` as `{job_id}.md` (the `.md` suffix is what makes `raw_content_service` leave the section headings alone), `set_transcription_metadata(provider=…, images_parsed=…, source="instagram_image_ocr")` (no duration key: a photo post has none, so the API returns `transcript.duration_seconds: null`), `mark_completed`, then a success `episode_completion_status` event — the same shape `x_ingestion_worker` uses for a text-only post. `job.media_type` becomes `image_post`, which the detail endpoint maps to the canonical `MediaType.IMAGE_POST`.
 
 Ref: `instagram_apify_resolver.py::_detect_instagram_content_type`, `instagram_apify_resolver.py::_resolve_post`, `instagram_ingestion_worker.py::_complete_image_post`, `core/services/document_parsing_service.py`
 
@@ -606,7 +606,7 @@ Workflow:
 3. Marks job `TRANSCRIBING`
 4. If `audio_s3_key` present → always push (download from S3, post bytes)
 5. Else dispatch on `deepgram_mode` (see [Deepgram Modes](#cross-cutting-deepgram-modes))
-6. Upload transcript to S3 as `{job_id}.txt`, publish success event with minutes-used computed from `audio_duration_seconds`
+6. Upload transcript to S3 as `{job_id}.txt`, publish success event with minutes-used computed from `audio_duration_seconds`. That key (Deepgram's `metadata.duration`, the length of the audio it processed) is the only duration in `transcription_metadata`: it is the media length the detail endpoint serves. The call's own latency is stored on `job.transcription_duration` only
 
 Ref: `transcription/deepgram_worker.py::process_deepgram_message`, `transcription/deepgram_worker.py::call_deepgram_api`, `transcription/deepgram_worker.py::call_deepgram_api_from_bytes`
 

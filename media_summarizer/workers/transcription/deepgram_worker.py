@@ -781,9 +781,9 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         "model_used": DEEPGRAM_MODEL,
         "language": transcript.get("language"),
         "segments_count": transcript.get("segments_count", 0),
-        "duration_seconds": transcription_duration,
-        # Length of the audio itself, as billed by Deepgram — not to be confused
-        # with `duration_seconds` above, which is how long the call took.
+        # Length of the audio itself, as billed by Deepgram: the media duration the
+        # app displays. How long the call took is a processing figure and lives on
+        # `job.transcription_duration`, never in this metadata.
         "audio_duration_seconds": billed_audio_seconds,
         "audio_url": audio_url.strip() if isinstance(audio_url, str) and audio_url.strip() else None,
         "audio_s3_key": audio_s3_key.strip()

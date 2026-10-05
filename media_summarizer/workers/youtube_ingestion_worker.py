@@ -672,7 +672,6 @@ def _build_apify_transcription_metadata(
         "language": apify_result.get("language"),
         "requested_language": apify_result.get("requested_language"),
         "segments_count": apify_result.get("segments_count"),
-        "duration_seconds": 0,
         "source_url": apify_result.get("source_url"),
         "transcribed_at": apify_result["fetched_at"],
         "source_detail": apify_result["source_detail"],

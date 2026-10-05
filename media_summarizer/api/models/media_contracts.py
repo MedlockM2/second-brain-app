@@ -212,7 +212,16 @@ class TranscriptInfo(BaseModel):
             "so the value is comparable across sources."
         ),
     )
-    duration_seconds: Optional[float] = Field(default=None, ge=0)
+    duration_seconds: Optional[float] = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Length of the media itself, when it was measured (audio transcribed "
+            "by Deepgram) or reported by its platform. Null for a source without "
+            "a duration (article, post, document, photo) or whose length is "
+            "unknown; never a processing time."
+        ),
+    )
 
 
 class MediaItemContract(BaseModel):

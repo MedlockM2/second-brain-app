@@ -662,7 +662,6 @@ def _build_apify_native_transcription_metadata(
         "language": None,
         # Paragraph count, comparable with the Deepgram path (task-231 §13.1).
         "segments_count": count_paragraphs(transcript_text),
-        "duration_seconds": 0,
         "source_url": source_url,
         "transcribed_at": _now_iso_utc(),
         "source_detail": "apify_tiktok_transcript",
@@ -777,7 +776,6 @@ def _build_native_transcription_metadata(
         "model_used": "yt_dlp_tiktok_subtitles",
         "language": native_result.get("language"),
         "segments_count": native_result.get("segments_count"),
-        "duration_seconds": 0,
         "source_url": source_url,
         "transcribed_at": native_result["fetched_at"],
         "source_detail": native_result["source_detail"],

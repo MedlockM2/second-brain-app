@@ -467,7 +467,6 @@ async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
         "language": lookup_result.get("lang"),
         # Paragraph count, comparable across sources (task-231 s13.1).
         "segments_count": count_paragraphs(transcript_text),
-        "duration_seconds": 0,
         "source_url": normalized_url,
     }
     extraction_metadata = _build_extraction_metadata(

@@ -52,6 +52,7 @@ Operational behavior now implemented in runtime:
 - stable not-found and unauthorized errors are returned as `MEDIA_NOT_FOUND` (404) and `NOT_AUTHORIZED` (403)
 - the media status response carries **no** artifact projection (task-270): artifacts are a per-scope, append-only history, so "the artifact of this type" no longer exists as a concept
 - transcript metadata (`language`, `segments_count`, `duration_seconds`) is surfaced when the runtime has persisted it from transcription or article extraction
+- `transcript.duration_seconds` is the length of the media itself and nothing else: the audio length Deepgram processed (`transcription_metadata.audio_duration_seconds`), else the length the platform reported before transcription (`extraction_metadata.audio_duration_seconds`, yt-dlp on TikTok), else the copy on the library row (which outlives the job, and carries the podcast index's length on the search path). It is `null` everywhere else — articles, posts, documents, photos, and transcripts that came from captions, whose media length was never measured — and the app then shows no duration. No processing time is ever stored under a `duration_seconds` key in job metadata; how long a step took lives on `ProcessingJob.*_duration`
 
 `task-270` makes artifact generation **scope-addressed** and its storage **append-only**:
 - one set of routes under `/api/artifacts` serves a single media (`scope="media"`) and a folder (`scope="folder"`); the per-media routes are gone, with no alias

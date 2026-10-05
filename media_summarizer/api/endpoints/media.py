@@ -95,6 +95,7 @@ from media_summarizer.core.services.artifact_service import (
     latest_internal_artifact_status,
 )
 from media_summarizer.core.services.durable_media_service import (
+    media_duration_seconds,
     resolve_job_for_record,
     save_media_for_user,
     user_holds_media,
@@ -987,12 +988,6 @@ def _canonical_transcript(
     else:
         source = None
 
-    duration = tx_meta.get("duration_seconds") or ext_meta.get("duration_seconds")
-    try:
-        duration = float(duration) if duration is not None else None
-    except (TypeError, ValueError):
-        duration = None
-
     segments = tx_meta.get("segments_count")
     try:
         segments = int(segments) if segments is not None else None
@@ -1005,7 +1000,13 @@ def _canonical_transcript(
     if not isinstance(language, str):
         language = None
 
-    if duration is None and record.duration_seconds is not None:
+    # The media's own length, or nothing: the app hides the figure when it is
+    # absent, which is right for a source that has no duration (an article, a
+    # document, a photo) or whose length was never measured. The job's figure
+    # wins because it is the measured one; the library row holds a copy of it
+    # that outlives the job, plus the podcast index's length on the search path.
+    duration = media_duration_seconds(job) if job is not None else None
+    if duration is None and record.duration_seconds and record.duration_seconds > 0:
         duration = float(record.duration_seconds)
 
     return CanonicalTranscriptInfo(
