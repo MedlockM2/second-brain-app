@@ -45,6 +45,14 @@ async def get_entitlements_status(
     their plan alone grants. It is null whenever the allowance is already the plan's
     own. The app should say so before the day comes rather than let the user watch
     their minutes disappear.
+
+    `is_beta_access` says the figures are the beta regime's (task-429): the widest
+    allowance in the catalogue, granted to every account because nothing is
+    purchasable before the stores. It is what the app reads to hide every route to
+    the paywall and to stop naming a free trial, which is not what grants the
+    access while the regime is open. No end date travels with it on purpose — the
+    beta does not end on a date the user has to plan around, and the app has
+    nothing to count down.
     """
     try:
         snapshot = await quota_enforcer.get_entitlement_snapshot(current_user.id)
@@ -55,6 +63,7 @@ async def get_entitlements_status(
             "subscription_status": snapshot.subscription_status,
             "is_active": snapshot.is_entitled,
             "is_free_trial": snapshot.is_free_trial,
+            "is_beta_access": snapshot.is_beta_access,
             "auto_renew_status": snapshot.auto_renew,
             "minutes_included": snapshot.minutes_included,
             "minutes_used": snapshot.minutes_used,

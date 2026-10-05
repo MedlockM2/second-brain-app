@@ -95,6 +95,13 @@ function readPeriodEnd(details: Record<string, unknown>): string | null {
  * than a sentence with a hole in it. Deliberately not routed through
  * `getFriendlyErrorMessage`, whose /quota/ rule would flatten all of this into
  * one generic line and drop the numbers.
+ *
+ * `beta_access` on the body selects a second set of sentences, identical but for
+ * the clause that invites an upgrade (task-429): while the beta regime is on
+ * there is no plan to move to, so the refusal states the limit and stops. It is
+ * read off the refusal itself, next to `has_plan` and `period_end`, rather than
+ * from the app's own entitlement state — the sentence then cannot contradict the
+ * check that produced it, and this module keeps needing nothing but the error.
  */
 export function getQuotaErrorMessage(
   error: unknown,
@@ -117,7 +124,8 @@ export function getQuotaErrorMessage(
   }
 
   // No plan at all is a different sentence from an allowance run down: there is
-  // no figure to quote and nothing has been spent.
+  // no figure to quote and nothing has been spent. Unreachable under the beta
+  // regime, which entitles every account, so it has no beta variant.
   if (details.has_plan === false) {
     return t("quota.refusal.noPlan");
   }
@@ -125,21 +133,38 @@ export function getQuotaErrorMessage(
   const remaining = readNumber(details, "minutes_remaining");
   const needed = readNumber(details, "minutes_needed");
   const periodEnd = readPeriodEnd(details);
+  const underBeta = details.beta_access === true;
 
   if (remaining !== null && remaining > 0 && needed !== null) {
-    return periodEnd === null
-      ? t("quota.refusal.needsMoreNoDate", {
-          needed: tCount("duration.minutes", needed),
-          remaining: tCount("duration.minutes", remaining),
-        })
-      : t("quota.refusal.needsMore", {
-          needed: tCount("duration.minutes", needed),
-          remaining: tCount("duration.minutes", remaining),
-          date: periodEnd,
-        });
+    const figures = {
+      needed: tCount("duration.minutes", needed),
+      remaining: tCount("duration.minutes", remaining),
+    };
+    if (periodEnd === null) {
+      return t(
+        underBeta
+          ? "quota.refusal.betaNeedsMoreNoDate"
+          : "quota.refusal.needsMoreNoDate",
+        figures,
+      );
+    }
+    return t(
+      underBeta ? "quota.refusal.betaNeedsMore" : "quota.refusal.needsMore",
+      { ...figures, date: periodEnd },
+    );
   }
 
-  return periodEnd === null
-    ? t("quota.refusal.outOfMinutes")
-    : t("quota.refusal.outOfMinutesUntil", { date: periodEnd });
+  if (periodEnd === null) {
+    return t(
+      underBeta
+        ? "quota.refusal.betaOutOfMinutes"
+        : "quota.refusal.outOfMinutes",
+    );
+  }
+  return t(
+    underBeta
+      ? "quota.refusal.betaOutOfMinutesUntil"
+      : "quota.refusal.outOfMinutesUntil",
+    { date: periodEnd },
+  );
 }

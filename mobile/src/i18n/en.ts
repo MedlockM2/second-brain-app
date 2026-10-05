@@ -312,6 +312,14 @@ export const en = {
     "This import needs {needed} and you have {remaining} left until {date}. Upgrade to process it now.",
   "quota.refusal.needsMoreNoDate":
     "This import needs {needed} and you have {remaining} left. Upgrade to process it now.",
+  "quota.refusal.betaOutOfMinutes":
+    "You're out of minutes for this period.",
+  "quota.refusal.betaOutOfMinutesUntil":
+    "You're out of minutes until {date}.",
+  "quota.refusal.betaNeedsMore":
+    "This import needs {needed} and you have {remaining} left until {date}.",
+  "quota.refusal.betaNeedsMoreNoDate":
+    "This import needs {needed} and you have {remaining} left.",
   "quota.refusal.itemTooLong":
     "This is {duration} long, over the {max} a single import can use on your plan. Split it into shorter parts.",
   "quota.refusal.itemTooLongGeneric":
@@ -395,6 +403,7 @@ export const en = {
     "Your minutes and reset date appear here once a subscription is active.",
   "account.plan.freeTrial": "Free trial",
   "account.plan.active": "Active plan",
+  "account.plan.betaAccess": "Beta access",
   "account.plan.minutesLeft": "MINUTES LEFT",
   "account.plan.minutesLeftA11y":
     "{remaining} of {included} minutes left this period",
@@ -402,6 +411,8 @@ export const en = {
   "account.plan.resetDateA11y": "{label} {date}",
   "account.plan.resetDateUnknownA11y": "Reset date unknown",
   "account.plan.minutesRuleTrial": "{rule} Trial minutes do not refill.",
+  "account.plan.minutesRuleBeta":
+    "{rule} While the app is in beta, every account gets the largest plan's allowance.",
   // --- Reader tab: the preview, then the source text ---
   // "Transcript" is gone from every line below on purpose (task-363): the reader
   // is looking at the text of a source, and whether it was typed or spoken is a

@@ -24,6 +24,13 @@ Three layers protect the margin (see docs/research/task-287-consumption-model):
    owner an account is worth a look;
 3. the shared provider pools, in `provider_pool_guard` — Apify credit and
    LlamaParse credits are platform-wide and no per-user allowance can protect them.
+
+One temporary regime sits on top of all of it: while `beta_access` is open
+(task-429) every account is served the widest allowance the catalogue holds,
+because nothing is purchasable before the stores. It raises the allowance and
+nothing else — the counters, the debits and the burst guards are untouched, since
+what the testers really consume is what the next pricing model will be built on.
+Both the block and every line reading it are deleted when the beta ends.
 """
 
 from __future__ import annotations
@@ -55,6 +62,11 @@ ERROR_ITEM_TOO_LONG = "item_too_long"
 # Statuses that keep a subscription entitled.
 _ENTITLED_STATUSES = frozenset({"active", "grace_period"})
 
+# What `subscription_status` reports for an account whose only entitlement is the
+# beta regime (task-429). Not a store status and never written by the webhook:
+# nothing was bought, so no store could ever report it.
+BETA_STATUS = "beta"
+
 
 @dataclass
 class QuotaCheckResult:
@@ -72,7 +84,8 @@ class QuotaCheckResult:
     error_code: Optional[str] = None  # stable machine-readable code
     # Figures the client needs to word the refusal. Keys are per error code:
     # `out_of_minutes` -> has_plan, and when a plan exists minutes_needed,
-    # minutes_remaining and period_end (ISO 8601, or absent);
+    # minutes_remaining, period_end (ISO 8601, or absent) and beta_access
+    # (true, or absent);
     # `item_too_long` -> minutes_needed, max_minutes_per_item.
     params: Dict[str, Any] = field(default_factory=dict)
     http_status: int = 200
@@ -123,6 +136,10 @@ class EntitlementSnapshot:
     auto_renew: Optional[bool] = None
     is_entitled: bool = False
     is_free_trial: bool = False
+    # Whether the figures below are the beta regime's rather than a plan's or a
+    # trial's (task-429). The app reads it to hide every route to the paywall and
+    # to stop announcing a trial that is not what grants the access.
+    is_beta_access: bool = False
     minutes_included: int = 0
     minutes_used: int = 0
     max_minutes_per_item: int = 0
@@ -363,6 +380,17 @@ def _read_allowance(*sources: Mapping[str, Any]) -> Allowance:
     return Allowance(figure(_MINUTES_KEY), figure(_PER_ITEM_KEY))
 
 
+def _allowance_rank(allowance: Allowance) -> Tuple[int, int]:
+    """How wide an allowance is, as a sortable pair: minutes first, then the cap.
+
+    The one ordering the module uses whenever two entitlements compete — the rows
+    a user holds in `_active_subscription`, the tiers of the catalogue in
+    `_widest_tier` — so "the larger allowance" means the same thing in both and
+    neither ranks anything by name.
+    """
+    return (allowance.minutes_included, allowance.max_minutes_per_item)
+
+
 def _config_tier(tiers: Mapping[str, Any], subscription_tier: str) -> Optional[str]:
     """The pricing config tier a stored subscription resolves to, or None.
 
@@ -379,6 +407,24 @@ def _config_tier(tiers: Mapping[str, Any], subscription_tier: str) -> Optional[s
 def _tier_allowance(tiers: Mapping[str, Any], tier: Optional[str]) -> Allowance:
     """What one pricing config tier grants; empty when the config has no such tier."""
     return _read_allowance(tiers.get(tier or "", {}) or {})
+
+
+def _widest_tier(tiers: Mapping[str, Any]) -> Optional[str]:
+    """The tier carrying the widest allowance in the catalogue, or None when it is empty.
+
+    Chosen by `_allowance_rank`, exactly as `_active_subscription` chooses between
+    the rows one user holds, and never by a tier id written here: the owner moving
+    an allowance, renaming a tier or adding one moves this answer with it, and the
+    choice stays right when the catalogue is restated in credits instead of
+    minutes. The tier key breaks ties, so the order is total and the answer does
+    not depend on how DynamoDB happened to serialise the map.
+    """
+    if not tiers:
+        return None
+    return max(
+        tiers,
+        key=lambda tier: (*_allowance_rank(_tier_allowance(tiers, tier)), tier),
+    )
 
 
 def _trial_allowance(config: Mapping[str, Any], tiers: Mapping[str, Any]) -> Allowance:
@@ -433,11 +479,9 @@ async def _active_subscription(user_id: str, tiers: Mapping[str, Any]) -> Option
         return entitled[0]
 
     def rank(sub: Any) -> Tuple[int, int, float, str]:
-        allowance = _row_allowance(tiers, sub)
         period_end = sub.current_period_end
         return (
-            allowance.minutes_included,
-            allowance.max_minutes_per_item,
+            *_allowance_rank(_row_allowance(tiers, sub)),
             period_end.timestamp() if period_end else 0.0,
             str(sub.id),
         )
@@ -468,6 +512,58 @@ async def _free_trial_window(
 
     duration_days = int(free_trial.get("duration_days", 30) or 30)
     return user.created_at, user.created_at + timedelta(days=duration_days)
+
+
+def _parse_instant(raw: Any) -> Optional[datetime]:
+    """An ISO 8601 instant from the configuration, as an aware UTC datetime, or None.
+
+    `Z` is spelled out as an offset because `fromisoformat` only learned to read
+    it in 3.11 and this runs on 3.10, and a value with no offset is read as UTC:
+    this field is typed by hand, and `2027-01-15` is a shape an owner writes.
+    """
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    if text[-1] in ("Z", "z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _is_beta_open(config: Mapping[str, Any], now: datetime) -> bool:
+    """Whether the beta regime is in force at `now` (task-429).
+
+    Open while `beta_access.enabled` says so and the end date it may carry is
+    still ahead. The date is optional because the beta was decided before its
+    start was announced: the block ships enabled and open-ended, and the owner
+    writes the closing instant into `pricing_config-<env>` when the three months
+    are dated — no build, no deploy.
+
+    An end date that cannot be read leaves the beta **open**, loudly. A typo must
+    not be able to take every tester's allowance away in silence, which is exactly
+    what reading an unusable date as "already over" would do.
+    """
+    beta = config.get("beta_access", {}) or {}
+    if not beta.get("enabled"):
+        return False
+
+    raw = beta.get("ends_at")
+    if raw is None or raw == "":
+        return True
+
+    ends_at = _parse_instant(raw)
+    if ends_at is None:
+        logger.error(
+            "quota.beta_access_ends_at_unreadable",
+            extra={"ends_at": str(raw)},
+        )
+        return True
+    return now < ends_at
 
 
 def _is_free_trial_active(
@@ -547,6 +643,13 @@ async def get_entitlement_snapshot(
     `_subscriber_allowance`, which holds that rule — while the period, the tier and
     the status stay the subscription's.
 
+    While the beta regime is open (task-429) the allowance is the widest tier's
+    for **every** account, whatever its creation date and whatever it has bought,
+    and `is_beta_access` says so. Only the allowance moves: the period, the
+    counter row and every debit behind them are the ones the account would have
+    had anyway, because the figures the beta produces are what the next pricing
+    model will be sized from.
+
     `with_usage=False` skips reading the counter row, for callers that only need
     to know which row to write to.
     """
@@ -561,6 +664,12 @@ async def get_entitlement_snapshot(
         period_key=now.strftime("%Y-%m"),
         warning_threshold_pct=warning_pct,
     )
+
+    # The tier the beta hands out, or None when the regime is closed — which is
+    # also what an empty catalogue gives, since there is then no allowance to
+    # grant and none may be invented.
+    beta_tier = _widest_tier(tiers) if _is_beta_open(config, now) else None
+    beta = _tier_allowance(tiers, beta_tier)
 
     trial = _trial_allowance(config, tiers)
     subscription = await _active_subscription(user_id, tiers)
@@ -582,15 +691,30 @@ async def get_entitlement_snapshot(
                     "config_tiers": sorted(tiers),
                 },
             )
-            return unentitled
+            # Under the beta the drift is still a thing to fix, but not a reason
+            # to refuse this account's imports: the regime grants the widest
+            # allowance to everyone, and "everyone" cannot have an exception whose
+            # cause is a catalogue the user has no part in.
+            if beta_tier is None:
+                return unentitled
 
-        allowance, trial_raises_until = await _subscriber_allowance(
-            user_id,
-            config,
-            paid=_tier_allowance(tiers, tier),
-            trial=trial,
-            now=now,
-        )
+        paid = _tier_allowance(tiers, tier)
+        if beta_tier is None:
+            allowance, trial_raises_until = await _subscriber_allowance(
+                user_id,
+                config,
+                paid=paid,
+                trial=trial,
+                now=now,
+            )
+        else:
+            # `raised_by`, not the beta's figures outright, so the regime can only
+            # ever add — a plan ahead on one axis keeps that axis. The trial is not
+            # consulted at all: it cannot be wider than the widest tier, and the
+            # beta is what replaces it for the duration, which also spares the
+            # user-row read `_subscriber_allowance` would pay for.
+            allowance, trial_raises_until = paid.raised_by(beta), None
+
         period_end = subscription.current_period_end
         period_key = (
             f"sub:{period_end.strftime('%Y-%m-%d')}"
@@ -599,16 +723,42 @@ async def get_entitlement_snapshot(
         )
         snapshot = EntitlementSnapshot(
             user_id=user_id,
-            tier=tier,
+            # Which tier the *figures* come from, which under the beta is the
+            # widest one rather than the plan — `subscription_tier` below keeps
+            # naming what the user actually bought.
+            tier=beta_tier or tier,
             subscription_tier=subscription_tier,
             subscription_status=subscription.status.value,
             auto_renew=subscription.auto_renew_status,
             is_entitled=True,
+            is_beta_access=beta_tier is not None,
             minutes_included=allowance.minutes_included,
             max_minutes_per_item=allowance.max_minutes_per_item,
             trial_raises_allowance_until=trial_raises_until,
             period_key=period_key,
             period_end=period_end or _next_month_start(now),
+            warning_threshold_pct=warning_pct,
+        )
+    elif beta_tier is not None:
+        # No plan and the beta is open: the widest allowance, on the period of an
+        # entitlement with no anniversary of its own — the calendar month. So the
+        # counter empties monthly and the owner reads one figure per month per
+        # account, which is the measurement the regime exists for.
+        #
+        # The trial window is not read, and that is the point of this branch
+        # sitting above it: during the beta there is no trial running out, nothing
+        # on any screen counts one down, and an account whose trial expired weeks
+        # ago is served exactly like one created today.
+        snapshot = EntitlementSnapshot(
+            user_id=user_id,
+            tier=beta_tier,
+            subscription_status=BETA_STATUS,
+            is_entitled=True,
+            is_beta_access=True,
+            minutes_included=beta.minutes_included,
+            max_minutes_per_item=beta.max_minutes_per_item,
+            period_key=now.strftime("%Y-%m"),
+            period_end=_next_month_start(now),
             warning_threshold_pct=warning_pct,
         )
     else:
@@ -664,6 +814,19 @@ def _period_end_param(period_end: Optional[datetime]) -> Dict[str, Any]:
     is the side that knows the reader's locale and calendar.
     """
     return {} if period_end is None else {"period_end": period_end.isoformat()}
+
+
+def _beta_access_param(snapshot: EntitlementSnapshot) -> Dict[str, Any]:
+    """The one fact that changes what a refusal may propose, or nothing.
+
+    Present only while the beta regime is in force, the way `period_end` is
+    present only when it is known. The app words the refusal from the body it
+    received — so this is what stops the sentence ending on "upgrade to process
+    this now" and what keeps the paywall out of a screen where there is nothing
+    to buy. Sent with the figures rather than read from a second endpoint, so the
+    wording cannot disagree with the check that produced it.
+    """
+    return {"beta_access": True} if snapshot.is_beta_access else {}
 
 
 # ---------------------------------------------------------------------------
@@ -749,6 +912,7 @@ def evaluate_submission(
                 "minutes_needed": minutes_needed,
                 "minutes_remaining": snapshot.minutes_remaining,
                 **_period_end_param(snapshot.period_end),
+                **_beta_access_param(snapshot),
             },
             http_status=403,
         )

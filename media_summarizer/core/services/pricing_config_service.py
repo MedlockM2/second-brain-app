@@ -89,6 +89,29 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "minutes_per_month": 300,
         "max_minutes_per_item": 180,
     },
+    # --- Beta regime (task-429) ---
+    # Nothing is purchasable while the app is in beta, so every account is served
+    # the widest allowance the `tiers` catalogue holds — whatever its creation
+    # date and whatever it has bought — and the app hides every route to the
+    # paywall. Consumption keeps being counted period by period: measuring what
+    # testers really use is the reason the regime exists, and those figures are
+    # what the next pricing model will be built from.
+    #
+    # `enabled` is True in the defaults rather than per environment because the
+    # beta is a state of the *product*, not of a deployment: an environment whose
+    # table has no block must behave like the beta, not start metering. The end
+    # date is unknown until the owner announces the start, hence `None`; it is
+    # filled in the table afterwards, which needs no build and no deploy (see
+    # docs/V1_LAUNCH_PLAN.md § « Phase de beta »).
+    #
+    # When the beta ends, this block and every line that reads it are **deleted**,
+    # here and in `pricing_config-dev` / `pricing_config-prod` — a key dropped from
+    # the defaults survives in the table, see `_merge_defaults`.
+    "beta_access": {
+        "enabled": True,
+        # ISO 8601 instant the beta closes, or None while it is open-ended.
+        "ends_at": None,
+    },
     # --- How each metered event converts into minutes (benchmark §3.1) ---
     "unit_conversion": {
         # Transcribed audio and video are charged their real length, rounded up.

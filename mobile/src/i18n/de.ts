@@ -238,6 +238,14 @@ export const de: Catalog = {
     "Dieser Import benötigt {needed}, und dir bleiben {remaining} bis zum {date}. Wechsle den Tarif, um ihn jetzt zu verarbeiten.",
   "quota.refusal.needsMoreNoDate":
     "Dieser Import benötigt {needed}, und dir bleiben {remaining}. Wechsle den Tarif, um ihn jetzt zu verarbeiten.",
+  "quota.refusal.betaOutOfMinutes":
+    "Deine Minuten für diesen Zeitraum sind aufgebraucht.",
+  "quota.refusal.betaOutOfMinutesUntil":
+    "Du hast bis zum {date} keine Minuten mehr.",
+  "quota.refusal.betaNeedsMore":
+    "Dieser Import benötigt {needed}, und dir bleiben {remaining} bis zum {date}.",
+  "quota.refusal.betaNeedsMoreNoDate":
+    "Dieser Import benötigt {needed}, und dir bleiben {remaining}.",
   "quota.refusal.itemTooLong":
     "Das dauert {duration} und liegt damit über den {max}, die ein einzelner Import in deinem Tarif nutzen darf. Teile es in kürzere Teile auf.",
   "quota.refusal.itemTooLongGeneric":
@@ -317,6 +325,7 @@ export const de: Catalog = {
     "Deine Minuten und dein Zurücksetzungsdatum erscheinen hier, sobald ein Abo aktiv ist.",
   "account.plan.freeTrial": "Kostenlose Testphase",
   "account.plan.active": "Aktiver Tarif",
+  "account.plan.betaAccess": "Beta-Zugang",
   "account.plan.minutesLeft": "VERBLEIBENDE MINUTEN",
   "account.plan.minutesLeftA11y":
     "{remaining} von {included} Minuten in diesem Zeitraum verbleibend",
@@ -325,6 +334,8 @@ export const de: Catalog = {
   "account.plan.resetDateUnknownA11y": "Zurücksetzungsdatum unbekannt",
   "account.plan.minutesRuleTrial":
     "{rule} Testminuten füllen sich nicht wieder auf.",
+  "account.plan.minutesRuleBeta":
+    "{rule} Während der Beta erhält jedes Konto das Guthaben des größten Tarifs.",
   "preview.essentials": "Das Wichtigste",
   "preview.pending": "Die Vorschau wird geschrieben …",
   "preview.unavailable": "Keine Vorschau für diese Quelle.",

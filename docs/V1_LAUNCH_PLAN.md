@@ -161,10 +161,38 @@ bloquant au moins bloquant :
   l'allocation du palier le plus élevé. La consommation reste comptée : elle sert à mesurer l'usage
   réel pour fixer les allocations du nouveau barème (`docs/research/pricing-challenge/README.md`,
   question 5).
-- **Au démarrage** : renseigner la date de fin du bloc de beta dans `pricing_config-dev` et
-  `pricing_config-prod`. Pas de build, pas de déploiement de code.
+- **Le mécanisme** : un bloc `beta_access` dans la pricing config, `{"enabled": bool,
+  "ends_at": str|null}`. Il est **activé sans date de fin** dans les defaults du code
+  (`media_summarizer/core/services/pricing_config_service.py`) et dans `pricing_config-dev`
+  depuis le 2026-10-05. Tant qu'il est actif et que `ends_at`, s'il existe, n'est pas passé,
+  `quota_enforcer` sert à chaque compte l'allocation du palier le plus large du catalogue
+  `tiers` — choisi par comparaison des allocations, donc toujours juste quand le barème
+  passera en crédits — et l'endpoint des entitlements renvoie `is_beta_access: true`, que
+  l'app lit pour masquer le paywall et taire l'essai gratuit.
+- **Au démarrage** : écrire la date de fin dans `pricing_config-dev` et `pricing_config-prod`.
+  Pas de build, pas de déploiement de code ; la config est relue dans les 5 minutes (TTL du
+  cache).
+
+  ```bash
+  # dev (profil second-brain-app) ; pour prod, --profile prod et pricing_config-prod
+  aws dynamodb put-item --profile second-brain-app --region eu-west-3 \
+    --table-name pricing_config-dev \
+    --item '{"config_key":{"S":"beta_access"},
+             "config_value":{"S":"{\"enabled\": true, \"ends_at\": \"2027-01-15T00:00:00+00:00\"}"},
+             "updated_at":{"S":"<ISO 8601 du jour>"}}'
+  ```
+
+  `ends_at` accepte un instant ISO 8601, avec ou sans fuseau (sans fuseau = UTC). Une date
+  illisible **laisse la beta ouverte** et émet `quota.beta_access_ends_at_unreadable` : une
+  faute de frappe ne doit pas retirer son allocation à tout le monde en silence.
+- **Reste à faire côté prod** : le même bloc, activé et sans date de fin, dans
+  `pricing_config-prod` (compte `866874944541`). Les defaults du code l'activent déjà, donc
+  l'écrire sert à pouvoir y poser `ends_at` au démarrage.
 - **À la fin** : supprimer le bloc de beta et tout le code qui le lit (tâche à créer à ce
-  moment-là), puis rouvrir l'abonnement avant la soumission aux stores.
+  moment-là) — un `top-level key` retiré des defaults survit dans la table, donc
+  `delete-item` sur les deux tables en plus du code — puis rouvrir l'abonnement avant la
+  soumission aux stores. Le flow Maestro `07_paywall.yaml` repasse par la carte d'Account
+  (version dans `git show ad76b79`) ; pendant la beta il entre par le deep link.
 
 ---
 

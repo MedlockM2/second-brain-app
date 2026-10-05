@@ -250,6 +250,14 @@ export const fr: Catalog = {
     "Cet import nécessite {needed} et il vous reste {remaining} jusqu'au {date}. Passez à une formule supérieure pour le traiter maintenant.",
   "quota.refusal.needsMoreNoDate":
     "Cet import nécessite {needed} et il vous reste {remaining}. Passez à une formule supérieure pour le traiter maintenant.",
+  "quota.refusal.betaOutOfMinutes":
+    "Vous n'avez plus de minutes pour cette période.",
+  "quota.refusal.betaOutOfMinutesUntil":
+    "Vous n'avez plus de minutes jusqu'au {date}.",
+  "quota.refusal.betaNeedsMore":
+    "Cet import nécessite {needed} et il vous reste {remaining} jusqu'au {date}.",
+  "quota.refusal.betaNeedsMoreNoDate":
+    "Cet import nécessite {needed} et il vous reste {remaining}.",
   "quota.refusal.itemTooLong":
     "Ce contenu dure {duration}, au-delà des {max} qu'un import unique peut utiliser sur votre formule. Découpez-le en parties plus courtes.",
   "quota.refusal.itemTooLongGeneric":
@@ -329,6 +337,7 @@ export const fr: Catalog = {
     "Vos minutes et votre date de recharge apparaîtront ici dès qu'un abonnement sera actif.",
   "account.plan.freeTrial": "Essai gratuit",
   "account.plan.active": "Formule active",
+  "account.plan.betaAccess": "Accès bêta",
   "account.plan.minutesLeft": "MINUTES RESTANTES",
   "account.plan.minutesLeftA11y":
     "{remaining} minutes restantes sur {included} pour cette période",
@@ -337,6 +346,8 @@ export const fr: Catalog = {
   "account.plan.resetDateUnknownA11y": "Date de recharge inconnue",
   "account.plan.minutesRuleTrial":
     "{rule} Les minutes d'essai ne se rechargent pas.",
+  "account.plan.minutesRuleBeta":
+    "{rule} Pendant la bêta, chaque compte reçoit l'allocation de la formule la plus élevée.",
   "preview.essentials": "L'essentiel",
   "preview.pending": "L'aperçu est en cours de rédaction…",
   "preview.unavailable": "Pas d'aperçu pour cette source.",

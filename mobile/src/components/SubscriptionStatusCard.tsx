@@ -49,6 +49,12 @@ import { t } from "../i18n";
  * from a purchased plan here: `subscription_tier` is null during a trial, so the
  * heading fell back to "Active plan" and the date to "PERIOD ENDS" (task-301).
  * It now names itself, and names what its date is.
+ *
+ * Beta access is a fifth state and takes precedence over the four above
+ * (task-429). What grants the allowance then is the regime, not a plan and not a
+ * trial — so the card names the beta, keeps the gauge, and says nothing about a
+ * trial ending: during the beta none is running out, and a countdown to a date
+ * that changes nothing is the kind of alarm the app has no business raising.
  */
 interface SubscriptionStatusCardProps {
   /** Backend entitlement payload, `null` while unknown or after a failure. */
@@ -149,6 +155,7 @@ function CardBody({
     );
   }
 
+  const isBeta = entitlement.is_beta_access;
   const isTrial = entitlement.is_free_trial;
   const tierLabel = getTierLabel(entitlement.subscription_tier);
   const statusNote = getStatusNote(entitlement.subscription_status);
@@ -157,18 +164,23 @@ function CardBody({
   const minutesRemaining = String(entitlement.minutes_remaining);
   // The trial's own tier is the one the gauge below is measuring, and it is
   // worth naming — but it never becomes the heading, which would read as a plan
-  // the user bought.
-  const chipText = isTrial ? trialTierName : statusNote;
+  // the user bought. Under the beta there is no chip at all: a plan's status note
+  // next to a "Beta access" heading would describe something the figures below
+  // no longer come from.
+  const chipText = isBeta ? null : isTrial ? trialTierName : statusNote;
 
   return (
     <View>
       <View style={styles.titleRow}>
-        {/* A trial names itself; an active subscription on a tier this build does
-            not know still says something true rather than nothing. */}
+        {/* The beta names itself, and so does a trial; an active subscription on
+            a tier this build does not know still says something true rather than
+            nothing. */}
         <Text testID="account-plan-tier" style={styles.planName}>
-          {isTrial
-            ? t("account.plan.freeTrial")
-            : (tierLabel ?? t("account.plan.active"))}
+          {isBeta
+            ? t("account.plan.betaAccess")
+            : isTrial
+              ? t("account.plan.freeTrial")
+              : (tierLabel ?? t("account.plan.active"))}
         </Text>
         {chipText !== null && (
           <View style={styles.statusChip}>
@@ -208,11 +220,15 @@ function CardBody({
           than re-typed: the two screens explain the meter in the same words or
           not at all — what the minutes cover, and that articles and web pages
           cost none of them. A trial allowance is spent once and never refills,
-          which the date above says but the meter rule does not. */}
+          which the date above says but the meter rule does not; under the beta
+          the same rule is followed by where the allowance comes from, which is
+          the one thing the heading alone does not explain. */}
       <Text style={styles.hintText}>
-        {isTrial
-          ? t("account.plan.minutesRuleTrial", { rule: minutesRule() })
-          : minutesRule()}
+        {isBeta
+          ? t("account.plan.minutesRuleBeta", { rule: minutesRule() })
+          : isTrial
+            ? t("account.plan.minutesRuleTrial", { rule: minutesRule() })
+            : minutesRule()}
       </Text>
     </View>
   );

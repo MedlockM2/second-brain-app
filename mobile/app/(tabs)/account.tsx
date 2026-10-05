@@ -44,6 +44,7 @@ export default function AccountScreen() {
   const { readingLanguage } = useUserPreferences();
   const {
     isSubscribed,
+    isBetaAccess,
     entitlementStatus,
     isLoading: isEntitlementLoading,
     refreshEntitlements,
@@ -196,36 +197,41 @@ export default function AccountScreen() {
           trialTierName={isFreeTrial ? trialTierName : null}
         />
 
-        {/* Subscription entry point */}
-        <Pressable
-          testID="account-upgrade-button"
-          style={({ pressed }) => [
-            styles.subscriptionCard,
-            pressed && styles.subscriptionCardPressed,
-          ]}
-          onPress={() => router.push("/paywall")}
-          accessibilityLabel={`${subscriptionLabel}: ${subscriptionSubtitle}`}
-          accessibilityRole="button"
-        >
-          <View style={styles.subscriptionIcon}>
+        {/* Subscription entry point — the app's only one. It is gone while the
+            beta regime is on (task-429): no plan can be bought before the stores,
+            so a card that leads to prices is a dead end, and the card above
+            already states what the account is being given instead. */}
+        {!isBetaAccess && (
+          <Pressable
+            testID="account-upgrade-button"
+            style={({ pressed }) => [
+              styles.subscriptionCard,
+              pressed && styles.subscriptionCardPressed,
+            ]}
+            onPress={() => router.push("/paywall")}
+            accessibilityLabel={`${subscriptionLabel}: ${subscriptionSubtitle}`}
+            accessibilityRole="button"
+          >
+            <View style={styles.subscriptionIcon}>
+              <Ionicons
+                name={isSubscribed ? "shield-checkmark" : "sparkles"}
+                size={20}
+                color={Colors.onPrimary}
+              />
+            </View>
+            <View style={styles.subscriptionTextContainer}>
+              <Text style={styles.subscriptionLabel}>{subscriptionLabel}</Text>
+              <Text style={styles.subscriptionSubtitle}>
+                {subscriptionSubtitle}
+              </Text>
+            </View>
             <Ionicons
-              name={isSubscribed ? "shield-checkmark" : "sparkles"}
-              size={20}
-              color={Colors.onPrimary}
+              name="chevron-forward"
+              size={18}
+              color={Colors.textMuted}
             />
-          </View>
-          <View style={styles.subscriptionTextContainer}>
-            <Text style={styles.subscriptionLabel}>{subscriptionLabel}</Text>
-            <Text style={styles.subscriptionSubtitle}>
-              {subscriptionSubtitle}
-            </Text>
-          </View>
-          <Ionicons
-            name="chevron-forward"
-            size={18}
-            color={Colors.textMuted}
-          />
-        </Pressable>
+          </Pressable>
+        )}
 
         {/* Menu */}
         <View style={styles.menuCard}>
