@@ -27,10 +27,14 @@ import { t } from "../i18n";
  * Deliberately not a modal and never repeated once dismissed — it carries no
  * decision, only the two facts that let the user make one (how much is left, what
  * happens on the date) plus a way to see the plans.
+ *
+ * The link to the plans is the only part the beta regime removes (task-429): the
+ * two facts stay, because knowing the allowance is running out is as useful to a
+ * tester as to a subscriber — there is just nothing to buy about it.
  */
 export function MinutesWarningBanner(): React.JSX.Element | null {
   const router = useRouter();
-  const { entitlementStatus } = usePurchases();
+  const { entitlementStatus, isBetaAccess } = usePurchases();
   const resetsAt = entitlementStatus?.resets_at ?? null;
   const shouldWarn = entitlementStatus?.warning_threshold_reached === true;
 
@@ -72,15 +76,17 @@ export function MinutesWarningBanner(): React.JSX.Element | null {
 
       <View style={styles.content}>
         <Text style={styles.message}>{message}</Text>
-        <Pressable
-          testID="minutes-warning-see-plans"
-          style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}
-          onPress={() => router.push("/paywall?reason=running_low")}
-          accessibilityLabel={t("quota.seePlans")}
-          accessibilityRole="button"
-        >
-          <Text style={styles.linkText}>{t("quota.seePlans")}</Text>
-        </Pressable>
+        {!isBetaAccess && (
+          <Pressable
+            testID="minutes-warning-see-plans"
+            style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}
+            onPress={() => router.push("/paywall?reason=running_low")}
+            accessibilityLabel={t("quota.seePlans")}
+            accessibilityRole="button"
+          >
+            <Text style={styles.linkText}>{t("quota.seePlans")}</Text>
+          </Pressable>
+        )}
       </View>
 
       <Pressable

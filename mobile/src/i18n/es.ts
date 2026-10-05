@@ -230,6 +230,14 @@ export const es: Catalog = {
     "Esta importación necesita {needed} y te quedan {remaining} hasta el {date}. Mejora tu plan para procesarla ahora.",
   "quota.refusal.needsMoreNoDate":
     "Esta importación necesita {needed} y te quedan {remaining}. Mejora tu plan para procesarla ahora.",
+  "quota.refusal.betaOutOfMinutes":
+    "Te has quedado sin minutos en este periodo.",
+  "quota.refusal.betaOutOfMinutesUntil":
+    "Te has quedado sin minutos hasta el {date}.",
+  "quota.refusal.betaNeedsMore":
+    "Esta importación necesita {needed} y te quedan {remaining} hasta el {date}.",
+  "quota.refusal.betaNeedsMoreNoDate":
+    "Esta importación necesita {needed} y te quedan {remaining}.",
   "quota.refusal.itemTooLong":
     "Esto dura {duration}, por encima de los {max} que puede usar una sola importación en tu plan. Divídelo en partes más cortas.",
   "quota.refusal.itemTooLongGeneric":
@@ -309,6 +317,7 @@ export const es: Catalog = {
     "Tus minutos y tu fecha de recarga aparecerán aquí en cuanto haya una suscripción activa.",
   "account.plan.freeTrial": "Prueba gratuita",
   "account.plan.active": "Plan activo",
+  "account.plan.betaAccess": "Acceso beta",
   "account.plan.minutesLeft": "MINUTOS RESTANTES",
   "account.plan.minutesLeftA11y":
     "{remaining} de {included} minutos restantes en este periodo",
@@ -317,6 +326,8 @@ export const es: Catalog = {
   "account.plan.resetDateUnknownA11y": "Fecha de recarga desconocida",
   "account.plan.minutesRuleTrial":
     "{rule} Los minutos de prueba no se recargan.",
+  "account.plan.minutesRuleBeta":
+    "{rule} Durante la beta, cada cuenta recibe la asignación del plan más alto.",
   "preview.essentials": "Lo esencial",
   "preview.pending": "Se está redactando la vista previa…",
   "preview.unavailable": "No hay vista previa para esta fuente.",

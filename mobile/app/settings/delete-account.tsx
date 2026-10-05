@@ -58,7 +58,13 @@ const ERASED_ITEM_KEYS: readonly TranslationKey[] = [
 export default function DeleteAccountScreen() {
   const router = useRouter();
   const { isAuthenticated, logout } = useAuth();
-  const { isSubscribed } = usePurchases();
+  const { isSubscribed, isBetaAccess } = usePurchases();
+  // The store-subscription warning below is about a purchase deletion cannot
+  // cancel. Under the beta regime there is none to cancel — every account is
+  // entitled by the regime itself (task-429), and `isSubscribed` is true for all
+  // of them — so telling a tester to go and stop a payment would be a false
+  // alarm on the one screen that has to be read literally.
+  const hasStoreSubscription = isSubscribed && !isBetaAccess;
   const [hasAcknowledged, setHasAcknowledged] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,7 +170,7 @@ export default function DeleteAccountScreen() {
           ))}
         </View>
 
-        {isSubscribed && (
+        {hasStoreSubscription && (
           <>
             <Text style={styles.sectionTitle}>
               {t("deleteAccount.subscriptionHeading")}

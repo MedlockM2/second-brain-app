@@ -40,6 +40,13 @@ export interface EntitlementStatus {
   subscription_status: string | null;
   is_active: boolean;
   is_free_trial: boolean;
+  /**
+   * The beta regime is what grants the access (task-429): the widest allowance
+   * the backend catalogue holds, served to every account because nothing is
+   * purchasable before the stores. Read through `isBetaAccess` below rather than
+   * directly, so a screen cannot forget what a missing payload means.
+   */
+  is_beta_access: boolean;
   auto_renew_status: boolean | null;
   /** Minutes the plan includes for the current period. */
   minutes_included: number;
@@ -64,6 +71,17 @@ interface PurchasesContextValue {
   entitlementStatus: EntitlementStatus | null;
   /** Whether the user has an active subscription */
   isSubscribed: boolean;
+  /**
+   * Whether the app may offer a subscription at all (task-429).
+   *
+   * True while the backend reports the beta regime, **and while it reports
+   * nothing**. That second half is deliberate and is the opposite of the rule
+   * the rest of this app follows for an unknown plan: here the question is not
+   * what to render, it is whether to offer a purchase that cannot be completed.
+   * A failed entitlements request is not a reason to send a beta tester to a
+   * paywall, so the entries stay hidden until a payload says otherwise.
+   */
+  isBetaAccess: boolean;
   /** Loading state for subscription checks */
   isLoading: boolean;
   /** Refresh entitlement status from backend */
@@ -171,11 +189,15 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
     entitlementStatus?.is_active === true ||
     (customerInfo !== null && hasActiveEntitlement(customerInfo));
 
+  const isBetaAccess =
+    entitlementStatus === null || entitlementStatus.is_beta_access;
+
   const value: PurchasesContextValue = {
     isInitialized,
     customerInfo,
     entitlementStatus,
     isSubscribed,
+    isBetaAccess,
     isLoading,
     refreshEntitlements,
   };

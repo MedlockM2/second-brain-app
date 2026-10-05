@@ -70,6 +70,12 @@ export function formatResetDate(isoDate: string | null): string | null {
  * renewal intent stays neutral rather than promising a refill.
  */
 export function getResetDateLabel(entitlement: EntitlementStatus): string {
+  // The beta first, because it is what the figures come from while it is on
+  // (task-429) and its allowance genuinely refills: the period is a month with
+  // no anniversary, so "resets" is the true reading of the date — where the
+  // neutral "period ends" an unknown renewal intent would fall through to reads
+  // as an ending nothing is planning.
+  if (entitlement.is_beta_access) return t("subscription.resetLabel.resets");
   if (entitlement.is_free_trial) return t("subscription.resetLabel.trialEnds");
   if (entitlement.auto_renew_status === true)
     return t("subscription.resetLabel.resets");

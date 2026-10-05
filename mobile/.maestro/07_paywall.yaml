@@ -1,9 +1,13 @@
 # Flow 07: RevenueCat paywall smoke test
-# Enters through the Account tab CTA, the same path a real user takes, so the
-# flow breaks if the paywall ever becomes unreachable again. It verifies
-# packages are loaded and that closing returns to the caller, never taps
-# Subscribe. The media-summarizer://paywall deep link still works but is no
-# longer the only way in, so the flow no longer depends on it.
+# Enters through the deep link, because while the beta regime is on (task-429)
+# the app has no entry point to enter through: the Account CTA this flow used to
+# tap is hidden, and so is every other route to the paywall. What the flow still
+# guards is the wiring behind the screen — the three Test Store products matched
+# to the three config tiers, and the two store-required legal links — which does
+# not stop mattering just because the screen is unreachable for three months.
+# When the beta ends, the Account CTA comes back and so does the entry through
+# it (`git show ad76b79` has that version). It verifies packages are loaded and
+# that closing leaves the screen, and never taps Subscribe.
 appId: com.secondbrainlabs.core
 tags:
   - critical
@@ -22,25 +26,13 @@ tags:
 
 - runFlow: utils/login.yaml
 
-- tapOn:
-    id: "account-tab-button"
-
-- extendedWaitUntil:
-    visible:
-      id: "account-screen"
-    timeout: 15000
-
-# The CTA reads "Upgrade" or "Manage subscription" depending on whether the test
-# account holds an entitlement, so it is only ever addressed by test id. The
-# scroll is a no-op while the card stays above the fold.
-- scrollUntilVisible:
-    element:
-      id: "account-upgrade-button"
-    direction: DOWN
-    timeout: 15000
-
-- tapOn:
-    id: "account-upgrade-button"
+# iOS asks for confirmation before handing a scheme URL to the app
+# ('Open in "Media Summarizer"?'), and without that confirmation the paywall
+# never mounts. autoVerify dismisses the dialog; Android opens the scheme
+# directly and ignores the flag.
+- openLink:
+    link: "media-summarizer://paywall"
+    autoVerify: true
 
 - extendedWaitUntil:
     visible:
@@ -98,12 +90,13 @@ tags:
 - tapOn:
     id: "paywall-close-button"
 
-# Closing returns to the screen that opened the paywall — the Account tab, not
-# the inbox. The Account screen sits behind the sheet on iOS, so the dismissal
-# itself is what has to be asserted.
+# Reached by deep link there is no screen underneath, so closing falls back to
+# the inbox (`dismiss` in app/paywall.tsx) rather than returning to a caller.
 - extendedWaitUntil:
     notVisible:
       id: "paywall-screen"
     timeout: 10000
-- assertVisible:
-    id: "account-screen"
+- extendedWaitUntil:
+    visible:
+      id: "inbox-screen"
+    timeout: 15000

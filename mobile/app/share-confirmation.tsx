@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../src/contexts/AuthContext";
+import { usePurchases } from "../src/contexts/PurchasesContext";
 import {
   useShareIntake,
   type ShareIntakeState,
@@ -51,7 +52,8 @@ import { ScreenHeader, HeaderIconButton } from "../src/components/ScreenHeader";
  * A media shared by mistake is removed from the inbox, like any other.
  *
  * The other face of this screen is failure, and it is the only place several
- * failures can be read at all: a quota refusal with its route to the paywall, a
+ * failures can be read at all: a quota refusal with its route to the paywall — or
+ * without it, while the beta regime is on and there is nothing to buy — a
  * transfer that never reached the backend, and content the app cannot save. Each
  * one reads as one sentence naming what to do next — the step a transfer died on
  * is a fact for the logs, not for the person holding the phone.
@@ -61,6 +63,7 @@ export default function ShareConfirmationScreen() {
   useTranslation();
   const router = useRouter();
   const { isAuthenticated, isLoading, revalidateSession } = useAuth();
+  const { isBetaAccess } = usePurchases();
   const { intake, dismissIntake, parkCurrentIntakeForAuth, retry } =
     useShareIntake();
   const [isSessionReady, setIsSessionReady] = useState(false);
@@ -170,9 +173,16 @@ export default function ShareConfirmationScreen() {
   // Offered when the backend refused the submission for a tier allowance. The
   // reason travels with the push so the paywall can open on the refusal the user
   // is standing in rather than on a generic pitch.
-  const handleOpenPaywall = () => {
-    router.push("/paywall?reason=out_of_minutes");
-  };
+  //
+  // `null` while the beta regime is on (task-429), which is how this screen says
+  // "there is no route out of this refusal": the sentence the backend's figures
+  // produce is a beta sentence that proposes nothing, and offering a purchase
+  // nobody can complete would be the one thing worse than a limit.
+  const handleOpenPaywall = isBetaAccess
+    ? null
+    : () => {
+        router.push("/paywall?reason=out_of_minutes");
+      };
 
   if (!isSessionReady || isLoading || !isAuthenticated) {
     return (
@@ -225,7 +235,8 @@ function ShareContent({
   onOpenFolder: () => void;
   onDismiss: () => void;
   onRetry: () => void;
-  onOpenPaywall: () => void;
+  /** `null` when no subscription may be offered — see the screen above. */
+  onOpenPaywall: (() => void) | null;
 }) {
   switch (intake.status) {
     // "ready" belongs here and not with the question: the submission has been
@@ -272,7 +283,9 @@ function ShareContent({
       // was reached.
       const quotaErrorCode = intake.quotaErrorCode ?? null;
       const offersUpgrade =
-        quotaErrorCode !== null && quotaErrorOffersUpgrade(quotaErrorCode);
+        onOpenPaywall !== null &&
+        quotaErrorCode !== null &&
+        quotaErrorOffersUpgrade(quotaErrorCode);
 
       return (
         <View style={styles.centerContent} testID="share-error-state">
