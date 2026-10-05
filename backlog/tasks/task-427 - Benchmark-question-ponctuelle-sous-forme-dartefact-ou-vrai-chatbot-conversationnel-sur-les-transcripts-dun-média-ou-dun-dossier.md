@@ -77,3 +77,65 @@ Une recommandation tranchée pour la V1, avec le coût unitaire, les garde-fous 
 - [ ] #6 Le README liste, pour chaque voie, les fichiers backend et mobile à étendre et ce qui est entièrement neuf, ainsi que ce que la voie A laisserait de réutilisable pour passer ensuite à la voie B
 - [ ] #7 Un fichier docs/research/task-427-ask-question-vs-chatbot/README.md existe avec owner_decision: pending dans son front-matter et les sections Owner Validation, Recommendation et Sources
 <!-- AC:END -->
+
+## Implementation Notes
+<!-- SECTION:NOTES:BEGIN -->
+**Mode: initial.** No `docs/research/task-427-*` directory existed, so this is a from-scratch
+benchmark. No previous `README.owner-rejected-*.md` and no `complement-request-*.md` to integrate.
+
+**Delivered**
+
+- `docs/research/task-427-ask-question-vs-chatbot/README.md` — front-matter `owner_decision: pending`,
+  empty `Owner Validation` section, a decided `Recommendation`, then 12 sections and `Sources`.
+- `docs/research/task-427-ask-question-vs-chatbot/compute.py` — pure arithmetic, no network.
+  `python3 compute.py` regenerates every euro figure quoted in the README. Written without dict or
+  f-string literals because the sandbox rejects heredocs containing curly braces.
+
+**Recommendation awaiting owner validation**: voie A' — the "question thread". The owner's voie A
+machinery (a sixth `MediaArtifactType`, `answer`, whose prompt is the user's question) with voie B
+semantics (previous turns of the same `thread_id` reinjected ahead of the new question). No
+conversations table, no new endpoint, no streaming, no RAG, no sliding window.
+
+**What the research established, against the owner's a priori**
+
+- Both fears behind voie A are measured false. At the task-269 ceiling, 20 turns with the full
+  history reinjected cost **0.0728 EUR** with prompt caching against **0.0212 EUR** for one cold
+  question; the history after 20 turns is **8 740 tokens, 7.3 % of the corpus**. Forbidding
+  follow-ups saves **3.6 %** (voie C, 0.0702 EUR over 20 turns) and loses the whole feature.
+- Prompt caching, measured at **-7.6 %** on batch artifacts (pricing-challenge R.6, re-verified here
+  at 8/128 calls and 11.9 % of prompt tokens on `media_artifacts-dev` on 2026-10-05), yields
+  **-61 % to -83 %** in a conversation, because a thread only ever appends and its turns are seconds
+  apart rather than the 4.9 min median that sits at the edge of the `in_memory` TTL.
+- No context management is needed: with a 10-turn cap, the worst case is 45.8 % of the 272 000-token
+  input window. RAG is unnecessary **under the ceiling**, and out of reach above it (the whole `-dev`
+  corpus is 1.35x the window).
+- The only real blocker is **streaming**, and it blocks the chat *form*, not the conversation
+  *semantics*: the deployed front door is an API Gateway **HTTP API**, whose `CreateIntegration` has
+  no response-transfer-mode field and whose integration timeout is capped at 30 000 ms, not
+  increasable. Only REST APIs carry `responseTransferMode = STREAM`, and Lambda streams natively
+  only on Node.js managed runtimes (Python needs the Lambda Web Adapter or a custom runtime).
+  Four options are costed in README section 7.2.
+- Measured on `-dev` (read-only, 2026-10-05, 128 generations carrying `llm_usage`): latency follows
+  **output**, not input — a 62 601-token prompt answered in 27.3 s while a 7 499-token `notes` with
+  2 888 output tokens took 123.6 s. Median output throughput about 111 tokens/s. That is what makes
+  `reasoning_effort` (still **zero occurrences** in the repo) the first lever of this feature.
+
+**Quota unit proposed**, tied to `quota_enforcer.py`: 1 minute per 20 000 context tokens on the first
+turn (`unit_conversion.question_context_tokens_per_minute`), 1 flat minute per follow-up within
+5 minutes, and the context re-charged beyond that — because past the provider's cache TTL we really
+do re-pay the corpus. Coverage 114 % to 202 % on the worst reasoning regime. Credit-scale mapping
+given for pricing-challenge R.2. No new visible refusal: `out_of_minutes` and `item_too_long` stay
+the only two.
+
+**Owner notes carried in the README, not as ACs**: the E2E check that validates the whole economic
+hypothesis (one question plus three follow-ups under a minute apart, then read `cached_tokens` on the
+four rows of `media_artifacts-dev`), and the fact that introducing `reasoning_effort` invalidates the
+cache prefix once.
+
+**Not decided here, on purpose**: the model for the `answer` type (figures given, recommendation is a
+dedicated `ANSWER_LLM_MODEL` env var with `gpt-5.4-nano` initially — the choice belongs to task-72),
+`reasoning_effort` per existing type (task-316 P2-2), thread deletion, and cross-library chat (a
+separate benchmark, with a vector store as its subject).
+
+Task stays `To Do`; the owner decides via `owner_decision` in the README front-matter.
+<!-- SECTION:NOTES:END -->
