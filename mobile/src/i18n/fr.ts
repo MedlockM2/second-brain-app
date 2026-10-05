@@ -397,9 +397,9 @@ export const fr: Catalog = {
   "deleteAccount.erasedHeading": "Ce qui est effacé",
   "deleteAccount.erased.library": "Votre bibliothèque et vos dossiers",
   "deleteAccount.erased.artifacts":
-    "Toutes vos transcriptions, résumés, notes et cartes mémo",
-  "deleteAccount.erased.schedule": "Votre planning de révision et vos digests",
-  "deleteAccount.erased.search": "Vos résultats de recherche dans toute l'app",
+    "Toutes vos transcriptions, résumés, notes, cartes mémo et quiz",
+  "deleteAccount.erased.digests": "Vos digests quotidiens et hebdomadaires",
+  "deleteAccount.erased.search": "L'index de recherche de votre bibliothèque",
   "deleteAccount.erased.identity":
     "Votre adresse e-mail et vos identifiants de connexion",
   "deleteAccount.subscriptionHeading": "Votre abonnement",

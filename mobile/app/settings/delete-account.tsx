@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { usePurchases } from "../../src/contexts/PurchasesContext";
 import { AccountService } from "../../src/services/accountService";
+import { hasActiveEntitlement } from "../../src/services/purchaseService";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import { t, type TranslationKey } from "../../src/i18n";
 import {
@@ -50,7 +51,7 @@ import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeade
 const ERASED_ITEM_KEYS: readonly TranslationKey[] = [
   "deleteAccount.erased.library",
   "deleteAccount.erased.artifacts",
-  "deleteAccount.erased.schedule",
+  "deleteAccount.erased.digests",
   "deleteAccount.erased.search",
   "deleteAccount.erased.identity",
 ];
@@ -58,7 +59,14 @@ const ERASED_ITEM_KEYS: readonly TranslationKey[] = [
 export default function DeleteAccountScreen() {
   const router = useRouter();
   const { isAuthenticated, logout } = useAuth();
-  const { isSubscribed } = usePurchases();
+  const { entitlementStatus, customerInfo } = usePurchases();
+  // Not the context's `isSubscribed`: the backend free trial is entitled too, but
+  // no store bills it, so telling a trial account that Apple or Google keeps
+  // charging it would be false. A store subscription is a tier on the backend
+  // row, or a tier entitlement RevenueCat reports before the webhook lands.
+  const hasStoreSubscription =
+    entitlementStatus?.subscription_tier != null ||
+    (customerInfo !== null && hasActiveEntitlement(customerInfo));
   const [hasAcknowledged, setHasAcknowledged] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,7 +172,7 @@ export default function DeleteAccountScreen() {
           ))}
         </View>
 
-        {isSubscribed && (
+        {hasStoreSubscription && (
           <>
             <Text style={styles.sectionTitle}>
               {t("deleteAccount.subscriptionHeading")}
