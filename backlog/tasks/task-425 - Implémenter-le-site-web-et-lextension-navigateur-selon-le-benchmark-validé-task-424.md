@@ -26,7 +26,7 @@ ordinal: 32000
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Construire le site web de l'app, avec son paiement Stripe, et l'extension navigateur qui enregistre une page dans le second cerveau.
 
-**Avant d'écrire une ligne, lire `docs/research/task-424-*/README.md`** : la section `Owner Validation` porte la décision de l'owner (périmètre du site, proposition de design retenue parmi les maquettes `mobile-design-mockups/website_direction_*/`, intégration du paiement Stripe, framework d'extension, navigateurs cibles, méthode d'authentification, ce que la première version capture) et l'architecture à suivre. Si le champ `Decision` renvoie à un `complement-response-*.md`, le lire aussi. La décision de l'owner prime sur la recommandation initiale du README.
+**Avant d'écrire une ligne, lire `docs/research/task-424-*/README.md`** : la section `Owner Validation` porte la décision de l'owner (périmètre du site, proposition de design retenue parmi les maquettes `mobile-design-mockups/web_app/`, intégration du paiement Stripe, framework d'extension, navigateurs cibles, méthode d'authentification, ce que la première version capture) et l'architecture à suivre. Si le champ `Decision` renvoie à un `complement-response-*.md`, le lire aussi. La décision de l'owner prime sur la recommandation initiale du README.
 
 Si le README découpe l'implémentation en plusieurs lots, ne réaliser que le premier, puis créer les tâches des lots suivants dans le backlog, chacune dépendant de celle-ci.
 

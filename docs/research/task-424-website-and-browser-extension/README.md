@@ -1,13 +1,43 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: redo   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : site web de l'app (avec paiement Stripe) et extension navigateur « enregistrer cette page »
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**:
+
+**Rejeté sur la dimension 1. L'app web est le périmètre, pas une option à chiffrer puis à écarter.** La recommandation « Option V — vitrine statique » est refusée, et avec elle le report de l'app web à un « lot 5 » conditionné à des retours de beta. Je n'ai pas besoin d'une donnée de beta pour savoir que je veux consulter mon second cerveau dans un navigateur : **c'est décidé**. Ce que le prochain passage doit étudier, ce n'est plus *si* on fait une app web, mais *comment* on la fait.
+
+Trois corrections à intégrer :
+
+**1. Le périmètre fonctionnel de l'app web, une fois l'utilisateur connecté.** Elle doit porter ce que porte l'app mobile :
+
+- les ajouts récents ;
+- la bibliothèque : liste, dossiers, fiche média, lecteur de transcript, artefacts IA ;
+- l'onglet digest (quotidien et hebdomadaire) ;
+- la recherche ;
+- les réglages du compte, abonnement compris.
+
+La page vitrine, les pages légales et la page d'installation de l'extension restent nécessaires — ce sont des obligations de store (task-357) — mais elles ne sont plus le livrable principal : elles deviennent la partie publique d'un site dont la partie connectée est l'app web.
+
+**2. Deux arguments du README à ne pas reprendre.**
+
+- « Le besoin exprimé est l'extension, pas la lecture sur ordinateur » (§1.3) : le besoin de lecture sur ordinateur est maintenant exprimé, ici, par écrit.
+- « La direction D des maquettes montre ce qu'on achèterait. L'owner peut voir à quoi ressemble l'app web avant de décider de la payer » (§1.3) : **c'est inexact, et c'est ce qui a rendu la recommandation indéfendable.** La direction D ne montre pas une app web. Comme les trois autres, c'est une vitrine de trois pages — accueil, extension, abonnement — dont le hero encastre une *vignette de démonstration* de la bibliothèque dans une page marketing. Aucune surface connectée n'est dessinée : pas de bibliothèque navigable, pas d'onglet digest, pas de fiche média, pas de réglages. La seule page connectée maquettée est `/abonnement`. **Les quatre répertoires `mobile-design-mockups/website_direction_*/` ont été supprimés** : ils ne servent pas le périmètre retenu, et les laisser ferait travailler l'implémentation sur une base fausse.
+
+**3. Les maquettes du prochain passage.**
+
+- Elles doivent couvrir les **écrans connectés**, pas quatre variantes de page d'accueil. Une direction de design se juge sur la bibliothèque, la fiche média et le digest — c'est là que l'utilisateur passera son temps.
+- **Elles vont toutes dans un sous-dossier commun `mobile-design-mockups/web_app/`**, une direction par sous-dossier (`mobile-design-mockups/web_app/direction_a_<nom>/`, etc.). La passe précédente a posé ses quatre `website_direction_*/` **à la racine de `mobile-design-mockups/`**, donc au même niveau d'arborescence que toutes les maquettes mobiles du projet, qui sont déjà une vingtaine. C'est illisible et ça ne passe pas à l'échelle. Le reste des conventions de `mobile-design-mockups/my_design_system/DESIGN.md` ne change pas : design system *Amber Clarity*, tokens de `mobile/src/constants/theme.ts`, `code.html` autonome sans requête réseau + `screen.png`.
+- Le rendu de référence est **desktop**. Un rendu responsive secondaire est bienvenu, mais une app web se juge d'abord sur grand écran : c'est sa raison d'être.
+
+**Ce qui reste acquis du README rejeté.** Tout ce qui ne dépend pas de la dimension 1 a été jugé solide et n'est pas à refaire : l'extension (WXT, Chrome Web Store d'abord, appairage depuis le mobile, capture URL + texte + sélection), les cinq affirmations corrigées en §0, l'analyse du webhook RevenueCat, le paiement Stripe branché sur RevenueCat et jamais en direct, la TVA, les règles des stores. **Reprendre ces conclusions, ne pas réinstruire ces questions.** Ce qui doit être réétudié à la lumière de l'app web : la stack du site (une app web connectée n'est plus six pages statiques — Astro reste-t-il le bon choix ?), l'hébergement, l'authentification (une session complète dans le navigateur, avec rafraîchissement, déconnexion et multi-onglets, là où le README ne prévoyait une session que sur la page d'abonnement), le CORS, le découpage en lots, et le coût sur douze mois.
+
+**La question ouverte que le prochain passage doit trancher, chiffres à l'appui :** parité complète avec le mobile dès le premier lot, ou un sous-ensemble en lecture d'abord — et dans ce cas lequel, et ce que coûte le rattrapage ensuite. Recommander, en chiffrant les deux. La question du partage de code avec `mobile/` se repose aussi : §3.4 concluait « rien d'utile n'est partageable » pour une extension, ce qui n'est pas la même question pour une app web qui réaffiche les mêmes artefacts.
+
+**Validated at**: 2026-10-05
 
 ---
 
