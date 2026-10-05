@@ -363,6 +363,7 @@ export const ja: Catalog = {
   "search.placeholder": "ライブラリを検索…",
   "search.clearA11y": "検索キーワードを消去",
   "search.folders": "フォルダ",
+  "search.foldersToggleHint": "フォルダの表示と非表示を切り替えます",
   "search.allMedia": "すべてのメディア",
   "search.noFolders": "まだフォルダがありません。保存するときにメディアをフォルダに整理してください。",
   "search.openFolderA11y": "フォルダ {name} を開く",

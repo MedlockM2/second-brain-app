@@ -434,6 +434,7 @@ export const es: Catalog = {
   "search.placeholder": "Busca en tu biblioteca…",
   "search.clearA11y": "Borrar la búsqueda",
   "search.folders": "Carpetas",
+  "search.foldersToggleHint": "Muestra u oculta tus carpetas",
   "search.allMedia": "Todos los medios",
   "search.noFolders":
     "Aún no hay carpetas. Organiza tus medios en carpetas al guardarlos.",

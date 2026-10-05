@@ -370,6 +370,7 @@ export const hi: Catalog = {
   "search.placeholder": "अपनी लाइब्रेरी में खोजें…",
   "search.clearA11y": "खोज मिटाएँ",
   "search.folders": "फ़ोल्डर",
+  "search.foldersToggleHint": "आपके फ़ोल्डर दिखाता या छिपाता है",
   "search.allMedia": "सभी मीडिया",
   "search.noFolders": "अभी कोई फ़ोल्डर नहीं है। सहेजते समय मीडिया को फ़ोल्डरों में व्यवस्थित करें।",
   "search.openFolderA11y": "फ़ोल्डर {name} खोलें",

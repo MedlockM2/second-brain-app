@@ -442,6 +442,7 @@ export const de: Catalog = {
   "search.placeholder": "Durchsuche deine Bibliothek …",
   "search.clearA11y": "Suche löschen",
   "search.folders": "Ordner",
+  "search.foldersToggleHint": "Blendet deine Ordner ein oder aus",
   "search.allMedia": "Alle Medien",
   "search.noFolders":
     "Noch keine Ordner. Ordne Medien beim Speichern in Ordner ein.",
