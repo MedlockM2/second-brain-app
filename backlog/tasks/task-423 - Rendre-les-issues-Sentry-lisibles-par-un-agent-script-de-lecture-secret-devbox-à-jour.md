@@ -3,9 +3,10 @@ id: TASK-423
 title: >-
   Rendre les issues Sentry lisibles par un agent (script de lecture + secret
   devbox à jour)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 20:24'
+updated_date: '2026-09-30 07:55'
 labels:
   - tooling
   - observability

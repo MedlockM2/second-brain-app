@@ -1,5 +1,5 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: more  # pending | ok | abandoned | redo | more
 ---
 
 # Challenge du système de pricing de bout en bout
@@ -11,7 +11,50 @@ owner_decision: pending   # pending | ok | abandoned | redo | more
 
 ## Owner Validation
 
-**Decision**:
+**Decision**: *Décisions partielles du 2026-10-04 — `owner_decision` reste `pending` tant que les
+questions encore ouvertes (ci-dessous) ne sont pas tranchées.*
+
+> Question de l'owner qui les a amenées (2026-10-04) : « c'est pas mal le système de crédits mais
+> j'ai peur ce soit trop confusant pour l'user de comprendre ce que représente un crédit
+> concrètement […]. Donc on peut peut-être garder le crédit comme quelque chose pour vérifier la
+> conso d'un user en backend mais ne pas communiquer dessus […]. De plus concernant le plan gratuit
+> permanent avec peu de crédits → ma crainte c'est qu'un user qui essaie l'appli grâce à ce plan
+> hypothétique ne peut pas l'utiliser à son plein potentiel (en construisant des gros dossiers avec
+> plein de médias…) et qu'on augmente le churn alors qu'avec un accès presque "illimité" pendant un
+> mois ce n'est pas le cas. »
+
+1. **Le crédit remplace la minute, mais en backend seulement.** Il sert au compteur et au barème
+   de § R.2 ; il n'apparaît **nulle part** dans l'app. L'utilisateur voit :
+   - sur la carte d'une formule, des équivalents en objets formulés comme une alternative
+     (« jusqu'à ≈ 6 h de podcast, *ou* 70 vidéos YouTube d'une heure, *ou* 180 articles par
+     mois ») ;
+   - sur la jauge, un pourcentage du forfait consommé et ce qu'il reste, en objets ;
+   - sur un refus, une phrase sur le média refusé (« ce podcast de 3 h dépasse ce qu'il reste de
+     votre forfait ce mois-ci ») ;
+   - pour la recharge, son équivalent (« ≈ 1 h 40 de podcast ou 50 articles de plus ce mois-ci »).
+
+   Les équivalents sont **calculés par l'API à partir du barème**, jamais écrits en dur dans les
+   catalogues i18n. Remplace la règle 2 de § R.5 et la formulation en crédits des clés
+   `plan.card.allowance` et `quota.refusal.topUp` de § R.5. À vérifier contre la règle store de
+   § 4.3 : la description « jusqu'à ≈ … » doit suffire à dire ce que l'abonnement donne.
+2. **Essai à la création du compte, puis petit palier gratuit permanent** — remplace Découverte
+   comme porte d'entrée (§ R.3), la puce « L'essai gratuit de 30 jours » de § R.4, la
+   correction 15 et la question 12(b) :
+   - **30 jours au niveau du palier haut**, accordés par le backend sans moyen de paiement, comme
+     aujourd'hui (`free_trial` dans `pricing_config_service.py`, `_free_trial_window` dans
+     `quota_enforcer.py`). Coût borné par l'allocation de ce palier ; les burst guards doivent
+     refuser et non journaliser (correction 6), parce qu'un nouveau compte Apple/Google donne un
+     nouvel essai ;
+   - **après l'essai, on garde quelques envois gratuits par mois** (le palier Découverte, 40
+     crédits, valeur à ajuster sur la consommation beta) au lieu d'un mur. La bibliothèque, la
+     recherche et les artefacts déjà générés restent accessibles ;
+   - raison : la valeur d'un second cerveau est cumulative (dossiers, génération sur un dossier,
+     recherche, digest) et 40 crédits/mois ne permettent pas de la découvrir. Un essai généreux est
+     aussi un meilleur instrument de mesure de la consommation qu'un petit palier qui la tronque,
+     et il nourrit la recommandation de formule `plan.rec.*`.
+
+**Encore ouvert** : suppression du palier à 3 € (Q2), recharge consommable (Q3), commission rendue
+ou encaissée (Q4), prix et allocation du palier haut (§ 2.8), numéro de tâche du répertoire (Q9).
 
 **Validated at**:
 
@@ -288,6 +331,11 @@ volume : c'est le vrai défaut de compréhensibilité, et il ne se règle pas pa
 règle par un **palier gratuit permanent**, qui est l'instrument avec lequel l'acheteur mesure sa
 consommation avant de choisir.
 
+> *Révisé le 2026-10-04 (décision de l'owner, § Owner Validation point 2).* La mesure se fait par
+> un **essai de 30 jours au niveau du palier haut** ; Découverte n'est plus la porte d'entrée mais le
+> palier où l'on retombe après l'essai si l'on ne s'abonne pas. Les chiffres de Découverte
+> ci-dessous restent valables pour ce rôle.
+
 Dimensionnée à **15 % de commission**, la candidature au Small Business Program étant déposée
 (cf. argument 4). Les allocations sont calées sur le **même ratio variable/net au plafond** que la
 version à 30 % de la première mouture de ce document (51 % et 57 %) : la réduction de commission est
@@ -368,6 +416,14 @@ stock** plutôt qu'illimité en conservation.
   introductif **s'obtient en souscrivant** — moyen de paiement, engagement, écran d'achat. Il ne
   permet donc **pas** à l'acheteur de mesurer sa consommation avant de décider, qui est précisément
   le service qu'on attend de lui. Le palier gratuit permanent le rend, à 0,20 €/mois/utilisateur.
+
+  > *Corrigé le 2026-10-04 — cette puce est fausse et ne s'applique pas.* L'essai de l'app n'est
+  > pas un essai introductif du store : il est accordé par le backend à la création du compte, sans
+  > moyen de paiement ni écran d'achat (`free_trial`, `quota_enforcer._free_trial_window`). Il
+  > permet donc bien de mesurer sa consommation, et mieux qu'un petit palier qui la tronque. Le
+  > coût de 2,89 € venait du taux de change faux de la minute ; avec le barème de § R.2, il est
+  > borné par l'allocation de l'essai. **L'essai est conservé**, au niveau du palier haut, suivi
+  > du palier Découverte — décision de l'owner, § Owner Validation point 2.
 - **Le repli Unstructured.** 43 % de couverture même avec le barème corrigé, et il se déclenche sur
   *n'importe quelle* `ParseError` (`docs/INGESTION_WORKERS_PROVIDERS.md:509`), y compris le HTTP 402
   d'un pool épuisé. Quand LlamaParse ne répond pas, le document attend ou est refusé — il n'est pas
@@ -411,8 +467,12 @@ Trois règles de rédaction qui tiennent dans les onze locales :
 
 1. **Un chiffre, jamais un mécanisme.** « 1 crédit par minute » se traduit ; « conversion d'unité de
    transcription » ne se traduit pas et ne se comprend pas.
-2. **Toujours le crédit *avec* son équivalent humain.** Le crédit seul est opaque ; « 300 crédits
-   ≈ 5 h de podcast » est lisible sans rien savoir du produit.
+2. ~~**Toujours le crédit *avec* son équivalent humain.**~~ *Remplacée le 2026-10-04 (§ Owner
+   Validation point 1)* : **l'équivalent seul, jamais le crédit.** Le crédit reste l'unité du
+   compteur et n'apparaît sur aucun écran ; on affiche « jusqu'à ≈ 6 h de podcast, ou 180
+   articles », un pourcentage de forfait consommé, et l'équivalent de ce qu'il reste. Les clés de
+   la table ci-dessus qui parlent de crédits (`plan.card.allowance`, `quota.refusal.topUp`) sont à
+   reformuler dans ce sens.
 3. **Pas de mise en page qui suppose des espaces entre les mots.** Le japonais et le chinois n'en
    ont pas : l'équivalence doit être une chaîne entière, pas deux fragments concaténés à l'écran.
 
@@ -912,6 +972,12 @@ même façon. Détail et mesures en § 3.6.
 
 ### 2.4 La commission de 15 % : automatique chez Google, sur candidature chez Apple
 
+> **État au 2026-10-04** : le Small Business Program **est accordé** — confirmé par l'owner. La
+> commission App Store est donc de 15 %, comme sur Google Play, et la colonne « Marge si 30 % » de
+> § R.3 n'est plus qu'un garde-fou historique. Restent à relever dans le mail Apple la date
+> d'approbation et la date d'effet (quinze jours après la fin du mois fiscal d'approbation) : les
+> ventes antérieures à cette date sont à 30 %. Tracé dans `docs/V1_LAUNCH_PLAN.md` § 2.
+>
 > **État au 2026-09-09** : la candidature au Small Business Program **a été déposée** par l'owner, et
 > la consigne est de traiter la réduction comme acquise dans tous les calculs de ce document. Ce qui
 > suit reste vrai comme description du mécanisme et de son calendrier — c'est le calendrier qui
@@ -985,6 +1051,13 @@ puis proposer `text_only` à 3 € demande à l'utilisateur d'**accepter une div
 allocation** au moment de payer. Snipd résout ça avec un **palier gratuit permanent, faible et
 compté en objets** (2 épisodes/semaine) qui n'établit jamais une référence haute. C'est la
 structure à copier — pas l'essai généreux.
+
+> *Révisé le 2026-10-04 — conclusion renversée par l'owner, § Owner Validation point 2.* La
+> comparaison avec Snipd est faible : la valeur d'un épisode Snipd est immédiate, celle d'un second
+> cerveau est cumulative (dossiers, génération sur un dossier, recherche), et un petit palier ne
+> permet pas de la découvrir. La division de l'allocation au moment de payer disparaît si l'essai
+> est au niveau du palier haut et si aucun palier payant ne lui est inférieur de 5×. Retenu : essai
+> généreux de 30 jours, puis palier Découverte.
 
 ### 2.7 L'absence de produit annuel
 
@@ -1761,7 +1834,7 @@ discute).
 | 1 | **M** | Cesser de facturer 1 minute forfaitaire une vidéo YouTube — **absorbé par la correction 0** (barème : 2 crédits + 1 par 20 min commencées, couverture 108–129 %). Si la refonte est refusée, le minimum vital est de facturer YouTube **à sa durée**, car le coût dominant est le LLM en aval, proportionnel à la longueur du transcript. | `unit_conversion.captions_minutes` dans DynamoDB `pricing_config-<env>` + `docs/research/task-287-…/README.md` (thèse à corriger) + `plan.cost.captions.*` dans les 11 catalogues i18n | **Bloque le lancement** |
 | 2 | **B** | Appeler `provider_pool_guard.spend_allowed` avant LlamaParse, comme `apify_adapter.py:212-214` le fait pour Apify, **et compter en crédits** : à 3 crédits/page le pool croit avoir dépensé le tiers du réel, donc `alarm_pct: 60` se déclenche après l'épuisement et `stop_pct: 90` jamais. Sans cet appel, l'épuisement bascule silencieusement sur un fournisseur 9,7× plus cher, et il arrive **dès le premier abonné documentaire intensif** (3 333 pages, pas 10 000). | `media_summarizer/workers/document_parsing/worker.py` (avant `:156`, et `:253-260` pour l'unité) + `provider_pools.llamaparse.capacity_unit` | **Bloque le lancement** |
 | 2b | **B** | **Envoyer le mode LlamaParse explicitement** dans la charge utile d'upload : `parse_mode=parse_page_with_llm`, qui est le défaut mesuré le 2026-09-09 — donc **à coût rigoureusement nul**, 3 crédits/page avant comme après. Ce qu'on achète est la stabilité : le défaut n'est publié nulle part, l'organisation porte un drapeau `show_parse_v1` réévalué par le fournisseur, et sa nomenclature de facturation a déjà changé sous le dépôt le 2026-08-29. Le mode est une décision de prix : il appartient à la requête. | `media_summarizer/infrastructure/resolvers/llamaparse_resolver.py:191-194` | **Bloque le lancement** |
-| 3 | **M** | **Fait le 2026-09-09** : la candidature au Small Business Program est déposée. Reste à **relever et consigner la date d'approbation** — l'effet est décalé de « fifteen (15) days after the end of the fiscal calendar month in which your enrollment is approved », soit ~15 novembre 2026 pour une approbation en septembre. Jusque-là les nets sont ceux de 30 % (−17,6 %). | Confirmation Apple par mail + App Store Connect → **Business**. Trace à écrire dans `docs/V1_LAUNCH_PLAN.md`, qui ne mentionne pas le programme | Haute |
+| 3 | **M** | **Accordé — confirmé par l'owner le 2026-10-04**, consigné dans `docs/V1_LAUNCH_PLAN.md` § 2. Seules la date d'approbation et la date d'effet restent à relever dans le mail Apple. *Historique :* **fait le 2026-09-09** : la candidature au Small Business Program est déposée. Reste à **relever et consigner la date d'approbation** — l'effet est décalé de « fifteen (15) days after the end of the fiscal calendar month in which your enrollment is approved », soit ~15 novembre 2026 pour une approbation en septembre. Jusque-là les nets sont ceux de 30 % (−17,6 %). | Confirmation Apple par mail + App Store Connect → **Business**. Trace à écrire dans `docs/V1_LAUNCH_PLAN.md`, qui ne mentionne pas le programme | Haute |
 | 3b | **M** | **Basculer `review_blurb` sur `gpt-5-nano`.** C'est le seul appel LLM que 100 % des ingestions paient, et **13 % seulement de son coût est de la sortie** — donc tout est dans l'input à $0.20/1M, pour produire quatre puces. **Mesuré sur les 59 appels réels de dev** : 0,000685 €/appel, soit **36,7 % de toute la facture LLM**, ramenés à 0,000177 € — **−74,1 %**, contre −74,9 % modélisé sur une source de 3 h. Les deux méthodes convergent, ce qui en fait le changement le mieux étayé du document ; ~8,50 €/mois au plafond de `items_per_day: 60`. Prérequis : rendre la famille `*_LLM_MODEL` réelle, sinon `OPENAI_MODEL` déplace cinq générateurs à la fois. | `generators/review_blurb.py:100-101` + secret `media-summarizer-runtime-<env>` | Haute |
 | 3c | **B** | **Envoyer `reasoning_effort: "minimal"` sur les deux appels LLM.** Le mot n'existe **nulle part** dans le dépôt : les deux payloads sont minimaux, donc `gpt-5-nano` et `gpt-5.4-nano` raisonnent au réglage par défaut et **ces tokens sont facturés au tarif de sortie** — 8× l'entrée, 6,25× respectivement. Mesuré sur 17 traductions : un plancher de **~3 400 tokens de sortie par appel indépendant de la longueur** (`sortie ≈ 3 402 + 1,58 × entrée`), qui donne un ratio de **11,4× sous 1 000 tokens d'entrée** contre 1,12× à 9 283. Gain **−69,2 %** sur les traductions mesurées. **La facture OpenAI confirme sur trois mois** : le résidu `gpt-5-nano` — la traduction — facture 774 714 tokens de sortie pour 82 417 d'entrée (ratio **9,40×**), **98,9 % de son coût est de la sortie**, et le poste pèse **60,4 % de toute la facture** (0,2695 € sur 0,4464 €). C'est donc **le premier levier en euros absolus**, devant 3b. Côté artefacts, `summary_short` dépense **92 %** de son coût en sortie pour un résumé *court*. À vérifier après coup sur la qualité des sorties structurées : c'est le seul de ces changements qui peut dégrader un résultat. | `media_summarizer/core/services/transcript_translation.py:310-315` + `media_summarizer/workers/artifact_generator/worker.py:139-148` | Haute |
 | 3d | **B** | **Persister le modèle dans `ArtifactLlmUsage`** — correction **révisée à la baisse** après vérification. La structure porte quatre champs (`prompt_tokens`, `cached_tokens`, `completion_tokens`, `cost_eur`) et pas le nom du modèle, mais l'information **n'est pas perdue** : `generator_version` la porte, au format `<type>:<modèle>:<prompt>` — relevé sur les artefacts du podcast, `quiz:gpt-5.4-nano-2026-03-17:prompt-v4`. C'est même par là qu'est établi que `notes` tourne bien sur `gpt-5.4-nano` et non sur le `gpt-4o-mini` de son défaut de code. Ce qui reste à corriger est donc mineur : le coût n'est pas **recalculable depuis `llm_usage` seul**, il faut parser une chaîne d'un autre champ dont le format n'est garanti nulle part. Un `model: str` réglé au même endroit que `cost_eur` rend l'enregistrement autoportant ; l'urgence a disparu. | `media_summarizer/core/models/media_artifact.py:127-133` + `workers/artifact_generator/worker.py:204-220` | Basse |
@@ -1778,7 +1851,7 @@ discute).
 | 12 | **B** | Monter `MinutesWarningBanner` sur Account, où vit la jauge. Aujourd'hui il n'est monté qu'à `inbox.tsx:348`, donc un abonné à 85 % ne voit aucun avertissement là où il regarde sa consommation — et un utilisateur de lecteur d'écran n'en voit aucun du tout, `UsageBar` étant masquée. | `mobile/app/(tabs)/account.tsx` | Moyenne |
 | 13 | **B** | **Supprimer `providers.llm` et purger `gpt-4o-mini` du dépôt.** Le bloc n'a aucun consommateur — les générateurs lisent `os.environ`. Et `gpt-4o-mini` n'est **jamais appelé** : il n'apparaît sur aucune ligne de la facture des trois derniers mois. Donc ne pas « l'ajouter à `_MODEL_PRICES` » comme la première version de ce tableau le proposait — ce serait provisionner un tarif pour un modèle mort. Ce qui se supprime : le bloc `providers.llm`, le fallback en dur `gpt-4o-mini-2024-07-18` de `notes.py:102` (aligné sur `OPENAI_MODEL` comme les quatre autres générateurs), et la ligne `gpt-4o-mini` du tableau de tarifs de ce document. | `pricing_config_service.py:159-164` + `workers/artifact_generator/generators/notes.py:99-104` | Moyenne |
 | 14 | **A** | Créer un produit annuel sur les trois entitlements. Un produit + un package, aucun code, aucun déploiement. Achète de la trésorerie avant le premier mois de coûts fournisseurs, supprime le churn mensuel, et ouvre les 10 % Apple après un an sur les *alternative terms* UE. Readwise cède 24 % pour ça. | Console RevenueCat (`proj879a771a`, offering `default`) + App Store Connect → *Second Brain Plans* + Play Console → Monetize → Subscriptions ; procédure dans `docs/REVENUECAT_ENTITLEMENTS.md:144-162` | Moyenne |
-| 15 | **A** | Remplacer l'essai de 30 jours à 300 minutes par un **palier gratuit permanent, faible, compté en objets** (sur le modèle des 2 épisodes/semaine de Snipd). Résout trois choses d'un coup : la division par 5 de l'allocation au moment de payer, le budget fournisseur non récupérable par inscription, et l'impossibilité de choisir une formule sans connaître sa consommation. | `free_trial` (config + DynamoDB) + `quota_enforcer._active_subscription` + `plan.*` / `paywall.*` dans les 11 catalogues i18n | Moyenne |
+| 15 | **A** | ~~Remplacer l'essai de 30 jours à 300 minutes par un palier gratuit permanent.~~ **Décidé le 2026-10-04** : garder l'essai de 30 jours mais au niveau du palier haut, puis faire retomber l'utilisateur non abonné sur le palier Découverte (quelques envois gratuits par mois) au lieu d'un refus total. Le coût de l'essai est borné par le barème de § R.2 ; la division de l'allocation au paiement disparaît avec le palier à 3 €. | `free_trial` (config + DynamoDB) + `quota_enforcer._active_subscription` + `plan.*` / `paywall.*` dans les 11 catalogues i18n | Moyenne |
 | 16 | **A** | Revoir le prix d'Audio-Heavy, ou son allocation. À 9 € TTC pour 720 min il est plus cher et moins généreux que Snipd à $6.99 pour 900 min + IA illimitée sur le catalogue pré-traité. Le tarif de la minute étant **1,78× trop haut, mesuré sur facture**, l'allocation a de la marge : 900 minutes coûtent 3,35 € sur 6,375 € de net. Et le crédit d'inscription Deepgram non entamé — **$197,06, soit 764 h** — absorbe entièrement le surcroît pendant les premiers mois, ce qui rend la générosité gratuite au lancement. Mais seulement après la correction n° 1. | `tiers.audio_heavy` (config + DynamoDB) + prix dans App Store Connect et Play Console | Moyenne |
 | 17 | **M** | Ajouter Algolia à `provider_pools` avec **deux** compteurs, parce qu'il en a deux de natures différentes : les recherches sont un **flux** mensuel (10 K sur le gratuit, ~111 abonnés à 90/mois), les records un **stock** cumulatif (50 K, soit ~26 700 sources indexées à 1,87 records/source **mesurés** sur dev) que rien ne libère — `media_purge_service.py:1-20` ne purge que sur suppression explicite ou TTL de 30 jours *après* suppression, il n'existe aucune rétention par âge. C'est le seul des quatre fournisseurs partagés dont l'épuisement ne coûte pas d'argent mais **casse la recherche**. Corriger au passage `providers.search.plan: "build_free"` (le plan est **Free**) et supprimer les deux index orphelins `transcripts` et `transcripts_user_4cd1abcb-…`. | `provider_pools` et `providers.search` (config + DynamoDB) + `docs/research/task-53.1-lexical-search/README.md:9,36` ; console Algolia → **Search → Index** | Moyenne |
 | 18 | **B** | Séparer `quota.refusal.noPlan` en deux messages : « votre formule a pris fin » pour un abonnement expiré, et une invitation neutre pour qui n'a jamais souscrit. Aujourd'hui on annonce à un nouvel utilisateur la fin de quelque chose qu'il n'a jamais eu. | 11 catalogues `mobile/src/i18n/` + branche correspondante de `mobile/src/lib/quotaError.ts` | Basse |
@@ -1857,7 +1930,9 @@ cache de prompt (§ R.6), le dépôt de la candidature SBP (§ 2.4), les records
    s'améliorent). Hypothèse retenue : **quelques dizaines d'abonnés**, donc n° 1 d'abord.
 12. **Trois questions que la refonte tranche, listées pour que tu puisses la contredire sur chacune
    séparément.** (a) *Tolérance à un tier d'appel déficitaire* → la refonte dit non et supprime le
-   3 €. (b) *Palier gratuit permanent plutôt qu'essai de 30 jours* → oui, 40 crédits. (c) *Plafond
+   3 €. (b) *Palier gratuit permanent plutôt qu'essai de 30 jours* → oui, 40 crédits. **Contredit par
+   l'owner le 2026-10-04** : essai de 30 jours au niveau du palier haut, **puis** palier gratuit
+   permanent de quelques envois par mois (§ Owner Validation point 2). (c) *Plafond
    de prix acceptable* → **les prix ne montent pas** : 5 € et 9 € sont conservés, ce sont les
    allocations qui sont re-dérivées (360 et 720 crédits, contre 300 et 720 minutes). C'était pour moi
    la contrainte à respecter : refondre l'unité sans demander plus d'argent au même utilisateur.
