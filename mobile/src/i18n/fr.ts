@@ -482,7 +482,7 @@ export const fr: Catalog = {
   "tabs.digest": "Digest",
   "home.loading": "Chargement de votre boîte de réception…",
   "home.retryA11y": "Réessayer de charger la boîte de réception",
-  "home.continueLearning": "Reprendre",
+  "home.continueLearning": "Reprendre l'apprentissage",
   "home.recentlyAdded": "Ajouts récents",
   "home.takePhotoA11y": "Prendre une photo",
   "home.unsortedReview": "Revue des non classés",

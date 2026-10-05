@@ -560,6 +560,12 @@ interface TileRowProps {
  * uppercase muted `YOUR MEDIA` label the vertical list used. The icon is an
  * Ionicon rather than an emoji: Ionicons is the app's icon language everywhere
  * else, and an emoji renders differently on each platform.
+ *
+ * The heading wraps rather than truncates. "Reprendre l'apprentissage" takes
+ * 242 of the 246 points a 320-point screen leaves beside the icon, and
+ * "Adicionados recentemente" takes all 246: one step up in the system text
+ * size and a single line would cut off the very word that names the row.
+ * Nothing below it has a fixed height, so a second line costs nothing.
  */
 function TileRow({
   testID,
@@ -573,9 +579,7 @@ function TileRow({
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <Ionicons name={icon} size={18} color={Colors.primary} />
-        <Text style={styles.sectionTitle} numberOfLines={1}>
-          {title}
-        </Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       <FlatList
         testID={testID}
@@ -646,6 +650,7 @@ function UnsortedReviewPlaceholder() {
  * The heading is the real one, with its real icon and its real string: it is what
  * makes the swap free. A skeleton bar in its place would be a different height
  * than the text that replaces it, which is the very shift this exists to remove.
+ * Same style, same width, so it wraps onto exactly as many lines as `TileRow`'s.
  */
 function TileRowPlaceholder({
   icon,
@@ -663,9 +668,7 @@ function TileRowPlaceholder({
     >
       <View style={styles.sectionHeaderRow}>
         <Ionicons name={icon} size={18} color={Colors.primary} />
-        <Text style={styles.sectionTitle} numberOfLines={1}>
-          {title}
-        </Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {/* A plain View, not a FlatList: nothing here scrolls, and the second plate
           is cut by `overflow` at the edge the way the real row's second tile is
@@ -948,7 +951,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
   },
   sectionTitle: {
-    // Claims the room left by the icon rather than wrapping under it.
+    // Claims the room left by the icon, so a second line starts beside the
+    // icon rather than under it.
     flex: 1,
     fontSize: Typography.headline.fontSize,
     fontWeight: Typography.headline.fontWeight,
