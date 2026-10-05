@@ -3,9 +3,10 @@ id: TASK-429
 title: >-
   Pendant la beta, accorder à tous les comptes le palier le plus élevé et
   masquer toutes les entrées vers l'abonnement
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-04 20:04'
+updated_date: '2026-10-05 09:34'
 labels:
   - feature
   - mobile
