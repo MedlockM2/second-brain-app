@@ -502,7 +502,6 @@ export const en = {
   "deleteAccount.failed":
     "Your account could not be deleted. Please try again.",
   // --- Account tab ---
-  "account.title": "Account",
   "account.notSet": "Not set",
   "account.subscription.manage": "Change plan",
   "account.subscription.manageHint": "Compare the plans and switch",
@@ -563,6 +562,7 @@ export const en = {
   // language's word for "summary" it collides with `artifacts.type.summaryShort`,
   // and two different things in the app end up carrying one name.
   "tabs.digest": "Digest",
+  "tabs.account": "Account",
   // --- Home tab ---
   "home.loading": "Loading your inbox...",
   "home.retryA11y": "Retry loading inbox",

@@ -343,7 +343,6 @@ export const it: Catalog = {
   "deleteAccount.confirmAction": "Elimina per sempre",
   "deleteAccount.failed":
     "Non è stato possibile eliminare il tuo account. Riprova.",
-  "account.title": "Account",
   "account.notSet": "Non impostata",
   "account.subscription.manage": "Cambia piano",
   "account.subscription.manageHint": "Confronta i piani e cambia",
@@ -390,6 +389,7 @@ export const it: Catalog = {
   "tabs.home": "Home",
   "tabs.search": "Cerca",
   "tabs.digest": "Digest",
+  "tabs.account": "Account",
   "home.loading": "Caricamento della posta in arrivo…",
   "home.retryA11y": "Riprova a caricare la posta in arrivo",
   "home.continueLearning": "Riprendi",

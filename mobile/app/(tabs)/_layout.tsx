@@ -148,9 +148,7 @@ export default function TabsLayout() {
             />
           }
         />
-        <NativeTabs.Trigger.Label>
-          {t("account.title")}
-        </NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>{t("tabs.account")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -344,7 +344,6 @@ export const nl: Catalog = {
   "deleteAccount.confirmAction": "Voorgoed verwijderen",
   "deleteAccount.failed":
     "Je account kon niet worden verwijderd. Probeer het opnieuw.",
-  "account.title": "Account",
   "account.notSet": "Niet ingesteld",
   "account.subscription.manage": "Van abonnement wisselen",
   "account.subscription.manageHint": "Vergelijk de abonnementen en wissel",
@@ -391,6 +390,7 @@ export const nl: Catalog = {
   "tabs.home": "Start",
   "tabs.search": "Zoeken",
   "tabs.digest": "Digest",
+  "tabs.account": "Account",
   "home.loading": "Je postvak wordt geladen…",
   "home.retryA11y": "Postvak opnieuw laden",
   "home.continueLearning": "Verder leren",

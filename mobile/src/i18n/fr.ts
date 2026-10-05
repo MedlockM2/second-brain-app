@@ -424,7 +424,6 @@ export const fr: Catalog = {
   "deleteAccount.confirmAction": "Supprimer définitivement",
   "deleteAccount.failed":
     "Votre compte n'a pas pu être supprimé. Veuillez réessayer.",
-  "account.title": "Compte",
   "account.notSet": "Non défini",
   "account.subscription.manage": "Changer de formule",
   "account.subscription.manageHint": "Comparez les formules et changez",
@@ -480,6 +479,7 @@ export const fr: Catalog = {
   "tabs.home": "Accueil",
   "tabs.search": "Recherche",
   "tabs.digest": "Digest",
+  "tabs.account": "Compte",
   "home.loading": "Chargement de votre boîte de réception…",
   "home.retryA11y": "Réessayer de charger la boîte de réception",
   "home.continueLearning": "Reprendre",

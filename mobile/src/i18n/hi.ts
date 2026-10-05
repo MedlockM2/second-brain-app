@@ -343,7 +343,6 @@ export const hi: Catalog = {
   "deleteAccount.confirmAction": "हमेशा के लिए मिटाएँ",
   "deleteAccount.failed":
     "आपका खाता मिटाया नहीं जा सका। कृपया फिर से कोशिश करें।",
-  "account.title": "खाता",
   "account.notSet": "तय नहीं",
   "account.subscription.manage": "प्लान बदलें",
   "account.subscription.manageHint": "प्लान की तुलना करें और बदलें",
@@ -390,6 +389,7 @@ export const hi: Catalog = {
   "tabs.home": "होम",
   "tabs.search": "खोज",
   "tabs.digest": "डाइजेस्ट",
+  "tabs.account": "खाता",
   "home.loading": "आपका इनबॉक्स लोड हो रहा है…",
   "home.retryA11y": "इनबॉक्स फिर से लोड करें",
   "home.continueLearning": "सीखना जारी रखें",
