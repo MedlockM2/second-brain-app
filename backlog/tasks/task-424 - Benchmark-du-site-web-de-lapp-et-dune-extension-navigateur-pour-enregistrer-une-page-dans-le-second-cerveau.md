@@ -105,3 +105,39 @@ Cette liste sert d'inspiration, pas de cahier des charges : le benchmark dit ce 
 - [ ] #10 Le README porte owner_decision: pending et propose un découpage de l'implémentation en lots
 - [ ] #11 Aucun fichier hors de docs/research/ et des 4 répertoires mobile-design-mockups/website_direction_* n'est modifié
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+### Mode initial — benchmark produit, en attente de validation de l'owner
+
+Aucun dossier `docs/research/task-424-*` n'existait, aucun `README.owner-rejected-*.md`, aucune demande de complément : ce passage est un **mode initial**, écrit from scratch.
+
+**Livrables**
+
+- `docs/research/task-424-website-and-browser-extension/README.md` — front-matter `owner_decision: pending`, section `Owner Validation` vide, 15 sections, ~96 ko. Les onze AC sont couverts et chaque section porte le numéro d'AC qu'elle sert.
+- Quatre maquettes, chacune avec `code.html` autonome (aucune requête réseau) et `screen.png` :
+  - `mobile-design-mockups/website_direction_a_vitrine_app_dabord/`
+  - `mobile-design-mockups/website_direction_b_bureau_extension_dabord/`
+  - `mobile-design-mockups/website_direction_c_revue_editoriale/`
+  - `mobile-design-mockups/website_direction_d_poste_de_travail/`
+  Chaque maquette couvre l'accueil, l'installation de l'extension et la page d'abonnement, et rend **le même balisage** à 1440 px et à 390 px dans deux cadres `container-type: inline-size` — la bascule responsive se fait en `@container`, ce n'est pas deux maquettes. Tokens repris verbatim de `mobile/src/constants/theme.ts`, icônes extraites des contours Ionicons des maquettes task-408/task-410.
+
+**Recommandation soumise à l'owner** (détail et sources dans le README)
+
+Site **vitrine** statique (6 pages, Astro, hébergement de task-357 avec Cloudflare **Workers** et non Pages — l'éditeur écrit désormais « Start new projects with Workers ») ; extension **WXT** publiée au lot 1 sur le **seul Chrome Web Store** ; authentification par **appairage depuis l'app mobile** ; capture de l'**URL + du texte de la page + de la sélection** (deux champs optionnels sur `IngestUrlRequest`) ; paiement **Stripe Billing branché sur RevenueCat**, jamais en direct, livré en **dernier** lot ; proposition de design **B**. Découpage en 5 lots, le lot 1 étant le périmètre de task-425.
+
+**Cinq constats du dépôt qui corrigent la description de la tâche**, et qui changent le chiffrage :
+
+1. L'extension de Recall **n'est pas** disponible sur Safari : sa propre documentation écrit « *Safari coming soon* », là où sa page marketing annonce Safari.
+2. Le **CORS n'est pas un problème pour l'extension** : un `fetch` depuis le service worker avec `host_permissions` n'y est pas soumis (c'est le script de contenu qui l'est). Aucune entrée `CORS_ORIGINS` à ajouter pour l'extension ; en revanche `CORS_ORIGINS=*` doit être resserré quand le site existe.
+3. Le **webhook RevenueCat accepte déjà un achat web** et écrit une ligne de palier correcte : `_resolve_tier` lit l'entitlement, et `_carries_product` / `_record_store_identity` tolèrent explicitement un store que `_get_platform` ne mappe pas. Le travail du lot paiement est additif (`SubscriptionPlatform.web`), pas structurel.
+4. **L'abonné sur deux canaux est déjà géré** : `_active_subscription` choisit la ligne dont le palier porte la plus grande allocation. Le problème restant est du texte, pas du code.
+5. **Cloudflare recommande Workers plutôt que Pages** pour un projet neuf — une mise à jour de task-357, pas un nouveau benchmark d'hébergement.
+
+**Ce qui n'a pas pu être vérifié** est listé en §13 du README (9 points), dont : le montant du frais d'inscription au Chrome Web Store (non publié par Google, et tous les moteurs de recherche joignables ont servi un défi anti-robots), la commission d'Apple sur un lien sortant depuis la boutique américaine, et les termes de l'entitlement européen.
+
+**La recommandation attend la validation de l'owner.** La tâche reste en `To Do` ; `owner_decision` vaut `pending`. C'est l'owner qui bascule le champ à `ok`, `abandoned`, `redo` ou `more`.
+
+**Périmètre touché** : ce fichier de tâche, le README de recherche, et les quatre répertoires de maquettes. Aucun fichier de code applicatif, de configuration ou d'infrastructure n'est modifié — les numéros de ligne cités dans le README sont des lectures.
+<!-- SECTION:NOTES:END -->
