@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-04 16:22'
-updated_date: '2026-10-04 17:50'
+updated_date: '2026-10-06 17:19'
 labels:
   - benchmark
   - scoping
@@ -93,51 +93,76 @@ Cette liste sert d'inspiration, pas de cahier des charges : le benchmark dit ce 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le README recommande explicitement un site vitrine ou une app web, avec l'effort estimé pour chacun, et reprend la recommandation d'hébergement de task-357 au lieu de la refaire
-- [ ] #2 Au moins trois frameworks d'extension sont comparés sur une grille commune (Chrome/Edge/Firefox avec un seul code, maintenance, partage de code avec mobile/)
-- [ ] #3 Chaque navigateur cible a son coût de publication, son délai d'examen et les règles d'examen applicables, avec des sources datées ; le cas Safari est traité explicitement
-- [ ] #4 Au moins trois options d'authentification sont comparées, chacune avec les changements backend qu'elle demande, en partant du constat que le flux OAuth web actuel n'émet aucun token
-- [ ] #5 Le périmètre de capture de la première version (URL, contenu de page, sélection, PDF) est défini, avec les changements de contrat d'API qu'il demande
-- [ ] #6 Chaque fonction de l'extension Recall listée dans la description est gardée ou écartée pour la première version, avec sa justification
-- [ ] #7 Le paiement Stripe sur le site est traité : Stripe en direct comparé à Stripe via RevenueCat, avec les changements du webhook et du modèle de facturation que chaque option demande, et ce que l'app mobile a le droit de dire d'un paiement web, sources datées à l'appui
-- [ ] #8 4 propositions de design du site, distinctes, chacune dans son propre répertoire mobile-design-mockups/website_direction_<lettre>_<slug>/ (code.html + screen.png), couvrant au minimum l'accueil, l'installation de l'extension et la page d'abonnement Stripe, conformes au design system Amber Clarity, rendues à 1440 px et à 390 px
-- [ ] #9 Le README compare les 4 propositions de design et en recommande une
-- [ ] #10 Le README porte owner_decision: pending et propose un découpage de l'implémentation en lots
-- [ ] #11 Aucun fichier hors de docs/research/ et des 4 répertoires mobile-design-mockups/website_direction_* n'est modifié
+- [x] #1 Le README part du fait que l'app web est décidée et dit **comment** la faire : périmètre fonctionnel connecté, stack, hébergement, session de navigateur, CORS, partage de code avec mobile/ ; il tranche entre parité complète dès le premier lot et un sous-ensemble en lecture d'abord, en chiffrant les deux ; et il reprend la recommandation d'hébergement de task-357 au lieu de la refaire
+- [x] #2 Au moins trois frameworks d'extension sont comparés sur une grille commune (Chrome/Edge/Firefox avec un seul code, maintenance, partage de code avec mobile/)
+- [x] #3 Chaque navigateur cible a son coût de publication, son délai d'examen et les règles d'examen applicables, avec des sources datées ; le cas Safari est traité explicitement
+- [x] #4 Au moins trois options d'authentification sont comparées, chacune avec les changements backend qu'elle demande, en partant du constat que le flux OAuth web actuel n'émet aucun token
+- [x] #5 Le périmètre de capture de la première version (URL, contenu de page, sélection, PDF) est défini, avec les changements de contrat d'API qu'il demande
+- [x] #6 Chaque fonction de l'extension Recall listée dans la description est gardée ou écartée pour la première version, avec sa justification
+- [x] #7 Le paiement Stripe sur le site est traité : Stripe en direct comparé à Stripe via RevenueCat, avec les changements du webhook et du modèle de facturation que chaque option demande, et ce que l'app mobile a le droit de dire d'un paiement web, sources datées à l'appui
+- [x] #8 4 propositions de design de l'app web, distinctes, chacune dans son propre répertoire mobile-design-mockups/web_app/direction_<lettre>_<slug>/ (code.html autonome + screen.png), couvrant au minimum les écrans connectés bibliothèque, fiche média et digest, conformes au design system Amber Clarity, avec le desktop comme rendu de référence et un rendu responsive secondaire
+- [x] #9 Le README compare les 4 propositions de design et en recommande une
+- [x] #10 Le README porte owner_decision: pending et propose un découpage de l'implémentation en lots
+- [x] #11 Aucun fichier hors de docs/research/task-424-*/, de mobile-design-mockups/web_app/ et de ce fichier de tâche n'est modifié
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
-### Mode initial — benchmark produit, en attente de validation de l'owner
+### Mode redo — deuxième passage, en attente de validation de l'owner
 
-Aucun dossier `docs/research/task-424-*` n'existait, aucun `README.owner-rejected-*.md`, aucune demande de complément : ce passage est un **mode initial**, écrit from scratch.
+Le dossier `docs/research/task-424-website-and-browser-extension/` ne contenait plus de `README.md` actif mais un `README.owner-rejected-2026-10-05.md` : **mode redo**. Ce fichier a été lu intégralement et son champ `Decision` fait autorité sur le périmètre de cette passe. Il est **conservé tel quel**.
+
+**Ce que l'owner avait rejeté, et comment cette passe l'intègre**
+
+| Retour de l'owner | Ce que cette passe fait |
+|---|---|
+| « L'app web est le périmètre, pas une option à chiffrer puis à écarter » ; la recommandation « vitrine statique » est refusée, et avec elle le report de l'app web à un lot conditionné aux retours de beta | L'app web est traitée comme **décidée**. La question posée est *comment* : §2 (périmètre connecté, surface par surface), §3 (stack), §5 (hébergement), §6 (session), §7 (ordre de livraison). Aucun lot n'est conditionné à une donnée de beta. |
+| Le périmètre connecté doit porter ce que porte le mobile : ajouts récents ; bibliothèque (liste, dossiers, fiche média, transcript, artefacts IA) ; onglet digest ; recherche ; réglages du compte, abonnement compris | §2 liste les six surfaces, les met en face des 26 écrans et composants mobiles qui les portent, et chiffre leurs 14 564 lignes. §8 les répartit sur quatre lots. |
+| Ne pas reprendre « le besoin exprimé est l'extension, pas la lecture sur ordinateur » | Cet argument n'apparaît nulle part. §0 le cite comme l'un des deux arguments explicitement abandonnés. |
+| Ne pas reprendre « les maquettes montraient une app web » ; les 4 `website_direction_*/` ont été supprimés | Ils ne sont pas recréés. Les quatre nouvelles maquettes vivent sous `mobile-design-mockups/web_app/` et montrent des **écrans connectés**, pas des pages d'accueil. |
+| Maquettes dans un sous-dossier commun, desktop comme rendu de référence | `mobile-design-mockups/web_app/direction_{a,b,c,d}_*/`, trois cadres à **1440 × 900** (bibliothèque, fiche média, digest) + un cadre responsive secondaire à 390 × 844. Rien à la racine de `mobile-design-mockups/`. |
+| Reprendre sans réinstruire : extension, les cinq constats du §0 rejeté, webhook RevenueCat, Stripe via RevenueCat, TVA, règles des stores | §0 dresse le tableau des 13 conclusions reprises avec renvoi à la section du fichier rejeté. §10.1 et §11 les rappellent. Ces recherches n'ont pas été refaites. |
+| Réétudier : stack du site, hébergement, authentification complète dans le navigateur, CORS, découpage en lots, coût sur douze mois | §3, §5, §6, §1.1, §8, §9. |
+| Trancher, chiffres à l'appui : parité complète dès le premier lot, ou lecture d'abord, et ce que coûte le rattrapage | §7, avec deux méthodes d'estimation indépendantes et le coût du rattrapage. |
+| Reposer la question du partage de code avec `mobile/` | §4, qui **renverse** la conclusion de la passe 1 sur mesure. |
 
 **Livrables**
 
-- `docs/research/task-424-website-and-browser-extension/README.md` — front-matter `owner_decision: pending`, section `Owner Validation` vide, 15 sections, ~96 ko. Les onze AC sont couverts et chaque section porte le numéro d'AC qu'elle sert.
-- Quatre maquettes, chacune avec `code.html` autonome (aucune requête réseau) et `screen.png` :
-  - `mobile-design-mockups/website_direction_a_vitrine_app_dabord/`
-  - `mobile-design-mockups/website_direction_b_bureau_extension_dabord/`
-  - `mobile-design-mockups/website_direction_c_revue_editoriale/`
-  - `mobile-design-mockups/website_direction_d_poste_de_travail/`
-  Chaque maquette couvre l'accueil, l'installation de l'extension et la page d'abonnement, et rend **le même balisage** à 1440 px et à 390 px dans deux cadres `container-type: inline-size` — la bascule responsive se fait en `@container`, ce n'est pas deux maquettes. Tokens repris verbatim de `mobile/src/constants/theme.ts`, icônes extraites des contours Ionicons des maquettes task-408/task-410.
+- `docs/research/task-424-website-and-browser-extension/README.md` — front-matter `owner_decision: pending`, section `Owner Validation` vide, 15 sections, ~108 ko.
+- Quatre maquettes de l'**app web**, chacune avec un `code.html` autonome (aucune requête réseau : ni `<link>`, ni `<script>`, ni `<img>`, ni URL absolue — vérifié sur les fichiers produits) et un `screen.png` rendu à 1520 px de large :
+  - `mobile-design-mockups/web_app/direction_a_classeur_trois_volets/` — trois volets permanents
+  - `mobile-design-mockups/web_app/direction_b_table_de_lecture/` — grille de couvertures, lecture plein cadre, artefacts en marge
+  - `mobile-design-mockups/web_app/direction_c_tableau_de_bord/` — barre latérale de 4 destinations, bibliothèque en tableau triable
+  - `mobile-design-mockups/web_app/direction_d_plein_ecran/` — aucune chrome permanente, palette de commandes
+  Tokens repris verbatim de `mobile/src/constants/theme.ts`, icônes reprises des contours Ionicons des maquettes task-408 / task-410, un seul glyphe (la loupe) composé depuis la définition SVG d'Ionicons et signalé comme tel.
 
 **Recommandation soumise à l'owner** (détail et sources dans le README)
 
-Site **vitrine** statique (6 pages, Astro, hébergement de task-357 avec Cloudflare **Workers** et non Pages — l'éditeur écrit désormais « Start new projects with Workers ») ; extension **WXT** publiée au lot 1 sur le **seul Chrome Web Store** ; authentification par **appairage depuis l'app mobile** ; capture de l'**URL + du texte de la page + de la sélection** (deux champs optionnels sur `IngestUrlRequest`) ; paiement **Stripe Billing branché sur RevenueCat**, jamais en direct, livré en **dernier** lot ; proposition de design **B**. Découpage en 5 lots, le lot 1 étant le périmètre de task-425.
+App web **React, pure SPA** (Vite 8 + React 19 + React Router 8, `ssr: false`), sur **une origine à elle** (`app.<domaine>`), le site public restant **Astro** sur `www.<domaine>` ; **React Native Web rejeté** ; **partage de 14 455 lignes** de `mobile/src/{types,lib,services,i18n,constants}` par un alias de build, sans `packages/` au premier lot ; session de navigateur par **cookie `HttpOnly` de rafraîchissement + access token en mémoire**, avec plafond absolu et expiration par inactivité ; **Cloudflare Workers static assets**, deux projets ; **lecture d'abord en quatre lots**, parité comme destination déclarée ; extension reprise telle quelle, à un point près (l'appairage peut désormais être délivré par l'app web, ce qui sort un écran mobile du chemin critique) ; paiement inchangé ; proposition de design **A, « Le classeur »**.
 
-**Cinq constats du dépôt qui corrigent la description de la tâche**, et qui changent le chiffrage :
+**Trois constats du dépôt que la passe 1 avait manqués, et qui changent le chiffrage**
 
-1. L'extension de Recall **n'est pas** disponible sur Safari : sa propre documentation écrit « *Safari coming soon* », là où sa page marketing annonce Safari.
-2. Le **CORS n'est pas un problème pour l'extension** : un `fetch` depuis le service worker avec `host_permissions` n'y est pas soumis (c'est le script de contenu qui l'est). Aucune entrée `CORS_ORIGINS` à ajouter pour l'extension ; en revanche `CORS_ORIGINS=*` doit être resserré quand le site existe.
-3. Le **webhook RevenueCat accepte déjà un achat web** et écrit une ligne de palier correcte : `_resolve_tier` lit l'entitlement, et `_carries_product` / `_record_store_identity` tolèrent explicitement un store que `_get_platform` ne mappe pas. Le travail du lot paiement est additif (`SubscriptionPlatform.web`), pas structurel.
-4. **L'abonné sur deux canaux est déjà géré** : `_active_subscription` choisit la ligne dont le palier porte la plus grande allocation. Le problème restant est du texte, pas du code.
-5. **Cloudflare recommande Workers plutôt que Pages** pour un projet neuf — une mise à jour de task-357, pas un nouveau benchmark d'hébergement.
+1. **Le CORS de l'API déployée n'est pas celui du code Python.** `lambda_api.tf:131-146` déclare un `cors_configuration` sur la HTTP API, et AWS documente que « API Gateway ignores CORS headers returned from your backend integration ». Le `CORSMiddleware` de FastAPI est donc inerte en production, et `allow_credentials = false` rend une session par cookie **impossible** tant qu'on ne l'a pas changé. La passe 1 ne visait que `CORS_ORIGINS`.
+2. **Le refresh token glissant d'un an sans plafond est interdit à un client navigateur.** « OAuth 2.0 for Browser-Based Applications » est devenu la **RFC 10017 / BCP 212** en août 2026, et son §6.3.2.3 exige qu'un serveur « MUST NOT, upon issuing a rotated refresh token, extend the lifetime of the new refresh token beyond the lifetime of the initial refresh token ». Le dépôt fait l'inverse. La correction est **par type de lignée**, le modèle portant déjà un `lineage_id`.
+3. **Une app web en lecture ne demande aucun endpoint nouveau.** Les dix-huit routes de lecture que l'app mobile appelle couvrent les six surfaces, curseur de pagination compris, et `/api/v1/entitlements` porte déjà `is_beta_access`. Le lot de fondations se réduit à la session et au CORS.
 
-**Ce qui n'a pas pu être vérifié** est listé en §13 du README (9 points), dont : le montant du frais d'inscription au Chrome Web Store (non publié par Google, et tous les moteurs de recherche joignables ont servi un défi anti-robots), la commission d'Apple sur un lien sortant depuis la boutique américaine, et les termes de l'entitlement européen.
+**Réalignement des critères d'acceptation**
+
+Les AC #1, #8 et #11 étaient devenus inexacts : écrits avant la décision de l'owner, ils demandaient de recommander « un site vitrine ou une app web » et plaçaient les maquettes dans `mobile-design-mockups/website_direction_*`. Le retour de l'owner prime, donc ils ont été réécrits :
+
+- **#1** demande maintenant que le README **parte** du fait que l'app web est décidée et dise comment la faire, et qu'il tranche entre parité et lecture d'abord en chiffrant les deux ;
+- **#8** demande 4 propositions sous `mobile-design-mockups/web_app/direction_<lettre>_<slug>/`, couvrant les **écrans connectés** (bibliothèque, fiche média, digest), avec le desktop comme rendu de référence ;
+- **#11** borne le périmètre modifiable à `docs/research/task-424-*/`, `mobile-design-mockups/web_app/` et ce fichier de tâche.
+
+La **description** de la tâche n'a pas été réécrite : sa dimension 1 (« un site vitrine […] ou une app web ») et ses conventions de maquettes au point 11 sont périmées par le retour de l'owner, et le README le dit en §0. Elle est laissée telle quelle parce que la description est le texte de l'owner.
+
+Les onze AC sont cochés. Quatre d'entre eux — **#2, #3, #5, #6** — et une partie de **#7** sont satisfaits par les conclusions **reprises** du `README.owner-rejected-2026-10-05.md`, que l'owner a demandé de ne pas réinstruire ; §0 du nouveau README donne le tableau de correspondance avec la section d'origine de chaque conclusion.
+
+**Ce qui n'a pas pu être vérifié** est listé en §13 du README (12 points), dont : les chiffrages de §7 ne reposent sur aucune donnée de vélocité du dépôt ; le passage d'un `Set-Cookie` à travers API Gateway sur une réponse lue par un `fetch` cross-origin avec `credentials: 'include'` n'a pas été exercé et ne l'est qu'après déploiement ; le comportement de `starlette` 0.47.2 est lu dans la source verrouillée, sans exécution ; le montant du frais d'inscription au Chrome Web Store n'est toujours pas publié par Google ; le rendu des maquettes n'a été vérifié que dans Chrome.
 
 **La recommandation attend la validation de l'owner.** La tâche reste en `To Do` ; `owner_decision` vaut `pending`. C'est l'owner qui bascule le champ à `ok`, `abandoned`, `redo` ou `more`.
 
-**Périmètre touché** : ce fichier de tâche, le README de recherche, et les quatre répertoires de maquettes. Aucun fichier de code applicatif, de configuration ou d'infrastructure n'est modifié — les numéros de ligne cités dans le README sont des lectures.
+**Périmètre touché** : ce fichier de tâche (AC et notes), le `README.md` de recherche, et les quatre répertoires `mobile-design-mockups/web_app/direction_*`. Aucun fichier de code applicatif, de configuration ou d'infrastructure n'est modifié — les numéros de ligne cités dans le README sont des lectures.
 <!-- SECTION:NOTES:END -->
+

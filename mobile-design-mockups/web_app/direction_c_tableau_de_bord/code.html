@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Direction C — « Le tableau de bord » : quatre destinations, la bibliotheque est un tableau triable</title>
+<!--
+  task-424 (passe 2) — maquette de l'APP WEB, autonome : aucune balise <link>,
+  <script> ni <img>, donc aucune requete reseau.
+
+  Rendu de reference : DESKTOP. Les trois premiers cadres sont a 1440 x 900 px,
+  c'est-a-dire la zone utile d'un portable 1440 pt une fois la chrome du
+  navigateur retiree. Ils sont en overflow:hidden : ce qui ne tient pas est
+  coupe a l'image, exactement comme a l'ecran. C'est la mesure elle-meme.
+  Le quatrieme cadre, a 390 x 844, est le rendu responsive secondaire.
+
+  1. Couleurs, rayons, ombres, espacements et tailles de texte : tous repris
+     verbatim de mobile/src/constants/theme.ts (voir les variables CSS). Aucune
+     couleur hors palette, aucune taille de texte hors echelle
+     (32 / 20 / 16 / 14 / 13).
+  2. Polices. mobile-design-mockups/my_design_system/DESIGN.md prescrit Plus
+     Jakarta Sans et Inter. Une maquette sans reseau ne peut pas les charger :
+     la pile declaree est le repli systeme. C'est le seul ecart visuel au
+     design system et il disparait a l'implementation.
+  3. Icones. Chaque glyphe est le contour exact extrait de la fonte que l'app
+     utilise (@expo/vector-icons, Ionicons.ttf, 512 unites/em), repris des
+     maquettes task-408 / task-410. Un seul glyphe manquait a ce stock, la
+     loupe : il est compose a partir de la definition SVG d'Ionicons
+     (search-outline, forme a trait et non extraite de la fonte), isole dans
+     le symbol ion-search-stroke.
+  4. Couvertures. L'app affiche de vraies vignettes. Une maquette sans reseau ne
+     peut pas : un bloc teinte de la palette portant l'icone de type tient la
+     place. C'est un substitut declare, pas une proposition graphique.
+  5. Ecart assume au design system : la « no-line rule » de DESIGN.md interdit
+     les filets de 1 px pour les divisions larges. Un tableau de donnees en a
+     besoin pour que l'oeil suive une ligne sur 1 100 px. Les filets utilises
+     ici sont a 5 % de noir, la valeur que DESIGN.md autorise deja pour les
+     Metadata Chips, et c'est le point que la comparaison du README retient
+     contre cette direction.
+  6. Le nom « Media Summarizer » est le placeholder du depot : le nom marketing
+     n'est pas tranche (task-186) et cette maquette n'en propose pas.
+-->
+<style>
+  :root {
+    /* Colors : mobile/src/constants/theme.ts, repris verbatim */
+    --primary: #ffcb05;
+    --on-primary: #1c1b1a;
+    --primary-05: rgba(255, 203, 5, 0.05);
+    --background: #fcf9f6;
+    --surface: #ffffff;
+    --surface-container: #f1edea;
+    --surface-container-high: #ebe7e5;
+    --surface-container-low: #f7f3f0;
+    --text-main: #2b2d42;
+    --text-muted: #8d99ae;
+    --text-subtle: #5c6880;
+    --outline: #78776f;
+    --outline-variant: #c8c7bd;
+    --highlight: #fff0b3;
+    --tab-active: #ffcb05;
+    --tab-inactive: #8d99ae;
+    --on-highlight: #1c1b1a;
+    --cover-title-veil: rgba(252, 249, 246, 0.72);
+    --error: #ba1a1a;
+    --error-container: #ffdad6;
+    --space-xs: 4px;  --space-sm: 8px;  --space-md: 16px;
+    --space-lg: 24px; --space-xl: 32px; --space-xxl: 48px;
+    --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px;
+    --radius-xl: 16px; --radius-full: 9999px;
+    --touch-minimum: 48px; --touch-comfortable: 56px; --touch-large: 64px;
+    --shadow-soft: 0 8px 24px rgba(43, 45, 66, 0.04);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--surface-container); color: var(--text-main); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .sheet { padding: 32px 32px 48px; }
+  .sheet-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; max-width: 1440px; margin: 0 auto 8px; }
+  .sheet-lede { font-size: 16px; color: var(--text-subtle); max-width: 1440px; margin: 0 auto 32px; }
+  .sheet-lede > span { display: block; max-width: 1060px; }
+  .frame-label { max-width: 1440px; margin: 32px auto 8px; font-size: 13px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-subtle); }
+  .frame-note { max-width: 1440px; margin: 0 auto 16px; font-size: 13px; color: var(--text-subtle); }
+  .frame { position: relative; overflow: hidden; background: var(--background); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); margin: 0 auto; color: var(--text-main); }
+  .frame-desktop { width: 1440px; height: 900px; }
+  .frame-phone { width: 390px; height: 844px; }
+  .ic { width: 20px; height: 20px; fill: currentColor; flex: 0 0 auto; display: block; }
+  .ic-sm { width: 16px; height: 16px; }
+  .ic-lg { width: 24px; height: 24px; }
+  .ic-xl { width: 32px; height: 32px; }
+  .wordmark { font-size: 20px; font-weight: 600; letter-spacing: -0.2px; display: flex; align-items: center; gap: 8px; }
+  .wordmark-dot { width: 24px; height: 24px; border-radius: var(--radius-sm); background: var(--primary); color: var(--on-primary); display: grid; place-items: center; flex: 0 0 auto; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border-radius: var(--radius-full); background: var(--surface); border: 1px solid rgba(0,0,0,0.05); font-size: 13px; color: var(--text-subtle); white-space: nowrap; }
+  .chip-high { background: var(--surface-container-high); border-color: transparent; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--touch-minimum); padding: 0 24px; border-radius: var(--radius-full); border: none; font-family: var(--font); font-size: 14px; font-weight: 500; background: var(--primary); color: var(--on-primary); }
+  .btn-ghost { background: var(--surface-container); color: var(--text-main); }
+  .btn-sm { height: 36px; padding: 0 16px; font-size: 13px; }
+  .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-container); border-radius: var(--radius-full); }
+  .seg > span { padding: 6px 14px; border-radius: var(--radius-full); font-size: 14px; font-weight: 500; color: var(--text-subtle); }
+  .seg > span.on { background: var(--primary); color: var(--on-primary); }
+  .callout { border-left: 4px solid var(--primary); background: var(--primary-05); padding: 16px 24px; border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+  .micro { font-size: 13px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-subtle); }
+  .meta { font-size: 13px; color: var(--text-subtle); line-height: 1.5; }
+  .muted { color: var(--text-muted); }
+  .cover { border-radius: var(--radius-md); background: var(--surface-container-high); display: grid; place-items: center; color: var(--text-muted); flex: 0 0 auto; overflow: hidden; position: relative; }
+  .gauge { height: 6px; border-radius: var(--radius-full); background: var(--surface-container-high); overflow: hidden; }
+  .gauge > i { display: block; height: 100%; background: var(--primary); border-radius: var(--radius-full); }
+  /* ---------- Listes et barre d onglets, partagees par les quatre directions ---------- */
+  .a-row { display: flex; gap: 12px; padding: 12px 20px 12px 17px; border-left: 3px solid transparent; }
+  .a-row.sel { background: var(--surface-container-low); border-left-color: var(--primary); }
+  .a-rowtitle { font-size: 16px; font-weight: 600; line-height: 1.35; }
+  .a-tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: var(--surface); display: grid; grid-template-columns: repeat(4, 1fr); align-items: center; box-shadow: 0 -8px 24px rgba(43, 45, 66, 0.04); }
+  .a-tabitem { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 13px; color: var(--tab-inactive, #8d99ae); }
+  .a-tabitem.on { color: var(--text-main); }
+  .a-avatar { width: 36px; height: 36px; border-radius: var(--radius-full); background: var(--surface-container-high); display: grid; place-items: center; color: var(--text-subtle); }
+  .scrollfade { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: linear-gradient(to bottom, rgba(252,249,246,0), var(--background)); pointer-events: none; }
+</style>
+<style>
+  /* ---------------- Direction C : le tableau de bord ---------------- */
+  .c-shell { display: grid; grid-template-columns: 216px 1fr; height: 100%; }
+  .c-rail { background: var(--surface-container-low); display: flex; flex-direction: column; padding: 0 12px; }
+  .c-railhead { height: 68px; display: flex; align-items: center; padding: 0 8px; }
+  .c-navitem { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border-radius: var(--radius-md); font-size: 14px; font-weight: 500; color: var(--text-subtle); }
+  .c-navitem.on { background: var(--primary); color: var(--on-primary); font-weight: 600; }
+  .c-main { display: flex; flex-direction: column; min-width: 0; position: relative; }
+  .c-head { padding: 22px 32px 0; }
+  .c-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 18px 0 22px; }
+  .c-stat { background: var(--surface); border-radius: var(--radius-lg); padding: 14px 16px; box-shadow: var(--shadow-soft); }
+  .c-statnum { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+  .c-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .c-table th { text-align: left; font-size: 13px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-subtle); padding: 0 12px 10px; white-space: nowrap; }
+  .c-table td { padding: 11px 12px; border-top: 1px solid rgba(0,0,0,0.05); vertical-align: middle; }
+  .c-table tr.on td { background: var(--surface); }
+  .c-tt { font-size: 16px; font-weight: 600; line-height: 1.3; }
+  .c-dot { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--primary); display: inline-block; }
+  .c-props { background: var(--surface); border-radius: var(--radius-lg); padding: 4px 16px; box-shadow: var(--shadow-soft); }
+  .c-prop { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid rgba(0,0,0,0.05); font-size: 14px; }
+  .c-prop:first-child { border-top: none; }
+  .c-prop > span:first-child { color: var(--text-subtle); width: 118px; flex: 0 0 auto; }
+  .c-two { display: grid; grid-template-columns: 1fr 332px; gap: 32px; }
+  .c-tx p { margin-bottom: 18px; }
+  .c-dlist { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-soft); overflow: hidden; }
+  .c-drow { display: flex; gap: 12px; padding: 14px 16px; border-top: 1px solid rgba(0,0,0,0.05); align-items: center; }
+  .c-drow:first-child { border-top: none; }
+  .c-num { width: 26px; height: 26px; border-radius: var(--radius-full); background: var(--surface-container); color: var(--text-subtle); font-size: 13px; font-weight: 600; display: grid; place-items: center; flex: 0 0 auto; }
+  .c-num.on { background: var(--primary); color: var(--on-primary); }
+</style>
+</head>
+<body>
+<div class="sheet">
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+<symbol id="ion-albums-outline" viewBox="0 0 512 512"><path d="M140 65Q141 64 257 64H374L377 67Q383 72 384 78Q385 92 371 95Q367 96 256 96Q145 96 141 95Q129 93 128.5 81Q128 69 140 65ZM108 112Q111 112 257 112H404L408 114Q416 119 416 128Q416 137 408 142L405 144H256H107L104 142Q91 134 98 120Q101 114 108 112ZM80 162Q85 161 255.5 160.5Q426 160 431 162Q443 165 452 175Q461 185 463 197Q464 202 464 304Q464 388 463.5 402Q463 416 459 423Q453 437 439 444Q433 446 429 447Q424 448 256 448Q88 448 83 447Q79 446 73 444Q59 437 53 423Q49 416 48.5 402Q48 388 48 304Q48 202 49 197Q51 185 60 175Q69 165 80 162ZM425 194Q425 194 425 194Q422 192 256 192Q90 192 87 193.5Q84 195 82.5 197.5Q81 200 80 303Q80 303 80 407L82 410Q84 412 86 414Q86 414 89 416H256H423L426 414Q428 412 430 410Q430 410 432 407V303Q431 200 429.5 197.5Q428 195 425 194Z"/></symbol>
+<symbol id="ion-alert-circle" viewBox="0 0 512 512"><path d="M242 49Q312 44 370 82Q387 94 403 110Q453 159 463 232Q464 239 464 256Q464 273 463 280Q453 353 403 403Q353 453 280 463Q273 464 256 464Q239 464 232 463Q159 453 109 403Q59 353 50 281Q40 206 82 142Q110 101 151.5 76.5Q193 52 242 49ZM266 147Q258 142 250 145Q240 148 236 158Q234 162 237 229Q240 293 242 296Q246 305 256 305Q262 305 267 301Q270 297 271 290.5Q272 284 274 244Q278 162 276 157Q273 151 266 147ZM262 329Q262 329 262 329Q256 327 250 329Q236 333 236 348Q236 357 243 363Q256 375 269 363Q276 357 276 348Q276 333 262 329Z"/></symbol>
+<symbol id="ion-arrow-forward" viewBox="0 0 512 512"><path d="M262 153Q262 153 262 153Q270 151 279 155Q283 157 357.5 232.0Q432 307 434.0 312.0Q436 317 436 321Q435 329 426.0 339.0Q417 349 356 409Q281 484 276.0 486.0Q271 488 268 488Q260 488 253 482Q240 472 245 456Q247 452 300.0 398.5Q353 345 353.0 344.5Q353 344 223 344Q223 344 93 343L90 341Q82 338 79 331Q74 322 77.0 312.5Q80 303 89 299Q89 299 93 297L224 296H354L301 242Q247 189 246 185Q242 175 246.5 165.5Q251 156 262 153Z"/></symbol>
+<symbol id="ion-book-outline" viewBox="0 0 512 512"><path d="M42 113Q47 112 61 112Q170 115 221 149Q229 154 239.5 164.0Q250 174 253 179Q256 183 256.0 183.0Q256 183 259 179Q262 174 272.5 164.0Q283 154 291 149Q332 122 411 114Q455 110 469 113Q482 115 490 126Q495 132 495.5 148.0Q496 164 496 288Q496 409 495.5 426.0Q495 443 491 449Q486 456 478.5 460.0Q471 464 453 464Q379 464 331 480Q299 490 276 515Q265 525 261.5 527.0Q258 529 251 527Q248 526 236 515Q219 497 199 487Q154 466 67 465Q39 464 32 460Q24 455 20 447Q17 441 16.5 423.0Q16 405 16 287Q16 164 16.5 148.0Q17 132 22 126Q30 115 42 113ZM81 145Q67 144 57 144H48V288V432H54Q61 433 71.5 433.0Q82 433 100 434Q188 440 232 469L240 474V350Q240 246 239.5 233.0Q239 220 234 210Q227 196 215 185Q177 151 81 145ZM464 288V144H452Q418 145 384 150Q301 163 278 210Q273 220 272.5 233.0Q272 246 272 350Q272 350 272 474L280 469Q311 449 358 440Q400 433 440 433Q451 433 458 432Q458 432 464 432Z"/></symbol>
+<symbol id="ion-checkmark-done-outline" viewBox="0 0 512 512"><path d="M363 113Q373 110 379 117Q387 125 382 134Q381 137 313 215.5Q245 294 242 297Q236 301 228.5 299Q221 297 217.5 291Q214 285 218 278Q219 275 287 196.5Q355 118 358 115Q360 114 363 113ZM460 113Q471 110 477 118Q483 127 478 136Q476 138 362.5 267.5Q249 397 248 398Q242 401 235 399Q232 398 181.5 348Q131 298 130 295Q126 288 130 281Q134 274 142 272Q148 272 154 276.5Q160 281 195 317L239 360L242 358Q245 355 349.5 235Q454 115 456 114Q458 113 460 113ZM41 274Q41 274 41 274Q47 271 54 274Q57 275 106 323.5Q155 372 158 376Q163 385 156 394Q149 403 139 399Q136 398 85.5 347.5Q35 297 33.5 294.5Q32 292 32 288Q32 284 34 281Q36 276 41 274Z"/></symbol>
+<symbol id="ion-chevron-back" viewBox="0 0 512 512"><path d="M322 153Q322 153 322 153Q329 151 337.0 154.5Q345 158 349 165Q355 176 349 187Q348 190 283 255Q283 255 218 320L283 385Q348 450 349 453Q353 460 351 468Q350 477 342.5 483.0Q335 489 326 488Q319 487 309.0 478.0Q299 469 239 409Q178 348 169.0 338.0Q160 328 160.0 320.0Q160 312 168.5 302.5Q177 293 237 233Q309 160 313.5 157.0Q318 154 322 153Z"/></symbol>
+<symbol id="ion-chevron-down" viewBox="0 0 512 512"><path d="M102 226Q102 226 102 226Q113 221 123 227Q127 229 191 293Q191 293 256 358L321 293Q385 229 389 227Q398 221 409 226Q426 233 424 250Q423 257 414.0 267.0Q405 277 345 337Q284 399 274.0 407.5Q264 416 256.0 416.0Q248 416 238.0 407.5Q228 399 167 337Q107 277 98.0 267.0Q89 257 88 250Q86 234 102 226Z"/></symbol>
+<symbol id="ion-chevron-forward" viewBox="0 0 512 512"><path d="M179 153Q179 153 179 153Q187 151 195 155Q198 156 273 231Q335 292 343.5 302.0Q352 312 352.0 320.0Q352 328 343.5 338.0Q335 348 273 409Q213 469 203.0 478.0Q193 487 186 488Q177 489 169.5 483.0Q162 477 161 468Q159 460 163 453Q164 450 229 385Q229 385 294 320L229 255Q164 190 163 187Q159 180 161 172Q163 156 179 153Z"/></symbol>
+<symbol id="ion-chevron-up" viewBox="0 0 512 512"><path d="M246 227Q246 227 246 227Q250 224 256 224Q264 224 274.0 232.5Q284 241 345 303Q405 363 414.0 373.0Q423 383 424 390Q425 399 419.0 406.5Q413 414 404 415Q396 417 389 413Q386 412 321 347Q321 347 256 282L191 347Q126 412 123 413Q116 417 108 415Q99 414 93.0 406.5Q87 399 88 390Q89 383 98.0 373.0Q107 363 167 303Q241 229 246 227Z"/></symbol>
+<symbol id="ion-document-text-outline" viewBox="0 0 512 512"><path d="M192 96Q241 96 249.5 97.0Q258 98 266 102Q272 105 348.0 181.0Q424 257 426 263Q431 271 431.5 284.0Q432 297 432 384Q432 489 430.0 495.5Q428 502 424.5 509.5Q421 517 413.0 525.0Q405 533 397 537Q386 543 372.0 543.5Q358 544 256.0 544.0Q154 544 140.0 543.5Q126 543 115 537Q107 533 99.0 525.0Q91 517 87.5 509.5Q84 502 82.0 495.5Q80 489 80.0 320.0Q80 151 82.0 144.5Q84 138 87.5 130.5Q91 123 99.0 115.0Q107 107 115.0 103.0Q123 99 128.5 98.0Q134 97 192 96ZM240 185V128H190Q140 128 136 129Q116 134 113 155Q112 161 112.0 320.0Q112 479 113 485Q115 502 131 509L136 512H256H376L382 509Q397 501 399 485Q400 479 400 384V289L340 288Q279 288 275 286Q262 282 252.5 271.5Q243 261 241 248Q240 243 240 185ZM331 256H377L325 203L272 151V198L273 245L275 249Q277 252 281.0 254.0Q285 256 331 256ZM169 338Q172 336 257 336L342 337L345 339Q350 343 351 349Q354 362 342 367Q340 368 256.0 368.0Q172 368 170 367Q160 363 160 352Q160 342 169 338ZM169 417Q169 417 169 417Q171 416 256.0 416.0Q341 416 343 418Q350 421 351 427Q352 430 352 431Q354 436 348 443Q346 445 342.5 446.5Q339 448 256.0 448.0Q173 448 169 446Q163 443 161 436Q158 424 169 417Z"/></symbol>
+<symbol id="ion-file-tray-outline" viewBox="0 0 512 512"><path d="M115 129Q121 128 259 128H396L403 130Q434 139 445 170Q446 175 463 256L481 337L480 397Q480 458 479 462Q468 503 429 511Q422 512 256.0 512.0Q90 512 83 511Q44 503 33 462Q32 458 32 397L31 337L49 256Q66 175 67 170Q76 146 96 135Q105 131 115 129ZM400 164 395 161H257Q147 161 131.0 161.0Q115 161 110 165Q102 170 98 179Q97 182 82.5 249.5Q68 317 68 319Q68 320 131 320Q183 320 191.0 320.5Q199 321 203 325Q207 329 208 339Q209 353 217 364Q227 378 244 382Q276 391 295 363Q302 353 304 339Q305 329 309 325Q313 321 321.0 320.5Q329 320 381 320Q444 320 444 319Q444 317 429.5 250.0Q415 183 414 180Q411 169 400 164ZM178 353Q178 353 178 353Q178 352 121 352Q121 352 64 352V404Q64 446 65.0 452.5Q66 459 70 466Q75 474 85 478Q85 478 90 480H256H422L427 478Q437 474 442 466Q446 459 447.0 452.5Q448 446 448 404Q448 404 448 352H391Q334 352 334 353Q326 382 306 398Q284 416 256.0 416.0Q228 416 206 398Q186 383 178 353Z"/></symbol>
+<symbol id="ion-headset-outline" viewBox="0 0 512 512"><path d="M233 97Q240 97 255.5 97.0Q271 97 278 97Q345 105 400 152Q474 215 480 308Q481 339 467 389Q454 429 444 454Q430 486 406 509Q390 526 372 535Q343 549 317 541Q301 536 287 524Q272 510 279 491Q280 486 324.5 408.5Q369 331 372 327Q380 316 396 316Q405 316 418 324Q435 334 443 344Q445 347 446 342Q446 341 446 338Q456 286 424 230Q400 187 358.0 160.0Q316 133 269 129Q216 124 166.0 152.5Q116 181 88 230Q64 273 64 319Q64 341 67 346Q68 347 69 344Q77 334 94 324Q107 316 116 316Q132 316 140 327Q143 331 187.5 408.5Q232 486 233 491Q240 510 225 524Q211 536 195 541Q151 555 106 510Q91 495 80 477Q67 455 51 406Q30 344 32 308Q37 238 82 182Q98 162 118 146Q170 104 233 97ZM108 353Q96 360 93 367Q88 376 88 394Q88 413 94 432Q107 467 132 490Q162 519 184 511Q188 509 196 505L203 501L202 498Q200 495 159.0 422.5Q118 350 117.0 349.0Q116 348 108 353ZM413 359Q413 359 413 359Q410 356 403 352Q403 352 396 348L395 350Q394 352 352.0 426.0Q310 500 309.5 500.5Q309 501 312.5 503.0Q316 505 321.0 507.5Q326 510 328 511Q340 515 358.5 505.5Q377 496 392 478Q415 449 423 416Q427 393 423 376Q420 365 413 359Z"/></symbol>
+<symbol id="ion-images-outline" viewBox="0 0 512 512"><path d="M48 98Q54 97 226 97H397L404 99Q418 104 429 115Q448 134 448 164V176H454Q474 178 489.0 190.0Q504 202 510 222Q512 227 512 357Q512 468 511.5 483.0Q511 498 505 509Q502 518 493.5 526.0Q485 534 478 537Q467 543 450.0 543.5Q433 544 296.5 544.0Q160 544 142.5 543.5Q125 543 115 538Q100 530 90.0 515.5Q80 501 80 486V481L67 480Q54 480 50 479Q32 474 18.5 460.5Q5 447 1 429Q0 422 0.0 288.0Q0 154 1 147Q5 129 17.5 116.0Q30 103 48 98ZM390 129Q386 128 223.5 128.0Q61 128 57 129Q42 132 35 147L33 151V287Q32 422 34 426Q39 441 55 446Q60 448 70 448H80V339Q80 248 80.5 234.5Q81 221 86 211Q98 187 123 179Q127 178 134.5 177.0Q142 176 279 176H416L415 164Q415 151 413 147Q406 132 390 129ZM463 211 458 209 297 208Q136 208 132 210Q123 213 118 220Q113 227 112.5 237.0Q112 247 112 324Q112 416 112.5 416.0Q113 416 158.5 375.5Q204 335 208 332Q218 326 230 325Q239 325 244 326Q253 328 259.5 333.5Q266 339 291 363Q324 395 336 407L350 421L363 408Q381 391 390 388Q404 383 417 387Q425 389 431.0 393.0Q437 397 460 416L480 433L479 331V229L477 225Q472 215 463 211ZM363 238Q372 236 382 238Q387 239 394 242Q407 249 414.0 262.5Q421 276 419 290Q417 305 406.0 316.0Q395 327 380 330Q352 334 335.5 311.5Q319 289 331 264Q335 255 344.5 247.5Q354 240 363 238ZM380 271Q368 265 360 277Q358 279 359 284Q360 298 373 298Q381 298 385 292Q389 287 387 280Q386 274 380 271ZM240 359Q235 356 229 358Q225 359 165 412L112 459V474Q112 489 115 494Q120 505 130 509L134 512H197H259L293 478L327 444L285 402Q242 360 240 359ZM411 419Q411 419 411 419Q407 417 401 418Q397 419 339 477Q339 477 304 512H379Q440 512 450.0 511.5Q460 511 465 508Q474 502 478 493Q480 488 480 481Q480 481 480 474L447 447Q415 420 411 419Z"/></symbol>
+<symbol id="ion-layers-outline" viewBox="0 0 512 512"><path d="M246 49Q269 47 286 53Q292 55 369 90Q446 125 449 128Q464 138 463.5 153.5Q463 169 448 178Q443 180 417.5 192Q392 204 392 204.5Q392 205 419 217Q446 229 449 231Q471 246 462 267Q458 275 448 281Q445 284 419.5 295.5Q394 307 394 307.5Q394 308 421 321.5Q448 335 452 338Q470 353 462 371Q458 379 448 386Q446 387 373 420.5Q300 454 291 458Q261 470 229 460Q223 459 146 424Q69 389 64 386Q55 380 51 370Q46 360 50.5 349.5Q55 339 67 333Q72 330 96.5 319.5Q121 309 121 308.5Q121 308 118.5 307Q116 306 112 304.5Q108 303 103 300Q64 282 58 277Q53 272 51 267Q44 253 54 239Q60 232 94 217Q101 213 107.5 210.5Q114 208 117.5 206Q121 204 121 204Q121 204 97 193Q64 178 58 173Q50 166 49 157Q45 140 62 128Q67 125 144.5 89.5Q222 54 225 53Q234 50 246 49ZM270 81Q256 78 242 81Q237 83 161.5 117Q86 151 85 152Q85 152 90 154.5Q95 157 104 161Q113 165 123 170Q163 188 169 191Q229 219 237 221Q254 227 274 222Q281 220 340 192Q344 190 383.5 172.5Q423 155 426 153L428 152L423 150Q419 148 347.5 115.5Q276 83 270 81ZM164 224 160 222 123 239Q86 255 85 256L162 292Q173 297 203 311Q233 324 240 326Q256 330 272 326Q281 324 345 294Q351 291 389 274Q400 269 408.5 265Q417 261 422 258.5Q427 256 427 256Q426 255 389.5 238.5Q353 222 352 222Q351 222 321 236Q291 250 285 252Q255 261 226 251Q220 249 194 237.5Q168 226 164 224ZM391 342Q391 342 391 342Q355 325 354.5 325Q354 325 323.5 339Q293 353 286 355Q256 366 225 355Q218 353 189.5 339.5Q161 326 160 327Q159 327 122.5 343Q86 359 85 360Q85 360 120.5 376.5Q156 393 193.5 410Q231 427 236 429Q242 431 256 431Q270 431 275 430Q279 428 317 411Q355 394 391 377Q427 360 427 360Q426 359 391 342Z"/></symbol>
+<symbol id="ion-library-outline" viewBox="0 0 512 512"><path d="M260 98 265 96 305 97H345L349 99Q360 104 365 114L367 120L368 136L369 151Q374 149 397.5 146.5Q421 144 428 144Q439 145 449 154Q457 162 460 172Q461 175 478.5 337.0Q496 499 496 506Q495 520 484 530Q478 536 470.5 538.0Q463 540 439 542Q413 545 404 540Q388 532 384 515Q383 511 376.0 444.5Q369 378 368 376Q368 375 368.0 384.5Q368 394 368.0 410.5Q368 427 368 446Q368 518 366 523Q360 538 346 543Q341 544 303.5 544.0Q266 544 261.0 542.0Q256 540 252 537L248 534L244 537Q240 540 235.0 542.0Q230 544 180.5 544.5Q131 545 125 544Q113 542 107 536L104 533L101 536Q94 542 84 544Q79 544 64.0 544.0Q49 544 44 544Q26 541 19 525L17 520V344V168L19 163Q24 152 35 147L40 145H64H88L93 147Q104 152 109 163Q111 168 112 190V212L116 210Q120 209 176.5 209.0Q233 209 236 210L240 212V169Q240 126 241 122Q244 105 260 98ZM336 320V128H304H272V320V512H304H336ZM80 344V176H64H48V344V512H64H80ZM425 176Q383 180 381 182Q380 182 380 186Q381 189 398.0 346.5Q415 504 415 508Q416 510 418.0 511.0Q420 512 440.5 510.0Q461 508 462.5 506.5Q464 505 463.5 501.5Q463 498 446.0 340.0Q429 182 428.5 180.0Q428 178 427.0 177.0Q426 176 425 176ZM224 256V240H176H128V256V272H176H224ZM224 376V304H176H128V376V448H176H224ZM224 496V480H176H128V496V512H176H224Z"/></symbol>
+<symbol id="ion-open-outline" viewBox="0 0 512 512"><path d="M316 113Q319 112 377.5 112.0Q436 112 439 114Q445 117 447 124Q448 127 448 185V243L446 247Q444 250 441.0 253.0Q438 256 432.0 256.0Q426 256 422.5 253.0Q419 250 417.5 246.5Q416 243 416 205V167L316 266Q217 365 214 366Q208 370 200.5 366.0Q193 362 192 355Q191 348 201.0 337.0Q211 326 293 244L393 144H355Q317 144 313.0 142.0Q309 140 306.5 137.0Q304 134 304.0 128.0Q304 122 307 119Q311 114 316 113ZM81 177Q81 177 81 177Q86 176 173.0 176.0Q260 176 262 178Q271 183 271.0 192.0Q271 201 262 206Q260 208 170.5 208.5Q81 209 78 210Q70 214 66 221Q66 221 64 225V352V479L66 483Q71 490 79 494Q82 496 207.5 496.0Q333 496 337 494Q345 490 349 483Q349 483 351 479L352 381V284L354 280Q358 274 365.0 272.5Q372 271 378 276Q383 281 383.5 291.5Q384 302 384 384Q384 384 384 483L382 488Q372 517 343 526Q343 526 337 528H208H78L72 526Q56 521 44 507Q38 499 34 488Q34 488 32 482V352V222L34 216Q38 205 44 197Q59 179 81 177Z"/></symbol>
+<symbol id="ion-person-outline" viewBox="0 0 512 512"><path d="M237 98Q255 95 274 98Q307 103 330 126Q362 158 360 205Q359 232 346 258Q337 277 321 292Q301 311 276 318Q256 323 236 318Q210 311 189 289Q163 263 154 226Q152 217 152.0 202.0Q152 187 154 178Q160 149 179 128Q203 104 237 98ZM275 131Q259 126 244 129Q222 132 207 146Q181 170 184 208Q186 227 195 244Q208 272 232 282Q270 299 302 266Q328 239 328 201Q328 182 321 168Q307 139 275 131ZM228 354Q237 353 255.5 353.0Q274 353 283 354Q328 359 365 378Q448 419 463 502Q464 510 464 516Q459 540 437 544Q431 544 256.0 544.0Q81 544 75 544Q53 540 48 516Q48 510 49 502Q64 419 147 378Q184 359 228 354ZM272 385Q272 385 272 385Q208 380 155.5 409.0Q103 438 86 488Q80 504 80 510Q80 512 256.0 512.0Q432 512 432 510Q432 498 421 475Q403 437 363.5 413.0Q324 389 272 385Z"/></symbol>
+<symbol id="ion-play-circle-outline" viewBox="0 0 512 512"><path d="M241 113Q256 112 269 113Q351 118 407 177Q452 225 462 292Q464 302 464.0 320.0Q464 338 462 348Q454 403 421 446Q405 469 382 485Q339 518 284 526Q274 528 256.0 528.0Q238 528 228 526Q173 518 130 485Q107 469 91 446Q58 403 50 348Q48 338 48.0 320.0Q48 302 50 292Q58 238 91 194Q107 172 130 155Q181 117 241 113ZM284 146Q278 145 261.5 144.5Q245 144 240 145Q212 148 193 156Q149 173 119.5 209.0Q90 245 82 293Q81 302 81.0 320.0Q81 338 82 347Q89 390 114.0 424.0Q139 458 178 478Q214 496 256.0 496.0Q298 496 334 478Q372 458 397.0 424.5Q422 391 430 348Q431 339 431.0 320.5Q431 302 430 293Q420 233 378 193Q338 156 284 146ZM207 241Q207 241 207 241Q210 239 213.5 240.5Q217 242 274.0 276.5Q331 311 333 313Q336 316 336.0 320.0Q336 324 333 327Q330 330 274.0 364.0Q218 398 214 399Q210 401 207.0 399.0Q204 397 202.0 394.5Q200 392 200.0 320.0Q200 248 202.0 245.5Q204 243 207 241Z"/></symbol>
+<symbol id="ion-pulse" viewBox="0 0 512 512"><path d="M171 49Q171 49 171 49Q185 44 191 58Q192 61 217.5 216Q243 371 244 372.5Q245 374 265.5 301Q286 228 288 222Q291 213 298 210Q302 207 308 209Q314 211 317 215Q319 218 333 261Q333 261 347 304H367H386L390 298Q397 283 412.5 276.5Q428 270 443 274Q465 279 474 297Q491 330 464 355Q450 369 429 368Q416 367 405 360Q395 353 390 342Q390 342 386 336H361Q335 336 332 335Q325 333 322 327Q320 324 313 301Q311 295 309 290Q307 285 306 282Q305 279 305 279Q305 279 280 366Q255 453 254 456Q251 462 244 463Q232 467 226 456Q224 452 198.5 298.5Q173 145 173 144Q173 144 170 156Q167 168 161.5 188.5Q156 209 150 234Q127 325 126 328Q123 334 116 335Q113 336 78.5 336Q44 336 40.5 334Q37 332 35 328Q26 315 40 306Q40 306 44 304H72H100L130 181Q161 59 162 56Q165 51 171 49Z"/></symbol>
+<symbol id="ion-sparkles" viewBox="0 0 512 512"><path d="M82 65Q87 63 92.5 65.0Q98 67 100 71Q102 73 110.5 95.0Q119 117 120.0 119.0Q121 121 143.0 129.5Q165 138 169 140Q175 143 175.5 151.0Q176 159 170 163Q168 165 145.0 174.0Q122 183 120.5 184.5Q119 186 110.0 209.0Q101 232 99 234Q95 240 87.5 239.5Q80 239 76 234Q74 231 65.5 208.0Q57 185 55.0 184.0Q53 183 30.5 174.0Q8 165 6 164Q0 160 0 152Q0 146 5 141Q7 139 30.5 130.0Q54 121 55.5 119.5Q57 118 66 95Q76 68 82 65ZM392 98Q400 94 407 98Q411 100 414.0 105.5Q417 111 426 136Q439 168 440.5 169.0Q442 170 471 181Q505 194 508 198Q512 203 511.5 209.5Q511 216 506 220Q503 223 473.5 234.0Q444 245 442 246Q439 248 425 283Q416 307 413.0 312.5Q410 318 405 319Q396 322 389 315Q386 312 374.5 282.5Q363 253 362 250Q360 247 356.5 245.5Q353 244 318 230Q293 221 290 215Q284 205 293 196Q295 194 327.0 182.0Q359 170 360.5 168.5Q362 167 374.0 136.0Q386 105 387.5 102.5Q389 100 392 98ZM200 194Q200 194 200 194Q214 189 225 200Q225 200 230 204L251 259Q272 313 274.0 315.5Q276 318 279.0 319.5Q282 321 333.5 341.0Q385 361 388 363Q394 367 398 374Q402 384 398 394Q394 402 387 406Q385 407 333.5 427.0Q282 447 279.0 448.5Q276 450 274.0 452.5Q272 455 251 509Q251 509 230 564L225 568Q218 576 208 576Q195 576 188 566Q186 563 165.0 508.5Q144 454 141.5 451.0Q139 448 86.5 428.0Q34 408 30 407Q23 403 18 395Q14 386 17 377Q20 368 28 363Q31 361 83.5 341.0Q136 321 138.5 319.0Q141 317 142.5 315.5Q144 314 164.5 260.0Q185 206 187 203Q192 196 200 194Z"/></symbol>
+<symbol id="ion-sparkles-outline" viewBox="0 0 512 512"><path d="M81 66Q95 59 102 73Q104 76 112.0 97.0Q120 118 121.0 119.0Q122 120 145 129Q172 140 175 146Q180 158 170 165Q168 166 144.5 175.0Q121 184 120.5 185.0Q120 186 111 209Q104 227 101.5 232.0Q99 237 94 239Q88 241 81.5 238.5Q75 236 65 209Q56 186 55.0 185.0Q54 184 33 176Q7 166 5 163Q0 158 0 152Q0 145 5 140Q7 138 30.5 129.0Q54 120 55.0 119.0Q56 118 65.0 95.0Q74 72 76.0 69.5Q78 67 81 66ZM392 98Q401 94 409 99Q413 102 428 139Q439 169 439.0 169.0Q439 169 470.0 181.0Q501 193 503 194Q509 197 511 203Q515 213 506 220Q503 222 471 235L439 247L427 279Q414 311 412 314Q408 320 400.0 320.0Q392 320 387 314Q386 312 373.5 279.5Q361 247 361.0 247.0Q361 247 329 235Q293 221 290 216Q285 205 293 197Q296 194 328.0 182.0Q360 170 360.5 169.0Q361 168 373.5 136.5Q386 105 387.5 102.5Q389 100 392 98ZM91 133 88 125 86 129Q85 133 84 136Q81 144 71 148Q63 151 62.5 152.0Q62 153 69 155Q77 159 79.5 161.0Q82 163 84.5 170.5Q87 178 87.5 178.0Q88 178 91 171Q96 160 107 155Q114 153 114.0 152.0Q114 151 106.5 148.5Q99 146 97.0 143.5Q95 141 91 133ZM406 172Q401 158 400 158Q400 158 399.0 159.5Q398 161 397.0 164.5Q396 168 394 172Q388 187 387 190Q384 194 364 202Q360 204 356.5 205.0Q353 206 351.5 207.0Q350 208 350 208Q350 209 364 214Q381 220 385 224Q387 226 393 242Q395 247 396.5 250.5Q398 254 399.0 256.0Q400 258 400 258Q401 257 407 242Q412 227 415.5 223.5Q419 220 434 215Q450 209 450 208Q450 208 448.0 207.0Q446 206 442.5 204.5Q439 203 434 201Q418 195 416 193Q412 189 406 172ZM200 194Q215 188 227 201Q230 205 251.5 261.0Q273 317 274.0 318.0Q275 319 330.0 340.0Q385 361 387 362Q393 365 397 373Q403 384 397 395Q393 403 387 406Q385 407 330.0 428.0Q275 449 274.0 450.0Q273 451 252 507L230 564L225 568Q218 576 208 576Q196 576 188 566Q186 563 164.0 506.5Q142 450 142.0 450.0Q142 450 87.0 428.5Q32 407 28 405Q16 398 16.0 384.0Q16 370 28 363Q31 361 86.5 339.5Q142 318 142.0 318.0Q142 318 163.5 262.0Q185 206 187 203Q191 197 200 194ZM227 287Q227 287 227 287Q209 239 208 238Q208 238 205.5 244.0Q203 250 198.5 261.0Q194 272 189 285Q171 332 169.5 335.0Q168 338 164 342Q160 346 98 370Q61 384 61.0 384.0Q61 384 98 398Q160 422 164 426Q168 430 169.5 433.0Q171 436 189 483Q194 496 198.5 507.0Q203 518 205.5 524.0Q208 530 208 530Q209 529 227.5 481.0Q246 433 249.0 429.0Q252 425 257.0 422.5Q262 420 308.0 402.5Q354 385 354.0 384.0Q354 383 305.5 364.5Q257 346 254.0 344.0Q251 342 248.5 338.5Q246 335 227 287Z"/></symbol>
+<symbol id="ion-sync" viewBox="0 0 512 512"><path d="M230 63Q239 61 258.5 61.5Q278 62 287 64Q372 78 419 150Q451 197 451 253V262L460 253Q470 243 473 242Q480 238 487 242Q493 245 495 252Q497 259 493 265Q490 270 467.5 291.5Q445 313 443 314Q435 317 429 314Q426 312 401 288.5Q376 265 375 263Q372 255 376 248Q378 245 381.5 242.5Q385 240 390 240Q398 240 401 244Q402 246 411 254L419 261L418 252Q417 213 401 182Q388 157 368 138Q326 98 269 93.5Q212 89 164 121Q148 132 132 149Q122 160 115 160Q103 160 100 148Q98 140 107 129Q157 73 230 63ZM69 198Q69 198 69 198Q76 194 83 198Q86 200 111 223.5Q136 247 137 249Q138 252 138 257Q138 263 133.5 267.5Q129 272 122 272Q115 272 102 260Q102 260 93 251V259Q93 293 109 326Q132 376 181 401Q230 426 284 416Q341 406 383 359Q389 352 396 352Q405 352 409.5 359Q414 366 411 374Q404 389 375 411Q321 451 255 451Q210 451 169 430Q121 406 92 362Q63 318 61 263Q61 263 60 251L51 260Q36 275 26 271Q19 267 17 260Q15 253 19 247Q22 243 44.5 221Q67 199 69 198Z"/></symbol>
+<symbol id="ion-text-outline" viewBox="0 0 512 512"><path d="M147 144Q152 143 156 144Q163 146 166 152Q167 154 227.5 315.0Q288 476 288 480Q288 490 279 494Q273 497 267 494Q260 492 257 485Q255 481 237 432L219 384H152H85L65 436Q46 488 43 491Q37 496 32.0 496.0Q27 496 22 491Q16 487 16 479Q16 476 77.0 313.5Q138 151 141.0 148.0Q144 145 147 144ZM206 351Q206 350 179 278L151 207V208Q97 346 97 351Q97 352 152 352Q174 352 190.0 351.5Q206 351 206 351ZM384 241Q390 240 400.0 240.0Q410 240 415 241Q447 245 469 267Q486 284 493 312Q495 319 495.5 400.0Q496 481 495 484Q494 490 487 494Q478 498 470 491Q464 487 464 474V466L458 471Q430 496 382 496Q361 496 346 489Q314 475 306 441Q301 422 306 405Q315 373 350 358Q375 347 448 344H464V333Q462 309 451 294Q433 272 401 272Q384 272 370 279Q362 283 354.5 290.5Q347 298 342.5 306.0Q338 314 334 317Q327 322 319 317Q309 312 310 302Q311 294 321 279Q345 247 384 241ZM464 383Q464 383 464 383V376H461Q434 375 393 380Q372 383 360 389Q336 400 336 423Q336 441 348 453Q356 460 367 463Q384 468 408 461Q454 449 462 399Q463 390 464 383Z"/></symbol>
+<symbol id="ion-time-outline" viewBox="0 0 512 512"><path d="M241 113Q256 112 269 113Q351 118 407 177Q452 225 462 292Q464 302 464.0 320.0Q464 338 462 348Q454 403 421 446Q405 469 382 485Q339 518 284 526Q274 528 256.0 528.0Q238 528 228 526Q173 518 130 485Q107 469 91 446Q58 403 50 348Q48 338 48.0 320.0Q48 302 50 292Q58 238 91 194Q107 172 130 155Q181 117 241 113ZM284 146Q278 145 261.5 144.5Q245 144 240 145Q212 148 193 156Q149 173 119.5 209.0Q90 245 82 293Q81 302 81.0 320.0Q81 338 82 347Q89 390 114.0 424.0Q139 458 178 478Q214 496 256.0 496.0Q298 496 334 478Q372 458 397.0 424.5Q422 391 430 348Q431 339 431.0 320.5Q431 302 430 293Q420 233 378 193Q338 156 284 146ZM252 177Q252 177 252 177Q258 175 263.5 178.0Q269 181 271 188Q272 191 272 255Q272 255 272 320H314Q355 320 359 322Q372 328 367 342Q364 350 355 352Q350 352 301 352Q301 352 252 352L248 350Q244 347 242 344Q242 344 240 341V266Q240 191 241 188Q243 179 252 177Z"/></symbol>
+<symbol id="ion-search-stroke" viewBox="0 0 512 512"><g fill="none" stroke="currentColor" stroke-width="32" stroke-miterlimit="10"><path d="M221.09 64a157.09 157.09 0 10157.09 157.09A157.1 157.1 0 00221.09 64z"/><path stroke-linecap="round" d="M338.29 338.29L448 448"/></g></symbol>
+</svg>
+<h1 class="sheet-title">Direction C — « Le tableau de bord »</h1>
+<p class="sheet-lede"><span>Une barre laterale de quatre destinations — exactement les quatre de l'app mobile : Accueil, Bibliotheque, Digest, Recherche — et, a droite, la page complete. La bibliotheque y est un tableau triable : titre, type, duree, dossier, etat, date. La fiche media juxtapose le texte et un panneau de proprietes. C'est la direction qui met le plus d'information par ecran et celle qui transfere le mieux le modele mental du mobile. Le prix a payer : elle a l'air d'une console d'administration, et son tableau heurte la « no-line rule » du design system.</span></p>
+
+<p class="frame-label">Cadre 1 — Bibliotheque : un tableau triable · 1440 x 900</p>
+<p class="frame-note">184 contenus ne se parcourent pas en grille. Le tableau permet ce qu'aucune autre direction ne permet : trier par duree pour trouver quoi ecouter en 20 minutes, ou filtrer sur l'etat pour voir ce qui a echoue. Les quatre compteurs du haut sont la lecture dashboard de la meme donnee.</p>
+<div class="frame frame-desktop">
+  <div class="c-shell">
+    <aside class="c-rail">
+      <div class="c-railhead">
+        <div class="wordmark" style="font-size:16px"><span class="wordmark-dot" style="width:20px;height:20px"><svg class="ic ic-sm"><use href="#ion-library-outline"/></svg></span>Media Summarizer</div>
+      </div>
+      <nav style="display:flex;flex-direction:column;gap:3px">
+        <div class="c-navitem"><svg class="ic"><use href="#ion-file-tray-outline"/></svg>Accueil</div>
+        <div class="c-navitem on" data-nav="bib"><svg class="ic"><use href="#ion-library-outline"/></svg>Bibliotheque</div>
+        <div class="c-navitem" data-nav="dig"><svg class="ic"><use href="#ion-sparkles-outline"/></svg>Digest</div>
+        <div class="c-navitem"><svg class="ic"><use href="#ion-search-stroke"/></svg>Recherche</div>
+      </nav>
+      <div style="margin-top:28px;padding:0 12px 10px"><span class="micro">Dossiers</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px;font-size:14px">
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Histoire romaine<span style="margin-left:auto;color:var(--text-muted);font-size:13px">12</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Productivite<span style="margin-left:auto;color:var(--text-muted);font-size:13px">23</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Economie<span style="margin-left:auto;color:var(--text-muted);font-size:13px">9</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Sciences<span style="margin-left:auto;color:var(--text-muted);font-size:13px">4</span></div>
+      </div>
+      <div style="margin-top:auto;padding:14px 12px 18px;display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:9999px;background:var(--surface-container-high);display:grid;place-items:center;color:var(--text-subtle)"><svg class="ic ic-sm"><use href="#ion-person-outline"/></svg></div>
+        <div style="min-width:0"><div style="font-size:14px;font-weight:600">Mon compte</div><div class="meta">Mix · 142 min</div></div>
+      </div>
+    </aside>
+    <main class="c-main">
+      <div class="c-head">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h1 style="font-size:32px;font-weight:700;letter-spacing:-0.5px">Bibliotheque</h1>
+          <div style="display:flex;gap:10px;align-items:center">
+            <span class="btn btn-sm btn-ghost"><svg class="ic ic-sm"><use href="#ion-search-stroke"/></svg>Filtrer</span>
+            <span class="btn btn-sm"><svg class="ic ic-sm"><use href="#ion-open-outline"/></svg>Ajouter une URL</span>
+          </div>
+        </div>
+        <div class="c-stats">
+          <div class="c-stat"><div class="micro">Contenus</div><div class="c-statnum">184</div></div>
+          <div class="c-stat"><div class="micro">Non classes</div><div class="c-statnum">7</div></div>
+          <div class="c-stat"><div class="micro">Minutes restantes</div><div class="c-statnum">142</div><div class="gauge" style="margin-top:8px"><i style="width:47%"></i></div></div>
+          <div class="c-stat"><div class="micro">En traitement</div><div class="c-statnum">1</div></div>
+        </div>
+      </div>
+      <div style="padding:0 32px;flex:1;overflow:hidden;position:relative">
+        <table class="c-table">
+          <thead><tr>
+            <th style="width:46%">Titre <svg class="ic ic-sm" style="display:inline-block;vertical-align:-3px"><use href="#ion-chevron-down"/></svg></th>
+            <th>Type</th><th>Duree</th><th>Dossier</th><th>Etat</th><th>Ajoute le</th>
+          </tr></thead>
+          <tbody>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px"><svg class="ic ic-sm"><use href="#ion-headset-outline"/></svg></div><span class="c-tt">Comment Rome a finance ses guerres</span></div></td><td>Podcast</td><td>48 min</td><td>Histoire romaine</td><td><span class="c-dot"></span> Pret</td><td>5 oct.</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px;background:var(--surface-container)"><svg class="ic ic-sm"><use href="#ion-document-text-outline"/></svg></div><span class="c-tt">Les legions apres Marius</span></div></td><td>Article</td><td>12 min</td><td>Histoire romaine</td><td><span class="c-dot"></span> Pret</td><td>5 oct.</td></tr>
+            <tr class="on"><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px;background:var(--surface-container-low)"><svg class="ic ic-sm"><use href="#ion-play-circle-outline"/></svg></div><span class="c-tt">Le tresor de Saturne : ou dormait l'argent public</span></div></td><td>Video</td><td>18 min</td><td>Republique tardive</td><td><span class="c-dot"></span> Lu a 38 %</td><td>2 oct.</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px;background:var(--surface-container)"><svg class="ic ic-sm" style="color:var(--text-muted)"><use href="#ion-sync"/></svg></div><span class="c-tt">Table ronde : la fiscalite de l'Empire</span></div></td><td>Video</td><td>1 h 12</td><td class="muted">Non classe</td><td><span class="chip chip-high">Traitement…</span></td><td>aujourd'hui</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px"><svg class="ic ic-sm"><use href="#ion-book-outline"/></svg></div><span class="c-tt">Scipion l'Africain, chapitre 4</span></div></td><td>Document</td><td>23 p.</td><td>Histoire romaine</td><td><span class="c-dot"></span> Pret</td><td>29 sept.</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px;background:var(--surface-container-low)"><svg class="ic ic-sm"><use href="#ion-text-outline"/></svg></div><span class="c-tt">Note — a verifier dans Tite-Live</span></div></td><td>Note</td><td class="muted">—</td><td>Histoire romaine</td><td><span class="c-dot"></span> Pret</td><td>24 sept.</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px"><svg class="ic ic-sm"><use href="#ion-play-circle-outline"/></svg></div><span class="c-tt">Pourquoi les taux montent plus vite qu'ils ne baissent</span></div></td><td>Video</td><td>22 min</td><td>Economie</td><td><span class="c-dot"></span> Pret</td><td>23 sept.</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px;background:var(--surface-container)"><svg class="ic ic-sm"><use href="#ion-images-outline"/></svg></div><span class="c-tt">Tableau des recettes publiques, p. 211</span></div></td><td>Photo</td><td class="muted">—</td><td>Histoire romaine</td><td><span class="c-dot"></span> Pret</td><td>21 sept.</td></tr>
+            <tr><td><div style="display:flex;gap:12px;align-items:center"><div class="cover" style="width:40px;height:40px;background:var(--surface-container-low)"><svg class="ic ic-sm"><use href="#ion-headset-outline"/></svg></div><span class="c-tt">Le cout reel d'une interruption</span></div></td><td>Podcast</td><td>31 min</td><td>Productivite</td><td><span class="c-dot"></span> Pret</td><td>19 sept.</td></tr>
+          </tbody>
+        </table>
+        <div class="scrollfade"></div>
+      </div>
+    </main>
+  </div>
+</div>
+<p class="frame-label">Cadre 2 — Fiche media : le texte et ses proprietes · 1440 x 900</p>
+<p class="frame-note">Le panneau de droite est un tableau de proprietes, pas une carte marketing : ce sont les champs que l'API rend deja (type, duree, source, dossier, langue de lecture, etat du traitement). C'est la seule direction ou l'on voit, sans cliquer, pourquoi un media n'a pas de texte.</p>
+<div class="frame frame-desktop">
+  <div class="c-shell">
+    <aside class="c-rail">
+      <div class="c-railhead">
+        <div class="wordmark" style="font-size:16px"><span class="wordmark-dot" style="width:20px;height:20px"><svg class="ic ic-sm"><use href="#ion-library-outline"/></svg></span>Media Summarizer</div>
+      </div>
+      <nav style="display:flex;flex-direction:column;gap:3px">
+        <div class="c-navitem"><svg class="ic"><use href="#ion-file-tray-outline"/></svg>Accueil</div>
+        <div class="c-navitem on" data-nav="bib"><svg class="ic"><use href="#ion-library-outline"/></svg>Bibliotheque</div>
+        <div class="c-navitem" data-nav="dig"><svg class="ic"><use href="#ion-sparkles-outline"/></svg>Digest</div>
+        <div class="c-navitem"><svg class="ic"><use href="#ion-search-stroke"/></svg>Recherche</div>
+      </nav>
+      <div style="margin-top:28px;padding:0 12px 10px"><span class="micro">Dossiers</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px;font-size:14px">
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Histoire romaine<span style="margin-left:auto;color:var(--text-muted);font-size:13px">12</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Productivite<span style="margin-left:auto;color:var(--text-muted);font-size:13px">23</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Economie<span style="margin-left:auto;color:var(--text-muted);font-size:13px">9</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Sciences<span style="margin-left:auto;color:var(--text-muted);font-size:13px">4</span></div>
+      </div>
+      <div style="margin-top:auto;padding:14px 12px 18px;display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:9999px;background:var(--surface-container-high);display:grid;place-items:center;color:var(--text-subtle)"><svg class="ic ic-sm"><use href="#ion-person-outline"/></svg></div>
+        <div style="min-width:0"><div style="font-size:14px;font-weight:600">Mon compte</div><div class="meta">Mix · 142 min</div></div>
+      </div>
+    </aside>
+    <main class="c-main">
+      <div class="c-head" style="padding-bottom:0">
+        <div class="meta" style="margin-bottom:6px">Bibliotheque › Histoire romaine › Republique tardive</div>
+        <h1 style="font-size:32px;font-weight:700;letter-spacing:-0.5px;line-height:1.2;max-width:900px">Le tresor de Saturne : ou dormait l'argent public</h1>
+        <div style="display:flex;align-items:center;gap:12px;margin:18px 0 0">
+          <div class="seg"><span class="on">Texte complet</span><span>IA</span><span>Source</span></div>
+          <span class="btn btn-sm btn-ghost"><svg class="ic ic-sm"><use href="#ion-sparkles"/></svg>Generer</span>
+          <span class="btn btn-sm btn-ghost"><svg class="ic ic-sm"><use href="#ion-layers-outline"/></svg>Deplacer</span>
+        </div>
+      </div>
+      <div style="padding:24px 32px 0;flex:1;overflow:hidden;position:relative">
+        <div class="c-two">
+          <div class="c-tx" style="max-width:720px">
+            <p>Le temple de Saturne, au pied du Capitole, n'etait pas seulement un lieu de culte : c'est la que la Republique gardait son tresor. L'<span style="background:var(--highlight);color:var(--on-highlight)">aerarium</span> y occupait une salle basse, sous la cella, et c'est de la que partaient les fonds des campagnes militaires.</p>
+            <p>La gestion en revenait aux questeurs, deux magistrats elus pour un an. Leur mandat court est une piece centrale du dispositif : personne ne tenait les cordons de la bourse assez longtemps pour s'en faire une clientele.</p>
+            <p>Quand la guerre s'allongeait, l'aerarium se vidait. Rome recourait alors a trois expedients : l'emprunt force aupres des citoyens les plus riches, la refonte des monnaies a titre reduit, et le butin, qui n'etait pas un supplement mais une ligne de recette anticipee.</p>
+            <p>C'est ce dernier point qui explique le mieux la mecanique de l'expansion : une campagne devait, au minimum, se payer elle-meme.</p>
+          </div>
+          <aside style="display:flex;flex-direction:column;gap:18px">
+            <div class="c-props">
+              <div class="c-prop"><span>Type</span><span>Video · Historia Civilis</span></div>
+              <div class="c-prop"><span>Duree</span><span>18 min 04 s</span></div>
+              <div class="c-prop"><span>Dossier</span><span>Republique tardive</span></div>
+              <div class="c-prop"><span>Ajoute le</span><span>2 octobre, 21 h 14</span></div>
+              <div class="c-prop"><span>Langue de lecture</span><span>Francais</span></div>
+              <div class="c-prop"><span>Etat</span><span><span class="c-dot"></span> Texte pret · 126 paragraphes</span></div>
+              <div class="c-prop"><span>Lecture</span><span style="flex:1"><span style="display:block;margin-bottom:6px">38 % · 11 min restantes</span><span class="gauge" style="display:block"><i style="width:38%"></i></span></span></div>
+            </div>
+            <div>
+              <div class="micro" style="margin-bottom:10px">Artefacts</div>
+              <div class="c-props">
+                <div class="c-prop"><span style="width:auto;flex:1;color:var(--text-main);font-weight:600">Resume</span><span class="meta">4 oct.</span></div>
+                <div class="c-prop"><span style="width:auto;flex:1;color:var(--text-main);font-weight:600">Cartes memo</span><span class="meta">24 cartes</span></div>
+                <div class="c-prop"><span style="width:auto;flex:1">Notes de cours</span><span class="chip">Generer</span></div>
+                <div class="c-prop"><span style="width:auto;flex:1">Quiz</span><span class="chip">Generer</span></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div class="scrollfade"></div>
+      </div>
+    </main>
+  </div>
+</div>
+<p class="frame-label">Cadre 3 — Digest quotidien · 1440 x 900</p>
+<p class="frame-note">Le digest devient un parcours mesure : combien de medias, combien de lus, et un selecteur de jours. La colonne de droite ouvre l'entree courante. Les positions « 1 / 4 » de l'app (digest.position) deviennent des pastilles numerotees.</p>
+<div class="frame frame-desktop">
+  <div class="c-shell">
+    <aside class="c-rail">
+      <div class="c-railhead">
+        <div class="wordmark" style="font-size:16px"><span class="wordmark-dot" style="width:20px;height:20px"><svg class="ic ic-sm"><use href="#ion-library-outline"/></svg></span>Media Summarizer</div>
+      </div>
+      <nav style="display:flex;flex-direction:column;gap:3px">
+        <div class="c-navitem"><svg class="ic"><use href="#ion-file-tray-outline"/></svg>Accueil</div>
+        <div class="c-navitem" data-nav="bib"><svg class="ic"><use href="#ion-library-outline"/></svg>Bibliotheque</div>
+        <div class="c-navitem on" data-nav="dig"><svg class="ic"><use href="#ion-sparkles-outline"/></svg>Digest</div>
+        <div class="c-navitem"><svg class="ic"><use href="#ion-search-stroke"/></svg>Recherche</div>
+      </nav>
+      <div style="margin-top:28px;padding:0 12px 10px"><span class="micro">Dossiers</span></div>
+      <div style="display:flex;flex-direction:column;gap:2px;font-size:14px">
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Histoire romaine<span style="margin-left:auto;color:var(--text-muted);font-size:13px">12</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Productivite<span style="margin-left:auto;color:var(--text-muted);font-size:13px">23</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Economie<span style="margin-left:auto;color:var(--text-muted);font-size:13px">9</span></div>
+        <div style="display:flex;padding:7px 12px;border-radius:var(--radius-md)">Sciences<span style="margin-left:auto;color:var(--text-muted);font-size:13px">4</span></div>
+      </div>
+      <div style="margin-top:auto;padding:14px 12px 18px;display:flex;align-items:center;gap:10px">
+        <div style="width:32px;height:32px;border-radius:9999px;background:var(--surface-container-high);display:grid;place-items:center;color:var(--text-subtle)"><svg class="ic ic-sm"><use href="#ion-person-outline"/></svg></div>
+        <div style="min-width:0"><div style="font-size:14px;font-weight:600">Mon compte</div><div class="meta">Mix · 142 min</div></div>
+      </div>
+    </aside>
+    <main class="c-main">
+      <div class="c-head">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h1 style="font-size:32px;font-weight:700;letter-spacing:-0.5px">Digest</h1>
+          <div class="seg"><span class="on">Quotidien</span><span>Hebdomadaire</span></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
+          <span class="b-filter on" style="height:34px;padding:0 16px;border-radius:9999px;display:inline-flex;align-items:center;background:var(--primary);color:var(--on-primary);font-size:14px;font-weight:500">Lun 6</span>
+          <span class="chip">Dim 5</span><span class="chip">Sam 4</span><span class="chip">Ven 3</span><span class="chip">Jeu 2</span>
+          <span class="meta" style="margin-left:12px">2 / 4 lus · 1 h 37 de contenu</span>
+        </div>
+      </div>
+      <div style="padding:22px 32px 0;flex:1;overflow:hidden;position:relative">
+        <div style="display:grid;grid-template-columns:440px 1fr;gap:32px">
+          <div>
+            <div class="micro" style="margin-bottom:10px">Lundi 6 octobre</div>
+            <div class="c-dlist">
+              <div class="c-drow"><span class="c-num">1</span><div class="cover" style="width:44px;height:44px"><svg class="ic ic-sm"><use href="#ion-headset-outline"/></svg></div><div style="min-width:0"><div style="font-weight:600;font-size:14px">Comment Rome a finance ses guerres</div><div class="meta">Podcast · 48 min · lu</div></div><svg class="ic ic-sm" style="margin-left:auto;color:var(--primary)"><use href="#ion-checkmark-done-outline"/></svg></div>
+              <div class="c-drow" style="background:var(--surface-container-low)"><span class="c-num on">2</span><div class="cover" style="width:44px;height:44px;background:var(--surface-container)"><svg class="ic ic-sm"><use href="#ion-document-text-outline"/></svg></div><div style="min-width:0"><div style="font-weight:600;font-size:14px">La regle des deux listes</div><div class="meta">Article · 9 min · en cours</div></div></div>
+              <div class="c-drow"><span class="c-num">3</span><div class="cover" style="width:44px;height:44px;background:var(--surface-container-low)"><svg class="ic ic-sm"><use href="#ion-play-circle-outline"/></svg></div><div style="min-width:0"><div style="font-weight:600;font-size:14px">Pourquoi les taux montent plus vite qu'ils ne baissent</div><div class="meta">Video · 22 min</div></div></div>
+              <div class="c-drow"><span class="c-num">4</span><div class="cover" style="width:44px;height:44px"><svg class="ic ic-sm"><use href="#ion-book-outline"/></svg></div><div style="min-width:0"><div style="font-weight:600;font-size:14px">Scipion l'Africain, chapitre 4</div><div class="meta">Document · 23 pages</div></div></div>
+            </div>
+            <div class="callout" style="margin-top:18px"><div class="meta">Le digest hebdomadaire de dimanche contient 11 medias, dont 3 deja lus cette semaine.</div></div>
+          </div>
+          <div>
+            <div class="meta" style="margin-bottom:6px">02 · Article · 9 min · Productivite</div>
+            <h2 style="font-size:20px;font-weight:600;margin-bottom:14px">La regle des deux listes</h2>
+            <div class="callout" style="margin-bottom:18px">
+              <div class="micro" style="margin-bottom:4px">Ce qu'il faut en retenir</div>
+              <div>Une liste pour ce qui se fait aujourd'hui, une pour ce qui attend une decision. Tout le reste est du rangement.</div>
+            </div>
+            <div class="c-tx">
+              <p>L'auteur part d'un constat banal : une liste unique melange des taches de dix minutes et des choix de six mois, et la liste devient alors un objet qu'on evite.</p>
+              <p>La seconde moitie du texte est un contre-exemple honnete : pour un travail entierement reactif, la separation ne tient pas une journee.</p>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:4px"><span class="btn btn-sm"><svg class="ic ic-sm"><use href="#ion-book-outline"/></svg>Ouvrir la fiche</span><span class="btn btn-sm btn-ghost">Suivant<svg class="ic ic-sm"><use href="#ion-arrow-forward"/></svg></span></div>
+          </div>
+        </div>
+        <div class="scrollfade"></div>
+      </div>
+    </main>
+  </div>
+</div>
+<p class="frame-label">Cadre 4 — Rendu responsive secondaire · 390 x 844</p>
+<p class="frame-note">Le tableau ne passe pas a 390 px : il redevient la liste de cartes de l'app, et les quatre destinations redeviennent la barre d'onglets. C'est le point faible responsive de cette direction — deux presentations de la bibliotheque a maintenir, pas une.</p>
+<div class="frame frame-phone">
+  <div style="height:100%;display:flex;flex-direction:column;background:var(--background)">
+    <div style="padding:44px 16px 14px;background:var(--surface);box-shadow:var(--shadow-soft)">
+      <h2 style="font-size:20px;font-weight:600;margin-bottom:12px">Bibliotheque</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="c-stat" style="padding:10px 12px;box-shadow:none;background:var(--surface-container-low)"><div class="micro">Contenus</div><div style="font-size:20px;font-weight:700">184</div></div>
+        <div class="c-stat" style="padding:10px 12px;box-shadow:none;background:var(--surface-container-low)"><div class="micro">Non classes</div><div style="font-size:20px;font-weight:700">7</div></div>
+      </div>
+    </div>
+    <div style="padding:10px 0;flex:1;overflow:hidden;position:relative">
+      <div class="a-row" style="padding:12px 16px"><div class="cover" style="width:48px;height:48px"><svg class="ic"><use href="#ion-headset-outline"/></svg></div><div style="min-width:0"><div class="a-rowtitle">Comment Rome a finance ses guerres</div><div class="meta">Podcast · 48 min · Histoire romaine</div></div></div>
+      <div class="a-row" style="padding:12px 16px"><div class="cover" style="width:48px;height:48px;background:var(--surface-container)"><svg class="ic"><use href="#ion-document-text-outline"/></svg></div><div style="min-width:0"><div class="a-rowtitle">Les legions apres Marius</div><div class="meta">Article · 12 min · Histoire romaine</div></div></div>
+      <div class="a-row" style="padding:12px 16px"><div class="cover" style="width:48px;height:48px;background:var(--surface-container-low)"><svg class="ic"><use href="#ion-play-circle-outline"/></svg></div><div style="min-width:0"><div class="a-rowtitle">Le tresor de Saturne : ou dormait l'argent public</div><div class="meta">Video · 18 min · lu a 38 %</div></div></div>
+      <div class="a-row" style="padding:12px 16px"><div class="cover" style="width:48px;height:48px;background:var(--surface-container)"><svg class="ic" style="color:var(--text-muted)"><use href="#ion-sync"/></svg></div><div style="min-width:0"><div class="a-rowtitle">Table ronde : la fiscalite de l'Empire</div><div class="meta"><span class="chip chip-high">Traitement…</span></div></div></div>
+      <div class="scrollfade"></div>
+    </div>
+    <div style="position:relative;height:64px">
+      <div class="a-tabbar">
+        <div class="a-tabitem"><svg class="ic"><use href="#ion-file-tray-outline"/></svg>Accueil</div>
+        <div class="a-tabitem on"><svg class="ic"><use href="#ion-library-outline"/></svg>Bibliotheque</div>
+        <div class="a-tabitem"><svg class="ic"><use href="#ion-sparkles-outline"/></svg>Digest</div>
+        <div class="a-tabitem"><svg class="ic"><use href="#ion-search-stroke"/></svg>Recherche</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>
