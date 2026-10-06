@@ -92,16 +92,77 @@ Un classement motivé des architectures candidates sur la définition d'« élé
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Un fichier docs/research/task-430-chatbot-architecture/README.md existe, avec owner_decision: pending dans son front-matter et les sections Owner Validation, Recommendation et Sources
-- [ ] #2 Le README déclare explicitement, dans sa section de base de preuves, qu'aucun fichier de docs/research/task-427-* n'a été consulté, et aucun chiffre, option ou conclusion du document n'en provient
-- [ ] #3 Au moins trois architectures candidates sont comparées, couvrant l'écart entre la réutilisation maximale de ce qui est déployé et la conversation comme objet de première classe, chacune évaluée sur les six axes d'élégance posés dans la description
-- [ ] #4 Le README donne une définition opérationnelle d'« élégant » pour cette app, avec les axes pondérés et justifiés, et classe les candidats dessus
-- [ ] #5 Chaque prix de modèle, chaque plafond de fournisseur et chaque limite AWS cités portent leur URL source et leur date de consultation ; aucun n'est donné de mémoire
-- [ ] #6 Chaque mesure relevée sur -dev indique la commande AWS en lecture seule utilisée et sa date ; aucun appel LLM payant n'a été émis et aucun fichier source du dépôt n'a été modifié
-- [ ] #7 Le README chiffre en euros, pour chaque architecture candidate, un premier tour sur un média d'une heure, un premier tour sur un dossier au plafond en vigueur, et des conversations de 5, 10 et 20 tours, avec et sans mise en cache de prompt
-- [ ] #8 Le README tranche la faisabilité du streaming de réponse sur la porte d'entrée et le runtime réellement déployés, en citant les fichiers Terraform avec leurs lignes et les références AWS datées, et dit pour chaque architecture si elle s'en passe et comment
-- [ ] #9 Le README propose une unité de quota et des garde-fous chiffrés (longueur de saisie, tours par conversation, conversations simultanées, volume par période et par palier, comportement à la saturation), rattachés au code qui débite le quota aujourd'hui, avec les lignes
-- [ ] #10 Le README dit comment chaque architecture s'articule avec les décisions validées sur l'agrégation d'un dossier, sur les prompts d'artefact et sur la mutualisation des générations par contenu, en citant les fichiers et les lignes
-- [ ] #11 Le README liste, pour chaque architecture, les fichiers backend, mobile, Terraform et i18n à étendre et ce qui est entièrement neuf, et dit ce qui resterait à jeter si l'architecture était remplacée plus tard
-- [ ] #12 La recommandation est tranchée et accompagnée d'un ordre de construction en tranches livrables, chaque tranche au-delà de la première portant le signal chiffré qui la déclenche, lisible dans des données que la première tranche produit elle-même
+- [x] #1 Un fichier docs/research/task-430-chatbot-architecture/README.md existe, avec owner_decision: pending dans son front-matter et les sections Owner Validation, Recommendation et Sources
+- [x] #2 Le README déclare explicitement, dans sa section de base de preuves, qu'aucun fichier de docs/research/task-427-* n'a été consulté, et aucun chiffre, option ou conclusion du document n'en provient
+- [x] #3 Au moins trois architectures candidates sont comparées, couvrant l'écart entre la réutilisation maximale de ce qui est déployé et la conversation comme objet de première classe, chacune évaluée sur les six axes d'élégance posés dans la description
+- [x] #4 Le README donne une définition opérationnelle d'« élégant » pour cette app, avec les axes pondérés et justifiés, et classe les candidats dessus
+- [x] #5 Chaque prix de modèle, chaque plafond de fournisseur et chaque limite AWS cités portent leur URL source et leur date de consultation ; aucun n'est donné de mémoire
+- [x] #6 Chaque mesure relevée sur -dev indique la commande AWS en lecture seule utilisée et sa date ; aucun appel LLM payant n'a été émis et aucun fichier source du dépôt n'a été modifié
+- [x] #7 Le README chiffre en euros, pour chaque architecture candidate, un premier tour sur un média d'une heure, un premier tour sur un dossier au plafond en vigueur, et des conversations de 5, 10 et 20 tours, avec et sans mise en cache de prompt
+- [x] #8 Le README tranche la faisabilité du streaming de réponse sur la porte d'entrée et le runtime réellement déployés, en citant les fichiers Terraform avec leurs lignes et les références AWS datées, et dit pour chaque architecture si elle s'en passe et comment
+- [x] #9 Le README propose une unité de quota et des garde-fous chiffrés (longueur de saisie, tours par conversation, conversations simultanées, volume par période et par palier, comportement à la saturation), rattachés au code qui débite le quota aujourd'hui, avec les lignes
+- [x] #10 Le README dit comment chaque architecture s'articule avec les décisions validées sur l'agrégation d'un dossier, sur les prompts d'artefact et sur la mutualisation des générations par contenu, en citant les fichiers et les lignes
+- [x] #11 Le README liste, pour chaque architecture, les fichiers backend, mobile, Terraform et i18n à étendre et ce qui est entièrement neuf, et dit ce qui resterait à jeter si l'architecture était remplacée plus tard
+- [x] #12 La recommandation est tranchée et accompagnée d'un ordre de construction en tranches livrables, chaque tranche au-delà de la première portant le signal chiffré qui la déclenche, lisible dans des données que la première tranche produit elle-même
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+### Mode initial — benchmark produit, **en attente de la validation de l'owner**
+
+`docs/research/task-430-chatbot-architecture/` n'existait pas et ne contenait donc ni `README.md`
+actif, ni `README.owner-rejected-*.md`, ni `complement-request-*.md` : **mode initial**. Le benchmark
+est produit depuis zéro.
+
+**Livrable** : `docs/research/task-430-chatbot-architecture/README.md` (~1 500 lignes), avec
+`owner_decision: pending` dans son front-matter et les sections `Owner Validation`, `Recommendation`
+et `Sources`.
+
+**Recommandation tranchée** : **architecture B — « un tour de conversation est un troisième mode du
+worker d'artefacts »**. Une table DynamoDB nouvelle (`chat_conversations`, les tours dans l'item), un
+routeur `/api/chat` de cinq routes, un écran mobile, et **rien d'autre** : le tour est enfilé sur
+`artifact-generator-queue` et calculé par la Lambda `artifact_generator`, qui porte déjà un second
+mode (la traduction d'artefact, task-395). Zéro file, zéro Lambda, zéro bucket, zéro porte d'entrée,
+zéro alarme, zéro compteur de quota nouveau. Un tour est débité comme une génération sur la même
+portée — `max(1, ceil(S/5))` minutes — ce qui n'ajoute ni unité, ni conversion, ni code de refus.
+Pas de streaming : il est **impossible** sur la porte d'entrée déployée (API Gateway HTTP, aucune
+propriété `responseTransferMode` sur `apigatewayv2`, aucune Function URL, adaptateur Mangum
+bufferisé) et la latence mesurée ne le justifie pas (médiane 6,3 s, p90 16,9 s sur 128 générations
+réelles de `-dev`).
+
+**Classement des quatre candidates** sur la définition opérationnelle d'« élégant » posée en §8.1 et
+les six axes pondérés de §8.2 : **B 9,4** > A 7,9 (synchrone sur la Lambda API) > D 6,8 (état chez le
+fournisseur) > C 4,8 (objet de première classe, WebSocket, récupération). Objets AWS nouveaux : B 1,
+A 2, D 1 + un magasin tiers hors du périmètre d'`account_deletion_service`, **C 21**.
+
+**Ordre de construction** en cinq tranches (§12), chacune au-delà de la première portant son signal
+chiffré, lisible dans ce que la tranche 1 écrit elle-même (`turn_count`, et par tour
+`llm_usage.cached_tokens / prompt_tokens`, `created_at`, `completed_at`) : tranche 2 (portée dossier)
+sur un taux de cache ≥ 70 % et une médiane de tours ≥ 3 ; tranche 3 (desserrage du barème, sans
+déploiement) sur un taux de cache ≥ 90 % ; tranche 4 (portée bibliothèque) sur ≥ 20 % de
+conversations à `source_count` ≥ 20, **et bloquée par un benchmark distinct** ; tranche 5 (streaming)
+sur un p90 par tour > 25 s.
+
+**Deux benchmarks distincts nommés et non tranchés ici** (§13) : la stratégie de récupération pour la
+portée bibliothèque (l'index Algolia est lexical ; task-269 §12.3 avait déjà laissé le sujet ouvert),
+et le modèle d'un Q&A multi-tours ancré (task-72 a évalué la génération one-shot ; trancher exigerait
+des appels LLM payants, interdits par cette tâche).
+
+**Interdiction respectée.** Aucun fichier de `docs/research/task-427-*` n'a été consulté — ni son
+`README.md`, ni son `compute.py`, ni aucun autre fichier de ce répertoire — et les fichiers de backlog
+`task-427` et `task-428` n'ont pas été ouverts. Le README le déclare dans sa section de base de
+preuves (§1.1), et chaque fait porte sa source propre : un fichier et une ligne, une commande AWS en
+lecture seule datée, ou une URL datée.
+
+**Mesures et garde-fous de la session.** Douze commandes AWS **en lecture seule** sur `-dev`, toutes
+exécutées le 2026-10-06 et listées une par une en §1.3 du README. **Aucun appel LLM payant n'a été
+émis.** **Aucun fichier source du dépôt n'a été modifié** : les seuls fichiers touchés sont le README
+de recherche et ce fichier de tâche. Aucun secret, aucune clé d'API, aucun identifiant de compte
+utilisateur n'apparaît dans le livrable.
+
+**Statut** : la tâche reste en `To Do` et la recommandation **attend la validation de l'owner**, qui
+la signale en éditant `owner_decision` dans le front-matter du README (`ok` / `abandoned` / `redo` /
+`more`). Les douze critères d'acceptation sont cochés parce qu'ils portent sur l'existence et le
+contenu du livrable, pas sur la décision.
+<!-- SECTION:NOTES:END -->
