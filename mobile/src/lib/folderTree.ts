@@ -1,4 +1,3 @@
-import { Colors } from "../constants/theme";
 import { t } from "../i18n";
 import type { Folder } from "../types/organization";
 
@@ -19,20 +18,6 @@ import type { Folder } from "../types/organization";
 export function getDefaultFolderLabel(): string {
   return t("folderPicker.unsorted");
 }
-
-/**
- * Tint of the default folder wherever it is listed, so it reads as a system
- * container and not as one more user folder.
- *
- * The olive-grey `outline` tone instead of the amber accent, which DESIGN.md
- * reserves for "high-value interactions (CTAs, active states) and meaningful
- * accents" -- a catch-all bin is none of those. `textMuted` was the other
- * candidate but falls under the 3:1 that WCAG 1.4.11 asks of a non-text
- * graphic (2.9:1 on `surface`); `outline` clears it on every system surface.
- *
- * Single source of truth: every screen showing the default folder reads this.
- */
-export const DEFAULT_FOLDER_TINT = Colors.outline;
 
 export interface FolderNode extends Folder {
   children: FolderNode[];

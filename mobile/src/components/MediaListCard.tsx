@@ -10,13 +10,14 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
+  type ThemeColors,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import type { MediaType } from "../types/media";
 import type { AnchorRect } from "./AnchoredContextMenu";
 import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
@@ -209,6 +210,8 @@ export function MediaListCard<T extends MediaCardItem>({
   style,
   testID,
 }: MediaListCardProps<T>): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const rowRef = useRef<View>(null);
   // Keyed by media id rather than a bare boolean: a `FlatList` cell can be
   // handed a different item, and a failure recorded for the previous one must
@@ -226,7 +229,7 @@ export function MediaListCard<T extends MediaCardItem>({
 
   const mediaType = (item.media_type ?? "unknown") as MediaType;
   const mediaTypeLabel = getMediaTypeLabel(mediaType);
-  const mediaTypeBgColor = getMediaTypeBgColor(mediaType);
+  const mediaTypeBadge = getMediaTypeBadgeTones(mediaType, Colors);
   const timeAgo = getRelativeTime(item.created_at);
   const icon = getMediaTypeIcon(mediaType);
 
@@ -349,9 +352,14 @@ export function MediaListCard<T extends MediaCardItem>({
         <View style={styles.cardTextSection}>
           <View style={styles.cardMeta}>
             <View
-              style={[styles.typeBadge, { backgroundColor: mediaTypeBgColor }]}
+              style={[
+                styles.typeBadge,
+                { backgroundColor: mediaTypeBadge.fill },
+              ]}
             >
-              <Text style={styles.typeBadgeText}>{mediaTypeLabel}</Text>
+              <Text style={[styles.typeBadgeText, { color: mediaTypeBadge.ink }]}>
+                {mediaTypeLabel}
+              </Text>
             </View>
             {importFailed ? <MediaFailureBadge /> : null}
             <Text style={styles.timeText}>{timeAgo}</Text>
@@ -390,109 +398,126 @@ export function MediaListCard<T extends MediaCardItem>({
 
 // --- Helpers (kept in sync with the inbox vignette presentation) ---
 
-function getMediaTypeBgColor(type: MediaType): string {
+/**
+ * The fill of the media-type badge and the ink that goes on it.
+ *
+ * The two travel together because they cannot be chosen independently: the
+ * amber fill needs `onPrimary` over it (`textMain` measures 1.5:1 on the dark
+ * amber and 8.9:1 on the light one, so a single ink cannot serve both modes),
+ * while the red and tonal fills keep `textMain`, which stays legible on both
+ * palettes (7.9:1 and 10.6:1 at worst).
+ *
+ * Takes the palette as an argument rather than importing it: a plain function
+ * cannot call `useThemeColors`, and its caller already holds the palette.
+ */
+function getMediaTypeBadgeTones(
+  type: MediaType,
+  Colors: ThemeColors,
+): { fill: string; ink: string } {
   switch (type) {
     case "podcast_episode":
-      return Colors.primary;
+      return { fill: Colors.primary, ink: Colors.onPrimary };
     case "youtube_video":
     case "short_video":
-      return Colors.errorContainer;
+      return { fill: Colors.errorContainer, ink: Colors.textMain };
     // The two tinted badges are reserved for media that *plays* — amber for a
     // podcast, red for a video. A photo post is read, like an article, so it
     // takes the same tonal surface: what tells it apart is its own word and its
     // own glyph, not a third hue competing with those two.
     case "article":
     case "image_post":
-      return Colors.surfaceContainerHigh;
+      return { fill: Colors.surfaceContainerHigh, ink: Colors.textMain };
     default:
-      return Colors.surfaceContainerHigh;
+      return { fill: Colors.surfaceContainerHigh, ink: Colors.textMain };
   }
 }
 
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.sm + 4,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-    minHeight: TouchTarget.comfortable,
-    ...Shadows.soft,
-  },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  cardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  // The container is the fallback surface *and* the frame of the cover: one
-  // tonal rectangle either way, so a row with a picture and a row without have
-  // the same silhouette.
-  coverContainer: {
-    width: COVER_WIDTH,
-    height: COVER_HEIGHT,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  cover: {
-    width: "100%",
-    height: "100%",
-  },
-  cardTextSection: {
-    flex: 1,
-    paddingVertical: Spacing.xs,
-    gap: 2,
-  },
-  cardMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  typeBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.md,
-  },
-  typeBadgeText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    letterSpacing: 0.5,
-  },
-  timeText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-  cardTitle: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    lineHeight: 22,
-  },
-  cardSubtitle: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-  },
-  // `textSubtle`, not `textMuted`: this is the one thing on the card the reader
-  // has to actually *read* rather than glance at, and the token's own note is
-  // that `textMuted` fails AA below 18.66px.
-  excerpt: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-    lineHeight: 18,
-    marginTop: Spacing.sm,
-  },
-  excerptMatch: {
-    backgroundColor: Colors.highlight,
-    color: Colors.onHighlight,
-    fontWeight: "600",
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    card: {
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.sm + 4,
+      marginHorizontal: Spacing.md,
+      marginBottom: Spacing.md,
+      minHeight: TouchTarget.comfortable,
+      ...Shadows.soft,
+    },
+    cardPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    cardContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+    },
+    // The container is the fallback surface *and* the frame of the cover: one
+    // tonal rectangle either way, so a row with a picture and a row without have
+    // the same silhouette.
+    coverContainer: {
+      width: COVER_WIDTH,
+      height: COVER_HEIGHT,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    cover: {
+      width: "100%",
+      height: "100%",
+    },
+    cardTextSection: {
+      flex: 1,
+      paddingVertical: Spacing.xs,
+      gap: 2,
+    },
+    cardMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    typeBadge: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.md,
+    },
+    // No `color` here: the ink comes from `getMediaTypeBadgeTones` with the
+    // fill it has to sit on.
+    typeBadgeText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "700",
+      letterSpacing: 0.5,
+    },
+    timeText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+    cardTitle: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+      lineHeight: 22,
+    },
+    cardSubtitle: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+    },
+    // `textSubtle`, not `textMuted`: this is the one thing on the card the reader
+    // has to actually *read* rather than glance at, and the token's own note is
+    // that `textMuted` fails AA below 18.66px.
+    excerpt: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+      lineHeight: 18,
+      marginTop: Spacing.sm,
+    },
+    excerptMatch: {
+      backgroundColor: Colors.highlight,
+      color: Colors.onHighlight,
+      fontWeight: "600",
+    },
+  });

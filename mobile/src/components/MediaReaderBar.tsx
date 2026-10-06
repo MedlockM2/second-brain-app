@@ -37,12 +37,12 @@ import {
 } from "./MediaDetailHeader";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 /** The height of the bar under the status bar. */
@@ -90,6 +90,9 @@ export function MediaReaderBar<K extends string>({
   progress,
   progressPercent,
 }: MediaReaderBarProps<K>): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Animated.View
       style={[styles.bar, { opacity }]}
@@ -155,71 +158,72 @@ export function MediaReaderBar<K extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  // The one floating layer of the page, hence the one soft shadow.
-  bar: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
-    ...Shadows.soft,
-  },
-  // Opaque: the page scrolls under this bar, and a cover seen through it
-  // made the title unreadable.
-  surface: {
-    overflow: "hidden",
-    backgroundColor: Colors.background,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    minHeight: MEDIA_READER_BAR_HEIGHT,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-  },
-  backButton: {
-    width: MEDIA_HEADER_BUTTON_SIZE,
-    height: MEDIA_HEADER_BUTTON_SIZE,
-    borderRadius: BorderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  thumbImage: {
-    width: "100%",
-    height: "100%",
-  },
-  // The only element of the row allowed to shrink: a long title costs an
-  // ellipsis here, never a collision with the segment. The whole title is one
-  // scroll away, at the top of the page.
-  title: {
-    flex: 1,
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-  },
-  progressTrack: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: Spacing.xs,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  // Scaled from the reading edge, which is the right one in Arabic.
-  progressFill: {
-    height: "100%",
-    backgroundColor: Colors.primary,
-    transformOrigin: I18nManager.isRTL ? "right" : "left",
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    // The one floating layer of the page, hence the one soft shadow.
+    bar: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1,
+      ...Shadows.soft,
+    },
+    // Opaque: the page scrolls under this bar, and a cover seen through it
+    // made the title unreadable.
+    surface: {
+      overflow: "hidden",
+      backgroundColor: Colors.background,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      minHeight: MEDIA_READER_BAR_HEIGHT,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.xs,
+    },
+    backButton: {
+      width: MEDIA_HEADER_BUTTON_SIZE,
+      height: MEDIA_HEADER_BUTTON_SIZE,
+      borderRadius: BorderRadius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    thumb: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+      borderRadius: BorderRadius.sm,
+      backgroundColor: Colors.surfaceContainerLow,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    thumbImage: {
+      width: "100%",
+      height: "100%",
+    },
+    // The only element of the row allowed to shrink: a long title costs an
+    // ellipsis here, never a collision with the segment. The whole title is one
+    // scroll away, at the top of the page.
+    title: {
+      flex: 1,
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    progressTrack: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: Spacing.xs,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    // Scaled from the reading edge, which is the right one in Arabic.
+    progressFill: {
+      height: "100%",
+      backgroundColor: Colors.primary,
+      transformOrigin: I18nManager.isRTL ? "right" : "left",
+    },
+  });

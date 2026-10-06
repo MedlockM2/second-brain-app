@@ -10,13 +10,13 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t, tCount } from "../i18n";
 import type { FolderNode } from "../lib/folderTree";
 import {
@@ -76,6 +76,8 @@ export function SubfolderCard({
   onPress,
   testID,
 }: SubfolderCardProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Ids rather than a flag: one failed picture must not take the others with it.
   const [failedCoverIds, setFailedCoverIds] = useState<readonly string[]>([]);
 
@@ -180,6 +182,8 @@ interface CollageCellProps {
  * cache key, so opening the subfolder draws from the pictures fetched here.
  */
 function CollageCell({ item, style, onError }: CollageCellProps) {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={style}>
       <Image
@@ -203,73 +207,74 @@ function CollageCell({ item, style, onError }: CollageCellProps) {
 /** Half a spacing step: a seam, not a gutter. */
 const SEAM = Spacing.xs / 2;
 
-const styles = StyleSheet.create({
-  // The box `MediaListCard` draws, token for token, so a subfolder and a source
-  // stacked in one list are the same card.
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.sm + Spacing.xs,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-    minHeight: TouchTarget.comfortable,
-    ...Shadows.soft,
-  },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  frame: {
-    width: COVER_WIDTH,
-    height: COVER_HEIGHT,
-    borderRadius: BorderRadius.lg,
-    overflow: "hidden",
-  },
-  collage: {
-    flexDirection: "row",
-    gap: SEAM,
-    backgroundColor: Colors.surface,
-  },
-  // Two thirds of the frame for the newest cover, the column of the next two
-  // beside it. With a single cover the lead fills the frame on its own.
-  leadCell: {
-    flex: 2,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  sideColumn: {
-    flex: 1,
-    gap: SEAM,
-  },
-  sideCell: {
-    flex: 1,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  cellImage: {
-    width: "100%",
-    height: "100%",
-  },
-  // The 5 % amber wash the design system prescribes for a tinted surface, under
-  // the same amber glyph the Library draws its folder tiles with.
-  fallback: {
-    backgroundColor: Colors.primaryTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textSection: {
-    flex: 1,
-    paddingVertical: Spacing.xs,
-    gap: SEAM,
-  },
-  name: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-  },
-  subtitle: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    // The box `MediaListCard` draws, token for token, so a subfolder and a source
+    // stacked in one list are the same card.
+    card: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.sm + Spacing.xs,
+      marginHorizontal: Spacing.md,
+      marginBottom: Spacing.md,
+      minHeight: TouchTarget.comfortable,
+      ...Shadows.soft,
+    },
+    cardPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    frame: {
+      width: COVER_WIDTH,
+      height: COVER_HEIGHT,
+      borderRadius: BorderRadius.lg,
+      overflow: "hidden",
+    },
+    collage: {
+      flexDirection: "row",
+      gap: SEAM,
+      backgroundColor: Colors.surface,
+    },
+    // Two thirds of the frame for the newest cover, the column of the next two
+    // beside it. With a single cover the lead fills the frame on its own.
+    leadCell: {
+      flex: 2,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    sideColumn: {
+      flex: 1,
+      gap: SEAM,
+    },
+    sideCell: {
+      flex: 1,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    cellImage: {
+      width: "100%",
+      height: "100%",
+    },
+    // The 5 % amber wash the design system prescribes for a tinted surface, under
+    // the same amber glyph the Library draws its folder tiles with.
+    fallback: {
+      backgroundColor: Colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textSection: {
+      flex: 1,
+      paddingVertical: Spacing.xs,
+      gap: SEAM,
+    },
+    name: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+    },
+    subtitle: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+    },
+  });

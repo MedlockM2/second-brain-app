@@ -23,12 +23,15 @@ import {
 import { Bullets } from "../../src/components/Bullets";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { t, tCount, useTranslation, type TranslationKey } from "../../src/i18n";
 
 /**
@@ -115,6 +118,8 @@ const KIND_ICON: Record<
 };
 
 export default function ArtifactDetailScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const { artifactId } = useLocalSearchParams<{ artifactId: string }>();
@@ -454,6 +459,8 @@ function ArtifactBody({
 // --- Summary (short) ---
 
 function SummaryShortBody({ content }: { content: Record<string, unknown> }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const headline = pickString(content, ["title"]);
   const keyPoints = pickStringArray(content, ["key_points"]);
   const takeaway = pickString(content, ["takeaway"]);
@@ -492,6 +499,7 @@ function SummaryDetailedBody({
 }: {
   content: Record<string, unknown>;
 }) {
+  const styles = useThemedStyles(makeStyles);
   const context = pickString(content, ["context"]);
   const mainTopics = pickStringArray(content, ["main_topics"]);
   const keyPoints = pickStringArray(content, ["key_points"]);
@@ -549,6 +557,7 @@ function SummaryDetailedBody({
 // --- Notes ---
 
 function NotesBody({ content }: { content: Record<string, unknown> }) {
+  const styles = useThemedStyles(makeStyles);
   const objectives = pickStringArray(content, ["objectives"]);
   const concepts = pickConceptArray(content);
   const keyPoints = pickStringArray(content, ["key_points"]);
@@ -629,6 +638,7 @@ interface Flashcard {
 }
 
 function FlashcardsBody({ content }: { content: Record<string, unknown> }) {
+  const styles = useThemedStyles(makeStyles);
   const cards = pickFlashcardArray(content);
   if (!cards || cards.length === 0) {
     return (
@@ -656,6 +666,8 @@ function FlashcardCard({
   index: number;
   card: Flashcard;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const [revealed, setRevealed] = useState(false);
   return (
     <Pressable
@@ -706,6 +718,8 @@ function QuizBody({
   content: Record<string, unknown>;
   onQuestionChange: () => void;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const questions = pickQuizQuestions(content);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
@@ -820,6 +834,8 @@ function QuizQuestionCard({
   picked: string | null;
   onPick: (label: string) => void;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const correct = question.correct_answer;
   const answered = picked !== null;
 
@@ -866,14 +882,21 @@ function QuizQuestionCard({
                 <Text
                   style={[
                     styles.quizOptionLabelText,
-                    showCorrect && styles.quizOptionLabelTextOnAccent,
-                    showWrong && styles.quizOptionLabelTextOnAccent,
+                    showCorrect && styles.quizOptionLabelTextOnPrimary,
+                    showWrong && styles.quizOptionLabelTextOnError,
                   ]}
                 >
                   {opt.label}
                 </Text>
               </View>
-              <Text style={styles.quizOptionText}>{opt.text}</Text>
+              <Text
+                style={[
+                  styles.quizOptionText,
+                  showCorrect && styles.quizOptionTextOnPrimary,
+                ]}
+              >
+                {opt.text}
+              </Text>
               {showCorrect ? (
                 <Ionicons
                   name="checkmark-circle"
@@ -909,6 +932,8 @@ function Section({
   title?: string;
   children: React.ReactNode;
 }) {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.section}>
       {title ? <Text style={styles.sectionTitle}>{title}</Text> : null}
@@ -1108,490 +1133,508 @@ function pickQuizQuestions(
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    minHeight: TouchTarget.comfortable,
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.full,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerSpacer: {
-    width: 44,
-    height: 44,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
+    },
+    headerButton: {
+      width: 44,
+      height: 44,
+      borderRadius: BorderRadius.full,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerSpacer: {
+      width: 44,
+      height: 44,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xxl,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
 
-  heroSection: {
-    marginBottom: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  kindChip: {
-    flexDirection: "row",
-    alignSelf: "flex-start",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-  },
-  kindChipText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    fontSize: Typography.display.fontSize,
-    fontWeight: Typography.display.fontWeight,
-    color: Colors.textMain,
-    letterSpacing: Typography.display.letterSpacing,
-    lineHeight: 38,
-  },
-  section: {
-    marginBottom: Spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.md,
-  },
-  body: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    lineHeight: 24,
-  },
-  emptyText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-  },
+    heroSection: {
+      marginBottom: Spacing.lg,
+      gap: Spacing.sm,
+    },
+    kindChip: {
+      flexDirection: "row",
+      alignSelf: "flex-start",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+    },
+    kindChipText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+      letterSpacing: 0.5,
+    },
+    heroTitle: {
+      fontSize: Typography.display.fontSize,
+      fontWeight: Typography.display.fontWeight,
+      color: Colors.textMain,
+      letterSpacing: Typography.display.letterSpacing,
+      lineHeight: 38,
+    },
+    section: {
+      marginBottom: Spacing.lg,
+    },
+    sectionTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      marginBottom: Spacing.md,
+    },
+    body: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      lineHeight: 24,
+    },
+    emptyText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+    },
 
-  // Summary (short)
-  summaryHeadline: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.textMain,
-    lineHeight: 32,
-    marginBottom: Spacing.lg,
-  },
-  takeawayCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm + 4,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md + 2,
-    ...Shadows.soft,
-  },
-  takeawayIcon: {
-    marginTop: 2,
-  },
-  takeawayText: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.onPrimary,
-    lineHeight: 24,
-  },
+    // Summary (short)
+    summaryHeadline: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: Colors.textMain,
+      lineHeight: 32,
+      marginBottom: Spacing.lg,
+    },
+    takeawayCard: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm + 4,
+      backgroundColor: Colors.primary,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.md + 2,
+      ...Shadows.soft,
+    },
+    takeawayIcon: {
+      marginTop: 2,
+    },
+    takeawayText: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.onPrimary,
+      lineHeight: 24,
+    },
 
-  // Summary (detailed)
-  topicChipsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  topicChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  topicChipText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  quoteCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md + 2,
-    marginBottom: Spacing.sm + 4,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
-    ...Shadows.soft,
-  },
-  quoteMark: {
-    fontSize: 32,
-    lineHeight: 32,
-    color: Colors.primary,
-    fontWeight: "800",
-    marginBottom: Spacing.xs,
-  },
-  quoteSourceRef: {
-    marginTop: Spacing.xs,
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMuted,
-  },
-  quoteText: {
-    fontSize: Typography.body.fontSize,
-    fontStyle: "italic",
-    color: Colors.textMain,
-    lineHeight: 24,
-  },
+    // Summary (detailed)
+    topicChipsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.sm,
+    },
+    topicChip: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 6,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    topicChipText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    quoteCard: {
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.md + 2,
+      marginBottom: Spacing.sm + 4,
+      borderLeftWidth: 4,
+      borderLeftColor: Colors.primary,
+      ...Shadows.soft,
+    },
+    quoteMark: {
+      fontSize: 32,
+      lineHeight: 32,
+      color: Colors.primary,
+      fontWeight: "800",
+      marginBottom: Spacing.xs,
+    },
+    quoteSourceRef: {
+      marginTop: Spacing.xs,
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMuted,
+    },
+    quoteText: {
+      fontSize: Typography.body.fontSize,
+      fontStyle: "italic",
+      color: Colors.textMain,
+      lineHeight: 24,
+    },
 
 
-  // Notes — concepts & glossary
-  conceptCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    marginBottom: Spacing.sm + 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-    ...Shadows.soft,
-  },
-  conceptHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.xs + 2,
-    gap: Spacing.sm,
-  },
-  conceptTerm: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-  },
-  conceptExplanation: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    lineHeight: 23,
-  },
-  importanceBadge: {
-    // Keeps its own width: the term next to it is the element that yields.
-    flexShrink: 0,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  importanceBadgeCore: {
-    backgroundColor: Colors.primary,
-  },
-  importanceBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: Colors.textMuted,
-    letterSpacing: 0.6,
-  },
-  importanceBadgeTextCore: {
-    color: Colors.onPrimary,
-  },
-  glossaryRow: {
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.outlineVariant,
-  },
-  glossaryTerm: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    marginBottom: 2,
-  },
-  glossaryDefinition: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    lineHeight: 23,
-  },
+    // Notes — concepts & glossary
+    conceptCard: {
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.md,
+      marginBottom: Spacing.sm + 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+      ...Shadows.soft,
+    },
+    conceptHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: Spacing.xs + 2,
+      gap: Spacing.sm,
+    },
+    conceptTerm: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+    },
+    conceptExplanation: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      lineHeight: 23,
+    },
+    importanceBadge: {
+      // Keeps its own width: the term next to it is the element that yields.
+      flexShrink: 0,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    importanceBadgeCore: {
+      backgroundColor: Colors.primary,
+    },
+    importanceBadgeText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: Colors.textMuted,
+      letterSpacing: 0.6,
+    },
+    importanceBadgeTextCore: {
+      color: Colors.onPrimary,
+    },
+    glossaryRow: {
+      paddingVertical: Spacing.sm + 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: Colors.outlineVariant,
+    },
+    glossaryTerm: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+      marginBottom: 2,
+    },
+    glossaryDefinition: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      lineHeight: 23,
+    },
 
-  // Flashcards
-  flashcard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-    ...Shadows.soft,
-  },
-  flashcardPressed: {
-    transform: [{ scale: 0.99 }],
-  },
-  flashcardIndexRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  flashcardIndex: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: "700",
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-  },
-  flashcardLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: Spacing.xs,
-  },
-  flashcardQuestion: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-    lineHeight: 24,
-  },
-  flashcardAnswer: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    lineHeight: 24,
-  },
-  flashcardHint: {
-    fontSize: Typography.body.fontSize,
-    fontStyle: "italic",
-    color: Colors.textMuted,
-  },
-  flashcardDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.outlineVariant,
-    marginVertical: Spacing.md,
-  },
+    // Flashcards
+    flashcard: {
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.lg,
+      marginBottom: Spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+      ...Shadows.soft,
+    },
+    flashcardPressed: {
+      transform: [{ scale: 0.99 }],
+    },
+    flashcardIndexRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: Spacing.sm,
+    },
+    flashcardIndex: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "700",
+      color: Colors.textMuted,
+      letterSpacing: 0.5,
+    },
+    flashcardLabel: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: Colors.textMuted,
+      letterSpacing: 0.8,
+      marginBottom: Spacing.xs,
+    },
+    flashcardQuestion: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+      lineHeight: 24,
+    },
+    flashcardAnswer: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      lineHeight: 24,
+    },
+    flashcardHint: {
+      fontSize: Typography.body.fontSize,
+      fontStyle: "italic",
+      color: Colors.textMuted,
+    },
+    flashcardDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.outlineVariant,
+      marginVertical: Spacing.md,
+    },
 
-  // Quiz
-  quizBody: {
-    marginBottom: Spacing.lg,
-  },
-  quizProgressHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.sm,
-  },
-  quizProgressLabel: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-  },
-  quizProgressTrack: {
-    height: Spacing.xs,
-    overflow: "hidden",
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-    marginBottom: Spacing.lg,
-  },
-  quizProgressFill: {
-    height: "100%",
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-  },
-  quizCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-    ...Shadows.soft,
-  },
-  quizQuestion: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    lineHeight: 24,
-    marginBottom: Spacing.md,
-  },
-  quizOptions: {
-    gap: Spacing.sm,
-  },
-  quizOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm + 4,
-    paddingVertical: Spacing.sm + 4,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-    minHeight: TouchTarget.minimum,
-  },
-  quizOptionCorrect: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  quizOptionWrong: {
-    backgroundColor: Colors.errorContainer,
-    borderColor: Colors.errorContainer,
-  },
-  quizOptionLabel: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-  },
-  quizOptionLabelCorrect: {
-    backgroundColor: Colors.onPrimary,
-    borderColor: Colors.onPrimary,
-  },
-  quizOptionLabelWrong: {
-    backgroundColor: Colors.error,
-    borderColor: Colors.error,
-  },
-  quizOptionLabelText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: Colors.textMain,
-  },
-  quizOptionLabelTextOnAccent: {
-    color: Colors.surface,
-  },
-  quizOptionText: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    lineHeight: 22,
-  },
-  quizExplanation: {
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.outlineVariant,
-  },
-  quizExplanationLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: Colors.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: Spacing.xs,
-  },
-  quizExplanationText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    lineHeight: 23,
-  },
-  quizContinueButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    minHeight: TouchTarget.comfortable,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-  },
-  quizContinueButtonPressed: {
-    opacity: 0.8,
-  },
-  quizContinueButtonText: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.onPrimary,
-  },
-  quizComplete: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    minHeight: TouchTarget.comfortable,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-  },
-  quizCompleteText: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.onPrimary,
-  },
+    // Quiz
+    quizBody: {
+      marginBottom: Spacing.lg,
+    },
+    quizProgressHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: Spacing.sm,
+    },
+    quizProgressLabel: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    quizProgressTrack: {
+      height: Spacing.xs,
+      overflow: "hidden",
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      marginBottom: Spacing.lg,
+    },
+    quizProgressFill: {
+      height: "100%",
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    quizCard: {
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.lg,
+      marginBottom: Spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+      ...Shadows.soft,
+    },
+    quizQuestion: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+      lineHeight: 24,
+      marginBottom: Spacing.md,
+    },
+    quizOptions: {
+      gap: Spacing.sm,
+    },
+    quizOption: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm + 4,
+      paddingVertical: Spacing.sm + 4,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+      minHeight: TouchTarget.minimum,
+    },
+    quizOptionCorrect: {
+      backgroundColor: Colors.primary,
+      borderColor: Colors.primary,
+    },
+    quizOptionWrong: {
+      backgroundColor: Colors.errorContainer,
+      borderColor: Colors.errorContainer,
+    },
+    quizOptionLabel: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: Colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+    },
+    quizOptionLabelCorrect: {
+      backgroundColor: Colors.onPrimary,
+      borderColor: Colors.onPrimary,
+    },
+    quizOptionLabelWrong: {
+      backgroundColor: Colors.error,
+      borderColor: Colors.error,
+    },
+    quizOptionLabelText: {
+      fontSize: 13,
+      fontWeight: "800",
+      color: Colors.textMain,
+    },
+    // One ink per badge fill, because the two fills move in opposite
+    // directions between the modes. The correct badge is `onPrimary`, a
+    // near-black in both palettes, so its ink has to be light in both: the amber
+    // (10.0:1 dark, 11.3:1 light). `Colors.surface` used to serve both and only
+    // works by day — on the dark palette it is itself near-black, 1.0:1 on the
+    // badge. The wrong badge is `error`, which *does* flip, so its ink is the
+    // token that flips with it (7.7:1 dark, 6.5:1 light).
+    quizOptionLabelTextOnPrimary: {
+      color: Colors.primary,
+    },
+    quizOptionLabelTextOnError: {
+      color: Colors.onError,
+    },
+    quizOptionText: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      lineHeight: 22,
+    },
+    // The correct row fills amber, and `textMain` measures 1.5:1 on the dark
+    // amber. The wrong row fills `errorContainer`, which flips with the mode and
+    // keeps `textMain` legible on both (7.9:1 dark, 10.4:1 light), so only this
+    // one state needs an override.
+    quizOptionTextOnPrimary: {
+      color: Colors.onPrimary,
+    },
+    quizExplanation: {
+      marginTop: Spacing.md,
+      paddingTop: Spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: Colors.outlineVariant,
+    },
+    quizExplanationLabel: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: Colors.textMuted,
+      letterSpacing: 0.8,
+      marginBottom: Spacing.xs,
+    },
+    quizExplanationText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      lineHeight: 23,
+    },
+    quizContinueButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
+      paddingHorizontal: Spacing.lg,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    quizContinueButtonPressed: {
+      opacity: 0.8,
+    },
+    quizContinueButtonText: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.onPrimary,
+    },
+    quizComplete: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
+      paddingHorizontal: Spacing.lg,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    quizCompleteText: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.onPrimary,
+    },
 
-  // Failure / not-ready states
-  failedIcon: {
-    marginBottom: Spacing.md,
-  },
-  failedTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-    marginBottom: Spacing.xs,
-  },
-  failedMessage: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: Spacing.lg,
-  },
-  refreshButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-  },
-  refreshButtonPressed: {
-    opacity: 0.8,
-  },
-  refreshButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
-  // Same refusal banner as the two AI tabs: the same refusals reach here, and
-  // they should read the same. `stretch` because this one sits in a centred
-  // column, where a row would otherwise collapse to its text's intrinsic width.
-  refusalBanner: {
-    flexDirection: "row",
-    alignSelf: "stretch",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  refusalText: {
-    flex: 1,
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+    // Failure / not-ready states
+    failedIcon: {
+      marginBottom: Spacing.md,
+    },
+    failedTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+      marginBottom: Spacing.xs,
+    },
+    failedMessage: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: 24,
+      marginBottom: Spacing.lg,
+    },
+    refreshButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+    },
+    refreshButtonPressed: {
+      opacity: 0.8,
+    },
+    refreshButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
+    // Same refusal banner as the two AI tabs: the same refusals reach here, and
+    // they should read the same. `stretch` because this one sits in a centred
+    // column, where a row would otherwise collapse to its text's intrinsic width.
+    refusalBanner: {
+      flexDirection: "row",
+      alignSelf: "stretch",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      backgroundColor: Colors.errorContainer,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      marginTop: Spacing.md,
+    },
+    refusalText: {
+      flex: 1,
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

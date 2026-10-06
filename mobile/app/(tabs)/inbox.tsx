@@ -41,13 +41,16 @@ import {
 } from "../../src/lib/localImport";
 import { validateShareIntentPayload } from "../../src/lib/urlValidation";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { HOME_BLOCK_GAP } from "../../src/constants/homeRhythm";
 import { TAB_BAR_CLEARANCE } from "../../src/constants/tabBar";
 import type { MediaListItem, MediaType } from "../../src/types/media";
@@ -107,6 +110,8 @@ import type { RecentEngagement } from "../../src/types/engagements";
 const RECENTLY_ADDED_LIMIT = 12;
 
 export default function InboxScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // The screen's copy is resolved on render, so it redraws with the language.
   useTranslation();
   const router = useRouter();
@@ -505,6 +510,8 @@ interface UnsortedReviewButtonProps {
  * for free.
  */
 function UnsortedReviewButton({ count, onPress }: UnsortedReviewButtonProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   if (count <= 0) return null;
 
   return (
@@ -575,6 +582,9 @@ function TileRow({
   onTilePress,
   processingStalled = false,
 }: TileRowProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
@@ -625,6 +635,8 @@ function TileRow({
 const PLACEHOLDER_TILES = 2;
 
 function UnsortedReviewPlaceholder() {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View
       testID="home-unsorted-review-placeholder"
@@ -659,6 +671,9 @@ function TileRowPlaceholder({
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View
       testID="home-continue-learning-placeholder"
@@ -689,6 +704,9 @@ function TileRowPlaceholder({
 }
 
 function EmptyState() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.emptyContainer}>
       <Ionicons
@@ -785,285 +803,286 @@ function toTimestamp(value?: string | null): number {
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    // No top padding on purpose: whichever block comes first carries the gap
-    // under the safe area itself, through the same `HOME_BLOCK_GAP` as every
-    // other. Padding here would stack on top of it and make the head of the
-    // screen the one place with a different rhythm — which is what it was, at 32
-    // above the trial pill against 16 below it.
-    // Room for the floating buttons so they never cover the last row, on top of
-    // the band the tab bar owns. Derived from the same `TAB_BAR_CLEARANCE` the
-    // buttons are pinned at rather than restated as a second figure: the row is
-    // `TouchTarget.large` tall and sits that far above the screen bottom, and
-    // `Spacing.sm` is the gap left between the last tile and it — the same 8 the
-    // previous pair of values produced (64 + 32 against a 24 pt offset).
-    paddingBottom: TAB_BAR_CLEARANCE + TouchTarget.large + Spacing.sm,
-  },
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    scrollContent: {
+      // No top padding on purpose: whichever block comes first carries the gap
+      // under the safe area itself, through the same `HOME_BLOCK_GAP` as every
+      // other. Padding here would stack on top of it and make the head of the
+      // screen the one place with a different rhythm — which is what it was, at 32
+      // above the trial pill against 16 below it.
+      // Room for the floating buttons so they never cover the last row, on top of
+      // the band the tab bar owns. Derived from the same `TAB_BAR_CLEARANCE` the
+      // buttons are pinned at rather than restated as a second figure: the row is
+      // `TouchTarget.large` tall and sits that far above the screen bottom, and
+      // `Spacing.sm` is the gap left between the last tile and it — the same 8 the
+      // previous pair of values produced (64 + 32 against a 24 pt offset).
+      paddingBottom: TAB_BAR_CLEARANCE + TouchTarget.large + Spacing.sm,
+    },
 
-  // Loading state
-  centeredContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  loadingText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    marginTop: Spacing.md,
-  },
+    // Loading state
+    centeredContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    loadingText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      marginTop: Spacing.md,
+    },
 
-  // Error state
-  errorIcon: {
-    marginBottom: Spacing.md,
-  },
-  errorTitle: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-    marginBottom: Spacing.lg,
-    lineHeight: 24,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
+    // Error state
+    errorIcon: {
+      marginBottom: Spacing.md,
+    },
+    errorTitle: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+      marginBottom: Spacing.lg,
+      lineHeight: 24,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
 
-  // Unsorted review card — variant F, "Deck tactile" (task-362)
-  reviewDeck: {
-    marginHorizontal: Spacing.md,
-    // Its share of the column's rhythm, above only — see `HOME_BLOCK_GAP`.
-    marginTop: HOME_BLOCK_GAP,
-  },
-  reviewDeckPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  // The deepest plate: the furthest down and out, and the darkest of the three
-  // tiers, so the stack reads as receding rather than as three stacked cards.
-  reviewDeckPlateBack: {
-    position: "absolute",
-    top: Spacing.sm,
-    start: Spacing.sm,
-    end: 0,
-    bottom: 0,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  reviewDeckPlateMid: {
-    position: "absolute",
-    top: Spacing.xs,
-    start: Spacing.xs,
-    end: Spacing.xs / 2,
-    bottom: Spacing.xs,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surfaceContainer,
-  },
-  reviewDeckSurface: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    minHeight: TouchTarget.comfortable + Spacing.xl,
-    padding: Spacing.md,
-    // The room the two rear plates show through, given up by the front surface
-    // rather than taken as padding on the pressable: the plates are positioned
-    // against the pressable's own box, and a padded box would move them.
-    marginEnd: Spacing.xs,
-    marginBottom: Spacing.sm,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surface,
-  },
-  reviewDeckIconPlate: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.primaryTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reviewDeckCount: {
-    position: "absolute",
-    // Hangs off the plate's bottom-end corner and into the surface's own
-    // padding — 8 of the 16 there is, so the sticker never reaches the card's
-    // edge and the leading column stays 48 wide for the label's sake.
-    end: -Spacing.sm,
-    bottom: -Spacing.sm,
-    minWidth: Spacing.lg,
-    minHeight: Spacing.lg,
-    // Grows inwards from that corner: the count is `media_count` of the default
-    // folder, with no clamp on the client, so four digits have to fit.
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reviewDeckCountText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: "700",
-    color: Colors.onPrimary,
-  },
-  reviewDeckLabel: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  reviewDeckArrow: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.textMain,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+    // Unsorted review card — variant F, "Deck tactile" (task-362)
+    reviewDeck: {
+      marginHorizontal: Spacing.md,
+      // Its share of the column's rhythm, above only — see `HOME_BLOCK_GAP`.
+      marginTop: HOME_BLOCK_GAP,
+    },
+    reviewDeckPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    // The deepest plate: the furthest down and out, and the darkest of the three
+    // tiers, so the stack reads as receding rather than as three stacked cards.
+    reviewDeckPlateBack: {
+      position: "absolute",
+      top: Spacing.sm,
+      start: Spacing.sm,
+      end: 0,
+      bottom: 0,
+      borderRadius: BorderRadius.xl,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    reviewDeckPlateMid: {
+      position: "absolute",
+      top: Spacing.xs,
+      start: Spacing.xs,
+      end: Spacing.xs / 2,
+      bottom: Spacing.xs,
+      borderRadius: BorderRadius.xl,
+      backgroundColor: Colors.surfaceContainer,
+    },
+    reviewDeckSurface: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      minHeight: TouchTarget.comfortable + Spacing.xl,
+      padding: Spacing.md,
+      // The room the two rear plates show through, given up by the front surface
+      // rather than taken as padding on the pressable: the plates are positioned
+      // against the pressable's own box, and a padded box would move them.
+      marginEnd: Spacing.xs,
+      marginBottom: Spacing.sm,
+      borderRadius: BorderRadius.xl,
+      backgroundColor: Colors.surface,
+    },
+    reviewDeckIconPlate: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.primaryTint,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    reviewDeckCount: {
+      position: "absolute",
+      // Hangs off the plate's bottom-end corner and into the surface's own
+      // padding — 8 of the 16 there is, so the sticker never reaches the card's
+      // edge and the leading column stays 48 wide for the label's sake.
+      end: -Spacing.sm,
+      bottom: -Spacing.sm,
+      minWidth: Spacing.lg,
+      minHeight: Spacing.lg,
+      // Grows inwards from that corner: the count is `media_count` of the default
+      // folder, with no clamp on the client, so four digits have to fit.
+      paddingHorizontal: Spacing.sm,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    reviewDeckCountText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "700",
+      color: Colors.onPrimary,
+    },
+    reviewDeckLabel: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    reviewDeckArrow: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.textMain,
+      alignItems: "center",
+      justifyContent: "center",
+    },
 
-  // Rows
-  section: {
-    // Same gap as every other block, and on the same side of it, so the space
-    // between the review card and the first heading and the space between the
-    // first row and the second heading are one value. The row's own height no
-    // longer varies with the kinds of tile it holds (`TILE_HEIGHT`), so this is
-    // now the whole of what separates two rows.
-    marginTop: HOME_BLOCK_GAP,
-  },
-  sectionHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  sectionTitle: {
-    // Claims the room left by the icon, so a second line starts beside the
-    // icon rather than under it.
-    flex: 1,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-  },
-  rowContent: {
-    paddingHorizontal: Spacing.md,
-    gap: TILE_GAP,
-  },
+    // Rows
+    section: {
+      // Same gap as every other block, and on the same side of it, so the space
+      // between the review card and the first heading and the space between the
+      // first row and the second heading are one value. The row's own height no
+      // longer varies with the kinds of tile it holds (`TILE_HEIGHT`), so this is
+      // now the whole of what separates two rows.
+      marginTop: HOME_BLOCK_GAP,
+    },
+    sectionHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.md,
+    },
+    sectionTitle: {
+      // Claims the room left by the icon, so a second line starts beside the
+      // icon rather than under it.
+      flex: 1,
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    rowContent: {
+      paddingHorizontal: Spacing.md,
+      gap: TILE_GAP,
+    },
 
-  // First-paint placeholders (task-417). Every dimension is borrowed from the
-  // thing it stands in for — the deck's own plate styles above, the tile module's
-  // exported geometry — so neither can be retuned without the other following.
-  placeholderIconPlate: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainer,
-  },
-  placeholderLabelBar: {
-    // Half the card, which is about what the label takes on one line; a bar the
-    // full remaining width would read as a loaded card with its text missing.
-    width: "50%",
-    height: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainer,
-  },
-  placeholderRow: {
-    flexDirection: "row",
-    // Same gutter and same gap as `rowContent`, so the first plate starts where
-    // the first tile will.
-    paddingHorizontal: Spacing.md,
-    gap: TILE_GAP,
-    height: TILE_HEIGHT,
-    overflow: "hidden",
-  },
-  placeholderTile: {
-    width: TILE_WIDTH,
-    height: TILE_HEIGHT,
-  },
-  placeholderCover: {
-    width: TILE_WIDTH,
-    height: TILE_COVER_HEIGHT,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  placeholderTextLine: {
-    height: Spacing.md,
-    marginTop: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.surfaceContainer,
-  },
-  placeholderTextLineShort: {
-    width: "60%",
-  },
+    // First-paint placeholders (task-417). Every dimension is borrowed from the
+    // thing it stands in for — the deck's own plate styles above, the tile module's
+    // exported geometry — so neither can be retuned without the other following.
+    placeholderIconPlate: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainer,
+    },
+    placeholderLabelBar: {
+      // Half the card, which is about what the label takes on one line; a bar the
+      // full remaining width would read as a loaded card with its text missing.
+      width: "50%",
+      height: Spacing.md,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainer,
+    },
+    placeholderRow: {
+      flexDirection: "row",
+      // Same gutter and same gap as `rowContent`, so the first plate starts where
+      // the first tile will.
+      paddingHorizontal: Spacing.md,
+      gap: TILE_GAP,
+      height: TILE_HEIGHT,
+      overflow: "hidden",
+    },
+    placeholderTile: {
+      width: TILE_WIDTH,
+      height: TILE_HEIGHT,
+    },
+    placeholderCover: {
+      width: TILE_WIDTH,
+      height: TILE_COVER_HEIGHT,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    placeholderTextLine: {
+      height: Spacing.md,
+      marginTop: Spacing.sm,
+      borderRadius: BorderRadius.sm,
+      backgroundColor: Colors.surfaceContainer,
+    },
+    placeholderTextLineShort: {
+      width: "60%",
+    },
 
-  // Floating ingestion controls (task-264)
-  fabStack: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    // Absolutely positioned, so nothing insets it for the bar: this row is the
-    // reason `TAB_BAR_CLEARANCE` exists.
-    bottom: TAB_BAR_CLEARANCE,
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  addButton: {
-    width: TouchTarget.large,
-    height: TouchTarget.large,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Shadows.soft,
-  },
-  cameraButton: {
-    width: TouchTarget.large,
-    height: TouchTarget.large,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.textMain,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Shadows.soft,
-  },
-  addButtonPressed: {
-    transform: [{ scale: 0.96 }],
-    opacity: 0.9,
-  },
+    // Floating ingestion controls (task-264)
+    fabStack: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      // Absolutely positioned, so nothing insets it for the bar: this row is the
+      // reason `TAB_BAR_CLEARANCE` exists.
+      bottom: TAB_BAR_CLEARANCE,
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      gap: Spacing.md,
+    },
+    addButton: {
+      width: TouchTarget.large,
+      height: TouchTarget.large,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      ...Shadows.soft,
+    },
+    cameraButton: {
+      width: TouchTarget.large,
+      height: TouchTarget.large,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.textMain,
+      alignItems: "center",
+      justifyContent: "center",
+      ...Shadows.soft,
+    },
+    addButtonPressed: {
+      transform: [{ scale: 0.96 }],
+      opacity: 0.9,
+    },
 
-  // Empty state
-  emptyContainer: {
-    paddingTop: 100,
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyIcon: {
-    marginBottom: Spacing.md,
-  },
-  emptyTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  emptyHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.sm,
-  },
-});
+    // Empty state
+    emptyContainer: {
+      paddingTop: 100,
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    emptyIcon: {
+      marginBottom: Spacing.md,
+    },
+    emptyTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    emptyHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.sm,
+    },
+  });

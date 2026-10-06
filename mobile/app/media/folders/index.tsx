@@ -17,17 +17,19 @@ import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessag
 import {
   buildFolderTree,
   getDefaultFolderLabel,
-  DEFAULT_FOLDER_TINT,
   type FolderNode,
 } from "../../../src/lib/folderTree";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../../src/contexts/ThemeContext";
 import { t, tCount, useTranslation } from "../../../src/i18n";
 import { ScreenHeader, HeaderIconButton } from "../../../src/components/ScreenHeader";
 import type { MediaListItem } from "../../../src/types/media";
@@ -43,6 +45,8 @@ import type { MediaListItem } from "../../../src/types/media";
  * Handles loading / error / empty states (AC#5).
  */
 export default function FoldersExplorerScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -192,6 +196,8 @@ interface FolderRowProps {
 }
 
 function FolderRow({ node, isDefault, onPress }: FolderRowProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const childCount = node.children.length;
   const subtitleParts: string[] = [];
   if (node.directMediaCount > 0) {
@@ -220,7 +226,7 @@ function FolderRow({ node, isDefault, onPress }: FolderRowProps) {
         <Ionicons
           name="folder"
           size={26}
-          color={isDefault ? DEFAULT_FOLDER_TINT : Colors.primary}
+          color={isDefault ? Colors.defaultFolderTint : Colors.primary}
         />
       </View>
       <View style={styles.folderTextSection}>
@@ -235,6 +241,9 @@ function FolderRow({ node, isDefault, onPress }: FolderRowProps) {
 }
 
 function EmptyState() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.emptyContainer}>
       <Ionicons
@@ -249,114 +258,115 @@ function EmptyState() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  listContent: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
-  },
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    listContent: {
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.xxl,
+    },
 
-  // Folder card
-  folderCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    minHeight: TouchTarget.comfortable,
-    ...Shadows.soft,
-  },
-  folderCardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  folderIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  /** Deeper tonal step for the default folder -- a colour block, never a rule. */
-  folderIconContainerDefault: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  folderTextSection: {
-    flex: 1,
-    gap: 2,
-  },
-  folderName: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-  },
-  folderSubtitle: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
+    // Folder card
+    folderCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.md,
+      marginBottom: Spacing.md,
+      minHeight: TouchTarget.comfortable,
+      ...Shadows.soft,
+    },
+    folderCardPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    folderIconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    /** Deeper tonal step for the default folder -- a colour block, never a rule. */
+    folderIconContainerDefault: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    folderTextSection: {
+      flex: 1,
+      gap: 2,
+    },
+    folderName: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+    },
+    folderSubtitle: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
 
-  // Centered states (loading / error)
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  centeredText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    marginTop: Spacing.md,
-  },
-  centeredIcon: {
-    marginBottom: Spacing.md,
-  },
-  centeredTitle: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-    marginBottom: Spacing.lg,
-    lineHeight: 24,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
+    // Centered states (loading / error)
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    centeredText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      marginTop: Spacing.md,
+    },
+    centeredIcon: {
+      marginBottom: Spacing.md,
+    },
+    centeredTitle: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+      marginBottom: Spacing.lg,
+      lineHeight: 24,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
 
-  // Empty state
-  emptyContainer: {
-    paddingTop: 100,
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  emptyHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.sm,
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+    // Empty state
+    emptyContainer: {
+      paddingTop: 100,
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    emptyTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    emptyHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.sm,
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

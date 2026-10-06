@@ -2,11 +2,12 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 /**
@@ -21,7 +22,7 @@ import { t } from "../i18n";
  * failed on one screen and fine on the next.
  *
  * Filled `error`, not `errorContainer`. The soft red container is already the
- * background `getMediaTypeBgColor` gives the VIDEO and SHORT type badges, and a
+ * background `getMediaTypeBadgeTones` gives the VIDEO and SHORT type badges, and a
  * second pill of that exact tint sitting beside one of them reads as a second type
  * rather than as an alarm.
  *
@@ -30,6 +31,9 @@ import { t } from "../i18n";
  * so a screen reader must not also stop on the pill and read "FAILED" twice.
  */
 export function MediaFailureBadge(): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.badge} accessible={false}>
       <Ionicons
@@ -67,22 +71,23 @@ export function describeWithFailure(label: string, failed: boolean): string {
   return failed ? t("mediaStatus.a11yFailed", { label }) : label;
 }
 
-const styles = StyleSheet.create({
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    // Half a step: the pill has to sit on the same optical line as the type badge
-    // beside it, which is padded by the same amount.
-    paddingVertical: Spacing.xs / 2,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.error,
-  },
-  label: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: "700",
-    color: Colors.onError,
-    letterSpacing: 0.5,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    badge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      paddingHorizontal: Spacing.sm,
+      // Half a step: the pill has to sit on the same optical line as the type badge
+      // beside it, which is padded by the same amount.
+      paddingVertical: Spacing.xs / 2,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.error,
+    },
+    label: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "700",
+      color: Colors.onError,
+      letterSpacing: 0.5,
+    },
+  });

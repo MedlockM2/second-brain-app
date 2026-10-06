@@ -22,11 +22,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t, type TranslationKey } from "../i18n";
 
 export interface ScreenTab<K extends string = string> {
@@ -62,6 +63,9 @@ export function ScreenTabs<K extends string>({
   accessibilityLabel,
   iconOnly = false,
 }: ScreenTabsProps<K>): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View
       style={[styles.container, iconOnly && styles.containerIconOnly]}
@@ -107,49 +111,50 @@ export function ScreenTabs<K extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  // A pill of `surfaceContainerLow` on the page background: the sectioning is a
-  // tonal shift, not a stroke ("No-Line rule").
-  container: {
-    flexDirection: "row",
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.full,
-    padding: Spacing.xs,
-  },
-  // Sized by its squares rather than stretched across the row it sits in.
-  containerIconOnly: {
-    alignSelf: "center",
-  },
-  tab: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    minHeight: TouchTarget.minimum,
-  },
-  tabIconOnly: {
-    flex: 0,
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    paddingHorizontal: 0,
-  },
-  tabSelected: {
-    backgroundColor: Colors.primary,
-  },
-  tabLabel: {
-    // The tab is `flex: 1`, but that only sizes the pill: without this the
-    // label refuses to compress inside it and a translated word ("Sources" →
-    // "Quellen", "Transcript" → "Transkript") pushes past the rounded edge.
-    flexShrink: 1,
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMuted,
-  },
-  tabLabelSelected: {
-    color: Colors.onPrimary,
-    fontWeight: "600",
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    // A pill of `surfaceContainerLow` on the page background: the sectioning is a
+    // tonal shift, not a stroke ("No-Line rule").
+    container: {
+      flexDirection: "row",
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.full,
+      padding: Spacing.xs,
+    },
+    // Sized by its squares rather than stretched across the row it sits in.
+    containerIconOnly: {
+      alignSelf: "center",
+    },
+    tab: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.full,
+      minHeight: TouchTarget.minimum,
+    },
+    tabIconOnly: {
+      flex: 0,
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      paddingHorizontal: 0,
+    },
+    tabSelected: {
+      backgroundColor: Colors.primary,
+    },
+    tabLabel: {
+      // The tab is `flex: 1`, but that only sizes the pill: without this the
+      // label refuses to compress inside it and a translated word ("Sources" →
+      // "Quellen", "Transcript" → "Transkript") pushes past the rounded edge.
+      flexShrink: 1,
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMuted,
+    },
+    tabLabelSelected: {
+      color: Colors.onPrimary,
+      fontWeight: "600",
+    },
+  });

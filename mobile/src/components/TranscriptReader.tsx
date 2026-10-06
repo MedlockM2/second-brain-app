@@ -28,11 +28,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import type {
   MediaStatusResponse,
@@ -138,6 +139,9 @@ export const TranscriptReader = memo(function TranscriptReader({
   onCheckTranslation,
   translationToggle,
 }: TranscriptReaderProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   if (!transcript) {
     return (
       <View style={styles.empty}>
@@ -237,6 +241,8 @@ function TranslationToggle({
 }: {
   toggle: TranscriptTranslationToggle;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { showingOriginal, languageCode, languageName, busy } = toggle;
   return (
     <Pressable
@@ -273,6 +279,7 @@ function TranslationToggle({
  * reflows with the body copy instead of becoming its own block.
  */
 function TranscriptBody({ content }: { content: string }) {
+  const styles = useThemedStyles(makeStyles);
   const paragraphs = useMemo(() => splitTranscriptParagraphs(content), [content]);
 
   if (paragraphs.length === 0) {
@@ -309,6 +316,8 @@ function TranscriptContent({
   onRetry: () => void;
   onCheckTranslation: () => void;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   if (state.status === "ready") {
     return (
       <View>
@@ -444,154 +453,155 @@ function TranscriptContent({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    gap: Spacing.sm,
-  },
-  // The title and the translation switch share a row. The margin that used to
-  // sit under the title belongs to the row now: with the pill in it, the row is
-  // what the text has to clear.
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    flex: 1,
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-  },
-  statusGlyph: {
-    marginEnd: Spacing.sm,
-  },
-  statusText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    lineHeight: Typography.body.lineHeight,
-  },
-  statusTextFailed: {
-    color: Colors.error,
-  },
-  translationPendingBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  translationPendingText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-    fontStyle: "italic",
-  },
-  // One tone above the pending line, so the two read as different states.
-  translationStalledBanner: {
-    gap: Spacing.sm,
-    padding: Spacing.md,
-    backgroundColor: Colors.surfaceContainer,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  translationStalledRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  translationStalledText: {
-    flex: 1,
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMain,
-  },
-  checkTranslationButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    alignSelf: "flex-start",
-    minHeight: TouchTarget.minimum,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: BorderRadius.full,
-  },
-  checkTranslationText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-  },
-  // Where the same pill sits when it is on the title row instead of inside a
-  // banner: centred against the title rather than pinned to the top of the row,
-  // and never squeezed — the title is what gives way if the label is long.
-  headerPill: {
-    alignSelf: "center",
-    flexShrink: 0,
-  },
-  translationFailedBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
-  },
-  translationFailedText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-    flex: 1,
-  },
-  body: {
-    paddingVertical: Spacing.sm,
-  },
-  paragraph: {
-    fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.md,
-  },
-  paragraphLast: {
-    marginBottom: 0,
-  },
-  speaker: {
-    color: Colors.textMuted,
-    fontWeight: "600",
-  },
-  empty: {
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.xl,
-  },
-  emptyText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-  },
-  emptyHint: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-    fontStyle: "italic",
-    textAlign: "center",
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-    marginTop: Spacing.md,
-    alignSelf: "flex-start",
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      gap: Spacing.sm,
+    },
+    // The title and the translation switch share a row. The margin that used to
+    // sit under the title belongs to the row now: with the pill in it, the row is
+    // what the text has to clear.
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    sectionTitle: {
+      flex: 1,
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    statusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: Spacing.sm,
+    },
+    statusGlyph: {
+      marginEnd: Spacing.sm,
+    },
+    statusText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      lineHeight: Typography.body.lineHeight,
+    },
+    statusTextFailed: {
+      color: Colors.error,
+    },
+    translationPendingBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.sm,
+    },
+    translationPendingText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+      fontStyle: "italic",
+    },
+    // One tone above the pending line, so the two read as different states.
+    translationStalledBanner: {
+      gap: Spacing.sm,
+      padding: Spacing.md,
+      backgroundColor: Colors.surfaceContainer,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.sm,
+    },
+    translationStalledRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+    },
+    translationStalledText: {
+      flex: 1,
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMain,
+    },
+    checkTranslationButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      alignSelf: "flex-start",
+      minHeight: TouchTarget.minimum,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: Colors.surfaceContainerHigh,
+      borderRadius: BorderRadius.full,
+    },
+    checkTranslationText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+    },
+    // Where the same pill sits when it is on the title row instead of inside a
+    // banner: centred against the title rather than pinned to the top of the row,
+    // and never squeezed — the title is what gives way if the label is long.
+    headerPill: {
+      alignSelf: "center",
+      flexShrink: 0,
+    },
+    translationFailedBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: Colors.errorContainer,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.sm,
+    },
+    translationFailedText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+      flex: 1,
+    },
+    body: {
+      paddingVertical: Spacing.sm,
+    },
+    paragraph: {
+      fontSize: Typography.body.fontSize,
+      lineHeight: Typography.body.lineHeight,
+      color: Colors.textMain,
+      marginBottom: Spacing.md,
+    },
+    paragraphLast: {
+      marginBottom: 0,
+    },
+    speaker: {
+      color: Colors.textMuted,
+      fontWeight: "600",
+    },
+    empty: {
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingVertical: Spacing.xl,
+    },
+    emptyText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+    },
+    emptyHint: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+      fontStyle: "italic",
+      textAlign: "center",
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+      marginTop: Spacing.md,
+      alignSelf: "flex-start",
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
+  });

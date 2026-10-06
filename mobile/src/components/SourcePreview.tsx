@@ -30,7 +30,13 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Bullets } from "./Bullets";
-import { BorderRadius, Colors, Spacing, Typography } from "../constants/theme";
+import {
+  BorderRadius,
+  Spacing,
+  Typography,
+  type Theme,
+} from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import type { MediaItemContract } from "../types/media";
 
@@ -87,6 +93,9 @@ export function SourcePreview({
 }: {
   state: SourcePreviewState;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.callout}>
       {/* A header for screen readers: after the tabs, it is the next landmark
@@ -131,54 +140,55 @@ export function SourcePreview({
   );
 }
 
-const styles = StyleSheet.create({
-  /**
-   * The Callout Aside. The amber bar sits on the *start* edge, so it moves to
-   * the right in Arabic along with the text it introduces; only the two corners
-   * away from it are rounded. The bar is the one stroke of the page, and it is
-   * the design system's own component rather than a divider ("No-Line" rule).
-   *
-   * The gap to the full text is the block's own: the Reader tab stacks the two
-   * directly, and only this one knows how much air it needs under itself.
-   */
-  callout: {
-    borderStartWidth: Spacing.xs,
-    borderStartColor: Colors.primary,
-    backgroundColor: Colors.primaryTint,
-    borderTopEndRadius: BorderRadius.md,
-    borderBottomEndRadius: BorderRadius.md,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  // `textSubtle`, not `textMuted`: a label to read, at 5.2:1 on the amber wash.
-  // The letter spacing is the one every small-caps label of the app uses.
-  label: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textSubtle,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  // Body size, headline weight: the hook is a sentence to read, not a title, but
-  // it has to lead the bullets under it. Both values are tokens.
-  hook: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    lineHeight: Typography.body.lineHeight,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statusGlyph: {
-    marginEnd: Spacing.sm,
-  },
-  statusText: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textSubtle,
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    /**
+     * The Callout Aside. The amber bar sits on the *start* edge, so it moves to
+     * the right in Arabic along with the text it introduces; only the two corners
+     * away from it are rounded. The bar is the one stroke of the page, and it is
+     * the design system's own component rather than a divider ("No-Line" rule).
+     *
+     * The gap to the full text is the block's own: the Reader tab stacks the two
+     * directly, and only this one knows how much air it needs under itself.
+     */
+    callout: {
+      borderStartWidth: Spacing.xs,
+      borderStartColor: Colors.primary,
+      backgroundColor: Colors.primaryTint,
+      borderTopEndRadius: BorderRadius.md,
+      borderBottomEndRadius: BorderRadius.md,
+      padding: Spacing.md,
+      gap: Spacing.sm,
+      marginBottom: Spacing.xl,
+    },
+    // `textSubtle`, not `textMuted`: a label to read, at 5.2:1 on the amber wash.
+    // The letter spacing is the one every small-caps label of the app uses.
+    label: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textSubtle,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    // Body size, headline weight: the hook is a sentence to read, not a title, but
+    // it has to lead the bullets under it. Both values are tokens.
+    hook: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      lineHeight: Typography.body.lineHeight,
+    },
+    statusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    statusGlyph: {
+      marginEnd: Spacing.sm,
+    },
+    statusText: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textSubtle,
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

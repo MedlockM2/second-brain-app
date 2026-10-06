@@ -2,7 +2,13 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Typography, Spacing, BorderRadius } from "../constants/theme";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  type Theme,
+} from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import type { MediaType } from "../types/media";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
@@ -164,6 +170,8 @@ export function HomeTile({
   onPress,
   processingStalled = false,
 }: HomeTileProps): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Pressable
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
@@ -193,6 +201,8 @@ function TileCover({
   item: HomeTileItem;
   processingStalled: boolean;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Keyed by tile id rather than a bare boolean: a horizontal `FlatList` cell is
   // recycled, and a failure recorded for the previous tile must not hide the
   // next one's cover.
@@ -272,6 +282,8 @@ function FolderMosaic({
 }: {
   item: Extract<HomeTileItem, { kind: "folder" }>;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const images = item.previewImages.filter(Boolean).slice(0, MAX_MOSAIC_IMAGES);
 
   if (images.length === 0) {
@@ -411,64 +423,65 @@ function describeTile(item: HomeTileItem): string {
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  tile: {
-    width: TILE_WIDTH,
-    // Fixed, not minimum: the row's height must not depend on which kinds of tile
-    // it happens to hold. Well past the 48 px touch floor, which the tile would
-    // clear on its cover alone.
-    height: TILE_HEIGHT,
-  },
-  tilePressed: {
-    opacity: 0.7,
-  },
-  cover: {
-    width: TILE_WIDTH,
-    height: TILE_COVER_HEIGHT,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  coverImage: {
-    width: "100%",
-    height: "100%",
-  },
-  // Top-start, where nothing else on the cover lives, and inset by one step so the
-  // pill's corner radius reads against the cover's own.
-  failureMarker: {
-    position: "absolute",
-    top: Spacing.sm,
-    start: Spacing.sm,
-  },
-  mosaicRow: {
-    flexDirection: "row",
-    gap: 2,
-  },
-  mosaicColumn: {
-    flex: 1,
-    gap: 2,
-  },
-  mosaicHalf: {
-    flex: 1,
-    height: "100%",
-  },
-  mosaicQuarter: {
-    flex: 1,
-    width: "100%",
-  },
-  title: {
-    ...Typography.label,
-    fontSize: 15,
-    lineHeight: TILE_TITLE_LINE_HEIGHT,
-    color: Colors.textMain,
-    marginTop: Spacing.sm,
-  },
-  subtitle: {
-    ...Typography.small,
-    lineHeight: TILE_SUBTITLE_LINE_HEIGHT,
-    color: Colors.textSubtle,
-    marginTop: Spacing.xs,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    tile: {
+      width: TILE_WIDTH,
+      // Fixed, not minimum: the row's height must not depend on which kinds of tile
+      // it happens to hold. Well past the 48 px touch floor, which the tile would
+      // clear on its cover alone.
+      height: TILE_HEIGHT,
+    },
+    tilePressed: {
+      opacity: 0.7,
+    },
+    cover: {
+      width: TILE_WIDTH,
+      height: TILE_COVER_HEIGHT,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    coverImage: {
+      width: "100%",
+      height: "100%",
+    },
+    // Top-start, where nothing else on the cover lives, and inset by one step so the
+    // pill's corner radius reads against the cover's own.
+    failureMarker: {
+      position: "absolute",
+      top: Spacing.sm,
+      start: Spacing.sm,
+    },
+    mosaicRow: {
+      flexDirection: "row",
+      gap: 2,
+    },
+    mosaicColumn: {
+      flex: 1,
+      gap: 2,
+    },
+    mosaicHalf: {
+      flex: 1,
+      height: "100%",
+    },
+    mosaicQuarter: {
+      flex: 1,
+      width: "100%",
+    },
+    title: {
+      ...Typography.label,
+      fontSize: 15,
+      lineHeight: TILE_TITLE_LINE_HEIGHT,
+      color: Colors.textMain,
+      marginTop: Spacing.sm,
+    },
+    subtitle: {
+      ...Typography.small,
+      lineHeight: TILE_SUBTITLE_LINE_HEIGHT,
+      color: Colors.textSubtle,
+      marginTop: Spacing.xs,
+    },
+  });

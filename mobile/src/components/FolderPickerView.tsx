@@ -32,14 +32,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import {
-  DEFAULT_FOLDER_TINT,
   buildFolderTree,
   type FolderNode,
 } from "../lib/folderTree";
@@ -82,6 +81,8 @@ export function FolderPickerView({
   onFolderCreated,
   onCreateFailed,
 }: FolderPickerViewProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const createInputRef = useRef<TextInput>(null);
 
   const [searchText, setSearchText] = useState("");
@@ -296,7 +297,7 @@ export function FolderPickerView({
                 <Ionicons
                   name="file-tray-outline"
                   size={24}
-                  color={DEFAULT_FOLDER_TINT}
+                  color={Colors.defaultFolderTint}
                 />
                 <Text style={styles.unsortedLabel} numberOfLines={1}>
                   {t("folderPicker.unsorted")}
@@ -413,185 +414,186 @@ function filterFolders(
   }, []);
 }
 
-const styles = StyleSheet.create({
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.md,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: BorderRadius.full,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    ...Shadows.soft,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    marginStart: Spacing.md,
-    padding: 0,
-  },
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.lg,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  unsortedCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.lg,
-    ...Shadows.soft,
-  },
-  unsortedCardSelected: {
-    borderWidth: 2,
-    borderColor: Colors.primary,
-  },
-  unsortedLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    flex: 1,
-  },
-  unsortedLabel: {
-    flexShrink: 1,
-    fontSize: 18,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  unsortedRight: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-    paddingHorizontal: Spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    letterSpacing: -0.3,
-  },
-  addButton: {
-    width: 32,
-    height: 32,
-    borderRadius: BorderRadius.full,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  foldersContainer: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: 24,
-    overflow: "hidden",
-    ...Shadows.soft,
-    paddingVertical: Spacing.sm,
-  },
-  folderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingEnd: Spacing.md,
-    paddingVertical: 14,
-    borderRadius: BorderRadius.xl,
-    marginHorizontal: Spacing.sm,
-  },
-  folderRowSelected: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  folderRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    flex: 1,
-  },
-  folderName: {
-    // The row's left half is already `flex: 1`; this is what lets the name give
-    // ground inside it instead of pushing the count and chevron off the row.
-    flexShrink: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "500",
-    color: Colors.textMain,
-  },
-  folderNameSelected: {
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-  folderRowRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  folderCount: {
-    fontSize: Typography.label.fontSize,
-    color: Colors.textMuted,
-  },
-  rowPressed: {
-    opacity: 0.85,
-  },
-  rowDisabled: {
-    opacity: 0.5,
-  },
-  createInputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.md,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    gap: Spacing.sm,
-  },
-  createInput: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    padding: 0,
-    paddingVertical: Spacing.sm,
-  },
-  createAction: {
-    padding: Spacing.xs,
-  },
-  emptyState: {
-    paddingVertical: Spacing.xl,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    searchContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginHorizontal: Spacing.lg,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.md,
+      backgroundColor: Colors.surfaceContainerHigh,
+      borderRadius: BorderRadius.full,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      ...Shadows.soft,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      marginStart: Spacing.md,
+      padding: 0,
+    },
+    errorBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      backgroundColor: Colors.errorContainer,
+      borderRadius: BorderRadius.lg,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.xxl,
+    },
+    unsortedCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: Colors.surfaceContainerHigh,
+      borderRadius: BorderRadius.xl,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      marginBottom: Spacing.lg,
+      ...Shadows.soft,
+    },
+    unsortedCardSelected: {
+      borderWidth: 2,
+      borderColor: Colors.primary,
+    },
+    unsortedLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      flex: 1,
+    },
+    unsortedLabel: {
+      flexShrink: 1,
+      fontSize: 18,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    unsortedRight: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: Spacing.md,
+      paddingHorizontal: Spacing.sm,
+    },
+    sectionTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+      letterSpacing: -0.3,
+    },
+    addButton: {
+      width: 32,
+      height: 32,
+      borderRadius: BorderRadius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    foldersContainer: {
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: 24,
+      overflow: "hidden",
+      ...Shadows.soft,
+      paddingVertical: Spacing.sm,
+    },
+    folderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingEnd: Spacing.md,
+      paddingVertical: 14,
+      borderRadius: BorderRadius.xl,
+      marginHorizontal: Spacing.sm,
+    },
+    folderRowSelected: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    folderRowLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      flex: 1,
+    },
+    folderName: {
+      // The row's left half is already `flex: 1`; this is what lets the name give
+      // ground inside it instead of pushing the count and chevron off the row.
+      flexShrink: 1,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "500",
+      color: Colors.textMain,
+    },
+    folderNameSelected: {
+      fontWeight: "600",
+      color: Colors.primary,
+    },
+    folderRowRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+    },
+    folderCount: {
+      fontSize: Typography.label.fontSize,
+      color: Colors.textMuted,
+    },
+    rowPressed: {
+      opacity: 0.85,
+    },
+    rowDisabled: {
+      opacity: 0.5,
+    },
+    createInputContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.xl,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      marginBottom: Spacing.md,
+      borderWidth: 2,
+      borderColor: Colors.primary,
+      gap: Spacing.sm,
+    },
+    createInput: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      padding: 0,
+      paddingVertical: Spacing.sm,
+    },
+    createAction: {
+      padding: Spacing.xs,
+    },
+    emptyState: {
+      paddingVertical: Spacing.xl,
+      alignItems: "center",
+    },
+    emptyText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+    },
+  });

@@ -47,7 +47,11 @@ import { DigestService } from "../../../src/services/digestService";
 import { MediaService } from "../../../src/services/mediaService";
 import { DigestCoverStack } from "../../../src/components/DigestCoverStack";
 import { TAB_BAR_CLEARANCE } from "../../../src/constants/tabBar";
-import { Colors, Spacing, Typography } from "../../../src/constants/theme";
+import { Spacing, Typography, type Theme } from "../../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
 import type { DigestPeriod } from "../../../src/types/digest";
 import type { MediaListItem } from "../../../src/types/media";
@@ -62,6 +66,8 @@ const LIBRARY_PAGE_SIZE = 100;
 type PeriodMedia = Record<DigestPeriod, readonly string[] | null>;
 
 export default function DigestChoiceScreen(): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Resolved-on-render copy: the screen has to redraw with the language.
   useTranslation();
   const router = useRouter();
@@ -168,30 +174,31 @@ export default function DigestChoiceScreen(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-  },
-  title: {
-    ...Typography.display,
-    color: Colors.textMain,
-  },
-  scroll: {
-    flex: 1,
-  },
-  // `flexGrow` so the two packs fill the height down to the tab bar between
-  // them; past that height the content scrolls instead of clipping.
-  content: {
-    flexGrow: 1,
-    gap: Spacing.xl,
-    paddingTop: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: TAB_BAR_CLEARANCE,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    header: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.md,
+    },
+    title: {
+      ...Typography.display,
+      color: Colors.textMain,
+    },
+    scroll: {
+      flex: 1,
+    },
+    // `flexGrow` so the two packs fill the height down to the tab bar between
+    // them; past that height the content scrolls instead of clipping.
+    content: {
+      flexGrow: 1,
+      gap: Spacing.xl,
+      paddingTop: Spacing.sm,
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: TAB_BAR_CLEARANCE,
+    },
+  });

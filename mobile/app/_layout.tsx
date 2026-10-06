@@ -18,7 +18,7 @@ import {
   installStartupErrorGuard,
   logStartupFailure,
 } from "../src/lib/startupErrorGuard";
-import { Colors } from "../src/constants/theme";
+import { ThemeProvider, useTheme } from "../src/contexts/ThemeContext";
 
 // Crash reporting first, so the guard's very first report has somewhere to go.
 // Sentry installs no global hook of its own: the guard below stays the only
@@ -153,16 +153,19 @@ export default Sentry.wrap(RootLayout);
  * Wraps the entire app with providers in this order:
  * 1. ExpoShareIntentProvider (from expo-share-intent package) - handles native
  *    module communication, URL interception, App Groups resolution on iOS.
- * 2. I18nProvider - resolves the interface language (device locale, or the
+ * 2. ThemeProvider - resolves the palette (the device appearance, or the in-app
+ *    override read from the device) before anything renders a pixel of it.
+ *    Outermost of our own providers because every one of them can end up
+ *    producing a visible surface, the startup error screen included.
+ * 3. I18nProvider - resolves the interface language (device locale, or the
  *    in-app override read from the device) before anything renders a word of
- *    it. Outermost of our own providers because every one of them can end up
- *    producing user-facing copy.
- * 3. AuthProvider - manages authentication state.
- * 4. UserPreferencesProvider - manages the account preferences the backend
+ *    it.
+ * 4. AuthProvider - manages authentication state.
+ * 5. UserPreferencesProvider - manages the account preferences the backend
  *    stores: the reading language, and the device time zone it reports on every
  *    foreground pass so the Digest can fire at 18:30 local time.
- * 5. PurchasesProvider - manages IAP state.
- * 6. ShareIntentProvider (our custom) - consumes the package's context, maps
+ * 6. PurchasesProvider - manages IAP state.
+ * 7. ShareIntentProvider (our custom) - consumes the package's context, maps
  *    to our ShareIntakeState, handles auth gating and navigation.
  *
  * `SplashGate` is mounted right under AuthProvider, the shallowest place that has
@@ -172,128 +175,160 @@ export default Sentry.wrap(RootLayout);
 function AppProviders() {
   return (
     <ExpoShareIntentProvider options={{ debug: false, resetOnBackground: true, scheme: "media-summarizer" }}>
-      <I18nProvider>
-      <AuthProvider>
-        <SplashGate />
-        <PushNotificationGate />
-        <UserPreferencesProvider>
-          <PurchasesProvider>
-            <ShareIntentProvider>
-              <StatusBar style="dark" backgroundColor={Colors.background} />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: Colors.background },
-                }}
-              >
-                <Stack.Screen
-                  name="onboarding/language"
-                  options={{
-                    animation: "slide_from_right",
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="share-confirmation"
-                  options={{
-                    presentation: "modal",
-                    animation: "slide_from_bottom",
-                    gestureEnabled: true,
-                  }}
-                />
-                <Stack.Screen
-                  name="media/[id]"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                <Stack.Screen
-                  name="media/folders/index"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                <Stack.Screen
-                  name="media/folders/[id]"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                <Stack.Screen
-                  name="artifacts/[artifactId]"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                <Stack.Screen
-                  name="media/folder"
-                  options={{
-                    presentation: "modal",
-                    animation: "slide_from_bottom",
-                    gestureEnabled: true,
-                  }}
-                />
-                {/* Unsorted review — two deliberate departures from every other
-                    modal in this file.
-                    `fullScreenModal` rather than `modal`: the iOS card modal
-                    insets its content and rounds its corners, which cuts a
-                    full-width horizontal pager in half at both ends and makes
-                    the page boundaries impossible to feel.
-                    `gestureEnabled: false`: this screen's whole business is
-                    swiping, and a vertical dismiss gesture layered on top of it
-                    turns a slightly-off swipe into an accidental exit mid-triage.
-                    The close button in the header is the way out. */}
-                <Stack.Screen
-                  name="media/unsorted-review"
-                  options={{
-                    presentation: "fullScreenModal",
-                    animation: "slide_from_bottom",
-                    gestureEnabled: false,
-                  }}
-                />
-                <Stack.Screen
-                  name="bug-report"
-                  options={{
-                    presentation: "modal",
-                    animation: "slide_from_bottom",
-                    gestureEnabled: true,
-                  }}
-                />
-                <Stack.Screen
-                  name="settings/reading-language"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                <Stack.Screen
-                  name="settings/delete-account"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                <Stack.Screen
-                  name="settings/interface-language"
-                  options={{
-                    animation: "slide_from_right",
-                  }}
-                />
-                {/* Opened from the Account tab and from a quota refusal on the
-                    share confirmation screen, so it presents over whatever
-                    pushed it and dismisses back to it. */}
-                <Stack.Screen
-                  name="paywall"
-                  options={{
-                    presentation: "modal",
-                    animation: "slide_from_bottom",
-                    gestureEnabled: true,
-                  }}
-                />
-              </Stack>
-            </ShareIntentProvider>
-        </PurchasesProvider>
-      </UserPreferencesProvider>
-      </AuthProvider>
-      </I18nProvider>
+      <ThemeProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <SplashGate />
+            <PushNotificationGate />
+            <UserPreferencesProvider>
+              <PurchasesProvider>
+                <ShareIntentProvider>
+                  <AppNavigator />
+                </ShareIntentProvider>
+              </PurchasesProvider>
+            </UserPreferencesProvider>
+          </AuthProvider>
+        </I18nProvider>
+      </ThemeProvider>
     </ExpoShareIntentProvider>
+  );
+}
+
+/**
+ * The navigator, and the two things on it that are the theme's business: the
+ * status bar glyphs and the colour behind every screen.
+ *
+ * Split out of `AppProviders` rather than reading the theme there, because
+ * `ThemeProvider` is one of the providers that file mounts — a hook call in
+ * `AppProviders` would resolve above its own provider and get the device
+ * appearance instead of the user's choice.
+ */
+function AppNavigator() {
+  const { mode, colors } = useTheme();
+
+  return (
+    <>
+      {/* The glyphs have to contrast with the bar's own background, so they go
+          the opposite way from the palette: light glyphs over a dark page. */}
+      <StatusBar
+        style={mode === "dark" ? "light" : "dark"}
+        backgroundColor={colors.background}
+      />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+        }}
+      >
+        <Stack.Screen
+          name="onboarding/language"
+          options={{
+            animation: "slide_from_right",
+            gestureEnabled: false,
+          }}
+        />
+        <Stack.Screen
+          name="share-confirmation"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="media/[id]"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="media/folders/index"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="media/folders/[id]"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="artifacts/[artifactId]"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="media/folder"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+            gestureEnabled: true,
+          }}
+        />
+        {/* Unsorted review — two deliberate departures from every other
+            modal in this file.
+            `fullScreenModal` rather than `modal`: the iOS card modal
+            insets its content and rounds its corners, which cuts a
+            full-width horizontal pager in half at both ends and makes
+            the page boundaries impossible to feel.
+            `gestureEnabled: false`: this screen's whole business is
+            swiping, and a vertical dismiss gesture layered on top of it
+            turns a slightly-off swipe into an accidental exit mid-triage.
+            The close button in the header is the way out. */}
+        <Stack.Screen
+          name="media/unsorted-review"
+          options={{
+            presentation: "fullScreenModal",
+            animation: "slide_from_bottom",
+            gestureEnabled: false,
+          }}
+        />
+        <Stack.Screen
+          name="bug-report"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+            gestureEnabled: true,
+          }}
+        />
+        <Stack.Screen
+          name="settings/reading-language"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="settings/delete-account"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="settings/interface-language"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        <Stack.Screen
+          name="settings/theme"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+        {/* Opened from the Account tab and from a quota refusal on the
+            share confirmation screen, so it presents over whatever
+            pushed it and dismisses back to it. */}
+        <Stack.Screen
+          name="paywall"
+          options={{
+            presentation: "modal",
+            animation: "slide_from_bottom",
+            gestureEnabled: true,
+          }}
+        />
+      </Stack>
+    </>
   );
 }

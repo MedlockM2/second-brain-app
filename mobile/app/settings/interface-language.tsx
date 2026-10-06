@@ -18,12 +18,16 @@ import {
   type SupportedLocale,
 } from "../../src/i18n";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeader";
 
 /**
@@ -46,6 +50,8 @@ const FOLLOW_DEVICE = "system" as const;
 type LocaleChoice = SupportedLocale | typeof FOLLOW_DEVICE;
 
 export default function InterfaceLanguageScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { locale, override, setLocale, pseudo, setPseudo } = useTranslation();
 
@@ -160,83 +166,84 @@ export default function InterfaceLanguageScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  disclaimer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  disclaimerText: {
-    flex: 1,
-    ...Typography.small,
-    color: Colors.textMuted,
-    lineHeight: Typography.body.lineHeight,
-  },
-  listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  devSection: {
-    marginTop: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  devHeading: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    letterSpacing: 1,
-  },
-  devRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-  },
-  devRowText: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  devLabel: {
-    ...Typography.body,
-    color: Colors.textMain,
-  },
-  devHint: {
-    ...Typography.small,
-    color: Colors.textMuted,
-  },
-  languageItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-  },
-  languageItemSelected: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  languageLabel: {
-    flex: 1,
-    ...Typography.body,
-    fontWeight: "500",
-    color: Colors.textMain,
-  },
-  languageLabelSelected: {
-    fontWeight: "700",
-  },
-  languageDetail: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    marginEnd: Spacing.sm,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    disclaimer: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.md,
+    },
+    disclaimerText: {
+      flex: 1,
+      ...Typography.small,
+      color: Colors.textMuted,
+      lineHeight: Typography.body.lineHeight,
+    },
+    listContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.xxl,
+    },
+    devSection: {
+      marginTop: Spacing.xl,
+      gap: Spacing.sm,
+    },
+    devHeading: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      letterSpacing: 1,
+    },
+    devRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+    },
+    devRowText: {
+      flex: 1,
+      gap: Spacing.xs,
+    },
+    devLabel: {
+      ...Typography.body,
+      color: Colors.textMain,
+    },
+    devHint: {
+      ...Typography.small,
+      color: Colors.textMuted,
+    },
+    languageItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      marginBottom: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+    },
+    languageItemSelected: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    languageLabel: {
+      flex: 1,
+      ...Typography.body,
+      fontWeight: "500",
+      color: Colors.textMain,
+    },
+    languageLabelSelected: {
+      fontWeight: "700",
+    },
+    languageDetail: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      marginEnd: Spacing.sm,
+    },
+  });

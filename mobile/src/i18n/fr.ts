@@ -460,6 +460,13 @@ export const fr: Catalog = {
   "settings.uiLanguage.restartTitle": "Redémarrez pour terminer",
   "settings.uiLanguage.restartBody":
     "Cette langue se lit de droite à gauche : l'app doit redémarrer pour que la mise en page suive. Fermez-la et rouvrez-la.",
+  "theme.title": "Thème",
+  "theme.disclaimer":
+    "Voici l'apparence de l'app. Ce choix reste sur cet appareil.",
+  "theme.followDevice": "Suivre mon appareil",
+  "theme.light": "Clair",
+  "theme.dark": "Sombre",
+  "theme.selectA11y": "Sélectionner {theme}",
   "onboarding.language.title": "Choisissez votre langue de lecture",
   "onboarding.language.subtitle":
     "Les contenus seront traduits dans cette langue si nécessaire.",

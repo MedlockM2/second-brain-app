@@ -4,7 +4,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
 import { LANGUAGE_ONBOARDING_ROUTE } from "../../src/constants/routes";
-import { Colors } from "../../src/constants/theme";
+import { type Theme } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
 import { ActivityIndicator, View, StyleSheet } from "react-native";
 
@@ -46,6 +50,8 @@ import { ActivityIndicator, View, StyleSheet } from "react-native";
  * content on iOS 26).
  */
 export default function TabsLayout() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { isAuthenticated, isLoading } = useAuth();
   const { needsLanguageOnboarding } = useUserPreferences();
   // The four labels are resolved on render, so the bar has to redraw when the
@@ -154,11 +160,12 @@ export default function TabsLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: Colors.background,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: Colors.background,
+    },
+  });

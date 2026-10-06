@@ -1,7 +1,7 @@
 import { Redirect, Stack } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { POST_AUTH_ENTRY_POINT } from "../../src/constants/routes";
-import { Colors } from "../../src/constants/theme";
+import { useThemeColors } from "../../src/contexts/ThemeContext";
 
 /**
  * Auth group layout.
@@ -9,6 +9,7 @@ import { Colors } from "../../src/constants/theme";
  * decide where a session goes.
  */
 export default function AuthLayout() {
+  const Colors = useThemeColors();
   const { isAuthenticated, isLoading } = useAuth();
 
   // Naming a destination here is what made the onboarding gate skippable: this

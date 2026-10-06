@@ -4,13 +4,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 interface StartupErrorScreenProps {
@@ -41,6 +41,8 @@ interface StartupErrorScreenProps {
  * amber CTA.
  */
 export function StartupErrorScreen({ onRetry }: StartupErrorScreenProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // `app/_layout.tsx` holds the native splash from module scope, for the whole
   // life of the process, and `SplashGate` — which is somewhere below this screen
   // and no longer mounted — is what normally gives it back. Without this the
@@ -78,49 +80,50 @@ export function StartupErrorScreen({ onRetry }: StartupErrorScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.xl,
-  },
-  hero: {
-    alignItems: "center",
-    marginBottom: Spacing.lg,
-  },
-  title: {
-    fontSize: Typography.display.fontSize,
-    fontWeight: Typography.display.fontWeight,
-    letterSpacing: Typography.display.letterSpacing,
-    color: Colors.textMain,
-    textAlign: "center",
-    marginBottom: Spacing.md,
-  },
-  body: {
-    fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
-    color: Colors.textSubtle,
-    textAlign: "center",
-    marginBottom: Spacing.xl,
-  },
-  retryButton: {
-    alignSelf: "stretch",
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.full,
-    minHeight: TouchTarget.comfortable,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Shadows.soft,
-  },
-  retryButtonText: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.onPrimary,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    content: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.xl,
+    },
+    hero: {
+      alignItems: "center",
+      marginBottom: Spacing.lg,
+    },
+    title: {
+      fontSize: Typography.display.fontSize,
+      fontWeight: Typography.display.fontWeight,
+      letterSpacing: Typography.display.letterSpacing,
+      color: Colors.textMain,
+      textAlign: "center",
+      marginBottom: Spacing.md,
+    },
+    body: {
+      fontSize: Typography.body.fontSize,
+      lineHeight: Typography.body.lineHeight,
+      color: Colors.textSubtle,
+      textAlign: "center",
+      marginBottom: Spacing.xl,
+    },
+    retryButton: {
+      alignSelf: "stretch",
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.xl,
+      borderRadius: BorderRadius.full,
+      minHeight: TouchTarget.comfortable,
+      alignItems: "center",
+      justifyContent: "center",
+      ...Shadows.soft,
+    },
+    retryButtonText: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.onPrimary,
+    },
+  });

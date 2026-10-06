@@ -19,13 +19,13 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import Constants from "expo-constants";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../src/constants/theme";
+import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
 import { t, useTranslation } from "../src/i18n";
 import { getFriendlyErrorMessage } from "../src/lib/getFriendlyErrorMessage";
 import { ScreenHeader, HeaderIconButton } from "../src/components/ScreenHeader";
@@ -56,6 +56,8 @@ interface SelectedFile {
  * Design: Amber Clarity system — warm surfaces, no hard borders, amber accents.
  */
 export default function BugReportScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -495,188 +497,189 @@ function getFileIcon(
   return "document-outline";
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  submitButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    minWidth: 80,
-    minHeight: TouchTarget.minimum,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "700",
-    color: Colors.onPrimary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  fieldContainer: {
-    marginBottom: Spacing.lg,
-  },
-  fieldLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.sm,
-  },
-  fieldHint: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-    marginBottom: Spacing.sm,
-  },
-  subjectInput: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    minHeight: TouchTarget.minimum,
-  },
-  descriptionInput: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    minHeight: 160,
-    lineHeight: Typography.body.lineHeight,
-  },
-  attachButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    minHeight: TouchTarget.minimum,
-  },
-  attachButtonText: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "500",
-    color: Colors.primary,
-  },
-  attachmentPreview: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    minHeight: TouchTarget.minimum,
-  },
-  attachmentInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    flex: 1,
-  },
-  attachmentTextContainer: {
-    flex: 1,
-  },
-  attachmentName: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-  },
-  attachmentSize: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-  removeFileButton: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.md,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-  },
-  progressBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.md,
-  },
-  progressText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-  // Success screen
-  successContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  successIconContainer: {
-    marginBottom: Spacing.lg,
-  },
-  successTitle: {
-    fontSize: Typography.display.fontSize,
-    fontWeight: Typography.display.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-    marginBottom: Spacing.md,
-  },
-  successMessage: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-    marginBottom: Spacing.lg,
-  },
-  doneButton: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    minHeight: TouchTarget.comfortable,
-    alignItems: "center",
-    justifyContent: "center",
-    ...Shadows.soft,
-  },
-  doneButtonText: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "700",
-    color: Colors.onPrimary,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    keyboardView: {
+      flex: 1,
+    },
+    submitButton: {
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.full,
+      minWidth: 80,
+      minHeight: TouchTarget.minimum,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    submitButtonDisabled: {
+      opacity: 0.5,
+    },
+    submitButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "700",
+      color: Colors.onPrimary,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.lg,
+      paddingBottom: Spacing.xxl,
+    },
+    fieldContainer: {
+      marginBottom: Spacing.lg,
+    },
+    fieldLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+      marginBottom: Spacing.sm,
+    },
+    fieldHint: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+      marginBottom: Spacing.sm,
+    },
+    subjectInput: {
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      minHeight: TouchTarget.minimum,
+    },
+    descriptionInput: {
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      minHeight: 160,
+      lineHeight: Typography.body.lineHeight,
+    },
+    attachButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      minHeight: TouchTarget.minimum,
+    },
+    attachButtonText: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "500",
+      color: Colors.primary,
+    },
+    attachmentPreview: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      minHeight: TouchTarget.minimum,
+    },
+    attachmentInfo: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      flex: 1,
+    },
+    attachmentTextContainer: {
+      flex: 1,
+    },
+    attachmentName: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+    },
+    attachmentSize: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+    removeFileButton: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    errorBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      backgroundColor: Colors.errorContainer,
+      borderRadius: BorderRadius.lg,
+      marginBottom: Spacing.md,
+    },
+    errorText: {
+      flex: 1,
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+    },
+    progressBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      marginBottom: Spacing.md,
+    },
+    progressText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+    // Success screen
+    successContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    successIconContainer: {
+      marginBottom: Spacing.lg,
+    },
+    successTitle: {
+      fontSize: Typography.display.fontSize,
+      fontWeight: Typography.display.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+      marginBottom: Spacing.md,
+    },
+    successMessage: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+      marginBottom: Spacing.lg,
+    },
+    doneButton: {
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.full,
+      minHeight: TouchTarget.comfortable,
+      alignItems: "center",
+      justifyContent: "center",
+      ...Shadows.soft,
+    },
+    doneButtonText: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      color: Colors.onPrimary,
+    },
+  });

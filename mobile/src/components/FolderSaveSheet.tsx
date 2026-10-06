@@ -31,12 +31,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  BorderRadius,
-  Colors,
-  Shadows,
-  Spacing,
-} from "../constants/theme";
+import { BorderRadius, Spacing, type Theme } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import { FolderPickerView } from "./FolderPickerView";
 import { ScreenHeader, HeaderIconButton } from "./ScreenHeader";
@@ -71,6 +67,8 @@ export function FolderSaveSheet({
   onFolderCreated,
   onSaved,
 }: FolderSaveSheetProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
 
   const [isSaving, setIsSaving] = useState(false);
@@ -230,41 +228,42 @@ export function FolderSaveSheet({
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(43, 45, 66, 0.35)",
-  },
-  // Tall on purpose: the picker is a browsable tree, not a three-item menu, and
-  // the sliver of the screen left above it is what says a sheet can be dismissed.
-  sheet: {
-    height: "94%",
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    paddingTop: Spacing.sm,
-    ...Shadows.soft,
-  },
-  handle: {
-    alignSelf: "center",
-    width: Spacing.xl,
-    height: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-    marginTop: Spacing.sm,
-  },
-  // Only the colour departs from the shared header's title.
-  headerTitle: {
-    color: Colors.primary,
-  },
-  headerAction: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      justifyContent: "flex-end",
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: Colors.scrim,
+    },
+    // Tall on purpose: the picker is a browsable tree, not a three-item menu, and
+    // the sliver of the screen left above it is what says a sheet can be dismissed.
+    sheet: {
+      height: "94%",
+      backgroundColor: Colors.surface,
+      borderTopLeftRadius: BorderRadius.xl,
+      borderTopRightRadius: BorderRadius.xl,
+      paddingTop: Spacing.sm,
+      ...Shadows.soft,
+    },
+    handle: {
+      alignSelf: "center",
+      width: Spacing.xl,
+      height: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      marginTop: Spacing.sm,
+    },
+    // Only the colour departs from the shared header's title.
+    headerTitle: {
+      color: Colors.primary,
+    },
+    headerAction: {
+      width: 40,
+      height: 40,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });

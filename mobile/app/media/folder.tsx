@@ -3,11 +3,15 @@ import { Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-nat
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
 import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeader";
 import { FolderPickerView } from "../../src/components/FolderPickerView";
@@ -33,6 +37,8 @@ import type { Folder } from "../../src/types/organization";
  * which writes it on the media.
  */
 export default function FolderScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -178,26 +184,27 @@ export default function FolderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-  },
-  // Only the colour departs from the shared header's title.
-  headerTitle: {
-    color: Colors.primary,
-  },
-  saveBtn: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-  },
-  saveBtnDisabled: {
-    opacity: 0.5,
-  },
-  saveBtnText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.surface,
+    },
+    // Only the colour departs from the shared header's title.
+    headerTitle: {
+      color: Colors.primary,
+    },
+    saveBtn: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.lg,
+    },
+    saveBtnDisabled: {
+      opacity: 0.5,
+    },
+    saveBtnText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.primary,
+    },
+  });

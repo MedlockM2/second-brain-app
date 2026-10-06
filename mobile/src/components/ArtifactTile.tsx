@@ -35,11 +35,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t, type TranslationKey } from "../i18n";
 import type { ArtifactStatus, ArtifactType } from "../types/media";
 
@@ -114,6 +115,8 @@ export function ArtifactTile({
   state,
   onGenerate,
 }: ArtifactTileProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const isInProgress =
     state.status === "queued" || state.status === "generating";
   const isFailed = state.status === "failed";
@@ -185,93 +188,96 @@ export function ArtifactTile({
   );
 }
 
-const styles = StyleSheet.create({
-  // A card on `surface` over the page background: the tiles are separated by a
-  // tonal shift and a gap, never by a rule ("No-Line rule").
-  tile: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    minHeight: TouchTarget.comfortable,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-  },
-  identity: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    flexShrink: 1,
-  },
-  labelColumn: {
-    flexShrink: 1,
-    gap: Spacing.xs,
-  },
-  label: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  action: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    // A card on `surface` over the page background: the tiles are separated by a
+    // tonal shift and a gap, never by a rule ("No-Line rule").
+    tile: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      minHeight: TouchTarget.comfortable,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+    },
+    identity: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      flexShrink: 1,
+    },
+    labelColumn: {
+      flexShrink: 1,
+      gap: Spacing.xs,
+    },
+    label: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    action: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
 
-  // States
-  progressContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  progressText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-  failedText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-  },
-  retryButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.errorContainer,
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-  },
-  retryText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.error,
-  },
-  // A note, not a state: it sits where the button was and must not read as
-  // something to tap, hence the muted colour and no container.
-  generatedText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-  generateButton: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primary,
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // The same press feedback every other button in the app gives (inbox digest
-  // card, artifact history row): the request behind this one can take seconds,
-  // so the finger must get an answer on the frame it lands.
-  generateButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  generateButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-});
+    // States
+    progressContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    progressText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+    failedText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+    },
+    retryButton: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.errorContainer,
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+    },
+    retryText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.error,
+    },
+    // A note, not a state: it sits where the button was and must not read as
+    // something to tap, hence the muted colour and no container.
+    generatedText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+    generateButton: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.primary,
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // The same press feedback every other button in the app gives (inbox digest
+    // card, artifact history row): the request behind this one can take seconds,
+    // so the finger must get an answer on the frame it lands.
+    generateButtonPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    // On the amber fill above, so `onPrimary` rather than `textMain` — the
+    // latter measures 1.5:1 on the dark amber.
+    generateButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.onPrimary,
+    },
+  });

@@ -10,12 +10,13 @@ import {
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { BugReportService } from "../services/bugReportService";
 import {
   getFriendlyErrorMessage,
@@ -66,6 +67,8 @@ export function SourceSupportRequestCard({
   mediaItemId,
   errorCode,
 }: SourceSupportRequestCardProps): React.JSX.Element | null {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const [state, setState] = useState<RequestState>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -158,74 +161,75 @@ export function SourceSupportRequestCard({
   );
 }
 
-const styles = StyleSheet.create({
-  // A tonal callout, not a bordered box: the surface shift is what separates it
-  // from the screen behind it ("No-Line rule").
-  card: {
-    alignSelf: "stretch",
-    gap: Spacing.xs,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainer,
-    // On top of the column's own gap: a second offer needs to read as separate
-    // from the screen's primary action rather than as its second half.
-    marginTop: Spacing.sm,
-  },
-  title: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  intro: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-    textAlign: "center",
-  },
-  // Lighter than the card it sits on, which is what makes it read as raised
-  // without a line around it. Not amber: "Refresh" right above already carries
-  // the screen's one primary action, and two amber buttons stacked read as a
-  // choice between equals.
-  action: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surface,
-    marginTop: Spacing.sm,
-  },
-  actionPressed: {
-    opacity: 0.7,
-  },
-  actionBusy: {
-    opacity: 0.6,
-  },
-  actionText: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  // Same height as the button it replaces, so the card does not resize under the
-  // reader's thumb when the request goes through.
-  confirmation: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-    marginTop: Spacing.sm,
-  },
-  confirmationText: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  error: {
-    ...Typography.small,
-    color: Colors.error,
-    textAlign: "center",
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    // A tonal callout, not a bordered box: the surface shift is what separates it
+    // from the screen behind it ("No-Line rule").
+    card: {
+      alignSelf: "stretch",
+      gap: Spacing.xs,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainer,
+      // On top of the column's own gap: a second offer needs to read as separate
+      // from the screen's primary action rather than as its second half.
+      marginTop: Spacing.sm,
+    },
+    title: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    intro: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+      textAlign: "center",
+    },
+    // Lighter than the card it sits on, which is what makes it read as raised
+    // without a line around it. Not amber: "Refresh" right above already carries
+    // the screen's one primary action, and two amber buttons stacked read as a
+    // choice between equals.
+    action: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+      paddingHorizontal: Spacing.lg,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.surface,
+      marginTop: Spacing.sm,
+    },
+    actionPressed: {
+      opacity: 0.7,
+    },
+    actionBusy: {
+      opacity: 0.6,
+    },
+    actionText: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    // Same height as the button it replaces, so the card does not resize under the
+    // reader's thumb when the request goes through.
+    confirmation: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+      marginTop: Spacing.sm,
+    },
+    confirmationText: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    error: {
+      ...Typography.small,
+      color: Colors.error,
+      textAlign: "center",
+    },
+  });

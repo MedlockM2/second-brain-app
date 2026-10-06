@@ -113,11 +113,15 @@ import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessag
 import { TAB_BAR_CLEARANCE } from "../../../src/constants/tabBar";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
 import type { Digest, DigestPeriod } from "../../../src/types/digest";
 
@@ -130,6 +134,7 @@ const MOUNT_RADIUS = 1;
 const DIGEST_CHOICE_HREF = "/(tabs)/digest";
 
 export default function DigestPeriodScreen(): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
   // Resolved-on-render copy: the screen has to redraw with the language.
   useTranslation();
 
@@ -159,6 +164,8 @@ function DigestCarousel({
 }: {
   period: DigestPeriod;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   const router = useRouter();
 
@@ -454,6 +461,8 @@ function DigestPage({
   onDeleted: (mediaItemId: string) => void;
   translationBudgets: TranslationBudgets;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { state, mediaData, fetchError, processingError, processingMessage } =
     useMediaDetailPolling(mediaItemId);
 
@@ -516,101 +525,102 @@ function DigestPage({
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
 
-  // Loading / error / empty
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  errorText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  retryButton: {
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-  },
-  retryButtonPressed: {
-    opacity: 0.9,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.onPrimary,
-  },
-  emptyTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  emptyHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-  },
+    // Loading / error / empty
+    centered: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.md,
+    },
+    errorText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    retryButton: {
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    retryButtonPressed: {
+      opacity: 0.9,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.onPrimary,
+    },
+    emptyTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    emptyHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+    },
 
-  // Pager
-  pagerContainer: {
-    flex: 1,
-    // The band the tab bar owns. See TAB_BAR_CLEARANCE.
-    paddingBottom: TAB_BAR_CLEARANCE,
-  },
-  // The band: on the page background, as the status bar above it is, so the two
-  // read as one strip the pages start under.
-  band: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    minHeight: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-  },
-  position: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textSubtle,
-  },
-  pager: {
-    flex: 1,
-  },
-  // Exactly one screen width, in every state of a page. See the gesture note at
-  // the top of the file: the page boundaries are `index * SCREEN_WIDTH` and
-  // nothing about mounting is allowed to move them.
-  page: {
-    width: SCREEN_WIDTH,
-  },
-  pageCentered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  pageStateTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  pageStateBody: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+    // Pager
+    pagerContainer: {
+      flex: 1,
+      // The band the tab bar owns. See TAB_BAR_CLEARANCE.
+      paddingBottom: TAB_BAR_CLEARANCE,
+    },
+    // The band: on the page background, as the status bar above it is, so the two
+    // read as one strip the pages start under.
+    band: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      minHeight: Spacing.xl,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+    },
+    position: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textSubtle,
+    },
+    pager: {
+      flex: 1,
+    },
+    // Exactly one screen width, in every state of a page. See the gesture note at
+    // the top of the file: the page boundaries are `index * SCREEN_WIDTH` and
+    // nothing about mounting is allowed to move them.
+    page: {
+      width: SCREEN_WIDTH,
+    },
+    pageCentered: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.md,
+    },
+    pageStateTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    pageStateBody: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

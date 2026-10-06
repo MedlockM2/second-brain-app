@@ -1,6 +1,6 @@
 import React from "react";
 import { Stack } from "expo-router";
-import { Colors } from "../../../src/constants/theme";
+import { useThemeColors } from "../../../src/contexts/ThemeContext";
 
 /**
  * The Digest tab: a choice of period, then the carousel of that period, pushed
@@ -22,6 +22,8 @@ export const unstable_settings = {
 };
 
 export default function DigestLayout(): React.JSX.Element {
+  const Colors = useThemeColors();
+
   return (
     <Stack
       screenOptions={{

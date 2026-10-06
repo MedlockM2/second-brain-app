@@ -93,16 +93,19 @@ import {
   TERMS_URL,
 } from "../src/constants/legal";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../src/constants/theme";
+import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
 import { t, useTranslation } from "../src/i18n";
 import { getFriendlyErrorMessage } from "../src/lib/getFriendlyErrorMessage";
 
 export default function PaywallScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -667,383 +670,384 @@ export default function PaywallScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingTop: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.sm,
-    alignItems: "center",
-  },
-  // Sits above the title's own line rather than beside it: "Choose Your Plan"
-  // at 32pt is ~280px wide on a 375pt screen, which reaches under a right-hand
-  // button placed on the same band.
-  closeButton: {
-    position: "absolute",
-    top: Spacing.sm,
-    // `end`, not `right`: an absolute `right` stays on the right in Arabic,
-    // where the close button belongs on the other side.
-    end: Spacing.lg,
-    minHeight: TouchTarget.minimum,
-    minWidth: TouchTarget.minimum,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeText: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textSubtle,
-  },
-  title: {
-    ...Typography.display,
-    color: Colors.textMain,
-    marginTop: Spacing.md,
-    textAlign: "center",
-    // Keeps the longer translations clear of the floating close button rather
-    // than relying on "~280px on a 375pt screen", which is an English number.
-    paddingHorizontal: TouchTarget.minimum,
-  },
-  tagline: {
-    ...Typography.label,
-    color: Colors.textMain,
-    marginTop: Spacing.xs,
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  subtitle: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-    marginTop: Spacing.xs,
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  loader: {
-    marginTop: Spacing.xxl,
-  },
-  errorBox: {
-    marginTop: Spacing.xl,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-  },
-  errorText: {
-    ...Typography.body,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  retryButton: {
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainer,
-  },
-  retryButtonText: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  // A degraded state, not a failure: the plans below are real and complete, only
-  // the prices are missing. Neutral surface rather than the amber used for a
-  // limit the user has hit, which is about them and not about the store.
-  //
-  // Compact on purpose. A centred block with a full-width button underneath cost
-  // ~180pt and pushed the first card to 549pt down a 852pt screen — this notice
-  // was undoing the very thing the screen was rearranged to fix. Icon and text on
-  // one row, retry as a link rather than a button, roughly half the height.
-  noticeBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  noticeBody: {
-    flex: 1,
-  },
-  noticeText: {
-    ...Typography.small,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  noticeRetry: {
-    minHeight: 40,
-    justifyContent: "center",
-  },
-  noticeRetryText: {
-    ...Typography.small,
-    fontWeight: "600",
-    color: Colors.textMain,
-    textDecorationLine: "underline",
-  },
-  // The reason the user is here, in the app's own alert tone rather than an
-  // error red: nothing has gone wrong, a limit was reached.
-  reasonBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    backgroundColor: Colors.highlight,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  reasonText: {
-    ...Typography.small,
-    flex: 1,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  trialNote: {
-    ...Typography.small,
-    color: Colors.textMain,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.sm,
-    lineHeight: 18,
-  },
-  selectorLabel: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-    marginTop: Spacing.lg,
-  },
-  recommendationText: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-    marginTop: Spacing.xs,
-    lineHeight: 18,
-  },
-  // A plan card carries a 2px border in both states: `surface` on `background`
-  // is a 1.01:1 step, so without one the three most important controls on the
-  // screen had no edge at all while the benefits block below them had a shadow.
-  // The width never changes between states, only the colour, so selecting a card
-  // cannot shift the layout by a pixel.
-  tierCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderWidth: 2,
-    borderColor: Colors.outlineVariant,
-    borderRadius: BorderRadius.xl,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
-    minHeight: TouchTarget.comfortable,
-  },
-  tierCardSelected: {
-    backgroundColor: Colors.highlight,
-    borderColor: Colors.textMain,
-  },
-  tierRadioColumn: {
-    justifyContent: "center",
-  },
-  tierBody: {
-    flex: 1,
-  },
-  tierTitleRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: Spacing.sm,
-  },
-  // The name is the label of the row, not its headline: it says "Mix", which
-  // tells a newcomer nothing. The allowance and the price are the headline.
-  tierName: {
-    // Yields to the price rather than colliding with it: the price is the
-    // number the user came for, and it is the one that must stay whole.
-    flexShrink: 1,
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  tierPrice: {
-    flexShrink: 0,
-    ...Typography.headline,
-    fontWeight: "700",
-    color: Colors.textMain,
-    // End of the line, not "right": `textAlign` has no logical value in React
-    // Native, so the side is read off the active direction instead.
-    textAlign: I18nManager.isRTL ? "left" : "right",
-  },
-  tierPricePeriod: {
-    ...Typography.small,
-    fontWeight: "500",
-    color: Colors.textSubtle,
-  },
-  tierAllowance: {
-    ...Typography.headline,
-    color: Colors.textMain,
-    marginTop: 2,
-  },
-  tierMeta: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-    marginTop: Spacing.xs,
-    lineHeight: 18,
-  },
-  // Its own line rather than beside the name: "RECOMMENDED FOR YOU" next to a
-  // plan name and a price does not survive a 375pt screen.
-  tierBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    marginBottom: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  tierBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    color: Colors.textMain,
-  },
-  // The two evidence blocks below the cards. `surface` on `background` with no
-  // stroke and no shadow: they are read, not floated, and the only element on
-  // this screen entitled to a shadow is the CTA. Separation comes from the tonal
-  // step and from the gap, per the No-Line rule.
-  blockCard: {
-    marginTop: Spacing.lg,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surface,
-  },
-  // `small`, not `label`: uppercase plus letter-spacing is what overflows first,
-  // and the German headings here are the longest of the eleven locales.
-  blockHeading: {
-    ...Typography.small,
-    fontWeight: "700",
-    color: Colors.textMain,
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-    marginBottom: Spacing.sm,
-  },
-  blockSubheading: {
-    marginTop: Spacing.md,
-  },
-  // Wraps rather than scrolls: a horizontal strip hides its own tail, and the
-  // whole point of the block is that the list is complete at a glance.
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  chipText: {
-    ...Typography.label,
-    color: Colors.textMain,
-  },
-  // Label and value on one row, each row its own tonal block. No rule between
-  // them and no dotted leader: a run of separator glyphs reorders under RTL, and
-  // a 1px line across the width is what the design system rules out.
-  costRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    marginTop: Spacing.xs,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  costLabel: {
-    ...Typography.small,
-    flex: 1,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  // Never shrinks, and never truncated: the value *is* the row. A long
-  // conversion wraps inside its own column instead of losing its figure.
-  costValue: {
-    ...Typography.small,
-    flexShrink: 0,
-    maxWidth: "45%",
-    fontWeight: "600",
-    color: Colors.textMain,
-    lineHeight: 18,
-    textAlign: I18nManager.isRTL ? "left" : "right",
-  },
-  legalBlock: {
-    marginTop: Spacing.lg,
-  },
-  legalText: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-    textAlign: "center",
-    paddingHorizontal: Spacing.md,
-    lineHeight: 18,
-  },
-  legalLinks: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-  },
-  legalLinkButton: {
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xs,
-  },
-  legalLinkText: {
-    ...Typography.small,
-    fontWeight: "600",
-    color: Colors.textSubtle,
-    textDecorationLine: "underline",
-  },
-  legalLinkSeparator: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-  },
-  // Sits on the background rather than floating: the design system asks for
-  // tonal separation over strokes, and the button's own fill is the separation.
-  footer: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
-    backgroundColor: Colors.background,
-  },
-  purchaseButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.lg,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: TouchTarget.comfortable,
-  },
-  purchaseButtonDisabled: {
-    opacity: 0.5,
-  },
-  purchaseButtonText: {
-    ...Typography.headline,
-    color: Colors.onPrimary,
-    fontWeight: "700",
-  },
-  footerNote: {
-    ...Typography.small,
-    color: Colors.textSubtle,
-    textAlign: "center",
-    marginTop: Spacing.sm,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    header: {
+      paddingTop: Spacing.xl,
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.sm,
+      alignItems: "center",
+    },
+    // Sits above the title's own line rather than beside it: "Choose Your Plan"
+    // at 32pt is ~280px wide on a 375pt screen, which reaches under a right-hand
+    // button placed on the same band.
+    closeButton: {
+      position: "absolute",
+      top: Spacing.sm,
+      // `end`, not `right`: an absolute `right` stays on the right in Arabic,
+      // where the close button belongs on the other side.
+      end: Spacing.lg,
+      minHeight: TouchTarget.minimum,
+      minWidth: TouchTarget.minimum,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    closeText: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textSubtle,
+    },
+    title: {
+      ...Typography.display,
+      color: Colors.textMain,
+      marginTop: Spacing.md,
+      textAlign: "center",
+      // Keeps the longer translations clear of the floating close button rather
+      // than relying on "~280px on a 375pt screen", which is an English number.
+      paddingHorizontal: TouchTarget.minimum,
+    },
+    tagline: {
+      ...Typography.label,
+      color: Colors.textMain,
+      marginTop: Spacing.xs,
+      textAlign: "center",
+      lineHeight: 20,
+    },
+    subtitle: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+      marginTop: Spacing.xs,
+      textAlign: "center",
+      lineHeight: 18,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.xxl,
+    },
+    loader: {
+      marginTop: Spacing.xxl,
+    },
+    errorBox: {
+      marginTop: Spacing.xl,
+      padding: Spacing.lg,
+      borderRadius: BorderRadius.xl,
+      backgroundColor: Colors.surface,
+      alignItems: "center",
+    },
+    errorText: {
+      ...Typography.body,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    retryButton: {
+      marginTop: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      alignItems: "center",
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainer,
+    },
+    retryButtonText: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    // A degraded state, not a failure: the plans below are real and complete, only
+    // the prices are missing. Neutral surface rather than the amber used for a
+    // limit the user has hit, which is about them and not about the store.
+    //
+    // Compact on purpose. A centred block with a full-width button underneath cost
+    // ~180pt and pushed the first card to 549pt down a 852pt screen — this notice
+    // was undoing the very thing the screen was rearranged to fix. Icon and text on
+    // one row, retry as a link rather than a button, roughly half the height.
+    noticeBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      marginTop: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    noticeBody: {
+      flex: 1,
+    },
+    noticeText: {
+      ...Typography.small,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    noticeRetry: {
+      minHeight: 40,
+      justifyContent: "center",
+    },
+    noticeRetryText: {
+      ...Typography.small,
+      fontWeight: "600",
+      color: Colors.textMain,
+      textDecorationLine: "underline",
+    },
+    // The reason the user is here, in the app's own alert tone rather than an
+    // error red: nothing has gone wrong, a limit was reached.
+    reasonBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      backgroundColor: Colors.highlight,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      marginTop: Spacing.md,
+    },
+    reasonText: {
+      ...Typography.small,
+      flex: 1,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    trialNote: {
+      ...Typography.small,
+      color: Colors.textMain,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      marginTop: Spacing.sm,
+      lineHeight: 18,
+    },
+    selectorLabel: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+      marginTop: Spacing.lg,
+    },
+    recommendationText: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+      marginTop: Spacing.xs,
+      lineHeight: 18,
+    },
+    // A plan card carries a 2px border in both states: `surface` on `background`
+    // is a 1.01:1 step, so without one the three most important controls on the
+    // screen had no edge at all while the benefits block below them had a shadow.
+    // The width never changes between states, only the colour, so selecting a card
+    // cannot shift the layout by a pixel.
+    tierCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.surface,
+      borderWidth: 2,
+      borderColor: Colors.outlineVariant,
+      borderRadius: BorderRadius.xl,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      marginTop: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
+    },
+    tierCardSelected: {
+      backgroundColor: Colors.highlight,
+      borderColor: Colors.textMain,
+    },
+    tierRadioColumn: {
+      justifyContent: "center",
+    },
+    tierBody: {
+      flex: 1,
+    },
+    tierTitleRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
+    },
+    // The name is the label of the row, not its headline: it says "Mix", which
+    // tells a newcomer nothing. The allowance and the price are the headline.
+    tierName: {
+      // Yields to the price rather than colliding with it: the price is the
+      // number the user came for, and it is the one that must stay whole.
+      flexShrink: 1,
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    tierPrice: {
+      flexShrink: 0,
+      ...Typography.headline,
+      fontWeight: "700",
+      color: Colors.textMain,
+      // End of the line, not "right": `textAlign` has no logical value in React
+      // Native, so the side is read off the active direction instead.
+      textAlign: I18nManager.isRTL ? "left" : "right",
+    },
+    tierPricePeriod: {
+      ...Typography.small,
+      fontWeight: "500",
+      color: Colors.textSubtle,
+    },
+    tierAllowance: {
+      ...Typography.headline,
+      color: Colors.textMain,
+      marginTop: 2,
+    },
+    tierMeta: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+      marginTop: Spacing.xs,
+      lineHeight: 18,
+    },
+    // Its own line rather than beside the name: "RECOMMENDED FOR YOU" next to a
+    // plan name and a price does not survive a 375pt screen.
+    tierBadge: {
+      alignSelf: "flex-start",
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      marginBottom: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    tierBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 0.5,
+      color: Colors.textMain,
+    },
+    // The two evidence blocks below the cards. `surface` on `background` with no
+    // stroke and no shadow: they are read, not floated, and the only element on
+    // this screen entitled to a shadow is the CTA. Separation comes from the tonal
+    // step and from the gap, per the No-Line rule.
+    blockCard: {
+      marginTop: Spacing.lg,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.xl,
+      backgroundColor: Colors.surface,
+    },
+    // `small`, not `label`: uppercase plus letter-spacing is what overflows first,
+    // and the German headings here are the longest of the eleven locales.
+    blockHeading: {
+      ...Typography.small,
+      fontWeight: "700",
+      color: Colors.textMain,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+      marginBottom: Spacing.sm,
+    },
+    blockSubheading: {
+      marginTop: Spacing.md,
+    },
+    // Wraps rather than scrolls: a horizontal strip hides its own tail, and the
+    // whole point of the block is that the list is complete at a glance.
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.sm,
+    },
+    chip: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    chipText: {
+      ...Typography.label,
+      color: Colors.textMain,
+    },
+    // Label and value on one row, each row its own tonal block. No rule between
+    // them and no dotted leader: a run of separator glyphs reorders under RTL, and
+    // a 1px line across the width is what the design system rules out.
+    costRow: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.sm,
+      marginTop: Spacing.xs,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    costLabel: {
+      ...Typography.small,
+      flex: 1,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    // Never shrinks, and never truncated: the value *is* the row. A long
+    // conversion wraps inside its own column instead of losing its figure.
+    costValue: {
+      ...Typography.small,
+      flexShrink: 0,
+      maxWidth: "45%",
+      fontWeight: "600",
+      color: Colors.textMain,
+      lineHeight: 18,
+      textAlign: I18nManager.isRTL ? "left" : "right",
+    },
+    legalBlock: {
+      marginTop: Spacing.lg,
+    },
+    legalText: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+      textAlign: "center",
+      paddingHorizontal: Spacing.md,
+      lineHeight: 18,
+    },
+    legalLinks: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+    },
+    legalLinkButton: {
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xs,
+    },
+    legalLinkText: {
+      ...Typography.small,
+      fontWeight: "600",
+      color: Colors.textSubtle,
+      textDecorationLine: "underline",
+    },
+    legalLinkSeparator: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+    },
+    // Sits on the background rather than floating: the design system asks for
+    // tonal separation over strokes, and the button's own fill is the separation.
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.md,
+      backgroundColor: Colors.background,
+    },
+    purchaseButton: {
+      backgroundColor: Colors.primary,
+      borderRadius: BorderRadius.lg,
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: TouchTarget.comfortable,
+    },
+    purchaseButtonDisabled: {
+      opacity: 0.5,
+    },
+    purchaseButtonText: {
+      ...Typography.headline,
+      color: Colors.onPrimary,
+      fontWeight: "700",
+    },
+    footerNote: {
+      ...Typography.small,
+      color: Colors.textSubtle,
+      textAlign: "center",
+      marginTop: Spacing.sm,
+    },
+  });
