@@ -467,6 +467,7 @@ export const fr: Catalog = {
   "search.placeholder": "Rechercher dans votre bibliothèque…",
   "search.clearA11y": "Effacer la recherche",
   "search.folders": "Dossiers",
+  "search.foldersToggleHint": "Affiche ou masque vos dossiers",
   "search.allMedia": "Tous les médias",
   "search.noFolders":
     "Aucun dossier pour l'instant. Classez vos médias en dossiers au moment de les enregistrer.",

@@ -359,6 +359,7 @@ export const zh: Catalog = {
   "search.placeholder": "搜索你的资料库…",
   "search.clearA11y": "清除搜索内容",
   "search.folders": "文件夹",
+  "search.foldersToggleHint": "显示或隐藏你的文件夹",
   "search.allMedia": "全部媒体",
   "search.noFolders": "还没有文件夹。保存媒体时把它们整理进文件夹吧。",
   "search.openFolderA11y": "打开文件夹 {name}",

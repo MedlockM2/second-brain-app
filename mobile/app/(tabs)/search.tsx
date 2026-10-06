@@ -6,6 +6,7 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  I18nManager,
   Pressable,
   RefreshControl,
   type StyleProp,
@@ -48,6 +49,7 @@ import { RenameDialog } from "../../src/components/RenameDialog";
 import { GlassSurface } from "../../src/components/GlassSurface";
 import { useMediaActions } from "../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../src/hooks/useFolderActions";
+import { useFoldersSectionExpanded } from "../../src/hooks/useFoldersSectionExpanded";
 import {
   Colors,
   Typography,
@@ -182,6 +184,10 @@ export default function SearchScreen() {
   const [mediaLoading, setMediaLoading] = useState(true);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // One fold for both bodies: they draw the same `Folders` heading, so a section
+  // the user folded stays folded whether something is typed or not.
+  const foldersSection = useFoldersSectionExpanded();
 
   // Debounce the search query
   const debouncedQuery = useDebounce(query, 300);
@@ -532,6 +538,8 @@ export default function SearchScreen() {
             folders={sortedFolders}
             foldersLoading={foldersLoading}
             foldersError={foldersError}
+            foldersExpanded={foldersSection.expanded}
+            onToggleFolders={foldersSection.toggle}
             onRetryFolders={handleRetryFolders}
             onOpenFolder={handleOpenFolder}
             onLongPressFolder={folderActions.open}
@@ -550,6 +558,8 @@ export default function SearchScreen() {
             folders={matchingFolders}
             foldersLoading={foldersLoading}
             foldersError={foldersError}
+            foldersExpanded={foldersSection.expanded}
+            onToggleFolders={foldersSection.toggle}
             onRetryFolders={handleRetryFolders}
             onOpenFolder={handleOpenFolder}
             onLongPressFolder={folderActions.open}
@@ -646,6 +656,9 @@ interface LibraryStateProps {
   folders: FolderNode[];
   foldersLoading: boolean;
   foldersError: string | null;
+  /** Whether the grid is drawn under the `Folders` heading or folded away. */
+  foldersExpanded: boolean;
+  onToggleFolders: () => void;
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
   /** Opens the tile's actions menu. Ignored on the default folder's tile. */
@@ -679,13 +692,16 @@ interface LibraryStateProps {
  * would be a second bar of chrome directly under the floating search pill,
  * spending the top of the screen on navigation on a screen whose whole job is to
  * show what you saved. The cost of this choice is that a user with many
- * folders scrolls past them to reach the media — acceptable, because the
- * grid is three tiles wide and the list is what the scroll is for.
+ * folders scrolls past them to reach the media — which is what the chevron of
+ * the `Folders` heading answers: folded, the grid leaves and `All media` comes
+ * up under the heading.
  */
 function LibraryState({
   folders,
   foldersLoading,
   foldersError,
+  foldersExpanded,
+  onToggleFolders,
   onRetryFolders,
   onOpenFolder,
   onLongPressFolder,
@@ -749,6 +765,8 @@ function LibraryState({
           folders={folders}
           foldersLoading={foldersLoading}
           foldersError={foldersError}
+          foldersExpanded={foldersExpanded}
+          onToggleFolders={onToggleFolders}
           onRetryFolders={onRetryFolders}
           onOpenFolder={onOpenFolder}
           onLongPressFolder={onLongPressFolder}
@@ -776,6 +794,8 @@ function LibraryHeader({
   folders,
   foldersLoading,
   foldersError,
+  foldersExpanded,
+  onToggleFolders,
   onRetryFolders,
   onOpenFolder,
   onLongPressFolder,
@@ -784,6 +804,8 @@ function LibraryHeader({
   folders: FolderNode[];
   foldersLoading: boolean;
   foldersError: string | null;
+  foldersExpanded: boolean;
+  onToggleFolders: () => void;
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
   onLongPressFolder: (
@@ -794,9 +816,15 @@ function LibraryHeader({
 }) {
   return (
     <View style={styles.listHeader}>
-      <Text style={styles.sectionTitle}>{t("search.folders")}</Text>
+      <FoldersSectionToggle
+        expanded={foldersExpanded}
+        onToggle={onToggleFolders}
+      />
 
-      {foldersLoading ? (
+      {/* Folded, everything the heading stands over leaves with the grid — the
+          spinner, the error card and the empty hint alike: they are all the
+          folders section, and folding it is asking not to see it. */}
+      {!foldersExpanded ? null : foldersLoading ? (
         <View style={styles.sectionLoadingRow}>
           <ActivityIndicator color={Colors.primary} />
         </View>
@@ -841,6 +869,9 @@ interface SearchResultsStateProps {
   folders: FolderNode[];
   foldersLoading: boolean;
   foldersError: string | null;
+  /** The same fold as the library's: one heading, one choice. */
+  foldersExpanded: boolean;
+  onToggleFolders: () => void;
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
   /** Opens the tile's actions menu. Ignored on the default folder's tile. */
@@ -882,6 +913,8 @@ function SearchResultsState({
   folders,
   foldersLoading,
   foldersError,
+  foldersExpanded,
+  onToggleFolders,
   onRetryFolders,
   onOpenFolder,
   onLongPressFolder,
@@ -946,6 +979,8 @@ function SearchResultsState({
           folders={folders}
           foldersLoading={foldersLoading}
           foldersError={foldersError}
+          foldersExpanded={foldersExpanded}
+          onToggleFolders={onToggleFolders}
           onRetryFolders={onRetryFolders}
           onOpenFolder={onOpenFolder}
           onLongPressFolder={onLongPressFolder}
@@ -967,6 +1002,8 @@ function SearchResultsHeader({
   folders,
   foldersLoading,
   foldersError,
+  foldersExpanded,
+  onToggleFolders,
   onRetryFolders,
   onOpenFolder,
   onLongPressFolder,
@@ -976,6 +1013,8 @@ function SearchResultsHeader({
   folders: FolderNode[];
   foldersLoading: boolean;
   foldersError: string | null;
+  foldersExpanded: boolean;
+  onToggleFolders: () => void;
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
   onLongPressFolder: (
@@ -988,11 +1027,16 @@ function SearchResultsHeader({
 }) {
   return (
     <View style={styles.listHeader}>
+      {/* The heading still only shows when there is a folders section to show:
+          a query no folder matches draws no heading, so no chevron either. */}
       {showFolders ? (
         <>
-          <Text style={styles.sectionTitle}>{t("search.folders")}</Text>
+          <FoldersSectionToggle
+            expanded={foldersExpanded}
+            onToggle={onToggleFolders}
+          />
 
-          {foldersLoading ? (
+          {!foldersExpanded ? null : foldersLoading ? (
             <View style={styles.sectionLoadingRow}>
               <ActivityIndicator color={Colors.primary} />
             </View>
@@ -1028,6 +1072,70 @@ function SearchResultsHeader({
         ) : null}
       </View>
     </View>
+  );
+}
+
+/**
+ * The chevron of a folded section points along the line, towards where the
+ * heading's text runs: the forward glyph in a left-to-right layout, the back one
+ * in a right-to-left one. React Native lays out RTL but does not mirror a glyph,
+ * so the choice is made here. Read once at module scope, as `DigestCoverStack`
+ * reads it: the flag only changes on a bundle reload.
+ */
+const FOLDED_CHEVRON = I18nManager.isRTL ? "chevron-back" : "chevron-forward";
+
+/**
+ * The `Folders` heading, and the switch that folds the grid under it.
+ *
+ * The heading and its chevron are one target, as in Raindrop (the reference the
+ * tester gave): the word alone is a target the eye already aims at, the chevron
+ * alone would be a 20 pt glyph. `>` folded, `v` unfolded — the chevron says what
+ * the section is, not what a tap would do.
+ *
+ * The target hugs its content rather than spanning the row: with the search
+ * field focused, a tap on the blank space beside it is what closes the keyboard
+ * (`keyboardShouldPersistTaps="handled"`), and a row-wide target would turn
+ * that tap into a fold instead.
+ *
+ * The accessible name is the visible heading, so Voice Control's "tap Folders"
+ * finds it, and the state is carried by `expanded` rather than by the label:
+ * VoiceOver and TalkBack both announce it, which a label that changed with the
+ * state would only repeat.
+ */
+function FoldersSectionToggle({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <Pressable
+      testID="search-folders-toggle"
+      style={({ pressed }) => [
+        styles.foldersToggle,
+        !expanded && styles.foldersToggleFolded,
+        pressed && styles.foldersTogglePressed,
+      ]}
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded }}
+      accessibilityLabel={t("search.folders")}
+      accessibilityHint={t("search.foldersToggleHint")}
+    >
+      <Text style={[styles.sectionTitle, styles.foldersToggleTitle]}>
+        {t("search.folders")}
+      </Text>
+      {/* `textSubtle`, not the `textMuted` of the row chevrons elsewhere: those
+          decorate a row whose text already says where it leads, this one is the
+          only thing on screen that shows the state, and `textMuted` falls under
+          the 3:1 a state indicator needs on `background`. */}
+      <Ionicons
+        name={expanded ? "chevron-down" : FOLDED_CHEVRON}
+        size={20}
+        color={Colors.textSubtle}
+      />
+    </Pressable>
   );
 }
 
@@ -1275,6 +1383,31 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: Colors.textMain,
     marginBottom: Spacing.md,
+  },
+  // The `Folders` heading as a target: the title and its chevron on one line, at
+  // least a touch target tall. The title sits centred in that height, whose slack
+  // already spaces it from what follows, so the title drops its own bottom
+  // margin and the row keeps only `xs`: half the slack plus `xs` comes back to
+  // about the `md` the bare heading used to leave above the grid.
+  foldersToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: Spacing.xs,
+    minHeight: TouchTarget.minimum,
+    marginBottom: Spacing.xs,
+  },
+  // Folded, `All media` comes up right under the heading, with the room of one
+  // heading after another rather than the tighter gap a heading keeps above its
+  // own content.
+  foldersToggleFolded: {
+    marginBottom: Spacing.md,
+  },
+  foldersToggleTitle: {
+    marginBottom: 0,
+  },
+  foldersTogglePressed: {
+    opacity: 0.75,
   },
   sectionHint: {
     fontSize: Typography.body.fontSize,

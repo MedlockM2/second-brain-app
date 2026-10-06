@@ -376,6 +376,7 @@ export const nl: Catalog = {
   "search.placeholder": "Zoek in je bibliotheek…",
   "search.clearA11y": "Zoekopdracht wissen",
   "search.folders": "Mappen",
+  "search.foldersToggleHint": "Toont of verbergt je mappen",
   "search.allMedia": "Alle items",
   "search.noFolders": "Nog geen mappen. Orden items in mappen wanneer je ze opslaat.",
   "search.openFolderA11y": "Map {name} openen",

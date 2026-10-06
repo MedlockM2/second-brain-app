@@ -375,6 +375,7 @@ export const it: Catalog = {
   "search.placeholder": "Cerca nella tua libreria…",
   "search.clearA11y": "Cancella la ricerca",
   "search.folders": "Cartelle",
+  "search.foldersToggleHint": "Mostra o nasconde le tue cartelle",
   "search.allMedia": "Tutti i contenuti",
   "search.noFolders": "Ancora nessuna cartella. Organizza i contenuti in cartelle quando li salvi.",
   "search.openFolderA11y": "Apri la cartella {name}",

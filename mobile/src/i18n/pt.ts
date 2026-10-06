@@ -376,6 +376,7 @@ export const pt: Catalog = {
   "search.placeholder": "Procure na sua biblioteca…",
   "search.clearA11y": "Limpar a pesquisa",
   "search.folders": "Pastas",
+  "search.foldersToggleHint": "Mostra ou oculta as suas pastas",
   "search.allMedia": "Todos os conteúdos",
   "search.noFolders": "Ainda não há pastas. Organize os conteúdos em pastas quando os guardar.",
   "search.openFolderA11y": "Abrir a pasta {name}",

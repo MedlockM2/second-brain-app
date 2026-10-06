@@ -370,6 +370,7 @@ export const ar: Catalog = {
   "search.placeholder": "ابحث في مكتبتك…",
   "search.clearA11y": "مسح نص البحث",
   "search.folders": "المجلدات",
+  "search.foldersToggleHint": "يعرض مجلداتك أو يخفيها",
   "search.allMedia": "كل العناصر",
   "search.noFolders": "لا توجد مجلدات بعد. نظّم عناصرك في مجلدات عند حفظها.",
   "search.openFolderA11y": "فتح المجلد {name}",
