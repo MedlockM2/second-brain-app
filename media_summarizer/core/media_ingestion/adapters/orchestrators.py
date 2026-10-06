@@ -66,7 +66,6 @@ def _shared_text_transcription_metadata(raw_text: str) -> Dict[str, Any]:
         "language": "unknown",
         # Paragraph count, comparable with the Deepgram path (task-231 §13.1).
         "segments_count": count_paragraphs(raw_text),
-        "duration_seconds": 0,
         "transcribed_at": _now_iso(),
     }
 
@@ -240,8 +239,9 @@ def _audio_seconds_billed_by(job: Any) -> Optional[int]:
     document, a video with native subtitles, or a job that never reached a
     terminal transcription. 0 means it was, but its length is unknown.
 
-    Reads `audio_duration_seconds` and never `duration_seconds`: in the Deepgram
-    metadata the latter is how long the API call took, not how long the audio is.
+    Reads `audio_duration_seconds`, the length of the audio Deepgram processed --
+    the same key `durable_media_service.media_duration_seconds` displays. How long
+    the call took is not in this metadata (it is `job.transcription_duration`).
     """
     transcription = getattr(job, "transcription_metadata", None) or {}
     provider = str(transcription.get("provider") or "").strip().lower()
@@ -627,13 +627,11 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     resolved.raw_text,
                     source=resolved.source_platform.value,
                 )
-                duration_seconds = resolved.metadata.get("duration_seconds", 0)
                 transcription_metadata: Dict[str, Any] = {
                     "provider": "apify_native",
                     "language": "unknown",
                     # Paragraph count, comparable with the Deepgram path (task-231 §13.1).
                     "segments_count": count_paragraphs(transcript_text),
-                    "duration_seconds": duration_seconds or 0,
                     "transcribed_at": _now_iso(),
                     "transcript_source": resolved.metadata.get("transcript_source", "apify_native"),
                 }
@@ -1154,7 +1152,6 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             # Paragraph count, comparable across sources (task-231 §13.1).
             "segments_count": extraction_metadata.get("paragraph_count")
             or count_paragraphs(transcript_text),
-            "duration_seconds": 0,
             "source_url": source_url,
             "transcribed_at": extraction_metadata.get("fetched_at") or _now_iso(),
         }

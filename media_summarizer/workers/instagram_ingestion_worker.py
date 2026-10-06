@@ -573,9 +573,8 @@ async def _complete_image_post(
         "images_parsed": parsed.images_parsed,
         # Paragraph count, comparable across sources (task-231 §13.1).
         "segments_count": count_paragraphs(transcript_text),
-        # A photo post has no duration, and the value is what the app reads to
-        # decide it has nothing to play.
-        "duration_seconds": 0,
+        # No duration key: a photo post has none, and its absence is what makes
+        # the API return no duration and the app show none.
         "source_url": normalized_url,
     }
 

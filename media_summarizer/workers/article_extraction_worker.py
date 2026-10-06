@@ -153,7 +153,6 @@ async def _publish_success_event(
                 "model_used": "trafilatura",
                 "language": metadata.get("language"),
                 "segments_count": metadata.get("paragraph_count"),
-                "duration_seconds": 0,
                 "source_url": metadata.get("final_url") or metadata.get("requested_url"),
                 "extracted_at": metadata.get("fetched_at"),
             },
@@ -247,7 +246,6 @@ async def process_article_message(message_body: Dict[str, Any]) -> Dict[str, Any
         "language": article.language,
         # Paragraph count, comparable across sources (task-231 s13.1).
         "segments_count": article.paragraph_count,
-        "duration_seconds": 0,
         "source_url": article.final_url or article.requested_url,
         "transcribed_at": article.fetched_at,
     }
