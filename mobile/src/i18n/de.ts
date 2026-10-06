@@ -422,7 +422,6 @@ export const de: Catalog = {
   "deleteAccount.confirmAction": "Endgültig löschen",
   "deleteAccount.failed":
     "Dein Konto konnte nicht gelöscht werden. Bitte versuche es erneut.",
-  "account.title": "Konto",
   "account.notSet": "Nicht gesetzt",
   "account.subscription.manage": "Tarif wechseln",
   "account.subscription.manageHint": "Tarife vergleichen und wechseln",
@@ -476,6 +475,7 @@ export const de: Catalog = {
   "tabs.home": "Start",
   "tabs.search": "Suche",
   "tabs.digest": "Digest",
+  "tabs.account": "Konto",
   "home.loading": "Dein Posteingang wird geladen …",
   "home.retryA11y": "Posteingang erneut laden",
   "home.continueLearning": "Weiterlernen",

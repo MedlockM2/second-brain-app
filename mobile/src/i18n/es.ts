@@ -414,7 +414,6 @@ export const es: Catalog = {
   "deleteAccount.confirmAction": "Eliminar para siempre",
   "deleteAccount.failed":
     "No se ha podido eliminar tu cuenta. Inténtalo de nuevo.",
-  "account.title": "Cuenta",
   "account.notSet": "Sin definir",
   "account.subscription.manage": "Cambiar de plan",
   "account.subscription.manageHint": "Compara los planes y cambia",
@@ -468,6 +467,7 @@ export const es: Catalog = {
   "tabs.home": "Inicio",
   "tabs.search": "Buscar",
   "tabs.digest": "Digest",
+  "tabs.account": "Cuenta",
   "home.loading": "Cargando tu bandeja…",
   "home.retryA11y": "Reintentar la carga de la bandeja",
   "home.continueLearning": "Seguir aprendiendo",

@@ -31,10 +31,13 @@ import {
 } from "../../src/constants/theme";
 
 /**
- * Account screen - skeleton following the design mockup.
- * Shows user info, the subscription state, the paywall entry point and the
- * logout action. Full implementation (stats, integrations, appearance) deferred
- * to later tasks.
+ * Account screen: the account's e-mail address at the head of the screen, then
+ * the subscription state, the paywall entry point and the settings menu.
+ *
+ * There is no screen title and no avatar. The tab bar already names the tab,
+ * and the app has no profile picture to show, so a title and a placeholder
+ * silhouette were taking up the top of the screen without telling the user
+ * anything (TestFlight feedback, build 10).
  */
 export default function AccountScreen() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -161,33 +164,27 @@ export default function AccountScreen() {
   // untappable without any visible sign of it, so the whole body scrolls.
   return (
     <SafeAreaView testID="account-screen" style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{t("account.title")}</Text>
-      </View>
-
-      {/* `contentInsetAdjustmentBehavior` is set by hand, not left to
-          `NativeTabs`. The tab bar insets the screen's scroll view itself, but
-          only the one it can find: react-native-screens walks the first-subview
-          chain down from the screen
-          (`RNSScrollViewFinder.findScrollViewInFirstDescendantChainFrom`) and
-          flips the first `UIScrollView` it meets from `never` to `automatic`
-          (`RNSScrollViewHelper`). The header above is the screen root's first
-          child, so that walk dead-ends in a `Text` and this list would never be
-          inset for the floating bar. `automatic` is the very value the native
-          helper would have set, so the last row clears the glass. */}
+      {/* This has to stay the first child of the screen root. Under
+          `NativeTabs`, the tab bar finds the scroll view it insets for the
+          floating bar (and attaches the scroll-edge effect to) by walking the
+          first-subview chain down from the screen
+          (`RNSScrollViewFinder.findScrollViewInFirstDescendantChainFrom` in
+          react-native-screens). Anything inserted above it, a fixed header
+          included, cuts that walk short, and the last rows end up under the
+          glass. */}
       <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={40} color={Colors.textMuted} />
-          </View>
-          <Text style={styles.email}>{user?.email ?? ""}</Text>
-        </View>
+        {/* The head of the screen. It wraps rather than truncating: an e-mail
+            address has no spaces to break on, but the user should see all of
+            it, at any Dynamic Type size. */}
+        {user?.email ? (
+          <Text style={styles.email} accessibilityRole="header">
+            {user.email}
+          </Text>
+        ) : null}
 
         {/* Subscription state (display only, enforcement stays backend-side) */}
         <SubscriptionStatusCard
@@ -363,38 +360,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingBottom: Spacing.xxl,
   },
-  profileSection: {
-    alignItems: "center",
-    paddingVertical: Spacing.lg,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: Colors.surfaceContainer,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
+  // Same left edge as the cards below it, and the same gap above them as
+  // between two cards, so the address reads as the head of the column rather
+  // than as a floating caption. Section-header scale (headline) rather than
+  // display: an e-mail address is long, and at 32px most of them would wrap.
+  // `alignSelf: "flex-start"` puts it on the start edge, the right one in an
+  // Arabic UI. `textAlign` cannot do that here: alignment left to the text
+  // follows the address's own Latin script, which would pin it left.
   email: {
-    fontSize: Typography.label.fontSize,
-    color: Colors.textMuted,
+    ...Typography.headline,
+    color: Colors.textMain,
+    alignSelf: "flex-start",
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   subscriptionCard: {
     flexDirection: "row",
