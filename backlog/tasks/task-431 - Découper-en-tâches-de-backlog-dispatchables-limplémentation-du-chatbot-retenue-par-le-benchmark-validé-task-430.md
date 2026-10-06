@@ -19,6 +19,7 @@ references:
   - docs/BENCHMARK_OWNER_WORKFLOW.md
   - scripts/dispatch_backlog.sh
 priority: medium
+dispatchable: true
 type: task
 ordinal: 38000
 ---
