@@ -3,7 +3,7 @@ id: TASK-432
 title: >-
   Faire survivre le contenu partagé à la suppression d'un compte qui n'en est
   pas le dernier détenteur
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 15:38'
 labels:
