@@ -94,6 +94,13 @@ select = ["E", "F", "I"]
 [tool.ruff.lint.per-file-ignores]
 # Research scripts: line-length and dead code less critical
 "docs/research/**/*.py" = ["E501", "F841"]
+# Visual concept explorations: one-off scripts that emit SVG, imported by
+# nothing and shipped nowhere. E501 because an SVG path is a single unbreakable
+# token — wrapping it would splice the geometry across string literals, less
+# readable than the long line and easy to corrupt. The rest is throwaway style:
+# the gate still catches dead imports and unsorted ones, which is what actually
+# rots in a script somebody reopens a year later.
+"docs/visual-concepts/**/*.py" = ["E501", "F841", "E702", "E731"]
 # Test files can have longer lines for readability
 "tests/**/*.py" = ["E501"]
 

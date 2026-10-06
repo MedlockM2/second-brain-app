@@ -1,5 +1,4 @@
 """Logos second cerveau : chaque marque est une fonction (fg, ac, bg) -> corps SVG, déclinée par palette."""
-import json
 NAVY, AMBER, PAPER = "#2b2d42", "#ffcb05", "#fcf9f6"
 SCHEMES = {  # nom: (fond, glyphe, accent)
     "nuit": (NAVY, PAPER, AMBER),
