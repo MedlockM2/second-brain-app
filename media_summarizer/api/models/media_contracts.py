@@ -197,8 +197,11 @@ class ProcessingJobContract(BaseModel):
 
 
 class TranscriptInfo(BaseModel):
+    # No S3 key: the location of a transcript is read from the content ledger and
+    # from nowhere else (task-432), and a client has no way to fetch a bucket
+    # object anyway. Publishing it here was a second source for the one fact this
+    # system now keeps in a single place.
     status: TranscriptStatus
-    transcription_s3_key: Optional[str] = None
     source: Optional[str] = Field(
         default=None,
         description="native_transcript | deepgram | article_extractor | x_api_lookup | shared_text",

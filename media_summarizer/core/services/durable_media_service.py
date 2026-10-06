@@ -27,6 +27,7 @@ benchmark:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -337,7 +338,7 @@ async def _provision_review_blurb(*, user_id: str, media_item_id: str) -> None:
     held this content, and a generation is queued under their own scope.
 
     Imported locally because ``review_blurb_service`` imports this module for
-    :func:`resolve_job_for_record`.
+    :func:`resolve_content_transcript`.
 
     Swallows everything. The strict part of the finalisation is the status write; a
     preview that could not be provisioned must not turn a successful save into a 500,
@@ -462,36 +463,110 @@ async def finalize_deduplicated_save(
     return owned_job_id
 
 
-async def resolve_job_for_record(
+@dataclass(frozen=True)
+class ContentTranscript:
+    """Where one content's text lives, and what reading it needs to know.
+
+    Addressed by the content and by nothing else: it is read off the global
+    ``media_idempotence`` row of a ``media_key``, which carries no user id and is
+    outside the scope of any account purge. That is the whole point (task-432) —
+    a transcript is deduplicated across accounts, so naming it on the job row of
+    whichever account happened to submit first made the text of a shared media
+    disappear the day that account was deleted.
+
+    ``job_id`` is the content job, kept for correlation: the log line of a
+    translation dispatch, the prefix an object purge sweeps. It may name a job that
+    expired or that belongs to another account, so **nothing may read it to find a
+    transcript** — this object already is the answer.
+
+    ``media_type`` and ``source_platform`` come from the caller's own library row,
+    which has carried them since the save was written. They classify the text for
+    rendering (``_detect_source_format``) and name the platform in a translation
+    request; neither is pipeline state.
+    """
+
+    media_key: str
+    transcript_s3_key: str
+    job_id: Optional[str] = None
+    source_language: Optional[str] = None
+    media_type: Optional[str] = None
+    source_platform: Optional[str] = None
+
+
+async def resolve_content_transcript(
     record: UserMediaRecord,
+) -> Optional[ContentTranscript]:
+    """Where the text of this save's content lives, or ``None`` if it has none.
+
+    The one read path for a transcript location (task-432): the global content
+    ledger, never a job row. Every caller that needs the text goes through here —
+    raw content, artifact generation and therefore the digests — so none of them
+    depends on a job row of another account surviving.
+
+    ``None`` is a normal answer and means "there is no readable text for this
+    content": an ingestion still running, one that produced nothing, or a content
+    whose objects have been purged. Callers distinguish those cases from the
+    library row's own status, which is the only honest source for it
+    (``artifact_service._is_still_being_ingested``).
+
+    Library reads must not call this. Invariant I3 stands: whether a save is
+    visible, named and organised never depends on the pipeline.
+    """
+    if record is None or not record.media_key:
+        return None
+
+    from media_summarizer.utils import media_idempotence
+
+    try:
+        ledger = await media_idempotence.already_processed(record.media_key)
+    except Exception as exc:  # noqa: BLE001 - an unreadable ledger is not a 500
+        logger.warning(
+            "Could not load content ledger for %s: %s", record.media_key, exc
+        )
+        return None
+
+    transcript_s3_key = media_idempotence.transcript_s3_key_of(ledger)
+    if not transcript_s3_key:
+        return None
+
+    job_id = str((ledger or {}).get("job_id") or "") or None
+    return ContentTranscript(
+        media_key=record.media_key,
+        transcript_s3_key=transcript_s3_key,
+        job_id=job_id,
+        source_language=media_idempotence.source_language_of(ledger),
+        media_type=record.media_type,
+        source_platform=record.source_platform,
+    )
+
+
+async def resolve_pipeline_job(
+    record: UserMediaRecord,
+    *,
+    content_job_id: Optional[str] = None,
 ) -> Optional[ProcessingJob]:
-    """Find the global content job behind a library row, if it still exists.
+    """The processing job behind a library row, as *enrichment only*.
 
-    Reserved for the few callers that genuinely need *pipeline* data the library
-    row does not carry — today only the transcript location (raw content,
-    artifact generation, digests). Library reads must never call this: that is
-    invariant I3, and the whole point of task-220 is that a missing job is a
-    non-event for the library.
+    What it answers: how far the pipeline got, what the provider said, what the
+    author wrote under the media, when the media was published. Every one of those
+    is detail that only ever lived on a job row, and every caller here treats
+    ``None`` as a normal outcome — a job is allowed to expire under a row that
+    stays (invariant I3).
 
-    The authoritative pointer is the global ``media_idempotence`` row keyed by
-    ``record.media_key``. The content job may belong to another user: ownership
-    was already established by loading this caller-owned library row, and global
-    pipeline deduplication deliberately makes every save of the content read the
-    same transcript. ``last_job_id`` remains only for direct document/audio
-    uploads that do not enter the global ledger, and is ownership-checked.
+    What it must never answer: **where the transcript is**. That is
+    :func:`resolve_content_transcript`, and keeping a second source for it is what
+    made a shared media unreadable the moment the account whose job produced it was
+    erased (task-432).
+
+    ``content_job_id`` comes from the content ledger the caller already read, so
+    this costs one ``GetItem`` and not a second ledger round-trip. Without one, the
+    row's own ``last_job_id`` is tried and ownership-checked: a pointer that
+    resolves to somebody else's job tells this caller nothing.
     """
     if record is None:
         return None
 
-    from media_summarizer.utils import database_async, media_idempotence
-
-    content_job_id: Optional[str] = None
-    try:
-        ledger = await media_idempotence.already_processed(record.media_key)
-        if ledger and ledger.get("job_id"):
-            content_job_id = str(ledger["job_id"])
-    except Exception as exc:  # noqa: BLE001 - direct uploads can lack a ledger
-        logger.warning("Could not load content ledger for %s: %s", record.media_key, exc)
+    from media_summarizer.utils import database_async
 
     if content_job_id:
         try:

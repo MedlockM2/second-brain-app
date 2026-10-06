@@ -1,9 +1,10 @@
 """
-Media idempotence utilities using DynamoDB.
+The global content ledger: who owns a content, and where its text lives.
 
 Canonical schema (MEDIA_IDEMPOTENCE_TABLE, default "media_idempotence"):
 - PK: media_key (S)
-- Attributes: status (reserved|processed|failed), job_id, created_at, updated_at
+- Attributes: status (reserved|processed|failed), job_id, created_at, updated_at,
+  transcript_s3_key, source_language
 
 `failed` is a *record*, not a lock. `reserved` and `processed` both mean "a job
 owns this content, do not start a second one"; `failed` means the opposite -- the
@@ -11,6 +12,24 @@ last attempt produced nothing, so the content is unowned and the next submission
 must try again. Until task-399 the reservation refused to write over a `failed`
 row, which turned one bad fetch into a permanent verdict on that URL for every
 account that would ever share it.
+
+**Why the transcript location lives here** (task-432). A transcript is globally
+deduplicated: the second account to save a public media reuses the object the
+first account's job produced, and that job is never attributed to the second
+account. So the location used to be readable only off the *first* account's job
+row -- and account deletion removes every job row of the account it erases, which
+took the text out from under everybody else who had saved the same media.
+
+This row is the one place that is addressed by the content alone: keyed on
+``media_key``, carrying no user id, and therefore deliberately outside the scope
+of an account purge (``account_deletion_service``). Naming the transcript here is
+the same move task-394 made for artifacts -- the object belongs to the content, and
+no account's erasure may take it away. It is also the *only* source of that
+location: nothing reads a job row to find a transcript any more.
+
+Every content gets a row, shared or not. An uploaded file's key is account-scoped
+(``acct_mkey_v1_``) and no reservation is ever taken for it, so its row is created
+by the completion write below rather than by :func:`reserve_or_skip`.
 """
 from __future__ import annotations
 
@@ -29,6 +48,35 @@ MEDIA_IDEMPOTENCE_TABLE = required_env("MEDIA_IDEMPOTENCE_TABLE")
 
 #: The one ledger state that does not own its content.
 STATUS_FAILED = "failed"
+
+#: Where the content's text is stored, in ``TRANSCRIPT_BUCKET``. The attribute the
+#: read path resolves a transcript through, and the reason this row survives the
+#: erasure of the account whose job produced the object (task-432).
+ATTR_TRANSCRIPT_S3_KEY = "transcript_s3_key"
+
+#: The language the text is written in, as told by the platform or detected once
+#: from the text itself. A fact about the content, so it sits beside the location
+#: rather than on a job row that may belong to somebody else.
+ATTR_SOURCE_LANGUAGE = "source_language"
+
+
+def transcript_s3_key_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The transcript location this ledger row names, or ``None``.
+
+    ``None`` means the content has no readable text: never processed, processed by
+    an ingestion that produced nothing, or a row written before the location was
+    recorded here (``scripts/backfill_media_idempotence_transcripts.py``).
+    """
+    if not row:
+        return None
+    return (str(row.get(ATTR_TRANSCRIPT_S3_KEY) or "")).strip() or None
+
+
+def source_language_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The language tag recorded for this content, or ``None``."""
+    if not row:
+        return None
+    return (str(row.get(ATTR_SOURCE_LANGUAGE) or "")).strip() or None
 
 
 def is_failed_row(row: Optional[Dict[str, Any]]) -> bool:
@@ -142,8 +190,10 @@ async def _record_terminal_status(
     media_key: Optional[str],
     job_id: Optional[str],
     status: str,
+    transcript_s3_key: Optional[str] = None,
+    source_language: Optional[str] = None,
 ) -> bool:
-    """Move an existing ledger row to a terminal status. ``True`` if it moved.
+    """Move the ledger row of a content to a terminal status. ``True`` if it moved.
 
     The write is conditional on the row still pointing at the job that reports
     the outcome (or at no job at all, which is how a reservation made before its
@@ -151,23 +201,39 @@ async def _record_terminal_status(
     purged and re-reserved therefore cannot stamp a dead job's outcome onto the
     new reservation, and cannot make a fresh in-flight job read as processed.
 
-    ``False`` is a normal outcome, not an error: it means there is no ledger row
-    for this content (nothing ever reserved it -- a direct upload, or a purged
-    entry) or the ledger has legitimately moved on to another job. The caller
-    keeps going; nothing about the media it just handled is invalidated by it.
+    **It creates the row when the reporting job is named and no row exists**
+    (task-432). A reservation is only ever taken for content a public locator
+    names; an uploaded file is account-scoped, is never deduplicated against
+    anything and therefore reserves nothing. Before this, those contents had no
+    ledger row at all, so the only name for their transcript was a job row -- the
+    second source of a transcript location this module exists to remove. The job
+    condition still holds: a missing item satisfies ``attribute_not_exists``, a row
+    pointing at another job does not.
+
+    ``False`` is a normal outcome, not an error: with no job id to attribute the
+    outcome to, a row that does not exist is left alone, and a ledger that has
+    legitimately moved on to another job is never overwritten. The caller keeps
+    going; nothing about the media it just handled is invalidated by it.
     """
     identity_key = _resolve_identity_key(media_key)
     update = "SET #st = :s, updated_at = :u"
-    condition = "attribute_exists(media_key)"
     expr_values: Dict[str, Any] = {":s": status, ":u": _now_iso()}
     if job_id:
-        update += ", job_id = :j"
-        condition += (
-            " AND (attribute_not_exists(job_id)"
-            " OR job_id = :j OR job_id = :no_job)"
+        update += ", job_id = :j, created_at = if_not_exists(created_at, :u)"
+        condition = (
+            "attribute_not_exists(job_id) OR job_id = :j OR job_id = :no_job"
         )
         expr_values[":j"] = job_id
         expr_values[":no_job"] = ""
+    else:
+        condition = "attribute_exists(media_key)"
+
+    if transcript_s3_key:
+        update += f", {ATTR_TRANSCRIPT_S3_KEY} = :tk"
+        expr_values[":tk"] = transcript_s3_key
+    if source_language:
+        update += f", {ATTR_SOURCE_LANGUAGE} = :sl"
+        expr_values[":sl"] = source_language
 
     try:
         session = database_async.get_session()
@@ -204,8 +270,10 @@ async def _record_terminal_status(
 async def mark_processed(
     media_key: Optional[str] = None,
     job_id: Optional[str] = None,
+    transcript_s3_key: Optional[str] = None,
+    source_language: Optional[str] = None,
 ) -> bool:
-    """Record that this content has been processed and needs no further job.
+    """Record that this content is processed, and where its text now lives.
 
     Called by the single path that completes a media
     (``workers/events/media_completed_worker``) and by the submission
@@ -213,10 +281,66 @@ async def mark_processed(
     Until task-390 nothing called it at all, so ``reserved`` was permanent and
     every re-save of an already-processed URL was parked in ``pending`` waiting
     for a job that had finished days earlier.
+
+    ``transcript_s3_key`` is what makes the content readable by every account that
+    holds it, for as long as any of them does (task-432). Omitting it leaves a
+    ``processed`` row that names no text, which the read path treats exactly like
+    an absent row -- so a caller that has the location must pass it.
     """
     return await _record_terminal_status(
-        media_key=media_key, job_id=job_id, status="processed"
+        media_key=media_key,
+        job_id=job_id,
+        status="processed",
+        transcript_s3_key=transcript_s3_key,
+        source_language=source_language,
     )
+
+
+async def record_source_language(
+    *,
+    media_key: Optional[str],
+    source_language: Optional[str],
+) -> bool:
+    """Persist the language of a content's text, once, where the readers look.
+
+    Written after a local detection over the transcript (no model call, no cost):
+    the corpus header of an artifact states what each source is written in, and the
+    reader path uses it as the detection hint that keeps a translation decision from
+    depending on langdetect twice. It used to be stored on the job row, which is
+    exactly the storage an erased account takes with it.
+
+    Idempotent and best-effort by contract: ``False`` means there is no ledger row
+    to decorate, which is not an error for any caller.
+    """
+    identity_key = _resolve_identity_key(media_key)
+    language = (source_language or "").strip()
+    if not language:
+        return False
+    try:
+        session = database_async.get_session()
+        async with session.resource(
+            "dynamodb",
+            region_name=database_async.AWS_REGION,
+        ) as dynamodb:
+            table = await dynamodb.Table(MEDIA_IDEMPOTENCE_TABLE)
+            await table.update_item(
+                Key={"media_key": identity_key},
+                UpdateExpression=(
+                    f"SET {ATTR_SOURCE_LANGUAGE} = :sl, updated_at = :u"
+                ),
+                ExpressionAttributeValues={":sl": language, ":u": _now_iso()},
+                ConditionExpression="attribute_exists(media_key)",
+            )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        logger.warning(
+            "Could not record the source language of media_key=%s: %s",
+            identity_key,
+            exc,
+        )
+        return False
+    return True
 
 
 async def mark_failed(

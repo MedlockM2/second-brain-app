@@ -162,7 +162,6 @@ Response (`MediaStatusResponse`):
     "status": "ready_for_artifacts",
     "transcript": {
       "status": "ready",
-      "transcription_s3_key": "job_01JQ8X8J5T9Q5V7Q4TW4N1HY03.txt",
       "source": "deepgram",
       "language": "fr",
       "segments_count": 583,

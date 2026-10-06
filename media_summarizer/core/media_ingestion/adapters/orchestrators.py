@@ -147,9 +147,10 @@ async def _resolve_duplicate_status(
         return ProcessingLifecycleStatus.PENDING
 
     if content.job is None:
-        # A reservation pointing at a job that no longer exists: its transcript is
-        # unreachable (the pointer to it lived on that row) and no worker is going
-        # to publish anything. Saying "pending" here is what parked saves forever.
+        # A reservation pointing at a job that no longer exists. A reservation is
+        # not a transcript: only the completion write records a location on the
+        # ledger (task-432), so a `reserved` row names nothing and no worker is
+        # going to publish anything. Saying "pending" here parked saves forever.
         log_event(
             logger,
             logging.WARNING,
@@ -165,7 +166,13 @@ async def _resolve_duplicate_status(
     )
     if mapped == ProcessingLifecycleStatus.READY_FOR_ARTIFACTS:
         await _reconcile_stranded_ledger(
-            media_key=media_key, job_id=content_job_id, processed=True
+            media_key=media_key,
+            job_id=content_job_id,
+            processed=True,
+            # The repair has the job in hand, so it also records what the lost
+            # completion event would have: a `processed` row naming no transcript
+            # reads as "no text" to every account that holds this content.
+            transcript_s3_key=content.job.transcription_s3_key,
         )
     elif mapped in (
         ProcessingLifecycleStatus.FAILED,
@@ -178,7 +185,11 @@ async def _resolve_duplicate_status(
 
 
 async def _reconcile_stranded_ledger(
-    *, media_key: str, job_id: str, processed: bool
+    *,
+    media_key: str,
+    job_id: str,
+    processed: bool,
+    transcript_s3_key: Optional[str] = None,
 ) -> None:
     """Close a ledger row whose job is already terminal. Best effort.
 
@@ -191,7 +202,9 @@ async def _reconcile_stranded_ledger(
     try:
         if processed:
             await episode_idempotence.mark_processed(
-                media_key=media_key, job_id=job_id
+                media_key=media_key,
+                job_id=job_id,
+                transcript_s3_key=transcript_s3_key,
             )
         else:
             await episode_idempotence.mark_failed(media_key=media_key, job_id=job_id)

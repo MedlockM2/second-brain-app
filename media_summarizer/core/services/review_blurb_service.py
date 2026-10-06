@@ -19,7 +19,9 @@ import logging
 from typing import Optional
 
 from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArtifactType
-from media_summarizer.core.services.durable_media_service import resolve_job_for_record
+from media_summarizer.core.services.durable_media_service import (
+    resolve_content_transcript,
+)
 from media_summarizer.utils import database_async
 from media_summarizer.utils import user_media as user_media_store
 
@@ -57,8 +59,10 @@ async def trigger_review_blurb_generation(
     if record.review_blurb is not None and record.review_blurb.hook.strip():
         return None
 
-    job = await resolve_job_for_record(record)
-    if job is None or not getattr(job, "transcription_s3_key", None):
+    # The content's own transcript, off the global ledger: a save that reuses the
+    # text another account's ingestion produced gets its blurb exactly like the
+    # first one, and keeps getting it after that account is erased (task-432).
+    if await resolve_content_transcript(record) is None:
         logger.debug("review_blurb: no transcript yet for %s", media_item_id)
         return None
 

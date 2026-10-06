@@ -653,9 +653,13 @@ Ref: `rss_feed_poll_worker.py::_route_item_to_pipeline`, `rss_feed_poll_worker.p
 A single, **source-agnostic** detect+translate step serves **every** source —
 YouTube, TikTok, Instagram, audio/podcast (Deepgram), article, image OCR, document
 (PDF/DOCX/PPTX), text file (TXT/MD/RTF), X, shared notes, and any future source. It
-is **not** wired per source: all transcripts converge on
-`ProcessingJob.transcription_s3_key`, so one insertion point covers the whole
-matrix.
+is **not** wired per source: every ingestion publishes its transcript key on the
+one completion event, which records it on the content ledger
+(`media_idempotence.transcript_s3_key`, task-432), so one insertion point covers
+the whole matrix. That ledger row — keyed on `media_key`, carrying no user id — is
+also the only place a *reader* resolves a transcript from: a job row belongs to one
+account and is deleted with it, while a transcript is shared by every account that
+saved the same media.
 
 **What it is for (task-398): the reader's full text, and nothing else.** Two
 triggers ask for a translated transcript, both through the same atomic reservation
@@ -691,7 +695,7 @@ after the ingestion job is already completed, and only enqueues.
 ### Pipeline position
 
 ```
-[any source worker] -> transcript in S3 (job.transcription_s3_key)
+[any source worker] -> transcript in S3 (-> media_idempotence.transcript_s3_key)
         |              -> job completed -> [episode-completed-events]
         |
         +--> media_completed_worker (task-414, proactive)
@@ -874,9 +878,9 @@ one it served in a top-level `variant` field:
   `is_translated: true`, so the languages are already in hand.
 
 The original is always reachable because `build_translated_transcript_key()`
-derives the translated key from `job.transcription_s3_key`: the two bodies are
-two objects, and `job.transcription_s3_key` is unconditionally the source one.
-This is a choice of body in the response, not a second store.
+derives the translated key from the content's own transcript key: the two bodies
+are two objects, and the ledger's `transcript_s3_key` is unconditionally the
+source one. This is a choice of body in the response, not a second store.
 
 Two bodies in one response was the alternative, and was rejected on weight: the
 default read is the hot path (every open of the Reader tab, plus one read per

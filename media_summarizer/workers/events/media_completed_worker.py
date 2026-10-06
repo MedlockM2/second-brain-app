@@ -57,32 +57,58 @@ TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
 RETRY_DELAY = 0.01 if TEST_MODE else 2
 
 
+def _event_source_language(metadata: Any) -> Optional[str]:
+    """The language tag an ingestion published with its transcript, if any.
+
+    Deepgram publishes the detected or forced language, the subtitle workers and
+    the Podcasting 2.0 short-circuit publish the one the platform declared. It is a
+    fact about the content, so it travels to the content ledger beside the
+    transcript location instead of living only on the job row (task-432).
+    """
+    if not isinstance(metadata, dict):
+        return None
+    for key in ("detected_language", "language"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
 async def _record_content_outcome(
     *,
     media_key: str,
     canonical_job_id: Optional[str],
     processed: bool,
+    transcription_s3_key: Optional[str] = None,
+    source_language: Optional[str] = None,
 ) -> None:
     """Close the global content ledger for this media (task-390).
 
     This consumer is the single join point every ingestion path publishes to, so
-    it is where ``media_idempotence`` learns that the content is done. Nothing
-    called this before: the ledger stayed at ``reserved`` for ever, and because
-    the submission orchestrator reads it before anything else, every later save
-    of the same URL was persisted as ``pending`` and waited on a job that had
-    already finished. ``reserved`` now means what it says -- in flight.
+    it is where ``media_idempotence`` learns that the content is done, and -- since
+    task-432 -- **where its transcript location is recorded**. That location is read
+    from this row and from nowhere else: a job row belongs to one account and is
+    deleted with it, while this row belongs to the content and outlives every
+    account that saved it.
+
+    Nothing called this before task-390: the ledger stayed at ``reserved`` for
+    ever, and because the submission orchestrator reads it before anything else,
+    every later save of the same URL was persisted as ``pending`` and waited on a
+    job that had already finished. ``reserved`` now means what it says -- in flight.
 
     Deliberately not swallowed: a ledger that cannot be closed is the bug this
     call exists to fix, so the event stays on the queue and is redelivered. The
     work below it is idempotent (the same Algolia objectIDs, an already-marked
     watcher, an already-provisioned blurb), so a redelivery costs a repeat, not a
-    corruption. A ledger row that simply is not there -- a direct upload, or a
-    purged entry -- is not a failure and returns quietly.
+    corruption.
     """
     try:
         if processed:
             await media_idempotence.mark_processed(
-                media_key=media_key, job_id=canonical_job_id
+                media_key=media_key,
+                job_id=canonical_job_id,
+                transcript_s3_key=transcription_s3_key,
+                source_language=source_language,
             )
         else:
             await media_idempotence.mark_failed(
@@ -289,11 +315,14 @@ async def process_event(message: Dict[str, Any]) -> None:
 
     # The content is processed. Recording it before anything else is deliberate:
     # a save landing while this event is being handled reads the ledger first,
-    # and it must find "processed" rather than a reservation it would wait on.
+    # and it must find "processed" -- with the transcript location on it -- rather
+    # than a reservation it would wait on.
     await _record_content_outcome(
         media_key=media_key,
         canonical_job_id=canonical_job_id,
         processed=True,
+        transcription_s3_key=transcription_s3_key,
+        source_language=_event_source_language(body.get("transcription_metadata")),
     )
 
     # -------------------------------------------------------------------------

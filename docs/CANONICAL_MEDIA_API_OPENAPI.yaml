@@ -737,7 +737,6 @@ components:
             status:
               type: string
               enum: [pending, extracting, transcribing, ready, failed]
-            transcription_s3_key: { type: string }
             source: { type: string }
             language: { type: string }
             segments_count: { type: integer, minimum: 0 }

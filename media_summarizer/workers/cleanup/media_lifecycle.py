@@ -56,7 +56,6 @@ from media_summarizer.core.models.media_artifact import (
     build_scope_key,
 )
 from media_summarizer.core.services import (
-    cover_capture,
     media_purge_service,
     search_indexing,
 )
@@ -124,18 +123,13 @@ async def purge_media_item(
     Every step is a delete, so replaying the cascade after a partial failure is
     safe — which is what makes it correct to let the stream retry.
     """
-    from media_summarizer.utils import media_idempotence
-    from media_summarizer.utils import user_media as user_media_store
-
     counts: Dict[str, int] = {}
-    references = [
-        record
-        for record in await user_media_store.list_by_media_key(
-            media_key, include_deleted=True
+    user_still_holds_content = any(
+        row.user_id == user_id
+        for row in await media_purge_service.content_holders(
+            media_key, ignore_save=(user_id, media_item_id)
         )
-        if (record.user_id, record.media_item_id) != (user_id, media_item_id)
-    ]
-    user_still_holds_content = any(record.user_id == user_id for record in references)
+    )
 
     if not user_still_holds_content:
         counts.update(
@@ -154,44 +148,24 @@ async def purge_media_item(
         )
     )
 
-    content_job_id = last_job_id
-    if not references and not content_job_id:
-        ledger = await media_idempotence.already_processed(media_key)
-        if ledger and ledger.get("job_id"):
-            content_job_id = str(ledger["job_id"])
-
-    if content_job_id and not references:
-        # No job row to read keys off: it may have expired years ago. The prefix
-        # sweeps are the whole cleanup, which is why purge_job_objects accepts
-        # being called with the id alone.
-        for key, value in (
-            await media_purge_service.purge_job_objects(content_job_id)
-        ).items():
-            counts[key] = counts.get(key, 0) + value
-        if await media_idempotence.delete_content_entry(
+    # Everything the content owns — transcript and its translations, media file,
+    # legacy quiz object, translation locks, re-hosted cover, ledger row — goes in
+    # one gated step, and the gate is the same last-holder test the account purge
+    # uses (task-432). `last_job_id` is passed because it names the objects of a
+    # content whose ledger row is already gone; the ledger's own job id is added by
+    # the purge, which is how the job of a long-erased account is still swept.
+    counts.update(
+        await media_purge_service.purge_content_for_media_key(
             media_key=media_key,
-            job_id=content_job_id,
-        ):
-            counts["media_idempotence_rows_deleted"] = 1
-
-    # A re-hosted cover is shared across every save of the same media_key, so it
-    # is deleted only when no other row still references it -- exactly like the
-    # transcript and job objects already guarded above. A hotlinked URL has
-    # nothing to delete and `delete_cover` says so (task-304).
-    if thumbnail_url and cover_capture.parse_cover_locator(thumbnail_url):
-        # A re-hosted cover (locator parsed successfully): check if any other
-        # row still points to the same thumbnail_url value.
-        cover_still_referenced = any(
-            record.thumbnail_url == thumbnail_url for record in references
+            ignore_save=(user_id, media_item_id),
+            jobs=(
+                [media_purge_service.JobObjectKeys(job_id=last_job_id)]
+                if last_job_id
+                else []
+            ),
+            cover_locators=[thumbnail_url] if thumbnail_url else [],
         )
-        if not cover_still_referenced:
-            if await cover_capture.delete_cover(thumbnail_url):
-                counts["cover_objects_deleted"] = 1
-            else:
-                # S3 cover deletion failed (already logged by delete_cover).
-                counts["cover_objects_delete_failed"] = 1
-        else:
-            counts["cover_objects_skipped_shared"] = 1
+    )
 
     await asyncio.to_thread(search_indexing.delete_document, user_id, media_item_id)
     counts["search_documents_deleted"] = 1

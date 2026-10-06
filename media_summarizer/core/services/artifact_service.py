@@ -59,7 +59,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from pydantic import ValidationError
 
@@ -85,13 +85,14 @@ from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
 from media_summarizer.core.services.media_identity import is_account_scoped_media_key
 from media_summarizer.core.services.transcript_translation import (
     detect_language,
-    job_source_language_hint,
     normalize_language_tag,
-    persist_detected_language,
 )
 from media_summarizer.utils import media_artifacts, s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle: durable_media -> review_blurb -> here
+    from media_summarizer.core.services.durable_media_service import ContentTranscript
 
 logger = logging.getLogger(__name__)
 
@@ -693,22 +694,27 @@ class ScopeResolution:
         )
 
 
-async def _load_transcript_bytes(job: ProcessingJob) -> Tuple[str, bytes]:
-    transcript_s3_key = (getattr(job, "transcription_s3_key", None) or "").strip()
-    if not transcript_s3_key:
-        raise ArtifactTranscriptNotReadyError(
-            "Transcript is not available for this media item."
-        )
+async def _load_transcript_bytes(transcript_s3_key: str) -> bytes:
+    """The text behind one key, or ``ArtifactTranscriptNotReadyError``.
 
-    transcript_bytes = await s3.download_file_to_memory(
-        bucket=TRANSCRIPT_BUCKET,
-        key=transcript_s3_key,
-    )
+    An unreadable object is reported as "not ready" rather than let through: the
+    caller resolves a whole scope in parallel, and one source whose object has
+    gone must exclude that source, not fail the generation of every other one.
+    """
+    try:
+        transcript_bytes = await s3.download_file_to_memory(
+            bucket=TRANSCRIPT_BUCKET,
+            key=transcript_s3_key,
+        )
+    except Exception as exc:  # noqa: BLE001 - one dead object excludes one source
+        raise ArtifactTranscriptNotReadyError(
+            f"Transcript {transcript_s3_key} could not be read."
+        ) from exc
     if not transcript_bytes or not transcript_bytes.strip():
         raise ArtifactTranscriptNotReadyError(
             "Transcript is empty or unavailable for this media item."
         )
-    return transcript_s3_key, transcript_bytes
+    return transcript_bytes
 
 
 def _iso_date(value: Any) -> Optional[str]:
@@ -727,7 +733,8 @@ def _iso_date(value: Any) -> Optional[str]:
 
 async def resolve_source(
     *,
-    job: ProcessingJob,
+    transcript: ContentTranscript,
+    job: Optional[ProcessingJob],
     media_item_id: str,
     content_id: str,
     title: Optional[str],
@@ -744,25 +751,39 @@ async def resolve_source(
     ``parameters["language"]`` alone, so a media in any language generates
     immediately.
 
-    The language is still detected — locally, from a source tag when the platform
-    gave one, so no LLM call and no cost — because the corpus header states what
-    each source is written in and the job keeps the answer for the reader path.
+    The text comes from ``transcript``, which is addressed by the content and read
+    off the global ledger — never from ``job``. That is what makes a folder of
+    shared medias still generate after the account that first submitted them is
+    deleted (task-432).
 
-    ``captured`` comes from the caller because it lives on the durable library row
-    while the publication date lives on the job, and the job is what this function
-    already holds. The author's description comes off that same job, through the
-    one reader that knows every platform's spelling (task-383).
+    The language is still detected — locally, from the ledger's own tag when the
+    platform gave one, so no LLM call and no cost — because the corpus header
+    states what each source is written in. The answer goes back to the ledger, so
+    the reader path finds it next to the location it already reads.
+
+    ``job`` is enrichment and is allowed to be ``None``: the publication date and
+    the author's description (task-383) only ever lived on a job row, and a source
+    whose job has expired or belonged to an erased account simply carries neither.
+    Nothing in the generation depends on it. ``captured`` comes from the caller
+    because it lives on the durable library row.
     """
-    transcript_s3_key, transcript_bytes = await _load_transcript_bytes(job)
+    transcript_s3_key = transcript.transcript_s3_key
+    transcript_bytes = await _load_transcript_bytes(transcript_s3_key)
     detected_language, _ = detect_language(
         transcript_bytes.decode("utf-8", errors="ignore"),
-        source_hint=job_source_language_hint(job),
+        source_hint=transcript.source_language,
     )
-    await persist_detected_language(job, detected_language)
+    if detected_language and detected_language != transcript.source_language:
+        from media_summarizer.utils import media_idempotence
+
+        await media_idempotence.record_source_language(
+            media_key=transcript.media_key,
+            source_language=detected_language,
+        )
 
     # Never truncated: a cut would sever a sentence, and the corpus ceiling is the
     # right place to refuse a volume that grew too big (task-383).
-    description = job_source_description(job)
+    description = job_source_description(job) if job is not None else None
     description_bytes = len(description.encode("utf-8")) if description else 0
     return ResolvedSource(
         media_item_id=media_item_id,
@@ -832,7 +853,10 @@ async def resolve_scope_sources(
     source is readable, hence what makes a waiting entry's ``artifact_id`` equal
     to the one the finished resolution computes.
     """
-    from media_summarizer.core.services.durable_media_service import resolve_job_for_record
+    from media_summarizer.core.services.durable_media_service import (
+        resolve_content_transcript,
+        resolve_pipeline_job,
+    )
 
     records = await _list_scope_media_records(
         user_id=user_id, scope=scope, scope_id=scope_id
@@ -863,13 +887,23 @@ async def resolve_scope_sources(
                 excluded_reason=reason,
             )
 
-        job = await resolve_job_for_record(record)
-        if job is None:
-            if _is_still_being_ingested(record, job):
-                return _pending(PREPARATION_TRANSCRIPTION)
-            return _excluded(EXCLUDED_REASON_TRANSCRIPT_UNAVAILABLE)
+        # Where the text is: by content, off the ledger. Then the job, for the
+        # enrichment only it carries and for the precise in-flight status —
+        # resolved from the id the ledger just gave, so this costs one GetItem
+        # and no second ledger read.
+        transcript = await resolve_content_transcript(record)
+        job = await resolve_pipeline_job(
+            record, content_job_id=transcript.job_id if transcript else None
+        )
+        if transcript is None:
+            return (
+                _pending(PREPARATION_TRANSCRIPTION)
+                if _is_still_being_ingested(record, job)
+                else _excluded(EXCLUDED_REASON_TRANSCRIPT_UNAVAILABLE)
+            )
         try:
             return await resolve_source(
+                transcript=transcript,
                 job=job,
                 media_item_id=media_item_id,
                 content_id=content_id,
@@ -877,8 +911,9 @@ async def resolve_scope_sources(
                 captured=_iso_date(getattr(record, "saved_at", None)),
             )
         except ArtifactTranscriptNotReadyError:
-            # No transcript behind the job yet. Whether that is a wait or a dead
-            # end is the job's own status, never the absence of the file.
+            # The ledger names an object that is not readable. Whether that is a
+            # wait or a dead end is the pipeline's own status, never the absence
+            # of the file.
             if _is_still_being_ingested(record, job):
                 return _pending(PREPARATION_TRANSCRIPTION)
             return _excluded(EXCLUDED_REASON_TRANSCRIPT_UNAVAILABLE)

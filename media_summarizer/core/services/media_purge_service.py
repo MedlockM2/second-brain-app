@@ -8,30 +8,66 @@ Two callers, one implementation, on purpose:
 - ``workers/cleanup/media_lifecycle.py`` (task-243) runs it for a single item when
   the ``user_media`` TTL sweeps a row the user deleted 30 days earlier.
 
-The two paths *must* delete the same things. Media-scoped artifacts are owned by
-``(user_id, media_key)`` and therefore survive deletion of one save while another
-retained row for that content remains. That is why this module exists instead of
-a second copy of the same logic in the worker.
+The two paths *must* delete the same things. That is why this module exists instead
+of a second copy of the same logic in the worker — and why the **last-holder test**
+lives here (:func:`content_holders`) rather than in each caller: both would
+otherwise have to re-derive it, and the account purge used not to apply it at all,
+which is the bug task-432 closes.
 
-An artifact is deleted at two different levels since task-394, and the difference is
+Two levels, and the only question that separates them
+-----------------------------------------------------
+*Who would still be reading this object tomorrow?*
+
+- **Account level.** The object exists because of one account and answers only that
+  account. It goes with the account, unconditionally, and goes with a single save
+  when that save is the account's last one for the content. Reached through a key
+  that carries the ``user_id`` (``shared-audio/<user_id>/``, a bug-report
+  attachment) or through a job that carries no ``media_key`` at all — a direct
+  document or audio upload, whose content identity is account-scoped and which no
+  other account can ever compute (``media_identity.is_account_scoped_media_key``).
+- **Content level.** The object answers every account that saved the same
+  ``media_key``, because the pipeline produced it once and deduplicated the rest.
+  It goes only when :func:`content_holders` reports that no save anywhere still
+  references that content.
+
+Deleting a content-level object at account level is the whole failure mode: account
+A shares a Reel, account B shares the same Reel and reuses A's transcript, A deletes
+its account, and B's reader, artifact generation and digests all lose their source.
+
+Where each key a job carries lands, and why (task-432)
+------------------------------------------------------
+- ``transcription_s3_key`` — **content**. The text of the content, written once:
+  the second save of a public media runs no job at all and reads this exact object
+  (``media_submission``, ``finalize_deduplicated_save``). Its translations are
+  derived keys of the same object (``<stem>.translated.<lang>.<ext>``) and their
+  locks are fingerprinted on the source key, so both follow it.
+- ``audio_s3_key`` — **content**. Same reasoning one step earlier in the pipeline:
+  the media file is downloaded once, under the content job's id, and a deduplicated
+  save never re-downloads it. An *uploaded* audio file is not this case — its job
+  carries no ``media_key``, so it is account level by the rule above.
+- ``quiz_s3_key`` — **content**. A generation over the content, from before
+  generations went through ``media_artifacts`` (task-406). Since task-394 a shared
+  generation belongs to the content; this legacy key is the same kind of object
+  under another name, so it gets the same rule rather than a second one.
+- The per-job document prefix in ``DOCUMENT_BUCKET`` — **account**, by
+  construction: only an upload writes there, and an upload's job carries no
+  ``media_key``.
+
+An artifact is deleted at the same two levels since task-394, and the difference is
 who paid for the object:
 
 - **an account's entry** goes with the account's scope, always. When it points at a
   shared generation it owns no S3 object, so deleting it deletes a row and nothing
   else — the object still answers every other account.
 - **a shared generation** goes with the *content*, exactly like the transcript: only
-  once no save anywhere still references that ``media_key``. Deleting it earlier would
-  take the object out from under another account's entry.
-
-Transcripts are globally deduplicated for the same reason, which is why the stream
-caller checks for remaining ``media_key`` references before asking this module to
-remove job objects.
+  once no save anywhere still references that ``media_key``.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Dict, Iterable, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from media_summarizer.core.models.media_artifact import (
     ArtifactScope,
@@ -41,6 +77,7 @@ from media_summarizer.core.models.media_artifact import (
 )
 from media_summarizer.utils import (
     media_artifacts,
+    media_idempotence,
     s3,
     translation_idempotence,
 )
@@ -51,6 +88,49 @@ logger = logging.getLogger(__name__)
 
 def _bump(counts: Dict[str, int], step: str, count: int = 1) -> None:
     counts[step] = counts.get(step, 0) + count
+
+
+# ---------------------------------------------------------------------------
+# The last-holder test
+# ---------------------------------------------------------------------------
+
+
+async def content_holders(
+    media_key: str,
+    *,
+    ignore_user_id: Optional[str] = None,
+    ignore_save: Optional[Tuple[str, str]] = None,
+) -> List[Any]:
+    """Every save that still references this content, minus the ones going away.
+
+    The single answer to "may a content-level object go?". An empty list means this
+    content has no holder left anywhere, which is the only state in which its
+    transcript, its media file, its re-hosted cover and its ledger row may be
+    deleted.
+
+    Soft-deleted rows count as holders (``include_deleted=True``): a row inside its
+    30-day grace window is restorable, and purging the content under it would make
+    the restore give back an item with no text.
+
+    The two exclusions are the two shapes of "about to disappear", and a caller
+    passes the one that matches what it is deleting:
+
+    - ``ignore_user_id`` — an account erasure. It purges content *before* it deletes
+      the account's library rows, so those rows are still readable and would every
+      one of them look like a live reference.
+    - ``ignore_save`` — a ``(user_id, media_item_id)`` pair whose row the TTL has
+      just swept. Only that one save is gone; the same account may well hold the
+      content through another save, which is a holder like any other.
+    """
+    from media_summarizer.utils import user_media as user_media_store
+
+    rows = await user_media_store.list_by_media_key(media_key, include_deleted=True)
+    return [
+        row
+        for row in rows
+        if row.user_id != ignore_user_id
+        and (ignore_save is None or (row.user_id, row.media_item_id) != ignore_save)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -113,17 +193,9 @@ async def purge_shared_artifacts_for_content(
     to disappear are still readable and would look like a live reference to every
     content the account held.
     """
-    from media_summarizer.utils import user_media as user_media_store
-
     counts: Dict[str, int] = {}
     for content_id in sorted({cid for cid in content_ids if cid}):
-        holders = [
-            row
-            for row in await user_media_store.list_by_media_key(
-                content_id, include_deleted=True
-            )
-            if row.user_id != ignore_user_id
-        ]
+        holders = await content_holders(content_id, ignore_user_id=ignore_user_id)
         if holders:
             _bump(counts, "shared_artifacts_kept_still_referenced")
             continue
@@ -172,6 +244,116 @@ async def _delete_owned_object(listed: MediaArtifactRecord) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Content-level objects
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class JobObjectKeys:
+    """A job id, plus whatever keys the caller can name off its row.
+
+    The prefix sweeps of :func:`purge_job_objects` do the bulk of the work; the
+    explicit keys are there for an object written outside the job's id prefix,
+    which only a caller still holding the job row can know about.
+    """
+
+    job_id: str
+    transcription_s3_key: Optional[str] = None
+    audio_s3_key: Optional[str] = None
+    quiz_s3_key: Optional[str] = None
+
+
+async def purge_content_for_media_key(
+    *,
+    media_key: str,
+    ignore_user_id: Optional[str] = None,
+    ignore_save: Optional[Tuple[str, str]] = None,
+    jobs: Iterable[JobObjectKeys] = (),
+    cover_locators: Iterable[str] = (),
+) -> Dict[str, int]:
+    """Destroy everything one content owns, if and only if nobody holds it any more.
+
+    The content-level half of both purge paths, and the only place that decides it.
+    Everything here goes together or stays together — the transcript and its
+    translations, the media file, the legacy quiz object, the translation locks, the
+    re-hosted cover, and the ledger row that names the transcript. Letting any one of
+    them go early is how a reader ends up with a row that promises text nothing can
+    serve, and how the ledger ends up answering "already processed, job X" for an
+    object that no longer exists.
+
+    Which job wrote the objects is read from the ledger *and* from the caller:
+
+    - the ledger's ``job_id`` is the content job, which may belong to an account
+      that was erased long ago and is the only name for the objects it wrote;
+    - ``jobs`` is what the caller already holds — the account's own jobs for this
+      content, or the swept row's ``last_job_id``, which covers a content whose
+      ledger row has already been purged.
+
+    The union of the two is swept, by prefix, which is idempotent and lets the same
+    object be named twice at no cost.
+
+    Returns the counters of what it did, including ``content_kept_still_referenced``
+    when the last-holder test refused the purge — a normal and frequent outcome.
+    """
+    counts: Dict[str, int] = {}
+    if not media_key:
+        return counts
+
+    if await content_holders(
+        media_key, ignore_user_id=ignore_user_id, ignore_save=ignore_save
+    ):
+        _bump(counts, "content_kept_still_referenced")
+        return counts
+
+    ledger = await media_idempotence.already_processed(media_key)
+    ledger_job_id = str((ledger or {}).get("job_id") or "")
+
+    targets: Dict[str, JobObjectKeys] = {
+        keys.job_id: keys for keys in jobs if keys.job_id
+    }
+    if ledger_job_id and ledger_job_id not in targets:
+        targets[ledger_job_id] = JobObjectKeys(
+            job_id=ledger_job_id,
+            transcription_s3_key=media_idempotence.transcript_s3_key_of(ledger),
+        )
+
+    for job_id in sorted(targets):
+        keys = targets[job_id]
+        for step, count in (
+            await purge_job_objects(
+                job_id,
+                transcription_s3_key=keys.transcription_s3_key,
+                audio_s3_key=keys.audio_s3_key,
+                quiz_s3_key=keys.quiz_s3_key,
+            )
+        ).items():
+            _bump(counts, step, count)
+
+    # A re-hosted cover is one object shared by every save of the content: a
+    # deduplicated save copies the locator of the first one onto its own row
+    # (``display_attributes_from_job``), so the object belongs to the content. A
+    # hotlinked URL has nothing to delete and ``delete_cover`` says so (task-304).
+    from media_summarizer.core.services import cover_capture
+
+    for locator in sorted({loc for loc in cover_locators if loc}):
+        if not cover_capture.parse_cover_locator(locator):
+            continue
+        if await cover_capture.delete_cover(locator):
+            _bump(counts, "cover_objects_deleted")
+        else:
+            # Already logged by delete_cover; a thumbnail never stalls a purge.
+            _bump(counts, "cover_objects_delete_failed")
+
+    if ledger is not None and await media_idempotence.delete_content_entry(
+        media_key=media_key,
+        job_id=ledger_job_id,
+    ):
+        _bump(counts, "media_idempotence_rows_deleted")
+
+    return counts
+
+
+# ---------------------------------------------------------------------------
 # S3 objects produced by a processing job
 # ---------------------------------------------------------------------------
 
@@ -185,14 +367,20 @@ async def purge_job_objects(
 ) -> Dict[str, int]:
     """Every S3 object one job produced, plus the translation locks it owns.
 
+    **Unconditional.** It deletes what it is given and asks nobody. Whether it may
+    run at all is the caller's decision, and there are exactly two right answers:
+    :func:`purge_content_for_media_key` for a job that worked on shared content, a
+    direct call for a job carrying no ``media_key`` — a document or audio upload,
+    whose objects no second account can ever be reading.
+
     Prefix sweeps are keyed on the bare job id, which is safe because job ids are
     fixed-length UUIDs: none is a prefix of another.
 
-    The explicit keys are optional because the two callers know different things.
-    The account purge still holds the job row and passes the keys recorded on it,
-    which catches objects written outside the id prefix. The TTL purge only has
-    ``user_media.last_job_id`` — the job row may have expired years ago — so it
-    relies on the prefix sweeps alone.
+    The explicit keys are optional because callers know different things. One
+    holding the job row passes the keys recorded on it, which catches objects
+    written outside the id prefix. A content purge whose job row expired years ago
+    has only the ledger's recorded transcript key, and relies on the prefix sweeps
+    for the rest.
     """
     if not job_id:
         return {}

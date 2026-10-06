@@ -2,15 +2,18 @@
 Service for retrieving and formatting raw content from media items.
 
 Raw content is the source material (transcript, extracted text, OCR result)
-stored in S3 under the processing job's transcription_s3_key.
-This service downloads that content and formats it into readable text.
+stored in S3. Its location is resolved by content, off the global ledger
+(``durable_media_service.resolve_content_transcript``), and never off a processing
+job: a transcript is shared by every account that saved the same media, so a
+location that lived on one account's job row vanished when that account was erased
+(task-432). This service is handed the location and formats what it finds there.
 
 Variant selection (task-419):
 - The reader can ask for the source text of a translated media instead of its
   translation (``variant="original"``). The translated object's S3 key is derived
   deterministically from the original's, so the original never stops being
-  reachable from ``job.transcription_s3_key``: this is a choice of body in the
-  response, not a second store.
+  reachable from ``ContentTranscript.transcript_s3_key``: this is a choice of body
+  in the response, not a second store.
 
 Translation architecture (task-200, task-414):
 - /raw-content NEVER calls LLM translation synchronously.
@@ -37,7 +40,7 @@ from __future__ import annotations
 import logging
 from typing import Literal, Optional
 
-from media_summarizer.core.models import ProcessingJob
+from media_summarizer.core.services.durable_media_service import ContentTranscript
 from media_summarizer.core.services.transcript_formatting import (
     normalize_transcript_text,
 )
@@ -45,7 +48,6 @@ from media_summarizer.core.services.transcript_translation import (
     TranslationDispatchOutcome,
     build_translated_transcript_key,
     detect_language,
-    job_source_language_hint,
     normalize_language_tag,
     reserve_and_dispatch_translation,
     should_translate,
@@ -102,7 +104,7 @@ class RawContentResponse:
 
 
 async def get_raw_content(
-    job: ProcessingJob,
+    transcript: ContentTranscript,
     reading_language: Optional[str] = None,
     variant: RawContentVariant = DEFAULT_RAW_CONTENT_VARIANT,
 ) -> RawContentResponse:
@@ -128,7 +130,9 @@ async def get_raw_content(
     - ``original``: the source text, with no translation resolved at all.
 
     Args:
-        job: The ProcessingJob containing the S3 key reference.
+        transcript: Where the content's text lives, resolved by content from the
+            global ledger. Carries the media's classification and its language
+            tag; no job row is read here or below.
         reading_language: The user's preferred reading language (ISO 639-1),
             if any.
         variant: Which body to serve. ``original`` returns the source text even
@@ -140,7 +144,7 @@ async def get_raw_content(
     Raises:
         RawContentNotAvailableError: If the content is not yet available.
     """
-    transcript_s3_key = (getattr(job, "transcription_s3_key", None) or "").strip()
+    transcript_s3_key = (transcript.transcript_s3_key or "").strip()
     if not transcript_s3_key:
         raise RawContentNotAvailableError(
             "Raw content is not yet available for this media item."
@@ -167,8 +171,8 @@ async def get_raw_content(
         )
 
     raw_text = raw_bytes.decode("utf-8")
-    media_type = getattr(job, "media_type", None) or ""
-    source_platform = getattr(job, "source_platform", None) or ""
+    media_type = transcript.media_type or ""
+    source_platform = transcript.source_platform or ""
 
     effective_text = raw_text
     translation_metadata: Optional[dict] = None
@@ -193,7 +197,7 @@ async def get_raw_content(
     # the client already holds every language this response could name.
     if reading_language and variant == "translated":
         translation_metadata = await _resolve_translation(
-            job=job,
+            transcript=transcript,
             transcript_s3_key=transcript_s3_key,
             raw_text=raw_text,
             reading_language=reading_language,
@@ -254,7 +258,7 @@ async def get_raw_content(
 
 async def _resolve_translation(
     *,
-    job: ProcessingJob,
+    transcript: ContentTranscript,
     transcript_s3_key: str,
     raw_text: str,
     reading_language: str,
@@ -277,7 +281,10 @@ async def _resolve_translation(
        serve the translation directly.
     5. On cache miss with no inflight state: reserve atomically + enqueue.
     """
-    source_language_hint = job_source_language_hint(job)
+    # The hint is the language the ingestion recorded on the content ledger —
+    # Deepgram's detected or forced tag, the one a subtitle track declared. Read
+    # by content, so it survives the erasure of the account that submitted first.
+    source_language_hint = transcript.source_language
     detected_language, detection_method = detect_language(
         raw_text,
         source_hint=source_language_hint,
@@ -464,7 +471,7 @@ async def _resolve_translation(
         target_language=normalized_target,
         source_language_hint=source_language_hint,
         source=source_platform or None,
-        job_id=getattr(job, "id", None),
+        job_id=transcript.job_id,
         trigger="raw_content",
         allow_done_retry=retry_missing_done_translation,
     )

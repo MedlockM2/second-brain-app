@@ -35,10 +35,11 @@ explanation.
 |---|---|---|
 | `user_media` | **indefinite** | user deletion (§3) or account deletion (§4). Nothing else. |
 | `media_artifacts` + their S3 objects | lifetime of the user's final retained save row for that `media_key` | purge cascade (`core/services/media_purge_service.py`) |
-| Transcripts, audio, documents in S3 | lifetime of the final retained save row for that `media_key` | same cascade, by job-id prefix |
+| Transcripts, audio, re-hosted covers in S3 | lifetime of the final retained save row for that `media_key`, **whoever holds it** | same cascade, by job-id prefix, gated on `media_purge_service.content_holders` |
+| Documents in S3 | lifetime of the uploading account | same cascade, unconditionally: an upload's job carries no `media_key` and no second account can hold it |
 | Algolia documents | lifetime of their `user_media` row | deleted at soft-delete time, re-deleted by the cascade |
 | `processing_jobs` | 30-90 days after the last status transition — **TTL currently frozen off** (task-239) until no read path depends on it | TTL on `expire_at`, Phase 4 |
-| `media_idempotence` | lifetime of the final visible save for that content | final content purge (conditional on the recorded job id) |
+| `media_idempotence` | lifetime of the final save for that content, whoever holds it | final content purge (conditional on the recorded job id). It names the content's transcript (task-432), so it goes with the objects it names and never before them |
 | `artifact_idempotence` / `translation_idempotence` | lifetime of the artifact they lock | purge cascade |
 | Job archives in S3 (`archives` bucket) | GLACIER_IR at day 0, expire at 365 days | bucket lifecycle rule in `archiving.tf` |
 | Library snapshots (AWS Backup) | 90 days | backup plan lifecycle (§5) |
@@ -92,6 +93,23 @@ because the purge enumerates the whole `user_id` partition.
 The per-media cascade is shared with the TTL purge
 (`core/services/media_purge_service.py`) so the two paths cannot drift: whatever
 one deletes, the other deletes.
+
+**Every row carrying the account's id goes, with no exception** — the job rows
+included, even the one that processed content other accounts still hold. What this
+purge may not do is take a *content-level* object with it: a transcript, a
+downloaded media file or a re-hosted cover is produced once and read by every
+account that saved the same `media_key`, so it goes only when
+`media_purge_service.content_holders` reports nobody left (`ignore_user_id`, since
+the account's own library rows are still in the table at that step). Until
+task-432 the account purge deleted them per job, which erased the text of a shared
+media under every other account holding it. That is also why the transcript's
+location now lives on the `media_idempotence` row rather than on a job row: the
+ledger describes the content, so no account's erasure can take it away.
+
+A job carrying **no** `media_key` is the opposite case and is purged
+unconditionally: a direct document or audio upload has an account-scoped content
+identity (`acct_mkey_v1_`) that no other account can compute, so nothing out there
+reads its objects.
 
 ## 5. Backup and restore windows
 

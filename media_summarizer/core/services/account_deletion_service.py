@@ -33,13 +33,29 @@ shared with the ``user_media`` TTL purge (task-243). Media-scoped artifacts are
 addressed by ``media_key`` within the user, while each library row remains an
 independent save.
 
+**Every row carrying this account's id goes, without exception.** What this purge
+may *not* do is take a content-level object with it: a transcript, a media file or
+a re-hosted cover is produced once and read by every account that saved the same
+``media_key``, so those go only when ``media_purge_service.content_holders``
+reports nobody left. Until task-432 this purge deleted them from every job of the
+account it erased, which took the text of a shared media out from under the other
+accounts holding it — their reader, their artifact generations and their digests.
+The transcript's location now lives on the content ledger rather than on a job
+row, which is what lets those accounts keep reading it after this purge has
+deleted every job row of the account that first submitted it.
+
 Deliberately out of scope
 -------------------------
-``media_idempotence`` (PK ``media_key``) and ``feed_forecasts`` (PK ``feed_id``)
-describe content, not people: they carry no user id, are shared by every account
-that submitted the same media, and cannot be queried per user in the first place.
-Artifact rows are reached through the scope index, keyed on ``user_id``.
-``pricing_config`` is global configuration.
+``feed_forecasts`` (PK ``feed_id``) describes content, not people: it carries no
+user id, is shared by every account that followed the same feed, and cannot be
+queried per user in the first place. Artifact rows are reached through the scope
+index, keyed on ``user_id``. ``pricing_config`` is global configuration.
+
+``media_idempotence`` (PK ``media_key``) describes content too, and for the same
+reason is not swept by user. It is nonetheless *deleted per content* here: a row
+naming a transcript that has just been purged would keep answering "already
+processed" for an object that no longer exists, so it goes with the objects it
+names — which is exactly what the TTL purge does.
 
 The archive bucket is not swept either: its keys are partitioned by archive date,
 not by user, so there is nothing to enumerate. Instead each job row is stamped
@@ -173,13 +189,19 @@ class _Inventory:
     """Everything the purge has to know before it starts deleting.
 
     Collected up front because the deletion order destroys the very rows the
-    later steps need to find their targets: artifacts and watchers are reached
-    through ``media_key``, which lives on rows this purge removes.
+    later steps need to find their targets: artifacts, watchers and content-level
+    objects are all reached through ``media_key``, which lives on rows this purge
+    removes.
     """
 
     jobs: List[ProcessingJob]
     media_keys: Set[str]
     bug_report_attachment_keys: Set[str]
+    # Per content, the re-hosted cover locators the account's library rows point
+    # at. One object is shared by every save of a content (a deduplicated save
+    # copies the first one's locator), so it is deleted with the content and never
+    # with a save.
+    cover_locators: Dict[str, Set[str]]
 
 
 async def _collect_inventory(user_id: str) -> _Inventory:
@@ -187,12 +209,18 @@ async def _collect_inventory(user_id: str) -> _Inventory:
     library = await user_media.list_all_for_user(user_id)
 
     media_keys: Set[str] = set()
+    cover_locators: Dict[str, Set[str]] = {}
     for job in jobs:
         if job.media_key:
             media_keys.add(job.media_key)
     for record in library:
-        if record.media_key:
-            media_keys.add(record.media_key)
+        if not record.media_key:
+            continue
+        media_keys.add(record.media_key)
+        if record.thumbnail_url:
+            cover_locators.setdefault(record.media_key, set()).add(
+                record.thumbnail_url
+            )
 
     attachment_keys: Set[str] = set()
     for item in await _query_user_index(
@@ -206,6 +234,7 @@ async def _collect_inventory(user_id: str) -> _Inventory:
         jobs=jobs,
         media_keys=media_keys,
         bug_report_attachment_keys=attachment_keys,
+        cover_locators=cover_locators,
     )
 
 
@@ -286,14 +315,50 @@ async def _purge_artifacts(
 # ---------------------------------------------------------------------------
 
 
+def _job_object_keys(job: ProcessingJob) -> media_purge_service.JobObjectKeys:
+    return media_purge_service.JobObjectKeys(
+        job_id=job.id,
+        transcription_s3_key=job.transcription_s3_key,
+        audio_s3_key=job.audio_s3_key,
+        quiz_s3_key=job.quiz_s3_key,
+    )
+
+
 async def _purge_media_objects(
     user_id: str,
     inventory: _Inventory,
     report: PurgeReport,
 ) -> None:
-    semaphore = asyncio.Semaphore(_JOB_CONCURRENCY)
+    """The S3 objects, at the two levels an object can belong to (task-432).
 
-    async def purge_one(job: ProcessingJob) -> Dict[str, int]:
+    **Content level, gated.** A job that worked on a ``media_key`` produced objects
+    the whole web of saves of that content reads: one transcript, one downloaded
+    media file, one re-hosted cover, and the ledger row that names the transcript.
+    They go through ``purge_content_for_media_key``, which refuses unless no save
+    anywhere still references the content — with ``ignore_user_id`` because this
+    account's own library rows are deleted a few steps later and would otherwise
+    every one of them look like a live reference. Driving the purge by content
+    rather than by job also sweeps the *content job*, which may belong to an
+    account erased long before this one and is the only name for the objects it
+    wrote.
+
+    **Account level, unconditional.** A job with no ``media_key`` is a direct
+    document or audio upload: its content identity is account-scoped and no second
+    account can compute it, so nothing out there is reading its objects. Same for
+    the share-extension staging area, whose keys carry the ``user_id``.
+    """
+    semaphore = asyncio.Semaphore(_JOB_CONCURRENCY)
+    jobs_by_media_key: Dict[str, List[media_purge_service.JobObjectKeys]] = {}
+    unshared_jobs: List[ProcessingJob] = []
+    for job in inventory.jobs:
+        if job.media_key:
+            jobs_by_media_key.setdefault(job.media_key, []).append(
+                _job_object_keys(job)
+            )
+        else:
+            unshared_jobs.append(job)
+
+    async def purge_unshared(job: ProcessingJob) -> Dict[str, int]:
         async with semaphore:
             return await media_purge_service.purge_job_objects(
                 job.id,
@@ -302,11 +367,24 @@ async def _purge_media_objects(
                 quiz_s3_key=job.quiz_s3_key,
             )
 
-    for counts in await asyncio.gather(*(purge_one(job) for job in inventory.jobs)):
+    async def purge_content(media_key: str) -> Dict[str, int]:
+        async with semaphore:
+            return await media_purge_service.purge_content_for_media_key(
+                media_key=media_key,
+                ignore_user_id=user_id,
+                jobs=jobs_by_media_key.get(media_key, []),
+                cover_locators=inventory.cover_locators.get(media_key, set()),
+            )
+
+    for counts in await asyncio.gather(
+        *(purge_unshared(job) for job in unshared_jobs),
+        *(purge_content(media_key) for media_key in sorted(inventory.media_keys)),
+    ):
         report.merge(counts)
 
     # Share-extension audio is staged outside any job prefix and survives a job
-    # that never completed, so it is swept per user rather than per job.
+    # that never completed, so it is swept per user rather than per job. Account
+    # level by construction: the key carries the user id.
     report.add(
         "audio_objects_deleted",
         await media_purge_service.purge_prefix(
@@ -361,7 +439,14 @@ async def _purge_media_watchers(
 
 
 async def _purge_processing_jobs(inventory: _Inventory, report: PurgeReport) -> None:
-    """Stamp then delete each job row.
+    """Stamp then delete each job row. **Every one of them, no exception.**
+
+    No job row survives this, not even the one that processed a content other
+    accounts still hold: it carries this account's ``user_id`` and its email, and
+    an erasure that kept it would be an erasure with a carve-out. What those other
+    accounts need from it — where the transcript is — does not live here any more;
+    it lives on the content ledger, which carries nobody's id (task-432). That is
+    the whole reason this step needs no condition.
 
     The stamp is not bookkeeping: deleting a job emits a REMOVE event on the
     table stream, and the archiver that consumes it would otherwise write the

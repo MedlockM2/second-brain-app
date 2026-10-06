@@ -96,7 +96,8 @@ from media_summarizer.core.services.artifact_service import (
 )
 from media_summarizer.core.services.durable_media_service import (
     media_duration_seconds,
-    resolve_job_for_record,
+    resolve_content_transcript,
+    resolve_pipeline_job,
     save_media_for_user,
     user_holds_media,
 )
@@ -1009,9 +1010,12 @@ def _canonical_transcript(
     if duration is None and record.duration_seconds and record.duration_seconds > 0:
         duration = float(record.duration_seconds)
 
+    # No transcript key here any more (task-432): the location of a transcript has
+    # exactly one source, the content ledger, and publishing a second one off a job
+    # row is what let an account erasure leave readers pointing at nothing. The
+    # client never used the value either -- it cannot read the bucket.
     return CanonicalTranscriptInfo(
         status=status,
-        transcription_s3_key=job.transcription_s3_key if job is not None else None,
         source=source,
         language=language,
         segments_count=segments,
@@ -1929,12 +1933,21 @@ async def upload_audio(
             idempotency_token=quota_enforcer.item_token(job.id),
         )
 
-        # Enqueue transcription message with the pre-signed URL
+        # Enqueue transcription message with the pre-signed URL.
+        #
+        # `media_key` rides along like it does on the document upload: the
+        # transcription worker forwards it to the completion event, and that event
+        # is what records the transcript location on the content ledger -- the one
+        # place the read path resolves a transcript from (task-432). Leaving it out
+        # published a completion event with no content identity at all, which the
+        # consumer dropped before doing anything: no ledger row, and therefore no
+        # readable text for an uploaded audio file.
         await sqs.send_message(
             queue_name=DEEPGRAM_TRANSCRIPTION_QUEUE,
             message_body={
                 "job_id": job.id,
                 "user_id": user.id,
+                "media_key": media_key,
                 "source_platform": "audio",
                 "audio_url": presigned_url,
                 "audio_s3_key": audio_s3_key,
@@ -2243,8 +2256,13 @@ async def get_media_item(
         record = await get_media_for_user(media_item_id, current_user.id)
 
         # Processing state is an optional enrichment. A missing job is a normal,
-        # expected outcome once the operational row has expired.
-        job = await resolve_job_for_record(record)
+        # expected outcome once the operational row has expired. The content
+        # ledger names the job to look at; it is read here and nowhere else in
+        # this handler, so the lookup costs one GetItem.
+        transcript = await resolve_content_transcript(record)
+        job = await resolve_pipeline_job(
+            record, content_job_id=transcript.job_id if transcript else None
+        )
         job_status = _canonical_job_status(record, job)
 
         log_event(
@@ -2497,17 +2515,18 @@ async def get_media_raw_content(
     try:
         record = await get_media_for_user(media_item_id, current_user.id)
 
-        # Unlike the library reads, this one genuinely needs the job: the
-        # transcript location lives nowhere else. A library item whose job is gone
-        # therefore has no retrievable raw content -- which is a 404 on the
+        # Unlike the library reads, this one genuinely needs the text. Its
+        # location is the content's, resolved off the global ledger, so a save
+        # that reuses another account's ingestion keeps reading it after that
+        # account is erased (task-432). No location at all is a 404 on the
         # content, not on the item.
-        job = await resolve_job_for_record(record)
-        if job is None:
+        transcript = await resolve_content_transcript(record)
+        if transcript is None:
             log_event(
                 logger,
                 logging.INFO,
                 "media.raw_content.not_available",
-                "Raw content unavailable: no processing job survives for this item",
+                "Raw content unavailable: the content ledger names no transcript",
                 media_item_id=media_item_id,
             )
             raise HTTPException(
@@ -2516,7 +2535,7 @@ async def get_media_raw_content(
             )
 
         raw = await get_raw_content(
-            job,
+            transcript,
             reading_language=current_user.reading_language,
             variant=variant,
         )
