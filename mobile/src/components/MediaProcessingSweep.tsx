@@ -9,7 +9,8 @@ import {
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
-import { Colors } from "../constants/theme";
+import { type Theme } from "../constants/theme";
+import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 /**
@@ -97,6 +98,7 @@ export function MediaProcessingSweep({
   width,
   animated = true,
 }: MediaProcessingSweepProps): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
   const reduceMotion = useReduceMotion();
   const still = !animated || reduceMotion;
   // Not a ref: an Animated.Value is created once and read during render, which
@@ -176,12 +178,17 @@ export function MediaProcessingSweep({
  * what carries the signal is the moving band, not the blur inside it.
  */
 function SweepMaterial(): React.JSX.Element {
+  // `BlurView` takes its tint as a prop, so this one colour cannot come from the
+  // style sheet with the rest.
+  const { mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <>
       {Platform.OS === "ios" ? (
         <BlurView
           intensity={SWEEP_BLUR_INTENSITY}
-          tint="light"
+          tint={mode}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
@@ -266,22 +273,23 @@ export function describeWithProcessing(
   return processing ? t("mediaStatus.a11yProcessing", { label }) : label;
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    // The cover already clips to its own radius; this clips again so the band
-    // cannot paint past the overlay's box on either platform.
-    overflow: "hidden",
-  },
-  band: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    // Physical, not `start`: the band is placed by the same axis that
-    // `translateX` moves it along. See `SWEEPS_TOWARDS_END`.
-    left: 0,
-  },
-  veil: {
-    backgroundColor: Colors.processingVeil,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    overlay: {
+      ...StyleSheet.absoluteFillObject,
+      // The cover already clips to its own radius; this clips again so the band
+      // cannot paint past the overlay's box on either platform.
+      overflow: "hidden",
+    },
+    band: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      // Physical, not `start`: the band is placed by the same axis that
+      // `translateX` moves it along. See `SWEEPS_TOWARDS_END`.
+      left: 0,
+    },
+    veil: {
+      backgroundColor: Colors.processingVeil,
+    },
+  });

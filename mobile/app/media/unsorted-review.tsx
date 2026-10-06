@@ -41,12 +41,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
 import {
   COVER_HEIGHT,
@@ -81,6 +84,8 @@ const QUEUE_LIMIT = 100;
 const MAX_BULLET_LINES = 3;
 
 export default function UnsortedReviewScreen(): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: the screen redraws with the interface language.
   useTranslation();
   const router = useRouter();
@@ -645,6 +650,8 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
  * fix — a clipped bullet carries less than a shorter one.
  */
 function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Kept per card rather than per screen: a cover that failed on one media says
   // nothing about the next one's.
   const [coverFailed, setCoverFailed] = useState(false);
@@ -865,229 +872,230 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
 
-  // Header
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    // Below the status bar, not against it: the safe area inset stops the
-    // content overlapping the clock, it does not give the header any air.
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.md,
-  },
-  closeButton: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  closeButtonPressed: {
-    opacity: 0.7,
-  },
-  headerTextSection: {
-    flex: 1,
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-  },
-  headerPosition: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-    marginTop: 2,
-  },
-  headerSpacer: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-  },
+    // Header
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.md,
+      // Below the status bar, not against it: the safe area inset stops the
+      // content overlapping the clock, it does not give the header any air.
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.md,
+    },
+    closeButton: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    closeButtonPressed: {
+      opacity: 0.7,
+    },
+    headerTextSection: {
+      flex: 1,
+      alignItems: "center",
+    },
+    headerTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    headerPosition: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+      marginTop: 2,
+    },
+    headerSpacer: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+    },
 
-  // Loading / error / completion
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  centeredTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  centeredBody: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textSubtle,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-  },
-  primaryButton: {
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-    marginTop: Spacing.sm,
-    ...Shadows.soft,
-  },
-  primaryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  primaryButtonLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-    color: Colors.onPrimary,
-  },
+    // Loading / error / completion
+    centered: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.md,
+    },
+    centeredTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    centeredBody: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textSubtle,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+    },
+    primaryButton: {
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.xl,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+      marginTop: Spacing.sm,
+      ...Shadows.soft,
+    },
+    primaryButtonPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    primaryButtonLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.onPrimary,
+    },
 
-  // Pager
-  pager: {
-    flex: 1,
-  },
-  page: {
-    width: SCREEN_WIDTH,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  /**
-   * Sized by what it holds, not by the screen it is on — `flexShrink` and not
-   * `flex: 1`.
-   *
-   * With `flex: 1` the card took the whole page whatever was in it, and since the
-   * blurb box did the same inside it, a two-line hook and three bullets were
-   * framed by a box five hundred points tall. On the 896 pt iPhone that came to
-   * some 280 pt of empty grey under the last bullet — a third of the screen,
-   * reported as "un gros espace vide en dessous". Emptiness inside a drawn frame
-   * reads as missing content; the same emptiness as background reads as air.
-   *
-   * `flexShrink: 1` keeps the other half of the deal. The page's height is fixed
-   * (the pager stretches it), so a card whose content overruns it gives ground
-   * instead of spilling past the pager and getting clipped — which is what hands
-   * `blurbCard` the bounded box `fitBullets` measures against.
-   */
-  card: {
-    flexShrink: 1,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
-    gap: Spacing.md,
-    ...Shadows.soft,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.md,
-  },
-  // The container is both the frame of the cover and the fallback surface, so a
-  // card with a picture and one without keep the same silhouette.
-  coverContainer: {
-    width: COVER_WIDTH,
-    height: COVER_HEIGHT,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  cover: {
-    width: "100%",
-    height: "100%",
-  },
-  cardHeading: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  cardTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-  },
-  cardCreator: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-  },
-  // Content-sized like the card around it, and shrinking with it: when the card
-  // has given all the ground the page allows, this is the box that takes the
-  // rest, which is the one case `fitBullets` clamps the bullets for.
-  blurbCard: {
-    flexShrink: 1,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    gap: Spacing.sm,
-    // The floor under `fitBullets`: at one line a bullet it stops shrinking, and on
-    // a box too small even for that the spill is cut by the frame instead of being
-    // drawn over the white card behind it.
-    overflow: "hidden",
-  },
-  blurbHook: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-    lineHeight: Typography.body.lineHeight,
-  },
-  blurbMissing: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textSubtle,
-    lineHeight: Typography.body.lineHeight,
-    fontStyle: "italic",
-  },
+    // Pager
+    pager: {
+      flex: 1,
+    },
+    page: {
+      width: SCREEN_WIDTH,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    /**
+     * Sized by what it holds, not by the screen it is on — `flexShrink` and not
+     * `flex: 1`.
+     *
+     * With `flex: 1` the card took the whole page whatever was in it, and since the
+     * blurb box did the same inside it, a two-line hook and three bullets were
+     * framed by a box five hundred points tall. On the 896 pt iPhone that came to
+     * some 280 pt of empty grey under the last bullet — a third of the screen,
+     * reported as "un gros espace vide en dessous". Emptiness inside a drawn frame
+     * reads as missing content; the same emptiness as background reads as air.
+     *
+     * `flexShrink: 1` keeps the other half of the deal. The page's height is fixed
+     * (the pager stretches it), so a card whose content overruns it gives ground
+     * instead of spilling past the pager and getting clipped — which is what hands
+     * `blurbCard` the bounded box `fitBullets` measures against.
+     */
+    card: {
+      flexShrink: 1,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.md,
+      gap: Spacing.md,
+      ...Shadows.soft,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.md,
+    },
+    // The container is both the frame of the cover and the fallback surface, so a
+    // card with a picture and one without keep the same silhouette.
+    coverContainer: {
+      width: COVER_WIDTH,
+      height: COVER_HEIGHT,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    cover: {
+      width: "100%",
+      height: "100%",
+    },
+    cardHeading: {
+      flex: 1,
+      gap: Spacing.xs,
+    },
+    cardTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+    },
+    cardCreator: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+    },
+    // Content-sized like the card around it, and shrinking with it: when the card
+    // has given all the ground the page allows, this is the box that takes the
+    // rest, which is the one case `fitBullets` clamps the bullets for.
+    blurbCard: {
+      flexShrink: 1,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      gap: Spacing.sm,
+      // The floor under `fitBullets`: at one line a bullet it stops shrinking, and on
+      // a box too small even for that the spill is cut by the frame instead of being
+      // drawn over the white card behind it.
+      overflow: "hidden",
+    },
+    blurbHook: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+      lineHeight: Typography.body.lineHeight,
+    },
+    blurbMissing: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textSubtle,
+      lineHeight: Typography.body.lineHeight,
+      fontStyle: "italic",
+    },
 
-  // Footer: dots, then the three actions
-  footer: {
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  actionBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-  },
-  gutterStart: {
-    flex: 1,
-    alignItems: "flex-start",
-  },
-  gutterEnd: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  plainAction: {
-    minWidth: TouchTarget.minimum,
-    minHeight: TouchTarget.minimum,
-    paddingHorizontal: Spacing.sm,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-  },
-  // Opacity *and* a scale, the same pair every pressable in the app uses, at the
-  // 0.96 the small round controls take. One finger on a 48 pt target covers most
-  // of what dims, so the shrink is the part that is actually seen — and these three
-  // are the only controls on the screen whose whole job is to be tapped in a row.
-  plainActionPressed: {
-    opacity: 0.6,
-    transform: [{ scale: 0.96 }],
-  },
-  plainActionLabel: {
-    // Three labels share one row: each one has to give ground rather than wrap
-    // and drag the whole bar out of alignment.
-    flexShrink: 1,
-    fontSize: Typography.small.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  discardLabel: {
-    color: Colors.error,
-  },
-});
+    // Footer: dots, then the three actions
+    footer: {
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.sm,
+    },
+    actionBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.md,
+    },
+    gutterStart: {
+      flex: 1,
+      alignItems: "flex-start",
+    },
+    gutterEnd: {
+      flex: 1,
+      alignItems: "flex-end",
+    },
+    plainAction: {
+      minWidth: TouchTarget.minimum,
+      minHeight: TouchTarget.minimum,
+      paddingHorizontal: Spacing.sm,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.xs,
+    },
+    // Opacity *and* a scale, the same pair every pressable in the app uses, at the
+    // 0.96 the small round controls take. One finger on a 48 pt target covers most
+    // of what dims, so the shrink is the part that is actually seen — and these three
+    // are the only controls on the screen whose whole job is to be tapped in a row.
+    plainActionPressed: {
+      opacity: 0.6,
+      transform: [{ scale: 0.96 }],
+    },
+    plainActionLabel: {
+      // Three labels share one row: each one has to give ground rather than wrap
+      // and drag the whole bar out of alignment.
+      flexShrink: 1,
+      fontSize: Typography.small.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    discardLabel: {
+      color: Colors.error,
+    },
+  });

@@ -43,12 +43,16 @@ import {
   type FolderNode,
 } from "../../../src/lib/folderTree";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
 import {
   ScreenHeader,
@@ -155,6 +159,8 @@ function buildInitialArtifactStates(): Record<ArtifactType, ArtifactTileState> {
 }
 
 export default function FolderDetailScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -358,7 +364,7 @@ export default function FolderDetailScreen() {
         style={styles.sourceCardPreview}
       />
     ),
-    [isProcessingStalled],
+    [isProcessingStalled, styles.sourceCardPreview],
   );
 
   // Patched in place rather than refetched: the rename already returned the
@@ -833,6 +839,9 @@ function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
 // --- Sub-components ---
 
 function EmptyState() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.emptyContainer}>
       <Ionicons
@@ -847,101 +856,102 @@ function EmptyState() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  // One page gutter for the whole screen, `Spacing.lg`, the same the header
-  // already used and the same `ArtifactsPanel` brings to the AI tab: the tab bar
-  // and the cards of the Sources list line up with the tiles under them.
-  tabsContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  // The cards bring their own `Spacing.md` side margin, the Library's gutter;
-  // the list adds the difference so they land on this screen's `Spacing.lg`,
-  // under the tabs, without either card being told about this page.
-  listContent: {
-    paddingHorizontal: Spacing.lg - Spacing.md,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
-  },
-  // A group caption of the Sources list. The uppercase muted caption stays
-  // confined to it — the AI tab's headings are section openers and use
-  // `Typography.headline`. Side margin as the cards', so it starts where they do.
-  sectionTitle: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "700",
-    color: Colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  // The card as the context menu redraws it: its margins are what the measured
-  // rect already excludes, so keeping them would shift the copy.
-  sourceCardPreview: {
-    marginHorizontal: 0,
-    marginBottom: 0,
-  },
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    // One page gutter for the whole screen, `Spacing.lg`, the same the header
+    // already used and the same `ArtifactsPanel` brings to the AI tab: the tab bar
+    // and the cards of the Sources list line up with the tiles under them.
+    tabsContainer: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.md,
+    },
+    // The cards bring their own `Spacing.md` side margin, the Library's gutter;
+    // the list adds the difference so they land on this screen's `Spacing.lg`,
+    // under the tabs, without either card being told about this page.
+    listContent: {
+      paddingHorizontal: Spacing.lg - Spacing.md,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.xxl,
+    },
+    // A group caption of the Sources list. The uppercase muted caption stays
+    // confined to it — the AI tab's headings are section openers and use
+    // `Typography.headline`. Side margin as the cards', so it starts where they do.
+    sectionTitle: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "700",
+      color: Colors.textMuted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginHorizontal: Spacing.md,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    // The card as the context menu redraws it: its margins are what the measured
+    // rect already excludes, so keeping them would shift the copy.
+    sourceCardPreview: {
+      marginHorizontal: 0,
+      marginBottom: 0,
+    },
 
-  // Centered states
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  centeredText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    marginTop: Spacing.md,
-  },
-  centeredIcon: {
-    marginBottom: Spacing.md,
-  },
-  centeredTitle: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-    marginBottom: Spacing.lg,
-    lineHeight: 24,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
+    // Centered states
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    centeredText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      marginTop: Spacing.md,
+    },
+    centeredIcon: {
+      marginBottom: Spacing.md,
+    },
+    centeredTitle: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+      marginBottom: Spacing.lg,
+      lineHeight: 24,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
 
-  // Empty state
-  emptyContainer: {
-    paddingTop: 100,
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  emptyTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  emptyHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.sm,
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+    // Empty state
+    emptyContainer: {
+      paddingTop: 100,
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    emptyTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    emptyHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.sm,
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

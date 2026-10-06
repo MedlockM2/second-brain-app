@@ -13,12 +13,16 @@ import { CompletedDetailView } from "../../src/components/CompletedDetailView";
 import { MediaDetailHeader } from "../../src/components/MediaDetailHeader";
 import { SourceSupportRequestCard } from "../../src/components/SourceSupportRequestCard";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
 
 /**
@@ -49,6 +53,8 @@ import { t, useTranslation } from "../../src/i18n";
  * - All interactive elements meet 48px minimum touch target
  */
 export default function MediaDetailScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -207,102 +213,106 @@ export default function MediaDetailScreen() {
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.md,
+    },
 
-  // Processing placeholder
-  processingIconContainer: {
-    marginBottom: Spacing.md,
-  },
-  processingTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  processingSubtitle: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.xs,
-  },
+    // Processing placeholder
+    processingIconContainer: {
+      marginBottom: Spacing.md,
+    },
+    processingTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    processingSubtitle: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.xs,
+    },
 
-  // Timeout state
-  timeoutTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  timeoutSubtitle: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.xs,
-  },
+    // Timeout state
+    timeoutTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    timeoutSubtitle: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.xs,
+    },
 
-  // Failed state
-  failedTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.error,
-    textAlign: "center",
-  },
-  failedMessage: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-    marginTop: Spacing.xs,
-  },
+    // Failed state
+    failedTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.error,
+      textAlign: "center",
+    },
+    failedMessage: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+      marginTop: Spacing.xs,
+    },
 
-  // Refresh/Retry button
-  refreshButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-    marginTop: Spacing.md,
-  },
-  refreshButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
+    // Refresh/Retry button
+    refreshButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+      marginTop: Spacing.md,
+    },
+    refreshButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
 
-  // Error state
-  errorText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  retryButton: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-});
+    // Error state
+    errorText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    retryButton: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+      backgroundColor: Colors.primary,
+      borderRadius: BorderRadius.md,
+      marginTop: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    // `onPrimary`, not `textMain`: this label sits on the amber fill above, and
+    // `textMain` only contrasts with amber in the light palette (8.9:1 there,
+    // 1.5:1 on the dark amber, which is no contrast at all).
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.onPrimary,
+    },
+  });

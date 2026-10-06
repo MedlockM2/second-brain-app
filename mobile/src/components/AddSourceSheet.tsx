@@ -18,12 +18,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 interface AddSourceSheetProps {
@@ -41,6 +41,7 @@ export function AddSourceSheet({
   onImportFile,
   onImportPhoto,
 }: AddSourceSheetProps) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const pendingAction = useRef<(() => void) | null>(null);
 
@@ -139,6 +140,9 @@ function SourceRow({
   onPress: () => void;
   testID?: string;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -159,69 +163,70 @@ function SourceRow({
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xl,
-    borderTopRightRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    gap: Spacing.sm,
-    ...Shadows.soft,
-  },
-  handle: {
-    alignSelf: "center",
-    width: Spacing.xl,
-    height: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-    marginBottom: Spacing.md,
-  },
-  title: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.xs,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    minHeight: TouchTarget.comfortable,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.xl,
-  },
-  rowPressed: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  rowIcon: {
-    width: TouchTarget.minimum,
-    height: TouchTarget.minimum,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowTextSection: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  rowLabel: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  rowDescription: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+      justifyContent: "flex-end",
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    sheet: {
+      backgroundColor: Colors.surface,
+      borderTopLeftRadius: BorderRadius.xl,
+      borderTopRightRadius: BorderRadius.xl,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      gap: Spacing.sm,
+      ...Shadows.soft,
+    },
+    handle: {
+      alignSelf: "center",
+      width: Spacing.xl,
+      height: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      marginBottom: Spacing.md,
+    },
+    title: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      marginBottom: Spacing.xs,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      minHeight: TouchTarget.comfortable,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.xl,
+    },
+    rowPressed: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    rowIcon: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    rowTextSection: {
+      flex: 1,
+      gap: Spacing.xs,
+    },
+    rowLabel: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    rowDescription: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+  });

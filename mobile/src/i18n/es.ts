@@ -437,6 +437,13 @@ export const es: Catalog = {
   "settings.uiLanguage.restartTitle": "Reinicia para terminar el cambio",
   "settings.uiLanguage.restartBody":
     "Este idioma se lee de derecha a izquierda, así que la app tiene que reiniciarse para que la disposición lo siga. Ciérrala y vuelve a abrirla.",
+  "theme.title": "Tema",
+  "theme.disclaimer":
+    "Así se ve la app. La elección se queda en este dispositivo.",
+  "theme.followDevice": "Seguir mi dispositivo",
+  "theme.light": "Claro",
+  "theme.dark": "Oscuro",
+  "theme.selectA11y": "Seleccionar {theme}",
   "onboarding.language.title": "Elige tu idioma de lectura",
   "onboarding.language.subtitle":
     "El contenido se traducirá a este idioma cuando haga falta.",

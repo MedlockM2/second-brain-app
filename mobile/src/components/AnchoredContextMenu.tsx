@@ -64,12 +64,16 @@ import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import {
+  useTheme,
+  useThemeColors,
+  useThemedStyles,
+} from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import { GlassSurface } from "./GlassSurface";
 
@@ -189,6 +193,10 @@ export function AnchoredContextMenu<T>({
   onClose,
   testIDPrefix,
 }: AnchoredContextMenuProps<T>): React.JSX.Element | null {
+  // The mode, for the backdrop blur: `BlurView` takes its tint as a prop, so
+  // it cannot come from the style sheet below.
+  const { mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
@@ -292,15 +300,14 @@ export function AnchoredContextMenu<T>({
               dropping this backdrop to its scrim alone.) */}
           <BlurView
             intensity={40}
-            tint="light"
+            tint={mode}
             experimentalBlurMethod="dimezisBlurView"
             style={StyleSheet.absoluteFill}
           />
-          {/* The dim over the blur. The design system has no scrim token, so
-              this is textMain at 35% — the only literal colour in this file,
-              and the same value the add-source sheet uses. It also guarantees
-              the backdrop reads as inert on an Android device whose blur
-              support degrades. */}
+          {/* The dim over the blur: `Colors.scrim`, which the three dialogs
+              and the add-source sheet draw too. It also guarantees the backdrop
+              reads as inert on an Android device whose blur support
+              degrades. */}
           <View style={styles.scrim} />
         </Animated.View>
 
@@ -403,6 +410,8 @@ function MenuRow({
   destructive?: boolean;
   testID: string;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const tint = destructive ? Colors.error : Colors.textMain;
 
   return (
@@ -435,55 +444,56 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(43, 45, 66, 0.35)",
-  },
-  preview: {
-    position: "absolute",
-  },
-  cardWrapper: {
-    position: "absolute",
-    width: MENU_WIDTH,
-    borderRadius: BorderRadius.xl,
-    // On the wrapper rather than the card: a shadow does not survive the
-    // `overflow: hidden` the rounded material needs.
-    ...Shadows.soft,
-  },
-  card: {
-    borderRadius: BorderRadius.xl,
-    paddingVertical: CARD_PADDING_VERTICAL,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    height: ROW_HEIGHT,
-    paddingHorizontal: Spacing.md,
-  },
-  rowPressed: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  rowDisabled: {
-    opacity: 0.5,
-  },
-  // Fixed width so the labels align whether the glyph is an icon or a spinner.
-  rowGlyph: {
-    width: Spacing.lg,
-    textAlign: "center",
-  },
-  rowLabel: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: Typography.label.fontWeight,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.outlineVariant,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+    },
+    scrim: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: Colors.scrim,
+    },
+    preview: {
+      position: "absolute",
+    },
+    cardWrapper: {
+      position: "absolute",
+      width: MENU_WIDTH,
+      borderRadius: BorderRadius.xl,
+      // On the wrapper rather than the card: a shadow does not survive the
+      // `overflow: hidden` the rounded material needs.
+      ...Shadows.soft,
+    },
+    card: {
+      borderRadius: BorderRadius.xl,
+      paddingVertical: CARD_PADDING_VERTICAL,
+      overflow: "hidden",
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      height: ROW_HEIGHT,
+      paddingHorizontal: Spacing.md,
+    },
+    rowPressed: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    rowDisabled: {
+      opacity: 0.5,
+    },
+    // Fixed width so the labels align whether the glyph is an icon or a spinner.
+    rowGlyph: {
+      width: Spacing.lg,
+      textAlign: "center",
+    },
+    rowLabel: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      fontWeight: Typography.label.fontWeight,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.outlineVariant,
+    },
+  });

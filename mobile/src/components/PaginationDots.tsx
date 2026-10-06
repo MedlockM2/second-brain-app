@@ -11,7 +11,8 @@
  */
 
 import { StyleSheet, View } from "react-native";
-import { BorderRadius, Colors, Spacing } from "../constants/theme";
+import { BorderRadius, Spacing, type Theme } from "../constants/theme";
+import { useThemedStyles } from "../contexts/ThemeContext";
 
 /**
  * Seven is the Instagram cap and the reason this component exists: past it the
@@ -48,6 +49,7 @@ export function PaginationDots({
   activeIndex,
   testID,
 }: PaginationDotsProps): React.JSX.Element | null {
+  const styles = useThemedStyles(makeStyles);
   // Nothing to page through: no row, not an empty one. A container reserving
   // height for zero dots would leave a gap above the action bar.
   if (count <= 0) return null;
@@ -126,22 +128,23 @@ export function PaginationDots({
   );
 }
 
-const styles = StyleSheet.create({
-  // Fixed height, so the row does not jump as the dots resize under it.
-  row: {
-    height: Spacing.md,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-  },
-  dot: {
-    borderRadius: BorderRadius.full,
-  },
-  dotActive: {
-    backgroundColor: Colors.textMain,
-  },
-  dotInactive: {
-    backgroundColor: Colors.outlineVariant,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    // Fixed height, so the row does not jump as the dots resize under it.
+    row: {
+      height: Spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+    },
+    dot: {
+      borderRadius: BorderRadius.full,
+    },
+    dotActive: {
+      backgroundColor: Colors.textMain,
+    },
+    dotInactive: {
+      backgroundColor: Colors.outlineVariant,
+    },
+  });

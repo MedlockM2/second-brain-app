@@ -59,11 +59,11 @@ import { GlassSurface } from "./GlassSurface";
 import { MediaCoverImage, type MediaCover } from "./MediaDetailHero";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
 import { tCount } from "../i18n";
 import type { MediaListItem, MediaType } from "../types/media";
@@ -149,6 +149,7 @@ export function DigestCoverStack({
   onPress,
   testID,
 }: DigestCoverStackProps): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
   // Kept per media, not as one flag: a refetch can reorder the covers, and a
   // picture that would not load must not take another media's with it.
   const [failedCoverIds, setFailedCoverIds] = useState<ReadonlySet<string>>(
@@ -292,6 +293,8 @@ function CardFaceView({
   isFront: boolean;
   onCoverError: (mediaItemId: string) => void;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   if (face.kind === "cover") {
     // The tone is what a loading picture shows: the frame, bare.
     return (
@@ -322,78 +325,79 @@ function CardFaceView({
   );
 }
 
-const styles = StyleSheet.create({
-  // `flexGrow` rather than `flex: 1`: the pack keeps its minimum as a floor and
-  // takes an equal share of what the screen has left, so two packs fill the
-  // screen together and scroll together once they cannot.
-  pack: {
-    flexGrow: 1,
-    minHeight: PACK_MIN_HEIGHT,
-  },
-  packPressed: {
-    opacity: 0.85,
-  },
-  // The shadow on the card, the clipping on its face: a view that clips its
-  // children clips its own shadow on iOS.
-  card: {
-    position: "absolute",
-    left: 0,
-    borderRadius: BorderRadius.xl,
-    backgroundColor: Colors.surface,
-    ...Shadows.soft,
-  },
-  face: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: BorderRadius.xl,
-    overflow: "hidden",
-  },
-  faceTonal: {
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  faceBlank: {
-    backgroundColor: Colors.surfaceContainer,
-  },
-  faceBlankBack: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  // Across the bottom of the front card, clipped to its lower corners.
-  caption: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    borderBottomLeftRadius: BorderRadius.xl,
-    borderBottomRightRadius: BorderRadius.xl,
-    overflow: "hidden",
-  },
-  // Absolute so it does not take part in the row's layout, and first in the tree
-  // so the label and the pill are drawn over it. The strip's `overflow: hidden`
-  // clips it to the card's bottom corners.
-  captionVeil: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.coverTitleVeil,
-  },
-  label: {
-    flex: 1,
-    ...Typography.headline,
-    color: Colors.textMain,
-  },
-  pill: {
-    paddingHorizontal: Spacing.sm + Spacing.xs,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-  },
-  pillText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.onPrimary,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    // `flexGrow` rather than `flex: 1`: the pack keeps its minimum as a floor and
+    // takes an equal share of what the screen has left, so two packs fill the
+    // screen together and scroll together once they cannot.
+    pack: {
+      flexGrow: 1,
+      minHeight: PACK_MIN_HEIGHT,
+    },
+    packPressed: {
+      opacity: 0.85,
+    },
+    // The shadow on the card, the clipping on its face: a view that clips its
+    // children clips its own shadow on iOS.
+    card: {
+      position: "absolute",
+      left: 0,
+      borderRadius: BorderRadius.xl,
+      backgroundColor: Colors.surface,
+      ...Shadows.soft,
+    },
+    face: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: BorderRadius.xl,
+      overflow: "hidden",
+    },
+    faceTonal: {
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    faceBlank: {
+      backgroundColor: Colors.surfaceContainer,
+    },
+    faceBlankBack: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    // Across the bottom of the front card, clipped to its lower corners.
+    caption: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      borderBottomLeftRadius: BorderRadius.xl,
+      borderBottomRightRadius: BorderRadius.xl,
+      overflow: "hidden",
+    },
+    // Absolute so it does not take part in the row's layout, and first in the tree
+    // so the label and the pill are drawn over it. The strip's `overflow: hidden`
+    // clips it to the card's bottom corners.
+    captionVeil: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: Colors.coverTitleVeil,
+    },
+    label: {
+      flex: 1,
+      ...Typography.headline,
+      color: Colors.textMain,
+    },
+    pill: {
+      paddingHorizontal: Spacing.sm + Spacing.xs,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    pillText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.onPrimary,
+    },
+  });

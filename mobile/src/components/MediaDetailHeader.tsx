@@ -20,12 +20,8 @@
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  BorderRadius,
-  Colors,
-  Spacing,
-  TouchTarget,
-} from "../constants/theme";
+import { BorderRadius, Spacing, TouchTarget } from "../constants/theme";
+import { useThemeColors } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 /**
@@ -41,6 +37,8 @@ export function MediaDetailHeader({
 }: {
   onBack: () => void;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+
   return (
     <View style={styles.header}>
       <Pressable

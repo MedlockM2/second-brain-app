@@ -445,6 +445,13 @@ export const de: Catalog = {
   "settings.uiLanguage.restartTitle": "Neu starten, um den Wechsel abzuschließen",
   "settings.uiLanguage.restartBody":
     "Diese Sprache wird von rechts nach links gelesen, daher muss die App neu starten, damit das Layout folgt. Schließe sie und öffne sie erneut.",
+  "theme.title": "Design",
+  "theme.disclaimer":
+    "So sieht die App aus. Die Auswahl bleibt auf diesem Gerät.",
+  "theme.followDevice": "Meinem Gerät folgen",
+  "theme.light": "Hell",
+  "theme.dark": "Dunkel",
+  "theme.selectA11y": "{theme} auswählen",
   "onboarding.language.title": "Wähle deine Lesesprache",
   "onboarding.language.subtitle":
     "Inhalte werden bei Bedarf in diese Sprache übersetzt.",

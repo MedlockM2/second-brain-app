@@ -16,12 +16,13 @@ import { t } from "../i18n";
 import { useGoogleSignIn } from "../hooks/useGoogleSignIn";
 import { POST_AUTH_ENTRY_POINT } from "../constants/routes";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 
 interface SocialAuthButtonsProps {
   onError: (message: string) => void;
@@ -38,6 +39,8 @@ interface SocialAuthButtonsProps {
  * sheet on Android. This component only maps the outcome to a message.
  */
 export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { loginWithGoogle, loginWithApple } = useAuth();
   const { signInAsync: googleSignInAsync } = useGoogleSignIn();
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -180,58 +183,59 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    gap: Spacing.md,
-    marginTop: Spacing.lg,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  dividerText: {
-    color: Colors.textMuted,
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.small.fontWeight,
-  },
-  socialButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    minHeight: TouchTarget.minimum,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-  },
-  googleButton: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-  },
-  googleButtonText: {
-    color: Colors.textMain,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "500",
-  },
-  appleButton: {
-    backgroundColor: Colors.textMain,
-  },
-  appleButtonText: {
-    color: Colors.surface,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "500",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  appleButtonDisabled: {
-    opacity: 0.6,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      gap: Spacing.md,
+      marginTop: Spacing.lg,
+    },
+    divider: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    dividerText: {
+      color: Colors.textMuted,
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.small.fontWeight,
+    },
+    socialButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      borderRadius: BorderRadius.md,
+      minHeight: TouchTarget.minimum,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+    },
+    googleButton: {
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.outlineVariant,
+    },
+    googleButtonText: {
+      color: Colors.textMain,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "500",
+    },
+    appleButton: {
+      backgroundColor: Colors.textMain,
+    },
+    appleButtonText: {
+      color: Colors.surface,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "500",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    appleButtonDisabled: {
+      opacity: 0.6,
+    },
+  });

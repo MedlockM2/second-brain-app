@@ -30,7 +30,6 @@ import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
   buildFolderTree,
   getDefaultFolderLabel,
-  DEFAULT_FOLDER_TINT,
   type FolderNode,
 } from "../../src/lib/folderTree";
 import { filterFoldersByName } from "../../src/lib/folderSearch";
@@ -51,13 +50,16 @@ import { useMediaActions } from "../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../src/hooks/useFolderActions";
 import { useFoldersSectionExpanded } from "../../src/hooks/useFoldersSectionExpanded";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import type { MediaListItem } from "../../src/types/media";
 import type { Folder } from "../../src/types/organization";
 
@@ -147,6 +149,8 @@ function hitToRow(hit: SearchHit): MediaRow {
  * the system, and `NativeTabs` has no equivalent of `tabBarButtonTestID`.
  */
 export default function SearchScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   // Subscribes the screen to the interface language: the copy below is resolved
   // at render time, so the tree has to redraw when the language changes.
@@ -402,7 +406,7 @@ export default function SearchScreen() {
         style={styles.mediaPreviewCard}
       />
     ),
-    [isProcessingStalled],
+    [isProcessingStalled, styles.mediaPreviewCard],
   );
 
   // Patched in place rather than refetched: the rename already returned the
@@ -464,7 +468,7 @@ export default function SearchScreen() {
         style={styles.folderTilePreview}
       />
     ),
-    [],
+    [styles.folderTilePreview],
   );
 
   // The default folder holds every media saved without an explicit folder.
@@ -715,6 +719,8 @@ function LibraryState({
   isRefreshing,
   onRefresh,
 }: LibraryStateProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // What stands in for the media rows while there are none: its own spinner on
   // the first load, its own error card with a retry, or the empty library.
   const mediaPlaceholder = mediaLoading ? (
@@ -814,6 +820,9 @@ function LibraryHeader({
   ) => void;
   mediaCount: number;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.listHeader}>
       <FoldersSectionToggle
@@ -927,6 +936,8 @@ function SearchResultsState({
   onOpenMedia,
   onLongPressMedia,
 }: SearchResultsStateProps) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // A folder list still loading, or one that failed, is not "zero matches": it
   // keeps its heading and states its own situation, exactly as in the library.
   const showFolders =
@@ -1025,6 +1036,9 @@ function SearchResultsHeader({
   /** `null` while the count would not describe what is on screen. */
   resultCount: number | null;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.listHeader}>
       {/* The heading still only shows when there is a folders section to show:
@@ -1109,6 +1123,9 @@ function FoldersSectionToggle({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Pressable
       testID="search-folders-toggle"
@@ -1155,6 +1172,9 @@ function InlineErrorCard({
   /** Set by callers whose container already carries the horizontal gutter. */
   style?: StyleProp<ViewStyle>;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={[styles.inlineErrorCard, style]}>
       <Ionicons
@@ -1177,6 +1197,9 @@ function InlineErrorCard({
 }
 
 function EmptyLibraryState() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.emptyLibraryContainer}>
       <Ionicons
@@ -1218,6 +1241,8 @@ function FolderTile({
    */
   style?: StyleProp<ViewStyle>;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const slotRef = useRef<View>(null);
   const longPress = isDefault ? undefined : onLongPress;
 
@@ -1262,7 +1287,7 @@ function FolderTile({
           <Ionicons
             name="folder"
             size={42}
-            color={isDefault ? DEFAULT_FOLDER_TINT : Colors.primary}
+            color={isDefault ? Colors.defaultFolderTint : Colors.primary}
           />
         </View>
         <Text style={styles.folderName} numberOfLines={2}>
@@ -1274,6 +1299,9 @@ function FolderTile({
 }
 
 function NoResultsState({ query }: { query: string }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.emptyContainer}>
       <Ionicons
@@ -1289,6 +1317,9 @@ function NoResultsState({ query }: { query: string }) {
 }
 
 function ErrorState({ message }: { message: string }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.emptyContainer}>
       <Ionicons
@@ -1305,256 +1336,257 @@ function ErrorState({ message }: { message: string }) {
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
 
-  // Floating search bar - minimum height meets touch target
-  searchBarOverlay: {
-    position: "absolute",
-    left: Spacing.md,
-    right: Spacing.md,
-    zIndex: 10,
-    // Shadow lives on the wrapper: the pill itself clips its children.
-    ...Shadows.soft,
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: BorderRadius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Colors.outlineVariant,
-    height: SEARCH_BAR_HEIGHT,
-    paddingHorizontal: Spacing.md,
-    // Required for the material to be clipped by the pill radius on iOS.
-    overflow: "hidden",
-  },
-  searchIcon: {
-    marginEnd: Spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: Typography.body.fontSize,
-    fontWeight: Typography.body.fontWeight,
-    color: Colors.textMain,
-    height: "100%",
-    paddingVertical: 0,
-  },
-  clearButton: {
-    marginStart: Spacing.sm,
-    padding: Spacing.xs,
-  },
+    // Floating search bar - minimum height meets touch target
+    searchBarOverlay: {
+      position: "absolute",
+      left: Spacing.md,
+      right: Spacing.md,
+      zIndex: 10,
+      // Shadow lives on the wrapper: the pill itself clips its children.
+      ...Shadows.soft,
+    },
+    searchBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: BorderRadius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+      height: SEARCH_BAR_HEIGHT,
+      paddingHorizontal: Spacing.md,
+      // Required for the material to be clipped by the pill radius on iOS.
+      overflow: "hidden",
+    },
+    searchIcon: {
+      marginEnd: Spacing.sm,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: Typography.body.fontSize,
+      fontWeight: Typography.body.fontWeight,
+      color: Colors.textMain,
+      height: "100%",
+      paddingVertical: 0,
+    },
+    clearButton: {
+      marginStart: Spacing.sm,
+      padding: Spacing.xs,
+    },
 
-  // Results area
-  resultsArea: {
-    flex: 1,
-  },
-  endOfResults: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.lg,
-    paddingHorizontal: Spacing.md,
-  },
+    // Results area
+    resultsArea: {
+      flex: 1,
+    },
+    endOfResults: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.lg,
+      paddingHorizontal: Spacing.md,
+    },
 
-  // One content container for both bodies, because both are the same scroll of
-  // the same vignette: the folders grid in the list header, media rows below.
-  // No horizontal padding and no `gap` — `MediaListCard` brings its own margins,
-  // and a container adding to them doubled the gutter on the results side.
-  listContent: {
-    paddingTop: CONTENT_TOP_INSET,
-    paddingBottom: Spacing.xxl,
-  },
-  // The row as the context menu redraws it: the list margins are what the
-  // measured rect already excludes, so keeping them would shift the copy.
-  mediaPreviewCard: {
-    marginHorizontal: 0,
-    marginBottom: 0,
-  },
-  // The gutter the rows carry themselves, applied to whichever header rides
-  // above them.
-  listHeader: {
-    paddingHorizontal: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    marginBottom: Spacing.md,
-  },
-  // The `Folders` heading as a target: the title and its chevron on one line, at
-  // least a touch target tall. The title sits centred in that height, whose slack
-  // already spaces it from what follows, so the title drops its own bottom
-  // margin and the row keeps only `xs`: half the slack plus `xs` comes back to
-  // about the `md` the bare heading used to leave above the grid.
-  foldersToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: Spacing.xs,
-    minHeight: TouchTarget.minimum,
-    marginBottom: Spacing.xs,
-  },
-  // Folded, `All media` comes up right under the heading, with the room of one
-  // heading after another rather than the tighter gap a heading keeps above its
-  // own content.
-  foldersToggleFolded: {
-    marginBottom: Spacing.md,
-  },
-  foldersToggleTitle: {
-    marginBottom: 0,
-  },
-  foldersTogglePressed: {
-    opacity: 0.75,
-  },
-  sectionHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textSubtle,
-    lineHeight: Typography.body.lineHeight,
-    marginBottom: Spacing.lg,
-  },
-  sectionLoadingRow: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.xl,
-  },
-  // The grid owns the space *between* its rows, and separately the space after
-  // its last one -- two gaps a per-tile bottom margin used to conflate, which is
-  // what made the rows drift apart: the margin had to be large enough to break
-  // from the next section heading, so every row inherited a section-sized gap.
-  //
-  // Only `rowGap`: the columns are sized in percentages, so a `columnGap` would
-  // push 3 x 33.333% + 2 x gap past the line and wrap the third tile away. The
-  // column gutter stays the slot's own horizontal padding.
-  foldersGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    rowGap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  slotHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.md,
-  },
-  mediaSectionHeader: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: Spacing.sm,
-  },
-  mediaSectionCount: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-    marginBottom: Spacing.md,
-  },
+    // One content container for both bodies, because both are the same scroll of
+    // the same vignette: the folders grid in the list header, media rows below.
+    // No horizontal padding and no `gap` — `MediaListCard` brings its own margins,
+    // and a container adding to them doubled the gutter on the results side.
+    listContent: {
+      paddingTop: CONTENT_TOP_INSET,
+      paddingBottom: Spacing.xxl,
+    },
+    // The row as the context menu redraws it: the list margins are what the
+    // measured rect already excludes, so keeping them would shift the copy.
+    mediaPreviewCard: {
+      marginHorizontal: 0,
+      marginBottom: 0,
+    },
+    // The gutter the rows carry themselves, applied to whichever header rides
+    // above them.
+    listHeader: {
+      paddingHorizontal: Spacing.md,
+    },
+    sectionTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+      marginBottom: Spacing.md,
+    },
+    // The `Folders` heading as a target: the title and its chevron on one line, at
+    // least a touch target tall. The title sits centred in that height, whose slack
+    // already spaces it from what follows, so the title drops its own bottom
+    // margin and the row keeps only `xs`: half the slack plus `xs` comes back to
+    // about the `md` the bare heading used to leave above the grid.
+    foldersToggle: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: Spacing.xs,
+      minHeight: TouchTarget.minimum,
+      marginBottom: Spacing.xs,
+    },
+    // Folded, `All media` comes up right under the heading, with the room of one
+    // heading after another rather than the tighter gap a heading keeps above its
+    // own content.
+    foldersToggleFolded: {
+      marginBottom: Spacing.md,
+    },
+    foldersToggleTitle: {
+      marginBottom: 0,
+    },
+    foldersTogglePressed: {
+      opacity: 0.75,
+    },
+    sectionHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textSubtle,
+      lineHeight: Typography.body.lineHeight,
+      marginBottom: Spacing.lg,
+    },
+    sectionLoadingRow: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: Spacing.xl,
+    },
+    // The grid owns the space *between* its rows, and separately the space after
+    // its last one -- two gaps a per-tile bottom margin used to conflate, which is
+    // what made the rows drift apart: the margin had to be large enough to break
+    // from the next section heading, so every row inherited a section-sized gap.
+    //
+    // Only `rowGap`: the columns are sized in percentages, so a `columnGap` would
+    // push 3 x 33.333% + 2 x gap past the line and wrap the third tile away. The
+    // column gutter stays the slot's own horizontal padding.
+    foldersGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      rowGap: Spacing.sm,
+      marginBottom: Spacing.xl,
+    },
+    slotHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+      paddingVertical: Spacing.xl,
+      paddingHorizontal: Spacing.md,
+    },
+    mediaSectionHeader: {
+      flexDirection: "row",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
+    },
+    mediaSectionCount: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+      marginBottom: Spacing.md,
+    },
 
-  // One half of the library failed to load. Tonal surface, no stroke: it is a
-  // slot of the page, not an alert.
-  inlineErrorCard: {
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceContainer,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  // Same card inside a container that is already inset, where the card's own
-  // horizontal margin would double the gutter.
-  inlineErrorCardFlush: {
-    marginHorizontal: 0,
-  },
-  inlineErrorText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-  },
-  emptyLibraryContainer: {
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xl,
-  },
-  folderTileSlot: {
-    width: "33.333%",
-    paddingHorizontal: 6,
-  },
-  // The tile as the context menu redraws it: it fills the rect the slot was
-  // measured at, which the grid's own row gap falls outside of.
-  folderTilePreview: {
-    width: "100%",
-  },
-  // No height of its own: the box hugs the icon and the label, so a name that
-  // fits on one line no longer leaves the height of a second one empty beneath
-  // it, and a name that needs two still gets them. Tiles of the same row keep
-  // aligning -- each slot stretches to the tallest tile of its row and holds its
-  // content at the top.
-  folderTile: {
-    alignItems: "center",
-    paddingVertical: Spacing.sm,
-  },
-  folderTilePressed: {
-    opacity: 0.75,
-    transform: [{ scale: 0.97 }],
-  },
-  folderIcon: {
-    width: 64,
-    height: 58,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.xs,
-  },
-  folderName: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-    textAlign: "center",
-    lineHeight: 17,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
+    // One half of the library failed to load. Tonal surface, no stroke: it is a
+    // slot of the page, not an alert.
+    inlineErrorCard: {
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceContainer,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.lg,
+      marginHorizontal: Spacing.md,
+      marginBottom: Spacing.lg,
+    },
+    // Same card inside a container that is already inset, where the card's own
+    // horizontal margin would double the gutter.
+    inlineErrorCardFlush: {
+      marginHorizontal: 0,
+    },
+    inlineErrorText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+    },
+    emptyLibraryContainer: {
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+      paddingTop: Spacing.xl,
+    },
+    folderTileSlot: {
+      width: "33.333%",
+      paddingHorizontal: 6,
+    },
+    // The tile as the context menu redraws it: it fills the rect the slot was
+    // measured at, which the grid's own row gap falls outside of.
+    folderTilePreview: {
+      width: "100%",
+    },
+    // No height of its own: the box hugs the icon and the label, so a name that
+    // fits on one line no longer leaves the height of a second one empty beneath
+    // it, and a name that needs two still gets them. Tiles of the same row keep
+    // aligning -- each slot stretches to the tallest tile of its row and holds its
+    // content at the top.
+    folderTile: {
+      alignItems: "center",
+      paddingVertical: Spacing.sm,
+    },
+    folderTilePressed: {
+      opacity: 0.75,
+      transform: [{ scale: 0.97 }],
+    },
+    folderIcon: {
+      width: 64,
+      height: 58,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.xs,
+    },
+    folderName: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+      textAlign: "center",
+      lineHeight: 17,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
 
-  // Empty states
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-    paddingTop: CONTENT_TOP_INSET,
-  },
-  emptyIcon: {
-    marginBottom: Spacing.md,
-  },
-  emptyTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  emptyHint: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    marginTop: Spacing.sm,
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+    // Empty states
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+      paddingTop: CONTENT_TOP_INSET,
+    },
+    emptyIcon: {
+      marginBottom: Spacing.md,
+    },
+    emptyTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    emptyHint: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      marginTop: Spacing.sm,
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

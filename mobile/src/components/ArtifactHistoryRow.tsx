@@ -16,11 +16,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { getRelativeTime } from "../lib/relativeTime";
 import { t, tCount } from "../i18n";
 import type { ArtifactSummary } from "../services/artifactService";
@@ -38,6 +39,8 @@ export function ArtifactHistoryRow({
   showSourceCount = true,
   onPress,
 }: ArtifactHistoryRowProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const tile = ARTIFACT_TILES.find((entry) => entry.type === artifact.artifact_type);
   const inFlight =
     artifact.status === "queued" || artifact.status === "generating";
@@ -102,40 +105,41 @@ export function ArtifactHistoryRow({
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    minHeight: TouchTarget.comfortable,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-  },
-  rowPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
-  },
-  iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceContainerLow,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  textColumn: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  meta: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+    },
+    rowPressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    iconContainer: {
+      width: 36,
+      height: 36,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.surfaceContainerLow,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    textColumn: {
+      flex: 1,
+      gap: 2,
+    },
+    title: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    meta: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+    },
+  });

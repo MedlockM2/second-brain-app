@@ -24,12 +24,16 @@ import {
 } from "../../src/lib/readingLanguageRefusal";
 import { t } from "../../src/i18n";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeader";
 
 /**
@@ -45,6 +49,8 @@ import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeade
  * and another device may have spent the change since.
  */
 export default function ReadingLanguageSettingsScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const {
     readingLanguage,
@@ -200,119 +206,120 @@ export default function ReadingLanguageSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  disclaimer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: Colors.surfaceContainerLow,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-  },
-  disclaimerText: {
-    flex: 1,
-    ...Typography.small,
-    color: Colors.textMuted,
-    lineHeight: 18,
-  },
-  // Same tonal surface as the disclaimer above it: both are context, not alarm.
-  // The monthly guard-rail is a fact about the setting, and turning it red would
-  // read as something having gone wrong.
-  limitNotice: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: Colors.surfaceContainerLow,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-  },
-  limitNoticeText: {
-    flex: 1,
-    ...Typography.small,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  errorContainer: {
-    backgroundColor: Colors.errorContainer,
-    padding: Spacing.md,
-    marginHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: Typography.small.fontSize,
-  },
-  successContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-  },
-  successText: {
-    ...Typography.small,
-    color: Colors.textMain,
-    fontWeight: "500",
-  },
-  listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  languageItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-  },
-  languageItemSelected: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  languageLabel: {
-    flex: 1,
-    ...Typography.body,
-    fontWeight: "500",
-    color: Colors.textMain,
-  },
-  languageLabelSelected: {
-    fontWeight: "700",
-  },
-  languageCode: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    marginEnd: Spacing.sm,
-  },
-  footer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingBottom: Platform.OS === "ios" ? Spacing.md : Spacing.lg,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: TouchTarget.comfortable,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: Colors.onPrimary,
-    ...Typography.body,
-    fontWeight: "600",
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    disclaimer: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: Colors.surfaceContainerLow,
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.md,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      gap: Spacing.sm,
+    },
+    disclaimerText: {
+      flex: 1,
+      ...Typography.small,
+      color: Colors.textMuted,
+      lineHeight: 18,
+    },
+    // Same tonal surface as the disclaimer above it: both are context, not alarm.
+    // The monthly guard-rail is a fact about the setting, and turning it red would
+    // read as something having gone wrong.
+    limitNotice: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: Colors.surfaceContainerLow,
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.md,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      gap: Spacing.sm,
+    },
+    limitNoticeText: {
+      flex: 1,
+      ...Typography.small,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    errorContainer: {
+      backgroundColor: Colors.errorContainer,
+      padding: Spacing.md,
+      marginHorizontal: Spacing.lg,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.md,
+    },
+    errorText: {
+      color: Colors.error,
+      fontSize: Typography.small.fontSize,
+    },
+    successContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.lg,
+      marginBottom: Spacing.md,
+    },
+    successText: {
+      ...Typography.small,
+      color: Colors.textMain,
+      fontWeight: "500",
+    },
+    listContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.md,
+    },
+    languageItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      marginBottom: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+    },
+    languageItemSelected: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    languageLabel: {
+      flex: 1,
+      ...Typography.body,
+      fontWeight: "500",
+      color: Colors.textMain,
+    },
+    languageLabelSelected: {
+      fontWeight: "700",
+    },
+    languageCode: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      marginEnd: Spacing.sm,
+    },
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      paddingBottom: Platform.OS === "ios" ? Spacing.md : Spacing.lg,
+    },
+    saveButton: {
+      backgroundColor: Colors.primary,
+      borderRadius: BorderRadius.md,
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: TouchTarget.comfortable,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    saveButtonText: {
+      color: Colors.onPrimary,
+      ...Typography.body,
+      fontWeight: "600",
+    },
+  });

@@ -30,12 +30,12 @@ import {
 } from "react-native";
 import {
   BorderRadius,
-  Colors,
-  Shadows,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 export interface UrlEntryDialogProps {
@@ -62,6 +62,8 @@ export function UrlEntryDialog({
   onClose,
   onSubmit,
 }: UrlEntryDialogProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const canSubmit = value.trim().length > 0;
 
   const handleSubmit = () => {
@@ -165,92 +167,93 @@ export function UrlEntryDialog({
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(43, 45, 66, 0.35)",
-  },
-  centering: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.lg,
-  },
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    gap: Spacing.md,
-    ...Shadows.soft,
-  },
-  title: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-  },
-  // A tonal shift instead of a border: the field reads as a recessed surface,
-  // which is how the design system separates without lines.
-  input: {
-    minHeight: TouchTarget.minimum,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-    // A URL is stable ASCII, so it stays left-to-right even when the interface
-    // language is not: an Arabic UI must not reorder the address being typed.
-    textAlign: "left",
-    writingDirection: "ltr",
-  },
-  hint: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-  },
-  error: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-  },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: Spacing.sm,
-  },
-  secondaryButton: {
-    minHeight: TouchTarget.minimum,
-    paddingHorizontal: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: BorderRadius.lg,
-  },
-  secondaryButtonPressed: {
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  secondaryLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textSubtle,
-  },
-  primaryButton: {
-    minHeight: TouchTarget.minimum,
-    minWidth: TouchTarget.large,
-    paddingHorizontal: Spacing.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.primary,
-  },
-  primaryButtonPressed: {
-    opacity: 0.9,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.5,
-  },
-  primaryLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-    color: Colors.onPrimary,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: Colors.scrim,
+    },
+    centering: {
+      flex: 1,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.lg,
+    },
+    card: {
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.lg,
+      gap: Spacing.md,
+      ...Shadows.soft,
+    },
+    title: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    // A tonal shift instead of a border: the field reads as a recessed surface,
+    // which is how the design system separates without lines.
+    input: {
+      minHeight: TouchTarget.minimum,
+      backgroundColor: Colors.surfaceContainerLow,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+      // A URL is stable ASCII, so it stays left-to-right even when the interface
+      // language is not: an Arabic UI must not reorder the address being typed.
+      textAlign: "left",
+      writingDirection: "ltr",
+    },
+    hint: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+    },
+    error: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+    },
+    actions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: Spacing.sm,
+    },
+    secondaryButton: {
+      minHeight: TouchTarget.minimum,
+      paddingHorizontal: Spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: BorderRadius.lg,
+    },
+    secondaryButtonPressed: {
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    secondaryLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textSubtle,
+    },
+    primaryButton: {
+      minHeight: TouchTarget.minimum,
+      minWidth: TouchTarget.large,
+      paddingHorizontal: Spacing.lg,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.primary,
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonDisabled: {
+      opacity: 0.5,
+    },
+    primaryLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.onPrimary,
+    },
+  });

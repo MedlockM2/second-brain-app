@@ -90,11 +90,12 @@ import {
 import type { AnchorRect } from "./AnchoredContextMenu";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -262,6 +263,8 @@ export function MediaDetailHero({
   onBack,
   onActionsPress,
 }: MediaDetailHeroProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Known before the first frame, from the band's shape and whether there is a
   // picture at all — never from how long the title turns out to be. So there is
   // no measure, nothing to wait for, and no pass to hide: the strip is drawn on
@@ -409,6 +412,9 @@ export function MediaDetailHero({
  * the control that opened the menu stays sharp on the measured rect.
  */
 export function MediaHeroMenuGlyph(): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <GlassSurface style={styles.glassButtonSurface}>
       <Ionicons name={MENU_GLYPH} size={24} color={Colors.textMain} />
@@ -418,6 +424,8 @@ export function MediaHeroMenuGlyph(): React.JSX.Element {
 
 /** The top of the band darkened under the status bar, strip by strip. */
 function StatusBarScrim({ height }: { height: number }): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View
       style={[styles.scrim, { height }]}
@@ -443,6 +451,9 @@ function GlassButton({
   accessibilityLabel: string;
   onPress: () => void;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Pressable
       style={styles.glassButton}
@@ -467,6 +478,8 @@ function GlassMenuButton({
 }: {
   onPress: (anchor: AnchorRect) => void;
 }): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const buttonRef = useRef<View>(null);
 
   const handlePress = () => {
@@ -492,121 +505,122 @@ function GlassMenuButton({
   );
 }
 
-const styles = StyleSheet.create({
-  // The tone is what a loading picture shows: the frame, bare.
-  band: {
-    backgroundColor: Colors.surfaceContainerLow,
-    overflow: "hidden",
-  },
-  fallback: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "center",
-    paddingBottom: Spacing.xl,
-  },
-  scrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  scrimStep: {
-    flex: 1,
-    backgroundColor: Colors.textMain,
-  },
-  // `overflow: hidden` is what `GlassSurface` asks of its caller, so the
-  // material is clipped to the strip whichever branch renders it.
-  titleBand: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    overflow: "hidden",
-  },
-  // The strip's contrast floor. Absolute so it does not take part in the strip's
-  // layout, and first in the tree so the text is drawn over it.
-  titleVeil: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.coverTitleVeil,
-  },
-  titleBelow: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  // `textSubtle`: a line to read, at 5.3:1 on the page. The letter spacing is the
-  // one every small-caps label of the app uses.
-  eyebrow: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textSubtle,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: Spacing.xs,
-  },
-  // On the cover, `textSubtle` measures 2.7:1 through the wash against a dark
-  // picture, so the line takes the title's colour — 6.5:1 at worst. Size, weight
-  // and caps still set it apart from the title it sits over.
-  eyebrowOnCover: {
-    color: Colors.textMain,
-  },
-  // The display title, at `TITLE_FONT_SIZE` rather than the 32pt of
-  // `Typography.display`: the weight and the letter spacing of the display style,
-  // four points smaller. Leading follows at the 1.19 ratio the 32/38 pair had.
-  title: {
-    fontSize: TITLE_FONT_SIZE,
-    fontWeight: Typography.display.fontWeight,
-    letterSpacing: Typography.display.letterSpacing,
-    lineHeight: TITLE_LINE_HEIGHT,
-    color: Colors.textMain,
-  },
-  // Where the lifecycle header puts its arrow, so the button does not move when
-  // the processing state hands over to the page.
-  controls: {
-    position: "absolute",
-    left: Spacing.md,
-    right: Spacing.md,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  glassButton: {
-    width: MEDIA_HEADER_BUTTON_SIZE,
-    height: MEDIA_HEADER_BUTTON_SIZE,
-  },
-  glassButtonSurface: {
-    width: MEDIA_HEADER_BUTTON_SIZE,
-    height: MEDIA_HEADER_BUTTON_SIZE,
-    borderRadius: BorderRadius.full,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  metaLine: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    columnGap: Spacing.xs,
-    rowGap: Spacing.xs,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  sourceLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    borderRadius: BorderRadius.sm,
-  },
-  sourceLinkPressed: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  sourceLinkText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textSubtle,
-  },
-  metaText: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textSubtle,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    // The tone is what a loading picture shows: the frame, bare.
+    band: {
+      backgroundColor: Colors.surfaceContainerLow,
+      overflow: "hidden",
+    },
+    fallback: {
+      flex: 1,
+      justifyContent: "flex-end",
+      alignItems: "center",
+      paddingBottom: Spacing.xl,
+    },
+    scrim: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+    },
+    scrimStep: {
+      flex: 1,
+      backgroundColor: Colors.coverScrimInk,
+    },
+    // `overflow: hidden` is what `GlassSurface` asks of its caller, so the
+    // material is clipped to the strip whichever branch renders it.
+    titleBand: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      overflow: "hidden",
+    },
+    // The strip's contrast floor. Absolute so it does not take part in the strip's
+    // layout, and first in the tree so the text is drawn over it.
+    titleVeil: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: Colors.coverTitleVeil,
+    },
+    titleBelow: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+    },
+    // `textSubtle`: a line to read, at 5.3:1 on the page. The letter spacing is the
+    // one every small-caps label of the app uses.
+    eyebrow: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textSubtle,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: Spacing.xs,
+    },
+    // On the cover, `textSubtle` measures 2.7:1 through the wash against a dark
+    // picture, so the line takes the title's colour — 6.5:1 at worst. Size, weight
+    // and caps still set it apart from the title it sits over.
+    eyebrowOnCover: {
+      color: Colors.textMain,
+    },
+    // The display title, at `TITLE_FONT_SIZE` rather than the 32pt of
+    // `Typography.display`: the weight and the letter spacing of the display style,
+    // four points smaller. Leading follows at the 1.19 ratio the 32/38 pair had.
+    title: {
+      fontSize: TITLE_FONT_SIZE,
+      fontWeight: Typography.display.fontWeight,
+      letterSpacing: Typography.display.letterSpacing,
+      lineHeight: TITLE_LINE_HEIGHT,
+      color: Colors.textMain,
+    },
+    // Where the lifecycle header puts its arrow, so the button does not move when
+    // the processing state hands over to the page.
+    controls: {
+      position: "absolute",
+      left: Spacing.md,
+      right: Spacing.md,
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    glassButton: {
+      width: MEDIA_HEADER_BUTTON_SIZE,
+      height: MEDIA_HEADER_BUTTON_SIZE,
+    },
+    glassButtonSurface: {
+      width: MEDIA_HEADER_BUTTON_SIZE,
+      height: MEDIA_HEADER_BUTTON_SIZE,
+      borderRadius: BorderRadius.full,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    metaLine: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      columnGap: Spacing.xs,
+      rowGap: Spacing.xs,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+    },
+    sourceLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      borderRadius: BorderRadius.sm,
+    },
+    sourceLinkPressed: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    sourceLinkText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textSubtle,
+    },
+    metaText: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
+    },
+  });

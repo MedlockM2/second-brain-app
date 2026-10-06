@@ -21,13 +21,13 @@ import {
   quotaErrorOffersUpgrade,
 } from "../src/lib/quotaError";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../src/constants/theme";
+import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
 import { t, useTranslation } from "../src/i18n";
 import { ScreenHeader, HeaderIconButton } from "../src/components/ScreenHeader";
 
@@ -59,6 +59,8 @@ import { ScreenHeader, HeaderIconButton } from "../src/components/ScreenHeader";
  * is a fact for the logs, not for the person holding the phone.
  */
 export default function ShareConfirmationScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -238,6 +240,8 @@ function ShareContent({
   /** `null` when no subscription may be offered — see the screen above. */
   onOpenPaywall: (() => void) | null;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   switch (intake.status) {
     // "ready" belongs here and not with the question: the submission has been
     // fired but has not left yet, and it lasts a frame. Saying "is being saved"
@@ -368,6 +372,8 @@ function FolderQuestion({
   onYes: () => void;
   onNo: () => void;
 }) {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.questionContent}>
       <Text style={styles.questionBody}>
@@ -412,137 +418,138 @@ function FolderQuestion({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-  },
-  centerContent: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-  },
-  statusText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    marginTop: Spacing.md,
-  },
-  // The question, centred in the sheet. No card and no rule: two sentences on
-  // the page are their own hierarchy.
-  questionContent: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: Spacing.sm,
-    paddingBottom: Spacing.xxl,
-    gap: Spacing.md,
-  },
-  questionBody: {
-    fontSize: Typography.body.fontSize,
-    lineHeight: Typography.body.lineHeight,
-    color: Colors.textSubtle,
-    textAlign: "center",
-  },
-  questionPrompt: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    textAlign: "center",
-  },
-  answers: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginTop: Spacing.lg,
-  },
-  // Both answers carry the same weight of target — the labels are two or three
-  // letters, and neither is a destructive action.
-  answerButton: {
-    flex: 1,
-    minHeight: TouchTarget.comfortable,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
-  },
-  answerNo: {
-    backgroundColor: Colors.surfaceContainer,
-  },
-  answerNoPressed: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  answerNoLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  answerYes: {
-    backgroundColor: Colors.primary,
-    ...Shadows.soft,
-  },
-  answerYesPressed: {
-    opacity: 0.85,
-  },
-  answerYesLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "700",
-    color: Colors.onPrimary,
-  },
-  // Error state
-  errorIcon: {
-    marginBottom: Spacing.md,
-  },
-  errorTitle: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.sm,
-  },
-  errorMessage: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-    marginBottom: Spacing.lg,
-  },
-  upgradeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-    minHeight: TouchTarget.minimum,
-    marginBottom: Spacing.sm,
-    ...Shadows.soft,
-  },
-  upgradeButtonPressed: {
-    opacity: 0.85,
-  },
-  upgradeButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: "700",
-    color: Colors.onPrimary,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainer,
-    minHeight: TouchTarget.minimum,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.lg,
+    },
+    centerContent: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: Spacing.xl,
+    },
+    statusText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      marginTop: Spacing.md,
+    },
+    // The question, centred in the sheet. No card and no rule: two sentences on
+    // the page are their own hierarchy.
+    questionContent: {
+      flex: 1,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.sm,
+      paddingBottom: Spacing.xxl,
+      gap: Spacing.md,
+    },
+    questionBody: {
+      fontSize: Typography.body.fontSize,
+      lineHeight: Typography.body.lineHeight,
+      color: Colors.textSubtle,
+      textAlign: "center",
+    },
+    questionPrompt: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      textAlign: "center",
+    },
+    answers: {
+      flexDirection: "row",
+      gap: Spacing.md,
+      marginTop: Spacing.lg,
+    },
+    // Both answers carry the same weight of target — the labels are two or three
+    // letters, and neither is a destructive action.
+    answerButton: {
+      flex: 1,
+      minHeight: TouchTarget.comfortable,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: Spacing.lg,
+      borderRadius: BorderRadius.full,
+    },
+    answerNo: {
+      backgroundColor: Colors.surfaceContainer,
+    },
+    answerNoPressed: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    answerNoLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    answerYes: {
+      backgroundColor: Colors.primary,
+      ...Shadows.soft,
+    },
+    answerYesPressed: {
+      opacity: 0.85,
+    },
+    answerYesLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "700",
+      color: Colors.onPrimary,
+    },
+    // Error state
+    errorIcon: {
+      marginBottom: Spacing.md,
+    },
+    errorTitle: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      marginBottom: Spacing.sm,
+    },
+    errorMessage: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+      marginBottom: Spacing.lg,
+    },
+    upgradeButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+      minHeight: TouchTarget.minimum,
+      marginBottom: Spacing.sm,
+      ...Shadows.soft,
+    },
+    upgradeButtonPressed: {
+      opacity: 0.85,
+    },
+    upgradeButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "700",
+      color: Colors.onPrimary,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainer,
+      minHeight: TouchTarget.minimum,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+    },
+  });

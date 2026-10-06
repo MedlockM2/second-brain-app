@@ -33,11 +33,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   TouchTarget,
   Typography,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import type { ArtifactSummary } from "../types/artifacts";
 import type { ArtifactType } from "../types/media";
 import {
@@ -90,6 +91,9 @@ export function ArtifactsPanel({
   onOpenArtifact,
   showSourceCount,
 }: ArtifactsPanelProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.panel}>
       <Text style={styles.heading}>{t("artifacts.panel.generateHeading")}</Text>
@@ -163,71 +167,72 @@ export function ArtifactsPanel({
   );
 }
 
-const styles = StyleSheet.create({
-  // The panel carries its own gutter — the same `Spacing.lg` the rest of both
-  // screens sits on — so neither caller re-applies one and neither can shift it.
-  panel: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
-  },
-  heading: {
-    fontSize: Typography.headline.fontSize,
-    fontWeight: Typography.headline.fontWeight,
-    color: Colors.textMain,
-    marginBottom: Spacing.md,
-  },
-  // Air above the second heading only: the first one opens the tab and needs
-  // none, hence a separate style rather than a change to the shared one.
-  historyHeading: {
-    marginTop: Spacing.lg,
-  },
-  // Stacks of self-contained cards: the gap does the sectioning, so there is no
-  // rule and no container frame ("No-Line rule").
-  tileStack: {
-    gap: Spacing.sm,
-  },
-  historyList: {
-    gap: Spacing.sm,
-  },
-  inlineState: {
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.lg,
-  },
-  inlineStateText: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    textAlign: "center",
-    lineHeight: Typography.body.lineHeight,
-  },
-  retryButton: {
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm + 4,
-    borderRadius: BorderRadius.lg,
-    minHeight: TouchTarget.minimum,
-  },
-  retryButtonText: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.onPrimary,
-  },
-  refusalBanner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    backgroundColor: Colors.errorContainer,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  refusalText: {
-    flex: 1,
-    fontSize: Typography.small.fontSize,
-    color: Colors.error,
-    lineHeight: Typography.body.lineHeight,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    // The panel carries its own gutter — the same `Spacing.lg` the rest of both
+    // screens sits on — so neither caller re-applies one and neither can shift it.
+    panel: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.xxl,
+    },
+    heading: {
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+      marginBottom: Spacing.md,
+    },
+    // Air above the second heading only: the first one opens the tab and needs
+    // none, hence a separate style rather than a change to the shared one.
+    historyHeading: {
+      marginTop: Spacing.lg,
+    },
+    // Stacks of self-contained cards: the gap does the sectioning, so there is no
+    // rule and no container frame ("No-Line rule").
+    tileStack: {
+      gap: Spacing.sm,
+    },
+    historyList: {
+      gap: Spacing.sm,
+    },
+    inlineState: {
+      alignItems: "center",
+      gap: Spacing.sm,
+      paddingVertical: Spacing.lg,
+    },
+    inlineStateText: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      textAlign: "center",
+      lineHeight: Typography.body.lineHeight,
+    },
+    retryButton: {
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: Colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm + 4,
+      borderRadius: BorderRadius.lg,
+      minHeight: TouchTarget.minimum,
+    },
+    retryButtonText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.onPrimary,
+    },
+    refusalBanner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      backgroundColor: Colors.errorContainer,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      marginTop: Spacing.md,
+    },
+    refusalText: {
+      flex: 1,
+      fontSize: Typography.small.fontSize,
+      color: Colors.error,
+      lineHeight: Typography.body.lineHeight,
+    },
+  });

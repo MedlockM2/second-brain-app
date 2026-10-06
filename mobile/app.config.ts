@@ -209,7 +209,20 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
+    // `automatic`, and this is the one line of task-433 that is not JavaScript.
+    //
+    // It writes `UIUserInterfaceStyle` into the Info.plist and lets Android keep
+    // its own night mode. While it read `light`, iOS pinned the app's trait
+    // collection to light and `Appearance.getColorScheme()` answered `"light"`
+    // forever — so `useColorScheme()`, which `ThemeProvider` subscribes to, could
+    // never report a dark device and the "Match my device" state of the theme
+    // setting would have been a synonym for "Light".
+    //
+    // Consequence for delivery: the two *forced* states work over the air,
+    // because they never ask the OS anything. "Match my device" needs the binary
+    // rebuilt — and it moves the fingerprint `runtimeVersion` below is computed
+    // from, so the next build is required rather than optional.
+    userInterfaceStyle: "automatic",
     scheme: "media-summarizer",
     // EAS Update (task-340). Two fields, and the second one is the mechanism.
     //

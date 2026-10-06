@@ -3,12 +3,13 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { HOME_BLOCK_GAP } from "../constants/homeRhythm";
 import { usePurchases } from "../contexts/PurchasesContext";
 import { formatResetDate, getUsageRatio } from "../lib/subscriptionDisplay";
@@ -33,6 +34,8 @@ import { t } from "../i18n";
  * tester as to a subscriber — there is just nothing to buy about it.
  */
 export function MinutesWarningBanner(): React.JSX.Element | null {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { entitlementStatus, isBetaAccess } = usePurchases();
   const resetsAt = entitlementStatus?.resets_at ?? null;
@@ -129,52 +132,53 @@ function buildMessage(
       });
 }
 
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    // The Home column's one inter-block gap, above only (`HOME_BLOCK_GAP`), so
-    // the banner reads the same distance from the trial pill above it as from the
-    // card below it, and costs the column nothing when dismissed.
-    marginTop: HOME_BLOCK_GAP,
-    paddingVertical: Spacing.sm,
-    paddingStart: Spacing.md,
-    paddingEnd: Spacing.xs,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  content: {
-    flex: 1,
-    // Balances the icon's optical centre against the first line of text without
-    // pushing the whole row down.
-    paddingTop: Spacing.xs / 2,
-  },
-  message: {
-    ...Typography.small,
-    color: Colors.textMain,
-  },
-  link: {
-    alignSelf: "flex-start",
-    justifyContent: "center",
-    minHeight: TouchTarget.minimum,
-    paddingEnd: Spacing.md,
-  },
-  linkText: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-    textDecorationLine: "underline",
-  },
-  linkPressed: {
-    opacity: 0.6,
-  },
-  dismiss: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: TouchTarget.minimum,
-    minWidth: TouchTarget.minimum,
-    borderRadius: BorderRadius.full,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    banner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      marginHorizontal: Spacing.md,
+      // The Home column's one inter-block gap, above only (`HOME_BLOCK_GAP`), so
+      // the banner reads the same distance from the trial pill above it as from the
+      // card below it, and costs the column nothing when dismissed.
+      marginTop: HOME_BLOCK_GAP,
+      paddingVertical: Spacing.sm,
+      paddingStart: Spacing.md,
+      paddingEnd: Spacing.xs,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    content: {
+      flex: 1,
+      // Balances the icon's optical centre against the first line of text without
+      // pushing the whole row down.
+      paddingTop: Spacing.xs / 2,
+    },
+    message: {
+      ...Typography.small,
+      color: Colors.textMain,
+    },
+    link: {
+      alignSelf: "flex-start",
+      justifyContent: "center",
+      minHeight: TouchTarget.minimum,
+      paddingEnd: Spacing.md,
+    },
+    linkText: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+      textDecorationLine: "underline",
+    },
+    linkPressed: {
+      opacity: 0.6,
+    },
+    dismiss: {
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: TouchTarget.minimum,
+      minWidth: TouchTarget.minimum,
+      borderRadius: BorderRadius.full,
+    },
+  });

@@ -24,12 +24,16 @@ import {
   STORE_SUBSCRIPTIONS_URL,
 } from "../../src/constants/legal";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeader";
 
 /**
@@ -57,6 +61,8 @@ const ERASED_ITEM_KEYS: readonly TranslationKey[] = [
 ];
 
 export default function DeleteAccountScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { isAuthenticated, logout } = useAuth();
   const { entitlementStatus, customerInfo } = usePurchases();
@@ -277,122 +283,123 @@ export default function DeleteAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.lg,
-  },
-  warningCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: Colors.errorContainer,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-  },
-  warningTextContainer: {
-    flex: 1,
-  },
-  warningTitle: {
-    ...Typography.label,
-    fontWeight: "700",
-    color: Colors.error,
-    marginBottom: Spacing.xs,
-  },
-  warningText: {
-    ...Typography.small,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  sectionTitle: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMuted,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.sm,
-  },
-  card: {
-    backgroundColor: Colors.surfaceContainerLow,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-  },
-  cardText: {
-    ...Typography.small,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  bulletRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  bulletText: {
-    flex: 1,
-    ...Typography.small,
-    color: Colors.textMain,
-  },
-  linkRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-  },
-  linkText: {
-    flex: 1,
-    ...Typography.small,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  acknowledgeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    marginTop: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-  },
-  acknowledgeText: {
-    flex: 1,
-    ...Typography.small,
-    color: Colors.textMain,
-    lineHeight: 18,
-  },
-  errorContainer: {
-    backgroundColor: Colors.errorContainer,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginTop: Spacing.md,
-  },
-  errorText: {
-    ...Typography.small,
-    color: Colors.error,
-  },
-  footer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingBottom: Platform.OS === "ios" ? Spacing.md : Spacing.lg,
-  },
-  deleteButton: {
-    backgroundColor: Colors.error,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: TouchTarget.comfortable,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  deleteButtonText: {
-    ...Typography.body,
-    fontWeight: "600",
-    color: Colors.onError,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.lg,
+    },
+    warningCard: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: Colors.errorContainer,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      gap: Spacing.sm,
+    },
+    warningTextContainer: {
+      flex: 1,
+    },
+    warningTitle: {
+      ...Typography.label,
+      fontWeight: "700",
+      color: Colors.error,
+      marginBottom: Spacing.xs,
+    },
+    warningText: {
+      ...Typography.small,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    sectionTitle: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMuted,
+      marginTop: Spacing.lg,
+      marginBottom: Spacing.sm,
+    },
+    card: {
+      backgroundColor: Colors.surfaceContainerLow,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      gap: Spacing.sm,
+    },
+    cardText: {
+      ...Typography.small,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    bulletRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    bulletText: {
+      flex: 1,
+      ...Typography.small,
+      color: Colors.textMain,
+    },
+    linkRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+    },
+    linkText: {
+      flex: 1,
+      ...Typography.small,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    acknowledgeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginTop: Spacing.lg,
+      paddingVertical: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+    },
+    acknowledgeText: {
+      flex: 1,
+      ...Typography.small,
+      color: Colors.textMain,
+      lineHeight: 18,
+    },
+    errorContainer: {
+      backgroundColor: Colors.errorContainer,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.md,
+      marginTop: Spacing.md,
+    },
+    errorText: {
+      ...Typography.small,
+      color: Colors.error,
+    },
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      paddingBottom: Platform.OS === "ios" ? Spacing.md : Spacing.lg,
+    },
+    deleteButton: {
+      backgroundColor: Colors.error,
+      borderRadius: BorderRadius.md,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: TouchTarget.comfortable,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    deleteButtonText: {
+      ...Typography.body,
+      fontWeight: "600",
+      color: Colors.onError,
+    },
+  });

@@ -20,9 +20,20 @@ import {
 import { SocialAuthButtons } from "../../src/components/SocialAuthButtons";
 import { t } from "../../src/i18n";
 import { POST_AUTH_ENTRY_POINT } from "../../src/constants/routes";
-import { Colors, Typography, Spacing, BorderRadius } from "../../src/constants/theme";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  type Theme,
+} from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 
 export default function LoginScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { login, sessionError, clearSessionError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -159,89 +170,90 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: Spacing.lg,
-  },
-  header: {
-    marginBottom: Spacing.xl,
-  },
-  title: {
-    fontSize: Typography.display.fontSize,
-    fontWeight: Typography.display.fontWeight,
-    color: Colors.textMain,
-    letterSpacing: Typography.display.letterSpacing,
-  },
-  subtitle: {
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMuted,
-    marginTop: Spacing.sm,
-  },
-  errorContainer: {
-    backgroundColor: Colors.errorContainer,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: Typography.small.fontSize,
-  },
-  form: {
-    gap: Spacing.md,
-  },
-  inputGroup: {
-    gap: Spacing.xs,
-  },
-  inputLabel: {
-    fontSize: Typography.label.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 14,
-    fontSize: Typography.body.fontSize,
-    color: Colors.textMain,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: Spacing.sm,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: Colors.onPrimary,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: Spacing.xl,
-  },
-  footerText: {
-    color: Colors.textMuted,
-    fontSize: Typography.label.fontSize,
-  },
-  footerLink: {
-    color: Colors.textMain,
-    fontSize: Typography.label.fontSize,
-    fontWeight: "600",
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    scrollContent: {
+      flexGrow: 1,
+      justifyContent: "center",
+      padding: Spacing.lg,
+    },
+    header: {
+      marginBottom: Spacing.xl,
+    },
+    title: {
+      fontSize: Typography.display.fontSize,
+      fontWeight: Typography.display.fontWeight,
+      color: Colors.textMain,
+      letterSpacing: Typography.display.letterSpacing,
+    },
+    subtitle: {
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMuted,
+      marginTop: Spacing.sm,
+    },
+    errorContainer: {
+      backgroundColor: Colors.errorContainer,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.md,
+    },
+    errorText: {
+      color: Colors.error,
+      fontSize: Typography.small.fontSize,
+    },
+    form: {
+      gap: Spacing.md,
+    },
+    inputGroup: {
+      gap: Spacing.xs,
+    },
+    inputLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+    },
+    input: {
+      backgroundColor: Colors.surface,
+      borderWidth: 1,
+      borderColor: Colors.outlineVariant,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 14,
+      fontSize: Typography.body.fontSize,
+      color: Colors.textMain,
+    },
+    button: {
+      backgroundColor: Colors.primary,
+      borderRadius: BorderRadius.md,
+      paddingVertical: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: Spacing.sm,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    buttonText: {
+      color: Colors.onPrimary,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+    },
+    footer: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: Spacing.xl,
+    },
+    footerText: {
+      color: Colors.textMuted,
+      fontSize: Typography.label.fontSize,
+    },
+    footerLink: {
+      color: Colors.textMain,
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+    },
+  });

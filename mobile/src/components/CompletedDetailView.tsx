@@ -94,11 +94,16 @@ import {
   type SourcePreviewState,
 } from "./SourcePreview";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
+  type Theme,
 } from "../constants/theme";
+import {
+  useTheme,
+  useThemeColors,
+  useThemedStyles,
+} from "../contexts/ThemeContext";
 import { LOCALE_ENDONYMS, formatDate, t, tCount } from "../i18n";
 import { isSupportedLocale } from "../i18n/locales";
 import type {
@@ -315,6 +320,11 @@ export function CompletedDetailView({
   underStatusBar = true,
   translationBudgets,
 }: CompletedDetailViewProps): React.JSX.Element {
+  // `mode` for the status bar glyphs below, which are a prop rather than a
+  // style and so cannot come from the sheet.
+  const { mode } = useTheme();
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   const { media_item, processing_job } = mediaData;
@@ -1214,8 +1224,11 @@ export function CompletedDetailView({
   // bar's stack for as long as it is mounted, and a screen pushed over this one
   // would otherwise inherit light icons on its light background. Only under the
   // status bar, too: the carousel's band keeps the default dark icons.
+  // In the dark theme the page is dark wherever the cover is not, so the
+  // "scrolled past" branch keeps the light glyphs rather than flipping back.
   const isFocused = useIsFocused();
-  const statusBarStyle = cover && bandUnderStatusBar ? "light" : "dark";
+  const statusBarStyle =
+    (cover && bandUnderStatusBar) || mode === "dark" ? "light" : "dark";
 
   return (
     <View style={styles.container}>
@@ -1359,48 +1372,49 @@ export function CompletedDetailView({
 
 // --- Styles ---
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
 
-  // Toast feedback
-  toastLayer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 2,
-  },
-  toast: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceContainer,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-  },
-  toastText: {
-    fontSize: Typography.small.fontSize,
-    fontWeight: Typography.label.fontWeight,
-    color: Colors.textMain,
-  },
+    // Toast feedback
+    toastLayer: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      alignItems: "center",
+      zIndex: 2,
+    },
+    toast: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: Colors.surfaceContainer,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.full,
+    },
+    toastText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.label.fontWeight,
+      color: Colors.textMain,
+    },
 
-  // Intra-screen tabs, under the metadata line.
-  tabsBar: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  // The Reader tab only. The AI tab is `ArtifactsPanel`, which brings the same
-  // gutter and the same bottom inset with it.
-  readerContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.xxl,
-  },
-});
+    // Intra-screen tabs, under the metadata line.
+    tabsBar: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+    },
+    // The Reader tab only. The AI tab is `ArtifactsPanel`, which brings the same
+    // gutter and the same bottom inset with it.
+    readerContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.xxl,
+    },
+  });

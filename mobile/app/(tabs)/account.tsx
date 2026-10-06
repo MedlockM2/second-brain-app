@@ -22,13 +22,18 @@ import { SubscriptionStatusCard } from "../../src/components/SubscriptionStatusC
 import { LOCALE_ENDONYMS, t, useTranslation } from "../../src/i18n";
 import { fetchPublicPricing } from "../../src/services/pricingService";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  THEME_PREFERENCE_LABEL_KEYS,
+  useThemeColors,
+  useThemedStyles,
+  useThemePreference,
+} from "../../src/contexts/ThemeContext";
 
 /**
  * Account screen: the account's e-mail address at the head of the screen, then
@@ -40,11 +45,14 @@ import {
  * anything (TestFlight feedback, build 10).
  */
 export default function AccountScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { user, isAuthenticated, logout } = useAuth();
   // Subscribes the screen to the interface language, so switching it in the
   // settings redraws this menu instead of leaving it in the previous one.
   const { locale } = useTranslation();
   const { readingLanguage } = useUserPreferences();
+  const { preference: themePreference } = useThemePreference();
   const {
     isSubscribed,
     isBetaAccess,
@@ -248,6 +256,17 @@ export default function AccountScreen() {
             subtitle={LOCALE_ENDONYMS[locale]}
             onPress={() => router.push("/settings/interface-language")}
           />
+          {/* The third device-only setting, next to the two languages because a
+              TestFlight tester pointed at this very card asking for it (build
+              10). Like the interface language, the choice never leaves the
+              phone: the backend renders no chrome, so it has no business
+              knowing what the chrome looks like. */}
+          <MenuItem
+            icon="contrast-outline"
+            label={t("theme.title")}
+            subtitle={t(THEME_PREFERENCE_LABEL_KEYS[themePreference])}
+            onPress={() => router.push("/settings/theme")}
+          />
           <MenuItem
             icon="bulb-outline"
             label={t("account.featureRequests")}
@@ -325,6 +344,9 @@ function MenuItem({
   onPress: () => void;
   isLoading?: boolean;
 }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <TouchableOpacity
       style={styles.menuItem}
@@ -355,117 +377,118 @@ function MenuItem({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: Spacing.xxl,
-  },
-  // Same left edge as the cards below it, and the same gap above them as
-  // between two cards, so the address reads as the head of the column rather
-  // than as a floating caption. Section-header scale (headline) rather than
-  // display: an e-mail address is long, and at 32px most of them would wrap.
-  // `alignSelf: "flex-start"` puts it on the start edge, the right one in an
-  // Arabic UI. `textAlign` cannot do that here: alignment left to the text
-  // follows the address's own Latin script, which would pin it left.
-  email: {
-    ...Typography.headline,
-    color: Colors.textMain,
-    alignSelf: "flex-start",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-  },
-  subscriptionCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    minHeight: TouchTarget.comfortable,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    ...Shadows.soft,
-  },
-  subscriptionCardPressed: {
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  subscriptionIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    marginEnd: Spacing.sm + 4,
-  },
-  subscriptionTextContainer: {
-    flex: 1,
-  },
-  subscriptionLabel: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  subscriptionSubtitle: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  menuCard: {
-    marginHorizontal: Spacing.lg,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    ...Shadows.soft,
-    overflow: "hidden",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: Spacing.md,
-    minHeight: TouchTarget.minimum,
-  },
-  menuIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255, 203, 5, 0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginEnd: Spacing.sm + 4,
-  },
-  menuIconDanger: {
-    backgroundColor: "rgba(186, 26, 26, 0.1)",
-  },
-  menuLabelContainer: {
-    flex: 1,
-  },
-  menuLabel: {
-    fontSize: Typography.body.fontSize,
-    fontWeight: "500",
-    color: Colors.textMain,
-  },
-  menuSubtitle: {
-    fontSize: Typography.small.fontSize,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  menuLabelDanger: {
-    color: Colors.error,
-  },
-  menuChevron: {
-    marginStart: Spacing.sm,
-  },
-  menuDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.outlineVariant,
-    marginHorizontal: Spacing.md,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: Spacing.xxl,
+    },
+    // Same left edge as the cards below it, and the same gap above them as
+    // between two cards, so the address reads as the head of the column rather
+    // than as a floating caption. Section-header scale (headline) rather than
+    // display: an e-mail address is long, and at 32px most of them would wrap.
+    // `alignSelf: "flex-start"` puts it on the start edge, the right one in an
+    // Arabic UI. `textAlign` cannot do that here: alignment left to the text
+    // follows the address's own Latin script, which would pin it left.
+    email: {
+      ...Typography.headline,
+      color: Colors.textMain,
+      alignSelf: "flex-start",
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.md,
+    },
+    subscriptionCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.md,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      minHeight: TouchTarget.comfortable,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      ...Shadows.soft,
+    },
+    subscriptionCardPressed: {
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    subscriptionIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: Colors.primary,
+      justifyContent: "center",
+      alignItems: "center",
+      marginEnd: Spacing.sm + 4,
+    },
+    subscriptionTextContainer: {
+      flex: 1,
+    },
+    subscriptionLabel: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    subscriptionSubtitle: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+      marginTop: 2,
+    },
+    menuCard: {
+      marginHorizontal: Spacing.lg,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      ...Shadows.soft,
+      overflow: "hidden",
+    },
+    menuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+      paddingHorizontal: Spacing.md,
+      minHeight: TouchTarget.minimum,
+    },
+    menuIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: Colors.primaryTint,
+      justifyContent: "center",
+      alignItems: "center",
+      marginEnd: Spacing.sm + 4,
+    },
+    menuIconDanger: {
+      backgroundColor: Colors.errorTint,
+    },
+    menuLabelContainer: {
+      flex: 1,
+    },
+    menuLabel: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "500",
+      color: Colors.textMain,
+    },
+    menuSubtitle: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
+      marginTop: 2,
+    },
+    menuLabelDanger: {
+      color: Colors.error,
+    },
+    menuChevron: {
+      marginStart: Spacing.sm,
+    },
+    menuDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.outlineVariant,
+      marginHorizontal: Spacing.md,
+    },
+  });

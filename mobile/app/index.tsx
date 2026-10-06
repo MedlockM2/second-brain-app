@@ -3,7 +3,8 @@ import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useUserPreferences } from "../src/contexts/UserPreferencesContext";
 import { LANGUAGE_ONBOARDING_ROUTE } from "../src/constants/routes";
-import { Colors } from "../src/constants/theme";
+import { type Theme } from "../src/constants/theme";
+import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
 
 /**
  * Root index route — the single entry point of every authenticated path, and the
@@ -25,6 +26,8 @@ import { Colors } from "../src/constants/theme";
  * that boolean is the single definition of the rule — neither restates it.
  */
 export default function Index() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { isLoading, isAuthenticated } = useAuth();
   const { needsLanguageOnboarding } = useUserPreferences();
 
@@ -46,11 +49,12 @@ export default function Index() {
   return <Redirect href="/(auth)/login" />;
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: Colors.background,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: Colors.background,
+    },
+  });

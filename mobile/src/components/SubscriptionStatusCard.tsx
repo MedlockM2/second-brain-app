@@ -8,13 +8,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
-  Shadows,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import type { EntitlementStatus } from "../contexts/PurchasesContext";
 import {
   formatResetDate,
@@ -77,6 +77,8 @@ export function SubscriptionStatusCard({
   onRetry,
   trialTierName = null,
 }: SubscriptionStatusCardProps): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View testID="account-plan-card" style={styles.card}>
       <Text style={styles.sectionLabel}>{t("account.plan.heading")}</Text>
@@ -96,6 +98,8 @@ function CardBody({
   onRetry,
   trialTierName = null,
 }: SubscriptionStatusCardProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   // Only the very first load shows a spinner. Once a payload is on screen, a
   // background refresh (tab focus, post-purchase) keeps showing the figures
   // instead of flickering back to a placeholder.
@@ -245,6 +249,7 @@ function UsageBar({
 }: {
   entitlement: EntitlementStatus;
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(makeStyles);
   if (entitlement.minutes_included <= 0) {
     return null;
   }
@@ -279,6 +284,8 @@ function Metric({
   label: string;
   accessibilityLabel: string;
 }): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View
       testID={testID}
@@ -296,111 +303,112 @@ function Metric({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    padding: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    ...Shadows.soft,
-  },
-  sectionLabel: {
-    ...Typography.small,
-    fontWeight: "600",
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: Spacing.xs,
-  },
-  inlineRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  planName: {
-    ...Typography.headline,
-    color: Colors.textMain,
-    flexShrink: 1,
-  },
-  bodyText: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    marginTop: Spacing.xs,
-  },
-  hintText: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    marginTop: Spacing.sm,
-  },
-  statusChip: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  statusChipText: {
-    ...Typography.small,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-  metricRow: {
-    flexDirection: "row",
-    gap: Spacing.sm,
-    marginTop: Spacing.md,
-  },
-  metricTile: {
-    flex: 1,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
-  },
-  metricValue: {
-    ...Typography.headline,
-    color: Colors.textMain,
-  },
-  metricLabel: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-    marginTop: Spacing.xs,
-  },
-  usageTrack: {
-    height: Spacing.xs,
-    marginTop: Spacing.md,
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-    overflow: "hidden",
-  },
-  usageFill: {
-    height: "100%",
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.primary,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    alignSelf: "flex-start",
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    minHeight: TouchTarget.minimum,
-    minWidth: TouchTarget.minimum + Spacing.xl,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceContainer,
-  },
-  retryButtonPressed: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  retryButtonText: {
-    ...Typography.label,
-    fontWeight: "600",
-    color: Colors.textMain,
-  },
-});
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    card: {
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.md,
+      padding: Spacing.md,
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.xl,
+      ...Shadows.soft,
+    },
+    sectionLabel: {
+      ...Typography.small,
+      fontWeight: "600",
+      color: Colors.textMuted,
+      letterSpacing: 0.5,
+      marginBottom: Spacing.xs,
+    },
+    inlineRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    titleRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    planName: {
+      ...Typography.headline,
+      color: Colors.textMain,
+      flexShrink: 1,
+    },
+    bodyText: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      marginTop: Spacing.xs,
+    },
+    hintText: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      marginTop: Spacing.sm,
+    },
+    statusChip: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    statusChipText: {
+      ...Typography.small,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    metricRow: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+      marginTop: Spacing.md,
+    },
+    metricTile: {
+      flex: 1,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    metricValue: {
+      ...Typography.headline,
+      color: Colors.textMain,
+    },
+    metricLabel: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      letterSpacing: 0.5,
+      marginTop: Spacing.xs,
+    },
+    usageTrack: {
+      height: Spacing.xs,
+      marginTop: Spacing.md,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      overflow: "hidden",
+    },
+    usageFill: {
+      height: "100%",
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
+      alignSelf: "flex-start",
+      marginTop: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      minHeight: TouchTarget.minimum,
+      minWidth: TouchTarget.minimum + Spacing.xl,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainer,
+    },
+    retryButtonPressed: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    retryButtonText: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+  });

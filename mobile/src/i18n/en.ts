@@ -538,6 +538,14 @@ export const en = {
   "settings.uiLanguage.restartTitle": "Restart to finish switching",
   "settings.uiLanguage.restartBody":
     "This language is read right to left, so the app has to restart before the layout follows. Close it and open it again.",
+  // --- Settings: theme ---
+  "theme.title": "Theme",
+  "theme.disclaimer":
+    "This is how the app looks. The choice stays on this device.",
+  "theme.followDevice": "Match my device",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "theme.selectA11y": "Select {theme}",
   // --- Onboarding: reading language ---
   "onboarding.language.title": "Choose your reading language",
   "onboarding.language.subtitle":

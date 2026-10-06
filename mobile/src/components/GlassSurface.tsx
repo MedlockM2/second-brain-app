@@ -66,7 +66,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
   Platform,
-  StyleSheet,
   View,
   type StyleProp,
   type ViewStyle,
@@ -77,6 +76,7 @@ import {
   isGlassEffectAPIAvailable,
   isLiquidGlassAvailable,
 } from "expo-glass-effect";
+import { useTheme } from "../contexts/ThemeContext";
 
 /** What the pre-26 blur has always been set to on both call sites. */
 const BLUR_INTENSITY = 60;
@@ -91,6 +91,13 @@ export function GlassSurface({
   style,
 }: GlassSurfaceProps): React.JSX.Element {
   const reduceTransparency = useReduceTransparency();
+  // The one thing all three branches need from the theme, and none of them can
+  // take from a style sheet: `GlassView` derives its own appearance from the
+  // trait collection, but `BlurView` takes a `tint` prop and the opaque branch
+  // takes a fill. Both of those are the mode's business, not the platform's —
+  // the `Platform.OS` fork below is about which *material* exists, and nothing
+  // was added to it here.
+  const { mode, colors } = useTheme();
 
   if (Platform.OS === "ios" && !reduceTransparency) {
     if (isLiquidGlassAvailable() && isGlassEffectAPIAvailable()) {
@@ -102,13 +109,17 @@ export function GlassSurface({
     }
 
     return (
-      <BlurView intensity={BLUR_INTENSITY} tint="light" style={style}>
+      <BlurView intensity={BLUR_INTENSITY} tint={mode} style={style}>
         {children}
       </BlurView>
     );
   }
 
-  return <View style={[style, styles.opaqueTint]}>{children}</View>;
+  return (
+    <View style={[style, { backgroundColor: colors.glassFallback }]}>
+      {children}
+    </View>
+  );
 }
 
 /**
@@ -148,13 +159,3 @@ function useReduceTransparency(): boolean {
 
   return reduceTransparency;
 }
-
-const styles = StyleSheet.create({
-  opaqueTint: {
-    // The one literal colour in this file: `Colors.background` at 92 %, opaque
-    // enough that the surface stays legible with no blur under it at all. The
-    // design system has no token for a partially transparent background, and
-    // inventing one would put a value only this fallback uses in the palette.
-    backgroundColor: "rgba(252, 249, 246, 0.92)",
-  },
-});

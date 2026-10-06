@@ -19,12 +19,16 @@ import {
 } from "../../src/services/userPreferencesService";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
-  Colors,
   Typography,
   Spacing,
   BorderRadius,
   TouchTarget,
+  type Theme,
 } from "../../src/constants/theme";
+import {
+  useThemeColors,
+  useThemedStyles,
+} from "../../src/contexts/ThemeContext";
 
 /**
  * Onboarding screen: asks the user to select their preferred reading language.
@@ -33,6 +37,8 @@ import {
  * Pre-selects the device locale if it matches a V1 language.
  */
 export default function OnboardingLanguageScreen() {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const { updateReadingLanguage, isUpdating } = useUserPreferences();
   const [selectedLanguage, setSelectedLanguage] =
     useState<ReadingLanguageCode>(() => {
@@ -153,86 +159,87 @@ export default function OnboardingLanguageScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl,
-    paddingBottom: Spacing.md,
-  },
-  title: {
-    ...Typography.display,
-    color: Colors.textMain,
-  },
-  subtitle: {
-    ...Typography.body,
-    color: Colors.textMuted,
-    marginTop: Spacing.sm,
-  },
-  errorContainer: {
-    backgroundColor: Colors.errorContainer,
-    padding: Spacing.md,
-    marginHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: Typography.small.fontSize,
-  },
-  listContent: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.md,
-  },
-  languageItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.sm,
-    minHeight: TouchTarget.minimum,
-  },
-  languageItemSelected: {
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  languageLabel: {
-    flex: 1,
-    ...Typography.body,
-    fontWeight: "500",
-    color: Colors.textMain,
-  },
-  languageLabelSelected: {
-    fontWeight: "700",
-  },
-  languageCode: {
-    ...Typography.small,
-    color: Colors.textMuted,
-    marginEnd: Spacing.sm,
-  },
-  footer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingBottom: Platform.OS === "ios" ? Spacing.md : Spacing.lg,
-  },
-  continueButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: TouchTarget.comfortable,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  continueButtonText: {
-    color: Colors.onPrimary,
-    ...Typography.body,
-    fontWeight: "600",
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: Colors.background,
+    },
+    header: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.xl,
+      paddingBottom: Spacing.md,
+    },
+    title: {
+      ...Typography.display,
+      color: Colors.textMain,
+    },
+    subtitle: {
+      ...Typography.body,
+      color: Colors.textMuted,
+      marginTop: Spacing.sm,
+    },
+    errorContainer: {
+      backgroundColor: Colors.errorContainer,
+      padding: Spacing.md,
+      marginHorizontal: Spacing.lg,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.md,
+    },
+    errorText: {
+      color: Colors.error,
+      fontSize: Typography.small.fontSize,
+    },
+    listContent: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.md,
+    },
+    languageItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: Colors.surface,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.md,
+      marginBottom: Spacing.sm,
+      minHeight: TouchTarget.minimum,
+    },
+    languageItemSelected: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    languageLabel: {
+      flex: 1,
+      ...Typography.body,
+      fontWeight: "500",
+      color: Colors.textMain,
+    },
+    languageLabelSelected: {
+      fontWeight: "700",
+    },
+    languageCode: {
+      ...Typography.small,
+      color: Colors.textMuted,
+      marginEnd: Spacing.sm,
+    },
+    footer: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      paddingBottom: Platform.OS === "ios" ? Spacing.md : Spacing.lg,
+    },
+    continueButton: {
+      backgroundColor: Colors.primary,
+      borderRadius: BorderRadius.md,
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+      minHeight: TouchTarget.comfortable,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    continueButtonText: {
+      color: Colors.onPrimary,
+      ...Typography.body,
+      fontWeight: "600",
+    },
+  });

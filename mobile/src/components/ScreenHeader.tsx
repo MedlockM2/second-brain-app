@@ -46,11 +46,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   Typography,
   TouchTarget,
+  type Theme,
 } from "../constants/theme";
+import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import type { AnchorRect } from "./AnchoredContextMenu";
 
 /**
@@ -83,6 +84,8 @@ export function ScreenHeader({
   titleStyle,
   testID,
 }: ScreenHeaderProps): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={[styles.header, style]} testID={testID}>
       {leading ?? <View style={styles.spacer} />}
@@ -121,6 +124,9 @@ export function HeaderIconButton({
   disabled = false,
   testID,
 }: HeaderIconButtonProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <Pressable
       style={[
@@ -175,6 +181,8 @@ export function HeaderMenuButton({
   accessibilityLabel,
   testID,
 }: HeaderMenuButtonProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
   const buttonRef = useRef<View>(null);
 
   const handlePress = () => {
@@ -206,6 +214,9 @@ export function HeaderMenuButton({
  * lift, so it lifts itself.
  */
 export function HeaderMenuGlyph(): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+
   return (
     <View style={styles.iconButton}>
       <Ionicons name={MENU_GLYPH} size={24} color={Colors.textMain} />
@@ -213,43 +224,44 @@ export function HeaderMenuGlyph(): React.JSX.Element {
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    gap: Spacing.md,
-  },
-  title: {
-    // The only shrinkable element in the row, and the reason this component
-    // exists.
-    flex: 1,
-    textAlign: "center",
-    fontSize: Typography.headline.fontSize,
-    fontWeight: "700",
-    color: Colors.textMain,
-    letterSpacing: -0.3,
-  },
-  // Holds the row open on the icon-only headers, where there is no title to
-  // claim the free space.
-  titleFill: {
-    flex: 1,
-  },
-  spacer: {
-    width: SLOT_SIZE,
-  },
-  iconButton: {
-    width: SLOT_SIZE,
-    height: SLOT_SIZE,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconButtonFilled: {
-    borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceContainerHigh,
-  },
-  iconButtonDisabled: {
-    opacity: 0.5,
-  },
-});
+const makeStyles = ({ colors: Colors }: Theme) =>
+  StyleSheet.create({
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      gap: Spacing.md,
+    },
+    title: {
+      // The only shrinkable element in the row, and the reason this component
+      // exists.
+      flex: 1,
+      textAlign: "center",
+      fontSize: Typography.headline.fontSize,
+      fontWeight: "700",
+      color: Colors.textMain,
+      letterSpacing: -0.3,
+    },
+    // Holds the row open on the icon-only headers, where there is no title to
+    // claim the free space.
+    titleFill: {
+      flex: 1,
+    },
+    spacer: {
+      width: SLOT_SIZE,
+    },
+    iconButton: {
+      width: SLOT_SIZE,
+      height: SLOT_SIZE,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    iconButtonFilled: {
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    iconButtonDisabled: {
+      opacity: 0.5,
+    },
+  });
