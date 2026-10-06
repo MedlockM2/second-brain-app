@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { usePurchases } from "../../src/contexts/PurchasesContext";
 import { AccountService } from "../../src/services/accountService";
+import { hasActiveEntitlement } from "../../src/services/purchaseService";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import { t, type TranslationKey } from "../../src/i18n";
 import {
@@ -50,7 +51,7 @@ import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeade
 const ERASED_ITEM_KEYS: readonly TranslationKey[] = [
   "deleteAccount.erased.library",
   "deleteAccount.erased.artifacts",
-  "deleteAccount.erased.schedule",
+  "deleteAccount.erased.digests",
   "deleteAccount.erased.search",
   "deleteAccount.erased.identity",
 ];
@@ -58,13 +59,22 @@ const ERASED_ITEM_KEYS: readonly TranslationKey[] = [
 export default function DeleteAccountScreen() {
   const router = useRouter();
   const { isAuthenticated, logout } = useAuth();
-  const { isSubscribed, isBetaAccess } = usePurchases();
-  // The store-subscription warning below is about a purchase deletion cannot
-  // cancel. Under the beta regime there is none to cancel — every account is
-  // entitled by the regime itself (task-429), and `isSubscribed` is true for all
-  // of them — so telling a tester to go and stop a payment would be a false
-  // alarm on the one screen that has to be read literally.
-  const hasStoreSubscription = isSubscribed && !isBetaAccess;
+  const { entitlementStatus, customerInfo } = usePurchases();
+  // Not the context's `isSubscribed`: the backend free trial is entitled too, but
+  // no store bills it, so telling a trial account that Apple or Google keeps
+  // charging it would be false. A store subscription is a tier on the backend
+  // row, or a tier entitlement RevenueCat reports before the webhook lands.
+  //
+  // This also covers the beta regime without naming it. task-429 entitles every
+  // account, so `isSubscribed` is true for all of them and an `!isBetaAccess`
+  // guard was what kept the warning off a tester. It is not needed here: the beta
+  // widens `tier`, never `subscription_tier`, which keeps naming what the account
+  // actually bought (`quota_enforcer.py`). Testing the purchase rather than the
+  // entitlement is the narrower condition of the two, and the one that still holds
+  // the day the regime closes on accounts whose trial is running.
+  const hasStoreSubscription =
+    entitlementStatus?.subscription_tier != null ||
+    (customerInfo !== null && hasActiveEntitlement(customerInfo));
   const [hasAcknowledged, setHasAcknowledged] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);

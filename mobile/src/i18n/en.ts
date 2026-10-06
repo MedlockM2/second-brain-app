@@ -484,9 +484,9 @@ export const en = {
   "deleteAccount.erasedHeading": "What gets erased",
   "deleteAccount.erased.library": "Your library and folders",
   "deleteAccount.erased.artifacts":
-    "Every transcript, summary, note and flashcard",
-  "deleteAccount.erased.schedule": "Your review schedule and digests",
-  "deleteAccount.erased.search": "Your search results across the app",
+    "Every transcript, summary, note, flashcard and quiz",
+  "deleteAccount.erased.digests": "Your daily and weekly digests",
+  "deleteAccount.erased.search": "Your library's search index",
   "deleteAccount.erased.identity": "Your email address and sign-in details",
   "deleteAccount.subscriptionHeading": "Your subscription",
   "deleteAccount.subscriptionBodyApple":

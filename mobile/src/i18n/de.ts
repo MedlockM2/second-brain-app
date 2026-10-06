@@ -395,9 +395,9 @@ export const de: Catalog = {
   "deleteAccount.erasedHeading": "Was gelöscht wird",
   "deleteAccount.erased.library": "Deine Bibliothek und Ordner",
   "deleteAccount.erased.artifacts":
-    "Alle Transkripte, Zusammenfassungen, Notizen und Lernkarten",
-  "deleteAccount.erased.schedule": "Dein Wiederholungsplan und deine Digests",
-  "deleteAccount.erased.search": "Deine Suchergebnisse in der ganzen App",
+    "Alle Transkripte, Zusammenfassungen, Notizen, Lernkarten und Quizze",
+  "deleteAccount.erased.digests": "Dein täglicher und wöchentlicher Digest",
+  "deleteAccount.erased.search": "Der Suchindex deiner Bibliothek",
   "deleteAccount.erased.identity": "Deine E-Mail-Adresse und deine Anmeldedaten",
   "deleteAccount.subscriptionHeading": "Dein Abo",
   "deleteAccount.subscriptionBodyApple":

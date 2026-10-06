@@ -387,9 +387,9 @@ export const es: Catalog = {
   "deleteAccount.erasedHeading": "Qué se borra",
   "deleteAccount.erased.library": "Tu biblioteca y tus carpetas",
   "deleteAccount.erased.artifacts":
-    "Todas tus transcripciones, resúmenes, apuntes y tarjetas",
-  "deleteAccount.erased.schedule": "Tu calendario de repaso y tus resúmenes",
-  "deleteAccount.erased.search": "Tus resultados de búsqueda en toda la app",
+    "Todas tus transcripciones, resúmenes, apuntes, tarjetas y cuestionarios",
+  "deleteAccount.erased.digests": "Tu Digest diario y semanal",
+  "deleteAccount.erased.search": "El índice de búsqueda de tu biblioteca",
   "deleteAccount.erased.identity":
     "Tu dirección de correo y tus datos de acceso",
   "deleteAccount.subscriptionHeading": "Tu suscripción",
