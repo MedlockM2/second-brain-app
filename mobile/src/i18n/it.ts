@@ -398,7 +398,7 @@ export const it: Catalog = {
   "tabs.account": "Account",
   "home.loading": "Caricamento della posta in arrivo…",
   "home.retryA11y": "Riprova a caricare la posta in arrivo",
-  "home.continueLearning": "Riprendi",
+  "home.continueLearning": "Continua a imparare",
   "home.recentlyAdded": "Aggiunti di recente",
   "home.takePhotoA11y": "Scatta una foto",
   "home.unsortedReview": "Revisione dei non ordinati",
