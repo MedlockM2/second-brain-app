@@ -23,6 +23,7 @@ references:
   - docs/research/task-434-chatbot-integration-ui/README.md
   - mobile-design-mockups/chatbot_integration_ui/
 priority: medium
+dispatchable: true
 type: task
 ordinal: 38000
 ---
