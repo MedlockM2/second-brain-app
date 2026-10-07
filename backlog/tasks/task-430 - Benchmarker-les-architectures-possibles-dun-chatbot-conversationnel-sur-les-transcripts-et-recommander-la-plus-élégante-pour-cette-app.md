@@ -165,4 +165,80 @@ utilisateur n'apparaît dans le livrable.
 la signale en éditant `owner_decision` dans le front-matter du README (`ok` / `abandoned` / `redo` /
 `more`). Les douze critères d'acceptation sont cochés parce qu'ils portent sur l'existence et le
 contenu du livrable, pas sur la décision.
+
+---
+
+### Mode complément — demande du 2026-10-07 traitée, **en attente de la validation de l'owner**
+
+Le dossier `docs/research/task-430-chatbot-architecture/` contenait un `README.md` actif et un
+`complement-request-2026-10-07.md` sans réponse correspondante : **mode complément**. Le `README.md`
+principal **n'a pas été modifié** — ni son front-matter, ni sa section `Owner Validation`, ni sa
+`Recommendation` : il reste la base de preuves, et l'owner l'a explicitement validé comme telle.
+
+**Livrable** : `docs/research/task-430-chatbot-architecture/complement-response-2026-10-07.md`
+(~1 100 lignes, sans front-matter), qui répond aux quatre consignes C1 à C4 dans l'ordre, chacune
+sous son identifiant.
+
+**Comment les retours de l'owner sont intégrés.** Ses deux griefs sont pris tels quels. (1) Ses
+priorités ne sont pas celles du §8.2 : le complément produit **une seconde pondération, la sienne** —
+streaming 25 %, robustesse de la reprise 25 % (axe **nouveau**), qualité d'utilisation du contexte
+20 %, soit 70 % pour ses trois priorités — et garde le tableau du §8.2 à côté, étendu à la nouvelle
+candidate, pour que les deux classements soient lisibles ensemble. (2) Une candidate manquait : elle
+est construite et chiffrée.
+
+**La cinquième candidate, E — « B + SSE reprenable sur une Lambda Function URL ».** `invoke_mode =
+"RESPONSE_STREAM"`, Lambda Web Adapter à la place de Mangum **sur cette fonction seulement** (la
+façade HTTP et les alarmes indexées sur `local.api_gateway_id` intactes), le tour restant enfilé sur
+`artifact-generator-queue` et calculé par le worker déjà surveillé. **8 objets AWS nouveaux**, contre
+1 pour B et 21 pour C — donc le streaming ne coûte pas 21 objets, il en coûte 8. Trois verdicts
+tranchés dans le complément : authentification **`NONE` + le JWT de l'application** (l'app n'a aucune
+identité AWS, `AWS_IAM` imposerait un pool Cognito et le SDK AWS côté mobile) ; **pas de domaine
+personnalisé** (il faudrait CloudFront + un certificat ACM en `us-east-1`, donc un alias de
+fournisseur Terraform) ; **tampon de fragments en DynamoDB dans la table que B crée déjà**, zéro objet
+nouveau, 0,000037 € par tour — contre un minimum facturé de **6,15 €/mois** pour ElastiCache
+Serverless Valkey à `eu-west-3`, soit 44,7× la dépense LLM totale du dépôt **par mois**. Et
+l'observabilité n'est **pas** gratuite : `lambda_error_rate` et `lambda_throttles` bouclent sur
+`local.workers`, dont chaque entrée alimente un `aws_lambda_event_source_mapping` exigeant un
+`queue_arn` — une Lambda de streaming n'en a pas.
+
+**Classement sous la pondération de l'owner : E 8,15 > B 5,75 > C 5,50 > D 5,00 > A 4,25.** Il
+**contredit** celui du README (B 9,4 > A 7,9 > D 6,8 > E 6,6 > C 4,8), et le complément le dit
+franchement : B ne reste pas devant, elle est même la plus mauvaise des cinq sur le streaming. Deux
+résultats que l'owner n'attendait peut-être pas : sa préférence pour le streaming **ne valide pas C**,
+qui reste troisième ; et **B est un sous-ensemble strict de E**, donc la tranche 1 du §12 ne change
+pas d'une ligne — seule la tranche 5 (streaming) devient la tranche 2 et cesse d'être conditionnelle.
+
+**C3 — modèles à grande fenêtre.** Les chiffres de la consigne sont confirmés à la source, et trois
+faits s'y ajoutent : `gpt-6-luna` est **2× moins cher sur l'entrée et 2,5× moins sur la sortie** que
+le modèle déployé pour une fenêtre d'entrée 3,4× plus grande (le pire cas de marge du §9.2 passe de
+×1,15 à ×1,90) ; la famille 5.6+ facture l'**écriture de cache à 1,25×** ; et la rétention du cache
+tombe de 24 h à **30 minutes sans option**. La falaise est modélisée en **fonction en escalier** :
+272 001 tokens coûtent le double de 272 000, donc le plafond économique est **272 000 moins la
+croissance de toute la conversation**, soit 260 900, ramené à **230 000** avec les ±10 % de
+l'estimateur `byte_length / 3.4` — valeur recommandée pour `MAX_FOLDER_CORPUS_TOKENS` *le jour du
+changement de modèle*, le commentaire du code étant à corriger dès maintenant. L'angle mort du §14.1
+sur le TPM est levé : « *Cached input tokens still count toward tokens-per-minute limits* », donc
+aucune ligne du §9.4 ne change. Et la compaction côté fournisseur est **écartée** : elle compacterait
+le corpus, qui est le préfixe cachable, pour économiser sur un historique qui vaut 8,2 % de l'entrée.
+
+**C4 — portée bibliothèque.** La prémisse du §13.1 est fausse : les 672 515 tokens additionnaient
+cinq comptes et comptaient deux fois les transcripts traduits. Mesuré (M17), **la bibliothèque la plus
+lourde de `-dev` vaut 193 104 tokens** et tient déjà dans le modèle déployé. Le benchmark distinct
+reste nécessaire, mais sa question change : « à partir de quelle longueur d'entrée le corpus complet
+cesse-t-il d'être meilleur qu'une récupération », et non « quelle récupération ». Position argumentée
+sur la qualité : la littérature raisonne en **longueur absolue** et jamais en pourcentage de fenêtre,
+donc remplir 73 % de 922 000 n'est pas justifiable, et 193 000 l'est.
+
+**Garde-fous de la session.** Six commandes AWS **en lecture seule** nouvelles (M13 à M18), toutes du
+2026-10-07, listées en §0.1 du complément. **Aucun appel LLM payant n'a été émis.** **Aucun fichier
+source du dépôt n'a été modifié** : les seuls fichiers touchés sont le complément et ce fichier de
+tâche. **Interdiction respectée** : aucun fichier de `docs/research/task-427-*` n'a été consulté, ni
+les fichiers de backlog `task-427` et `task-428` ; le complément le déclare en tête. Aucun secret,
+aucune clé d'API, aucun identifiant ni adresse de compte utilisateur n'apparaît dans le livrable.
+
+**Statut** : la tâche reste en `To Do`. Le complément est un document de consultation : c'est le
+`README.md` principal qui porte l'`owner_decision`, et l'owner tranche entre `ok`, `abandoned`,
+`redo` et un nouveau `more` en s'appuyant sur ce complément. S'il accepte, la `Decision` du README
+devrait référencer explicitement `complement-response-2026-10-07.md`, puisque c'est lui qui porte la
+candidate E, la pondération retenue et le classement.
 <!-- SECTION:NOTES:END -->
