@@ -1,5 +1,5 @@
 ---
-owner_decision: more   # pending | ok | abandoned | redo | more
+owner_decision: pending   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : architectures possibles d'un chatbot conversationnel sur les transcripts
