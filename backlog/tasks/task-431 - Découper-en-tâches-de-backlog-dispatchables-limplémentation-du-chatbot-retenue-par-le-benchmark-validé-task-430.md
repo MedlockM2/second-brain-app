@@ -2,15 +2,17 @@
 id: TASK-431
 title: >-
   Découper en tâches de backlog dispatchables l'implémentation du chatbot
-  retenue par le benchmark validé (task-430)
+  retenue par les benchmarks validés (task-430 et task-434)
 status: To Do
 assignee: []
 created_date: '2026-10-06 14:43'
+updated_date: '2026-10-07 10:08'
 labels:
   - orchestration
   - backlog
 dependencies:
   - TASK-430
+  - TASK-434
 references:
   - docs/research/task-430-chatbot-architecture/README.md
   - AGENTS.md
@@ -18,8 +20,9 @@ references:
   - .claude/agents/backlog-dispatcher.md
   - docs/BENCHMARK_OWNER_WORKFLOW.md
   - scripts/dispatch_backlog.sh
+  - docs/research/task-434-chatbot-integration-ui/README.md
+  - mobile-design-mockups/chatbot_integration_ui/
 priority: medium
-dispatchable: true
 type: task
 ordinal: 38000
 ---
@@ -29,17 +32,24 @@ ordinal: 38000
 <!-- SECTION:DESCRIPTION:BEGIN -->
 ## Pourquoi cette tâche existe
 
-Le benchmark `task-430` va recommander une architecture de chatbot conversationnel, et l'owner va trancher. Ce que cette décision produit n'est pas une tâche d'implémentation unique : c'est un chantier qui traverse le backend, le mobile, Terraform, le quota, les prompts et l'i18n. Le dispatcher (`./scripts/dispatch_backlog.sh`) sait lancer plusieurs agents en parallèle sur des tâches bien découpées, mais il ne sait pas découper. Et une tâche fourre-tout produirait une PR que personne ne peut relire.
+Deux benchmarks vont trancher le chatbot conversationnel : `task-430` pour son **architecture** (où vit la conversation, quel transport, quelle stratégie de contexte, quel quota) et `task-434` pour son **intégration dans l'UI** (où le chat entre dans la navigation, à quelle portée, avec quelles maquettes). L'owner tranche chacun des deux dans son README.
+
+Ce que ces deux décisions produisent n'est pas une tâche d'implémentation unique : c'est un chantier qui traverse le backend, le mobile, Terraform, le quota, les prompts et l'i18n. Le dispatcher (`./scripts/dispatch_backlog.sh`) sait lancer plusieurs agents en parallèle sur des tâches bien découpées, mais il ne sait pas découper. Et une tâche fourre-tout produirait une PR que personne ne peut relire.
 
 **Cette tâche n'écrit donc aucun code applicatif.** Son livrable est un **ensemble de tâches de backlog**, découpées, ordonnées et rédigées de telle sorte qu'on puisse lancer le dispatcher dessus et que le chantier s'implémente correctement, agent par agent, sans que l'owner ait à re-cadrer à chaque étape.
 
-## La source de vérité
+## Les deux sources de vérité
 
-Lire `docs/research/task-430-chatbot-architecture/README.md`, et en particulier la section **Owner Validation** : le champ `Decision` porte la décision finale de l'owner, qui **peut différer de la recommandation** du benchmark. Si le `Decision` renvoie à des fichiers `complement-response-*.md` du même répertoire, les suivre aussi.
+1. **L'architecture** : `docs/research/task-430-chatbot-architecture/README.md`.
+2. **L'intégration UI** : `docs/research/task-434-chatbot-integration-ui/README.md`, et les maquettes de la direction retenue sous `mobile-design-mockups/chatbot_integration_ui/`.
+
+Dans les deux cas, lire la section **Owner Validation** : le champ `Decision` porte la décision finale de l'owner, qui **peut différer de la recommandation** du benchmark. Si un `Decision` renvoie à des fichiers `complement-response-*.md` du même répertoire, les suivre aussi.
 
 **C'est le `Decision` de l'owner qui fait le périmètre, pas la `Recommendation`.** Si les deux divergent, le découpage suit le `Decision` et le dit explicitement.
 
-L'ordre de construction en tranches que le README propose est le point de départ du découpage, pas une contrainte : si le découpage s'en écarte, dire pourquoi.
+L'ordre de construction en tranches que le README d'architecture propose est le point de départ du découpage, pas une contrainte : si le découpage s'en écarte, dire pourquoi.
+
+**Si les deux décisions se contredisent** — par exemple une direction d'UI qui suppose une réponse en flux alors que l'architecture retenue n'en produit pas — **ne pas arbitrer à la place de l'owner** : nommer la contradiction dans la note de fin de tâche, dire laquelle le découpage a suivie et pourquoi, et créer la tâche qui manque plutôt que de rogner silencieusement l'une des deux décisions.
 
 ## Les règles de rédaction que les tâches créées doivent respecter
 
@@ -53,11 +63,11 @@ Elles sont dans `AGENTS.md` et `CLAUDE.md`, et elles sont impératives parce que
 
 ## Le routage vers les bons agents
 
-Le dispatcher choisit l'agent d'après les labels, dans l'ordre de la table de `.claude/agents/backlog-dispatcher.md`. Lire cette table avant de poser les labels, parce qu'un label mal choisi envoie une tâche mobile à un agent backend. En particulier : toute tâche qui touche `mobile/` doit porter le label `mobile`, et une tâche qui porte un label de recherche part en recherche même si elle est destinée à être implémentée.
+Le dispatcher choisit l'agent d'après les labels, dans l'ordre de la table de `.claude/agents/backlog-dispatcher.md`. Lire cette table avant de poser les labels, parce qu'un label mal choisi envoie une tâche mobile à un agent backend. En particulier : toute tâche qui touche `mobile/` doit porter le label `mobile` — ce qui vaut pour **toutes** les tâches issues de la décision d'UI — et une tâche qui porte un label de recherche part en recherche même si elle est destinée à être implémentée.
 
 ## Si une décision technologique manque encore
 
-Si le découpage fait apparaître un choix non tranché par le benchmark validé — un service externe, une bibliothèque parmi plusieurs, une politique de quota, ou un périmètre dont la forme n'est pas évidente — **ne pas le trancher ici**. Créer une paire de tâches selon la convention de `CLAUDE.md` : une tâche benchmark, et une tâche d'implémentation qui en dépend et qui renvoie à son README sans en préjuger la conclusion.
+Si le découpage fait apparaître un choix non tranché par les benchmarks validés — un service externe, une bibliothèque parmi plusieurs, une politique de quota, ou un périmètre dont la forme n'est pas évidente — **ne pas le trancher ici**. Créer une paire de tâches selon la convention de `CLAUDE.md` : une tâche benchmark, et une tâche d'implémentation qui en dépend et qui renvoie à son README sans en préjuger la conclusion.
 
 ## Note à l'owner
 
@@ -78,4 +88,6 @@ Après ce découpage, rien n'est implémenté : il reste à commiter les fichier
 - [ ] #10 Tout choix technologique non tranché par le benchmark validé donne lieu à une paire tâche benchmark plus tâche d'implémentation dépendante selon la convention de CLAUDE.md, l'implémentation renvoyant au README du benchmark sans en préjuger la conclusion
 - [ ] #11 La note de fin de tâche liste les identifiants des tâches créées, leur titre, l'agent vers lequel leurs labels les routent, le graphe de dépendances, et l'ordre de dispatch recommandé
 - [ ] #12 La note de fin de tâche dit explicitement si le découpage suit la Recommendation du benchmark ou le Decision de l'owner lorsque les deux divergent, et dit où le découpage s'écarte de l'ordre de construction proposé par le README et pourquoi
+- [ ] #13 Le périmètre découpé couvre la décision d'architecture de la section Owner Validation de docs/research/task-430-chatbot-architecture/README.md et la décision d'intégration UI de celle de docs/research/task-434-chatbot-integration-ui/README.md ; si les deux décisions se contredisent sur un point, la note de fin de tâche nomme la contradiction et dit laquelle le découpage a suivie, sans la trancher à la place de l'owner
+- [ ] #14 Les tâches qui portent l'intégration UI renvoient aux maquettes de la direction retenue sous mobile-design-mockups/chatbot_integration_ui/ et portent le label mobile
 <!-- AC:END -->
