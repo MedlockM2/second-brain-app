@@ -3,9 +3,10 @@ id: TASK-435
 title: >-
   Donner à la catégorie média « Short » sa propre couleur de badge, distincte de
   toutes les autres
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-07 10:23'
+updated_date: '2026-10-08 14:22'
 labels:
   - mobile
   - enhancement
