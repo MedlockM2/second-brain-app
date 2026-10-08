@@ -76,6 +76,7 @@ reproduced here:
 | `onHighlight` `#ffe9a8` on `highlight` `#5c4a12` | 7.15 ✅ | 15.04 | 4.5:1 |
 | `onError` `#690005` on `error` `#ffb4ab` | 7.72 ✅ | 6.46 | 4.5:1 |
 | `textMain` on `errorContainer` `#93000a` | 7.89 ✅ | 10.44 | 4.5:1 |
+| `textMain` on `shortVideoContainer` `#1a4975` | 7.86 ✅ | 10.52 | 4.5:1 |
 
 The highlight pair inverts polarity between the modes: a pale `#fff0b3` band
 carrying dark text by day, a deep amber block carrying bright text by night.
@@ -89,6 +90,42 @@ text tokens on top rather than `onHighlight`. Both clear AA in both modes:
 | --- | --- | --- | --- |
 | `textMain` on `highlight` | 7.25 ✅ | 11.80 | 4.5:1 |
 | `textSubtle` on `highlight` | 5.38 ✅ | 4.90 | 4.5:1 |
+
+### `shortVideoContainer`, the video red mirrored on the ink hue
+
+The SHORT media-type badge needed a fill no other type uses (task-435), and it
+was built by moving `errorContainer` — the VIDEO fill — onto the blue-grey hue
+of the palette's ink family, keeping its weight. `L*`/`C*`/`h` are CIE LCh:
+
+| Token | Mode | `L*` | `C*` | `h` |
+| --- | --- | --- | --- | --- |
+| `shortVideoContainer` `#d6e4fd` | light | 90.3 | 13.7 | 271.2° |
+| `errorContainer` `#ffdad6` | light | 90.0 | 13.9 | 28.8° |
+| `textMuted` `#8d99ae` (the hue it borrows) | light | 62.9 | 12.4 | 271.3° |
+| `shortVideoContainer` `#1a4975` | dark | 30.1 | 29.8 | 271.3° |
+| `errorContainer` `#93000a` | dark | 30.0 | 66.3 | 36.5° |
+| `textMuted` `#9aa3b4` | dark | 66.8 | 9.9 | 272.1° |
+
+Lightness and hue are matched on purpose, chroma only in the light mode:
+
+- **Equal `L*`** is what makes the two pills read as peers rather than as two
+  strengths of one colour, and it is why no other badge had to move.
+- **The borrowed hue** is `textMuted`'s to within 0.1°, so the fourth family is
+  one Amber Clarity already owns — the olive-and-blue-grey secondary tones — and
+  not an imported accent.
+- **Chroma is pulled back at night** (29.8 against the deep red's 66.3, where
+  sRGB would allow past 50 at this lightness). Same reasoning as decision 3 of
+  the dark palette: a fully saturated navy on a warm dark canvas reads as
+  borrowed system chrome.
+
+Separation from the fills it sits beside, as ΔE (CIE76), well past the ~10 at
+which two surfaces are told apart at a glance:
+
+| Pair | Dark ΔE | Light ΔE |
+| --- | --- | --- |
+| `shortVideoContainer` vs `errorContainer` (VIDEO) | 87.0 | 23.6 |
+| `shortVideoContainer` vs `primary` (PODCAST) | 115.3 | 98.6 |
+| `shortVideoContainer` vs `surfaceContainerHigh` (every other type) | 35.9 | 15.2 |
 
 ## Text over a photograph, through a veil
 

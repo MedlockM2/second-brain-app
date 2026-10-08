@@ -169,6 +169,31 @@ const lightColors = {
    */
   glassFallback: "rgba(252, 249, 246, 0.92)",
 
+  /**
+   * The fill of the SHORT media-type badge, and the palette's one filled tone
+   * taken from its blue-grey *ink* family (task-435).
+   *
+   * A short video used to share the red `errorContainer` with a YouTube video,
+   * so the two pills were the same colour and the same glyph and only the word
+   * differed — nothing to find in a scrolling list. It needed a fourth family,
+   * since the first three are spoken for: amber for a podcast, red for a video,
+   * the tonal containers for everything that is read.
+   *
+   * It is the **mirror of the video red on the ink hue**, which is what keeps it
+   * inside Amber Clarity rather than importing a foreign accent. Its Lab hue is
+   * 271.2°, that of `textMuted` (271.3°) and its family `textSubtle` (275.2°) —
+   * the olive-and-blue-grey "secondary tones [that] ground the interface" the
+   * system prescribes beside the amber. Its lightness and chroma are
+   * `errorContainer`'s to within a rounding step (L\* 90.3 vs 90.0, C\* 13.7 vs
+   * 13.9), so the SHORT pill weighs exactly what the VIDEO pill weighs and the
+   * row's chromatic balance is unchanged — only the hue moves.
+   *
+   * Pairs with `textMain`, like the red and the tonal fills and unlike the
+   * amber: **10.52:1** here (`errorContainer` gives 10.44), **7.86:1** on the
+   * dark variant. Both clear AA for the badge's 13px, in both modes.
+   */
+  shortVideoContainer: "#d6e4fd",
+
   error: "#ba1a1a",
   onError: "#ffffff",
   errorContainer: "#ffdad6",
@@ -301,6 +326,19 @@ const darkColors: ThemeColors = {
   // scrim has to reach below the darkest surface the app can draw.
   scrim: "rgba(0, 0, 0, 0.6)",
   glassFallback: "rgba(33, 30, 25, 0.92)",
+
+  // Same mirror as in the light palette, re-derived rather than inverted: the
+  // ink hue (271.3°, `textMuted`'s own) at the lightness of the dark
+  // `errorContainer` (L* 30.1 vs 30.0), so SHORT and VIDEO stay twins by weight
+  // at night too, and `textMain` measures 7.86:1 on it where it measures 7.89 on
+  // the red.
+  //
+  // The chroma is the one number that is *not* matched: 29.8 against the deep
+  // red's 66.3. That is rule 3 of this palette applied to a second hue — a fully
+  // saturated navy on a warm dark canvas reads as borrowed system chrome, where a
+  // slate blue reads as ink in an archive. sRGB could reach past 50 here; the
+  // restraint is deliberate, not a gamut limit.
+  shortVideoContainer: "#1a4975",
 
   // `#ba1a1a` measures 1.8:1 on `background` — unreadable, not merely weak — so
   // the error family inverts wholesale: a light red carrying dark text (7.7:1),

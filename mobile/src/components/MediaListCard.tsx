@@ -404,8 +404,8 @@ export function MediaListCard<T extends MediaCardItem>({
  * The two travel together because they cannot be chosen independently: the
  * amber fill needs `onPrimary` over it (`textMain` measures 1.5:1 on the dark
  * amber and 8.9:1 on the light one, so a single ink cannot serve both modes),
- * while the red and tonal fills keep `textMain`, which stays legible on both
- * palettes (7.9:1 and 10.6:1 at worst).
+ * while the red, blue-grey and tonal fills keep `textMain`, which stays legible
+ * on both palettes (7.9:1, 7.9:1 and 10.6:1 at worst).
  *
  * Takes the palette as an argument rather than importing it: a plain function
  * cannot call `useThemeColors`, and its caller already holds the palette.
@@ -418,12 +418,37 @@ function getMediaTypeBadgeTones(
     case "podcast_episode":
       return { fill: Colors.primary, ink: Colors.onPrimary };
     case "youtube_video":
-    case "short_video":
       return { fill: Colors.errorContainer, ink: Colors.textMain };
-    // The two tinted badges are reserved for media that *plays* — amber for a
-    // podcast, red for a video. A photo post is read, like an article, so it
-    // takes the same tonal surface: what tells it apart is its own word and its
-    // own glyph, not a third hue competing with those two.
+    // A short is its own family, not a shade of the video red (task-435). It
+    // used to take that exact red with that exact glyph, so only the word
+    // separated SHORT from VIDÉO — too little to find one while scrolling.
+    //
+    // `shortVideoContainer` is the blue-grey of the palette's *ink* family
+    // (`textMuted`, `textSubtle`), which is the only hue Amber Clarity already
+    // owns and has not yet spent as a fill, so this adds a family without
+    // importing a foreign accent. It competes with neither neighbour, for two
+    // different reasons:
+    //
+    // - **Not the video red.** Same Lab lightness and chroma as
+    //   `errorContainer` (L* 90.3/90.0 light, 30.1/30.0 dark) but 242° away in
+    //   hue, so the pills read as peers of equal weight rather than as two
+    //   strengths of one colour — ΔE 23.6 light, 87.0 dark.
+    // - **Not the podcast amber.** The amber is a saturated accent the system
+    //   reserves for "high-value interactions… and meaningful accents" (C* 84.7)
+    //   and it carries `onPrimary`; this is a quiet container six times less
+    //   chromatic, ΔE 98.6 light and 115.3 dark away from it. No eye confuses a
+    //   lit amber chip with a pale slate one.
+    //
+    // Its ink is `textMain`, measured on the fill in both modes: **10.52:1**
+    // light (`#2b2d42` on `#d6e4fd`) and **7.86:1** dark (`#f1ebe1` on
+    // `#1a4975`), against the 4.5:1 WCAG AA asks of the badge's 13px label.
+    case "short_video":
+      return { fill: Colors.shortVideoContainer, ink: Colors.textMain };
+    // The tinted badges are reserved for media that *plays* — amber for a
+    // podcast, red for a video, blue-grey for a short. A photo post is read,
+    // like an article, so it takes the same tonal surface: what tells it apart
+    // is its own word and its own glyph, not a fourth hue competing with those
+    // three.
     case "article":
     case "image_post":
       return { fill: Colors.surfaceContainerHigh, ink: Colors.textMain };

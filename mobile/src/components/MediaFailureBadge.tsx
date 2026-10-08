@@ -22,9 +22,9 @@ import { t } from "../i18n";
  * failed on one screen and fine on the next.
  *
  * Filled `error`, not `errorContainer`. The soft red container is already the
- * background `getMediaTypeBadgeTones` gives the VIDEO and SHORT type badges, and a
- * second pill of that exact tint sitting beside one of them reads as a second type
- * rather than as an alarm.
+ * background `getMediaTypeBadgeTones` gives the VIDEO type badge, and a second pill
+ * of that exact tint sitting beside one reads as a second type rather than as an
+ * alarm.
  *
  * Both surfaces mark themselves `accessible={false}`: the row and the tile each
  * announce their own failure inside their single label (see `describeWithFailure`),
