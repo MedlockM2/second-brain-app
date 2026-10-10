@@ -4,9 +4,10 @@ title: >-
   Validate Android dev build — non-Maestrable flows only (Google sheet, Chrome
   share)
 status: To Do
-assignee: []
+assignee:
+  - owner
 created_date: '2026-06-10 05:39'
-updated_date: '2026-09-04 10:45'
+updated_date: '2026-10-10 15:14'
 labels:
   - phase-5
   - mobile
@@ -24,6 +25,10 @@ dispatchable: false
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+## Responsabilité — cadrage lancement du 2026-10-10
+
+Owner — terminer la qualification des bugs de la validation Android. Les quatre parcours sont déjà cochés : ne pas les recréer ni les présenter comme non validés. Agent uniquement pour un correctif dédié si nécessaire.
+
 > ⚠️ **MANUAL — OWNER ONLY. NEVER DISPATCH TO A SUBAGENT.**
 > Cette tâche doit être exécutée à la main par l'owner sur device physique Android. Même si à un moment elle est marquée `dispatchable: true` par erreur, **aucun agent ne doit la prendre**. Raison : la validation requiert un device Android physique avec compte Google de test, l'utilisation du sheet Google Sign-In natif (hors process app), et le partage depuis Chrome via la UI Android. Aucune de ces interactions n'est scriptable — c'est précisément la raison pour laquelle elles ne sont pas dans la suite Maestro.
 

@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@Codex'
 created_date: '2026-10-08 14:20'
-updated_date: '2026-10-10 15:02'
+updated_date: '2026-10-10 16:05'
 labels:
   - mobile
   - bug
@@ -78,10 +78,12 @@ AC #1 : procédure écrite dans le diagnostic, avec OS, apps/contenus, états et
 AC #5 laissé non coché : Sentry a été consulté, mais les credentials configurés ne donnent accès qu'à un projet python-fastapi avec une issue exemple. Aucun projet mobile visible ; impossible de consulter les événements React Native avec cet accès. La limite et la méthode de récupération sont documentées, sans valeur sensible.
 
 Confirmation finale hors AC : installer le nouveau binaire iOS que la CI doit produire après push et retester via Plus…, puis via les suggestions, avec plusieurs apps sources et états chaud/froid. Une OTA JavaScript seule ne livre pas cette modification native ; flash de modale possible. Le propriétaire a autorisé commit et push.
+
+Validation finale propriétaire du 2026-10-10 : correctif déployé, application mise à jour et scénario testé sur appareil. Résultat confirmé : fonctionnement attendu, plus de gel de l’application source. Le propriétaire confirme la clôture de TASK-438. Le build iOS 13 du commit f05bd7c a réussi à la relance inchangée et sa soumission App Store Connect est terminée ; le crash Swift du build 12 ne s’est pas reproduit. AC #5 reste non coché pour la limite d’accès Sentry mobile déjà documentée.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Contournement iOS iosHideView:false appliqué après reproduction propriétaire via Plus…. Diagnostic et décision livrés. Prebuild, expo config, lint et TypeScript passent ; confirmation sur nouveau binaire iOS encore nécessaire. AC #5 non coché : accès Sentry mobile indisponible.
+Correctif iOS iosHideView:false déployé et validé sur appareil par le propriétaire le 2026-10-10 après mise à jour de l’application : plus de gel de l’application source. TASK-438 clôturée. Diagnostic livré ; prebuild, expo config, lint et TypeScript passent. AC #5 non coché : accès Sentry mobile indisponible.
 <!-- SECTION:FINAL_SUMMARY:END -->

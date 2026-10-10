@@ -1,7 +1,15 @@
-# V1 Launch Plan — Media Summarizer
+# V1 Launch Plan — Deepn
 
 > Plan exhaustif des étapes restantes pour mettre l'application en production.
-> Date de rédaction : 2026-05-19. Dernière mise à jour : **2026-09-03**
+> Date de rédaction : 2026-05-19. Dernière mise à jour : **2026-10-10**
+> (`task-456` : réconciliation de la vue de lancement avec la bêta de trois mois,
+> la sortie de bêta, les gates de soumission et le soft launch portés par
+> `task-440` à `task-455` — cf. § « Vue de lancement au 2026-10-10 » ; correction
+> de quatre affirmations périmées : validations mobiles présentées comme à refaire,
+> « ni TestFlight ni testeurs », commits locaux d'avance, portes Play). Le reste du
+> fichier garde l'audit principal du 2026-09-03 ; un état externe non relevé depuis
+> est marqué **à confirmer**, pas déclaré validé.
+> Mise à jour précédente : **2026-09-03**
 > (audit CI/CD des six workflows et décisions d'automatisation de la cadence, en
 > Phase 7 point 10 ; **correction d'un fait faux depuis trois semaines** : le quota
 > Lambda `L-B99A9384` du compte prod était annoncé `PENDING` alors qu'il a été
@@ -17,6 +25,8 @@
 > **surface produit** (cf. § 0), retravaillée en profondeur du 2026-08-14 au
 > 2026-08-21.
 
+Nom commercial définitif : **Deepn**, choisi le **2026-10-10**. Voir `docs/BRAND_IDENTITY.md` ; le rebrand mobile (`task-186`) reste à appliquer.
+
 ### État de vérité au 2026-09-03
 
 - **Source et CI vertes, et la source est synchronisée côté backend** :
@@ -24,16 +34,15 @@
   `Deploy Lambda Functions` et `Terraform Dev` `success`. Le dernier commit qui
   touche `media_summarizer/` est `3994d3f` (`task-344`, 2026-09-03T13:14) et il
   **est** dans `origin/main` : le runtime dev exécute donc bien le HEAD backend.
-- **Les commits locaux d'avance ne bloquent plus rien du backend** — 25 au relevé
-  du 2026-09-03, dont **aucun ne touche `media_summarizer/`**. Le total bouge à
-  chaque commit, donc ne pas s'y fier : le remesurer avec `git fetch origin` puis
+- **Aucun commit local d'avance au 2026-10-10** : après `git fetch origin`,
+  `origin/main` et `HEAD` sont tous deux sur `f05bd7c` (2026-10-10 17:02) et
+  `git rev-list --count origin/main..HEAD` renvoie **0**. Au 2026-09-03 on en
+  comptait 25, dont aucun dans `media_summarizer/`. Le total bouge à chaque
+  commit, donc ne pas s'y fier : le remesurer avec `git fetch origin` puis
   `git rev-list --count origin/main..HEAD`, et surtout regarder *ce qu'ils
   touchent* —
   `git rev-list --count origin/main..HEAD -- media_summarizer/ infrastructure/`.
-  `git status` seul ne dit rien de l'état réel du remote. Les quatre commits qui
-  sortent de `mobile/`, `docs/` et `backlog/` sont deux passes de commentaires
-  Terraform prod (`87c5034`, `7c07c3e`) et un workflow mobile (`3125491`,
-  `task-349`).
+  `git status` seul ne dit rien de l'état réel du remote.
 
   Ce paragraphe a longtemps affirmé le contraire — « 10 commits backend/infra non
   poussés », « le fix de matching webhook de `task-334` n'a jamais tourné en
@@ -75,25 +84,38 @@
   `EXPO_TOKEN` est posé depuis le 2026-09-02T17:13:47Z — `Mobile Build &
   Distribute` n'a plus de cause d'échec connue, mais **n'a encore jamais tourné
   vert** : tous ses runs au registre sont des `failure` du 2026-08-13 ou avant,
-  déclenchés par push sous l'ancien contrat et morts à l'authentification.
-  `task-164` et `task-165` restent ouverts (validations device).
+  déclenchés par push sous l'ancien contrat et morts à l'authentification
+  (relevé du 2026-09-02 ; son état actuel est **à confirmer**, ce que `task-449`
+  exige avant tout build de release).
+  **Les validations device ne sont pas à refaire.** `task-164` est `Done` : Sign in
+  with Apple, Continue with Google et le partage Safari validés par l'owner le
+  2026-09-04 sur TestFlight, sans bug P0/P1. `task-165` a ses AC #1 à #4 cochées
+  le 2026-09-02 sur le `versionCode` 6 (Google via Credential Manager, pas de bouton
+  Apple, partage Chrome, partage audio). Seul reste son **AC #5** : vérifier sur
+  device le partage de documents et d'images (`task-338`, `Done` en code) avec un
+  binaire Android qui porte `task-345` et `task-347` — le `versionCode` 8 installé
+  le 2026-09-04 ne porte ni l'un ni l'autre, et la soumission Play du 9 a échoué.
+  `task-166` ne fait ensuite que clore la Phase 5 dans ce fichier.
 - **Production release** : `docs/RELEASE_LOG.md` reste la source de vérité :
   v1.0.0 `Pre-release`, aucun tag (`git tag -l` vide), aucun build production,
   aucune soumission.
-- **Backlog** : **12 tâches non-`Done`** au 2026-09-03 — 62, 118, 145, 164, 165,
-  166, 172, 180, 186, 229, 260, 352. `task-252` (credentials prod) et `task-337`
-  (libellé de quota du paywall) sont passées `Done` le 2026-09-03, `task-352`
-  (menu contextuel ancré sur une tuile de dossier) est entrée. `task-262`,
-  `task-238`, `task-261` et `task-163` sont `Done`, et les 26 tâches ouvertes entre
-  le 2026-08-14 et le 2026-08-21 (287, 289 à 312) sont toutes closes.
+- **Backlog au 2026-10-10 : 43 tâches `To Do`**, relevé sur le front-matter de
+  `backlog/tasks/*.md` (celui du 2026-09-03 en comptait 12 ; `task-164` et
+  `task-352` sont `Done` depuis). Par rôle dans le lancement :
+  - **chaîne de lancement** `task-440` à `task-456`, créée le 2026-10-10 et
+    détaillée au § « Vue de lancement au 2026-10-10 » ;
+  - **reste de Phase 5** : `task-165` (owner, AC #5 seule), `task-166` (agent,
+    attend `task-165`), `task-172` (Maestro, verrouillée) ;
+  - **stores, branding, légal** : `task-180`, `task-186`, `task-260` (owner),
+    `task-357` (benchmark des pages légales, `owner_decision: pending`) →
+    `task-358` ;
+  - **produit hors chemin de lancement** : 386 à 388, 424 à 428, 430, 431, 434,
+    436, 437, 439 ;
+  - **V2 / support** : 62, 118, 145, 229.
+
   `task-212`/`task-213` (architecture LLM) restent **archivées** sur
-  `owner_decision: abandoned`.
-  Aucune des 12 restantes n'est un gate technique : 4 tâches produit V2 / support
-  (62, 118, 145, 229), 3 tâches mobile/device (164, 165, 166), 1 tâche CI en sommeil
-  (172), 3 tâches owner-only stores/branding (180, 186, 260), et `task-352` (UI).
-  **11 des 12 portent `dispatchable: false` : `task-352` est la seule tâche que le
-  dispatcher peut confier à un agent.** Tout le reste est de la main d'œuvre owner
-  (devices physiques, dashboards stores).
+  `owner_decision: abandoned`. Le verrou `dispatchable` se lit dans le
+  front-matter de chaque tâche, pas ici : il change trop souvent pour être recopié.
 - **La surface produit a beaucoup bougé depuis le 2026-08-13** — 12 tâches
   livrées qui changent ce que l'utilisateur voit, donc ce que les screenshots
   stores devront montrer (cf. § 0, « Surface produit V1 ») : consommation
@@ -104,9 +126,17 @@
   (`task-303`/`305`/`311`), onglet **Library** listant tous les médias
   (`task-306`), et **Inbox reconstruite en écran Home** de rangées de tuiles
   (`task-307`).
-- **Rien n'est déployé sur les stores, et ça change la façon d'écrire les tâches** :
-  ni App Store, ni Play Store, ni TestFlight, ni Internal Testing ; zéro
-  utilisateur hors owner, zéro donnée de production, zéro abonnement actif. Aucune
+- **Rien n'est publié sur les stores, et ça change la façon d'écrire les tâches** :
+  ni App Store, ni Play Store ; zéro donnée de production, zéro client payant,
+  zéro abonnement actif. Ce paragraphe disait aussi « ni TestFlight, ni Internal
+  Testing, zéro utilisateur hors owner » : c'est **faux depuis début septembre**.
+  L'app est sur la piste de test interne Play depuis le 2026-09-01 et en TestFlight
+  depuis le 2026-09-02, des testeurs l'ont installée, et leurs retours sont
+  traités par `scripts/testflight_triage.sh` (correction déjà portée dans
+  `AGENTS.md` le 2026-09-04). Ces testeurs ne sont **pas** la bêta de trois mois,
+  qui n'a pas démarré (`task-441`). La règle ne change pas pour autant : un testeur
+  met à jour à la demande et ne détient que le dernier build installé, donc il n'y
+  a **aucune base installée à préserver**. Aucune
   couche de compatibilité, aucun fallback « au cas où », aucune migration de
   données n'est justifiable — on supprime, on ne pontifie pas. La règle complète,
   ses deux exceptions et ses conséquences sur l'ordre des tâches sont consignées
@@ -114,42 +144,120 @@
   it ») et `CLAUDE.md`. Toute justification par « les utilisateurs existants
   seraient… » est, dans ce dépôt, une erreur factuelle.
 
-### Chemin critique restant, dans l'ordre
+### Vue de lancement au 2026-10-10
 
-Le plan a basculé : l'infrastructure n'est plus le goulot. Ce qui reste, du plus
-bloquant au moins bloquant :
+Cette vue remplace le « chemin critique restant » du 2026-09-03, dont trois lignes
+étaient devenues fausses : les validations device y figuraient encore comme à faire
+(`task-164` est `Done`, `task-165` n'a plus que son AC #5), le compteur de closed
+testing y attendait `task-340` (`Done` depuis), et l'hygiène y demandait de pousser
+des commits locaux (il n'y en a plus, cf. § « État de vérité »). Le billing réel
+reste acquis (Phase 6, `task-262`/`238`/`261` `Done`).
 
-1. **Re-run `pytest -m e2e` contre dev** — dernier gate backend ouvert (Phase 4).
-2. **Build Android unique + validations device** — `task-163` ACs #6-#8,
-   `task-164`, `task-165`, puis `task-166` clôture la Phase 5.
-3. ✅ **Billing réel — fait.** Phase 6, dans l'ordre `task-262` → {`task-238`,
-   `task-261`} : les trois tâches sont `Done`. Un achat sandbox a tourné de bout en
-   bout sur Play le 2026-09-01 (cycle complet jusqu'à l'`EXPIRATION`) et sur l'App
-   Store le 2026-09-02 (`INITIAL_PURCHASE`, `PRODUCT_CHANGE`, `RENEWAL`), avec le tier
-   résolu depuis l'entitlement dans les deux cas. `revenucat_events-dev` porte
-   32 items, `subscriptions-dev` un abonnement iOS actif. Le
-   `REVENUCAT_WEBHOOK_SECRET` n'est plus « à confirmer » : 32 requêtes signées ont
-   franchi un Lambda qui répond `401` sur un Bearer invalide.
-4. **Owner-only, sans substitut possible** — le quota
-   Lambda prod et les vérifications d'éligibilité du compte Google Play
-   (`task-260`) ; les credentials du secret prod sont faits (`task-252`, `Done`).
-   Le closed testing n'est plus une hypothèse : le compte est **personnel** et créé
-   le 2026-06-01, donc l'exigence **s'applique** — 12 testeurs inscrits en continu
-   pendant 14 jours, plus jusqu'à 7 jours de review, soit un plancher calendaire
-   d'environ 21 jours qui borne par le bas la date de publication Android. Le
-   compteur ne doit pas démarrer avant `task-340` (OTA), sans quoi les 12 testeurs
-   devront réinstaller en plein milieu des 14 jours continus.
-5. **Stores et légal** — nom marketing (`task-186`), icônes (`task-180`), domaine
-   tranché puis API/privacy/terms réellement hébergés, listings et review accounts.
-   **Les screenshots devront montrer l'UI d'après `task-306`/`307`**, pas l'Inbox
-   verticale d'avant le 2026-08-21.
-6. **Hygiène, rapide** — il ne reste qu'une chose : **pousser les commits locaux**
-   (cf. § « État de vérité », dont 10 touchent le backend). Tout le reste de
-   cette ligne est fait : `EXPO_TOKEN` est posé depuis le 2026-09-02T17:13:47Z
-   (dernier reste de `task-258`), les 5 fichiers `uv.lock` du worktree sont
-   commités (`c05df88`), la branch protection est configurée (`task-257`), le
-   workflow de build mobile est désarmé (`task-258`) et les comptes E2E
-   résiduels sont purgés (`task-259`).
+Le lancement se lit en **quatre étapes distinctes**, à ne pas confondre : la bêta
+de trois mois, la sortie de bêta, les gates de soumission stores, puis le soft
+launch. La présence de testeurs en TestFlight et sur la piste interne depuis
+septembre n'est **aucune** de ces étapes. Responsabilité : **owner** = décision,
+appareil physique, console tierce, compte prod ou publication ; **agent** = fichiers
+livrés dans un worktree, sans merge, push, déploiement ni publication.
+
+#### Étape 1 — Avant la bêta, puis bêta de trois mois
+
+| Quoi | Tâche | Qui | État au 2026-10-10 |
+|---|---|---|---|
+| Rejouer la suite E2E existante contre AWS dev, tester le digest journalier (Phase 4) | `task-440` | owner | À faire. Dernier run complet : 2026-06-12 |
+| Partage document/image sur device Android (AC #5) | `task-165` | owner | Seul reste de la validation device ; AC #1-#4 déjà validées |
+| Clôture documentaire de la Phase 5 | `task-166` | agent | Attend `task-165` ; aucune nouvelle validation device ni Maestro |
+| Mécanisme de bêta (`beta_access`) | `task-429` | — | ✅ `Done`, actif sans date de fin dans `pricing_config-dev` depuis le 2026-10-05 |
+| Fixer le début, poser `ends_at`, écrire le bloc en prod, ouvrir aux testeurs | `task-441` | owner | Dépend de `task-429` et `task-440`. Début **non fixé** |
+
+#### Étape 2 — Sortie de bêta
+
+| Quoi | Tâche | Qui | État |
+|---|---|---|---|
+| Go de fin de bêta et barème validé (`docs/research/pricing-challenge/README.md`) | `task-442` | owner | Après les trois mois |
+| Retrait du code, des defaults et des entrées `beta_access`, réouverture de l'abonnement | `task-442` | agent puis owner | L'agent supprime dans son worktree après le go ; l'owner applique et vérifie |
+| Droits et quotas des abonnements après sortie | `task-453` | owner | Dépend de `task-442`, `task-448`, `task-449` |
+
+#### Étape 3 — Gates de soumission stores
+
+| Quoi | Tâche | Qui | Dépend de |
+|---|---|---|---|
+| Domaine Deepn et contacts publics | `task-443` | owner | — |
+| Pages légales : choix d'hébergement, puis publication | `task-357` → `task-444` | owner (agent prépare les fichiers) | `task-357` en `owner_decision: pending` |
+| Liens légaux du paywall | `task-358` | agent | `task-357` |
+| Domaine API et configuration mobile de production | `task-445` | agent, puis owner pour DNS, certificats et secrets | `task-443` |
+| Mise à jour et réveil de prod | `task-446` | owner | `task-445` |
+| Alertes et rollback exercés | `task-447` | owner | `task-446` |
+| Parcours et charge sur prod | `task-448` | owner | `task-446`, `task-440` |
+| Nom Deepn appliqué au mobile | `task-186` | owner | — |
+| Icônes finales | `task-180` | owner | — |
+| Chaîne EAS et binaires finaux | `task-449` | owner | `task-445`, `task-186`, `task-180`, `task-358`, `task-442` |
+| Fiches et déclarations stores | `task-450` | owner (agent prépare les fichiers) | `task-186`, `task-180`, `task-444` |
+| Branding Google OAuth et audience de production | `task-451` | owner | `task-186`, `task-443` |
+| Éligibilité du compte Play, puis closed testing et accès production | `task-260` → `task-452` | owner | Peut chevaucher la bêta |
+| Soumission iOS et Android, suivi des reviews | `task-454` | owner | `task-447`, `task-449` à `task-453`, `task-166` |
+
+Le closed testing Play n'attend plus rien côté code : `task-340` (OTA) est `Done`,
+donc les testeurs ne devront pas réinstaller pendant les 14 jours continus. Le
+plancher reste d'environ 21 jours (12 testeurs × 14 jours, plus jusqu'à 7 jours de
+review), chiffres **à confirmer** dans la Play Console au démarrage (`task-452`).
+**Les screenshots devront montrer l'UI finale**, pas l'Inbox verticale d'avant le
+2026-08-21.
+
+#### Étape 4 — Soft launch
+
+`task-455` (owner, après `task-454`) : un pays, environ 100 utilisateurs, une
+semaine d'observation, puis décision d'élargir, prolonger ou suspendre, tracée
+dans `docs/RELEASE_LOG.md`. `task-118` (Discord) n'en est pas un prérequis : un
+canal de support approuvé suffit.
+
+#### Checklist : livraison en worktree ou action owner de release
+
+Ce qu'un agent peut livrer et prouver depuis sa branche :
+
+- [ ] `task-166` — Phase 5 close dans ce fichier, une fois `task-165` terminée
+- [ ] `task-358` — liens légaux du paywall, une fois `task-357` tranchée
+- [ ] `task-445` — configuration mobile et runbook de production, une fois le
+  domaine acquis
+- [ ] `task-442` (partie code) — retrait de `beta_access`, après le go de l'owner
+- [ ] Fichiers de support de `task-444` et `task-450`, sans publication
+- Preuves admises : fichiers relus, `ruff`/`mypy`/`terraform validate` propres,
+  lecture directe des ressources `-dev`. Jamais « endpoint déployé » ni « build
+  publié » : le déploiement suit le push sur `main`, après la fin de l'agent.
+
+Ce qui ne se fait qu'à la main, par l'owner :
+
+- [ ] Run E2E contre AWS dev et digest (`task-440`)
+- [ ] AC #5 de `task-165` sur device Android
+- [ ] Date de début de bêta et `ends_at` dans dev et prod (`task-441`)
+- [ ] Domaine, DNS, certificats, secrets prod (`task-443`, `task-445`)
+- [ ] Apply Terraform prod et réveil des trois booléens (`task-446`), exercices
+  d'alerte et de rollback (`task-447`), parcours et charge sur prod (`task-448`)
+- [ ] Builds EAS finaux et distribution (`task-449`)
+- [ ] Consoles stores, Google OAuth, closed testing (`task-450`, `task-451`,
+  `task-260`, `task-452`)
+- [ ] Soumission et reviews (`task-454`), soft launch (`task-455`)
+
+**Maestro n'est pas un gate de lancement.** La CI Maestro dort depuis le
+2026-08-13 (`task-254`) et `task-172` reste verrouillée jusqu'au gel de l'UI
+(Phase 7, « Maestro E2E CI — en sommeil depuis le 2026-08-13 »). Tant que cette
+décision tient, aucune étape ci-dessus n'exige une suite Maestro verte ; les runs
+qui comptent sont les parcours manuels de l'owner.
+
+#### États externes à confirmer par l'owner
+
+Non relevés depuis la date indiquée ; ce fichier ne les déclare pas validés.
+
+- **Binaire Android sur la piste interne** : `versionCode` 8 installé au
+  2026-09-04, soumission Play du 9 en échec ce jour-là. Aucun relevé depuis.
+- **`Mobile Build & Distribute`** : aucun run vert attesté au 2026-09-02.
+- **Portes d'éligibilité Play** : ce fichier en donnait deux comptes
+  contradictoires ; le relevé daté le plus récent est **4 sur 7 au 2026-09-01**
+  (§ 2), à confirmer dans la console par `task-260`.
+- **Prod** : en veille, dernier apply le 2026-08-13 ; secret runtime peuplé le
+  2026-09-03 (`task-252`). Aucun relevé de prod depuis.
+- **Domaine** : aucun possédé au 2026-09-03 ; Deepn n'a pas encore de domaine
+  (`task-443`).
 
 ### Phase de beta — décidée le 2026-10-04, pas encore démarrée
 
@@ -185,11 +293,11 @@ bloquant au moins bloquant :
   `ends_at` accepte un instant ISO 8601, avec ou sans fuseau (sans fuseau = UTC). Une date
   illisible **laisse la beta ouverte** et émet `quota.beta_access_ends_at_unreadable` : une
   faute de frappe ne doit pas retirer son allocation à tout le monde en silence.
-- **Reste à faire côté prod** : le même bloc, activé et sans date de fin, dans
+- **Reste à faire côté prod** (`task-441`) : le même bloc, activé et sans date de fin, dans
   `pricing_config-prod` (compte `866874944541`). Les defaults du code l'activent déjà, donc
   l'écrire sert à pouvoir y poser `ends_at` au démarrage.
-- **À la fin** : supprimer le bloc de beta et tout le code qui le lit (tâche à créer à ce
-  moment-là) — un `top-level key` retiré des defaults survit dans la table, donc
+- **À la fin** : supprimer le bloc de beta et tout le code qui le lit (`task-442`, créée le
+  2026-10-10 et verrouillée jusqu'au go de sortie) — un `top-level key` retiré des defaults survit dans la table, donc
   `delete-item` sur les deux tables en plus du code — puis rouvrir l'abonnement avant la
   soumission aux stores. Le flow Maestro `07_paywall.yaml` repasse par la carte d'Account
   (version dans `git show ad76b79`) ; pendant la beta il entre par le deep link.
@@ -268,26 +376,26 @@ un staging ou une soumission.
 | Sécurité users legacy | `task-222`, `task-224`, `task-253` | **Corrigé et déployé** — 2026-08-05 : `create_user`, `get_user`, `get_user_by_email`, `update_user` et `POST /api/v1/auth/verify-email` supprimés. 2026-08-12 (`task-224`) : `endpoints/users.py` et `DELETE /api/v1/users/{user_id}` supprimés au profit de `DELETE /api/account`, qui déduit le compte du token. 2026-08-13 (`task-253`) : le 404 de `DELETE /api/account` en dev est corrigé et un **startup guard** échoue au boot si une route critique n'est pas montée. Le code est déployé (dernier deploy backend vert : `d6ba844`, 2026-09-03T13:41). Les routes citées ici portaient encore le préfixe `/api/v1/`, supprimé depuis par `task-289`. **Reste** : le run E2E complet (Phase 4) |
 | Dérive de dépendances Lambda | `6b22542` | **Corrigé le 2026-08-13, après incident** — l'API dev a répondu 500 sur toutes les routes pendant ~2 h 20 : le startup guard de `task-253` lisait mal `app.routes` sur FastAPI 0.13x, et les Dockerfiles résolvaient `fastapi>=0.104.0` au build (0.141.1 dans l'image contre 0.116.1 dans `uv.lock` et le venv local) — donc irreproductible localement. Les images installent désormais depuis `uv export --frozen`. **Clos le 2026-08-13 par `c05df88`** : la même bascule sur `uv.lock` a été étendue à `api.Dockerfile`, `worker.Dockerfile`, `test-orchestrator.Dockerfile`, `pr.yml` et `main.yml`. Rechute connue depuis : `f06bd62` a dû plafonner `pillow` sous 12.3 pour que l'image worker se construise à nouveau |
 | Suppression/export de compte | `mobile/app/settings/delete-account.tsx`, `media_summarizer/core/services/account_deletion_service.py`, `task-224` | **Fait en code (2026-08-12)** — suppression de compte in-app (Account > Delete Account) branchée sur `DELETE /api/account`, qui purge DynamoDB + S3 + Algolia. Le bouton `Export Data` mort est retiré : l'accès et la portabilité passent par `privacy@mediasummarizer.com` sous un mois, documenté dans la privacy policy. Le bouton `Settings` mort reste à traiter hors `task-224` |
-| Source + CI | `task-223`, `task-227`, `task-228` | **Fait** — `Main Branch Checks`, `Deploy Lambda Functions` et `Terraform Dev` verts sur les push récents (dernier : `e4051d1`, 2026-09-03T13:45). Reste hors P0 : `Mobile Build & Distribute`, dont le token n'a jamais authentifié un run réel (cf. Phase 7). Les 25 commits locaux d'avance ne touchent aucun fichier backend (cf. § « État de vérité ») |
+| Source + CI | `task-223`, `task-227`, `task-228` | **Fait** — `Main Branch Checks`, `Deploy Lambda Functions` et `Terraform Dev` verts sur les push récents (dernier : `e4051d1`, 2026-09-03T13:45). Reste hors P0 : `Mobile Build & Distribute`, dont le token n'a jamais authentifié un run réel (cf. Phase 7). Les 25 commits locaux d'avance du 2026-09-03 sont poussés : 0 d'avance au 2026-10-10 (cf. § « État de vérité ») |
 
 ### Bloquants release immédiats
 
 | Zone | Tâches | Statut |
 |---|---|---|
-| Re-run E2E AWS dev | Phase 4 | **Seul gate backend encore ouvert, et plus rien ne le précède.** Le HEAD backend est poussé et déployé (`3994d3f` dans `origin/main`, `Deploy Lambda Functions` vert), donc le run peut partir tel quel. Aucune preuve de `pytest -m e2e` complet depuis le 2026-06-12, alors que `/api/v1/` a disparu, que YouTube et Instagram sont passés en Apify-only, que le quota se compte en minutes et que le contrat média porte désormais cover et créateur |
+| Re-run E2E AWS dev | Phase 4, `task-440` | **Seul gate backend encore ouvert, et plus rien ne le précède.** Le HEAD backend est poussé et déployé (`3994d3f` dans `origin/main`, `Deploy Lambda Functions` vert), donc le run peut partir tel quel. Aucune preuve de `pytest -m e2e` complet depuis le 2026-06-12, alors que `/api/v1/` a disparu, que YouTube et Instagram sont passés en Apify-only, que le quota se compte en minutes et que le contrat média porte désormais cover et créateur |
 | Mobile dev builds | `task-161`, `task-162`, `task-163` | **Clos.** iOS : `task-161` est `Done`, sur une build du 2026-06-11 expirée le 2026-06-25 — le development client reste installé sur l'iPhone owner. Android : keystore (`task-162`), Client IDs et build en place, `task-163` est `Done` au 2026-09-02 |
 | Google OAuth Android | `task-163`, `task-325` | **Clos : le sign in with Google marche sur device, sur l'app installée depuis Play.** Deux clients Android coexistent — celui du 2026-08-13 sur le SHA-1 du keystore EAS (`task-162`, pour les APK posés à la main) et celui relevé le 2026-09-02 sur le SHA-1 Play App Signing (pour tout binaire servi par Play, production incluse). Le flow lui-même a changé le 2026-09-01 (`task-325`) : Google refuse un custom URI scheme pour un client Android, donc l'app signe via **Credential Manager** (module Expo local, `serverClientId` = client Web) et ne lit aucun Client ID Android |
-| Validation device non automatisable | `task-164`, `task-165` | À faire sur devices physiques : Apple Sign-In, Google sheet, Safari/Chrome share |
+| Validation device non automatisable | `task-164`, `task-165` | **Presque close, ne pas rejouer.** iOS : `task-164` `Done` le 2026-09-04 (Apple, Google, partage Safari). Android : `task-165` AC #1-#4 validées le 2026-09-02 ; reste l'AC #5, partage document/image sur un binaire portant `task-345` et `task-347` |
 | Maestro V1 | `task-168`, `task-169`, `task-170`, `task-171`, `task-172` | **Plus un bloquant release** — CI en sommeil depuis le 2026-08-13 (`task-254`) le temps que l'UI soit figée ; 168/169/170/171 closes, 172 verrouillée. Cf. Phase 7, section « Maestro E2E CI — en sommeil depuis le 2026-08-13 » |
-| Clôture Phase 5 | `task-166` | Mettre ce plan à jour une fois `task-163/164/165` terminées ; la couverture Maestro n'en est plus un prérequis |
+| Clôture Phase 5 | `task-166` | Mettre ce plan à jour une fois `task-165` terminée (`task-163` et `task-164` sont `Done`) ; la couverture Maestro n'en est plus un prérequis |
 
 ### Bloquants pré-soumission stores
 
 | Zone | Tâches | Statut |
 |---|---|---|
-| Branding app | `task-186` | Nom marketing final requis avant App Store Connect / Play Console |
+| Branding app | `task-186` | Deepn choisi le 2026-10-10 ; rebrand mobile et consoles restant à appliquer |
 | App icons | `task-180` | Remplacer les placeholders avant soumission |
-| RevenueCat / IAP | **Plus un bloquant : la facturation tourne sur les deux stores.** `task-262`, `task-238` (Android) et `task-261` (iOS) sont `Done`. Ne reste que des métadonnées de soumission, portées par Phase 6 item 3 et Phase 10 : les 13 localisations ASC, la capture de vérification, et le nom marketing (`task-186`) | Prouvé par des achats réels sur les deux stores, pas par de la configuration. **iOS, 2026-09-02** : `INITIAL_PURCHASE` 15:42:41, `PRODUCT_CHANGE` 15:43:00, `RENEWAL` 15:43:00 pour un même utilisateur, et `subscriptions-dev` porte `com.secondbrainlabs.core.mix_monthly` / `platform: ios` / `tier: M` / `status: active` / `auto_renew_status: true`. Le `PRODUCT_CHANGE` n'était pas demandé et vaut cher : il valide le **changement de formule dans le groupe**, donc les niveaux 1/2/3 réglés en ASC. **Android, 2026-09-01** : cycle complet `INITIAL_PURCHASE` → 5 × `RENEWAL` → `CANCELLATION` → `EXPIRATION`, tier `L` résolu depuis l'entitlement. `revenucat_events-dev` contient 32 items, plus 0. Le `REVENUCAT_WEBHOOK_SECRET` est donc validé par l'usage et non plus par une sonde `401`. Les 3 entitlements de tier, l'offering `default` et les 3 packages existent, **chaque tier portant trois produits, un par store**. Côté iOS les trois drapeaux sont verts (`app_store_connect_api_key_configured`, vendor number, `subscription_key_configured`) ; les 3 produits gardent `subscription.duration: null`, ce qui ne gêne rien — voir Phase 6 item 4. Disposition détaillée : `docs/REVENUECAT_ENTITLEMENTS.md` |
+| RevenueCat / IAP | **Plus un bloquant : la facturation tourne sur les deux stores.** `task-262`, `task-238` (Android) et `task-261` (iOS) sont `Done`. Ne reste que des métadonnées de soumission, portées par Phase 6 item 3 et Phase 10 : les 13 localisations ASC, la capture de vérification, et l’application du nom Deepn (`task-186`) | Prouvé par des achats réels sur les deux stores, pas par de la configuration. **iOS, 2026-09-02** : `INITIAL_PURCHASE` 15:42:41, `PRODUCT_CHANGE` 15:43:00, `RENEWAL` 15:43:00 pour un même utilisateur, et `subscriptions-dev` porte `com.secondbrainlabs.core.mix_monthly` / `platform: ios` / `tier: M` / `status: active` / `auto_renew_status: true`. Le `PRODUCT_CHANGE` n'était pas demandé et vaut cher : il valide le **changement de formule dans le groupe**, donc les niveaux 1/2/3 réglés en ASC. **Android, 2026-09-01** : cycle complet `INITIAL_PURCHASE` → 5 × `RENEWAL` → `CANCELLATION` → `EXPIRATION`, tier `L` résolu depuis l'entitlement. `revenucat_events-dev` contient 32 items, plus 0. Le `REVENUCAT_WEBHOOK_SECRET` est donc validé par l'usage et non plus par une sonde `401`. Les 3 entitlements de tier, l'offering `default` et les 3 packages existent, **chaque tier portant trois produits, un par store**. Côté iOS les trois drapeaux sont verts (`app_store_connect_api_key_configured`, vendor number, `subscription_key_configured`) ; les 3 produits gardent `subscription.duration: null`, ce qui ne gêne rien — voir Phase 6 item 4. Disposition détaillée : `docs/REVENUECAT_ENTITLEMENTS.md` |
 | Domaine production | Phase 10 §0bis | 🛑 **Aucun domaine n'est possédé** — énoncé par l'owner le 2026-09-03. `secondbrainlabs.com` appartient à un tiers (`301` vers `sbl.so`, qui refuse la connexion) et `mediasummarizer.com` est en `NXDOMAIN`. **Un achat est un prérequis dur** de la soumission stores : Apple et Google exigent une politique de confidentialité publiquement hébergée. Le profil EAS `production` pointe sur `api.mediasummarizer.com`, qui n'existe pas |
 | Store/legal | Phase 10 | Les textes existent au dépôt (`docs/compliance/privacy-policy.md`, `terms-of-service.md`, `apple-app-privacy.md`, `google-play-data-safety.md`, `CHECKLIST.md`) mais **ne peuvent pas encore être hébergés : il n'y a pas de domaine** (cf. ligne au-dessus). Ils désignent en outre `privacy@mediasummarizer.com` comme canal RGPD, adresse morte sur un domaine inexistant. Liens in-app absents, listings/screenshots/review accounts à finaliser |
 
@@ -319,7 +427,7 @@ un staging ou une soumission.
 | **AWS** (2 comptes, Organizations `o-7sf5u7j5hd`) | usage-based | DynamoDB, S3, SQS, Lambda, EventBridge | Bon : dev dans `125313707865` (déployé sur le HEAD), prod dans `866874944541` (199 ressources, health `200`, **en veille** mais secret runtime peuplé depuis le 2026-09-03). Aucune alarme active — par conception dans les deux environnements, pas par défaut de provisioning |
 | **Apple Developer Program** | $99/an | Publication App Store, TestFlight, IAP sandbox | OK (payé 2026-06-01, validé par Apple ; App ID + Sign in with Apple provisionnés). **Small Business Program accordé** (candidature déposée le 2026-09-09, accord confirmé par l'owner le 2026-10-04) : commission App Store de **15 %** au lieu de 30 %, effective « fifteen (15) days after the end of the fiscal calendar month in which your enrollment is approved ». Date d'approbation exacte et date d'effet à relever dans le mail Apple. Le programme se requalifie chaque année sous le seuil de 1 M USD de proceeds. Calculs de marge : `docs/research/pricing-challenge/README.md` § 2.4 |
 | **Google Play Console** | $25 one-time | Publication Play Store, Internal Testing, IAP sandbox | Payé 2026-06-01 ; 4 des 7 portes d'éligibilité franchies au 2026-09-01 (appareil Android physique ✅, numéro de téléphone de contact ✅, identité ✅ aucune action due ni échéance, enregistrement du nom de package ✅ — fait par le premier upload d'AAB via Play App Signing, bien avant l'échéance du 2026-09-30). **App Play créée le 2026-08-31** (`com.secondbrainlabs.core`, déclarée *Sans frais*, le nom de package étant le seul champ définitif du formulaire) et **premier AAB uploadé sur la piste de test interne le 2026-09-01**. **Compte marchand créé le 2026-08-31**, IBAN déposé le même jour, **compte bancaire validé par micro-dépôt et passé en `Principal` le 2026-09-01**. **Informations fiscales : W-8BEN approuvé le 2026-09-01** (0 % sur les royalties de droits d'auteur au titre de l'article 12 §1 de la convention France–États-Unis, attestation d'absence d'activité aux États-Unis enregistrée, valide jusqu'au 31 décembre 2029). **Compte marchand donc complet sur ses trois volets.** Restent ouvertes : adresse publique, closed testing (12 testeurs / 14 jours continus + review ≤7 jours = ~21 jours de plancher calendaire) — runbook `task-260`, détail en Phase 2.2 |
-| **Expo / EAS** | gratuit (free tier) | Builds iOS/Android | Partiel : compte/projet OK ; ancienne build iOS expirée. **Deux AAB Android produits le 2026-09-01** (profil `internal`, keystore géré par EAS, API dev) : `versionCode` 4, puis `versionCode` 5 une fois la clé RevenueCat corrigée dans les environnements EAS — le 4 était inexploitable pour la facturation, `EXPO_PUBLIC_*` étant inliné à la compilation. C'est le 5 qui est sur la piste de test interne. Il a fallu corriger un défaut qui rendait *tout* build Release Android impossible, `production` compris : les fichiers `mobile/locales/*.json` étaient plats, donc Expo recopiait les trois clés iOS dans les ressources Android où elles n'existent pas dans la locale par défaut, et `lintVitalRelease` échouait sur 33 erreurs `ExtraTranslation`. Les fichiers sont désormais scindés en sections `ios`/`android`. Les trois environnements EAS **sont peuplés** et portent la vraie clé `goog_` depuis le 2026-09-01. **Un build iOS de distribution store existe aussi** : `790af106`, 1.0.0 (2), commit `ca9cadb`, terminé le 2026-09-01, poussé sur ASC (`6778072060`) par EAS Submit le 2026-09-02 et installé par un beta testeur en TestFlight. Contrairement à ce que ce tableau affirmait, **il porte bien les deux clés RevenueCat et l'API dev** — vérifié le 2026-09-02 en dézippant l'IPA : `Payload/*.app/EXConstants.bundle/app.config` donne `apiBaseUrl: https://jji077bi8e.execute-api.eu-west-3.amazonaws.com`, `revenueCatAppleKey: appl_…`, `revenueCatGoogleKey: goog_…`. `mobile/eas.json` n'en déclare aucune, mais le profil résout les variables de l'environnement EAS, et les valeurs partent dans le manifeste (`extra` de `app.config.ts`), pas dans le bundle JS — les chercher dans `main.jsbundle` ne prouve rien, c'est `EXConstants.bundle/app.config` qu'il faut lire. La CI Maestro injecte la clé Test Store par l'environnement |
+| **Expo / EAS** | gratuit (free tier) | Builds iOS/Android | Partiel : compte/projet OK ; ancienne build iOS expirée. **Deux AAB Android produits le 2026-09-01** (profil `internal`, keystore géré par EAS, API dev) : `versionCode` 4, puis `versionCode` 5 une fois la clé RevenueCat corrigée dans les environnements EAS — le 4 était inexploitable pour la facturation, `EXPO_PUBLIC_*` étant inliné à la compilation. Le 5 a été remplacé depuis sur la piste interne (8 installé au 2026-09-04, binaire actuel à confirmer, cf. § 5). Il a fallu corriger un défaut qui rendait *tout* build Release Android impossible, `production` compris : les fichiers `mobile/locales/*.json` étaient plats, donc Expo recopiait les trois clés iOS dans les ressources Android où elles n'existent pas dans la locale par défaut, et `lintVitalRelease` échouait sur 33 erreurs `ExtraTranslation`. Les fichiers sont désormais scindés en sections `ios`/`android`. Les trois environnements EAS **sont peuplés** et portent la vraie clé `goog_` depuis le 2026-09-01. **Un build iOS de distribution store existe aussi** : `790af106`, 1.0.0 (2), commit `ca9cadb`, terminé le 2026-09-01, poussé sur ASC (`6778072060`) par EAS Submit le 2026-09-02 et installé par un beta testeur en TestFlight. Contrairement à ce que ce tableau affirmait, **il porte bien les deux clés RevenueCat et l'API dev** — vérifié le 2026-09-02 en dézippant l'IPA : `Payload/*.app/EXConstants.bundle/app.config` donne `apiBaseUrl: https://jji077bi8e.execute-api.eu-west-3.amazonaws.com`, `revenueCatAppleKey: appl_…`, `revenueCatGoogleKey: goog_…`. `mobile/eas.json` n'en déclare aucune, mais le profil résout les variables de l'environnement EAS, et les valeurs partent dans le manifeste (`extra` de `app.config.ts`), pas dans le bundle JS — les chercher dans `main.jsbundle` ne prouve rien, c'est `EXConstants.bundle/app.config` qu'il faut lire. La CI Maestro injecte la clé Test Store par l'environnement |
 | **RevenueCat** | gratuit < $10k MTR | Cross-platform IAP backend | Partiel : projet `proj879a771a` avec 3 entitlements de tier, offering courant et 3 packages tiers (`task-262`, 2026-08-13), désormais servis par les produits Test Store **et** les 3 produits App Store de l'app iOS (`task-261`, 2026-08-13). L'app Play (`appb253c0f75a`) existe depuis le 2026-08-20 et porte ses **3 produits depuis le 2026-09-01**, rattachés aux mêmes entitlements et packages, avec des identifiants de la forme `subscriptionId:basePlanId`. Ses **identifiants de compte de service sont validés depuis le 2026-09-01** (`Valid credentials`) — il ne manquait que l'upload d'un AAB, les permissions et les API Google Cloud étant correctes depuis le départ, ce qu'a prouvé le panneau *Debug error* (2 vérifications sur 3 déjà vertes). **Complet au 2026-09-02** : la clé App Store Connect est en place côté iOS, et un achat sandbox a tourné de bout en bout sur chacun des deux stores (Android le 2026-09-01, iOS le 2026-09-02, avec un changement de formule en prime). Le `REVENUCAT_WEBHOOK_SECRET` est validé par 32 événements reçus, plus par une sonde. Disposition détaillée : `docs/REVENUECAT_ENTITLEMENTS.md` |
 | **Google Cloud Console** (OAuth) | gratuit | Sign in with Google : OAuth Client IDs (iOS, Android, Web) + écran de consentement OAuth | Partiel : projet + consent screen Test + OAuth Web backend + OAuth iOS OK ; OAuth Android et publication Production restent à faire |
 | **OpenAI** | usage-based | Génération artifacts (summary/notes/flashcards) | OK (compte créé, clé en local dans `.env`) |
@@ -569,8 +677,8 @@ EXPO_PUBLIC_API_BASE_URL=https://api.<your-domain>
    `uv.lock` (`pr.yml`, `main.yml`, `api.Dockerfile`, `worker.Dockerfile`,
    `test-orchestrator.Dockerfile`) sont commités depuis `c05df88`, et
    `origin/main` (`e4051d1`) contient tout `media_summarizer/`. Les 25 commits
-   locaux d'avance sont du mobile, de la doc et du backlog — cf. § « État de
-   vérité ». À pousser quand même, mais plus aucun gate n'en dépend.
+   locaux d'avance de ce relevé sont poussés depuis : 0 d'avance au 2026-10-10,
+   cf. § « État de vérité ».
 4. ✅ **CI verte** (`task-223`, `task-227`, `task-228`) :
    - `Main Branch Checks` **success** sur tous les push récents, dont
      `e4051d1` (2026-09-03) ;
@@ -631,7 +739,7 @@ EXPO_PUBLIC_API_BASE_URL=https://api.<your-domain>
       Coordonnées* : téléphone et adresse e-mail de contact portent tous deux la
       pastille « vérifié ». Relevé au même endroit : le *Nom du développeur* est
       déjà `Second Brain Labs` (l'entité légale), ce qui est indépendant du nom
-      marketing de l'app que `task-186` doit encore trancher.
+      marketing de l'app, désormais Deepn (décision du 2026-10-10 ; application via `task-186`).
    3. **Vérification d'identité du compte développeur — ✅ aucune action due,
       aucune échéance, relevé le 2026-08-31.** Chemin réel : *Validation des
       développeurs Android* → onglet **Identité** (et non « Paramètres → Détails du
@@ -1091,15 +1199,21 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
    device sur l'app installée depuis Play. Les deux créations ont dû se faire à
    la main dans l'UI web de la Cloud Console — ni `gcloud` ni aucune API
    publique n'expose la création d'un OAuth client de type Android.
-3. `task-164` — validation iOS sur device physique :
+3. ✅ `task-164` — validation iOS sur device physique, **`Done`, validée par
+   l'owner le 2026-09-04** sur TestFlight, sans bug P0/P1 :
    - Sign in with Apple → user créé/lié → inbox.
    - Continue with Google → `ASWebAuthenticationSession` → user créé/lié → inbox.
    - Share intent Safari → share-confirm → submit → vignette inbox.
-4. `task-165` — validation Android sur device physique :
-   - Continue with Google sans `DEVELOPER_ERROR`.
-   - Apple button absent ou no-op clean.
-   - Share intent Chrome URL.
-   - Share intent texte/audio.
+4. `task-165` — validation Android sur device physique. **Les quatre parcours
+   sont validés le 2026-09-02** sur le `versionCode` 6 ; ne pas les rejouer :
+   - ✅ Continue with Google (via Credential Manager depuis `task-325`).
+   - ✅ Apple button absent.
+   - ✅ Share intent Chrome URL.
+   - ✅ Share intent audio.
+
+   **Reste l'AC #5** : le partage de documents et d'images (`task-338`) sur un
+   binaire portant `task-345` et `task-347`, que le `versionCode` 8 installé au
+   2026-09-04 ne contient pas. Détail dans les notes de `task-165`.
 5. **Couverture Maestro (`task-168` à `task-172`) : plus un prérequis de
    Phase 5.** La CI Maestro est en sommeil depuis le 2026-08-13 (`task-254`) le
    temps que l'UI soit figée. `task-168`, `task-169`, `task-170` et `task-171`
@@ -1107,8 +1221,8 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
    (`dispatchable: false`) jusqu'à ce jalon. État des 7 flows, ce qui reste
    provisionné et travail de réactivation : Phase 7, section « Maestro E2E CI —
    en sommeil depuis le 2026-08-13 ».
-6. `task-166` — marquer Phase 5 DONE dans ce plan une fois `task-163`,
-   `task-164` et `task-165` closes.
+6. `task-166` — marquer Phase 5 DONE dans ce plan une fois `task-165` close
+   (`task-163` et `task-164` le sont).
 7. ✅ **Hygiène backlog** : `task-162` est passée à `Done` le 2026-08-13 — ses
    3 critères étaient cochés et son SHA-1 consigné, seul le statut était en retard.
    Phase 5 ne dépend donc plus que de `task-163` (ACs #6-#8), `task-164` et
@@ -1400,7 +1514,7 @@ faite :
       `Prepare for Submission`. Détail et enchaînement correct dans
       `docs/store-listing/app-store-connect.md`, § « Do not put the subscriptions in a
       submission before 1.0 is ready ». À noter aussi : le groupe s'appelle
-      `Second Brain Plans` — si c'est le nom marketing définitif, `task-186` doit
+      `Second Brain Plans` — à aligner sur `Deepn Plans` ; `task-186` doit
       passer avant d'écrire les métadonnées de la 1.0 (Phase 10, sous-étape 0).
    4. **App Store Connect → Users and Access → Integrations → App Store Connect
       API** : la clé Admin **existe depuis le 2026-09-01** et est déjà enregistrée
@@ -1493,8 +1607,8 @@ sont rattachés aux entitlements de tier comme n'importe quel autre produit.
    - `.github/workflows/mobile-store-promote.yml` — promotion stores.
    - `.github/workflows/mobile-e2e-maestro.yml` — Maestro Android/iOS.
 2. ✅ **État source** : `origin/main` est sur `e4051d1` (2026-09-03T13:45) et
-   contient tout `media_summarizer/`. Les 25 commits locaux d'avance sont du
-   mobile, de la doc et du backlog (cf. § « État de vérité »). Les runs GitHub
+   contient tout `media_summarizer/`. Les 25 commits locaux d'avance de ce relevé
+   sont poussés depuis : 0 d'avance au 2026-10-10 (cf. § « État de vérité »). Les runs GitHub
    portent donc sur le HEAD backend.
 3. ✅ **Main checks verts** (`task-223`, `task-227`, `task-228`) : `Main Branch
    Checks` est `success` sur tous les push récents. Le pin sur `uv.lock`
@@ -1783,7 +1897,7 @@ macOS). iOS ne redevient donc **jamais** un required check par PR : Android sur
 
 ### Phase 10 — Pré-lancement (jour 10+)
 
-0. **Rebrand mobile placeholder name** (cf. task-186) — l'app utilise actuellement le nom legacy `Media Summarizer` partout (display name, slug Expo, scheme deep link, share extension iOS). À exécuter **avant** la sous-étape 1 ci-dessous : tous les textes Apple App Store Connect (App Information, screenshots) et Google Play Console + Google OAuth Branding consomment le nom marketing définitif. Coût ~30 min en pré-distribution, beaucoup plus élevé une fois publié. Ne touche pas le bundle id `com.secondbrainlabs.core` (figé). Voir `task-186` pour la checklist exacte des 8-9 endroits à mettre à jour.
+0. **Appliquer le nom définitif Deepn** (cf. task-186) — l'app utilise actuellement le nom legacy `Media Summarizer` partout (display name, slug Expo, scheme deep link, share extension iOS). À exécuter **avant** la sous-étape 1 ci-dessous : tous les textes Apple App Store Connect (App Information, screenshots) et Google Play Console + Google OAuth Branding consomment le nom marketing définitif. Coût ~30 min en pré-distribution, beaucoup plus élevé une fois publié. Ne touche pas le bundle id `com.secondbrainlabs.core` (figé). Voir `task-186` pour la checklist exacte des 8-9 endroits à mettre à jour.
 
 0bis. **Acheter un domaine, puis couper l'API dessus** — pendant le dev (Phase 5), l'app mobile + Apple Sign-In Service ID + `APPLE_REDIRECT_URI` côté backend tapent tous l'URL brute API Gateway `https://jji077bi8e.execute-api.eu-west-3.amazonaws.com`. En Phase 10, on bascule sur un custom domain. Étapes :
    - 🛑 **PRÉALABLE ABSOLU, énoncé par l'owner le 2026-09-03 : il ne possède
@@ -1826,7 +1940,7 @@ macOS). iOS ne redevient donc **jamais** un required check par PR : Android sur
    - Rebuild EAS dev + preview pour propager la nouvelle URL aux binaires.
 
 1. **Apple App Store Connect** (appstoreconnect.apple.com) :
-   - **App Information** : nom marketing affiché aux users (à figer en Phase 10 ; ≠ Bundle ID `com.secondbrainlabs.core`), sous-titre (30 chars max), catégorie primaire/secondaire, contact info, copyright. C'est l'équivalent Apple du "Branding" Google OAuth.
+   - **App Information** : nom marketing affiché aux users : `Deepn` (choisi le 2026-10-10 ; ≠ Bundle ID `com.secondbrainlabs.core`), sous-titre (30 chars max), catégorie primaire/secondaire, contact info, copyright. C'est l'équivalent Apple du "Branding" Google OAuth.
    - **Pricing & Availability** : free vs paid, pays/régions, App Store distribution.
    - **App Privacy** : remplir le questionnaire détaillé sur les données collectées + leur usage. Apple est strict — toute imprécision peut entraîner un rejet ou un retrait post-launch.
    - **App Review Information** : compte de démo (login + password) pour le reviewer Apple, notes éventuelles, contact.
@@ -1837,7 +1951,7 @@ macOS). iOS ne redevient donc **jamais** un required check par PR : Android sur
    - Play Console : assets, description, classification, politique de confidentialité.
    - Closed Testing → Open Testing → Production rollout.
 3. **Google Auth Platform (OAuth consent screen → Audience)** :
-   - Vérifier le **Branding** : App name = nom marketing (ex. `Second Brain`, **pas** le nom interne du projet GCP), logo, support email, developer contact email.
+   - Vérifier le **Branding** : App name = `Deepn` ( **pas** le nom interne du projet GCP), logo, support email, developer contact email.
    - Confirmer que les **scopes** demandés sont uniquement `openid`, `email`, `profile` (non-sensitive). Si d'autres scopes sont ajoutés (Drive, Gmail, etc.), prévoir 4-6 semaines de **vérification Google** + politique de confidentialité publique + vidéo de démo.
    - Section **État de la publication** : cliquer **« Publier l'application »** pour passer de `Test` (limité aux 100 utilisateurs whitelistés) à `Production` (n'importe qui peut se connecter avec Google).
    - Pour les scopes basiques (notre cas), la publication est immédiate sans validation Google supplémentaire — un avertissement "App non vérifiée" peut apparaître initialement chez certains users, à monitorer.
@@ -1867,7 +1981,7 @@ macOS). iOS ne redevient donc **jamais** un required check par PR : Android sur
      domaine n'est possédé**, cf. Phase 10 §0bis. `secondbrainlabs.com` est à un
      tiers, `mediasummarizer.com` est en `NXDOMAIN`.
 5. **Site landing minimal** (optionnel) : `<your-domain>` avec CTA App Store / Play Store.
-6. **Soft launch** : un seul pays, 100 users, observer 1 semaine avant rollout global.
+6. **Soft launch** (`task-455`) : un seul pays, 100 users, observer 1 semaine avant rollout global.
 
 ---
 
@@ -1899,13 +2013,13 @@ Les comptes principaux sont largement provisionnés. Les blocages restants sont 
 - [x] Apple Developer Program payé ($99) au 2026-06-01, validé par Apple
 - [x] **Apple Sign in with Apple Service ID + Key (.p8) + App ID + Team ID + Key ID** provisionnés au 2026-06-08 (cf. Phase 2.8) — toutes les vars Apple dans `.env` renseignées : `APPLE_CLIENT_ID` (Service ID), `APPLE_PRIVATE_KEY` (PEM single-line), `APPLE_REDIRECT_URI` prod, `APPLE_TEAM_ID`, `APPLE_KEY_ID`.
 - [ ] Google Play Console payé ($25) au 2026-06-01 — **sept portes d'éligibilité
-  du compte, deux franchies au 2026-08-31** : accès à un appareil Android
-  physique ✅ 2026-08-31 (via l'app mobile Play Console) et numéro de téléphone de
-  contact ✅ 2026-08-31. Restent ouvertes : identité développeur, profil de
-  paiement Google Payments, adresse développeur publique, closed testing
-  ~12 testeurs / 14 jours, et l'enregistrement des noms de packages (échéance
-  Google 2026-09-30 — automatique via Play App Signing, à revérifier en Phase 10).
-  Cf. Phase 2.2 et `task-260`
+  du compte, quatre franchies au 2026-09-01** (relevé le plus récent, § 2 ; cette
+  ligne disait « deux au 2026-08-31 ») : appareil Android physique, numéro de
+  téléphone de contact, identité (aucune action due), enregistrement du nom de
+  package par le premier upload d'AAB. Le compte marchand est complet. Restent
+  ouvertes : adresse développeur publique et closed testing ~12 testeurs /
+  14 jours. État actuel **à confirmer** dans la console : `task-260`, puis
+  `task-452` pour le closed testing
 - [x] Google Cloud Console : projet `media-summarizer` créé, OAuth consent screen configuré (Branding `Second Brain`, External, scopes openid+email+profile), mode Test avec utilisateur test ajouté, **3 OAuth Client IDs créés (Web backend + iOS + Android au 2026-08-13)** — `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` dans `.env` racine ; `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` + `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS` dans `mobile/.env` (naming aligné avec `mobile/app.config.ts`, corrigé 2026-06-08)
 - [x] Google Cloud Console **Android OAuth Client IDs — les deux** :
   - le 2026-08-13 (`task-163`), `package=com.secondbrainlabs.core` + SHA-1 du
@@ -1959,16 +2073,18 @@ Les comptes principaux sont largement provisionnés. Les blocages restants sont 
 - [x] SHA-1 keystore Android via `eas credentials`, sans build (`task-162`,
   2026-08-13) — aucun build consommé, cf. notes de `task-162`
 - [x] Build Android EAS : deux AAB produits le **2026-09-01** avec le profil
-  `internal` (`versionCode` 4 puis 5), keystore géré par EAS, API dev. Le 5 est
-  sur la piste de test interne Play ; le 4 portait encore le placeholder de clé
-  RevenueCat. Aucune build de profil `development` n'a été consommée
+  `internal` (`versionCode` 4 puis 5), keystore géré par EAS, API dev ; le 4
+  portait encore le placeholder de clé RevenueCat. Suivis du 6 (validation de
+  `task-165`), puis du 8, installé au 2026-09-04 ; la soumission Play du 9 a
+  échoué ce jour-là. Binaire actuel de la piste interne **à confirmer**. Aucune
+  build de profil `development` n'a été consommée
 - [x] Variables EAS development/preview/production : les trois environnements sont
   peuplés, et `EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY` y porte la vraie clé `goog_`
   depuis le **2026-09-01** (`task-238`). Elle y valait le placeholder jusque-là,
   ce qui rendait tout AAB inexploitable pour la facturation — le profil `internal`
   résout l'environnement `production` et les `EXPO_PUBLIC_*` sont figées à la
   compilation
-- [ ] Nom marketing final : requis avant `task-186`, App Store Connect, Play Console et Google OAuth Branding
+- [x] Nom marketing final : **Deepn**, décidé par l’owner le 2026-10-10. Application dans le mobile, App Store Connect, Play Console et Google OAuth Branding encore à faire (`task-186`, Phase 10).
 - [ ] Icônes finales : `task-180`, requis avant soumission stores
 - [ ] Domaines : 🛑 **acheter un domaine — aucun n'est possédé** (owner, 2026-09-03).
   `secondbrainlabs.com` appartient à un tiers, `mediasummarizer.com` n'existe pas.
@@ -1996,7 +2112,7 @@ Les comptes principaux sont largement provisionnés. Les blocages restants sont 
 | ~~API interactive indisponible après longue inactivité~~ | **Traité** (`task-217`, 2026-08-06) : image API minimale, reserved concurrency configurable, warm-up EventBridge, health gate de release. Cold 5,2 s / warm 1,0 s au 2026-08-13. |
 | ~~Collision/destruction entre dev/staging/prod~~ | **Traité** (`task-237`, `task-248`) : une racine Terraform par environnement, 100 % des noms suffixés, et surtout **une frontière de compte AWS** entre dev et prod — un plan lancé avec les identifiants de prod ne peut rien toucher dans dev. |
 | ~~CRUD users legacy non authentifié~~ | **Traité** (`task-222`, `task-224`, `task-253`) : surface legacy supprimée, `DELETE /api/account` déduit le compte du token et purge DynamoDB + S3 + Algolia, startup guard contre les routes silencieusement absentes. |
-| État local non poussé sur GitHub | **Résorbé côté backend au 2026-09-03** : `origin/main` est sur `e4051d1` et contient tout `media_summarizer/`, donc le runtime dev est le HEAD backend. Les 25 commits d'avance sont du mobile, de la doc et du backlog. Le risque reste réel et se répète — au 2026-09-02 il y avait 10 commits backend/infra en attente, et les achats sandbox du 2026-09-01/02 ont bien tourné sur le code d'avant `task-334`. Pousser après chaque session de merge, et vérifier ce que les commits touchent, pas seulement combien il y en a. |
+| État local non poussé sur GitHub | **Résorbé côté backend au 2026-09-03** : `origin/main` est sur `e4051d1` et contient tout `media_summarizer/`, donc le runtime dev est le HEAD backend. Les 25 commits d'avance de ce relevé sont poussés depuis : 0 au 2026-10-10. Le risque reste réel et se répète — au 2026-09-02 il y avait 10 commits backend/infra en attente, et les achats sandbox du 2026-09-01/02 ont bien tourné sur le code d'avant `task-334`. Pousser après chaque session de merge, et vérifier ce que les commits touchent, pas seulement combien il y en a. |
 | Dérive silencieuse entre l'image Lambda et le lockfile | **Cause de l'incident du 2026-08-13** (API dev 500 sur toutes les routes, ~2 h 20) : les Dockerfiles résolvaient les intervalles de `pyproject.toml` au build, donc chaque build produisait une image différente et aucune exécution locale ne pouvait reproduire le bug. Mitigation : installer depuis `uv export --frozen` — **fait partout depuis `c05df88`** (les trois images et les deux workflows). Le risque n'est pas éteint pour autant : `f06bd62` a dû plafonner `pillow` sous 12.3 pour que l'image worker se construise à nouveau. |
 | Un health check vert lu comme « l'environnement fonctionne » | `GET /api/health/` ne teste que DynamoDB via le rôle IAM. Prod répondait `200` avec un secret runtime **vide** jusqu'au 2026-09-03 ; le secret est peuplé depuis, mais le `200` ne le prouvait pas et ne prouve toujours rien d'autre. Ne jamais s'en servir comme preuve qu'un environnement est opérationnel — seul un E2E complet l'établit. |
 | Prod ouverte alors qu'elle est en veille | Trois booléens (`enable_alarms`, `enable_dashboard`, `enable_worker_polling`) à repasser à `true`. Le quota de concurrence (accordé le 2026-08-13) et le secret runtime (peuplé le 2026-09-03, `task-252`) ne sont plus en cause ; l'apply qui matérialise la réservation bute encore sur la protection de suppression d'`artifact_idempotence-prod`, cf. Phase 9 point 3. Une prod servant de vrais utilisateurs sans alarmes est une faute ; la veille n'est acceptable qu'avant lancement. |

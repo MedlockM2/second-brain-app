@@ -2,9 +2,10 @@
 id: task-166
 title: Mark Phase 5 as DONE in V1_LAUNCH_PLAN.md and finalize Phase 5 status section
 status: To Do
-assignee: []
+assignee:
+  - agent
 created_date: '2026-06-10 05:40'
-updated_date: '2026-09-02 18:45'
+updated_date: '2026-10-10 15:14'
 labels:
   - phase-5
   - mobile
@@ -15,12 +16,16 @@ dependencies:
   - task-165
   - task-171
 priority: high
-dispatchable: false
+dispatchable: true
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+## Responsabilité — cadrage lancement du 2026-10-10
+
+Agent — clôturer la documentation de Phase 5 dans son worktree lorsque les dépendances sont satisfaites. Aucune nouvelle validation device ni exécution Maestro requise dans cette tâche ; les preuves sont fournies par task-164/165.
+
 ## Context
 
 Une fois task-164 et task-165 closes (validation device des flows non-Maestrables), Phase 5 du V1_LAUNCH_PLAN est terminée. Il faut acter ça dans la doc, comme ça a été fait pour Phase 3 (`PARTIELLEMENT DONE 2026-06-08`) et Phase 4 (`PARTIELLEMENT DONE 2026-06-09`), pour garder la traçabilité release.

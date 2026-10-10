@@ -2,8 +2,10 @@
 id: task-180
 title: Replace placeholder app icons before store submission
 status: To Do
-assignee: []
+assignee:
+  - owner
 created_date: '2026-06-10 13:48'
+updated_date: '2026-10-10 15:14'
 labels:
   - mobile
   - release
@@ -17,6 +19,10 @@ dispatchable: false
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+## Responsabilité — cadrage lancement du 2026-10-10
+
+Owner / designer — décider et fournir les visuels finaux ; intégration et vérifications techniques selon la tâche existante. Coordonner la livraison native avec task-186. Le verrou owner-only existant est conservé.
+
 > ⚠️ **MANUAL — OWNER ONLY. NEVER DISPATCH TO A SUBAGENT.**
 > Cette tâche relève de la création de visuels (design + outils graphiques propriétaires) et ne peut pas être exécutée par un agent. Toute tentative de dispatch doit être ignorée.
 

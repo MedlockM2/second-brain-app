@@ -6,12 +6,12 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-06-08 10:53'
+updated_date: '2026-10-10 14:10'
 labels:
   - community
   - ops
 dependencies: []
 priority: medium
-dispatchable: false
 ---
 
 ## Description
@@ -149,3 +149,9 @@ L'URL Discord sera ajoutée :
 - [ ] #8 #8 `docs/community/discord.md` créé avec : URL du serveur, structure complète des canaux, liste des rôles, qui modère, comment ajouter un bot, comment configurer un webhook
 - [ ] #9 #9 Au moins 1 message de welcome dans `#welcome` et 1 message de seed dans `#general-chat` pour éviter le serveur vide au lancement
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-10 — Nom commercial définitif choisi par l’owner : Deepn (docs/BRAND_IDENTITY.md). Pour le branding communautaire prévu dans la description, la variante <NomApp> Community devient Deepn Community. Le choix du nom ne prouve pas la création du serveur ni les autres livrables : tâche conservée To Do, aucun AC coché.
+<!-- SECTION:NOTES:END -->

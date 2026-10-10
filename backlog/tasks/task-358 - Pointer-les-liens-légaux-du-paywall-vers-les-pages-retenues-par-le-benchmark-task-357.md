@@ -4,19 +4,26 @@ title: >-
   Pointer les liens légaux du paywall vers les pages retenues par le benchmark
   (task-357)
 status: To Do
-assignee: []
+assignee:
+  - agent
 created_date: '2026-09-04 15:26'
+updated_date: '2026-10-10 15:15'
 labels:
   - mobile
   - compliance
 dependencies:
   - task-357
 priority: high
+dispatchable: true
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+## Responsabilité — cadrage lancement du 2026-10-10
+
+Agent mobile — appliquer la décision validée du benchmark task-357 aux liens légaux et aux points d’entrée V1. Owner — publier les pages via task-444 et vérifier les liens sur appareil. La publication externe ne fait pas partie des critères du travail en branche.
+
 Mettre en place les liens légaux de l'app conformément à la décision de l'owner sur le benchmark **task-357**.
 
 ## Avant de commencer
@@ -40,6 +47,10 @@ Cadrage (`AGENTS.md`, « Nothing is deployed yet ») : l'app n'a jamais été so
 
 - **Publier les pages vous revient** : elles doivent être joignables publiquement, sans authentification, avant la première soumission. Un agent ne peut ni acheter un domaine ni mettre une page en ligne.
 - Une fois publiées, vérifier depuis l'app que les deux liens de l'écran d'achat ouvrent bien les bonnes pages — un lien qui répond 404 est rejeté comme un lien absent.
+
+## Complément de périmètre V1
+
+Les liens Privacy/Terms doivent aussi être accessibles depuis login/register et Account, en utilisant les mêmes constantes que le paywall et la suppression de compte. Ce complément couvre le point du V1 Launch Plan sans créer un ticket mobile concurrent.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -48,4 +59,6 @@ Cadrage (`AGENTS.md`, « Nothing is deployed yet ») : l'app n'a jamais été so
 - [ ] #2 `grep -rn 'mediasummarizer' mobile/` ne renvoie plus aucune adresse légale, ni en valeur, ni en repli, ni en exemple de commentaire
 - [ ] #3 L'écran d'achat et l'écran de suppression de compte lisent tous deux ces constantes ; aucune URL légale n'est écrite en dur ailleurs dans `mobile/`
 - [ ] #4 `npm run typecheck` et `npm run lint` sont propres dans `mobile/`
+- [ ] #5 Les liens de confidentialité et de conditions sont accessibles depuis les écrans login/register et Account, et lisent les mêmes constantes légales que le paywall et la suppression de compte.
+- [ ] #6 Les libellés ajoutés passent par les catalogues de traduction existants et sont présents dans les 11 langues V1.
 <!-- AC:END -->

@@ -4,9 +4,10 @@ title: >-
   Runbook owner — confirm the Google Play account eligibility gates before any
   Android publication
 status: To Do
-assignee: []
+assignee:
+  - owner
 created_date: '2026-08-13 19:01'
-updated_date: '2026-09-03 10:14'
+updated_date: '2026-10-10 15:15'
 labels:
   - release
   - owner-only
@@ -1039,4 +1040,6 @@ Trois relevés annexes du même écran :
 - Le `N° DE TÉLÉPHONE` du profil de paiement est **vide**, alors que le numéro de contact
   Play Console est validé depuis ce matin. Deux champs distincts ; non bloquant, mais à
   renseigner si la création du compte marchand le réclame.
+
+Responsabilité — cadrage lancement du 2026-10-10 : Owner — terminer le relevé des portes Play, en particulier la décision sur l’adresse publique et les exigences de closed testing. Ne pas recommencer les vérifications déjà cochées. Le déroulement du closed testing et la demande d’accès production sont suivis séparément dans task-452.
 <!-- SECTION:NOTES:END -->

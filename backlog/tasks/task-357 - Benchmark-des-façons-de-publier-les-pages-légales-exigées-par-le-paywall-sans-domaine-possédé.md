@@ -4,19 +4,26 @@ title: >-
   Benchmark des façons de publier les pages légales exigées par le paywall, sans
   domaine possédé
 status: To Do
-assignee: []
+assignee:
+  - agent
 created_date: '2026-09-04 15:26'
+updated_date: '2026-10-10 15:15'
 labels:
   - benchmark
   - mobile
   - compliance
 dependencies: []
 priority: high
+dispatchable: true
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+## Responsabilité — cadrage lancement du 2026-10-10
+
+Agent de recherche — produire ou compléter le benchmark selon son cycle owner_decision. Owner — lire le livrable et décider de l’option d’hébergement. Le README existant reste autoritatif ; ne pas inventer de nouvelle décision ni confondre livrable produit et benchmark accepté.
+
 Recherche exhaustive des façons de publier deux pages publiques — **conditions d'utilisation** et **politique de confidentialité** — joignables depuis l'écran d'achat de l'app, sachant que **le projet ne possède aucun domaine**.
 
 ## Pourquoi cette question se pose

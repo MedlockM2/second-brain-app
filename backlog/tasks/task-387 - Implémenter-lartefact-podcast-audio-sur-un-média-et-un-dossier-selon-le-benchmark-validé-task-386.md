@@ -6,12 +6,18 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 15:59'
+updated_date: '2026-10-10 14:23'
 labels:
   - backend
   - artifacts
   - feature
 dependencies:
-  - task-386
+  - TASK-386
+  - TASK-439
+references:
+  - >-
+    backlog/tasks/task-439 -
+    Unifier-sur-GPT-6-Luna-le-modèle-des-artefacts-des-aperçus-et-du-futur-chat.md
 priority: high
 ---
 
@@ -51,6 +57,10 @@ Ajouter un **sixième type d'artefact demandable par l'utilisateur** : un podcas
 3. **L'E2E qui compte** : demander un podcast sur un média, puis sur un dossier de plusieurs sources, écouter le fichier, vérifier la durée obtenue face à la durée demandée, et le débit de minutes sur le compte.
 4. **Une re-soumission de la même demande est une réutilisation**, pas une nouvelle génération : pour regénérer, il faut des `parameters` différents ou un dossier dont les sources ont changé.
 5. **Coût réel** : c'est le premier artefact dont le coût dépend de la longueur de la sortie. Surveiller `llm_usage` / la facture du fournisseur sur les premiers épisodes.
+
+## Décision transversale de modèle du 2026-10-10
+
+L'owner a fixé OpenAI `gpt-6-luna` en mode Standard pour la génération textuelle de tous les artefacts. Le script du podcast consomme le socle et la configuration commune livrés par `task-439`, dont cette tâche dépend désormais. Ce choix de LLM ne rouvre pas le choix de fournisseur de synthèse vocale porté par task-386 et ne demande aucun nouveau benchmark comparatif de modèles.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -69,4 +79,5 @@ Ajouter un **sixième type d'artefact demandable par l'utilisateur** : un podcas
 - [ ] #12 `utils/infra_check.py` connaît le nouveau type et son bucket, de sorte qu'un environnement où le bucket manque est signalé par le contrôle d'infra plutôt que par un échec de génération.
 - [ ] #13 `ruff check` et `mypy` passent sur `media_summarizer/`, et `terraform validate` passe sur les roots touchés. Un `terraform plan` sur le root dev est consigné dans les Implementation Notes, montrant la création du bucket et la modification du worker — l'apply se fait au push sur `main`, hors de portée de l'implémenteur.
 - [ ] #14 Les Implementation Notes consignent une vérification directe contre `-dev` de ce qui existe déjà et conditionne le câblage : la queue `artifact-generator-queue` et la table `media_artifacts` avec son GSI `scope-index`, interrogées via l'AWS CLI en `--region eu-west-3` (l'`AWS_REGION` du shell pointe ailleurs).
+- [ ] #15 La génération textuelle du script de podcast utilise gpt-6-luna en mode Standard via la configuration commune livrée par task-439, sans sélection de modèle divergente propre au podcast.
 <!-- AC:END -->
