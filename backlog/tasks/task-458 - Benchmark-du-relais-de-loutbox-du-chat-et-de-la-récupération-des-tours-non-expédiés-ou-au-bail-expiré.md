@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-10 17:56'
-updated_date: '2026-10-10 18:01'
+updated_date: '2026-10-10 22:00'
 labels:
   - benchmark
   - chat
@@ -57,9 +57,15 @@ Benchmark seulement : aucune implémentation, aucun fichier source modifié. Rec
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 docs/research/task-458-chat-outbox-relay/README.md existe avec owner_decision: pending et une section Owner Validation à remplir
-- [ ] #2 Au moins trois mécanismes d'expédition sont comparés sur la latence ajoutée au lancement, les objets AWS nouveaux, le coût fixe mensuel, le comportement à chaque point de crash et l'observabilité, chaque fait portant sa source et sa date de consultation
-- [ ] #3 Le README décrit pour chaque option la récupération des intentions non expédiées et des tentatives au bail expiré, et ce que le consommateur doit faire pour qu'une livraison dupliquée ne crée ni deuxième réponse ni deuxième débit
-- [ ] #4 Le README se termine par une recommandation argumentée et la liste de ce qu'elle impose à la table du chat et au Terraform
-- [ ] #5 Aucun fichier hors du répertoire de recherche n'est modifié
+- [x] #1 docs/research/task-458-chat-outbox-relay/README.md existe avec owner_decision: pending et une section Owner Validation à remplir
+- [x] #2 Au moins trois mécanismes d'expédition sont comparés sur la latence ajoutée au lancement, les objets AWS nouveaux, le coût fixe mensuel, le comportement à chaque point de crash et l'observabilité, chaque fait portant sa source et sa date de consultation
+- [x] #3 Le README décrit pour chaque option la récupération des intentions non expédiées et des tentatives au bail expiré, et ce que le consommateur doit faire pour qu'une livraison dupliquée ne crée ni deuxième réponse ni deuxième débit
+- [x] #4 Le README se termine par une recommandation argumentée et la liste de ce qu'elle impose à la table du chat et au Terraform
+- [x] #5 Aucun fichier hors du répertoire de recherche n'est modifié
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-11 — Mode initial. Livrable : docs/research/task-458-chat-outbox-relay/README.md (owner_decision: pending). Compare cinq mécanismes (A envoi SQS direct par l'API + balayeur, B flux DynamoDB → Lambda, C flux → EventBridge Pipes, D Kinesis, E FIFO) sur la latence au lancement, les objets AWS, le coût fixe, les points de crash et l'observabilité. Recommandation : A, avec un balayeur planifié chaque minute sur un GSI épars `chat-recovery-index` qui rattrape les intentions pending et remplace les tentatives au bail expiré. Aucune mesure de latence sur -dev (lecture seule) : chiffres issus de la documentation AWS et de mesures tierces. **La recommandation attend la validation de l'owner.**
+<!-- SECTION:NOTES:END -->
