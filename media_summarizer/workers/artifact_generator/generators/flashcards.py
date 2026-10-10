@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
 
-from media_summarizer.workers.artifact_generator.generators import corpus
+from media_summarizer.core.services import llm_corpus as corpus
 
 # One card is a valid deck: the material decides how many cards there are, and a
 # source that teaches one thing must be allowed to yield one card instead of the

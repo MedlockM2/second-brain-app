@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
-from media_summarizer.workers.artifact_generator.generators import corpus
+from media_summarizer.core.services import llm_corpus as corpus
 
 # One question is a valid quiz: the material decides how many questions there
 # are, and the old floor of five is what forced trivial and hedged questions out

@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
 
-from media_summarizer.workers.artifact_generator.generators import corpus
+from media_summarizer.core.services import llm_corpus as corpus
 
 # At most four bullets reach the card. The cap is enforced by truncating the *list*,
 # never by cutting a bullet's text: a clipped sentence reads as a bug, one bullet

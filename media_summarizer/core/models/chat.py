@@ -254,7 +254,7 @@ class ChatSource(ArtifactSource):
     its language, whether the source was excluded and why — plus ``ref``, the
     tag the corpus gives this source and the one a citation names. It is the
     same ``[S1]`` … ``[Sn]`` as
-    ``workers/artifact_generator/generators/corpus.source_label``, in snapshot
+    ``core/services/llm_corpus.source_label``, in snapshot
     order. ``preparation`` stays unset: a conversation opens on readable sources
     only.
     """

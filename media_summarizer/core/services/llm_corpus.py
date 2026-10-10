@@ -1,4 +1,12 @@
-"""Shared prompt layout: preamble, then tagged corpus, then type instructions.
+"""The corpus every LLM call reads: its download, its measure, its prompt layout.
+
+Shared by the artifact worker and the chat worker (task-460, Decision point 2 of
+docs/research/task-430-chatbot-architecture/README.md): the chat reads the same
+transcripts, tagged the same way, behind the same preamble, and puts its own
+instructions, history and question *after* the corpus — which is what keeps the
+corpus a stable, cacheable prefix for both.
+
+Shared prompt layout: preamble, then tagged corpus, then type instructions.
 
 The order matters and is not cosmetic. OpenAI's prompt cache only matches an
 **exactly identical prefix**, from 1 024 tokens up, and bills cache reads at 0.1x
@@ -22,7 +30,66 @@ out of five.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional, Sequence
+
+from media_summarizer.utils import s3
+from media_summarizer.utils.env import required_env
+
+# `tiktoken` is not in the Lambda image, so the corpus is measured in UTF-8 bytes
+# and converted. ±10%, which the 2.3x margin to the model's window absorbs.
+BYTES_PER_TOKEN = 3.4
+
+
+def estimate_tokens(byte_length: int) -> int:
+    return int(byte_length / BYTES_PER_TOKEN)
+
+
+async def download_transcripts(
+    sources: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Fetch the N transcripts in parallel, keeping the snapshot order.
+
+    25 sources at the measured median are ~400 kB, comfortably inside the
+    worker's 512 MB. Sequential downloads would spend most of the invocation
+    waiting on S3 round-trips instead of on the model.
+    """
+    default_bucket = required_env("TRANSCRIPT_BUCKET")
+
+    async def fetch(source: Dict[str, Any]) -> Dict[str, Any]:
+        key = str(source.get("transcript_s3_key") or "")
+        bucket = source.get("transcript_bucket") or default_bucket
+        content = await s3.download_file_to_memory(bucket=bucket, key=key)
+        return {
+            "media_item_id": source.get("media_item_id"),
+            "title": source.get("title"),
+            "language": source.get("language"),
+            # Dates of the corpus header: the model needs them to resolve the
+            # "today" a transcript is full of (task-316 §2.7).
+            "published": source.get("published"),
+            "captured": source.get("captured"),
+            # The author's presentation text, which travelled in the message
+            # rather than in S3. Its own corpus block, never merged into the
+            # transcript (task-383).
+            "description": source.get("description"),
+            "text": content.decode("utf-8", errors="ignore"),
+        }
+
+    return list(await asyncio.gather(*(fetch(source) for source in sources)))
+
+
+def corpus_byte_length(corpus_sources: Sequence[Dict[str, Any]]) -> int:
+    """UTF-8 bytes of what the prompt will carry from these downloaded sources.
+
+    The author's description counts too: it goes in the prompt, so it has to go
+    in the measurement a ceiling is made of (task-383).
+    """
+    return sum(
+        len((source.get("text") or "").encode("utf-8"))
+        + len((source.get("description") or "").encode("utf-8"))
+        for source in corpus_sources
+    )
+
 
 # Identical for every artifact type — the first bytes of the shared cache prefix.
 PROMPT_PREAMBLE = (

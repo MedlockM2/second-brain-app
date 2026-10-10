@@ -997,11 +997,11 @@ Instagram, TikTok and YouTube each let the author write a text block next to the
 
 Two spellings, one reader: `core/media_ingestion/source_description.py::job_source_description` is the only place that knows both. It strips the text, never truncates it, and returns `None` when the job carries none.
 
-From there the value travels the path `published`/`captured` already traced: `ResolvedSource.description` (`artifact_service.py::resolve_source`) → the `description` key of `sources[]` in the generation message (`artifact_service.py::build_generation_message`) → the source dict of `artifact_generator/worker.py::_download_transcripts` → its own `--- author description ---` block in `artifact_generator/generators/corpus.py::build_corpus_block`, ahead of the transcript and never inside the `|`-joined header line. That covers the five user-requested artifact types **and** the automatic review blurb, which shares the same corpus builder.
+From there the value travels the path `published`/`captured` already traced: `ResolvedSource.description` (`artifact_service.py::resolve_source`) → the `description` key of `sources[]` in the generation message (`artifact_service.py::build_generation_message`) → the source dict of `core/services/llm_corpus.py::download_transcripts` → its own `--- author description ---` block in `core/services/llm_corpus.py::build_corpus_block`, ahead of the transcript and never inside the `|`-joined header line. That covers the five user-requested artifact types **and** the automatic review blurb, which shares the same corpus builder.
 
 Its bytes count twice over, in `ResolvedSource.byte_length` and in the worker's post-translation recount, so `MAX_FOLDER_CORPUS_TOKENS` measures what is really sent to the model. A missing description is never a failure: no retry, no error log, and the source simply carries no description block.
 
-Ref: `core/media_ingestion/source_description.py`, `core/services/artifact_service.py::resolve_source`, `workers/artifact_generator/generators/corpus.py::build_corpus_block`, `workers/artifact_generator/generators/corpus.py::source_description_instruction`
+Ref: `core/media_ingestion/source_description.py`, `core/services/artifact_service.py::resolve_source`, `core/services/llm_corpus.py::build_corpus_block`, `core/services/llm_corpus.py::source_description_instruction`
 
 ---
 
@@ -1156,7 +1156,9 @@ All artifact generation (flashcards, notes, quiz, summary_short, summary_detaile
 
 | Component | Path |
 |---|---|
-| Unified worker (shared S3 download, LLM call, retries, validation, status transitions) | `media_summarizer/workers/artifact_generator/worker.py` |
+| Unified worker (retries, validation, status transitions) | `media_summarizer/workers/artifact_generator/worker.py` |
+| Common LLM layer, shared with the chat worker (request from `llm_config`, refusal classification, usage and cost, buffered and streamed modes) — task-460 | `media_summarizer/core/services/llm_client.py` |
+| Common corpus (transcript download, byte measure and token estimate, corpus-first prompt layout and its shared instruction fragments) — task-460 | `media_summarizer/core/services/llm_corpus.py` |
 | Generator registry | `media_summarizer/workers/artifact_generator/generators/__init__.py` |
 | FlashcardsGenerator (prompt + pydantic schema + structured outputs) | `media_summarizer/workers/artifact_generator/generators/flashcards.py` |
 | NotesGenerator (prompt + pydantic schema) | `media_summarizer/workers/artifact_generator/generators/notes.py` |
@@ -1177,6 +1179,15 @@ No `temperature` is sent: the model page documents no sampling parameter. Every 
 **Runtime settings to retire.** The worker no longer reads `OPENAI_MODEL`, `SUMMARY_SHORT_LLM_MODEL`, `SUMMARY_DETAILED_LLM_MODEL`, `NOTES_LLM_MODEL`, `FLASHCARDS_LLM_MODEL`, `QUIZ_LLM_MODEL`, `LLM_TEMPERATURE` nor the `*_ARTIFACT_GENERATOR_VERSION` overrides. The runtime secret `media-summarizer-runtime-<env>` holds credentials only: the model is not a secret and is set in code, next to its price. `OPENAI_MODEL`, the only one of these keys it still held, was removed from dev and prod on 2026-10-10. The `providers.llm` item of `pricing_config` is descriptive (nothing reads it); neither `pricing_config-dev` nor `pricing_config-prod` stored a `providers` row on 2026-10-10. No data migration: entries generated before keep their own `generator_version`, which names their model.
 
 **For the chat tasks (task-431).** Every chat LLM call builds its request from `llm_config.chat_completion_parameters()` and records its usage through `llm_pricing.estimate_llm_cost_eur`, from the first delivery. On Chat Completions, Luna supports function calling only at `reasoning_effort: none`; a chat that needs tools uses the Responses API rather than lowering the shared effort.
+
+**The common LLM layer (task-460).** Every LLM call of the repository on the `llm_config` model goes through `media_summarizer/core/services/llm_client.py`; the artifact worker holds no LLM code of its own any more. A caller passes a list of messages with their roles (`system`/`developer`, `user`, `assistant`), an optional Structured Outputs schema and an optional `prompt_cache_key` — never a model or an output ceiling, which come from `chat_completion_parameters()` for everyone, the chat included (`LLM_MAX_COMPLETION_TOKENS`, owner decision of 2026-10-10). Two modes:
+
+- `complete(...)` — buffered, the default. Every artifact type, the review blurb and the re-translation use it with a single `user` message, and the request is the one the artifact worker sent before the extraction. Returns `LlmResult(content, usage, finish_reason)`.
+- `stream(..., on_delta=...)` — taken only by the chat. Sends `stream: true` and `stream_options: {"include_usage": true}`, reads the provider's SSE line by line, awaits `on_delta(text)` for each text delta (returning `False` closes the connection and stops the provider: the stop path of Decision point 6), and reads `usage` off the chunk sent before `data: [DONE]`. A failure **before** the first delta raises what `complete` raises (`LlmProviderRefusedError`, an `aiohttp` error), which the chat may retry within its own bounds; **after** it, `LlmStreamInterruptedError` carries the delivered text, an estimated usage and the failure axes of `llm_failure`. No total timeout in this mode: `LLM_TIMEOUT_SECONDS` bounds the silence between two reads. The provider's `finish_reason` comes back in both modes (`length` = cut by the output ceiling).
+
+When a stream ends without its usage chunk (stopped or cut), `estimate_usage` fills it from the bytes sent and the text received, through `llm_corpus.estimate_tokens`, and marks it `usage_estimated: true` on `ArtifactLlmUsage` so the observed cost is never written as zeros; the field is absent from a normal call's usage. `record_observed_cost(user_id, usage, idempotency_token=...)` stores the cost for the period, keyed by the unit of work (`artifact_cost:<artifact_id>` for artifacts).
+
+The corpus the chat reads is built by the same `llm_corpus` functions as the artifacts' — `download_transcripts`, `corpus_byte_length`, `build_corpus_block`, `PROMPT_PREAMBLE` and the instruction fragments — and the chat puts its instructions, history and question **after** the corpus, which keeps the corpus a stable cached prefix.
 
 **Queue**: `artifact-generator-queue` (single queue for all 5 kinds, `visibility_timeout_seconds=1800`, `maxReceiveCount=3`, DLQ: `artifact-generator-dlq`)
 

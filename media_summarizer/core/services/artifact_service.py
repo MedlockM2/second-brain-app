@@ -83,6 +83,7 @@ from media_summarizer.core.models.media_artifact import (
 from media_summarizer.core.models.processing_job import JobStatus
 from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
 from media_summarizer.core.services.llm_config import LLM_MODEL
+from media_summarizer.core.services.llm_corpus import estimate_tokens
 from media_summarizer.core.services.media_identity import is_account_scoped_media_key
 from media_summarizer.core.services.transcript_translation import (
     detect_language,
@@ -117,9 +118,6 @@ ARTIFACT_GENERATOR_QUEUE = required_env("ARTIFACT_GENERATOR_QUEUE")
 # token ceiling is the guard that catches a folder of unusually long sources.
 MAX_FOLDER_SOURCES = 25
 MAX_FOLDER_CORPUS_TOKENS = 120_000
-# `tiktoken` is not in the Lambda image, so the corpus is measured in UTF-8 bytes
-# and converted. ±10%, which the 2.3x margin to the model's window absorbs.
-BYTES_PER_TOKEN = 3.4
 
 # Matches the artifact_generator Lambda's 300 s timeout, so a worker killed
 # mid-generation leaves an entry another invocation can reclaim.
@@ -412,10 +410,6 @@ def _allowed_artifact_types() -> set[MediaArtifactType]:
         except ValueError:
             logger.warning("Ignoring unknown artifact type in ARTIFACT_TYPES_ALLOWED: %s", value)
     return allowed or set(GENERATABLE_ARTIFACT_TYPES)
-
-
-def estimate_tokens(byte_length: int) -> int:
-    return int(byte_length / BYTES_PER_TOKEN)
 
 
 def build_artifact_id(

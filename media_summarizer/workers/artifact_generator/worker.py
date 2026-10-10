@@ -2,9 +2,11 @@
 Unified artifact generator worker.
 
 Polls a single SQS queue (artifact-generator-queue) and dispatches to
-per-kind generators based on `body.artifact_type`. Shared logic for S3
-download, LLM call, retries, validation, and status transitions lives here
-once instead of being duplicated across 5 separate workers.
+per-kind generators based on `body.artifact_type`. Retries, validation and
+status transitions live here once instead of being duplicated across 5 separate
+workers. The transcript download, the corpus layout and the LLM call itself are
+shared with the chat worker: ``core/services/llm_corpus.py`` and
+``core/services/llm_client.py`` (task-460).
 
 Consolidates the former flashcards, notes, quiz, summarization, and summary
 workers (task-195).
@@ -34,32 +36,18 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-import aiohttp
-
-from media_summarizer.core.models.media_artifact import (
-    ArtifactLlmUsage,
-    MediaArtifactType,
-)
-from media_summarizer.core.services import quota_enforcer
+from media_summarizer.core.models.media_artifact import MediaArtifactType
+from media_summarizer.core.services import llm_client, llm_corpus
 from media_summarizer.core.services.artifact_service import (
     MAX_FOLDER_CORPUS_TOKENS,
     claim_artifact_generation,
     complete_artifact_generation,
-    estimate_tokens,
     fail_artifact_generation,
 )
-from media_summarizer.core.services.llm_config import (
-    LLM_MODEL,
-    chat_completion_parameters,
-)
-from media_summarizer.core.services.llm_pricing import estimate_llm_cost_eur
 from media_summarizer.utils import s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
-    REFUSAL_AUTHENTICATION,
     LLMFailureKind,
-    LlmProviderRefusedError,
-    classify_llm_failure,
     log_llm_generation_failure,
 )
 from media_summarizer.utils.logging_config import (
@@ -72,11 +60,6 @@ from media_summarizer.utils.logging_config import (
 logger = logging.getLogger(__name__)
 
 ARTIFACT_GENERATOR_QUEUE = required_env("ARTIFACT_GENERATOR_QUEUE")
-TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
-LLM_API_URL = os.environ.get(
-    "LLM_API_URL", "https://api.openai.com/v1/chat/completions"
-)
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 
 class ArtifactValidationError(Exception):
@@ -90,148 +73,6 @@ def _strip_code_fences(content: str) -> str:
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
     return cleaned.strip()
-
-
-async def _download_transcripts(
-    sources: list[Dict[str, Any]],
-) -> list[Dict[str, Any]]:
-    """Fetch the N transcripts in parallel, keeping the snapshot order.
-
-    25 sources at the measured median are ~400 kB, comfortably inside the
-    worker's 512 MB. Sequential downloads would spend most of the invocation
-    waiting on S3 round-trips instead of on the model.
-    """
-
-    async def fetch(source: Dict[str, Any]) -> Dict[str, Any]:
-        key = source.get("transcript_s3_key")
-        bucket = source.get("transcript_bucket") or TRANSCRIPT_BUCKET
-        content = await s3.download_file_to_memory(bucket=bucket, key=key)
-        return {
-            "media_item_id": source.get("media_item_id"),
-            "title": source.get("title"),
-            "language": source.get("language"),
-            # Dates of the corpus header: the model needs them to resolve the
-            # "today" a transcript is full of (task-316 §2.7).
-            "published": source.get("published"),
-            "captured": source.get("captured"),
-            # The author's presentation text, which travelled in the message
-            # rather than in S3. Its own corpus block, never merged into the
-            # transcript (task-383).
-            "description": source.get("description"),
-            "text": content.decode("utf-8", errors="ignore"),
-        }
-
-    return list(await asyncio.gather(*(fetch(source) for source in sources)))
-
-
-async def _call_llm(
-    prompt: str,
-    artifact_type: str,
-    response_format: Dict[str, Any] | None = None,
-    prompt_cache_key: str | None = None,
-) -> tuple[str, Dict[str, Any]]:
-    """Call the LLM API and return the raw content plus the provider usage block.
-
-    Model, reasoning effort and output ceiling come from ``llm_config``, the same
-    for every type and for a translation (task-439). ``prompt_cache_key`` keeps the
-    requests over one corpus on the same cached prefix. The usage block is what
-    makes the real cost measurable instead of estimated (`llm_usage`).
-    """
-    if not OPENAI_API_KEY:
-        # A missing key and a revoked key are the same outage seen from here, and
-        # they need the same action, so they carry the same refusal reason.
-        raise LlmProviderRefusedError(
-            "openai_api_key_missing",
-            refusal_reason=REFUSAL_AUTHENTICATION,
-            # Three deliveries of the same message would make three identical
-            # no-ops: the key appears in the runtime secret, not between retries.
-            failure_kind=LLMFailureKind.PERMANENT,
-        )
-
-    timeout = aiohttp.ClientTimeout(
-        total=int(os.environ.get("LLM_TIMEOUT_SECONDS", "180"))
-    )
-    payload: Dict[str, Any] = {
-        **chat_completion_parameters(),
-        "messages": [{"role": "user", "content": prompt}],
-    }
-
-    if response_format is not None:
-        payload["response_format"] = response_format
-    if prompt_cache_key:
-        payload["prompt_cache_key"] = prompt_cache_key
-
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(
-            LLM_API_URL,
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        ) as response:
-            if response.status >= 400:
-                body = await response.text()
-                # One parse of the provider's answer, both axes out: what the
-                # operator must do about it, and whether another delivery of this
-                # message could ever get a different answer.
-                failure = classify_llm_failure(
-                    status_code=response.status,
-                    body=body,
-                    retry_after=response.headers.get("Retry-After"),
-                )
-                log_event(
-                    logger,
-                    logging.ERROR,
-                    "external_call.failed",
-                    "LLM API returned an error",
-                    provider="openai",
-                    artifact_type=artifact_type,
-                    status=response.status,
-                    failure_kind=failure.kind,
-                    refusal_reason=failure.refusal_reason,
-                    detail=body[:500],
-                )
-                # A refusal is raised as itself so the failure metric can name the
-                # account state (no credit / bad key / throttled) instead of
-                # lumping it in with a validation error.
-                if failure.refusal_reason is not None:
-                    raise LlmProviderRefusedError(
-                        f"llm_provider_refused_http_{response.status}",
-                        refusal_reason=failure.refusal_reason,
-                        failure_kind=failure.kind,
-                        provider_status=response.status,
-                    )
-            response.raise_for_status()
-            result = await response.json()
-            usage = dict(result.get("usage") or {})
-            # The model that actually answered, as the provider names it, rides
-            # with the usage it produced: that is what cost and traceability read.
-            usage["model"] = result.get("model") or LLM_MODEL
-            return result["choices"][0]["message"]["content"], usage
-
-
-def _read_llm_usage(usage: Dict[str, Any]) -> ArtifactLlmUsage:
-    model = str(usage.get("model") or LLM_MODEL)
-    prompt_details = usage.get("prompt_tokens_details") or {}
-    prompt_tokens = int(usage.get("prompt_tokens") or 0)
-    cached_tokens = int(prompt_details.get("cached_tokens") or 0)
-    cache_write_tokens = int(prompt_details.get("cache_write_tokens") or 0)
-    completion_tokens = int(usage.get("completion_tokens") or 0)
-    return ArtifactLlmUsage(
-        model=model,
-        prompt_tokens=prompt_tokens,
-        cached_tokens=cached_tokens,
-        cache_write_tokens=cache_write_tokens,
-        completion_tokens=completion_tokens,
-        cost_eur=estimate_llm_cost_eur(
-            model=model,
-            prompt_tokens=prompt_tokens,
-            cached_tokens=cached_tokens,
-            cache_write_tokens=cache_write_tokens,
-            completion_tokens=completion_tokens,
-        ),
-    )
 
 
 async def process_message(message: Dict[str, Any]) -> None:
@@ -318,20 +159,15 @@ async def process_message(message: Dict[str, Any]) -> None:
             )
             return
 
-        corpus_sources = await _download_transcripts(sources)
+        corpus_sources = await llm_corpus.download_transcripts(sources)
 
         # Second ceiling check, on the text actually downloaded: the API measured
         # the corpus before the transcripts were read, and a source can have grown
         # since. Failing here costs nothing; sending a request the provider will
-        # reject costs the whole invocation. The author's description counts too —
-        # it goes in the prompt, so it has to go in the measurement the ceiling is
-        # made of (task-383).
-        corpus_bytes = sum(
-            len(source["text"].encode("utf-8"))
-            + len((source.get("description") or "").encode("utf-8"))
-            for source in corpus_sources
+        # reject costs the whole invocation.
+        estimated_tokens = llm_corpus.estimate_tokens(
+            llm_corpus.corpus_byte_length(corpus_sources)
         )
-        estimated_tokens = estimate_tokens(corpus_bytes)
         if estimated_tokens > MAX_FOLDER_CORPUS_TOKENS:
             raise ValueError(
                 f"corpus_too_large: {estimated_tokens} estimated tokens exceeds "
@@ -344,13 +180,14 @@ async def process_message(message: Dict[str, Any]) -> None:
         # generator that has a schema always sends it.
         schema = generator.response_format_schema()
 
-        raw_content, usage = await _call_llm(
-            prompt=prompt,
-            artifact_type=artifact_type.value,
+        result = await llm_client.complete(
+            [{"role": "user", "content": prompt}],
             response_format=schema,
             prompt_cache_key=prompt_cache_key,
+            artifact_type=artifact_type.value,
         )
-        llm_usage = _read_llm_usage(usage)
+        raw_content = result.content
+        llm_usage = result.usage
 
         if schema is not None:
             raw_content = generator.unwrap_structured_response(raw_content)
@@ -381,7 +218,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 for source in sources
             ],
             "generator_version": body.get("generator_version"),
-            "llm_usage": llm_usage.model_dump(),
+            "llm_usage": llm_usage.model_dump(exclude_none=True),
             "content": artifact_content,
         }
 
@@ -392,7 +229,12 @@ async def process_message(message: Dict[str, Any]) -> None:
             llm_usage=llm_usage,
         )
 
-        await _record_generation_cost(body, artifact_id, llm_usage)
+        # Keyed on the artifact, so a redelivery cannot record twice.
+        await llm_client.record_observed_cost(
+            body.get("user_id"),
+            llm_usage,
+            idempotency_token=f"artifact_cost:{artifact_id}",
+        )
 
     except Exception as exc:
         # Determine error code for validation errors
@@ -501,17 +343,23 @@ async def _translate_stored_artifact(
             f"Artifact {source_artifact_id} holds no translatable text"
         )
 
-    raw_content, usage = await _call_llm(
-        prompt=translator.build_prompt(
-            segments=segments,
-            source_language=source_language,
-            target_language=target_language,
-            artifact_type=artifact_type.value,
-        ),
-        artifact_type=artifact_type.value,
+    result = await llm_client.complete(
+        [
+            {
+                "role": "user",
+                "content": translator.build_prompt(
+                    segments=segments,
+                    source_language=source_language,
+                    target_language=target_language,
+                    artifact_type=artifact_type.value,
+                ),
+            }
+        ],
         response_format=translator.build_response_format(len(segments)),
+        artifact_type=artifact_type.value,
     )
-    llm_usage = _read_llm_usage(usage)
+    raw_content = result.content
+    llm_usage = result.usage
     translated_content = translator.apply_segments(
         source_content,
         segments=segments,
@@ -529,7 +377,7 @@ async def _translate_stored_artifact(
         "source_count": source_envelope.get("source_count"),
         "sources": source_envelope.get("sources") or [],
         "generator_version": body.get("generator_version"),
-        "llm_usage": llm_usage.model_dump(),
+        "llm_usage": llm_usage.model_dump(exclude_none=True),
         # What this entry is, readable from the payload alone: whose text it carries
         # and which model moved it across.
         "translated_from": {
@@ -551,7 +399,11 @@ async def _translate_stored_artifact(
         ),
         llm_usage=llm_usage,
     )
-    await _record_generation_cost(body, artifact_id, llm_usage)
+    await llm_client.record_observed_cost(
+        body.get("user_id"),
+        llm_usage,
+        idempotency_token=f"artifact_cost:{artifact_id}",
+    )
 
     log_event(
         logger,
@@ -568,27 +420,6 @@ async def _translate_stored_artifact(
         prompt_tokens=llm_usage.prompt_tokens,
         completion_tokens=llm_usage.completion_tokens,
         cost_eur=llm_usage.cost_eur,
-    )
-
-
-async def _record_generation_cost(
-    body: Dict[str, Any],
-    artifact_id: str,
-    llm_usage: ArtifactLlmUsage,
-) -> None:
-    """Store the measured LLM cost against the period, for observability only.
-
-    Nothing gates on this figure -- the minute allowance is what bounds spend --
-    but recording it is how the owner can compare the model's assumptions with the
-    real invoice. Keyed on ``artifact_id`` so a redelivery cannot record twice.
-    """
-    user_id = body.get("user_id")
-    if not user_id or llm_usage.cost_eur <= 0:
-        return
-    await quota_enforcer.record_observed_cost(
-        user_id,
-        cost_eur=llm_usage.cost_eur,
-        idempotency_token=f"artifact_cost:{artifact_id}",
     )
 
 

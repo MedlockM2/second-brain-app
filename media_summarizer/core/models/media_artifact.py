@@ -173,6 +173,11 @@ class ArtifactLlmUsage(BaseModel):
     cache_write_tokens: int = 0
     completion_tokens: int = 0
     cost_eur: float = 0.0
+    #: ``True`` when the provider never delivered its usage block -- a streamed
+    #: answer cut before its last chunk -- and the counts above are estimated from
+    #: the bytes sent and the text received (task-460). Absent otherwise, so the
+    #: usage of a normal call is stored exactly as before.
+    usage_estimated: Optional[bool] = None
 
 
 class MediaArtifactRecord(BaseModel):
@@ -312,6 +317,7 @@ class MediaArtifactRecord(BaseModel):
                 cache_write_tokens=int(usage.get("cache_write_tokens") or 0),
                 completion_tokens=int(usage.get("completion_tokens") or 0),
                 cost_eur=float(usage.get("cost_eur") or 0.0),
+                usage_estimated=usage.get("usage_estimated"),
             )
         payload["sources"] = [
             ArtifactSource(**source) for source in (payload.get("sources") or [])
