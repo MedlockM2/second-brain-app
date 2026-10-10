@@ -3,9 +3,10 @@ id: TASK-460
 title: >-
   Extraire du worker d'artefacts la couche LLM commune et lui ajouter un mode de
   réponse en flux pour le chat
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 17:57'
+updated_date: '2026-10-10 22:08'
 labels:
   - backend
   - llm
@@ -22,6 +23,20 @@ references:
   - media_summarizer/workers/artifact_generator/worker.py
   - media_summarizer/workers/artifact_generator/generators/corpus.py
   - media_summarizer/utils/llm_failure.py
+  - docs/INGESTION_WORKERS_PROVIDERS.md
+modified_files:
+  - media_summarizer/core/services/llm_client.py
+  - media_summarizer/core/services/llm_corpus.py
+  - media_summarizer/workers/artifact_generator/worker.py
+  - media_summarizer/workers/artifact_generator/generators/flashcards.py
+  - media_summarizer/workers/artifact_generator/generators/notes.py
+  - media_summarizer/workers/artifact_generator/generators/quiz.py
+  - media_summarizer/workers/artifact_generator/generators/review_blurb.py
+  - media_summarizer/workers/artifact_generator/generators/summary_detailed.py
+  - media_summarizer/workers/artifact_generator/generators/summary_short.py
+  - media_summarizer/core/services/artifact_service.py
+  - media_summarizer/core/models/media_artifact.py
+  - media_summarizer/core/models/chat.py
   - docs/INGESTION_WORKERS_PROVIDERS.md
 priority: medium
 type: feature
@@ -63,11 +78,27 @@ Après merge et déploiement, générer un artefact de chaque type et une retrad
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 L'appel LLM, la lecture d'usage, l'enregistrement du coût, la classification des échecs et la résolution du corpus vivent dans des modules partagés importés par le worker d'artefacts, et leurs anciennes définitions dans worker.py sont supprimées
-- [ ] #2 Le worker d'artefacts envoie la même requête qu'avant l'extraction pour chaque type et pour la retraduction : paramètres de llm_config.chat_completion_parameters(), sorties structurées, prompt_cache_key et mise en page corpus-d'abord inchangés
-- [ ] #3 La couche partagée accepte un tableau de messages avec leurs rôles, prend modèle, raisonnement et plafond de sortie de llm_config.chat_completion_parameters() sans paramètre de plafond propre à l'appelant, et renvoie le finish_reason du fournisseur en flux comme en bufferisé
-- [ ] #4 Un mode flux optionnel lit le SSE du fournisseur, transmet chaque delta à un rappel, permet à l'appelant d'interrompre la consommation, distingue une erreur avant le premier texte d'une erreur après, et lit l'usage du dernier chunk ; le mode bufferisé reste le défaut
-- [ ] #5 Quand un flux ne livre pas son usage, l'usage enregistré est estimé et marqué comme tel au lieu d'être zéro
-- [ ] #6 docs/INGESTION_WORKERS_PROVIDERS.md décrit l'emplacement de la couche LLM commune et son mode flux pour le chat
-- [ ] #7 ruff check et mypy passent sur les fichiers Python modifiés ou créés
+- [x] #1 L'appel LLM, la lecture d'usage, l'enregistrement du coût, la classification des échecs et la résolution du corpus vivent dans des modules partagés importés par le worker d'artefacts, et leurs anciennes définitions dans worker.py sont supprimées
+- [x] #2 Le worker d'artefacts envoie la même requête qu'avant l'extraction pour chaque type et pour la retraduction : paramètres de llm_config.chat_completion_parameters(), sorties structurées, prompt_cache_key et mise en page corpus-d'abord inchangés
+- [x] #3 La couche partagée accepte un tableau de messages avec leurs rôles, prend modèle, raisonnement et plafond de sortie de llm_config.chat_completion_parameters() sans paramètre de plafond propre à l'appelant, et renvoie le finish_reason du fournisseur en flux comme en bufferisé
+- [x] #4 Un mode flux optionnel lit le SSE du fournisseur, transmet chaque delta à un rappel, permet à l'appelant d'interrompre la consommation, distingue une erreur avant le premier texte d'une erreur après, et lit l'usage du dernier chunk ; le mode bufferisé reste le défaut
+- [x] #5 Quand un flux ne livre pas son usage, l'usage enregistré est estimé et marqué comme tel au lieu d'être zéro
+- [x] #6 docs/INGESTION_WORKERS_PROVIDERS.md décrit l'emplacement de la couche LLM commune et son mode flux pour le chat
+- [x] #7 ruff check et mypy passent sur les fichiers Python modifiés ou créés
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Couche LLM commune extraite du worker d'artefacts.
+
+- `core/services/llm_client.py` : `complete()` (bufferisé, défaut) et `stream()` (SSE avec `include_usage`, rappel par delta qui peut arrêter la lecture, erreur avant le premier texte levée telle quelle, après le premier texte `LlmStreamInterruptedError` avec le partiel), `read_usage`, `estimate_usage` (usage marqué `usage_estimated`), `record_observed_cost`. Le `finish_reason` du fournisseur est rendu dans les deux modes. Modèle, raisonnement et plafond de sortie viennent seulement de `chat_completion_parameters()`.
+- `core/services/llm_corpus.py` (ancien `generators/corpus.py`) : ajoute `download_transcripts`, `corpus_byte_length`, `BYTES_PER_TOKEN`/`estimate_tokens` (retirés d'`artifact_service`).
+- Le worker d'artefacts n'a plus de code LLM : `_call_llm`, `_read_llm_usage`, `_download_transcripts` et `_record_generation_cost` sont supprimés. La requête envoyée est identique (un message `user`, même schéma, même `prompt_cache_key`). L'enveloppe stocke `llm_usage` sans champ nul, donc sans changement de forme.
+- `ArtifactLlmUsage.usage_estimated` (optionnel, absent sur un appel normal).
+- Doc : `docs/INGESTION_WORKERS_PROVIDERS.md`.
+
+Vérifications : `ruff check media_summarizer/` et `mypy` sur les fichiers touchés passent ; import du worker vérifié ; mode flux vérifié localement contre un faux serveur SSE (flux complet avec usage, arrêt par le rappel, coupure après texte), avec un script jetable non commité.
+
+Note à l'owner : après déploiement, générer un artefact de chaque type et une retraduction sur dev, puis vérifier que modèle, usage et coût n'ont pas changé.
+<!-- SECTION:FINAL_SUMMARY:END -->
