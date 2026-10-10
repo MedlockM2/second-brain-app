@@ -3,9 +3,10 @@ id: TASK-468
 title: >-
   Poser le composeur de chat persistant dans l'onglet Lecture d'un média et
   l'onglet Sources d'un dossier, avec sa feuille de conversation
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 18:01'
+updated_date: '2026-10-10 22:38'
 labels:
   - mobile
   - chat
@@ -27,6 +28,25 @@ references:
   - mobile/src/lib/quotaError.ts
   - mobile/src/lib/artifactRefusal.ts
   - mobile-design-mockups/my_design_system/DESIGN.md
+modified_files:
+  - mobile/src/components/chat/ChatDock.tsx
+  - mobile/src/components/chat/ChatSheet.tsx
+  - mobile/src/components/chat/ChatThread.tsx
+  - mobile/src/components/chat/ChatComposer.tsx
+  - mobile/src/lib/chatRefusal.ts
+  - mobile/src/components/CompletedDetailView.tsx
+  - 'mobile/app/media/folders/[id].tsx'
+  - mobile/src/i18n/en.ts
+  - mobile/src/i18n/fr.ts
+  - mobile/src/i18n/es.ts
+  - mobile/src/i18n/de.ts
+  - mobile/src/i18n/it.ts
+  - mobile/src/i18n/pt.ts
+  - mobile/src/i18n/nl.ts
+  - mobile/src/i18n/ja.ts
+  - mobile/src/i18n/zh.ts
+  - mobile/src/i18n/ar.ts
+  - mobile/src/i18n/hi.ts
 priority: medium
 type: feature
 ordinal: 75000
@@ -76,11 +96,28 @@ Design system « Amber Clarity » (`mobile-design-mockups/my_design_system/DESIG
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Un composeur de chat est ancré en bas de l'onglet Lecture de CompletedDetailView et de l'onglet Sources de folders/[id].tsx, et n'apparaît ni dans les onglets IA, ni sur la bibliothèque, ni sur les écrans de la barre d'onglets
-- [ ] #2 (tabs)/_layout.tsx, ScreenTabs.tsx, ArtifactsPanel.tsx et MediaReaderBar.tsx ne sont pas modifiés
-- [ ] #3 Le tapotement ouvre une feuille de conversation où le même champ devient le composeur, multiligne jusqu'à 4 lignes puis défilement, avec compteur, envoi et arrêt distincts, conformément aux maquettes de direction_f_composeur_persistant/
-- [ ] #4 Le fil affiche le texte en flux, les références de source, l'état interrompu et l'échec partiel comme tels, et la conversation survit à la fermeture de la feuille et au changement d'écran par ChatSessionContext
-- [ ] #5 Chaque refus typé du contrat du chat a un rendu, en réutilisant quotaError.ts, artifactRefusal.ts et les clés quota.refusal.* existantes
-- [ ] #6 Les thèmes clair et sombre passent par ThemeContext, aucune cible tactile n'est sous 48 pt, et la feuille se ferme par un bouton annoncé ; toutes les chaînes nouvelles existent dans les onze catalogues et pseudo.ts
-- [ ] #7 npx tsc --noEmit et le lint du projet mobile passent
+- [x] #1 Un composeur de chat est ancré en bas de l'onglet Lecture de CompletedDetailView et de l'onglet Sources de folders/[id].tsx, et n'apparaît ni dans les onglets IA, ni sur la bibliothèque, ni sur les écrans de la barre d'onglets
+- [x] #2 (tabs)/_layout.tsx, ScreenTabs.tsx, ArtifactsPanel.tsx et MediaReaderBar.tsx ne sont pas modifiés
+- [x] #3 Le tapotement ouvre une feuille de conversation où le même champ devient le composeur, multiligne jusqu'à 4 lignes puis défilement, avec compteur, envoi et arrêt distincts, conformément aux maquettes de direction_f_composeur_persistant/
+- [x] #4 Le fil affiche le texte en flux, les références de source, l'état interrompu et l'échec partiel comme tels, et la conversation survit à la fermeture de la feuille et au changement d'écran par ChatSessionContext
+- [x] #5 Chaque refus typé du contrat du chat a un rendu, en réutilisant quotaError.ts, artifactRefusal.ts et les clés quota.refusal.* existantes
+- [x] #6 Les thèmes clair et sombre passent par ThemeContext, aucune cible tactile n'est sous 48 pt, et la feuille se ferme par un bouton annoncé ; toutes les chaînes nouvelles existent dans les onze catalogues et pseudo.ts
+- [x] #7 npx tsc --noEmit et le lint du projet mobile passent
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Composeur de chat persistant (direction F adaptée en composant d'écran, iOS et Android identiques).
+
+- `ChatDock` est ancré sous le contenu de l'onglet **Lecture** de `CompletedDetailView`, donc aussi sur les pages média du Digest, et de l'onglet **Sources** de `folders/[id].tsx`, hors chargement et erreur. Il est absent des onglets IA, de la bibliothèque et des écrans de la barre d'onglets. Au repos, c'est un champ qui nomme sa portée (« …sur cette source », « …sur ce dossier ») ou dit « Une réponse est en cours… ». `(tabs)/_layout.tsx`, `ScreenTabs.tsx`, `ArtifactsPanel.tsx` et `MediaReaderBar.tsx` ne sont pas modifiés.
+- `ChatSheet` : feuille modale montant du bas, `KeyboardAvoidingView`, en-tête avec titre, « Nouvelle conversation » et bouton de fermeture annoncé (le scrim ferme aussi). Le focus va au titre et au champ à l'ouverture, puis revient au dock à la fermeture. En modale, le clavier ne fait pas défiler le carrousel du Digest. La feuille est masquée quand l'écran perd le focus ; la réponse continue.
+- `ChatComposer` : champ multiligne qui grandit jusqu'à 4 lignes puis défile, compteur `n / 1 000`, plafond à 1 000 caractères, boutons Envoyer et Arrêter distincts (Arrêter seulement pendant une génération ; c'est le seul appel à la route d'arrêt).
+- `ChatThread` : questions et réponses, texte en flux, attente « Lecture des sources… ». Les références `[Sn]` sont rendues en étiquettes et lues avec le titre de la source. Les états interrompu (arrêt, plafond de sortie, erreur avec partiel conservé) et échec sont affichés comme tels. « Reposer la question » lance un nouveau tour, donc une nouvelle génération.
+- `lib/chatRefusal.ts` : rendu de chaque refus du contrat (`question_too_long`, `conversation_full`, `turn_in_flight`, `context_budget_exceeded`, `scope_preparing`, `turn_count_changed`, `generation_stale`, `conversation_not_found`). Il réutilise `quotaError.ts` (clés `quota.refusal.*`, sans paywall sous `beta_access`) et `artifactRefusal.ts` (`scope_empty`, `scope_too_large`). Actions proposées : « Voir les offres » ou « Nouvelle conversation ».
+- Thèmes via `useThemedStyles` et `ThemeContext`, cibles ≥ `TouchTarget.minimum`, annonces lecteur d'écran au début et à la fin d'une réponse seulement. 35 clés `chat.*` ajoutées aux onze catalogues ; `pseudo.ts` les transforme automatiquement, il ne porte pas de clés.
+
+Vérifications : `npx tsc --noEmit` passe ; `npm run lint` donne 0 erreur (1 avertissement préexistant).
+
+Note à l'owner : vérification visuelle à faire sur appareil (iOS et Android, petit et grand écran, clair et sombre). Le flux ne fonctionnera qu'une fois `EXPO_PUBLIC_CHAT_STREAM_URL` renseignée (task-467) ; avant cela, les réponses apparaissent par relecture.
+<!-- SECTION:FINAL_SUMMARY:END -->
