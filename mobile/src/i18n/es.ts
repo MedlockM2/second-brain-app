@@ -452,6 +452,9 @@ export const es: Catalog = {
   "search.clearA11y": "Borrar la búsqueda",
   "search.folders": "Carpetas",
   "search.foldersToggleHint": "Muestra u oculta tus carpetas",
+  "search.newFolder.a11y": "Crear una carpeta",
+  "search.newFolder.title": "Nueva carpeta",
+  "search.newFolder.create": "Crear",
   "search.allMedia": "Todos los medios",
   "search.noFolders":
     "Aún no hay carpetas. Organiza tus medios en carpetas al guardarlos.",

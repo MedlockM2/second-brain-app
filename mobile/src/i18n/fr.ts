@@ -475,6 +475,9 @@ export const fr: Catalog = {
   "search.clearA11y": "Effacer la recherche",
   "search.folders": "Dossiers",
   "search.foldersToggleHint": "Affiche ou masque vos dossiers",
+  "search.newFolder.a11y": "Créer un dossier",
+  "search.newFolder.title": "Nouveau dossier",
+  "search.newFolder.create": "Créer",
   "search.allMedia": "Tous les médias",
   "search.noFolders":
     "Aucun dossier pour l'instant. Classez vos médias en dossiers au moment de les enregistrer.",

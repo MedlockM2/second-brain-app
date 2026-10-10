@@ -460,6 +460,9 @@ export const de: Catalog = {
   "search.clearA11y": "Suche löschen",
   "search.folders": "Ordner",
   "search.foldersToggleHint": "Blendet deine Ordner ein oder aus",
+  "search.newFolder.a11y": "Ordner erstellen",
+  "search.newFolder.title": "Neuer Ordner",
+  "search.newFolder.create": "Erstellen",
   "search.allMedia": "Alle Medien",
   "search.noFolders":
     "Noch keine Ordner. Ordne Medien beim Speichern in Ordner ein.",

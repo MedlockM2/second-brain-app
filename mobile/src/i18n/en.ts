@@ -556,6 +556,9 @@ export const en = {
   "search.clearA11y": "Clear search query",
   "search.folders": "Folders",
   "search.foldersToggleHint": "Shows or hides your folders",
+  "search.newFolder.a11y": "Create a folder",
+  "search.newFolder.title": "New folder",
+  "search.newFolder.create": "Create",
   "search.allMedia": "All media",
   "search.noFolders":
     "No folders yet. Organize media into folders when you save them.",

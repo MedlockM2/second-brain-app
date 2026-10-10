@@ -456,6 +456,59 @@ export default function SearchScreen() {
     onRenamed: handleFolderRenamed,
   });
 
+  // A folder created from here, empty and at the root: the one way to get a
+  // folder without a media in hand (task-436). The naming prompt is the rename
+  // dialog — same field, same in-dialog error, same refusal of a blank name
+  // before anything is sent.
+  const [isNewFolderVisible, setIsNewFolderVisible] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderError, setNewFolderError] = useState<string | null>(null);
+
+  const handleOpenNewFolder = useCallback(() => {
+    setNewFolderName("");
+    setNewFolderError(null);
+    setIsNewFolderVisible(true);
+  }, []);
+
+  const handleCloseNewFolder = useCallback(() => {
+    setIsNewFolderVisible(false);
+  }, []);
+
+  const { expanded: foldersExpanded, toggle: toggleFoldersSection } =
+    foldersSection;
+
+  // Appended rather than refetched, as a rename is patched: the `POST` already
+  // returned the stored folder, and rebuilding the tree from `folders` drops
+  // the tile into its alphabetical place. A folded grid is unfolded, or the
+  // folder the user just made would be nowhere on screen.
+  const handleSubmitNewFolder = useCallback(
+    (name: string) => {
+      if (isCreatingFolder) return;
+      setIsCreatingFolder(true);
+      setNewFolderError(null);
+      void (async () => {
+        try {
+          const created = await OrganizationService.createFolder(name);
+          setFolders((current) => [...current, created]);
+          setIsNewFolderVisible(false);
+          if (!foldersExpanded) toggleFoldersSection();
+        } catch (err) {
+          // The dialog stays open with the typed name intact, so a retry is
+          // one tap.
+          setNewFolderError(
+            getFriendlyErrorMessage(err, {
+              fallback: t("folderPicker.createFailed"),
+            }),
+          );
+        } finally {
+          setIsCreatingFolder(false);
+        }
+      })();
+    },
+    [isCreatingFolder, foldersExpanded, toggleFoldersSection],
+  );
+
   // The copy of the pressed tile the menu lifts above its blur. Same component
   // as the grid tile, laid out on the rect the slot was measured at — hence the
   // full width and the dropped bottom margin, which that rect excludes.
@@ -547,6 +600,7 @@ export default function SearchScreen() {
             onRetryFolders={handleRetryFolders}
             onOpenFolder={handleOpenFolder}
             onLongPressFolder={folderActions.open}
+            onCreateFolder={handleOpenNewFolder}
             media={media}
             mediaLoading={mediaLoading}
             mediaError={mediaError}
@@ -634,6 +688,21 @@ export default function SearchScreen() {
         renderPreview={renderFolderPreview}
       />
       <RenameDialog {...folderActions.renameProps} />
+      <RenameDialog
+        visible={isNewFolderVisible}
+        heading={t("search.newFolder.title")}
+        placeholder={t("folderPicker.namePlaceholder")}
+        // The backend's ceiling for a folder name, as in the rename dialog.
+        maxLength={255}
+        value={newFolderName}
+        onChangeText={setNewFolderName}
+        isSaving={isCreatingFolder}
+        errorMessage={newFolderError}
+        onClose={handleCloseNewFolder}
+        onSubmit={handleSubmitNewFolder}
+        submitLabel={t("search.newFolder.create")}
+        testIDPrefix="library-folder-create"
+      />
     </View>
   );
 }
@@ -670,6 +739,8 @@ interface LibraryStateProps {
     folder: FolderNode,
     anchor: AnchorRect,
   ) => void;
+  /** Opens the prompt that names a new, empty root folder. */
+  onCreateFolder: () => void;
   media: MediaRow[];
   mediaLoading: boolean;
   mediaError: string | null;
@@ -709,6 +780,7 @@ function LibraryState({
   onRetryFolders,
   onOpenFolder,
   onLongPressFolder,
+  onCreateFolder,
   media,
   mediaLoading,
   mediaError,
@@ -776,6 +848,7 @@ function LibraryState({
           onRetryFolders={onRetryFolders}
           onOpenFolder={onOpenFolder}
           onLongPressFolder={onLongPressFolder}
+          onCreateFolder={onCreateFolder}
           mediaCount={media.length}
         />
       }
@@ -805,6 +878,7 @@ function LibraryHeader({
   onRetryFolders,
   onOpenFolder,
   onLongPressFolder,
+  onCreateFolder,
   mediaCount,
 }: {
   folders: FolderNode[];
@@ -818,6 +892,7 @@ function LibraryHeader({
     folder: FolderNode,
     anchor: AnchorRect,
   ) => void;
+  onCreateFolder: () => void;
   mediaCount: number;
 }) {
   const Colors = useThemeColors();
@@ -825,10 +900,28 @@ function LibraryHeader({
 
   return (
     <View style={styles.listHeader}>
-      <FoldersSectionToggle
-        expanded={foldersExpanded}
-        onToggle={onToggleFolders}
-      />
+      {/* The `+` sits at the far end of the heading's line, in the library body
+          only: a query is a search, not a place to file things. Shown folded,
+          loading or failed alike — creating a folder needs none of the list. */}
+      <View style={styles.foldersHeadingRow}>
+        <FoldersSectionToggle
+          expanded={foldersExpanded}
+          onToggle={onToggleFolders}
+        />
+        <Pressable
+          testID="library-new-folder"
+          style={({ pressed }) => [
+            styles.newFolderButton,
+            pressed && styles.foldersTogglePressed,
+          ]}
+          onPress={onCreateFolder}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={t("search.newFolder.a11y")}
+        >
+          <Ionicons name="add" size={26} color={Colors.primary} />
+        </Pressable>
+      </View>
 
       {/* Folded, everything the heading stands over leaves with the grid — the
           spinner, the error card and the empty hint alike: they are all the
@@ -1440,6 +1533,23 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     },
     foldersTogglePressed: {
       opacity: 0.75,
+    },
+    // The heading and the `+` on one line. Aligned at the top rather than
+    // centred: both are a touch target tall, and the toggle's bottom margin —
+    // which spaces the grid — must not shift the button down by half of it.
+    foldersHeadingRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+    },
+    newFolderButton: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      alignItems: "center",
+      justifyContent: "center",
+      // Pulled into the gutter so the glyph, not its invisible target, lines up
+      // with the end of the grid's last column.
+      marginEnd: -Spacing.sm,
     },
     sectionHint: {
       fontSize: Typography.body.fontSize,

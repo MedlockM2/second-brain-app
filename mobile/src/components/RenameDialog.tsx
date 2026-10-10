@@ -63,6 +63,11 @@ export interface RenameDialogProps {
   errorMessage: string | null;
   onClose: () => void;
   onSubmit: (name: string) => void;
+  /**
+   * The primary button's label. `Save` by default; a prompt that names something
+   * new rather than renaming it says `Create`.
+   */
+  submitLabel?: string;
   /** Names the dialog and its controls for a flow, e.g. `media-rename`. */
   testIDPrefix: string;
 }
@@ -78,6 +83,7 @@ export function RenameDialog({
   errorMessage,
   onClose,
   onSubmit,
+  submitLabel = t("common.save"),
   testIDPrefix,
 }: RenameDialogProps): React.JSX.Element {
   const Colors = useThemeColors();
@@ -163,7 +169,7 @@ export function RenameDialog({
                 ]}
                 onPress={handleSubmit}
                 disabled={!canSubmit}
-                accessibilityLabel={t("common.save")}
+                accessibilityLabel={submitLabel}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !canSubmit }}
                 testID={`${testIDPrefix}-save`}
@@ -171,7 +177,7 @@ export function RenameDialog({
                 {isSaving ? (
                   <ActivityIndicator size="small" color={Colors.onPrimary} />
                 ) : (
-                  <Text style={styles.primaryLabel}>{t("common.save")}</Text>
+                  <Text style={styles.primaryLabel}>{submitLabel}</Text>
                 )}
               </Pressable>
             </View>
