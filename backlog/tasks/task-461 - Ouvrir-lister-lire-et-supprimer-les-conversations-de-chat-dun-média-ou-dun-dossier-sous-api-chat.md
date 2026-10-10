@@ -3,9 +3,10 @@ id: TASK-461
 title: >-
   Ouvrir, lister, lire et supprimer les conversations de chat d'un média ou d'un
   dossier sous /api/chat
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 17:58'
+updated_date: '2026-10-10 22:11'
 labels:
   - backend
   - api
@@ -19,6 +20,11 @@ references:
   - media_summarizer/api/endpoints/artifacts.py
   - media_summarizer/api/main.py
   - media_summarizer/api/dependencies/auth.py
+  - docs/CANONICAL_MEDIA_API_CONTRACT.md
+modified_files:
+  - media_summarizer/api/endpoints/chat.py
+  - media_summarizer/core/services/chat_service.py
+  - media_summarizer/api/main.py
   - docs/CANONICAL_MEDIA_API_CONTRACT.md
 priority: medium
 type: feature
@@ -59,11 +65,27 @@ Après merge et déploiement : ouvrir une conversation sur un média et sur un d
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Un routeur /api/chat est monté dans media_summarizer/api/main.py, hors de /api/v1/, et toutes ses routes exigent le JWT de l'app et l'appartenance de la conversation au compte
-- [ ] #2 L'ouverture d'une conversation sur un média ou un dossier réutilise resolve_scope_sources et enforce_scope_ceilings, conserve les refus scope_empty et scope_too_large et les plafonds de corpus en vigueur, et enregistre un instantané de sources versionné, ordonné et citable
-- [ ] #3 La liste des conversations d'un compte pour un média ou un dossier rend les plus récentes d'abord avec de quoi afficher une ligne d'historique
-- [ ] #4 La lecture d'une conversation rend ses messages ordonnés, l'état de chaque tour dont l'état interrompu, l'identité de la génération en cours et le dernier numéro de séquence persisté
-- [ ] #5 La suppression d'une conversation retire tous ses items de la table chat
-- [ ] #6 docs/CANONICAL_MEDIA_API_CONTRACT.md décrit les routes, leurs corps et leurs refus typés
-- [ ] #7 ruff check et mypy passent sur les fichiers Python modifiés ou créés
+- [x] #1 Un routeur /api/chat est monté dans media_summarizer/api/main.py, hors de /api/v1/, et toutes ses routes exigent le JWT de l'app et l'appartenance de la conversation au compte
+- [x] #2 L'ouverture d'une conversation sur un média ou un dossier réutilise resolve_scope_sources et enforce_scope_ceilings, conserve les refus scope_empty et scope_too_large et les plafonds de corpus en vigueur, et enregistre un instantané de sources versionné, ordonné et citable
+- [x] #3 La liste des conversations d'un compte pour un média ou un dossier rend les plus récentes d'abord avec de quoi afficher une ligne d'historique
+- [x] #4 La lecture d'une conversation rend ses messages ordonnés, l'état de chaque tour dont l'état interrompu, l'identité de la génération en cours et le dernier numéro de séquence persisté
+- [x] #5 La suppression d'une conversation retire tous ses items de la table chat
+- [x] #6 docs/CANONICAL_MEDIA_API_CONTRACT.md décrit les routes, leurs corps et leurs refus typés
+- [x] #7 ruff check et mypy passent sur les fichiers Python modifiés ou créés
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Routeur `/api/chat` (hors `/api/v1/`), monté dans `api/main.py`, avec `get_current_user` sur chaque route. Toutes les lectures passent par la clé du compte, donc une conversation d'un autre compte répond 404.
+
+- `POST /api/chat/conversations` : vérifie la propriété du média ou du dossier, puis applique `resolve_scope_sources` et `enforce_scope_ceilings` (mêmes plafonds, mêmes refus `scope_empty` et `scope_too_large` avec leurs chiffres). Refuse en `409 scope_preparing` (`pending_count`) tant qu'une source est en transcription : un instantané figé ne pourrait jamais l'inclure. Enregistre un `ChatSourceSnapshot` versionné, ordonné, avec une `ref` citable par source (sources lisibles d'abord, donc refs alignées sur les tags du corpus, puis les exclues).
+- `GET /api/chat/conversations?scope=&scope_id=` : historique de la portée, plus récent d'abord (LSI), avec un curseur opaque qui reconstruit la clé à partir du compte du jeton.
+- `GET /api/chat/conversations/{id}` : messages ordonnés, état de chaque tour (dont `interrupted` et sa cause), `active_generation` (tour, tentative, `last_seq`).
+- `DELETE /api/chat/conversations/{id}` : `chat_db.delete_conversation` retire tous les items, avec 404 si la conversation est absente ou d'un autre compte.
+- Refus typés `{error_code, chiffres}`, sans phrase. Contrat dans `docs/CANONICAL_MEDIA_API_CONTRACT.md`, section « Chat conversations ».
+
+Vérifications : `ruff check` et `mypy` passent sur les fichiers touchés. L'API Gateway route tout sur `$default`, donc rien à ajouter côté Terraform.
+
+Note à l'owner : après déploiement, ouvrir, lister, lire puis supprimer une conversation sur un média et sur un dossier de -dev, puis vérifier que la table chat ne contient plus aucun de ses items.
+<!-- SECTION:FINAL_SUMMARY:END -->
