@@ -3,9 +3,10 @@ id: TASK-467
 title: >-
   Donner à l'app mobile un service de chat et un contrôleur de conversation
   partagé qui reprend le flux SSE
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 18:00'
+updated_date: '2026-10-10 22:32'
 labels:
   - mobile
   - chat
@@ -26,6 +27,16 @@ references:
   - mobile/eas.json
   - scripts/mobile_ota_manifest_check.sh
   - docs/CANONICAL_MEDIA_API_CONTRACT.md
+modified_files:
+  - mobile/src/types/chat.ts
+  - mobile/src/services/chatService.ts
+  - mobile/src/services/apiClient.ts
+  - mobile/src/contexts/ChatSessionContext.tsx
+  - mobile/app/_layout.tsx
+  - mobile/src/constants/config.ts
+  - mobile/app.config.ts
+  - mobile/eas.json
+  - scripts/mobile_ota_manifest_check.sh
 priority: medium
 type: feature
 ordinal: 74000
@@ -60,11 +71,26 @@ La vérification se fait avec l'UI de la tâche suivante, sur un build de dev po
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 mobile/src/services/chatService.ts couvre l'ouverture, la liste par portée, la lecture et la suppression d'une conversation, l'envoi d'un tour et l'arrêt, selon le contrat de docs/CANONICAL_MEDIA_API_CONTRACT.md, et lit le flux SSE par expo/fetch sans dépendance npm nouvelle
-- [ ] #2 Le flux est repris avec l'identité de génération et le dernier numéro de séquence, les événements sont dédupliqués par séquence, un 204 ou un échec d'ouverture déclenche une relecture de la conversation
-- [ ] #3 Au retour au premier plan, le contrôleur relit l'état durable puis reprend le flux ou récupère la réponse finale
-- [ ] #4 La route d'arrêt n'est appelée que par une action explicite, jamais depuis un nettoyage de démontage, et la fermeture du flux n'appelle pas l'arrêt
-- [ ] #5 Un ChatSessionContext monté au-dessus de la navigation dans mobile/app/_layout.tsx porte la conversation active par portée et son état de génération, partagé entre média et dossier
-- [ ] #6 L'URL de diffusion est une variable publique lue dans app.config.ts et config.ts, posée dans chaque profil de eas.json et vérifiée par scripts/mobile_ota_manifest_check.sh
-- [ ] #7 npx tsc --noEmit et le lint du projet mobile passent
+- [x] #1 mobile/src/services/chatService.ts couvre l'ouverture, la liste par portée, la lecture et la suppression d'une conversation, l'envoi d'un tour et l'arrêt, selon le contrat de docs/CANONICAL_MEDIA_API_CONTRACT.md, et lit le flux SSE par expo/fetch sans dépendance npm nouvelle
+- [x] #2 Le flux est repris avec l'identité de génération et le dernier numéro de séquence, les événements sont dédupliqués par séquence, un 204 ou un échec d'ouverture déclenche une relecture de la conversation
+- [x] #3 Au retour au premier plan, le contrôleur relit l'état durable puis reprend le flux ou récupère la réponse finale
+- [x] #4 La route d'arrêt n'est appelée que par une action explicite, jamais depuis un nettoyage de démontage, et la fermeture du flux n'appelle pas l'arrêt
+- [x] #5 Un ChatSessionContext monté au-dessus de la navigation dans mobile/app/_layout.tsx porte la conversation active par portée et son état de génération, partagé entre média et dossier
+- [x] #6 L'URL de diffusion est une variable publique lue dans app.config.ts et config.ts, posée dans chaque profil de eas.json et vérifiée par scripts/mobile_ota_manifest_check.sh
+- [x] #7 npx tsc --noEmit et le lint du projet mobile passent
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Couche non visuelle du chat mobile.
+
+- `src/types/chat.ts` : conversations, messages, états de tour (dont `interrupted` et ses causes `cancelled`, `output_limit` et `provider_error` pour l'échec partiel), identité de génération, refus typés, événements du flux.
+- `src/services/chatService.ts` : ouvrir, lister par portée, lire, supprimer, envoyer un tour (avec un `client_request_id` de `expo-crypto`, réutilisé pour un renvoi de la même question), arrêter. Lecture SSE par `expo/fetch` (`body.getReader()` et `TextDecoder` installé par le runtime Expo), sans dépendance npm nouvelle, avec l'`Authorization` et le rejeu 401 existants (`sendAuthenticated`, désormais exporté de `apiClient`). Gère 204 → `idle`, 409 `generation_stale` → identité vivante, échec d'ouverture → `unavailable`.
+- `src/contexts/ChatSessionContext.tsx`, monté dans `app/_layout.tsx` sous `PurchasesProvider` et au-dessus du navigateur. Il porte une session par portée (`media:<id>`, `folder:<id>`) : conversation active, génération suivie, texte reçu, `lastSeq`, phase. Le flux est repris avec l'identité et `after_seq`, et les fragments déjà reçus sont ignorés. Un 204, un `end` ou une coupure déclenchent la relecture de la conversation ; sur `replaced`, le texte repart de zéro sous la nouvelle tentative. Si le flux est indisponible, le contrôleur relit la conversation toutes les 2 s et retente le flux toutes les 10 s (pas de boucle de reconnexion). Au retour au premier plan (`AppState`), il relit l'état durable puis reprend ; en arrière-plan, au changement de compte ou en quittant un écran, il se déconnecte seulement. `stopGeneration` est le seul chemin vers la route d'arrêt. Hook `useChatSession(scope, scopeId)` pour l'UI.
+- Configuration : `EXPO_PUBLIC_CHAT_STREAM_URL` → `extra.chatStreamUrl` (`app.config.ts`) → `Config.CHAT_STREAM_URL` (vide toléré : repli par relecture). La variable est posée dans chaque profil de `eas.json`, vide pour l'instant. `scripts/mobile_ota_manifest_check.sh` exige qu'elle soit déclarée dans le profil et que le manifest servi porte la même valeur ; il avertit si elle est vide. Testé hors ligne : conforme → 0, écart → 1.
+
+Vérifications : `npx tsc --noEmit` passe ; `npm run lint` donne 0 erreur (1 avertissement préexistant dans `purchaseService.ts`).
+
+Note à l'owner : l'URL de diffusion n'existe pas encore en dev (aucune REST API dans le compte au 2026-10-11 ; elle apparaîtra après le `terraform apply` de task-464). La valeur à poser dans chaque profil de `mobile/eas.json` est alors la sortie `chat_stream_url`. Comme `extra` entre dans l'empreinte native, ce changement demande un nouveau build, pas seulement une OTA. La vérification fonctionnelle se fera avec l'UI de task-468.
+<!-- SECTION:FINAL_SUMMARY:END -->
