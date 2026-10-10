@@ -669,7 +669,7 @@ Semantics (task-264 for the folder half, task-346 for the title half):
 
 ## Chat conversations
 
-Router `media_summarizer/api/endpoints/chat.py`, mounted under `/api/chat` (never `/api/v1/`), service `media_summarizer/core/services/chat_service.py`, storage `docs/CHAT_DATA_MODEL.md` (task-461). Owner decision: `docs/research/task-430-chatbot-architecture/README.md`, Owner Validation, points 1, 5 and 7. Sending a turn and stopping it are task-462; the SSE stream has its own door (task-464).
+Router `media_summarizer/api/endpoints/chat.py`, mounted under `/api/chat` (never `/api/v1/`), service `media_summarizer/core/services/chat_service.py`, storage `docs/CHAT_DATA_MODEL.md` (task-461). Owner decision: `docs/research/task-430-chatbot-architecture/README.md`, Owner Validation, points 1, 5 and 7. Sending a turn and stopping it are task-462; the SSE stream has its own door (task-464, "Chat stream" below).
 
 Every route requires the app JWT (`get_current_user`). Every read and write is keyed on the caller's account, so a conversation of another account answers `404 conversation_not_found`, exactly like one that does not exist. Refusals carry a stable `error_code` and their figures in `detail`, **never a sentence**: the app words them in the reader's language.
 
@@ -809,6 +809,39 @@ Asks the live generation to stop. Request: `{ "attempt_id": "at_41c2…" }` — 
 ### DELETE /api/chat/conversations/{conversation_id}
 
 Deletes the conversation and every item under it — messages, attempts, fragments, dispatch intents — and releases the account's in-flight marker if one of its turns held it. `204` on success; unknown or foreign id: `404 conversation_not_found`. Conversations have no TTL: they live until deleted here or by account erasure (`docs/DATA_RETENTION.md`).
+
+### Chat stream — GET {chat_stream_url}/chat/conversations/{conversation_id}/stream
+
+**Not on the main API.** A separate door: a regional REST API Gateway in `STREAM` mode in front of a dedicated Lambda (`media_summarizer/api/chat_stream_app.py`, Terraform `chat_stream.tf`). Its base URL is the Terraform output `chat_stream_url` (`https://<id>.execute-api.<region>.amazonaws.com/v1`), which the app reads as a public variable. Same app JWT as the main API (`Authorization: Bearer …`, checked by the same `get_current_user`), same ownership rule: a conversation of another account answers 404. It generates nothing and calls no LLM: it replays and follows the fragments the chat worker persists.
+
+Query parameters:
+
+| Name | Required | Meaning |
+| --- | --- | --- |
+| `turn_id`, `attempt_id` | no | the generation the app is showing (`active_generation` of the conversation, or the send response). Omitted: stream whatever is live |
+| `after_seq` | no, default `-1` | the last fragment sequence the app holds; the stream starts after it |
+
+Answers before the stream starts:
+
+| Status | Body | When |
+| --- | --- | --- |
+| 204 | — | no generation in flight on this conversation: read the conversation from the main API for the final answer |
+| 401 | — | missing or invalid JWT |
+| 404 | `{"detail": {"error_code": "conversation_not_found"}}` | unknown or foreign conversation |
+| 409 | `{"detail": {"error_code": "generation_stale", "turn_id", "turn_index", "attempt_id"}}` | the identity sent is no longer the live one; the body names the live one |
+| 429 | — | the stage's throttling (stream openings per second) |
+
+Otherwise `200`, `Content-Type: text/event-stream`. Events, in order:
+
+| `event` | `id` | `data` | Meaning |
+| --- | --- | --- | --- |
+| `generation` | — | `{turn_id, turn_index, attempt_id}` | the generation this stream follows, always first |
+| `fragment` | the sequence | `{seq, text}` | the next piece of the answer. Sequences of one attempt start at 0 and grow by 1; the app drops any `seq` it already holds |
+| `end` | — | `{turn_id, attempt_id, status, interruption_cause, error_code, last_seq, text}` | sent only after the turn's final state was **read back persisted**: `status` is `completed`, `interrupted` (with its cause: `cancelled`, `output_limit`, `provider_error`) or `failed`; `text` is the final answer as stored. The stream then closes |
+| `replaced` | — | `{turn_id, turn_index, attempt_id}` | a newer attempt replaced this one (a recovery). Its answer starts from nothing: the app discards this attempt's fragments and reconnects with the new `attempt_id` and `after_seq=-1` |
+| `reconnect` | — | `{turn_id, attempt_id, after_seq}` | the stream reached its own time limit (14 minutes); the app reconnects with this cursor. Nothing is lost: fragments live a day |
+
+A comment line `: keepalive` is sent every 15 s of silence, below the 5-minute idle timeout of a regional streaming endpoint. A dropped connection is resumed the same way as `reconnect`: same identity, `after_seq` = the last sequence received. Closing the stream never stops the generation; only the stop route does.
 
 ## File upload entrypoints (non-canonical, same organization contract)
 

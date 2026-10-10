@@ -91,6 +91,20 @@ resource "aws_ecr_lifecycle_policy" "lambda" {
         action = {
           type = "expire"
         }
+      },
+      {
+        # The chat stream image (task-464), built by deploy-lambda.yml.
+        rulePriority = 4
+        description  = "Keep the ${var.image_retention_count} most recent chat stream images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["chat-stream-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = var.image_retention_count
+        }
+        action = {
+          type = "expire"
+        }
       }
     ]
   })

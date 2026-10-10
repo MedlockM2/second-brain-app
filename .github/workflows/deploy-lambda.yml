@@ -19,13 +19,14 @@ on:
       - "uv.lock"
       - "infrastructure/docker/lambda-api.Dockerfile"
       - "infrastructure/docker/lambda.Dockerfile"
+      - "infrastructure/docker/lambda-chat-stream.Dockerfile"
       - ".github/workflows/deploy-lambda.yml"
   # Production is never deployed automatically. It is promoted, by hand, from an
   # image a push to main already built and validated in dev.
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Tag suffix to promote to production: a git SHA already built by a main deploy, or 'latest'. The api-<tag> and worker-<tag> images must both exist in the shared registry."
+        description: "Tag suffix to promote to production: a git SHA already built by a main deploy, or 'latest'. The api-<tag>, worker-<tag> and chat-stream-<tag> images must all exist in the shared registry."
         required: true
         default: latest
 
@@ -53,6 +54,7 @@ jobs:
     outputs:
       api: ${{ steps.filter.outputs.api }}
       workers: ${{ steps.filter.outputs.workers }}
+      chat_stream: ${{ steps.filter.outputs.chat_stream }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,6 +83,17 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - 'infrastructure/docker/lambda.Dockerfile'
+              - '.github/workflows/deploy-lambda.yml'
+            # The chat stream app imports the shared auth, models and access
+            # layer, so it rebuilds on the same core paths as the API.
+            chat_stream:
+              - 'media_summarizer/api/chat_stream_app.py'
+              - 'media_summarizer/api/dependencies/**'
+              - 'media_summarizer/core/**'
+              - 'media_summarizer/utils/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'infrastructure/docker/lambda-chat-stream.Dockerfile'
               - '.github/workflows/deploy-lambda.yml'
 
   deploy-api:
@@ -233,6 +246,62 @@ jobs:
             test "$WORKER_UPDATE" = "Successful"
           done
 
+  # The chat's SSE door (task-464): its own image, its own function, deployed by
+  # digest like the API. Deliberately outside the workers' loop, which matches
+  # media-summarizer-worker-* only.
+  deploy-chat-stream:
+    needs: changes
+    if: needs.changes.outputs.chat_stream == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU for ARM64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build and push chat stream image
+        id: build-chat-stream
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/lambda-chat-stream.Dockerfile
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:chat-stream-latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:chat-stream-${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=lambda-chat-stream
+          cache-to: type=gha,mode=max,scope=lambda-chat-stream
+
+      - name: Deploy chat stream by immutable digest
+        run: |
+          STREAM_FUNCTION="media-summarizer-chat-stream-${DEPLOY_ENVIRONMENT}"
+          aws lambda update-function-code \
+            --function-name "$STREAM_FUNCTION" \
+            --image-uri "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.build-chat-stream.outputs.digest }}" \
+            --no-cli-pager
+          aws lambda wait function-updated-v2 --function-name "$STREAM_FUNCTION"
+          test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query State --output text)" = "Active"
+          test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query LastUpdateStatus --output text)" = "Successful"
+
   release-validation:
     needs: [changes, deploy-api, deploy-workers]
     if: >-
@@ -346,7 +415,7 @@ jobs:
           # bytes dev validated. describe-images is a cross-account read against
           # the shared registry, allowed by ConsumerAccountImagePull in
           # shared/ecr.tf plus EcrPullSharedRepository in the prod role.
-          for KIND in api worker; do
+          for KIND in api worker chat-stream; do
             DIGEST=$(aws ecr describe-images \
               --registry-id "$ECR_REGISTRY_ACCOUNT_ID" \
               --repository-name "$ECR_REPOSITORY" \
@@ -355,7 +424,7 @@ jobs:
               --output text)
             test -n "$DIGEST" && test "$DIGEST" != "None" || {
               echo "No image tagged ${KIND}-${PROMOTE_TAG} in the shared registry"; exit 1; }
-            echo "${KIND}=${DIGEST}" >> "$GITHUB_OUTPUT"
+            echo "${KIND//-/_}=${DIGEST}" >> "$GITHUB_OUTPUT"
             echo "${KIND}-${PROMOTE_TAG} -> ${DIGEST}"
           done
 
@@ -403,6 +472,18 @@ jobs:
             test "$(aws lambda get-function-configuration --function-name "$FUNCTION_NAME" --query State --output text)" = "Active"
             test "$(aws lambda get-function-configuration --function-name "$FUNCTION_NAME" --query LastUpdateStatus --output text)" = "Successful"
           done
+
+      - name: Promote the chat stream image
+        run: |
+          REGISTRY="${ECR_REGISTRY_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+          STREAM_FUNCTION="media-summarizer-chat-stream-${DEPLOY_ENVIRONMENT}"
+          aws lambda update-function-code \
+            --function-name "$STREAM_FUNCTION" \
+            --image-uri "${REGISTRY}/${ECR_REPOSITORY}@${{ steps.digests.outputs.chat_stream }}" \
+            --no-cli-pager
+          aws lambda wait function-updated-v2 --function-name "$STREAM_FUNCTION"
+          test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query State --output text)" = "Active"
+          test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query LastUpdateStatus --output text)" = "Successful"
 
       - name: Validate the prod health endpoint
         run: |

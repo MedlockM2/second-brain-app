@@ -10,6 +10,7 @@ Each section corresponds to a specific CloudWatch alarm defined in `infrastructu
 - [API Latency](#api-latency)
 - [API 5xx Rate](#api-5xx-rate)
 - [DLQ Messages](#dlq-messages)
+- [Chat stream](#chat-stream)
 - [How to Recover a DLQ After a Fix](#how-to-recover-a-dlq-after-a-fix)
 - [Lambda Errors](#lambda-errors)
 - [Lambda Throttles](#lambda-throttles)
@@ -121,6 +122,25 @@ Each section corresponds to a specific CloudWatch alarm defined in `infrastructu
 - If AWS service outage: communicate to users via status page
 
 ---
+
+## Chat stream
+
+The chat's SSE door (task-464): Lambda `media-summarizer-chat-stream-<env>`
+behind the REST API `media-summarizer-chat-stream-<env>`, stage `v1`
+(`infrastructure/terraform/modules/platform/chat_stream.tf`). Four alarms:
+
+| Alarm | Means | First look |
+| --- | --- | --- |
+| `media-summarizer-chat-stream-errors-<env>` | the stream Lambda raised | its log group `/aws/lambda/media-summarizer-chat-stream-<env>` |
+| `media-summarizer-chat-stream-throttles-<env>` | the **connection budget** is spent: every open stream holds one execution, and `chat_stream_reserved_concurrency` (20) were in use | is something holding streams open (a client reconnecting in a loop, a generation that never seals)? Raise the variable only if real concurrent use reached it |
+| `media-summarizer-chat-stream-5xx-<env>` | the stage answered 5xx | the access log group `/aws/apigateway/media-summarizer-chat-stream-<env>`: `integrationStatus`, `errorMessage`, `errorResponseType` |
+| `media-summarizer-chat-stream-open-latency-<env>` | opening a stream takes over 5 s at p90 | cold starts (image size, adapter readiness on `/health`) or slow DynamoDB reads |
+
+The access log records one line per stream, written when it closes: `responseLatency`
+is the stream's duration, `responseLength` the bytes sent. A `500` with
+`integrationStatus` empty and a stream that never starts usually means the function
+did not answer in the streaming format (metadata, 8 null bytes, body) — check that
+the image still runs the Lambda Web Adapter with `AWS_LWA_INVOKE_MODE=response_stream`.
 
 ## DLQ Messages
 
