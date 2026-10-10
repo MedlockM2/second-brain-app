@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-10 17:57'
-updated_date: '2026-10-10 18:01'
+updated_date: '2026-10-10 22:04'
 labels:
   - benchmark
   - chat
@@ -58,9 +58,15 @@ Benchmark seulement : aucun fichier source modifié, aucun appel LLM payant. Rec
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 docs/research/task-459-llm-token-rate-control/README.md existe avec owner_decision: pending et une section Owner Validation à remplir
-- [ ] #2 Les limites TPM et RPM de gpt-6-luna par palier sont relevées à la source avec leur date, et confrontées à la charge d'un premier tour de chat sur un dossier au plafond de corpus en vigueur
-- [ ] #3 Au moins trois mécanismes de contrôle sont comparés sur l'exactitude, la latence ajoutée au chat, le comportement au dépassement par type d'appel, la priorité chat contre artefacts, les objets AWS et le coût fixe
-- [ ] #4 Le README se termine par une recommandation argumentée et la liste des fichiers et ressources qu'elle touche
-- [ ] #5 Aucun fichier hors du répertoire de recherche n'est modifié
+- [x] #1 docs/research/task-459-llm-token-rate-control/README.md existe avec owner_decision: pending et une section Owner Validation à remplir
+- [x] #2 Les limites TPM et RPM de gpt-6-luna par palier sont relevées à la source avec leur date, et confrontées à la charge d'un premier tour de chat sur un dossier au plafond de corpus en vigueur
+- [x] #3 Au moins trois mécanismes de contrôle sont comparés sur l'exactitude, la latence ajoutée au chat, le comportement au dépassement par type d'appel, la priorité chat contre artefacts, les objets AWS et le coût fixe
+- [x] #4 Le README se termine par une recommandation argumentée et la liste des fichiers et ressources qu'elle touche
+- [x] #5 Aucun fichier hors du répertoire de recherche n'est modifié
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-11 — Mode initial. Livrable : docs/research/task-459-llm-token-rate-control/README.md (owner_decision: pending). Limites de gpt-6-luna relevées à la source (Build 5 000 RPM / 2 000 000 TPM ; Launch 10 000 / 10 000 000 ; Grow 30 000 / 180 000 000) et confrontées à un premier tour sur un dossier au plafond (152 460 tokens réservés, 7,6 % du TPM ; 152 % avec 10 artefacts + 10 tours concurrents). Cinq mécanismes comparés. Recommandation : réservation dans des fenêtres partagées de 10 s en DynamoDB (plafond TPM × 0,9 / 7), fond plafonné à 60 %, chat prioritaire avec attente bornée, renvoi différé des artefacts ; 429 et en-tête x-ratelimit-limit-tokens en filet et calibrage. Aucun appel LLM fait : l'hypothèse prudente sur max_completion_tokens est retenue. **La recommandation attend la validation de l'owner.**
+<!-- SECTION:NOTES:END -->
