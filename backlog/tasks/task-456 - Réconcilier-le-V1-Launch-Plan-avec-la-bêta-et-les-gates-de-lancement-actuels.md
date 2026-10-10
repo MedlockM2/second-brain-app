@@ -1,10 +1,11 @@
 ---
 id: TASK-456
 title: Réconcilier le V1 Launch Plan avec la bêta et les gates de lancement actuels
-status: To Do
+status: Done
 assignee:
   - agent
 created_date: '2026-10-10 15:13'
+updated_date: '2026-10-10 21:03'
 labels:
   - v1-launch
   - release

@@ -1,11 +1,11 @@
 ---
 id: task-166
 title: Mark Phase 5 as DONE in V1_LAUNCH_PLAN.md and finalize Phase 5 status section
-status: To Do
+status: Done
 assignee:
   - agent
 created_date: '2026-06-10 05:40'
-updated_date: '2026-10-10 15:14'
+updated_date: '2026-10-10 21:50'
 labels:
   - phase-5
   - mobile
@@ -15,6 +15,8 @@ dependencies:
   - task-164
   - task-165
   - task-171
+modified_files:
+  - docs/V1_LAUNCH_PLAN.md
 priority: high
 dispatchable: true
 ---
@@ -64,11 +66,28 @@ Corollaire : **ne pas écrire dans le plan que la suite Maestro est verte ni qu'
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 docs/V1_LAUNCH_PLAN.md Phase 5 marquée DONE avec date, même format que Phase 3 et Phase 4
-- [ ] #2 Sous-section Bugs détectés et fixés en route complétée avec les sous-tickets task-164/165/171
-- [ ] #3 Sous-section TDD coverage décrit l'état réel de Maestro (flows écrits, lesquels sont verts, CI en sommeil depuis le 2026-08-13, task-172 ouverte) sans affirmer que la suite est verte ni qu'elle bloque les PR
-- [ ] #4 Section 5 (credentials) : ligne Google Cloud Console Android OAuth en [x] et mentionnant les deux clients (SHA-1 keystore EAS + SHA-1 Play App Signing)
-- [ ] #5 Header du fichier (Dernière mise à jour) actualisé
+- [x] #1 docs/V1_LAUNCH_PLAN.md Phase 5 marquée DONE avec date, même format que Phase 3 et Phase 4
+- [x] #2 Sous-section Bugs détectés et fixés en route complétée avec les sous-tickets task-164/165/171
+- [x] #3 Sous-section TDD coverage décrit l'état réel de Maestro (flows écrits, lesquels sont verts, CI en sommeil depuis le 2026-08-13, task-172 ouverte) sans affirmer que la suite est verte ni qu'elle bloque les PR
+- [x] #4 Section 5 (credentials) : ligne Google Cloud Console Android OAuth en [x] et mentionnant les deux clients (SHA-1 keystore EAS + SHA-1 Play App Signing)
+- [x] #5 Header du fichier (Dernière mise à jour) actualisé
 
-- [ ] #6 Aucun changement hors-scope (Phase 6+ non touchées)
+- [x] #6 Aucun changement hors-scope (Phase 6+ non touchées)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-10, fait sur l'arbre de travail principal, après la clôture de task-165 le même jour.
+
+- **AC #1** : le titre de la Phase 5 devient `**DONE 2026-10-10**`, au même format que la Phase 3. L'encadré d'introduction indique les dates de validation iOS (2026-09-04) et Android (2026-09-02, puis 2026-10-10). Dans « À faire », les points 4 (task-165), 6 (task-166) et 8 (rebuild iOS, couvert par le build TestFlight `1.0.0 (4)`) sont cochés.
+- **AC #2** : nouvelle sous-section « Bugs détectés et fixés en route », qui liste task-325, 338, 345 et 347, plus le correctif sans ticket du handler de validation de l'API (500 au lieu de 422). Elle précise que task-171 n'a ouvert aucun sous-ticket.
+- **AC #3** : nouvelle sous-section « TDD coverage » : 7 flows écrits, 3 verts (01, 06, 07) au run du 2026-08-12, 4 jamais verts en CI, CI en sommeil depuis le 2026-08-13 (task-254), task-172 ouverte et verrouillée. Elle dit explicitement que la suite ne bloque aucune PR.
+- **AC #4** : déjà rempli avant cette tâche. La ligne du § 5 est en `[x]` et cite les deux clients (SHA-1 du keystore EAS et SHA-1 Play App Signing).
+- **AC #5** : l'en-tête « Dernière mise à jour » mentionne la clôture de la Phase 5, sans affirmation sur Maestro.
+- **AC #6** : aucune phase 6 ou suivante n'est modifiée.
+
+Ajout : une sous-section « Outputs Phase 5 ». Elle donne le build TestFlight `1.0.0 (4)` sans son URL, que je n'ai pas. Côté Android, il n'y a pas d'APK distribué par lien : elle cite le dernier build `internal`, versionCode 17 du 2026-10-10. Le SHA-1 du keystore est tronqué.
+
+Hors Phase 5 mais nécessaire pour que le plan reste juste : les passages qui disaient que task-165 attendait son AC #5 ont été corrigés (État de vérité, Vue de lancement, checklist, Bloquants release). La ligne « Build Android EAS » du § 5 ne présente plus le binaire de la piste interne comme « à confirmer » ; elle indique les builds jusqu'au versionCode 17 et la validation du 2026-10-10.
+<!-- SECTION:NOTES:END -->

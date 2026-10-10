@@ -3,11 +3,11 @@ id: task-165
 title: >-
   Validate Android dev build — non-Maestrable flows only (Google sheet, Chrome
   share)
-status: To Do
+status: Done
 assignee:
   - owner
 created_date: '2026-06-10 05:39'
-updated_date: '2026-10-10 15:14'
+updated_date: '2026-10-10 21:37'
 labels:
   - phase-5
   - mobile
@@ -76,7 +76,7 @@ Sign in with Apple n'est **pas applicable sur Android** — vérifie juste que l
 - [x] #2 Bouton Sign in with Apple soit absent soit no-op clean sur Android
 - [x] #3 Share intent depuis Chrome (URL) atteint share-confirm, soumet, et la vignette apparaît dans l'inbox
 - [x] #4 Share intent texte ou audio depuis app native fonctionne
-- [ ] #5 Tous les bugs P0/P1 détectés ont un sous-ticket et sont résolus avant clôture
+- [x] #5 Tous les bugs P0/P1 détectés ont un sous-ticket et sont résolus avant clôture
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -159,4 +159,15 @@ La doc avait raison : Credential Manager fait vérifier par Play services le cou
 Les deux clients coexistent et aucun n'est redondant : celui du keystore EAS (`task-163` AC#1) couvre les APK posés à la main, celui de Play couvre tout binaire servi par Play. Aucun des deux n'entre dans le bundle — `task-325` a supprimé `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID`, l'app ne passe que le client **Web** en `serverClientId`. Rien à rejouer pour la production : le certificat Play App Signing est le même sur la piste interne, le closed testing et la production.
 
 Il n'y a donc plus de réserve sur AC#1, et le « second client Android » qui figurait comme travail owner restant dans les Owner notes de `task-325` est clos.
+
+### AC#5 validée le 2026-10-10 (owner), sur device physique Android
+
+La note « Reste à faire » du 2026-09-04 était périmée : task-345 et task-347 sont sur `main` depuis début septembre, et les builds `internal` du versionCode 10 (2026-09-04, `5fbab97`) au versionCode 17 (2026-10-10, `f05bd7c`) contiennent les deux (vérifié par `git merge-base --is-ancestor`). Il n'a donc fallu ni nouveau push ni nouveau build.
+
+Check device de l'owner :
+- PDF depuis « Mes fichiers » : OK.
+- Photo et PDF depuis Drive : OK.
+- `.zip` : Deepn n'apparaît pas dans la feuille de partage Android pour ce type. Le refus a donc lieu en amont, dans le système, faute de filtre d'intent correspondant : l'utilisateur ne peut pas lancer le partage. C'est un refus propre, sans erreur dans l'app.
+
+Le bug P1 relevé (task-338) est résolu et vérifié sur device. AC#5 cochée, tâche close.
 <!-- SECTION:NOTES:END -->

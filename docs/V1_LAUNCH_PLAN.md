@@ -2,7 +2,8 @@
 
 > Plan exhaustif des étapes restantes pour mettre l'application en production.
 > Date de rédaction : 2026-05-19. Dernière mise à jour : **2026-10-10**
-> (`task-456` : réconciliation de la vue de lancement avec la bêta de trois mois,
+> (Phase 5 close — builds iOS et Android validés sur device, `task-166` ; plus tôt
+> le même jour, `task-456` : réconciliation de la vue de lancement avec la bêta de trois mois,
 > la sortie de bêta, les gates de soumission et le soft launch portés par
 > `task-440` à `task-455` — cf. § « Vue de lancement au 2026-10-10 » ; correction
 > de quatre affirmations périmées : validations mobiles présentées comme à refaire,
@@ -91,11 +92,11 @@ Nom commercial définitif : **Deepn**, choisi le **2026-10-10**. Voir `docs/BRAN
   with Apple, Continue with Google et le partage Safari validés par l'owner le
   2026-09-04 sur TestFlight, sans bug P0/P1. `task-165` a ses AC #1 à #4 cochées
   le 2026-09-02 sur le `versionCode` 6 (Google via Credential Manager, pas de bouton
-  Apple, partage Chrome, partage audio). Seul reste son **AC #5** : vérifier sur
-  device le partage de documents et d'images (`task-338`, `Done` en code) avec un
-  binaire Android qui porte `task-345` et `task-347` — le `versionCode` 8 installé
-  le 2026-09-04 ne porte ni l'un ni l'autre, et la soumission Play du 9 a échoué.
-  `task-166` ne fait ensuite que clore la Phase 5 dans ce fichier.
+  Apple, partage Chrome, partage audio). Son **AC #5** est validée le 2026-10-10 :
+  partage d'un PDF depuis « Mes fichiers », d'une photo et d'un PDF depuis Drive,
+  sur un binaire de la piste interne qui porte `task-345` et `task-347` ; un `.zip`
+  ne fait pas apparaître l'app dans la feuille de partage. `task-165` est `Done`,
+  et la **Phase 5 est close** (`task-166`).
 - **Production release** : `docs/RELEASE_LOG.md` reste la source de vérité :
   v1.0.0 `Pre-release`, aucun tag (`git tag -l` vide), aucun build production,
   aucune soumission.
@@ -104,8 +105,8 @@ Nom commercial définitif : **Deepn**, choisi le **2026-10-10**. Voir `docs/BRAN
   `task-352` sont `Done` depuis). Par rôle dans le lancement :
   - **chaîne de lancement** `task-440` à `task-456`, créée le 2026-10-10 et
     détaillée au § « Vue de lancement au 2026-10-10 » ;
-  - **reste de Phase 5** : `task-165` (owner, AC #5 seule), `task-166` (agent,
-    attend `task-165`), `task-172` (Maestro, verrouillée) ;
+  - **reste de Phase 5** : aucun depuis le 2026-10-10 (`task-165` et `task-166`
+    `Done`) ; `task-172` (Maestro, verrouillée) reste ouverte hors Phase 5 ;
   - **stores, branding, légal** : `task-180`, `task-186`, `task-260` (owner),
     `task-357` (benchmark des pages légales, `owner_decision: pending`) →
     `task-358` ;
@@ -148,7 +149,7 @@ Nom commercial définitif : **Deepn**, choisi le **2026-10-10**. Voir `docs/BRAN
 
 Cette vue remplace le « chemin critique restant » du 2026-09-03, dont trois lignes
 étaient devenues fausses : les validations device y figuraient encore comme à faire
-(`task-164` est `Done`, `task-165` n'a plus que son AC #5), le compteur de closed
+(`task-164` est `Done` ; `task-165` l'est aussi depuis le 2026-10-10), le compteur de closed
 testing y attendait `task-340` (`Done` depuis), et l'hygiène y demandait de pousser
 des commits locaux (il n'y en a plus, cf. § « État de vérité »). Le billing réel
 reste acquis (Phase 6, `task-262`/`238`/`261` `Done`).
@@ -165,8 +166,8 @@ livrés dans un worktree, sans merge, push, déploiement ni publication.
 | Quoi | Tâche | Qui | État au 2026-10-10 |
 |---|---|---|---|
 | Rejouer la suite E2E existante contre AWS dev, tester le digest journalier (Phase 4) | `task-440` | owner | À faire. Dernier run complet : 2026-06-12 |
-| Partage document/image sur device Android (AC #5) | `task-165` | owner | Seul reste de la validation device ; AC #1-#4 déjà validées |
-| Clôture documentaire de la Phase 5 | `task-166` | agent | Attend `task-165` ; aucune nouvelle validation device ni Maestro |
+| Partage document/image sur device Android (AC #5) | `task-165` | owner | ✅ `Done` le 2026-10-10 |
+| Clôture documentaire de la Phase 5 | `task-166` | agent | ✅ `Done` le 2026-10-10 |
 | Mécanisme de bêta (`beta_access`) | `task-429` | — | ✅ `Done`, actif sans date de fin dans `pricing_config-dev` depuis le 2026-10-05 |
 | Fixer le début, poser `ends_at`, écrire le bloc en prod, ouvrir aux testeurs | `task-441` | owner | Dépend de `task-429` et `task-440`. Début **non fixé** |
 
@@ -215,7 +216,7 @@ canal de support approuvé suffit.
 
 Ce qu'un agent peut livrer et prouver depuis sa branche :
 
-- [ ] `task-166` — Phase 5 close dans ce fichier, une fois `task-165` terminée
+- [x] `task-166` — Phase 5 close dans ce fichier (2026-10-10)
 - [ ] `task-358` — liens légaux du paywall, une fois `task-357` tranchée
 - [ ] `task-445` — configuration mobile et runbook de production, une fois le
   domaine acquis
@@ -228,7 +229,7 @@ Ce qu'un agent peut livrer et prouver depuis sa branche :
 Ce qui ne se fait qu'à la main, par l'owner :
 
 - [ ] Run E2E contre AWS dev et digest (`task-440`)
-- [ ] AC #5 de `task-165` sur device Android
+- [x] AC #5 de `task-165` sur device Android (2026-10-10)
 - [ ] Date de début de bêta et `ends_at` dans dev et prod (`task-441`)
 - [ ] Domaine, DNS, certificats, secrets prod (`task-443`, `task-445`)
 - [ ] Apply Terraform prod et réveil des trois booléens (`task-446`), exercices
@@ -385,9 +386,9 @@ un staging ou une soumission.
 | Re-run E2E AWS dev | Phase 4, `task-440` | **Seul gate backend encore ouvert, et plus rien ne le précède.** Le HEAD backend est poussé et déployé (`3994d3f` dans `origin/main`, `Deploy Lambda Functions` vert), donc le run peut partir tel quel. Aucune preuve de `pytest -m e2e` complet depuis le 2026-06-12, alors que `/api/v1/` a disparu, que YouTube et Instagram sont passés en Apify-only, que le quota se compte en minutes et que le contrat média porte désormais cover et créateur |
 | Mobile dev builds | `task-161`, `task-162`, `task-163` | **Clos.** iOS : `task-161` est `Done`, sur une build du 2026-06-11 expirée le 2026-06-25 — le development client reste installé sur l'iPhone owner. Android : keystore (`task-162`), Client IDs et build en place, `task-163` est `Done` au 2026-09-02 |
 | Google OAuth Android | `task-163`, `task-325` | **Clos : le sign in with Google marche sur device, sur l'app installée depuis Play.** Deux clients Android coexistent — celui du 2026-08-13 sur le SHA-1 du keystore EAS (`task-162`, pour les APK posés à la main) et celui relevé le 2026-09-02 sur le SHA-1 Play App Signing (pour tout binaire servi par Play, production incluse). Le flow lui-même a changé le 2026-09-01 (`task-325`) : Google refuse un custom URI scheme pour un client Android, donc l'app signe via **Credential Manager** (module Expo local, `serverClientId` = client Web) et ne lit aucun Client ID Android |
-| Validation device non automatisable | `task-164`, `task-165` | **Presque close, ne pas rejouer.** iOS : `task-164` `Done` le 2026-09-04 (Apple, Google, partage Safari). Android : `task-165` AC #1-#4 validées le 2026-09-02 ; reste l'AC #5, partage document/image sur un binaire portant `task-345` et `task-347` |
+| Validation device non automatisable | `task-164`, `task-165` | **Close, ne pas rejouer.** iOS : `task-164` `Done` le 2026-09-04 (Apple, Google, partage Safari). Android : `task-165` `Done` le 2026-10-10 — AC #1-#4 validées le 2026-09-02, AC #5 (partage document/image) le 2026-10-10 |
 | Maestro V1 | `task-168`, `task-169`, `task-170`, `task-171`, `task-172` | **Plus un bloquant release** — CI en sommeil depuis le 2026-08-13 (`task-254`) le temps que l'UI soit figée ; 168/169/170/171 closes, 172 verrouillée. Cf. Phase 7, section « Maestro E2E CI — en sommeil depuis le 2026-08-13 » |
-| Clôture Phase 5 | `task-166` | Mettre ce plan à jour une fois `task-165` terminée (`task-163` et `task-164` sont `Done`) ; la couverture Maestro n'en est plus un prérequis |
+| Clôture Phase 5 | `task-166` | **Close le 2026-10-10** : Phase 5 marquée DONE dans ce plan ; la couverture Maestro n'en était plus un prérequis |
 
 ### Bloquants pré-soumission stores
 
@@ -1148,11 +1149,13 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
    **15 non-`Done`**, aucune incohérence de statut résiduelle — `task-162` et
    `task-262` sont passées `Done`. Liste et lecture : § « État de vérité ».
 
-### Phase 5 — Mobile dev build (jour 4-5) — **EN COURS, NON VALIDÉE AU 2026-08-21 — CHEMIN CRITIQUE**
+### Phase 5 — Mobile dev build (jour 4-5) — **DONE 2026-10-10**
 
-> Les gates backend étant fermés, cette phase est désormais **ce qui bloque le
-> plan**. Elle tient à trois choses : un build Android unique, et deux validations
-> manuelles sur device physique.
+> Close le 2026-10-10 (`task-166`) : les builds iOS et Android sont validés sur
+> device physique par l'owner — iOS le 2026-09-04 (`task-164`), Android le
+> 2026-09-02 pour les quatre parcours puis le 2026-10-10 pour le partage de
+> documents et d'images (`task-165`). Aucun bug P0/P1 ouvert. La suite Maestro
+> n'est **pas** une condition de cette clôture : cf. « TDD coverage » ci-dessous.
 
 #### Fait
 
@@ -1204,16 +1207,20 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
    - Sign in with Apple → user créé/lié → inbox.
    - Continue with Google → `ASWebAuthenticationSession` → user créé/lié → inbox.
    - Share intent Safari → share-confirm → submit → vignette inbox.
-4. `task-165` — validation Android sur device physique. **Les quatre parcours
-   sont validés le 2026-09-02** sur le `versionCode` 6 ; ne pas les rejouer :
+4. ✅ `task-165` — validation Android sur device physique, **`Done` le
+   2026-10-10**. Les quatre parcours sont validés le 2026-09-02 sur le
+   `versionCode` 6 :
    - ✅ Continue with Google (via Credential Manager depuis `task-325`).
    - ✅ Apple button absent.
    - ✅ Share intent Chrome URL.
    - ✅ Share intent audio.
 
-   **Reste l'AC #5** : le partage de documents et d'images (`task-338`) sur un
-   binaire portant `task-345` et `task-347`, que le `versionCode` 8 installé au
-   2026-09-04 ne contient pas. Détail dans les notes de `task-165`.
+   **AC #5 validée le 2026-10-10** : le partage de documents et d'images
+   (`task-338`) marche sur un binaire de la piste interne portant `task-345` et
+   `task-347` (tous les builds `internal` depuis le `versionCode` 10 du
+   2026-09-04 les contiennent) — PDF depuis « Mes fichiers », photo et PDF depuis
+   Drive. Un `.zip` ne fait pas apparaître l'app dans la feuille de partage
+   Android : le refus a lieu en amont, sans erreur dans l'app.
 5. **Couverture Maestro (`task-168` à `task-172`) : plus un prérequis de
    Phase 5.** La CI Maestro est en sommeil depuis le 2026-08-13 (`task-254`) le
    temps que l'UI soit figée. `task-168`, `task-169`, `task-170` et `task-171`
@@ -1221,16 +1228,44 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
    (`dispatchable: false`) jusqu'à ce jalon. État des 7 flows, ce qui reste
    provisionné et travail de réactivation : Phase 7, section « Maestro E2E CI —
    en sommeil depuis le 2026-08-13 ».
-6. `task-166` — marquer Phase 5 DONE dans ce plan une fois `task-165` close
-   (`task-163` et `task-164` le sont).
+6. ✅ `task-166` — Phase 5 marquée DONE dans ce plan le 2026-10-10.
 7. ✅ **Hygiène backlog** : `task-162` est passée à `Done` le 2026-08-13 — ses
    3 critères étaient cochés et son SHA-1 consigné, seul le statut était en retard.
    Phase 5 ne dépend donc plus que de `task-163` (ACs #6-#8), `task-164` et
    `task-165`.
-8. **Rebuild iOS courant** : `task-161` est `Done` sur la preuve du 2026-06-11,
-   mais l'artifact a expiré le 2026-06-25 et le HEAD a beaucoup bougé depuis. Un
-   rebuild iOS `development` sera de toute façon nécessaire pour `task-164`, ne
-   serait-ce que pour tester le code courant.
+8. ✅ **Rebuild iOS courant** : fait par la chaîne `internal` — `task-164` a été
+   validée sur un build TestFlight (`1.0.0 (4)`), pas sur le development client
+   du 2026-06-11.
+
+#### Bugs détectés et fixés en route
+
+Les validations device de Phase 5 (`task-164`, `task-165`) ont déclenché :
+
+- **task-325** — Sign in with Google Android remplacé par un module Credential Manager (le flow par custom URI scheme était refusé par Google pour un client Android) ✅
+- **task-338** — Partage entrant de documents et d'images : filtres d'intent Android et routage des fichiers dans le handler de partage (P1, tranché par l'owner le 2026-09-02) ✅
+- **task-345** — Upload de fichier par URL S3 présignée au lieu d'un multipart envoyé à l'API ✅
+- **task-347** — Extension d'un fichier partagé depuis Drive retrouvée par le `path` puis le `mimeType` quand le nom affiché n'en porte pas ✅
+- Sans sous-ticket, corrigé dans la session du 2026-09-04 — le handler de validation de l'API mourait en 500 (`UnicodeDecodeError`) sur un corps binaire au lieu de répondre 422 ; `_renderable_value` dans `media_summarizer/api/error_handling.py` ✅
+
+`task-171` n'a ouvert aucun sous-ticket de bug : elle a été close le 2026-08-13 sur 3 flows verts, sans réparer les autres (cf. « TDD coverage »).
+
+#### Outputs Phase 5
+
+- **iOS** : build TestFlight `1.0.0 (4)`, piste interne, validé sur device le 2026-09-04 (`task-164`). L'URL TestFlight vit dans App Store Connect ; elle n'est pas recopiée ici.
+- **Android** : pas d'APK distribué par lien. Les AAB `internal` partent sur la piste de test interne de Play (`eas build --profile internal --auto-submit`) ; dernier build `internal` terminé sur EAS : `versionCode` 17, le 2026-10-10, commit `f05bd7c`. Validation device terminée le 2026-10-10 (`task-165`).
+- **SHA-1 du keystore EAS** : `38:D5:13:F4:…:58:DD:FD` (valeur complète plus haut et dans `task-162`). Le SHA-1 Play App Signing porte le second client OAuth Android (§ 5).
+
+#### TDD coverage
+
+État réel au 2026-10-10, pas un état souhaité :
+
+- **7 flows Maestro écrits** dans `mobile/.maestro/`.
+- **3 verts** : `01_login`, `06_search` et `07_paywall`, sur émulateur Android API 33 et simulateur iOS, au run `workflow_dispatch` du 2026-08-12 (`flow_filter: suites/tasks_168_170`).
+- **4 jamais verts en CI** : `02_share_intake` neutralisé (le partage natif n'est pas pilotable par Maestro), `03`, `04` et `05` cassés par la redirection de l'ancien deep link de partage vers l'Inbox.
+- **CI Maestro en sommeil depuis le 2026-08-13** (`task-254`) : seuls les déclencheurs `push`/`pull_request` sont coupés, `workflow_dispatch` reste disponible.
+- **`task-172` ouverte et verrouillée** (`dispatchable: false`) : la suite n'est pas un check obligatoire des PR.
+
+La suite ne bloque donc aucune PR et n'est pas verte dans son ensemble. Plan de réactivation : Phase 7, « Maestro E2E CI — en sommeil depuis le 2026-08-13 ».
 
 ### Phase 6 — Tests IAP sandbox (jour 5-6) — **validée sur les deux stores le 2026-09-02**
 
@@ -2076,8 +2111,10 @@ Les comptes principaux sont largement provisionnés. Les blocages restants sont 
   `internal` (`versionCode` 4 puis 5), keystore géré par EAS, API dev ; le 4
   portait encore le placeholder de clé RevenueCat. Suivis du 6 (validation de
   `task-165`), puis du 8, installé au 2026-09-04 ; la soumission Play du 9 a
-  échoué ce jour-là. Binaire actuel de la piste interne **à confirmer**. Aucune
-  build de profil `development` n'a été consommée
+  échoué ce jour-là. Builds `internal` suivants jusqu'au `versionCode` 17
+  (2026-10-10, `f05bd7c`) ; le binaire installé depuis la piste interne a validé
+  l'AC #5 de `task-165` le 2026-10-10, son `versionCode` exact n'est pas relevé.
+  Aucune build de profil `development` n'a été consommée
 - [x] Variables EAS development/preview/production : les trois environnements sont
   peuplés, et `EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY` y porte la vraie clé `goog_`
   depuis le **2026-09-01** (`task-238`). Elle y valait le placeholder jusque-là,
