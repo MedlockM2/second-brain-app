@@ -3,9 +3,10 @@ id: TASK-464
 title: >-
   Diffuser en SSE reprenable les réponses du chat par une Lambda dédiée derrière
   une API Gateway REST en mode STREAM
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 17:59'
+updated_date: '2026-10-10 22:28'
 labels:
   - backend
   - infrastructure
@@ -28,6 +29,14 @@ references:
   - >-
     https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode-lambda.html
   - 'https://github.com/awslabs/aws-lambda-web-adapter'
+modified_files:
+  - media_summarizer/api/chat_stream_app.py
+  - infrastructure/terraform/modules/platform/chat_stream.tf
+  - infrastructure/docker/lambda-chat-stream.Dockerfile
+  - .github/workflows/deploy-lambda.yml
+  - infrastructure/terraform/shared/ecr.tf
+  - docs/CANONICAL_MEDIA_API_CONTRACT.md
+  - infrastructure/observability/runbooks/pipeline-alerts.md
 priority: medium
 type: feature
 ordinal: 71000
@@ -74,10 +83,27 @@ Rien n'est déployé : pas de compatibilité. Pas de tests automatisés ni d'app
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Une API Gateway REST régionale dédiée au flux, avec une intégration Lambda en mode STREAM, un étage avec journaux d'accès et limites de trafic, est déclarée en Terraform, et aucune Function URL n'est créée ; terraform validate passe
-- [ ] #2 La Lambda de diffusion est déclarée hors de local.workers, avec son log group, sa concurrence réservée, des alarmes d'erreurs et d'étranglements de la Lambda et de 5xx et latence de l'étage, et des permissions limitées à la lecture de la table chat
-- [ ] #3 Un Dockerfile neuf construit l'image uvicorn plus Lambda Web Adapter avec résolution de dépendances figée, et deploy-lambda.yml la construit et la déploie par digest en dev et dans promote-prod sans qu'elle entre dans la boucle des workers
-- [ ] #4 L'application de diffusion est distincte de api/main.py, vérifie le JWT avec la même fonction que la façade et l'appartenance de la conversation, rend 204 sans génération active et refuse une identité de génération périmée
-- [ ] #5 La route rejoue les fragments après le curseur puis suit les nouveaux, chaque événement portant son numéro de séquence, et émet un événement terminal portant l'état final persisté avant de fermer ; elle n'appelle aucun LLM
-- [ ] #6 L'URL d'invocation de l'étage est une sortie Terraform, et le contrat du flux est décrit dans docs/CANONICAL_MEDIA_API_CONTRACT.md ; ruff check et mypy passent
+- [x] #1 Une API Gateway REST régionale dédiée au flux, avec une intégration Lambda en mode STREAM, un étage avec journaux d'accès et limites de trafic, est déclarée en Terraform, et aucune Function URL n'est créée ; terraform validate passe
+- [x] #2 La Lambda de diffusion est déclarée hors de local.workers, avec son log group, sa concurrence réservée, des alarmes d'erreurs et d'étranglements de la Lambda et de 5xx et latence de l'étage, et des permissions limitées à la lecture de la table chat
+- [x] #3 Un Dockerfile neuf construit l'image uvicorn plus Lambda Web Adapter avec résolution de dépendances figée, et deploy-lambda.yml la construit et la déploie par digest en dev et dans promote-prod sans qu'elle entre dans la boucle des workers
+- [x] #4 L'application de diffusion est distincte de api/main.py, vérifie le JWT avec la même fonction que la façade et l'appartenance de la conversation, rend 204 sans génération active et refuse une identité de génération périmée
+- [x] #5 La route rejoue les fragments après le curseur puis suit les nouveaux, chaque événement portant son numéro de séquence, et émet un événement terminal portant l'état final persisté avant de fermer ; elle n'appelle aucun LLM
+- [x] #6 L'URL d'invocation de l'étage est une sortie Terraform, et le contrat du flux est décrit dans docs/CANONICAL_MEDIA_API_CONTRACT.md ; ruff check et mypy passent
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Diffusion SSE reprenable du chat.
+
+- `media_summarizer/api/chat_stream_app.py` : app FastAPI minimale, distincte de `api/main.py`, avec `/health` pour la readiness du LWA et une route `GET /chat/conversations/{id}/stream?turn_id&attempt_id&after_seq`. Elle vérifie le JWT par `get_current_user` (la fonction de la façade) et l'appartenance via la clé du compte (404). Elle répond 204 sans génération active et `409 generation_stale` (avec l'identité vivante) quand l'identité fournie est périmée. Sinon elle émet `generation`, rejoue les fragments après le curseur puis suit les nouveaux toutes les 250 ms (`event: fragment`, `id` = séquence), avec un keepalive toutes les 15 s. Elle émet `end` avec l'état relu persisté (statut, cause, code, texte final) après avoir vidé les derniers fragments, `replaced` si une nouvelle tentative remplace celle-ci, `reconnect` à 840 s. Aucun appel LLM. Vérifié localement sous uvicorn : `/health` 200, flux sans jeton 401.
+- `chat_stream.tf` : Lambda `media-summarizer-chat-stream-<env>` hors de `local.workers`, avec log group, concurrence réservée de 20 (budget de connexions ; les deux comptes ont 1 000), timeout 900 s et IAM en lecture seule (table chat en GetItem/Query, ligne utilisateur pour le JWT, secret runtime). API Gateway REST **régionale** dont l'intégration Lambda passe en `responseTransferMode: STREAM` par son corps OpenAPI (URI `2021-11-15/…/response-streaming-invocations`, 900 000 ms) : le provider AWS épinglé (5.100.0) n'a pas l'attribut, le choix est expliqué en tête de fichier. S'y ajoutent l'étage `v1` avec journaux d'accès (rôle CloudWatch de compte `aws_api_gateway_account`) et limites de trafic, `aws_lambda_permission` et des alarmes erreurs, étranglements, 5xx et latence d'ouverture p90. Aucune Function URL. Sortie `chat_stream_url`. `terraform validate` passe en dev et en prod.
+- `infrastructure/docker/lambda-chat-stream.Dockerfile` : base Lambda Python 3.11 arm64, Lambda Web Adapter épinglé à 1.1.0 (sorti le 18 septembre), `uv export --frozen`, entrée uvicorn. `deploy-lambda.yml` ajoute le filtre `chat_stream`, le job `deploy-chat-stream` (déploiement par digest, nom hors du motif `media-summarizer-worker-*`) et la promotion `chat-stream-<tag>` dans `promote-prod`. `shared/ecr.tf` ajoute une règle de rétention `chat-stream-`.
+- Docs : contrat du flux (`CANONICAL_MEDIA_API_CONTRACT.md`, section « Chat stream ») et runbook (section « Chat stream »).
+
+Non vérifié ici : la construction de l'image (Docker absent de la machine) et le comportement réel derrière API Gateway.
+
+Notes à l'owner :
+- Ordre de mise en service : pousser sur main d'abord pour que `chat-stream-latest` existe dans le registre, puis lancer `terraform apply` (la Lambda est créée sur ce tag). Le premier job de déploiement échouera tant que la fonction n'existe pas.
+- Sur dev : ouvrir un flux par `chat_stream_url` avec un JWT valide, vérifier le 204 sans génération et le rejeu depuis un curseur, puis consulter les journaux d'accès de l'étage.
+<!-- SECTION:FINAL_SUMMARY:END -->
