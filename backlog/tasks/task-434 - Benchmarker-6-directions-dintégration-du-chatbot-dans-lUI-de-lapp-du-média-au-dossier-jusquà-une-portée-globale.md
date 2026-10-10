@@ -3,9 +3,10 @@ id: TASK-434
 title: >-
   Benchmarker 6 directions d'intégration du chatbot dans l'UI de l'app, du média
   au dossier jusqu'à une portée globale
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-07 10:07'
+updated_date: '2026-10-10 18:02'
 labels:
   - benchmark
   - mobile

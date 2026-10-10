@@ -1,14 +1,12 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: ok   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : six directions d'intégration du chatbot dans l'UI de l'app
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale :
-accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les
-consignes précises de correction à intégrer au prochain passage)_
+**Decision**: direction F composeur persistant au niveau d'un media et au niveau d'un dossier mais pas au niveau de la biliothèque. Seulement visible dans l'onglet Lecture d'un media ou dans l'onglet Sources d'un dossier.
 **Validated at**: _(date ISO à remplir par l'owner)_
 
 ---

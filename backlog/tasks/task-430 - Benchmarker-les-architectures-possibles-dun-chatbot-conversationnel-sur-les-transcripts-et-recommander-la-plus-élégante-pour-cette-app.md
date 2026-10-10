@@ -3,9 +3,10 @@ id: TASK-430
 title: >-
   Benchmarker les architectures possibles d'un chatbot conversationnel sur les
   transcripts, et recommander la plus élégante pour cette app
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06 14:42'
+updated_date: '2026-10-10 18:02'
 labels:
   - benchmark
   - scoping

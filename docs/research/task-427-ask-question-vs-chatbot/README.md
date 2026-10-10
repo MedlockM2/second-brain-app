@@ -1,13 +1,13 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: abandoned   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : question ponctuelle sous forme d'artefact, ou vrai chatbot conversationnel sur les transcripts
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: Abandonné. Remplacé par le chatbot conversationnel retenu par le benchmark task-430 (`docs/research/task-430-chatbot-architecture/README.md`) et découpé en task-457 à task-469 par task-431. task-427 et task-428 sont supprimées du backlog.
+**Validated at**: 2026-10-10
 
 ---
 

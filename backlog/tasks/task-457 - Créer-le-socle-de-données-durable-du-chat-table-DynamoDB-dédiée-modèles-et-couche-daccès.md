@@ -3,7 +3,7 @@ id: TASK-457
 title: >-
   Créer le socle de données durable du chat : table DynamoDB dédiée, modèles et
   couche d'accès
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-10 17:56'
 updated_date: '2026-10-10 20:55'
