@@ -16,6 +16,7 @@ from media_summarizer.api.endpoints import (
     auth,
     auth_social,
     bug_reports,
+    chat,
     digest,
     engagements,
     entitlements,
@@ -160,6 +161,7 @@ app.include_router(feedback.router, prefix="/api", tags=["feedback"])
 app.include_router(revenucat_webhook.router, prefix="/api", tags=["webhooks"])
 app.include_router(apify_webhook.router, prefix="/api", tags=["webhooks"])
 app.include_router(bug_reports.router, prefix="/api/bug-reports", tags=["bug-reports"])
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 
 # --- Startup guard: the routes above must really be mounted ---------------
 #

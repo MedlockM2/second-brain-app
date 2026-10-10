@@ -1,0 +1,343 @@
+"""Chat conversations under ``/api/chat`` (task-461).
+
+Open, list, read and delete the conversations of a media or a folder. Sending a
+turn and stopping it are task-462; the SSE stream has its own door (task-464).
+Owner decision and rules: ``core/services/chat_service.py``; data model:
+``docs/CHAT_DATA_MODEL.md``; contract: ``docs/CANONICAL_MEDIA_API_CONTRACT.md``,
+section "Chat conversations".
+
+Every route needs the app's JWT, and every read is keyed on the caller's account,
+so a conversation of another account answers 404. Refusals carry a stable
+``error_code`` and their figures, never a sentence: the app words them in the
+reader's language (the rule of ``quota_enforcer.QuotaCheckResult``).
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
+
+from media_summarizer.api.dependencies.auth import get_current_user
+from media_summarizer.core.models.auth import AuthUser
+from media_summarizer.core.models.chat import (
+    ChatAssistantMessage,
+    ChatConversation,
+    ChatConversationSummary,
+    ChatScope,
+)
+from media_summarizer.core.services import chat_service
+from media_summarizer.core.services.artifact_service import (
+    ArtifactScopeEmptyError,
+    ArtifactScopeTooLargeError,
+)
+from media_summarizer.utils.chat_db import ChatMessage
+from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+DEFAULT_LIST_LIMIT = 20
+MAX_LIST_LIMIT = 50
+
+
+class ConversationCreateRequest(BaseModel):
+    scope: str = Field(..., description="'media' or 'folder'")
+    scope_id: str = Field(..., description="Media item id, or folder id")
+
+
+class ChatSourceResponse(BaseModel):
+    ref: str
+    media_item_id: str
+    title: Optional[str] = None
+    language: Optional[str] = None
+    excluded: bool = False
+    excluded_reason: Optional[str] = None
+
+
+class ConversationSummaryResponse(BaseModel):
+    """One history row."""
+
+    conversation_id: str
+    scope: str
+    scope_id: str
+    title: Optional[str] = None
+    turn_count: int
+    last_turn_status: Optional[str] = None
+    generating: bool
+    created_at: str
+    last_activity_at: str
+
+
+class ConversationListResponse(BaseModel):
+    scope: str
+    scope_id: str
+    conversations: List[ConversationSummaryResponse]
+    next_cursor: Optional[str] = None
+
+
+class ChatMessageResponse(BaseModel):
+    turn_id: str
+    turn_index: int
+    role: str
+    text: Optional[str] = None
+    created_at: str
+    #: Assistant messages only: the state of the turn.
+    status: Optional[str] = None
+    interruption_cause: Optional[str] = None
+    error_code: Optional[str] = None
+    attempt_id: Optional[str] = None
+    attempt_count: Optional[int] = None
+    completed_at: Optional[str] = None
+
+
+class ActiveGenerationResponse(BaseModel):
+    """What the app resumes the stream from: the generation and its cursor."""
+
+    turn_id: str
+    turn_index: int
+    attempt_id: str
+    #: Highest fragment sequence persisted for this attempt; ``None`` before the first.
+    last_seq: Optional[int] = None
+
+
+class ConversationDetailResponse(ConversationSummaryResponse):
+    source_snapshot_version: str
+    sources: List[ChatSourceResponse]
+    messages: List[ChatMessageResponse] = Field(default_factory=list)
+    active_generation: Optional[ActiveGenerationResponse] = None
+
+
+def _parse_scope(value: str) -> ChatScope:
+    try:
+        return ChatScope((value or "").strip().lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error_code": "invalid_scope"},
+        )
+
+
+def _summary_from_conversation(conversation: ChatConversation) -> ConversationSummaryResponse:
+    return ConversationSummaryResponse(
+        conversation_id=conversation.conversation_id,
+        scope=conversation.scope.value,
+        scope_id=conversation.scope_id,
+        title=conversation.title,
+        turn_count=conversation.turn_count,
+        last_turn_status=conversation.last_turn_status.value if conversation.last_turn_status else None,
+        generating=conversation.active_turn_id is not None,
+        created_at=conversation.created_at.isoformat(),
+        last_activity_at=conversation.last_activity_at.isoformat(),
+    )
+
+
+def _summary_from_index(summary: ChatConversationSummary) -> ConversationSummaryResponse:
+    return ConversationSummaryResponse(
+        conversation_id=summary.conversation_id,
+        scope=summary.scope.value,
+        scope_id=summary.scope_id,
+        title=summary.title,
+        turn_count=summary.turn_count,
+        last_turn_status=summary.last_turn_status.value if summary.last_turn_status else None,
+        generating=summary.active_turn_id is not None,
+        created_at=summary.created_at.isoformat(),
+        last_activity_at=summary.last_activity_at.isoformat(),
+    )
+
+
+def _message(message: ChatMessage) -> ChatMessageResponse:
+    response = ChatMessageResponse(
+        turn_id=message.turn_id,
+        turn_index=message.turn_index,
+        role=message.role.value,
+        text=message.text,
+        created_at=message.created_at.isoformat(),
+    )
+    if isinstance(message, ChatAssistantMessage):
+        response.status = message.status.value
+        response.interruption_cause = (
+            message.interruption_cause.value if message.interruption_cause else None
+        )
+        response.error_code = message.error_code
+        response.attempt_id = message.attempt_id
+        response.attempt_count = message.attempt_count
+        response.completed_at = message.completed_at.isoformat() if message.completed_at else None
+    return response
+
+
+def _detail(
+    conversation: ChatConversation,
+    messages: List[ChatMessage],
+    active: Optional[chat_service.ActiveGeneration],
+) -> ConversationDetailResponse:
+    return ConversationDetailResponse(
+        **_summary_from_conversation(conversation).model_dump(),
+        source_snapshot_version=conversation.source_snapshot.version,
+        sources=[
+            ChatSourceResponse(
+                ref=source.ref,
+                media_item_id=source.media_item_id,
+                title=source.title,
+                language=source.language,
+                excluded=source.excluded,
+                excluded_reason=source.excluded_reason,
+            )
+            for source in conversation.source_snapshot.sources
+        ],
+        messages=[_message(message) for message in messages],
+        active_generation=(
+            ActiveGenerationResponse(
+                turn_id=active.turn_id,
+                turn_index=active.turn_index,
+                attempt_id=active.attempt_id,
+                last_seq=active.last_seq,
+            )
+            if active is not None
+            else None
+        ),
+    )
+
+
+def _refusal(exc: chat_service.ChatServiceError) -> HTTPException:
+    status_code = {
+        chat_service.ChatScopeNotFoundError: status.HTTP_404_NOT_FOUND,
+        chat_service.ChatConversationNotFoundError: status.HTTP_404_NOT_FOUND,
+        chat_service.ChatScopePreparingError: status.HTTP_409_CONFLICT,
+        chat_service.InvalidCursorError: status.HTTP_400_BAD_REQUEST,
+    }.get(type(exc), status.HTTP_400_BAD_REQUEST)
+    return HTTPException(
+        status_code=status_code,
+        detail={"error_code": exc.error_code, **exc.params},
+    )
+
+
+@router.post(
+    "/conversations",
+    response_model=ConversationDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def open_conversation(
+    payload: ConversationCreateRequest,
+    current_user: AuthUser = Depends(get_current_user),
+):
+    """Open a conversation over a media or a folder, its sources frozen now."""
+    scope = _parse_scope(payload.scope)
+    scope_id = (payload.scope_id or "").strip()
+    token = bind_log_context(user_id=current_user.id, scope=scope.value, scope_id=scope_id)
+    try:
+        conversation = await chat_service.open_conversation(
+            user_id=current_user.id,
+            scope=scope,
+            scope_id=scope_id,
+            reading_language=current_user.reading_language,
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "chat.conversation.opened",
+            "Chat conversation opened",
+            conversation_id=conversation.conversation_id,
+            source_count=len(conversation.source_snapshot.sources),
+        )
+        return _detail(conversation, [], None)
+    except chat_service.ChatServiceError as exc:
+        raise _refusal(exc)
+    except ArtifactScopeEmptyError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error_code": "scope_empty"},
+        )
+    except ArtifactScopeTooLargeError as exc:
+        # The same four numbers as the artifact refusal, which the app already
+        # renders (task-272 AC#9).
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": "scope_too_large",
+                "source_count": exc.source_count,
+                "max_sources": exc.max_sources,
+                "estimated_tokens": exc.estimated_tokens,
+                "max_tokens": exc.max_tokens,
+            },
+        )
+    finally:
+        reset_log_context(token)
+
+
+@router.get("/conversations", response_model=ConversationListResponse)
+async def list_conversations(
+    scope: str = Query(..., description="'media' or 'folder'"),
+    scope_id: str = Query(..., description="Media item id, or folder id"),
+    limit: int = Query(DEFAULT_LIST_LIMIT, ge=1, le=MAX_LIST_LIMIT),
+    cursor: Optional[str] = Query(None),
+    current_user: AuthUser = Depends(get_current_user),
+):
+    """The conversations of one media or folder, latest activity first."""
+    resolved_scope = _parse_scope(scope)
+    try:
+        summaries, next_cursor = await chat_service.list_conversations(
+            user_id=current_user.id,
+            scope=resolved_scope,
+            scope_id=scope_id.strip(),
+            limit=limit,
+            cursor=cursor,
+        )
+    except chat_service.ChatServiceError as exc:
+        raise _refusal(exc)
+    return ConversationListResponse(
+        scope=resolved_scope.value,
+        scope_id=scope_id.strip(),
+        conversations=[_summary_from_index(summary) for summary in summaries],
+        next_cursor=next_cursor,
+    )
+
+
+@router.get("/conversations/{conversation_id}", response_model=ConversationDetailResponse)
+async def get_conversation(
+    conversation_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+):
+    """A conversation with its messages in order and the generation to resume.
+
+    What the app reads when it comes back to the foreground, before resuming the
+    stream from ``active_generation.last_seq`` or showing the final answer
+    (Decision point 6).
+    """
+    try:
+        view = await chat_service.get_conversation_view(
+            user_id=current_user.id, conversation_id=conversation_id
+        )
+    except chat_service.ChatServiceError as exc:
+        raise _refusal(exc)
+    return _detail(view.conversation, view.messages, view.active_generation)
+
+
+@router.delete(
+    "/conversations/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+async def delete_conversation(
+    conversation_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+):
+    """Delete a conversation and every item under it: messages, attempts, fragments, intents."""
+    try:
+        deleted = await chat_service.delete_conversation(
+            user_id=current_user.id, conversation_id=conversation_id
+        )
+    except chat_service.ChatServiceError as exc:
+        raise _refusal(exc)
+    log_event(
+        logger,
+        logging.INFO,
+        "chat.conversation.deleted",
+        "Chat conversation deleted",
+        user_id=current_user.id,
+        conversation_id=conversation_id,
+        item_count=deleted,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

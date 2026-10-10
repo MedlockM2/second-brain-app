@@ -81,6 +81,7 @@ Operational behavior now implemented in runtime:
 6. `GET /api/artifacts/{artifact_id}/content`
 7. `DELETE /api/media/{media_item_id}`
 8. `PATCH /api/media/{media_id}`
+9. `POST /api/chat/conversations`, `GET /api/chat/conversations?scope=&scope_id=`, `GET /api/chat/conversations/{conversation_id}`, `DELETE /api/chat/conversations/{conversation_id}` (see "Chat conversations")
 
 Authentication:
 - all endpoints require authenticated user context
@@ -665,6 +666,92 @@ Semantics (task-264 for the folder half, task-346 for the title half):
 - a rename also refreshes the `title` denormalized onto that media's search chunks (selected by the `media_item_id` filter), so results stop matching and displaying the old name. That refresh is best-effort: a search-index failure is logged as `user_media.rename_search_failed` and does not fail the request — the library row is the source of truth
 - a rename touches the user-facing title only: `media_key`, `saved_at`, dedup identity and artifacts are untouched
 - the path parameter is spelled `media_id` on this route; it carries the same durable library id as `{media_item_id}` elsewhere
+
+## Chat conversations
+
+Router `media_summarizer/api/endpoints/chat.py`, mounted under `/api/chat` (never `/api/v1/`), service `media_summarizer/core/services/chat_service.py`, storage `docs/CHAT_DATA_MODEL.md` (task-461). Owner decision: `docs/research/task-430-chatbot-architecture/README.md`, Owner Validation, points 1, 5 and 7. Sending a turn and stopping it, and the SSE stream, are separate routes (task-462, task-464).
+
+Every route requires the app JWT (`get_current_user`). Every read and write is keyed on the caller's account, so a conversation of another account answers `404 conversation_not_found`, exactly like one that does not exist. Refusals carry a stable `error_code` and their figures in `detail`, **never a sentence**: the app words them in the reader's language.
+
+### POST /api/chat/conversations
+
+Opens a conversation over one media or one folder and freezes its sources.
+
+Request:
+```json
+{ "scope": "folder", "scope_id": "fld_01JQ8X8J5S3H3CXX8V70M9M3K7" }
+```
+
+Response `201` — the detail shape below, with `messages: []` and `active_generation: null`.
+
+Semantics:
+- the scope is resolved like an artifact's: `resolve_scope_sources` then `enforce_scope_ceilings`. A folder covers the folder **and its descendants**, as the Sources tab does; the corpus ceilings are the artifacts' (`MAX_FOLDER_SOURCES`, `MAX_FOLDER_CORPUS_TOKENS`)
+- the **source snapshot** is frozen here and never rewritten: readable sources first, in resolution order, then the excluded ones. Each source carries its citable `ref` (`[S1]`…), the tag the corpus gives it; `source_snapshot_version` fingerprints the ordered `(media_item_id, transcript_s3_key)` set. If the folder changes later, the conversation keeps its snapshot; a new conversation reads the new state
+
+| Status | `detail.error_code` | Figures | When |
+| --- | --- | --- | --- |
+| 400 | `invalid_scope` | — | `scope` is neither `media` nor `folder` |
+| 404 | `scope_not_found` | `scope` | the media or folder is not in this account |
+| 409 | `scope_preparing` | `pending_count` | a source is still being transcribed: a frozen snapshot could never include it, so the app asks to come back later |
+| 422 | `scope_empty` | — | no source with a usable transcript |
+| 422 | `scope_too_large` | `source_count`, `max_sources`, `estimated_tokens`, `max_tokens` | over a corpus ceiling (same figures as the artifact refusal) |
+
+### GET /api/chat/conversations?scope=&scope_id=&limit=&cursor=
+
+One page of the history of a media or folder, **latest activity first**. `limit` 1–50, default 20. `cursor` is the opaque `next_cursor` of the previous page; a malformed cursor or one from another scope is `400 invalid_cursor`. Unknown or foreign scope: `404 scope_not_found`.
+
+Response `200`:
+```json
+{
+  "scope": "media",
+  "scope_id": "mi_9f2c1d0b7a4e5f6081c2d3e4f5a6b7c8",
+  "conversations": [
+    {
+      "conversation_id": "cv_5b0c…",
+      "scope": "media",
+      "scope_id": "mi_9f2c1d0b7a4e5f6081c2d3e4f5a6b7c8",
+      "title": "What does the author mean by a commonplace book?",
+      "turn_count": 3,
+      "last_turn_status": "completed",
+      "generating": false,
+      "created_at": "2026-10-11T09:12:03.120000+00:00",
+      "last_activity_at": "2026-10-11T09:20:41.502000+00:00"
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+`title` is the first question cut to 120 characters, `null` until a first turn. `last_turn_status` is one of `accepted`, `generating`, `completed`, `failed`, `interrupted`, or `null`. `generating` is `true` while a turn is in flight.
+
+### GET /api/chat/conversations/{conversation_id}
+
+The conversation, its messages in order, and the generation to resume. What the app reads when it comes back to the foreground before resuming the stream or showing the final answer.
+
+Response `200` — the summary fields above, plus:
+```json
+{
+  "source_snapshot_version": "src_v1_3f1a…",
+  "sources": [
+    { "ref": "[S1]", "media_item_id": "mi_…", "title": "…", "language": "en", "excluded": false, "excluded_reason": null }
+  ],
+  "messages": [
+    { "turn_id": "tn_…", "turn_index": 1, "role": "user", "text": "…", "created_at": "…" },
+    { "turn_id": "tn_…", "turn_index": 1, "role": "assistant", "text": "…", "created_at": "…",
+      "status": "interrupted", "interruption_cause": "cancelled", "error_code": null,
+      "attempt_id": "at_…", "attempt_count": 1, "completed_at": "…" }
+  ],
+  "active_generation": { "turn_id": "tn_…", "turn_index": 2, "attempt_id": "at_…", "last_seq": 14 }
+}
+```
+
+- `messages`: each turn's question then its answer, turns in order. Only assistant messages carry `status`, `interruption_cause` (`cancelled`, `output_limit`, `provider_error`, with `interrupted` only), `error_code`, `attempt_id`, `attempt_count`, `completed_at`. An assistant message with no `text` is a turn still running or one that failed before any text
+- `active_generation`: the generation in flight — `(turn_id, attempt_id)` is the generation identity the stream is resumed with, `last_seq` the highest fragment sequence persisted for that attempt (`null` before the first). `null` when no turn is running
+- unknown or foreign id: `404 conversation_not_found`
+
+### DELETE /api/chat/conversations/{conversation_id}
+
+Deletes the conversation and every item under it — messages, attempts, fragments, dispatch intents. `204` on success; unknown or foreign id: `404 conversation_not_found`. Conversations have no TTL: they live until deleted here or by account erasure (`docs/DATA_RETENTION.md`).
 
 ## File upload entrypoints (non-canonical, same organization contract)
 
