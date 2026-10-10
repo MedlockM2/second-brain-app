@@ -6,6 +6,8 @@ transcription provider to process, plus the three flat conversions of the model
 (a bought caption set counts 1, five document pages count 1, five sources of a
 folder generation count 1). Everything that is not transcription — articles,
 web pages, TikToks, single-item AI generations — is unlimited and debits nothing.
+A chat turn is the exception to that last one: it debits at the folder rate even
+on a single media, and it is the only debit that can be refunded (task-462).
 An Instagram photo post left that free list in task-384: its slides are read by
 the paid document parser, so they debit at the document rate through
 :func:`record_document_parse`, exactly like the pages of an upload.
@@ -1059,8 +1061,15 @@ async def _debit(
     document_pages: int = 0,
     generations: int = 0,
     items: int = 0,
+    period_key: Optional[str] = None,
+    unit_cost: Optional[float] = None,
 ) -> int:
     """Charge `minutes` once for `idempotency_token` and feed the burst counters.
+
+    `period_key` and `unit_cost`, when given, are the period row and the price of
+    a minute the caller already resolved -- a caller that must remember where and
+    at what cost a debit landed (a chat turn, which may be refunded) resolves them
+    once and passes them, so what it records is what was written.
 
     Best-effort by design: the provider has already been (or is about to be)
     billed, so a counter write failing must never fail the work the user is
@@ -1074,10 +1083,11 @@ async def _debit(
     try:
         applied = True
         if minutes > 0:
-            unit_cost = await cost_eur_per_minute()
+            if unit_cost is None:
+                unit_cost = await cost_eur_per_minute()
             applied = await quota_usage_db.increment_monthly_usage(
                 user_id,
-                await resolve_period_key(user_id),
+                period_key or await resolve_period_key(user_id),
                 minutes=minutes,
                 cost_eur=round(minutes * unit_cost, 4),
                 idempotency_token=idempotency_token,
@@ -1214,6 +1224,146 @@ async def record_generation(
         kind=f"generation:{scope}",
         generations=1,
     )
+
+
+def chat_turn_token(turn_id: str) -> str:
+    """Idempotency token of a chat turn's debit: the logical turn, never an attempt.
+
+    A redelivery, a network resume or a replacement attempt of the same turn finds
+    the token already applied, so a turn is charged once whatever happens to its
+    generation (Decision point 8 of task-430).
+    """
+    return f"chat_turn:{turn_id}"
+
+
+def chat_turn_refund_token(turn_id: str) -> str:
+    """Idempotency token of the refund of a chat turn: credited at most once."""
+    return f"chat_turn:{turn_id}:refund"
+
+
+async def minutes_for_chat_turn(source_count: int) -> int:
+    """What one chat turn costs: the folder-generation rate, with no media exemption.
+
+    The exemption of a single-item generation rests on "its LLM cost is already
+    inside what the item cost to ingest". An ingestion paid one reading of the
+    transcript; a conversation of twenty turns pays twenty, so the premise does not
+    hold for the chat (task-430 README §9.1).
+    """
+    return await minutes_for_folder_sources(source_count)
+
+
+@dataclass(frozen=True)
+class ChatTurnDebit:
+    """What a chat turn's debit wrote, for the turn to keep and a refund to undo.
+
+    ``minutes`` is 0 when nothing was written -- the token was already applied (a
+    replayed request) or the write failed -- and then nothing may be refunded.
+    """
+
+    minutes: int
+    period_key: str
+    cost_eur: float
+
+
+async def record_chat_turn(
+    user_id: str,
+    *,
+    source_count: int,
+    turn_id: str,
+) -> ChatTurnDebit:
+    """Charge one accepted chat turn, once per logical turn.
+
+    Called after the turn is written, never before: a refusal or a failed write
+    must leave no debit. Best-effort like every debit -- a failed counter write is
+    logged and the turn goes on.
+    """
+    minutes = await minutes_for_chat_turn(source_count)
+    period_key = await resolve_period_key(user_id)
+    unit_cost = await cost_eur_per_minute()
+    applied = await _debit(
+        user_id,
+        minutes=minutes,
+        idempotency_token=chat_turn_token(turn_id),
+        kind="chat_turn",
+        generations=1,
+        period_key=period_key,
+        unit_cost=unit_cost,
+    )
+    return ChatTurnDebit(
+        minutes=applied,
+        period_key=period_key,
+        cost_eur=round(applied * unit_cost, 4),
+    )
+
+
+async def refund_chat_turn(
+    user_id: str,
+    *,
+    turn_id: str,
+    period_key: str,
+    minutes: int,
+    cost_eur: float,
+) -> int:
+    """Credit back the debit of a chat turn that produced no answer at all.
+
+    Owner decision of 2026-10-10 ("On rembourse"): a turn sealed ``failed`` with no
+    visible text gives its minutes back; a turn that produced text -- completed,
+    interrupted, partially failed -- does not. That rule is applied by the caller
+    (``chat_service.refund_unanswered_turn``); this is the write.
+
+    The credit lands on ``period_key``, the row the debit was written to, with the
+    minutes and cost the turn recorded -- not the current period, not today's price.
+    Applied once under :func:`chat_turn_refund_token`. The daily burst counters are
+    not credited back: they measure activity, and the turn did happen. Best-effort
+    like `_debit`: a failed write is logged, it does not fail the seal.
+
+    Returns the minutes credited (0 when there was nothing to credit, the refund was
+    already applied, or the write failed).
+    """
+    minutes = max(0, int(minutes))
+    if minutes <= 0:
+        return 0
+    token = chat_turn_refund_token(turn_id)
+    try:
+        applied = await quota_usage_db.increment_monthly_usage(
+            user_id,
+            period_key,
+            minutes=-minutes,
+            cost_eur=-abs(cost_eur),
+            idempotency_token=token,
+        )
+    except Exception as exc:
+        logger.error(
+            "quota.refund_failed",
+            extra={
+                "user_id": user_id,
+                "kind": "chat_turn",
+                "minutes": minutes,
+                "period_key": period_key,
+                "idempotency_token": token,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            },
+            exc_info=exc,
+        )
+        return 0
+    if not applied:
+        logger.info(
+            "quota.refund_already_applied",
+            extra={"user_id": user_id, "kind": "chat_turn", "idempotency_token": token},
+        )
+        return 0
+    logger.info(
+        "quota.refunded",
+        extra={
+            "user_id": user_id,
+            "kind": "chat_turn",
+            "minutes": minutes,
+            "period_key": period_key,
+            "idempotency_token": token,
+        },
+    )
+    return minutes
 
 
 async def record_submitted_item(user_id: str, *, idempotency_token: str) -> None:
@@ -1359,8 +1509,9 @@ async def settle_transcription_minutes(
 
     Overrun policy: the true value is stored even when it takes the user past
     their allowance — the counter is the truth, the display clamps it, and the
-    *next* import is refused naturally. Minutes are never refunded, so a delta of
-    zero or less is a no-op.
+    *next* import is refused naturally. Minutes of an import are never refunded,
+    so a delta of zero or less is a no-op. The one refund the product has is a
+    chat turn that produced no answer (:func:`refund_chat_turn`).
     """
     real_minutes = minutes_for_seconds(actual_duration_seconds)
     if real_minutes <= 0:

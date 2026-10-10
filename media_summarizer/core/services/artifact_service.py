@@ -82,6 +82,7 @@ from media_summarizer.core.models.media_artifact import (
 )
 from media_summarizer.core.models.processing_job import JobStatus
 from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
+from media_summarizer.core.services import llm_corpus
 from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.core.services.llm_corpus import estimate_tokens
 from media_summarizer.core.services.media_identity import is_account_scoped_media_key
@@ -1857,10 +1858,10 @@ def build_generation_message(
         # Same corpus prefix for the 5 types of one request, so OpenAI's prompt
         # cache is what shares the corpus between the 5 independent invocations —
         # no intermediate store and no coordination lock of ours (task-269 §2.6).
-        "prompt_cache_key": _prompt_cache_key(
-            scope=record.scope,
-            scope_id=effective_scope_id,
-            sources=resolution.sources,
+        "prompt_cache_key": llm_corpus.prompt_cache_key(
+            scope=record.scope.value,
+            content_scope_id=effective_scope_id,
+            transcript_s3_keys=[source.transcript_s3_key for source in resolution.sources],
         ),
         # No transcript byte travels through the queue: a key per source, plus the
         # author's description, which has no S3 object to point at. ~5 kB of keys
@@ -2095,26 +2096,6 @@ async def _collapsed_onto_existing(
         scope_id=existing.scope_id,
     )
     return existing, ArtifactGenerationOutcome.COLLAPSED
-
-
-def _prompt_cache_key(
-    *,
-    scope: ArtifactScope,
-    scope_id: str,
-    sources: List[ResolvedSource],
-) -> str:
-    # The model is part of the key: a provider cache never crosses models, and
-    # since GPT-5.6 the key also scopes cache accounting, so a model change starts
-    # a new key instead of sharing one with entries the old model wrote (task-439).
-    material = "|".join(
-        [
-            LLM_MODEL,
-            scope.value,
-            scope_id,
-            *[source.transcript_s3_key for source in sources],
-        ]
-    )
-    return _sha256_text(material)[:48]
 
 
 def enforce_scope_ceilings(resolution: ScopeResolution) -> None:

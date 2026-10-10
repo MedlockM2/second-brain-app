@@ -184,6 +184,20 @@ def dispatch_intent_sk(conversation_id: str, attempt_id: str) -> str:
     return f"{conversation_children_prefix(conversation_id)}OUT#{attempt_id}"
 
 
+#: Sort key of the account's "turn in flight" marker (task-462): one item per
+#: account, outside every ``CONV#`` range, written in the transaction that accepts
+#: a turn and removed once that turn is sealed. It is what makes "one turn in
+#: flight per account, all conversations together" a condition DynamoDB checks,
+#: rather than a query racing a concurrent submission.
+TURN_IN_FLIGHT_SK = "INFLIGHT"
+
+#: How long a marker holds the account if its turn is never sealed (a worker that
+#: died and a recovery that has not run yet). Past it, a new turn may take the
+#: marker over: a stuck turn must not lock an account out of the chat. Above the
+#: longest a Lambda generation can live (15 minutes).
+TURN_IN_FLIGHT_GUARD = timedelta(minutes=15)
+
+
 def scope_activity_prefix(scope: ChatScope, scope_id: str) -> str:
     return f"{scope.value}#{scope_id}#"
 
@@ -257,9 +271,19 @@ class ChatSource(ArtifactSource):
     ``core/services/llm_corpus.source_label``, in snapshot
     order. ``preparation`` stays unset: a conversation opens on readable sources
     only.
+
+    A readable line also keeps what the corpus header and the context budget
+    need without re-reading the library (task-462): ``byte_length`` is the
+    transcript-plus-description measure the corpus ceiling was checked on, and
+    ``published`` / ``captured`` are the dates the header shows. All three are
+    absent on an excluded line.
     """
 
-    ref: str
+    #: Set by :meth:`ChatSourceSnapshot.freeze`; a line is never stored without it.
+    ref: str = ""
+    byte_length: Optional[int] = None
+    published: Optional[str] = None
+    captured: Optional[str] = None
 
 
 class ChatSourceSnapshot(BaseModel):
@@ -284,7 +308,8 @@ class ChatSourceSnapshot(BaseModel):
     def freeze(cls, sources: Sequence[ArtifactSource], *, taken_at: Optional[datetime] = None) -> "ChatSourceSnapshot":
         """Number the sources in the given order and fingerprint the set."""
         lines = [
-            ChatSource(**source.model_dump(exclude={"preparation"}), ref=f"[S{index + 1}]") for index, source in enumerate(sources)
+            ChatSource(**source.model_dump(exclude={"preparation", "ref"}), ref=f"[S{index + 1}]")
+            for index, source in enumerate(sources)
         ]
         material = json.dumps(
             [[line.media_item_id, line.transcript_s3_key] for line in lines],
@@ -304,6 +329,16 @@ class ChatConversation(_ChatItem):
     #: The library row id for a media scope, the folder id for a folder scope —
     #: what the app navigates by, like an artifact's ``scope_id``.
     scope_id: str
+    #: What the artifacts key their prompt cache on: the ``media_key`` for a media
+    #: scope, the folder id for a folder (``artifact_service`` calls it the
+    #: content scope id). The chat's ``prompt_cache_key`` is built on the same
+    #: material, so a conversation reads the corpus prefix an artifact generation
+    #: already cached (README §11.3) without sharing any row.
+    content_scope_id: Optional[str] = None
+    #: The language answers are written in: the reader's language when the
+    #: conversation was opened, frozen with the snapshot so the instructions --
+    #: and the cached prefix -- do not move between turns.
+    language: Optional[str] = None
     #: The first question, cut to :data:`TITLE_MAX_CHARS`; set by the first turn.
     title: Optional[str] = None
     source_snapshot: ChatSourceSnapshot
@@ -398,6 +433,13 @@ class ChatAssistantMessage(_ChatItem):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     llm_usage: Optional[ArtifactLlmUsage] = None
+    #: The debit of this turn, written once it was applied (task-462): the period
+    #: row it landed on, the minutes and their cost. A refund reads them back so
+    #: it credits exactly what was charged, on the period it was charged to --
+    #: absent when no debit was applied, and then nothing is refunded.
+    quota_period_key: Optional[str] = None
+    quota_minutes_debited: Optional[int] = None
+    quota_cost_eur: Optional[float] = None
     created_at: datetime = Field(default_factory=_now_utc)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

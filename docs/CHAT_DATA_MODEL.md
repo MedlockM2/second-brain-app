@@ -46,6 +46,7 @@ opaque: `cv_…` (conversation), `tn_…` (turn), `at_…` (attempt).
 | `attempt` | `CONV#<cid>#ATT#<turn:04d>#<attempt_id>` | one generation run of a turn: lease, stop request |
 | `fragment` | `CONV#<cid>#FRAG#<attempt_id>#<seq:08d>` | one flush of streamed text, with TTL |
 | `dispatch_intent` | `CONV#<cid>#OUT#<attempt_id>` | what the outbox relay sends to the chat queue |
+| `turn_in_flight` | `INFLIGHT` | the account's one turn in flight (task-462), outside every conversation range |
 
 Consequences of the key layout:
 
@@ -65,6 +66,8 @@ Consequences of the key layout:
 |---|---|
 | `scope` | `media` or `folder` — the `ArtifactScope` vocabulary |
 | `scope_id` | the library row id (media) or the folder id, as for artifacts |
+| `content_scope_id` | the `media_key` (media) or the folder id: what the artifacts key their `prompt_cache_key` on, so a conversation reuses their cached corpus prefix (task-462) |
+| `language` | the language answers are written in, the reader's at opening, frozen so instructions and cached prefix do not move between turns |
 | `title` | the first question, cut to 120 characters; set by turn 1 with `if_not_exists` |
 | `source_snapshot` | `{version, taken_at, sources[]}`, see §2.2 |
 | `turn_count` | number of accepted turns |
@@ -80,11 +83,16 @@ mid-conversation would answer on text earlier answers never read and break the
 prompt-cache prefix. If the folder's contents change, a **new** conversation reads
 the new state. `create_conversation` is the only write that sets it.
 
-- `sources[]` keeps the order it was given, which is the corpus order. Each line has
+- `sources[]` keeps the order it was given: readable sources first, in resolution
+  order, then the excluded ones, so the readable sources' refs are exactly the
+  `[Sk]` tags `llm_corpus.build_corpus_block` gives them. Each line has
   the `ArtifactSource` fields (`media_item_id`, `title`, `transcript_s3_key` — the
   original transcript the model reads, `language`, `excluded`, `excluded_reason`)
   plus `ref`, the citable tag `[S1]` … `[Sn]`, identical to
-  `corpus.source_label` of the artifact prompts.
+  `llm_corpus.source_label` of the artifact prompts, and on a readable line
+  `byte_length` (transcript plus description, the measure the corpus ceiling was
+  checked on, which the context budget reads), `published` and `captured` (the
+  corpus header's dates).
 - `version` = `src_v1_<sha256>` over the ordered `(media_item_id,
   transcript_s3_key)` pairs: two conversations with the same version read the same
   text in the same order.
@@ -103,7 +111,8 @@ Exists from the moment the turn is accepted, with no `text`.
 | `attempt_count` | 1, +1 per replacement |
 | `text` | the final answer, set by the seal. A 32,000-token answer is ~130 kB, under the 400 kB item limit |
 | `error_code`, `error_message` | on `failed` or a `provider_error` interruption |
-| `llm_usage` | `ArtifactLlmUsage` (model, tokens, cache, cost) |
+| `llm_usage` | `ArtifactLlmUsage` (model, tokens, cache, cost; `usage_estimated` when a stream ended without its usage) |
+| `quota_period_key`, `quota_minutes_debited`, `quota_cost_eur` | the debit applied for the turn, written after it (task-462); what a refund credits back, on that period. Absent when no debit was applied |
 | `created_at`, `started_at`, `completed_at` | |
 
 ### 2.4 Attempt
@@ -147,7 +156,7 @@ All in `utils/chat_db.py`. A write refused because the state moved on returns
 
 Put, `attribute_not_exists(sk)`. Writes the snapshot — the only write that does.
 
-### 3.2 `accept_turn` — transaction, 5 items
+### 3.2 `accept_turn` — transaction, 6 items
 
 | Item | Write | Condition |
 |---|---|---|
@@ -156,9 +165,11 @@ Put, `attribute_not_exists(sk)`. Writes the snapshot — the only write that doe
 | assistant message | put, `accepted`, `attempt_id` | not exists |
 | attempt | put, `queued` | not exists |
 | dispatch intent | put, `pending` | not exists |
+| in-flight marker `INFLIGHT` | put: conversation, turn, `in_flight_until` = now + 15 min | not exists, **or** `in_flight_until < now` |
 
 Refusal raises `TurnNotAcceptedError` with `conversation_not_found`,
-`turn_in_progress` or `turn_count_changed` (read off the conversation's old image,
+`turn_in_progress`, `account_turn_in_flight` (the marker is held by a live turn of
+another conversation) or `turn_count_changed` (read off the conversation's old image,
 `ReturnValuesOnConditionCheckFailure`). `idempotency_token` becomes the
 `ClientRequestToken`: the same request repeated within ten minutes is not written
 twice. Nothing is sent to SQS here (Decision point 4: the outbox does it).
@@ -213,7 +224,10 @@ instead of landing on a newer one. Closing the stream does not call it.
 | conversation | `last_turn_status`, active generation removed | active attempt is this one |
 
 `interrupted` requires a cause and only `interrupted` has one (checked before
-writing). **The terminal state is committed before anything announces the end**:
+writing). After the commit, and outside the transaction, the account's in-flight
+marker is deleted if it names this turn (`release_turn_in_flight`): a marker
+already taken over by a newer turn past its guard must not make the seal fail, and
+a release that fails costs at most the 15-minute guard. **The terminal state is committed before anything announces the end**:
 the stream's terminal event and any notification come after this call and read
 what it wrote (Decision point 3). Sealing from `queued` exists for a turn the relay
 gave up on.
@@ -222,12 +236,20 @@ gave up on.
 
 `pending` → `dispatched`. `False` if already dispatched.
 
+### 3.8b `record_turn_debit`
+
+Update of the assistant message, `attribute_exists(sk)`: the period key, minutes
+and cost of the turn's debit, written by the send route once the debit is applied.
+`chat_service.refund_unanswered_turn` reads them back.
+
 ### 3.9 `delete_conversation`
 
 Attempts first (which fences any worker still writing fragments), then the rest of
 the range, read after that, then the conversation item last — an interrupted
 deletion leaves a conversation the user can still see and delete again. A fragment
 that slips between the two reads expires by TTL within a day.
+Last, the account's in-flight marker is released if a turn of this conversation
+held it.
 
 ### 3.10 Account erasure
 
@@ -257,9 +279,9 @@ reads are strongly consistent.
 
 ## 6. Not decided here
 
-- Product limits (question length, 20 turns, one turn in flight per account,
-  context budget): task-462, as explicit parameters — the storage model has no
-  limit of its own. A per-account "turn in flight" marker, if 462 needs one, is an
-  extra item of this table written in the `accept_turn` transaction.
+- Product limits (question length, 20 turns, context budget): task-462, as
+  explicit parameters in `core/services/chat_prompt.py` — the storage model has no
+  limit of its own. The one turn in flight per account is the `INFLIGHT` marker
+  above.
 - How intents are sent and how stuck turns are recovered: task-458 / task-465.
 - Routes, queue, worker, stream: task-461 to task-464.

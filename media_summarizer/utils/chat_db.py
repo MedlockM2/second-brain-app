@@ -39,6 +39,8 @@ from botocore.exceptions import ClientError
 from media_summarizer.core.models.chat import (
     TERMINAL_TURN_STATUSES,
     TITLE_MAX_CHARS,
+    TURN_IN_FLIGHT_GUARD,
+    TURN_IN_FLIGHT_SK,
     ChatAssistantMessage,
     ChatAttempt,
     ChatAttemptStatus,
@@ -131,16 +133,21 @@ class _Transaction:
     def __init__(self) -> None:
         self.items: List[Dict[str, Any]] = []
 
-    def put(self, item: Dict[str, Any], *, condition: str = "attribute_not_exists(sk)") -> None:
-        self.items.append(
-            {
-                "Put": {
-                    "TableName": CHAT_TABLE,
-                    "Item": _serialize(item),
-                    "ConditionExpression": condition,
-                }
-            }
-        )
+    def put(
+        self,
+        item: Dict[str, Any],
+        *,
+        condition: str = "attribute_not_exists(sk)",
+        values: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        operation: Dict[str, Any] = {
+            "TableName": CHAT_TABLE,
+            "Item": _serialize(item),
+            "ConditionExpression": condition,
+        }
+        if values:
+            operation["ExpressionAttributeValues"] = _serialize(values)
+        self.items.append({"Put": operation})
 
     def update(
         self,
@@ -331,6 +338,8 @@ class TurnNotAcceptedError(Exception):
 
     - ``conversation_not_found``: no such conversation in this account;
     - ``turn_in_progress``: a turn of this conversation is still running;
+    - ``account_turn_in_flight``: a turn of another conversation of the account
+      is still running (the per-account marker, task-462);
     - ``turn_count_changed``: another turn was accepted since the caller read
       the conversation — re-read before deciding anything.
     """
@@ -368,6 +377,12 @@ async def accept_turn(
     on it makes two concurrent submissions on one conversation one turn.
     ``idempotency_token`` is passed to DynamoDB as ``ClientRequestToken``, so a
     retried request inside ten minutes does not write the turn twice.
+
+    A sixth item takes the account's turn-in-flight marker (task-462): one turn
+    in flight per account, all conversations together. The put is conditional on
+    no live marker -- absent, or past its :data:`TURN_IN_FLIGHT_GUARD` -- so two
+    submissions on two conversations cannot both win. ``seal_turn`` and
+    ``delete_conversation`` release it.
 
     Raises :class:`TurnNotAcceptedError` when the conversation refuses.
     """
@@ -441,6 +456,19 @@ async def accept_turn(
     transaction.put(answer.to_dynamodb_item())
     transaction.put(attempt.to_dynamodb_item())
     transaction.put(intent.to_dynamodb_item())
+    transaction.put(
+        {
+            "user_id": user_id,
+            "sk": TURN_IN_FLIGHT_SK,
+            "kind": "turn_in_flight",
+            "conversation_id": conversation_id,
+            "turn_id": turn_id,
+            "turn_index": turn_index,
+            "in_flight_until": (now + TURN_IN_FLIGHT_GUARD).isoformat(),
+        },
+        condition="attribute_not_exists(sk) OR in_flight_until < :now",
+        values={":now": now.isoformat()},
+    )
 
     try:
         await transaction.commit("chat.accept_turn", user_id=user_id, token=idempotency_token)
@@ -455,6 +483,10 @@ def _turn_refusal_reason(exc: ClientError, expected_turn_count: int) -> str:
     reasons = exc.response.get("CancellationReasons", [])
     first = reasons[0] if reasons else {}
     if first.get("Code") != "ConditionalCheckFailed":
+        marker = reasons[5] if len(reasons) > 5 else {}
+        if marker.get("Code") == "ConditionalCheckFailed":
+            # Another conversation of the account holds a live turn.
+            return "account_turn_in_flight"
         # The conversation passed and a message key already existed: the turn
         # index was taken, which is a turn count that moved under the caller.
         return "turn_count_changed"
@@ -887,11 +919,81 @@ async def seal_turn(
     )
     try:
         await transaction.commit("chat.seal_turn", user_id=user_id)
-        return True
     except ClientError as exc:
         if _refused_by_condition(exc):
             return False
         raise
+    # After the commit and outside it: the marker may already have been taken
+    # over by a newer turn past its guard, and that must not make a seal fail.
+    await release_turn_in_flight(user_id=user_id, conversation_id=conversation_id, turn_index=turn_index)
+    return True
+
+
+async def release_turn_in_flight(*, user_id: str, conversation_id: str, turn_index: Optional[int] = None) -> bool:
+    """Remove the account's turn-in-flight marker if it names this turn.
+
+    ``turn_index=None`` releases a marker held by any turn of the conversation
+    (a deletion). Best-effort: a marker that survives expires on its guard, so a
+    failed release costs at most :data:`TURN_IN_FLIGHT_GUARD` of waiting.
+    """
+    condition = "conversation_id = :conversation"
+    values: Dict[str, Any] = {":conversation": conversation_id}
+    if turn_index is not None:
+        condition += " AND turn_index = :turn_index"
+        values[":turn_index"] = turn_index
+    session = get_session()
+    try:
+        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+            table = await dynamodb.Table(CHAT_TABLE)
+            await table.delete_item(
+                Key=_key(user_id, TURN_IN_FLIGHT_SK),
+                ConditionExpression=condition,
+                ExpressionAttributeValues=values,
+            )
+            return True
+    except ClientError as exc:
+        if not _is_conditional_failure(exc):
+            _log_dynamodb_error("chat.release_turn_in_flight", exc, table=CHAT_TABLE, user_id=user_id)
+        return False
+
+
+async def get_turn_in_flight(user_id: str) -> Optional[Dict[str, Any]]:
+    """The account's marker if it is live, else ``None``."""
+    item = await _get_item(user_id, TURN_IN_FLIGHT_SK)
+    if not item or str(item.get("in_flight_until", "")) < _now().isoformat():
+        return None
+    return item
+
+
+async def record_turn_debit(
+    *,
+    user_id: str,
+    conversation_id: str,
+    turn_index: int,
+    period_key: str,
+    minutes: int,
+    cost_eur: float,
+) -> None:
+    """Write on the turn the debit that was applied for it (task-462).
+
+    Read back by the refund of a turn that never answered, so it credits exactly
+    what was charged on the period it was charged to.
+    """
+    session = get_session()
+    async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        table = await dynamodb.Table(CHAT_TABLE)
+        await table.update_item(
+            Key=_key(user_id, message_sk(conversation_id, turn_index, ChatRole.ASSISTANT)),
+            UpdateExpression=(
+                "SET quota_period_key = :period, quota_minutes_debited = :minutes, quota_cost_eur = :cost"
+            ),
+            ConditionExpression="attribute_exists(sk)",
+            ExpressionAttributeValues={
+                ":period": period_key,
+                ":minutes": minutes,
+                ":cost": Decimal(str(cost_eur)),
+            },
+        )
 
 
 def _usage_item(usage: Optional[ArtifactLlmUsage]) -> Optional[Dict[str, Any]]:
@@ -964,4 +1066,7 @@ async def delete_conversation(user_id: str, conversation_id: str) -> int:
         if await _get_item(user_id, conversation_sk(conversation_id)) is not None:
             await table.delete_item(Key=_key(user_id, conversation_sk(conversation_id)))
             deleted += 1
+    # A turn of this conversation still in flight would otherwise hold the
+    # account until its guard expires.
+    await release_turn_in_flight(user_id=user_id, conversation_id=conversation_id)
     return deleted

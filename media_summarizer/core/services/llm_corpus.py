@@ -31,8 +31,10 @@ out of five.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import Any, Dict, List, Optional, Sequence
 
+from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.utils import s3
 from media_summarizer.utils.env import required_env
 
@@ -76,6 +78,26 @@ async def download_transcripts(
         }
 
     return list(await asyncio.gather(*(fetch(source) for source in sources)))
+
+
+def prompt_cache_key(
+    *,
+    scope: str,
+    content_scope_id: str,
+    transcript_s3_keys: Sequence[str],
+) -> str:
+    """The ``prompt_cache_key`` of every request over one corpus.
+
+    One material for the artifacts and the chat (task-430 README §11.3): the model,
+    the scope, its content id (the ``media_key`` of a media, the id of a folder) and
+    the transcript keys in corpus order. The cache is per organisation, so two
+    accounts reading the same content share the cached prefix without sharing a
+    row. The model is part of the key: a provider cache never crosses models, and
+    since GPT-5.6 the key also scopes cache accounting, so a model change starts a
+    new key instead of sharing one with entries the old model wrote (task-439).
+    """
+    material = "|".join([LLM_MODEL, scope, content_scope_id, *transcript_s3_keys])
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:48]
 
 
 def corpus_byte_length(corpus_sources: Sequence[Dict[str, Any]]) -> int:

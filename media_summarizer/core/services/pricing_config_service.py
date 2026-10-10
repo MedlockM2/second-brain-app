@@ -147,7 +147,11 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "items_per_day": 60,
         "documents_per_day": 40,
         "document_pages_per_day": 400,
-        "generations_per_day": 50,
+        # A chat turn counts as a generation (task-462). Three conversations of 20
+        # turns plus the five artifact types already make 65 in a day, so 50 would
+        # flag ordinary use; 120 keeps the guard an order of magnitude signal
+        # (task-430 README §9.4).
+        "generations_per_day": 120,
     },
     # --- Safety-net layer 3: shared provider pools (benchmark §3.3) ---
     # Apify credit and LlamaParse credits are *fixed monthly pools shared by every
