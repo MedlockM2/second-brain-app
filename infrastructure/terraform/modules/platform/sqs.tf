@@ -227,6 +227,51 @@ resource "aws_sqs_queue" "artifact_generator" {
 }
 
 # =============================================================================
+# Chat (task-463) -- one message per attempt of a chat turn, sent by the outbox
+# relay (task-458/465), consumed by worker-chat. Its own queue and its own policy,
+# independent of the artifact generator's (Decision point 2 of
+# docs/research/task-430-chatbot-architecture/README.md).
+#
+# The numbers belong together:
+#   - the worker's timeout is 600 s (lambda_workers.tf): an answer of up to the
+#     shared 32 000-token output ceiling, reasoning included, with room left;
+#   - visibility 660 s = that timeout + 60 s, so a redelivery never overlaps a
+#     live invocation. Deliberately not the artifacts' 1 800 s, and not the
+#     usual 6x either: a redelivery is not how a chat turn recovers. A worker that
+#     dies is caught by its 30-second lease, and the recovery (task-465) replaces
+#     the attempt; the late redelivery then finds it superseded and stands down.
+#     The ESM's maximum_concurrency, not throttling retries, bounds the fleet;
+#   - maxReceiveCount 3: the worker acknowledges every outcome it can name (it
+#     seals the turn), so a message only comes back when an invocation crashed;
+#     three crashes on one message is a poison message for the DLQ alarm;
+#   - retention 1 day: a turn not started within a day is nobody's live question.
+# =============================================================================
+
+resource "aws_sqs_queue" "chat_dlq" {
+  name                      = "chat-dlq${local.suffix}"
+  message_retention_seconds = 1209600 # 14 days
+
+  tags = {
+    Name = "chat-dlq${local.suffix}"
+  }
+}
+
+resource "aws_sqs_queue" "chat" {
+  name                       = "chat-queue${local.suffix}"
+  visibility_timeout_seconds = 660
+  message_retention_seconds  = 86400
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.chat_dlq.arn
+    maxReceiveCount     = 3
+  })
+
+  tags = {
+    Name = "chat-queue${local.suffix}"
+  }
+}
+
+# =============================================================================
 # Document Parsing
 # =============================================================================
 

@@ -77,6 +77,7 @@ locals {
     rss_feed_poll          = { queue = aws_sqs_queue.rss_feed_poll.name, dlq = aws_sqs_queue.rss_feed_poll_dlq.name }
     media_completed_events = { queue = aws_sqs_queue.media_completed_events.name, dlq = aws_sqs_queue.media_completed_events_dlq.name }
     transcript_translation = { queue = aws_sqs_queue.transcript_translation.name, dlq = aws_sqs_queue.transcript_translation_dlq.name }
+    chat                   = { queue = aws_sqs_queue.chat.name, dlq = aws_sqs_queue.chat_dlq.name }
   }
 }
 

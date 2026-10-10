@@ -144,6 +144,11 @@ transcript_translation_handler = _build_handler(
     "media_summarizer.workers.transcript_translation_worker"
 )
 
+# The chat's own worker (task-463): its queue, its concurrency, its retry policy.
+chat_handler = _build_handler(
+    "media_summarizer.workers.chat_worker",
+)
+
 push_notification_handler = _build_handler(
     "media_summarizer.workers.push_notification_worker"
 )

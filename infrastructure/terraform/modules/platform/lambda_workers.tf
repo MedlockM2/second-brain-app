@@ -97,6 +97,17 @@ locals {
       queue_arn   = aws_sqs_queue.transcript_translation.arn
       handler     = "media_summarizer.workers.lambda_handlers.transcript_translation_handler"
     }
+    # The chat's own worker (task-463). Timeout and queue visibility are explained
+    # together on aws_sqs_queue.chat. Concurrency 10 like the artifact worker, but
+    # its own: the chat and the artifacts no longer wait in one line. What they
+    # share is the provider's token-rate limit, which task-459/466 controls.
+    chat = {
+      memory_size         = 512
+      timeout             = 600
+      queue_arn           = aws_sqs_queue.chat.arn
+      handler             = "media_summarizer.workers.lambda_handlers.chat_handler"
+      maximum_concurrency = 10
+    }
     # Two HTTP calls to Expo and a handful of DynamoDB reads. 60s and 256MB is the
     # smallest envelope in this map, and it is the right one: the work is waiting
     # on a third party, not computing.
@@ -180,9 +191,9 @@ resource "aws_lambda_event_source_mapping" "worker" {
   # apply, so a mothballed environment stays one command from usable.
   enabled = var.enable_worker_polling
 
-  # Scale up slowly to avoid throttling
+  # Scale up slowly to avoid throttling. A worker may set its own ceiling.
   scaling_config {
-    maximum_concurrency = 10
+    maximum_concurrency = lookup(each.value, "maximum_concurrency", 10)
   }
 }
 

@@ -27,7 +27,7 @@ locals {
   # emit llm.generation_failed. Not derived from local.workers on purpose: a new
   # worker starting to call the LLM must be added here consciously, otherwise its
   # failures are invisible for exactly the reason this file exists.
-  llm_worker_keys = ["artifact_generator", "transcript_translation"]
+  llm_worker_keys = ["artifact_generator", "transcript_translation", "chat"]
 
   # One alarm per failure_kind. Kept as data because the two kinds answer two
   # different questions and deserve two thresholds:
@@ -45,7 +45,7 @@ locals {
       severity    = "critical"
       period      = 300
       threshold   = 0
-      description = "The LLM provider refused the call (quota exhausted, credentials rejected or rate limited): artifact generation and transcript translation are both producing nothing. Read refusal_reason in the llm.generation_failed events to know whether to top up the OpenAI account, rotate OPENAI_API_KEY in the runtime secret, or wait out a throttle. Runbook: infrastructure/observability/runbooks/pipeline-alerts.md#llm-generation-failures"
+      description = "The LLM provider refused the call (quota exhausted, credentials rejected or rate limited): artifact generation, transcript translation and chat answers are all producing nothing. Read refusal_reason in the llm.generation_failed events to know whether to top up the OpenAI account, rotate OPENAI_API_KEY in the runtime secret, or wait out a throttle. Runbook: infrastructure/observability/runbooks/pipeline-alerts.md#llm-generation-failures"
     }
     other = {
       alarm_slug  = "llm-generation-failures"

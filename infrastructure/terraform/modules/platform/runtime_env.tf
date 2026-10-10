@@ -70,6 +70,7 @@ locals {
     RSS_FEED_POLL_QUEUE           = aws_sqs_queue.rss_feed_poll.name
     TRANSCRIPT_TRANSLATION_QUEUE  = aws_sqs_queue.transcript_translation.name
     PUSH_NOTIFICATION_QUEUE       = aws_sqs_queue.push_notification.name
+    CHAT_QUEUE                    = aws_sqs_queue.chat.name
 
     # Canonical name settled by task-143: every producer and the single consumer
     # read EPISODE_COMPLETED_EVENTS_QUEUE. Enforced by a guard in

@@ -65,6 +65,9 @@ resource "aws_iam_policy" "lambda_worker" {
           aws_sqs_queue.media_completed_events.arn,
           aws_sqs_queue.instagram_ingestion.arn,
           aws_sqs_queue.transcript_translation.arn,
+          # Consumed by worker-chat (task-463). Who sends to it is the outbox
+          # relay's choice (task-458/465), which adds its own grant.
+          aws_sqs_queue.chat.arn,
           # Both directions on one queue (task-369): the digest scheduler sends
           # to it, and the push notification worker both receives from it and
           # sends its own delayed receipt check back onto it.

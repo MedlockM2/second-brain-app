@@ -142,7 +142,20 @@ Each section corresponds to a specific CloudWatch alarm defined in `infrastructu
 | `artifact-generator-dlq` | `artifact-generator-queue` | Artifact generation (flashcards, notes, quiz, summary_short, summary_detailed) |
 | `episode-completed-dlq` | `episode-completed-events` | Episode completed fan-out |
 | `push-notification-dlq` | `push-notification-queue` | Push notifications |
+| `chat-dlq` | `chat-queue` | Chat answers (worker-chat, task-463) — see "Chat DLQ" below |
 | `spotify-sync-dlq` | `spotify-sync-queue` | Spotify sync |
+
+### Chat DLQ
+
+A chat message only comes back when an invocation **crashed**: every outcome the
+worker can name (answer, stop, provider failure, budget) seals the turn and
+acknowledges the message. So a message in `chat-dlq` means three crashes on one
+attempt — read the `worker-chat` log for its `attempt_id`. The body is
+`{user_id, conversation_id, turn_id, turn_index, attempt_id}`; the turn's state is
+the assistant message `CONV#<conversation_id>#MSG#<turn_index:04d>#1` of the
+`chat-<env>` table. Do **not** redrive it: the attempt is `generating` with an
+expired lease, and the recovery (task-465) replaces it with a new attempt; a
+redriven message would only find it superseded. Purge it once the cause is fixed.
 
 ### Symptoms
 
