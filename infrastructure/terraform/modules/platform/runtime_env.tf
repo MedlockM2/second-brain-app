@@ -34,6 +34,7 @@ locals {
     BUG_REPORTS_TABLE             = aws_dynamodb_table.bug_reports.name
     USER_RSS_FEEDS_TABLE          = aws_dynamodb_table.user_rss_feeds.name
     USER_PUSH_TOKENS_TABLE        = aws_dynamodb_table.user_push_tokens.name
+    CHAT_TABLE                    = aws_dynamodb_table.chat.name
   }
 
   # Every table this environment owns, plus its indexes, matched through the

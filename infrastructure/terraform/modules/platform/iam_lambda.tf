@@ -126,8 +126,15 @@ resource "aws_iam_policy" "lambda_worker" {
           "dynamodb:Query",
           "dynamodb:Scan",
           "dynamodb:BatchGetItem",
-          "dynamodb:BatchWriteItem"
+          "dynamodb:BatchWriteItem",
+          # TransactWriteItems has no IAM action of its own: each item is
+          # authorised by its own action, and a ConditionCheck item needs this
+          # one. The chat writes a fragment next to a check on its attempt
+          # (task-457, utils/chat_db.py).
+          "dynamodb:ConditionCheckItem"
         ]
+        # The chat table (task-457) is covered by the suffix match like every
+        # other table, for both the API and the workers.
         # Scoped to THIS environment's tables only (task-237). The previous
         # "table/*" grant let a dev Lambda read and write every table in the
         # account, which with three environments means a dev bug can corrupt
@@ -285,8 +292,15 @@ resource "aws_iam_policy" "lambda_api" {
           "dynamodb:Query",
           "dynamodb:Scan",
           "dynamodb:BatchGetItem",
-          "dynamodb:BatchWriteItem"
+          "dynamodb:BatchWriteItem",
+          # TransactWriteItems has no IAM action of its own: each item is
+          # authorised by its own action, and a ConditionCheck item needs this
+          # one. The chat writes a fragment next to a check on its attempt
+          # (task-457, utils/chat_db.py).
+          "dynamodb:ConditionCheckItem"
         ]
+        # The chat table (task-457) is covered by the suffix match like every
+        # other table, for both the API and the workers.
         # Scoped to THIS environment's tables only (task-237). The previous
         # "table/*" grant let a dev Lambda read and write every table in the
         # account, which with three environments means a dev bug can corrupt

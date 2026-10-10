@@ -44,6 +44,8 @@ explanation.
 | Job archives in S3 (`archives` bucket) | GLACIER_IR at day 0, expire at 365 days | bucket lifecycle rule in `archiving.tf` |
 | Library snapshots (AWS Backup) | 90 days | backup plan lifecycle (§5) |
 | Library exports (S3, DYNAMODB_JSON) | 365 days | same bucket lifecycle rule as job archives |
+| `chat` conversations, messages, attempts, dispatch intents | **indefinite** | the user deleting the conversation, or account deletion (§4). No TTL (task-430 Decision point 3) |
+| `chat` fragments | **1 day** after their write | TTL on `fragment_expires_at`, the only TTL attribute of the table; the final answer is kept on the message. Schema: `docs/CHAT_DATA_MODEL.md` |
 | `user_push_tokens` | **90 days** since the device last registered, refreshed on every launch | the daily sweep in `workers/digest/scheduler.py`, Expo answering `DeviceNotRegistered`, sign-out, or account deletion (§4) |
 
 `user_push_tokens` is the one store partitioned by `user_id` that carries a

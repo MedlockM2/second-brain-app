@@ -108,6 +108,10 @@ _USER_PARTITION_TABLES: Tuple[Tuple[str, Optional[str]], ...] = (
     # account has to take the push tokens with it, or the devices of a deleted
     # account stay addressable — device data held with no account left to serve.
     ("USER_PUSH_TOKENS_TABLE", "push_token"),
+    # Every chat item of the account — conversations, messages, attempts,
+    # fragments, dispatch intents — sits in its partition under one sort key
+    # (task-457), so the whole chat goes with one partition sweep.
+    ("CHAT_TABLE", "sk"),
 )
 
 # Tables that own the user's rows under their own primary key and expose them
