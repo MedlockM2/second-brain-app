@@ -17,9 +17,9 @@ type RequestOptions = {
  * refusal it rotates the session once and replays the request with the token it
  * just obtained, and only propagates the error if that replay fails too.
  */
-async function sendAuthenticated(
-  send: (accessToken: string) => Promise<Response>,
-): Promise<Response> {
+export async function sendAuthenticated<R extends { status: number }>(
+  send: (accessToken: string) => Promise<R>,
+): Promise<R> {
   const accessToken = await SessionManager.getAccessToken();
   if (!accessToken) {
     throw createHttpError(

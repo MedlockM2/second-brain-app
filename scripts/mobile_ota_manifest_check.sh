@@ -178,6 +178,7 @@ profile_field() {
 }
 
 EXPECTED_URL="$(profile_field '["env","EXPO_PUBLIC_API_BASE_URL"]')"
+EXPECTED_STREAM_URL="$(profile_field '["env","EXPO_PUBLIC_CHAT_STREAM_URL"]')"
 CHANNEL="$(profile_field '["channel"]')"
 
 case "${EXPECTED_URL}" in
@@ -192,6 +193,17 @@ case "${EXPECTED_URL}" in
     exit 1
     ;;
 esac
+
+# The chat's streaming door (task-467). Declared in every profile, possibly empty
+# until the stream API is deployed: an empty value makes the chat read answers
+# back instead of streaming them, which is degraded but not broken. What must not
+# happen is an update carrying another value than its profile -- a stale or
+# missing URL there breaks streaming silently on every device that takes it.
+if [ "${EXPECTED_STREAM_URL}" = "__ABSENT__" ]; then
+  fail "Build profile '${PROFILE}' sets no EXPO_PUBLIC_CHAT_STREAM_URL in mobile/eas.json"
+  printf "       Every profile declares it, empty if the chat stream is not deployed yet.\n"
+  exit 1
+fi
 
 if [ "${CHANNEL}" = "__ABSENT__" ]; then
   fail "Build profile '${PROFILE}' declares no update channel in mobile/eas.json"
@@ -349,6 +361,22 @@ if [ "${SERVED_URL}" != "${EXPECTED_URL}" ]; then
   printf "       Then look for an EXPO_PUBLIC_API_BASE_URL defined in the EAS environment\n"
   printf "       ('eas env:list'): on the update path it overrides eas.json.\n"
   exit 1
+fi
+
+SERVED_STREAM_URL="$(printf '%s' "${MANIFEST_JSON}" | jq -r '.extra.expoClient.extra.chatStreamUrl // empty')"
+echo "Served stream URL: ${SERVED_STREAM_URL:-<empty>}  (expected: ${EXPECTED_STREAM_URL:-<empty>})"
+if [ "${SERVED_STREAM_URL}" != "${EXPECTED_STREAM_URL}" ]; then
+  fail "The served manifest carries another chat stream URL than profile '${PROFILE}' declares."
+  printf "       served:   %s\n" "${SERVED_STREAM_URL:-<empty>}"
+  printf "       expected: %s  (mobile/eas.json, build.%s.env)\n" "${EXPECTED_STREAM_URL:-<empty>}" "${PROFILE}"
+  printf "       The chat would stream from the wrong door, or not at all. Roll the update back:\n"
+  printf "         cd mobile && eas update:rollback\n"
+  printf "       Then look for an EXPO_PUBLIC_CHAT_STREAM_URL defined in the EAS environment\n"
+  printf "       ('eas env:list'): on the update path it overrides eas.json.\n"
+  exit 1
+fi
+if [ -z "${EXPECTED_STREAM_URL}" ]; then
+  printf "[WARN] Profile '%s' declares no chat stream URL: the chat reads answers back instead of streaming them.\n" "${PROFILE}"
 fi
 
 pass "Channel '${CHANNEL}' serves ${SERVED_URL} to ${PLATFORM} on runtime ${MANIFEST_RUNTIME}."

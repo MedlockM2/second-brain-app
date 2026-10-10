@@ -497,6 +497,12 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
       revenueCatAppleKey: process.env.EXPO_PUBLIC_REVENUCAT_APPLE_KEY || "",
       revenueCatGoogleKey: process.env.EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY || "",
       feedbackUrl: process.env.EXPO_PUBLIC_FEEDBACK_URL || "",
+      // The chat's streaming door (task-464/467), the `chat_stream_url` output of
+      // infrastructure/terraform/modules/platform/chat_stream.tf. Set in every
+      // build profile of eas.json and checked on every update by
+      // scripts/mobile_ota_manifest_check.sh; empty means the chat reads answers
+      // back instead of streaming them (src/constants/config.ts).
+      chatStreamUrl: process.env.EXPO_PUBLIC_CHAT_STREAM_URL?.trim() || "",
       // Where crash and error reports go (task-413), read at runtime by
       // src/lib/crashReporting.ts. Empty means Sentry is not initialised at all,
       // which is what a local `expo start` without the variable and the E2E

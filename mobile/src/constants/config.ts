@@ -63,4 +63,16 @@ export const Config = {
    * none on purpose. The value lives only in the EAS environments.
    */
   SENTRY_DSN: (extra.sentryDsn as string) || "",
+  /**
+   * The chat's streaming door (task-464/467): the stage URL of the REST API that
+   * streams a generation's fragments, `<url>/chat/conversations/{id}/stream`.
+   * Not the API host: the stream has its own API Gateway.
+   *
+   * Empty rather than throwing: without it the chat still works — the answer is
+   * read back from the conversation instead of watched as it is written
+   * (`ChatSessionContext` falls back on polling). That is the state of a build
+   * made before the streaming door was deployed. `scripts/mobile_ota_manifest_check.sh`
+   * checks that an update carries the value its profile declares.
+   */
+  CHAT_STREAM_URL: ((extra.chatStreamUrl as string) || "").trim().replace(/\/+$/, ""),
 } as const;

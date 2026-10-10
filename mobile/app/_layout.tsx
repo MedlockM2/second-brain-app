@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from "../src/contexts/AuthContext";
 import { UserPreferencesProvider } from "../src/contexts/UserPreferencesContext";
 import { ShareIntentProvider } from "../src/contexts/ShareIntentContext";
 import { PurchasesProvider } from "../src/contexts/PurchasesContext";
+import { ChatSessionProvider } from "../src/contexts/ChatSessionContext";
 import { StartupErrorGate } from "../src/components/StartupErrorGate";
 import { StartupErrorScreen } from "../src/components/StartupErrorScreen";
 import { usePushNotifications } from "../src/hooks/usePushNotifications";
@@ -165,7 +166,11 @@ export default Sentry.wrap(RootLayout);
  *    stores: the reading language, and the device time zone it reports on every
  *    foreground pass so the Digest can fire at 18:30 local time.
  * 6. PurchasesProvider - manages IAP state.
- * 7. ShareIntentProvider (our custom) - consumes the package's context, maps
+ * 7. ChatSessionProvider - the chat's conversation controller (task-467): the
+ *    active conversation of each media and folder and the answer being
+ *    followed. Above the navigator because a generation must outlive the screen
+ *    that started it; under AuthProvider because it is per account.
+ * 8. ShareIntentProvider (our custom) - consumes the package's context, maps
  *    to our ShareIntakeState, handles auth gating and navigation.
  *
  * `SplashGate` is mounted right under AuthProvider, the shallowest place that has
@@ -182,9 +187,11 @@ function AppProviders() {
             <PushNotificationGate />
             <UserPreferencesProvider>
               <PurchasesProvider>
-                <ShareIntentProvider>
-                  <AppNavigator />
-                </ShareIntentProvider>
+                <ChatSessionProvider>
+                  <ShareIntentProvider>
+                    <AppNavigator />
+                  </ShareIntentProvider>
+                </ChatSessionProvider>
               </PurchasesProvider>
             </UserPreferencesProvider>
           </AuthProvider>
