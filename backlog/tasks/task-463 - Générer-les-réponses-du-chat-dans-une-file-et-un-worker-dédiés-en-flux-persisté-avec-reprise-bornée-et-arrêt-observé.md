@@ -3,9 +3,10 @@ id: TASK-463
 title: >-
   Générer les réponses du chat dans une file et un worker dédiés, en flux
   persisté, avec reprise bornée et arrêt observé
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 17:59'
+updated_date: '2026-10-10 22:22'
 labels:
   - backend
   - chat
@@ -29,6 +30,18 @@ references:
   - media_summarizer/core/services/llm_config.py
   - media_summarizer/utils/llm_failure.py
   - .github/workflows/deploy-lambda.yml
+modified_files:
+  - media_summarizer/workers/chat_worker.py
+  - media_summarizer/workers/lambda_handlers.py
+  - infrastructure/terraform/modules/platform/sqs.tf
+  - infrastructure/terraform/modules/platform/lambda_workers.tf
+  - infrastructure/terraform/modules/platform/llm_alerts.tf
+  - infrastructure/terraform/modules/platform/pipeline_dashboard.tf
+  - infrastructure/terraform/modules/platform/runtime_env.tf
+  - infrastructure/terraform/modules/platform/iam_lambda.tf
+  - infrastructure/observability/runbooks/pipeline-alerts.md
+  - docs/INGESTION_WORKERS_PROVIDERS.md
+  - .env.example
 priority: medium
 type: feature
 ordinal: 70000
@@ -75,13 +88,29 @@ Le worker ne recevra de messages qu'une fois le relais d'outbox livré. Après m
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Une file SQS de chat et sa DLQ, et un worker Lambda de chat dans local.workers nommé media-summarizer-worker-…, sont déclarés avec leur propre concurrence, timeout, visibilité et maxReceiveCount justifiés en commentaire, la visibilité dépassant le timeout ; terraform validate passe
-- [ ] #2 Le worker de chat figure dans llm_worker_keys de llm_alerts.tf
-- [ ] #3 Le worker claim la tentative sous condition et bail, acquitte sans appel LLM une tentative terminale ou sous bail vivant, et ne débite aucun quota
-- [ ] #4 Le worker construit sa requête par le module de prompt partagé et llm_config.chat_completion_parameters(), donc gpt-6-luna, et revérifie le budget de contexte avec la même règle que l'acceptation
-- [ ] #5 Les fragments sont écrits en flux avec numéro de séquence et TTL sous condition d'identité de tentative, et la réponse finale et son état terminal sont persistés avant l'effacement de la génération en cours
-- [ ] #6 Une demande d'annulation observée pendant le flux interrompt la consommation du flux fournisseur et scelle le partiel en état interrompu ; une fin en finish_reason length scelle le tour en interrompu avec la cause plafond de sortie (en échec typé s'il n'a produit aucun texte visible), sans nouvelle tentative automatique
-- [ ] #7 Les erreurs transitoires avant le premier texte sont retentées de façon bornée dans le worker, une erreur après le premier texte scelle un échec partiel identifiable, et les refus permanents suivent la taxonomie llm_failure
-- [ ] #8 L'usage et le coût de chaque tour sont enregistrés par la couche commune, estimés et marqués quand le flux ne livre pas l'usage ; docs/INGESTION_WORKERS_PROVIDERS.md décrit le worker, sa file et sa politique de reprise ; ruff check et mypy passent
-- [ ] #9 Un tour scellé par le worker en échec sans texte visible déclenche l'opération de remboursement de task-462 ; un tour interrompu ou en échec partiel n'en déclenche pas
+- [x] #1 Une file SQS de chat et sa DLQ, et un worker Lambda de chat dans local.workers nommé media-summarizer-worker-…, sont déclarés avec leur propre concurrence, timeout, visibilité et maxReceiveCount justifiés en commentaire, la visibilité dépassant le timeout ; terraform validate passe
+- [x] #2 Le worker de chat figure dans llm_worker_keys de llm_alerts.tf
+- [x] #3 Le worker claim la tentative sous condition et bail, acquitte sans appel LLM une tentative terminale ou sous bail vivant, et ne débite aucun quota
+- [x] #4 Le worker construit sa requête par le module de prompt partagé et llm_config.chat_completion_parameters(), donc gpt-6-luna, et revérifie le budget de contexte avec la même règle que l'acceptation
+- [x] #5 Les fragments sont écrits en flux avec numéro de séquence et TTL sous condition d'identité de tentative, et la réponse finale et son état terminal sont persistés avant l'effacement de la génération en cours
+- [x] #6 Une demande d'annulation observée pendant le flux interrompt la consommation du flux fournisseur et scelle le partiel en état interrompu ; une fin en finish_reason length scelle le tour en interrompu avec la cause plafond de sortie (en échec typé s'il n'a produit aucun texte visible), sans nouvelle tentative automatique
+- [x] #7 Les erreurs transitoires avant le premier texte sont retentées de façon bornée dans le worker, une erreur après le premier texte scelle un échec partiel identifiable, et les refus permanents suivent la taxonomie llm_failure
+- [x] #8 L'usage et le coût de chaque tour sont enregistrés par la couche commune, estimés et marqués quand le flux ne livre pas l'usage ; docs/INGESTION_WORKERS_PROVIDERS.md décrit le worker, sa file et sa politique de reprise ; ruff check et mypy passent
+- [x] #9 Un tour scellé par le worker en échec sans texte visible déclenche l'opération de remboursement de task-462 ; un tour interrompu ou en échec partiel n'en déclenche pas
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Worker de chat dédié.
+
+- Terraform : `chat-queue` (visibilité 660 s = timeout + 60, `maxReceiveCount` 3, rétention 1 jour) et `chat-dlq`, avec la justification en commentaire ; entrée `chat` dans `local.workers` (Lambda `media-summarizer-worker-chat`, image des workers, 512 Mo, timeout 600 s, `maximum_concurrency` propre, le mapping lisant désormais `lookup(each.value, "maximum_concurrency", 10)`) ; `chat` ajouté à `llm_worker_keys`, à `queue_dlq_map` (alarme DLQ et widgets) et à l'IAM du rôle workers ; `CHAT_QUEUE` ajouté à l'environnement. `terraform validate` passe sur dev.
+- `workers/chat_worker.py` (handler `chat_handler`), avec un message `{user_id, conversation_id, turn_id, turn_index, attempt_id}`. Il fait un `claim_attempt` sous bail de 30 s (acquittement sans appel si la tentative est refusée) et aucun débit. Il reconstruit le prompt par `chat_prompt` depuis l'instantané et revérifie le budget (`failed`/`context_budget_exceeded` au dépassement). Il lit le flux par `llm_client.stream` (Luna via `chat_completion_parameters()`) et écrit des fragments numérotés toutes les 200 ms au plus, sous la garde de la tentative. Il renouvelle le bail toutes les 10 s et relit la demande d'arrêt chaque seconde. Il scelle en `completed`, `interrupted` (`cancelled`, `output_limit` avec texte, `provider_error` avec le partiel) ou `failed` (`output_limit` sans texte, `provider_refused_*`, `provider_unavailable` après deux réessais courts des erreurs transitoires avant le premier texte, `corpus_unavailable`, `empty_answer`). Un `failed` sans texte déclenche `refund_unanswered_turn`. Usage et coût passent par la couche commune (estimés et marqués si le flux ne livre pas l'usage), avec le token `chat_cost:<turn>:<attempt>`.
+- Docs : `docs/INGESTION_WORKERS_PROVIDERS.md` (worker, file, politique de reprise par bail et non par visibilité) et runbook DLQ (section « Chat DLQ »).
+
+Limite connue, documentée : l'instantané ne porte pas la description des auteurs, donc le corpus du chat omet ce bloc et seul le partage de cache avec les artefacts en pâtit.
+
+Vérifications : `ruff check media_summarizer/` et `mypy` passent ; `terraform validate` (env dev) passe.
+
+Note à l'owner : après `terraform apply`, vérifier la file, la DLQ, la Lambda et le filtre LLM `chat` sur dev. Aucun message n'arrivera avant le relais d'outbox (task-465).
+<!-- SECTION:FINAL_SUMMARY:END -->
