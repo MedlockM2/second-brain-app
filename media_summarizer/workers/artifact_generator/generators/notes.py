@@ -1,12 +1,11 @@
 """Notes artifact generator.
 
-Model choice: gpt-4o-mini-2024-07-18 for notes (per worker default).
+Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type.
 """
 
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -94,13 +93,6 @@ class NotesGenerator:
     @property
     def artifact_type_value(self) -> str:
         return "notes"
-
-    @property
-    def default_model(self) -> str:
-        return os.environ.get(
-            "NOTES_LLM_MODEL",
-            os.environ.get("OPENAI_MODEL", "gpt-4o-mini-2024-07-18"),
-        )
 
     def build_prompt(
         self,

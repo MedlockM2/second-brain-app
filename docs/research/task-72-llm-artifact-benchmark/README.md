@@ -4,8 +4,15 @@ owner_decision: ok
 
 ## Owner Validation
 
-**Decision**: summary_short : gpt-5-nano-2025-08-07, all other artefacts : gpt-5.4-nano-2026-03-17
-**Validated at**: 2026-04-29
+**Decision**: Le 2026-10-10, l'owner remplace le choix par type du 2026-04-29 par
+OpenAI `gpt-6-luna` en mode Standard pour tous les artefacts (résumés courts et détaillés, notes,
+flashcards, quiz, et génération textuelle des futurs artefacts), ainsi que les aperçus
+`review_blurb` et leur retraduction. Le modèle reste configurable. Aucun nouveau benchmark
+comparatif ni essai de plusieurs modèles n'est requis. Task-439 porte cette bascule et le socle
+LLM commun au futur chat ; voir aussi la décision de
+[task-430](../task-430-chatbot-architecture/README.md). Les analyses ci-dessous restent celles du
+benchmark d'avril et ne constituent pas une évaluation comparative de Luna.
+**Validated at**: 2026-10-10
 
 ---
 

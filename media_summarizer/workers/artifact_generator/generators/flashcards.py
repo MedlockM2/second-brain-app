@@ -1,13 +1,12 @@
 """Flashcards artifact generator.
 
-Model choice validated by owner (task-72 benchmark): gpt-5.4-nano-2026-03-17.
+Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type.
 Uses OpenAI Structured Outputs (response_format) for reliable JSON generation.
 """
 
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -57,13 +56,6 @@ class FlashcardsGenerator:
     @property
     def artifact_type_value(self) -> str:
         return "flashcards"
-
-    @property
-    def default_model(self) -> str:
-        return os.environ.get(
-            "FLASHCARDS_LLM_MODEL",
-            os.environ.get("OPENAI_MODEL", "gpt-5.4-nano-2026-03-17"),
-        )
 
     def build_prompt(
         self,

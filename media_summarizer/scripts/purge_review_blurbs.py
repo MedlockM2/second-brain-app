@@ -1,6 +1,6 @@
 """Purge the v1 ``review_blurb`` artifacts so v2 can be generated in their place.
 
-Bumping ``REVIEW_BLURB_ARTIFACT_GENERATOR_VERSION`` regenerates **nothing**:
+Bumping the ``review_blurb`` generator version regenerates **nothing**:
 ``artifact_service.build_artifact_id`` deliberately keeps the generator version out
 of the hash, precisely so that a prompt bump does not hand out a fresh generation
 per media. The corollary is that a change of *shape* — v1's prose paragraph to v2's

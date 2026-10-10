@@ -17,16 +17,13 @@ Like ``summary_short`` — the closest sibling and the one this follows — ther
 Structured Outputs call: the prompt asks for strict JSON and ``validate`` parses it
 into a Pydantic model. None of the five other generators does anything else.
 
-Model: ``OPENAI_MODEL``, i.e. the "all other artefacts" side of the task-72 owner
-decision. Deliberately no per-type override variable for this type: the
-``*_LLM_MODEL`` family the older generators read only exists in ``.env.example``, no
-runtime secret carries it, and a knob no environment sets is a dead button.
+Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type. No
+generator chooses its own model any more; the worker reads the one choice.
 """
 
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -95,10 +92,6 @@ class ReviewBlurbGenerator:
     @property
     def artifact_type_value(self) -> str:
         return "review_blurb"
-
-    @property
-    def default_model(self) -> str:
-        return os.environ.get("OPENAI_MODEL", "gpt-5.4-nano-2026-03-17")
 
     def build_prompt(
         self,

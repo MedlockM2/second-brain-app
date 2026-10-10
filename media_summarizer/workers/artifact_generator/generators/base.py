@@ -13,11 +13,6 @@ class ArtifactGenerator(Protocol):
         """The string value of the artifact type (e.g. 'flashcards')."""
         ...
 
-    @property
-    def default_model(self) -> str:
-        """Default LLM model for this artifact kind."""
-        ...
-
     def build_prompt(
         self,
         sources: Sequence[Dict[str, Any]],

@@ -82,6 +82,7 @@ from media_summarizer.core.models.media_artifact import (
 )
 from media_summarizer.core.models.processing_job import JobStatus
 from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
+from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.core.services.media_identity import is_account_scoped_media_key
 from media_summarizer.core.services.transcript_translation import (
     detect_language,
@@ -108,14 +109,6 @@ NOTES_BUCKET = required_env("NOTES_BUCKET")
 FLASHCARDS_BUCKET = required_env("FLASHCARDS_BUCKET")
 REVIEW_BLURB_BUCKET = required_env("REVIEW_BLURB_BUCKET")
 ARTIFACT_GENERATOR_QUEUE = required_env("ARTIFACT_GENERATOR_QUEUE")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.4-nano-2026-03-17")
-# LLM models per artifact type — validated by owner in task-72 benchmark:
-# summary_short: gpt-5-nano-2025-08-07
-# all other artifacts: gpt-5.4-nano-2026-03-17
-SUMMARY_SHORT_MODEL = os.environ.get("SUMMARY_SHORT_LLM_MODEL", "gpt-5-nano-2025-08-07")
-SUMMARY_DETAILED_MODEL = os.environ.get("SUMMARY_DETAILED_LLM_MODEL", OPENAI_MODEL)
-NOTES_MODEL = os.environ.get("NOTES_LLM_MODEL", OPENAI_MODEL)
-FLASHCARDS_MODEL = os.environ.get("FLASHCARDS_LLM_MODEL", OPENAI_MODEL)
 
 # The two ceilings a request must fit under. Both derive from the model's input
 # window, not from pricing, which is why they are code constants and stay out of
@@ -355,27 +348,18 @@ def _sha256_bytes(value: bytes) -> str:
 
 
 def get_generator_version(artifact_type: MediaArtifactType) -> str:
-    versions = {
-        MediaArtifactType.SUMMARY_SHORT: os.environ.get(
-            "SUMMARY_SHORT_ARTIFACT_GENERATOR_VERSION",
-            f"summary_short:{SUMMARY_SHORT_MODEL}:prompt-v4",
-        ),
-        MediaArtifactType.SUMMARY_DETAILED: os.environ.get(
-            "SUMMARY_DETAILED_ARTIFACT_GENERATOR_VERSION",
-            f"summary_detailed:{SUMMARY_DETAILED_MODEL}:prompt-v4",
-        ),
-        MediaArtifactType.QUIZ: os.environ.get(
-            "QUIZ_ARTIFACT_GENERATOR_VERSION",
-            f"quiz:{OPENAI_MODEL}:prompt-v4",
-        ),
-        MediaArtifactType.NOTES: os.environ.get(
-            "NOTES_ARTIFACT_GENERATOR_VERSION",
-            f"notes:{NOTES_MODEL}:prompt-v4",
-        ),
-        MediaArtifactType.FLASHCARDS: os.environ.get(
-            "FLASHCARDS_ARTIFACT_GENERATOR_VERSION",
-            f"flashcards:{FLASHCARDS_MODEL}:prompt-v4",
-        ),
+    """``<type>:<model>:<prompt version>``, the model being the one actually called.
+
+    Built from ``LLM_MODEL`` with no per-type environment override (task-439): an
+    override was free text, so it could name a model the worker no longer calls,
+    and a row would then claim a generation it is not.
+    """
+    prompt_versions = {
+        MediaArtifactType.SUMMARY_SHORT: "prompt-v4",
+        MediaArtifactType.SUMMARY_DETAILED: "prompt-v4",
+        MediaArtifactType.QUIZ: "prompt-v4",
+        MediaArtifactType.NOTES: "prompt-v4",
+        MediaArtifactType.FLASHCARDS: "prompt-v4",
         # v3: v1's prose paragraph was unreadable on the triage card, and v2's
         # structured card asked for bullets of up to 110 characters when the card
         # can show ~65 -- half of them came back clipped mid-word. v3 states the
@@ -383,12 +367,9 @@ def get_generator_version(artifact_type: MediaArtifactType) -> str:
         # the owner found told them nothing the hook did not. Note that a bump
         # regenerates nothing on its own: `build_artifact_id` deliberately excludes
         # the generator version, so old blurbs have to be purged explicitly.
-        MediaArtifactType.REVIEW_BLURB: os.environ.get(
-            "REVIEW_BLURB_ARTIFACT_GENERATOR_VERSION",
-            f"review_blurb:{OPENAI_MODEL}:prompt-v3",
-        ),
+        MediaArtifactType.REVIEW_BLURB: "prompt-v3",
     }
-    return versions[artifact_type]
+    return f"{artifact_type.value}:{LLM_MODEL}:{prompt_versions[artifact_type]}"
 
 
 def get_artifact_bucket(artifact_type: MediaArtifactType) -> str:
@@ -2128,8 +2109,16 @@ def _prompt_cache_key(
     scope_id: str,
     sources: List[ResolvedSource],
 ) -> str:
+    # The model is part of the key: a provider cache never crosses models, and
+    # since GPT-5.6 the key also scopes cache accounting, so a model change starts
+    # a new key instead of sharing one with entries the old model wrote (task-439).
     material = "|".join(
-        [scope.value, scope_id, *[source.transcript_s3_key for source in sources]]
+        [
+            LLM_MODEL,
+            scope.value,
+            scope_id,
+            *[source.transcript_s3_key for source in sources],
+        ]
     )
     return _sha256_text(material)[:48]
 

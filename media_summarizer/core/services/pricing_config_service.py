@@ -181,11 +181,12 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
             # codebase is allowed to hardcode a per-minute price.
             "cost_per_minute_eur": 0.00664,
         },
+        # One model for the chat, every artifact, the blurbs and their
+        # re-translation (task-439). Descriptive only: the model called is
+        # `llm_config.LLM_MODEL`, its price lives in `llm_pricing`.
         "llm": {
-            "summary_short_model": "gpt-5-nano",
-            "summary_detailed_model": "gpt-5.4-nano",
-            "flashcards_model": "gpt-5.4-nano",
-            "notes_model": "gpt-5.4-nano",
+            "model": "gpt-6-luna",
+            "processing": "standard",
         },
         "document_parsing": {
             "primary": "llamaparse",

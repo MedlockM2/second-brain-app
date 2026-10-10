@@ -515,12 +515,14 @@ extra.
         "transcript_s3_key": "job_01JQ8X8J5T9Q5V7Q4TW4N1HY03.txt"
       }
     ],
-    "generator_version": "notes:gpt-5.4-nano-2026-03-17:prompt-v4",
+    "generator_version": "notes:gpt-6-luna:prompt-v4",
     "llm_usage": {
+      "model": "gpt-6-luna",
       "prompt_tokens": 4622,
       "cached_tokens": 0,
+      "cache_write_tokens": 0,
       "completion_tokens": 1200,
-      "cost_eur": 0.0016
+      "cost_eur": 0.000913
     },
     "content": {
       "title": "...",

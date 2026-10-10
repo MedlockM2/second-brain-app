@@ -165,8 +165,12 @@ class ArtifactSource(BaseModel):
 class ArtifactLlmUsage(BaseModel):
     """What the generation actually consumed, read off the provider response."""
 
+    #: The model the provider says answered, so the cost can be read against the
+    #: right price row. ``None`` on entries written before task-439.
+    model: Optional[str] = None
     prompt_tokens: int = 0
     cached_tokens: int = 0
+    cache_write_tokens: int = 0
     completion_tokens: int = 0
     cost_eur: float = 0.0
 
@@ -257,7 +261,7 @@ class MediaArtifactRecord(BaseModel):
         if self.storage is not None:
             item["storage"] = self.storage.model_dump(exclude_none=True)
         if self.llm_usage is not None:
-            usage = self.llm_usage.model_dump()
+            usage = self.llm_usage.model_dump(exclude_none=True)
             # DynamoDB deliberately rejects binary floats. Keep the application
             # model convenient for pricing arithmetic and convert only at the
             # persistence boundary, through str so the decimal value matches the
@@ -302,8 +306,10 @@ class MediaArtifactRecord(BaseModel):
         usage = payload.get("llm_usage")
         if usage is not None:
             payload["llm_usage"] = ArtifactLlmUsage(
+                model=usage.get("model"),
                 prompt_tokens=int(usage.get("prompt_tokens") or 0),
                 cached_tokens=int(usage.get("cached_tokens") or 0),
+                cache_write_tokens=int(usage.get("cache_write_tokens") or 0),
                 completion_tokens=int(usage.get("completion_tokens") or 0),
                 cost_eur=float(usage.get("cost_eur") or 0.0),
             )

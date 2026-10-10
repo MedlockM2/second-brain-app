@@ -1,13 +1,12 @@
 """Summary (short) artifact generator.
 
-Model choice validated by owner (task-72 benchmark): gpt-5-nano-2025-08-07.
+Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type.
 Concise format for digest/newsletter (title + key points + optional takeaway).
 """
 
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
@@ -63,10 +62,6 @@ class SummaryShortGenerator:
     @property
     def artifact_type_value(self) -> str:
         return "summary_short"
-
-    @property
-    def default_model(self) -> str:
-        return os.environ.get("SUMMARY_SHORT_LLM_MODEL", "gpt-5-nano-2025-08-07")
 
     def build_prompt(
         self,

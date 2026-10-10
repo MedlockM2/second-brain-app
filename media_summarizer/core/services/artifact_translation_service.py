@@ -4,8 +4,8 @@ A reading language change used to translate nothing: the language travels in
 ``parameters``, ``parameters`` is in the hash, so the second language was a second
 id and therefore a **regeneration from the whole transcript** — thousands of input
 tokens to rewrite the four lines of a ``review_blurb``. What exists is translated
-instead, on the model already proven for the full text
-(``transcript_translation``): free local comparison of the languages, a model call
+instead, by the model that generates the artifacts (``llm_config``, task-439): free
+local comparison of the languages (``transcript_translation``), a model call
 only when they differ, and persistence under a deterministic key so a couple
 ``(content, type, language)`` is never translated twice.
 
@@ -48,8 +48,8 @@ from media_summarizer.core.models.media_artifact import (
     build_scope_key,
 )
 from media_summarizer.core.services import artifact_service
+from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.core.services.transcript_translation import (
-    TRANSLATION_MODEL,
     normalize_language_tag,
     should_translate,
 )
@@ -69,9 +69,10 @@ def build_translation_generator_version(artifact_type: MediaArtifactType) -> str
 
     Deliberately shaped like ``get_generator_version`` and deliberately different
     from it: reading a row must tell whether its text came out of the transcript or
-    out of another entry, and which model did it.
+    out of another entry, and which model did it. The model is the generations' own
+    (task-439); the transcript translation step keeps its separate choice.
     """
-    return f"{artifact_type.value}:translated:{TRANSLATION_MODEL}:{TRANSLATION_PROMPT_VERSION}"
+    return f"{artifact_type.value}:translated:{LLM_MODEL}:{TRANSLATION_PROMPT_VERSION}"
 
 
 async def translate_scope_artifacts_for_reader(

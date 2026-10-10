@@ -48,8 +48,11 @@ from media_summarizer.core.services.artifact_service import (
     estimate_tokens,
     fail_artifact_generation,
 )
+from media_summarizer.core.services.llm_config import (
+    LLM_MODEL,
+    chat_completion_parameters,
+)
 from media_summarizer.core.services.llm_pricing import estimate_llm_cost_eur
-from media_summarizer.core.services.transcript_translation import TRANSLATION_MODEL
 from media_summarizer.utils import s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
@@ -123,15 +126,15 @@ async def _download_transcripts(
 
 async def _call_llm(
     prompt: str,
-    model: str,
     artifact_type: str,
     response_format: Dict[str, Any] | None = None,
     prompt_cache_key: str | None = None,
 ) -> tuple[str, Dict[str, Any]]:
     """Call the LLM API and return the raw content plus the provider usage block.
 
-    ``prompt_cache_key`` routes the five requests of one generation to the same
-    machine so they hit the same cached corpus prefix. The usage block is what
+    Model, reasoning effort and output ceiling come from ``llm_config``, the same
+    for every type and for a translation (task-439). ``prompt_cache_key`` keeps the
+    requests over one corpus on the same cached prefix. The usage block is what
     makes the real cost measurable instead of estimated (`llm_usage`).
     """
     if not OPENAI_API_KEY:
@@ -149,7 +152,7 @@ async def _call_llm(
         total=int(os.environ.get("LLM_TIMEOUT_SECONDS", "180"))
     )
     payload: Dict[str, Any] = {
-        "model": model,
+        **chat_completion_parameters(),
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -157,14 +160,6 @@ async def _call_llm(
         payload["response_format"] = response_format
     if prompt_cache_key:
         payload["prompt_cache_key"] = prompt_cache_key
-
-    # gpt-5 family does not support temperature parameter
-    model_lower = (model or "").lower()
-    if not any(marker in model_lower for marker in ["o1", "o3", "gpt-5"]):
-        try:
-            payload["temperature"] = float(os.environ.get("LLM_TEMPERATURE", "0.3"))
-        except Exception:
-            payload["temperature"] = 0.3
 
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
@@ -209,35 +204,33 @@ async def _call_llm(
                     )
             response.raise_for_status()
             result = await response.json()
-            usage = result.get("usage") or {}
+            usage = dict(result.get("usage") or {})
+            # The model that actually answered, as the provider names it, rides
+            # with the usage it produced: that is what cost and traceability read.
+            usage["model"] = result.get("model") or LLM_MODEL
             return result["choices"][0]["message"]["content"], usage
 
 
-def _read_llm_usage(usage: Dict[str, Any], model: str) -> ArtifactLlmUsage:
+def _read_llm_usage(usage: Dict[str, Any]) -> ArtifactLlmUsage:
+    model = str(usage.get("model") or LLM_MODEL)
+    prompt_details = usage.get("prompt_tokens_details") or {}
     prompt_tokens = int(usage.get("prompt_tokens") or 0)
-    cached_tokens = int(
-        (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
-    )
+    cached_tokens = int(prompt_details.get("cached_tokens") or 0)
+    cache_write_tokens = int(prompt_details.get("cache_write_tokens") or 0)
     completion_tokens = int(usage.get("completion_tokens") or 0)
     return ArtifactLlmUsage(
+        model=model,
         prompt_tokens=prompt_tokens,
         cached_tokens=cached_tokens,
+        cache_write_tokens=cache_write_tokens,
         completion_tokens=completion_tokens,
         cost_eur=estimate_llm_cost_eur(
             model=model,
             prompt_tokens=prompt_tokens,
             cached_tokens=cached_tokens,
+            cache_write_tokens=cache_write_tokens,
             completion_tokens=completion_tokens,
         ),
-    )
-
-
-def _supports_structured_outputs(model: str) -> bool:
-    """Check if the model supports OpenAI Structured Outputs."""
-    model_lower = (model or "").lower()
-    return any(
-        marker in model_lower
-        for marker in ["gpt-4o", "gpt-5", "gpt-4.1"]
     )
 
 
@@ -347,26 +340,19 @@ async def process_message(message: Dict[str, Any]) -> None:
 
         prompt = generator.build_prompt(corpus_sources, language=language)
 
-        # Determine model and structured output support
-        model = generator.default_model
-        response_format = None
-        uses_structured_outputs = _supports_structured_outputs(model)
+        # The configured model supports Structured Outputs (llm_config), so a
+        # generator that has a schema always sends it.
         schema = generator.response_format_schema()
-        if uses_structured_outputs and schema is not None:
-            response_format = schema
 
-        # Call LLM
         raw_content, usage = await _call_llm(
             prompt=prompt,
-            model=model,
             artifact_type=artifact_type.value,
-            response_format=response_format,
+            response_format=schema,
             prompt_cache_key=prompt_cache_key,
         )
-        llm_usage = _read_llm_usage(usage, model)
+        llm_usage = _read_llm_usage(usage)
 
-        # Unwrap structured response wrapper if applicable
-        if uses_structured_outputs and schema is not None:
+        if schema is not None:
             raw_content = generator.unwrap_structured_response(raw_content)
 
         # Validate
@@ -515,11 +501,6 @@ async def _translate_stored_artifact(
             f"Artifact {source_artifact_id} holds no translatable text"
         )
 
-    response_format = (
-        translator.build_response_format(len(segments))
-        if _supports_structured_outputs(TRANSLATION_MODEL)
-        else None
-    )
     raw_content, usage = await _call_llm(
         prompt=translator.build_prompt(
             segments=segments,
@@ -527,11 +508,10 @@ async def _translate_stored_artifact(
             target_language=target_language,
             artifact_type=artifact_type.value,
         ),
-        model=TRANSLATION_MODEL,
         artifact_type=artifact_type.value,
-        response_format=response_format,
+        response_format=translator.build_response_format(len(segments)),
     )
-    llm_usage = _read_llm_usage(usage, TRANSLATION_MODEL)
+    llm_usage = _read_llm_usage(usage)
     translated_content = translator.apply_segments(
         source_content,
         segments=segments,
@@ -556,7 +536,7 @@ async def _translate_stored_artifact(
             "artifact_id": source_artifact_id,
             "source_language": source_language,
             "target_language": target_language,
-            "model": TRANSLATION_MODEL,
+            "model": llm_usage.model,
         },
         "content": translated_content,
     }
@@ -584,7 +564,7 @@ async def _translate_stored_artifact(
         source_language=source_language,
         target_language=target_language,
         segment_count=len(segments),
-        model=TRANSLATION_MODEL,
+        model=llm_usage.model,
         prompt_tokens=llm_usage.prompt_tokens,
         completion_tokens=llm_usage.completion_tokens,
         cost_eur=llm_usage.cost_eur,

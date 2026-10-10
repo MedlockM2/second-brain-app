@@ -1164,12 +1164,19 @@ All artifact generation (flashcards, notes, quiz, summary_short, summary_detaile
 | SummaryShortGenerator (prompt + pydantic schema) | `media_summarizer/workers/artifact_generator/generators/summary_short.py` |
 | SummaryDetailedGenerator (prompt + pydantic schema) | `media_summarizer/workers/artifact_generator/generators/summary_detailed.py` |
 
-**Models per artifact kind** (validated by task-72 benchmark):
-- `flashcards`: `gpt-5.4-nano-2026-03-17`
-- `notes`: `gpt-4o-mini-2024-07-18`
-- `quiz`: `gpt-5.4-nano-2026-03-17`
-- `summary_short`: `gpt-5-nano-2025-08-07`
-- `summary_detailed`: `gpt-5.4-nano-2026-03-17`
+**Model** (owner decision of 2026-10-10, task-439, replacing the per-kind split of task-72): one OpenAI model, `gpt-6-luna` in Standard processing, for every kind, the internal `review_blurb`, the re-translation of an existing artifact (task-395) and the future chat. It is read from a single place, `media_summarizer/core/services/llm_config.py`; no generator chooses its own model.
+
+| Variable | Shipped value | Role |
+|---|---|---|
+| `LLM_MODEL` | `gpt-6-luna` | The model called. Also embedded in `generator_version` (`<type>:<model>:<prompt-version>`), in the `translated:` version of a translation, and in the `prompt_cache_key`. |
+| `LLM_REASONING_EFFORT` | `medium` | Sent explicitly as `reasoning_effort` (provider default, also what the task-72 models ran at). |
+| `LLM_MAX_COMPLETION_TOKENS` | `32000` | `max_completion_tokens`, reasoning included; the model's maximum is 128 000. Above OpenAI's 25 000 minimum for reasoning models, and kept low because the allowance weighs on the tokens-per-minute limit. Shared by the chat and every artifact. |
+
+No `temperature` is sent: the model page documents no sampling parameter. Every generator with a JSON schema sends it as Structured Outputs. The usage stored on an entry (`llm_usage`) carries the `model` the provider says answered and its `cache_write_tokens`; `llm_pricing.py` prices them at Luna's Standard rates ($0.10 input, $0.01 cached input, $0.125 cache write, $0.50 output per 1M tokens, doubled input/cache and 1.5x output above 272K prompt tokens — https://developers.openai.com/api/docs/pricing, read 2026-10-10). The transcript translation step is **not** covered: it keeps `TRANSLATION_LLM_MODEL` (task-189).
+
+**Runtime settings to retire.** The worker no longer reads `OPENAI_MODEL`, `SUMMARY_SHORT_LLM_MODEL`, `SUMMARY_DETAILED_LLM_MODEL`, `NOTES_LLM_MODEL`, `FLASHCARDS_LLM_MODEL`, `QUIZ_LLM_MODEL`, `LLM_TEMPERATURE` nor the `*_ARTIFACT_GENERATOR_VERSION` overrides. The runtime secret `media-summarizer-runtime-<env>` holds credentials only: the model is not a secret and is set in code, next to its price. `OPENAI_MODEL`, the only one of these keys it still held, was removed from dev and prod on 2026-10-10. The `providers.llm` item of `pricing_config` is descriptive (nothing reads it); neither `pricing_config-dev` nor `pricing_config-prod` stored a `providers` row on 2026-10-10. No data migration: entries generated before keep their own `generator_version`, which names their model.
+
+**For the chat tasks (task-431).** Every chat LLM call builds its request from `llm_config.chat_completion_parameters()` and records its usage through `llm_pricing.estimate_llm_cost_eur`, from the first delivery. On Chat Completions, Luna supports function calling only at `reasoning_effort: none`; a chat that needs tools uses the Responses API rather than lowering the shared effort.
 
 **Queue**: `artifact-generator-queue` (single queue for all 5 kinds, `visibility_timeout_seconds=1800`, `maxReceiveCount=3`, DLQ: `artifact-generator-dlq`)
 
