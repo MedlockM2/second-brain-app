@@ -3,9 +3,10 @@ id: TASK-462
 title: >-
   Accepter un tour de chat avec ses plafonds, son budget de contexte et un débit
   de quota unique, et permettre son arrêt volontaire
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 17:58'
+updated_date: '2026-10-10 22:19'
 labels:
   - backend
   - api
@@ -25,6 +26,18 @@ references:
   - media_summarizer/core/services/artifact_service.py
   - media_summarizer/workers/artifact_generator/generators/corpus.py
   - docs/CANONICAL_MEDIA_API_CONTRACT.md
+modified_files:
+  - media_summarizer/api/endpoints/chat.py
+  - media_summarizer/core/services/chat_service.py
+  - media_summarizer/core/services/chat_prompt.py
+  - media_summarizer/core/services/quota_enforcer.py
+  - media_summarizer/core/services/pricing_config_service.py
+  - media_summarizer/core/services/llm_corpus.py
+  - media_summarizer/core/services/artifact_service.py
+  - media_summarizer/utils/chat_db.py
+  - media_summarizer/core/models/chat.py
+  - docs/CANONICAL_MEDIA_API_CONTRACT.md
+  - docs/CHAT_DATA_MODEL.md
 priority: medium
 type: feature
 ordinal: 69000
@@ -69,12 +82,29 @@ Après merge et déploiement : envoyer un tour par l'API dev, vérifier dans la 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La route d'envoi refuse avec un code typé une question au-delà du plafond de caractères, un tour au-delà du plafond de tours, un second tour en vol sur le compte et un dépassement du budget de contexte, ces plafonds étant des constantes nommées
-- [ ] #2 Le budget de contexte compte les tokens d'entrée du tour (corpus, instructions, historique complet, question) sans y imputer le plafond de sortie, garde le tour sous la marche de prix de 272 000 tokens avec la marge d'erreur de l'estimateur, et sa règle est documentée dans le code ; aucune troncature, aucun résumé d'historique, aucune récupération de passages n'est introduite
-- [ ] #3 Le quota d'un tour vaut minutes_for_folder_sources(source_count) sans exemption média unique, est vérifié avant écriture avec les refus existants, et est débité sous un token d'idempotence du tour logique ; burst_guards.generations_per_day vaut 120
-- [ ] #4 Le tour accepté, son message, sa première tentative et son intention d'envoi sont écrits dans une seule transaction DynamoDB, et la route n'envoie rien vers SQS
-- [ ] #5 Un module partagé construit les messages du tour, corpus en préfixe stable puis instructions avec les fragments partagés de corpus.py puis historique avec rôles puis question, et calcule le budget avec la même règle que celle qu'utilisera le worker
-- [ ] #6 La route d'arrêt enregistre une demande d'annulation conditionnée par l'identité de la génération en cours et refuse une génération périmée
-- [ ] #7 docs/CANONICAL_MEDIA_API_CONTRACT.md décrit l'envoi, l'arrêt, l'idempotence, les refus nouveaux et le comportement du débit en cas d'échec, remboursement compris ; ruff check et mypy passent
-- [ ] #8 quota_enforcer.py expose une opération de remboursement d'un tour de chat qui recrédite une seule fois, sous un token d'idempotence propre, les minutes et le coût d'un débit appliqué sur la période où il a été fait ; le tour enregistre la clé de période et les minutes débitées ; le commentaire « Minutes are never refunded » est mis à jour
+- [x] #1 La route d'envoi refuse avec un code typé une question au-delà du plafond de caractères, un tour au-delà du plafond de tours, un second tour en vol sur le compte et un dépassement du budget de contexte, ces plafonds étant des constantes nommées
+- [x] #2 Le budget de contexte compte les tokens d'entrée du tour (corpus, instructions, historique complet, question) sans y imputer le plafond de sortie, garde le tour sous la marche de prix de 272 000 tokens avec la marge d'erreur de l'estimateur, et sa règle est documentée dans le code ; aucune troncature, aucun résumé d'historique, aucune récupération de passages n'est introduite
+- [x] #3 Le quota d'un tour vaut minutes_for_folder_sources(source_count) sans exemption média unique, est vérifié avant écriture avec les refus existants, et est débité sous un token d'idempotence du tour logique ; burst_guards.generations_per_day vaut 120
+- [x] #4 Le tour accepté, son message, sa première tentative et son intention d'envoi sont écrits dans une seule transaction DynamoDB, et la route n'envoie rien vers SQS
+- [x] #5 Un module partagé construit les messages du tour, corpus en préfixe stable puis instructions avec les fragments partagés de corpus.py puis historique avec rôles puis question, et calcule le budget avec la même règle que celle qu'utilisera le worker
+- [x] #6 La route d'arrêt enregistre une demande d'annulation conditionnée par l'identité de la génération en cours et refuse une génération périmée
+- [x] #7 docs/CANONICAL_MEDIA_API_CONTRACT.md décrit l'envoi, l'arrêt, l'idempotence, les refus nouveaux et le comportement du débit en cas d'échec, remboursement compris ; ruff check et mypy passent
+- [x] #8 quota_enforcer.py expose une opération de remboursement d'un tour de chat qui recrédite une seule fois, sous un token d'idempotence propre, les minutes et le coût d'un débit appliqué sur la période où il a été fait ; le tour enregistre la clé de période et les minutes débitées ; le commentaire « Minutes are never refunded » est mis à jour
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Envoi et arrêt d'un tour de chat.
+
+- `POST /api/chat/conversations/{id}/turns` (`client_request_id` exigé) applique, avant toute écriture, les refus typés `question_too_long` (1 000 caractères), `conversation_full` (20 tours), `turn_in_flight` (un tour par compte) et `context_budget_exceeded`, puis la vérification de quota (`check_submission_allowed`, avec les refus `out_of_minutes` et `item_too_long` existants). Viennent ensuite la transaction de 6 items de `accept_turn`, sans aucun envoi SQS, puis le débit `minutes_for_folder_sources(S)` sans exemption média, sous le token `chat_turn:<turn_id>`, avec la période, les minutes et le coût enregistrés sur le tour. Le `turn_id` est dérivé du `client_request_id` : un renvoi rejoue le même tour, sans second tour ni second débit.
+- Un tour en vol par compte : marqueur `INFLIGHT` posé dans la transaction (conditionné à l'absence de marqueur ou à l'expiration de sa garde de 15 min), libéré après `seal_turn` et par `delete_conversation`.
+- `core/services/chat_prompt.py` porte les constantes de plafonds et la mise en page des messages (corpus d'abord via `llm_corpus.build_prompt`, puis les instructions du chat avec les fragments partagés, `source_ref_instruction(required=True)` inclus tel quel avec une ligne qui dit ce qui tient lieu de `source_ref` en texte libre, puis l'historique avec ses rôles, puis la question). Il porte aussi la règle de budget : entrée estimée ≤ 272 000 / 1,10 = 247 272 tokens, sans plafond de sortie, version worker sur les messages et version API sur l'instantané. Vérifié localement : l'estimation API est toujours ≥ celle du worker. `prompt_cache_key` passe dans `llm_corpus` et sert aux artefacts comme au chat (même matériau, `content_scope_id` stocké sur la conversation).
+- `POST .../turns/{turn_id}/stop` : `request_cancellation` conditionné par l'identité `(turn_id, attempt_id)` de la génération vivante, sinon `409 generation_stale`.
+- `quota_enforcer.refund_chat_turn` recrédite une seule fois (token `chat_turn:<turn_id>:refund`) les minutes et le coût sur la période du débit. La règle est dans `chat_service.is_refundable` / `refund_unanswered_turn` (échec sans texte visible), appelée par le worker et la récupération. Le commentaire « Minutes are never refunded » est mis à jour. `generations_per_day` passe à 120.
+- Docs : contrat API (envoi, arrêt, idempotence, refus, débit en échec, remboursement) et `CHAT_DATA_MODEL.md` (marqueur, nouveaux champs).
+
+Vérifications : `ruff check media_summarizer/` et `mypy` sur les 9 fichiers touchés passent.
+
+Note à l'owner : après déploiement, envoyer un tour sur dev, vérifier les items et un seul débit dans `user_usage_monthly-dev`, renvoyer la même requête, puis vérifier qu'aucun second débit n'apparaît.
+<!-- SECTION:FINAL_SUMMARY:END -->
