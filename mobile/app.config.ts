@@ -427,6 +427,12 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
           // Share-sheet label *and* native target name. See the constant: the
           // stripped form must not collide with the app target.
           iosShareExtensionName,
+          // Wait for viewDidAppear before handling the share. The hidden view
+          // starts in viewDidLoad and can leave the source app unresponsive
+          // when selected through "More…" (task-438, upstream #216/#217).
+          // Trade-off: the extension modal may briefly appear. Native rebuild
+          // required; see SHARE_INTENT_DIAGNOSTIC.md.
+          iosHideView: false,
           // These predicates *are* the share sheet: iOS evaluates them against
           // the items being shared and only renders the row when one matches
           // (they become the `NSExtensionActivationRule` of the generated
