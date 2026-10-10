@@ -9,7 +9,10 @@ import {
   Pressable,
   RefreshControl,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../src/contexts/AuthContext";
@@ -27,6 +30,7 @@ import { AnchoredContextMenu } from "../../../src/components/AnchoredContextMenu
 import { MediaListCard } from "../../../src/components/MediaListCard";
 import { isProcessingLibraryStatus } from "../../../src/components/MediaProcessingSweep";
 import { RenameDialog } from "../../../src/components/RenameDialog";
+import { Toast, useToast } from "../../../src/components/Toast";
 import { ScreenTabs, type ScreenTab } from "../../../src/components/ScreenTabs";
 import { SubfolderCard } from "../../../src/components/SubfolderCard";
 import { useMediaActions } from "../../../src/hooks/useMediaActions";
@@ -59,6 +63,7 @@ import {
   HeaderIconButton,
   HeaderMenuButton,
   HeaderMenuGlyph,
+  SCREEN_HEADER_HEIGHT,
 } from "../../../src/components/ScreenHeader";
 import type { ArtifactType, MediaListItem } from "../../../src/types/media";
 
@@ -343,12 +348,20 @@ export default function FolderDetailScreen() {
     [],
   );
 
+  // Says where "New folder" put a source, just under the header.
+  const insets = useSafeAreaInsets();
+  const { showToast, toastProps } = useToast();
+
   // The long-press menu of a source card. A move out of this folder needs no
   // handling here: the focus refetch above runs when the picker is popped, and
-  // the card is gone because the folder no longer holds that media.
+  // the card is gone because the folder no longer holds that media. "New
+  // folder" leaves no screen, so its card is dropped here: the folder it made is
+  // a root one, never this folder nor one under it.
   const mediaActions = useMediaActions({
     onDeleted: handleMediaDeleted,
     onRenamed: handleMediaRenamed,
+    onMovedToFolder: handleMediaDeleted,
+    showToast,
   });
 
   // The copy of the pressed card the menu lifts above its blur: the same card,
@@ -537,6 +550,11 @@ export default function FolderDetailScreen() {
         renderPreview={renderSourcePreview}
       />
       <RenameDialog {...mediaActions.renameProps} />
+      <RenameDialog {...mediaActions.newFolderProps} />
+      <Toast
+        {...toastProps}
+        top={insets.top + SCREEN_HEADER_HEIGHT + Spacing.sm}
+      />
 
       {/* The folder's own menu, opened from the header rather than from a
           row. Two menus, never both up: each is driven by its own visibility. */}

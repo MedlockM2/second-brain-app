@@ -111,6 +111,9 @@ export const en = {
 
   // --- Actions on a media item: long press in Library, `…` on its own page ---
   "mediaActions.move.label": "Move",
+  "mediaActions.newFolder.label": "New folder",
+  "mediaActions.newFolder.moveFailed":
+    "Folder \"{name}\" was created, but this source could not be moved into it.",
   "mediaActions.rename.label": "Rename",
   "mediaActions.delete.label": "Delete",
   // The header `…` of a media item's own page, which opens the two rows

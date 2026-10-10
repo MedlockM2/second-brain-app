@@ -61,6 +61,9 @@ export const pt: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. A processar.",
   "notifications.mediaReadyChannel": "Pronto para aprofundar",
   "mediaActions.move.label": "Mover",
+  "mediaActions.newFolder.label": "Nova pasta",
+  "mediaActions.newFolder.moveFailed":
+    "A pasta «{name}» foi criada, mas não foi possível mover esta fonte para ela.",
   "mediaActions.rename.label": "Renomear",
   "mediaActions.delete.label": "Eliminar",
   "mediaActions.moreA11y": "Ações para esta fonte",

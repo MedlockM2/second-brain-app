@@ -1,12 +1,13 @@
 /**
  * The behaviour behind the actions menu of a media item: which media it targets,
- * where "Move" goes, what "Rename" writes, and what "Delete" actually does.
+ * where "Move" goes, what "New folder" creates, what "Rename" writes, and what
+ * "Delete" actually does.
  *
  * Lives here rather than in the menu component so every surface offering those
  * actions shares one implementation of the destructive path and of the rename
  * instead of three that can drift apart: the `All media` list of the library tab,
  * the sources list inside a folder, and the `…` over the cover of a media item's
- * own page. All three offer the same three rows. Each surface only supplies what it alone knows — how to drop a
+ * own page. All three offer the same four rows. Each surface only supplies what it alone knows — how to drop a
  * row from the list it holds and how to put a new title on one, or, on a detail
  * screen holding no list, how to leave once the thing it shows is gone.
  *
@@ -18,23 +19,31 @@
  * issues the `PATCH /api/media/:id` itself. Every caller refetches on focus, so
  * the surface already reflects the move by the time the picker is popped — there
  * is nothing to report back. Renaming is the opposite case: it never leaves the
- * screen, so the new title is handed back to the surface directly.
+ * screen, so the new title is handed back to the surface directly. "New folder"
+ * (task-437) is the rename's case too: it names a root folder in the same dialog
+ * the Library's `+` uses, files the media in it, and hands both back.
  */
 
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { MediaService } from "../services/mediaService";
+import { OrganizationService } from "../services/organizationService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { t } from "../i18n";
 import type { MediaListItem } from "../types/media";
+import type { Folder } from "../types/organization";
 import type {
   AnchoredContextMenuProps,
   AnchorRect,
   ContextMenuAction,
 } from "../components/AnchoredContextMenu";
 import type { RenameDialogProps } from "../components/RenameDialog";
+import type { ShowToast } from "../components/Toast";
+
+/** The backend's ceiling for a folder name, as in every folder naming dialog. */
+const MAX_FOLDER_NAME_LENGTH = 255;
 
 /**
  * The server's own ceiling (`MAX_TITLE_LENGTH` in
@@ -91,6 +100,8 @@ export interface MediaActionsController<T> {
   menuProps: MenuProps<T>;
   /** Spread onto `<RenameDialog />`. */
   renameProps: RenameDialogProps;
+  /** Spread onto a second `<RenameDialog />`: the naming of a new folder. */
+  newFolderProps: RenameDialogProps;
 }
 
 export function useMediaActions<
@@ -107,8 +118,25 @@ export function useMediaActions<
    * has answered, so the list never displays a name the library does not hold.
    */
   onRenamed: (mediaItemId: string, title: string) => void;
+  /**
+   * Called once "New folder" has created its folder, whether or not the media
+   * then made it in: the folder exists either way, and a surface listing
+   * folders has to show it.
+   */
+  onFolderCreated?: (folder: Folder) => void;
+  /**
+   * Called once the media is filed in the folder "New folder" created. A media
+   * belongs to one folder, so it has also left the one it was in.
+   */
+  onMovedToFolder: (mediaItemId: string, folder: Folder) => void;
+  /**
+   * The surface's pill, which says where the media went — or that the folder
+   * was created and the media is not in it.
+   */
+  showToast: ShowToast;
 }): MediaActionsController<T> {
-  const { onDeleted, onRenamed } = options;
+  const { onDeleted, onRenamed, onFolderCreated, onMovedToFolder, showToast } =
+    options;
   const router = useRouter();
 
   // Visibility is tracked apart from the target on purpose. The menu defers the
@@ -161,6 +189,90 @@ export function useMediaActions<
     }
     router.push(`/media/folder?${params.toString()}`);
   }, [router, target]);
+
+  // --- New folder ---
+  //
+  // The shortest path for "this one deserves its own folder": name it, and the
+  // media is in it. Same dialog, field and error placement as the Library's `+`
+  // (task-436), with its strings.
+  const [isNewFolderVisible, setIsNewFolderVisible] = useState(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderError, setNewFolderError] = useState<string | null>(null);
+  const [newFolderDraft, setNewFolderDraft] = useState("");
+
+  const handleNewFolder = useCallback(() => {
+    if (!target) return;
+    setNewFolderError(null);
+    setNewFolderDraft("");
+    setIsNewFolderVisible(true);
+  }, [target]);
+
+  const changeNewFolderDraft = useCallback((next: string) => {
+    setNewFolderDraft(next);
+    setNewFolderError(null);
+  }, []);
+
+  const closeNewFolder = useCallback(() => {
+    if (isCreatingFolder) return;
+    setIsNewFolderVisible(false);
+    setNewFolderError(null);
+  }, [isCreatingFolder]);
+
+  const submitNewFolder = useCallback(
+    (name: string) => {
+      if (!target || isCreatingFolder) return;
+      // The dialog already refuses a blank name; this keeps the hook from ever
+      // creating one whatever calls it.
+      if (!name.trim()) return;
+      const item = target;
+
+      setIsCreatingFolder(true);
+      setNewFolderError(null);
+      void (async () => {
+        let folder: Folder;
+        try {
+          folder = await OrganizationService.createFolder(name);
+        } catch (err) {
+          // Nothing was created: the dialog stays open with the typed name, so a
+          // retry is one tap.
+          setNewFolderError(
+            getFriendlyErrorMessage(err, {
+              fallback: t("folderPicker.createFailed"),
+            }),
+          );
+          setIsCreatingFolder(false);
+          return;
+        }
+
+        onFolderCreated?.(folder);
+        try {
+          // A `PATCH` of `folder_id`: the media leaves whatever folder held it.
+          await OrganizationService.setMediaFolder(item.mediaItemId, folder.id);
+          setTarget((current) =>
+            current && current.mediaItemId === item.mediaItemId
+              ? { ...current, folderId: folder.id }
+              : current,
+          );
+          setIsNewFolderVisible(false);
+          onMovedToFolder(item.mediaItemId, folder);
+          showToast(t("media.movedToNamed", { name: folder.name }));
+        } catch {
+          // Two calls, and only the second failed. Keeping the dialog open would
+          // invite a retry that creates a second folder of the same name, so it
+          // closes and the pill says exactly what is true: the folder exists,
+          // empty, and the media is where it was.
+          setIsNewFolderVisible(false);
+          showToast(
+            t("mediaActions.newFolder.moveFailed", { name: folder.name }),
+            "error",
+          );
+        } finally {
+          setIsCreatingFolder(false);
+        }
+      })();
+    },
+    [target, isCreatingFolder, onFolderCreated, onMovedToFolder, showToast],
+  );
 
   const handleRename = useCallback(() => {
     if (!target) return;
@@ -288,6 +400,14 @@ export function useMediaActions<
     closesMenu: true,
     testID: "media-actions-move",
   };
+  const newFolderAction: ContextMenuAction = {
+    key: "new-folder",
+    icon: "add-circle-outline",
+    label: t("mediaActions.newFolder.label"),
+    onPress: handleNewFolder,
+    closesMenu: true,
+    testID: "media-actions-new-folder",
+  };
   const renameAction: ContextMenuAction = {
     key: "rename",
     icon: "pencil-outline",
@@ -314,7 +434,8 @@ export function useMediaActions<
       visible: isMenuVisible,
       target: target?.item ?? null,
       anchor,
-      actions: [moveAction, renameAction, deleteAction],
+      // Next to "Move", the other way of filing the media.
+      actions: [moveAction, newFolderAction, renameAction, deleteAction],
       isBusy: isDeleting,
       onClose: closeMenu,
       testIDPrefix: "media-actions",
@@ -331,6 +452,20 @@ export function useMediaActions<
       onClose: closeRename,
       onSubmit: submitRename,
       testIDPrefix: "media-rename",
+    },
+    newFolderProps: {
+      visible: isNewFolderVisible,
+      heading: t("search.newFolder.title"),
+      placeholder: t("folderPicker.namePlaceholder"),
+      maxLength: MAX_FOLDER_NAME_LENGTH,
+      value: newFolderDraft,
+      onChangeText: changeNewFolderDraft,
+      isSaving: isCreatingFolder,
+      errorMessage: newFolderError,
+      onClose: closeNewFolder,
+      onSubmit: submitNewFolder,
+      submitLabel: t("search.newFolder.create"),
+      testIDPrefix: "media-new-folder",
     },
   };
 }

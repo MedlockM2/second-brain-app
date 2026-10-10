@@ -61,6 +61,9 @@ export const hi: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. प्रोसेस हो रहा है।",
   "notifications.mediaReadyChannel": "गहराई से समझने के लिए तैयार",
   "mediaActions.move.label": "ले जाएँ",
+  "mediaActions.newFolder.label": "नया फ़ोल्डर",
+  "mediaActions.newFolder.moveFailed":
+    "फ़ोल्डर «{name}» बनाया गया, लेकिन यह स्रोत उसमें नहीं ले जाया जा सका।",
   "mediaActions.rename.label": "नाम बदलें",
   "mediaActions.delete.label": "हटाएँ",
   "mediaActions.moreA11y": "इस स्रोत के लिए क्रियाएँ",

@@ -61,6 +61,9 @@ export const ja: Catalog = {
   "mediaStatus.a11yProcessing": "{label}。処理中です。",
   "notifications.mediaReadyChannel": "深掘りの準備完了",
   "mediaActions.move.label": "移動",
+  "mediaActions.newFolder.label": "新しいフォルダ",
+  "mediaActions.newFolder.moveFailed":
+    "フォルダ「{name}」を作成しましたが、このソースを移動できませんでした。",
   "mediaActions.rename.label": "名前を変更",
   "mediaActions.delete.label": "削除",
   "mediaActions.moreA11y": "このソースの操作",

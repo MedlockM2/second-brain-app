@@ -64,6 +64,12 @@ import type { AnchorRect } from "./AnchoredContextMenu";
 const SLOT_SIZE = 40;
 const SLOT_HIT_SLOP = (TouchTarget.minimum - SLOT_SIZE) / 2;
 
+/**
+ * The header's height under the safe area: its slots and its vertical padding.
+ * For what a screen overlays just below it, such as its toast.
+ */
+export const SCREEN_HEADER_HEIGHT = SLOT_SIZE + 2 * Spacing.md;
+
 interface ScreenHeaderProps {
   /** Omitted on the headers that carry only icons. */
   title?: string;

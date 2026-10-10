@@ -60,6 +60,9 @@ export const zh: Catalog = {
   "mediaStatus.a11yProcessing": "{label}。正在处理。",
   "notifications.mediaReadyChannel": "可以深入了解了",
   "mediaActions.move.label": "移动",
+  "mediaActions.newFolder.label": "新建文件夹",
+  "mediaActions.newFolder.moveFailed":
+    "已创建文件夹“{name}”，但无法将此来源移入其中。",
   "mediaActions.rename.label": "重命名",
   "mediaActions.delete.label": "删除",
   "mediaActions.moreA11y": "此来源的操作",

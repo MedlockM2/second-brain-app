@@ -42,7 +42,6 @@ import React, {
 import {
   Animated,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
   type LayoutChangeEvent,
@@ -53,7 +52,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -78,6 +76,7 @@ import {
 } from "./MediaDetailHero";
 import { MediaReaderBar, MEDIA_READER_BAR_HEIGHT } from "./MediaReaderBar";
 import { RenameDialog } from "./RenameDialog";
+import { Toast, useToast } from "./Toast";
 import { useMediaActions } from "../hooks/useMediaActions";
 import {
   useTranslationRefresh,
@@ -93,17 +92,8 @@ import {
   resolveSourcePreviewState,
   type SourcePreviewState,
 } from "./SourcePreview";
-import {
-  Typography,
-  Spacing,
-  BorderRadius,
-  type Theme,
-} from "../constants/theme";
-import {
-  useTheme,
-  useThemeColors,
-  useThemedStyles,
-} from "../contexts/ThemeContext";
+import { Spacing, type Theme } from "../constants/theme";
+import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
 import { LOCALE_ENDONYMS, formatDate, t, tCount } from "../i18n";
 import { isSupportedLocale } from "../i18n/locales";
 import type {
@@ -323,7 +313,6 @@ export function CompletedDetailView({
   // `mode` for the status bar glyphs below, which are a prop rather than a
   // style and so cannot come from the sheet.
   const { mode } = useTheme();
-  const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   const router = useRouter();
@@ -339,37 +328,9 @@ export function CompletedDetailView({
   );
   const previousFolderIdRef = useRef<string | null>(currentFolderId);
 
-  // Toast feedback state. The tone only swaps the glyph and its colour: one
-  // surface carries both the folder confirmations and a failed source open,
-  // instead of a second banner for errors.
-  const [toast, setToast] = useState<{
-    message: string;
-    tone: "success" | "error";
-  } | null>(null);
-  // Not a ref: an Animated.Value is created once and read during render, which
-  // is exactly `useMemo` and not `useRef().current`.
-  const toastOpacity = useMemo(() => new Animated.Value(0), []);
-  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showToast = useCallback(
-    (message: string, tone: "success" | "error" = "success") => {
-      setToast({ message, tone });
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-      toastTimeoutRef.current = setTimeout(() => {
-        Animated.timing(toastOpacity, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }).start(() => setToast(null));
-      }, 2500);
-    },
-    [toastOpacity],
-  );
+  // Toast feedback: the folder confirmations, a folder made from the `…` menu,
+  // and a failed source open, all in the one pill.
+  const { showToast, toastProps } = useToast();
 
   // --- Source preview ("Aperçu"), above the full text ---
   //
@@ -465,13 +426,6 @@ export function CompletedDetailView({
     }, [isAuthenticated, media_item.media_item_id, showToast, adoptPreview]),
   );
 
-  // Cleanup toast timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    };
-  }, []);
-
   // The title as this screen shows it: whatever the library row holds, or the
   // label key it carries instead, read as "<label> — <save date>" in the reader's
   // language (task-400). The URL-then-"Untitled" chain that used to be here is
@@ -489,6 +443,14 @@ export function CompletedDetailView({
     // what replaces the page.
     onDeleted,
     onRenamed: (_mediaItemId, title) => setRenamedTitle(title),
+    // "New folder" files the item without leaving the page, so no focus
+    // refresh will bring the folder back: it is taken here, and recorded as the
+    // one already announced so the next return does not toast it a second time.
+    onMovedToFolder: (_mediaItemId, folder) => {
+      setCurrentFolderId(folder.id);
+      previousFolderIdRef.current = folder.id;
+    },
+    showToast,
   });
 
   // What the menu acts on, carrying the title currently on screen — a second
@@ -1340,32 +1302,16 @@ export function CompletedDetailView({
 
       {/* Toast feedback, over the page and under where the collapsed bar ends,
           so it covers neither the controls over the cover nor the bar. */}
-      {toast && (
-        <View
-          style={[
-            styles.toastLayer,
-            { top: barHeight + Spacing.sm },
-          ]}
-          pointerEvents="none"
-        >
-          <Animated.View style={[styles.toast, { opacity: toastOpacity }]}>
-            <Ionicons
-              name={toast.tone === "error" ? "alert-circle" : "checkmark-circle"}
-              size={16}
-              color={toast.tone === "error" ? Colors.error : Colors.primary}
-            />
-            <Text style={styles.toastText}>{toast.message}</Text>
-          </Animated.View>
-        </View>
-      )}
+      <Toast {...toastProps} top={barHeight + Spacing.sm} />
 
-      {/* Screen level, outside the scroll view: both are modals belonging to the
-          screen's state, and the menu's backdrop covers the whole page. */}
+      {/* Screen level, outside the scroll view: all three are modals belonging
+          to the screen's state, and the menu's backdrop covers the whole page. */}
       <AnchoredContextMenu
         {...mediaActions.menuProps}
         renderPreview={renderActionsPreview}
       />
       <RenameDialog {...mediaActions.renameProps} />
+      <RenameDialog {...mediaActions.newFolderProps} />
     </View>
   );
 }
@@ -1380,29 +1326,6 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     scrollView: {
       flex: 1,
-    },
-
-    // Toast feedback
-    toastLayer: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      alignItems: "center",
-      zIndex: 2,
-    },
-    toast: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-      backgroundColor: Colors.surfaceContainer,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      borderRadius: BorderRadius.full,
-    },
-    toastText: {
-      fontSize: Typography.small.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      color: Colors.textMain,
     },
 
     // Intra-screen tabs, under the metadata line.

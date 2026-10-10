@@ -61,6 +61,9 @@ export const it: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. Elaborazione in corso.",
   "notifications.mediaReadyChannel": "Pronto da approfondire",
   "mediaActions.move.label": "Sposta",
+  "mediaActions.newFolder.label": "Nuova cartella",
+  "mediaActions.newFolder.moveFailed":
+    "La cartella «{name}» è stata creata, ma non è stato possibile spostarvi questa fonte.",
   "mediaActions.rename.label": "Rinomina",
   "mediaActions.delete.label": "Elimina",
   "mediaActions.moreA11y": "Azioni per questa fonte",

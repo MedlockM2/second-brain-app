@@ -45,6 +45,7 @@ import {
   type AnchorRect,
 } from "../../src/components/AnchoredContextMenu";
 import { RenameDialog } from "../../src/components/RenameDialog";
+import { Toast, useToast } from "../../src/components/Toast";
 import { GlassSurface } from "../../src/components/GlassSurface";
 import { useMediaActions } from "../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../src/hooks/useFolderActions";
@@ -380,12 +381,53 @@ export default function SearchScreen() {
     [],
   );
 
+  // A folder made from a media row's "New folder" lands in the grid at once, as
+  // one made with the `+` does, and a folded grid is unfolded so it is on screen.
+  const handleMenuFolderCreated = useCallback(
+    (created: Folder) => {
+      setFolders((current) => [...current, created]);
+      if (!foldersSection.expanded) foldersSection.toggle();
+    },
+    [foldersSection],
+  );
+
+  // The row learns its folder in place, so the next "Move" opens on it. The
+  // folders are read again for their counts: the new one now holds the media,
+  // and the folder it left holds one fewer.
+  const handleMediaMovedToFolder = useCallback(
+    (mediaItemId: string, folder: Folder) => {
+      setMedia((current) =>
+        current.map((item) =>
+          item.media_item_id === mediaItemId
+            ? { ...item, folder_id: folder.id }
+            : item,
+        ),
+      );
+      setResults((current) =>
+        current.map((row) =>
+          row.media_item_id === mediaItemId
+            ? { ...row, folder_id: folder.id }
+            : row,
+        ),
+      );
+      void loadFolders();
+    },
+    [loadFolders],
+  );
+
+  // Says where "New folder" put the media, under the floating search bar.
+  const { showToast, toastProps } = useToast();
+
   // The long-press menu of a media row, whichever list it was pressed in. A move
-  // needs nothing here: a moved media stays in both lists whatever folder it
-  // lands in, and the focus refetch above already brings its new folder back.
+  // through the picker needs nothing here: a moved media stays in both lists
+  // whatever folder it lands in, and the focus refetch above already brings its
+  // new folder back. "New folder" leaves no screen, so it reports back.
   const mediaActions = useMediaActions<MediaRow>({
     onDeleted: handleMediaDeleted,
     onRenamed: handleMediaRenamed,
+    onFolderCreated: handleMenuFolderCreated,
+    onMovedToFolder: handleMediaMovedToFolder,
+    showToast,
   });
 
   // The copy of the pressed row the menu lifts above its blur. Same component
@@ -683,6 +725,11 @@ export default function SearchScreen() {
         renderPreview={renderMediaPreview}
       />
       <RenameDialog {...mediaActions.renameProps} />
+      <RenameDialog {...mediaActions.newFolderProps} />
+      <Toast
+        {...toastProps}
+        top={insets.top + CONTENT_TOP_INSET}
+      />
       <AnchoredContextMenu
         {...folderActions.menuProps}
         renderPreview={renderFolderPreview}

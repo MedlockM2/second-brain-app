@@ -61,6 +61,9 @@ export const nl: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. Wordt verwerkt.",
   "notifications.mediaReadyChannel": "Klaar om te verdiepen",
   "mediaActions.move.label": "Verplaatsen",
+  "mediaActions.newFolder.label": "Nieuwe map",
+  "mediaActions.newFolder.moveFailed":
+    "De map ‘{name}’ is aangemaakt, maar deze bron kon er niet naartoe worden verplaatst.",
   "mediaActions.rename.label": "Hernoemen",
   "mediaActions.delete.label": "Verwijderen",
   "mediaActions.moreA11y": "Acties voor deze bron",

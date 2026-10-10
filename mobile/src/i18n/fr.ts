@@ -78,6 +78,9 @@ export const fr: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. Traitement en cours.",
   "notifications.mediaReadyChannel": "Prêt à approfondir",
   "mediaActions.move.label": "Déplacer",
+  "mediaActions.newFolder.label": "Nouveau dossier",
+  "mediaActions.newFolder.moveFailed":
+    "Le dossier « {name} » a été créé, mais cette source n'a pas pu y être rangée.",
   "mediaActions.rename.label": "Renommer",
   "mediaActions.delete.label": "Supprimer",
   "mediaActions.moreA11y": "Actions pour cette source",

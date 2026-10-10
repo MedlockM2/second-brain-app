@@ -61,6 +61,9 @@ export const ar: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. جارٍ المعالجة.",
   "notifications.mediaReadyChannel": "جاهز للتعمّق",
   "mediaActions.move.label": "نقل",
+  "mediaActions.newFolder.label": "مجلد جديد",
+  "mediaActions.newFolder.moveFailed":
+    "تم إنشاء المجلد «{name}»، لكن تعذّر نقل هذا المصدر إليه.",
   "mediaActions.rename.label": "إعادة تسمية",
   "mediaActions.delete.label": "حذف",
   "mediaActions.moreA11y": "إجراءات هذا المصدر",

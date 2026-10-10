@@ -65,6 +65,9 @@ export const de: Catalog = {
   "mediaStatus.a11yProcessing": "{label}. Wird verarbeitet.",
   "notifications.mediaReadyChannel": "Bereit zum Vertiefen",
   "mediaActions.move.label": "Verschieben",
+  "mediaActions.newFolder.label": "Neuer Ordner",
+  "mediaActions.newFolder.moveFailed":
+    "Der Ordner „{name}“ wurde erstellt, aber diese Quelle konnte nicht hineinverschoben werden.",
   "mediaActions.rename.label": "Umbenennen",
   "mediaActions.delete.label": "Löschen",
   "mediaActions.moreA11y": "Aktionen für diese Quelle",
