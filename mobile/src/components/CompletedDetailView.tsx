@@ -67,6 +67,7 @@ import { formatDuration } from "../lib/formatDuration";
 import type { ArtifactTileState } from "./ArtifactTile";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ScreenTabs, type ScreenTab } from "./ScreenTabs";
+import { ChatDock } from "./chat/ChatDock";
 import { AnchoredContextMenu } from "./AnchoredContextMenu";
 import {
   MediaDetailHero,
@@ -1299,6 +1300,17 @@ export function CompletedDetailView({
           />
         )}
       </Animated.ScrollView>
+
+      {/* The chat composer, on the Reader tab only (owner decision of task-434):
+          anchored under the page, so the transcript scrolls above it. On the
+          route the safe area is below it; in the Digest the tab bar is. */}
+      {activeTab === "reader" ? (
+        <ChatDock
+          scope="media"
+          scopeId={media_item.media_item_id}
+          bottomInset={underStatusBar ? insets.bottom : 0}
+        />
+      ) : null}
 
       {/* Toast feedback, over the page and under where the collapsed bar ends,
           so it covers neither the controls over the cover nor the bar. */}

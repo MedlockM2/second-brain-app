@@ -26,6 +26,7 @@ import {
   type ArtifactTileState,
 } from "../../../src/components/ArtifactTile";
 import { ArtifactsPanel } from "../../../src/components/ArtifactsPanel";
+import { ChatDock } from "../../../src/components/chat/ChatDock";
 import { AnchoredContextMenu } from "../../../src/components/AnchoredContextMenu";
 import { MediaListCard } from "../../../src/components/MediaListCard";
 import { isProcessingLibraryStatus } from "../../../src/components/MediaProcessingSweep";
@@ -541,6 +542,13 @@ export default function FolderDetailScreen() {
       ) : (
         <AiTab folderId={folderId} scopeMediaIds={scopeMediaIds} />
       )}
+
+      {/* The chat composer, on the Sources tab only (owner decision of
+          task-434), under the list. The SafeAreaView already keeps the bottom
+          inset. */}
+      {!isLoading && !error && activeTab === "sources" && folderId ? (
+        <ChatDock scope="folder" scopeId={folderId} />
+      ) : null}
 
       {/* Screen level, outside the list: the menu belongs to the screen's
           state, and mounting it inside a row would tie a modal to a cell the

@@ -1,0 +1,272 @@
+/**
+ * The conversation sheet the dock opens (direction F of task-434, adapted to a
+ * screen component — see `ChatDock`).
+ *
+ * A modal rising from the bottom, over the page it was opened from: the page
+ * stays visible above it, which keeps the scope of the question in sight. Inside
+ * a modal on purpose: the keyboard and the sheet then live outside the page's
+ * scroll views — including the Digest's horizontal carousel, which the keyboard
+ * would otherwise scroll to another page.
+ *
+ * Closing the sheet only hides it. The conversation and the answer being written
+ * are held by `ChatSessionContext`, above the navigation.
+ */
+
+import { Ionicons } from "@expo/vector-icons";
+import React, { useRef } from "react";
+import {
+  AccessibilityInfo,
+  findNodeHandle,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  type TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
+import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
+import { t } from "../../i18n";
+import type { ChatRefusal } from "../../lib/chatRefusal";
+import type { ChatMessage, ChatSource } from "../../types/chat";
+import { ChatComposer } from "./ChatComposer";
+import { ChatThread } from "./ChatThread";
+
+export interface ChatSheetProps {
+  visible: boolean;
+  onClose: () => void;
+  title: string;
+  emptyText: string;
+  placeholder: string;
+  messages: ChatMessage[];
+  sources: ChatSource[];
+  live: { turnIndex: number; text: string } | null;
+  waiting: boolean;
+  generating: boolean;
+  sending: boolean;
+  draft: string;
+  onChangeDraft: (value: string) => void;
+  onSend: () => void;
+  onStop: () => void;
+  onRetry: (question: string) => void;
+  refusal: ChatRefusal | null;
+  onRefusalAction: (action: NonNullable<ChatRefusal["action"]>) => void;
+  /** Offered once the conversation has turns. */
+  onNewConversation: (() => void) | null;
+}
+
+export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const titleRef = useRef<Text>(null);
+  const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+
+  const handleShow = () => {
+    // Focus where the sheet starts: the screen reader on its title, the
+    // keyboard on the field.
+    const node = findNodeHandle(titleRef.current);
+    if (node) AccessibilityInfo.setAccessibilityFocus(node);
+    inputRef.current?.focus();
+  };
+
+  const refusalActionLabel =
+    props.refusal?.action === "seePlans"
+      ? t("quota.seePlans")
+      : props.refusal?.action === "newConversation"
+        ? t("chat.sheet.newConversation")
+        : null;
+
+  return (
+    <Modal
+      visible={props.visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      onShow={handleShow}
+      onRequestClose={props.onClose}
+    >
+      <View style={styles.root}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={props.onClose}
+          accessibilityRole="button"
+          accessibilityLabel={t("chat.sheet.closeA11y")}
+        />
+        <KeyboardAvoidingView
+          style={styles.avoider}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          pointerEvents="box-none"
+        >
+          <View
+            style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}
+            testID="chat-sheet"
+          >
+            <View style={styles.header}>
+              <Text ref={titleRef} style={styles.title} accessibilityRole="header" numberOfLines={1}>
+                {props.title}
+              </Text>
+              {props.onNewConversation ? (
+                <Pressable
+                  style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+                  onPress={props.onNewConversation}
+                  disabled={props.generating}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: props.generating }}
+                  accessibilityLabel={t("chat.sheet.newConversation")}
+                  testID="chat-sheet-new"
+                >
+                  <Ionicons name="create-outline" size={22} color={Colors.textMain} />
+                </Pressable>
+              ) : null}
+              <Pressable
+                style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+                onPress={props.onClose}
+                accessibilityRole="button"
+                accessibilityLabel={t("chat.sheet.closeA11y")}
+                testID="chat-sheet-close"
+              >
+                <Ionicons name="close" size={24} color={Colors.textMain} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              ref={scrollRef}
+              style={styles.threadScroll}
+              contentContainerStyle={styles.threadContent}
+              keyboardShouldPersistTaps="handled"
+              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            >
+              {props.messages.length === 0 ? (
+                <Text style={styles.empty}>{props.emptyText}</Text>
+              ) : (
+                <ChatThread
+                  messages={props.messages}
+                  sources={props.sources}
+                  live={props.live}
+                  waiting={props.waiting}
+                  onRetry={props.onRetry}
+                  retryDisabled={props.generating || props.sending}
+                />
+              )}
+            </ScrollView>
+
+            {props.refusal ? (
+              <View style={styles.refusal} accessibilityLiveRegion="polite" testID="chat-sheet-refusal">
+                <Text style={styles.refusalText}>{props.refusal.message}</Text>
+                {props.refusal.action && refusalActionLabel ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.refusalAction, pressed && styles.pressed]}
+                    onPress={() => props.onRefusalAction(props.refusal!.action!)}
+                    accessibilityRole="button"
+                    accessibilityLabel={refusalActionLabel}
+                  >
+                    <Text style={styles.refusalActionLabel}>{refusalActionLabel}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            <ChatComposer
+              ref={inputRef}
+              value={props.draft}
+              onChangeText={props.onChangeDraft}
+              placeholder={props.placeholder}
+              onSend={props.onSend}
+              onStop={props.onStop}
+              generating={props.generating}
+              sending={props.sending}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+  StyleSheet.create({
+    root: {
+      flex: 1,
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: Colors.scrim,
+    },
+    avoider: {
+      flex: 1,
+      justifyContent: "flex-end",
+    },
+    sheet: {
+      maxHeight: "88%",
+      backgroundColor: Colors.surface,
+      borderTopLeftRadius: BorderRadius.xl,
+      borderTopRightRadius: BorderRadius.xl,
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      gap: Spacing.sm,
+      ...Shadows.soft,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+    },
+    title: {
+      flex: 1,
+      fontSize: Typography.headline.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.textMain,
+    },
+    headerButton: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: BorderRadius.full,
+    },
+    pressed: {
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    threadScroll: {
+      flexGrow: 0,
+      flexShrink: 1,
+    },
+    threadContent: {
+      paddingVertical: Spacing.sm,
+    },
+    empty: {
+      fontSize: Typography.body.fontSize,
+      lineHeight: Typography.body.lineHeight,
+      color: Colors.textSubtle,
+      paddingVertical: Spacing.lg,
+    },
+    refusal: {
+      backgroundColor: Colors.errorTint,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      gap: Spacing.sm,
+    },
+    refusalText: {
+      fontSize: Typography.label.fontSize,
+      color: Colors.textMain,
+    },
+    refusalAction: {
+      alignSelf: "flex-start",
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.primary,
+    },
+    refusalActionLabel: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.onPrimary,
+    },
+  });
