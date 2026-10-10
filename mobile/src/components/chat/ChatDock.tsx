@@ -32,6 +32,7 @@ import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import { describeChatRefusal, type ChatRefusal } from "../../lib/chatRefusal";
 import type { ChatScope } from "../../types/chat";
+import { ChatHistoryList } from "./ChatHistoryList";
 import { ChatSheet } from "./ChatSheet";
 
 export interface ChatDockProps {
@@ -51,6 +52,7 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [refusal, setRefusal] = useState<ChatRefusal | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const dockRef = useRef<View>(null);
 
   const generating = session.generation !== null;
@@ -158,6 +160,25 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
         onRetry={(question) => void ask(question)}
         refusal={refusal}
         onRefusalAction={handleRefusalAction}
+        historyOpen={historyOpen}
+        onToggleHistory={() => setHistoryOpen((value) => !value)}
+        history={
+          historyOpen ? (
+            <ChatHistoryList
+              scope={scope}
+              scopeId={scopeId}
+              currentId={conversation?.conversation_id ?? null}
+              onSelect={(conversationId) => {
+                setRefusal(null);
+                setHistoryOpen(false);
+                void chat.selectConversation(conversationId).catch((error) =>
+                  setRefusal(describeChatRefusal(error, scope)),
+                );
+              }}
+              onDelete={(conversationId) => chat.deleteConversation(conversationId)}
+            />
+          ) : null
+        }
         onNewConversation={
           conversation && conversation.turn_count > 0
             ? () => {

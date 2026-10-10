@@ -57,6 +57,10 @@ export interface ChatSheetProps {
   onRefusalAction: (action: NonNullable<ChatRefusal["action"]>) => void;
   /** Offered once the conversation has turns. */
   onNewConversation: (() => void) | null;
+  /** The past conversations of the scope replace the thread while open (task-469). */
+  historyOpen: boolean;
+  onToggleHistory: () => void;
+  history: React.ReactNode;
 }
 
 export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
@@ -108,9 +112,31 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
             testID="chat-sheet"
           >
             <View style={styles.header}>
+              {props.historyOpen ? (
+                <Pressable
+                  style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+                  onPress={props.onToggleHistory}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("chat.history.back")}
+                  testID="chat-sheet-history-back"
+                >
+                  <Ionicons name="arrow-back" size={22} color={Colors.textMain} />
+                </Pressable>
+              ) : null}
               <Text ref={titleRef} style={styles.title} accessibilityRole="header" numberOfLines={1}>
-                {props.title}
+                {props.historyOpen ? t("chat.history.title") : props.title}
               </Text>
+              {!props.historyOpen ? (
+                <Pressable
+                  style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
+                  onPress={props.onToggleHistory}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("chat.history.open")}
+                  testID="chat-sheet-history"
+                >
+                  <Ionicons name="time-outline" size={22} color={Colors.textMain} />
+                </Pressable>
+              ) : null}
               {props.onNewConversation ? (
                 <Pressable
                   style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
@@ -140,9 +166,13 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
               style={styles.threadScroll}
               contentContainerStyle={styles.threadContent}
               keyboardShouldPersistTaps="handled"
-              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+              onContentSizeChange={() => {
+                if (!props.historyOpen) scrollRef.current?.scrollToEnd({ animated: true });
+              }}
             >
-              {props.messages.length === 0 ? (
+              {props.historyOpen ? (
+                props.history
+              ) : props.messages.length === 0 ? (
                 <Text style={styles.empty}>{props.emptyText}</Text>
               ) : (
                 <ChatThread
@@ -156,7 +186,7 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
               )}
             </ScrollView>
 
-            {props.refusal ? (
+            {!props.historyOpen && props.refusal ? (
               <View style={styles.refusal} accessibilityLiveRegion="polite" testID="chat-sheet-refusal">
                 <Text style={styles.refusalText}>{props.refusal.message}</Text>
                 {props.refusal.action && refusalActionLabel ? (
@@ -172,6 +202,7 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
               </View>
             ) : null}
 
+            {props.historyOpen ? null : (
             <ChatComposer
               ref={inputRef}
               value={props.draft}
@@ -182,6 +213,7 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
               generating={props.generating}
               sending={props.sending}
             />
+            )}
           </View>
         </KeyboardAvoidingView>
       </View>
