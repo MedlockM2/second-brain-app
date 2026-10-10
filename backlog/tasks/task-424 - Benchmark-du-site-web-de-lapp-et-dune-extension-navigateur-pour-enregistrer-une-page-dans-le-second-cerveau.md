@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-04 16:22'
-updated_date: '2026-10-06 17:19'
+updated_date: '2026-10-10 14:48'
 labels:
   - benchmark
   - scoping
@@ -23,6 +23,15 @@ references:
   - 'https://www.recall.it/web-clipper'
   - 'https://chrome.google.com/webstore/detail/ldbooahljamnocpaahaidnmlgfklbben'
   - 'https://addons.mozilla.org/en-US/firefox/addon/getrecall/'
+  - docs/research/task-434-chatbot-integration-ui/README.md
+  - docs/research/task-430-chatbot-architecture/README.md
+  - docs/BRAND_IDENTITY.md
+  - mobile-design-mockups/my_design_system/DESIGN.md
+  - mobile/src/constants/theme.ts
+  - docs/BENCHMARK_OWNER_WORKFLOW.md
+  - >-
+    backlog/tasks/task-439 -
+    Unifier-sur-GPT-6-Luna-le-modèle-des-artefacts-des-aperçus-et-du-futur-chat.md
 priority: medium
 type: spike
 ordinal: 31000
@@ -31,79 +40,69 @@ ordinal: 31000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-## Le besoin
+## Nouvelle passe demandée par l'owner le 2026-10-10
 
-L'app n'existe aujourd'hui que sur mobile, et on y enregistre un contenu par la feuille de partage (`expo-share-intent`). Sur ordinateur, il n'y a aucun moyen d'envoyer une page vers son second cerveau. Il faut deux choses :
+Relancer le benchmark de l'app web Deepn et générer **cinq nouvelles directions de design**, en intégrant le chatbot décidé depuis la passe précédente et en corrigeant la navigation parmi de nombreux dossiers. Les quatre directions précédentes ne répondent pas à ce dernier besoin ; aucune n'est validée. L'app web connectée est déjà décidée : ne pas rouvrir la question « vitrine ou app web ».
 
-1. **un site web de l'app** ;
-2. **une extension navigateur** qui enregistre la page courante en un clic, sans quitter l'onglet.
+Le README principal porte `owner_decision: redo`. Au prochain dispatch, la Phase 0 l'archivera ; travailler ensuite en mode redo, en lisant **tous** les `README.owner-rejected-*.md`, notamment les décisions du 2026-10-05 et du 2026-10-10. Les présentes consignes remplacent les anciennes exigences de quatre propositions et les anciens minima de trois écrans. Les notes des passes antérieures sont un historique, pas la preuve que cette nouvelle passe est terminée.
 
-La forme exacte n'est pas évidente (périmètre du site, navigateurs, authentification de l'extension, ce qu'on capture). Ce benchmark la définit avant toute implémentation.
+## Sources et décisions à appliquer
 
-## La référence : l'extension de Recall
+- `docs/research/task-434-chatbot-integration-ui/README.md`, **Owner Validation → Decision** : **direction F**, composeur persistant à portée **média et dossier uniquement**, visible dans **Lecture** d'un média et dans **Sources** d'un dossier. **Aucun chat à portée bibliothèque.** La Recommendation D du benchmark n'est pas la décision et ne doit pas être reprise à sa place. Adapter cette interaction au desktop sans changer ces portées et ces conditions d'affichage.
+- `docs/research/task-430-chatbot-architecture/README.md`, **Owner Validation → Decision** : chat multi-tours, historique durable, streaming SSE reprenable, arrêt volontaire et échecs partiels ; les deux portées font partie de la première livraison fonctionnelle. Évaluer les conséquences web sur la session, l'authentification du flux, le CORS des deux façades et la reprise après navigation/rechargement ; ne pas rouvrir l'architecture retenue.
+- `task-439` : choix de `gpt-6-luna` Standard pour chat, artefacts et aperçus, sans nouveau benchmark de modèles. Réutiliser ce choix dans les coûts et le découpage.
+- `docs/BRAND_IDENTITY.md` : nom définitif **Deepn**. Le nom n'est plus un choix ouvert ; ne pas présumer qu'un domaine est acheté.
+- Design system **Amber Clarity**, tokens de `mobile/src/constants/theme.ts` et référence `mobile-design-mockups/my_design_system/DESIGN.md`. Tenir compte des thèmes clair et sombre existants.
+- Les conclusions acquises des passes précédentes sur l'extension, Stripe via RevenueCat, la TVA, les stores et task-357 restent des points de départ. Ne réexaminer que ce que le code actuel, le chatbot ou une source officielle actualisée remet en cause, en expliquant pourquoi.
 
-Recall (getrecall.ai, devenu recall.it, à ne pas confondre avec recall.ai qui est une API de bots de réunion) fait exactement cela. D'après sa documentation publique, relue le 2026-10-04 :
+## Exhaustivité fonctionnelle impérative
 
-- **Navigateurs** : Chrome, Firefox, Edge, et Safari sur Mac. Un même compte synchronise l'extension, l'app web et le mobile.
-- **Enregistrement** : l'icône épinglée dans la barre d'outils ouvre un panneau qui propose « save the full content », « summarize and chat » ou « save to the Recall Notebook ». Raccourcis `Alt+S` (enregistrer la page) et `Alt+R` (ouvrir ou fermer le panneau), modifiables dans `chrome://extensions/shortcuts`.
-- **Contenus** : YouTube, posts X et Reddit, PDF, Google Docs et Slides, articles, podcasts, TikTok, Instagram, recettes, Wikipédia.
-- **Dans la page** : un résumé immédiat, un chat sur la page ou sur toute la bibliothèque, et un mode « Augmented Browsing », en bêta, qui surligne sur la page les mots-clés reliés aux contenus déjà enregistrés. Ce mode tourne en local, avec un modèle embarqué dans le navigateur et non un LLM, et peut être désactivé par site ou partout.
-- **Confidentialité affichée** : rien n'est envoyé au serveur tant que l'utilisateur n'enregistre pas explicitement.
+**L'agent ne doit oublier aucune fonctionnalité existante dans l'app.** Commencer par un inventaire actuel de `mobile/app/`, des composants, hooks, services, menus et contrats API ; ne pas se limiter aux six surfaces et aux anciens comptes de lignes du README. Pour chaque fonction et action, produire une matrice avec sa source dans le dépôt, son équivalent web, son emplacement dans **chacune des cinq directions** et son lot d'implémentation.
 
-Cette liste sert d'inspiration, pas de cahier des charges : le benchmark dit ce qu'on garde pour une première version et ce qu'on écarte.
+L'inventaire couvre notamment : connexion/inscription/onboarding ; ajouts récents et reprise de lecture ; ajout par URL et import de fichiers/images/documents ; revue des non classés et aperçus ; bibliothèque, dossiers/sous-dossiers, création, renommage, déplacement/rangement, suppression et menus contextuels ; lecteur de média et de texte, langue originale et traductions ; consultation, génération et historique des artefacts ; digest quotidien/hebdomadaire ; recherche ; compte, langues, thèmes, abonnement/consommation selon l'état beta, déconnexion, suppression de compte et signalement de problème. Cette liste est un plancher, **pas un substitut à la lecture du code**. Ajouter le chatbot validé, même s'il n'est pas encore implémenté.
 
-## Ce que le dépôt impose déjà
+Ne pas réintroduire des fonctions supprimées, par exemple les tags. Les interactions natives doivent avoir leur équivalent web lorsqu'il existe ; toute contrainte propre à une plateforme doit être explicitement documentée. Aucun oubli, suppression implicite ou report non identifié sous prétexte de simplifier une maquette. Un découpage de livraison peut être proposé, mais les cinq designs doivent montrer la cible fonctionnelle complète, pas seulement un premier lot en lecture.
 
-- **Aucun client web n'existe.** Le flux OAuth web (`GET /api/auth/google/callback`, `/apple/callback`) **n'émet aucun token de session**. Les sessions s'ouvrent par `POST /api/auth/google/native`, `/apple/native` ou `/login`, et le refresh token voyage dans le corps JSON, sans cookie (`docs/AUTHENTICATION_SETUP.md`, task-293). L'extension a donc besoin d'un chemin d'authentification qui n'existe pas encore.
-- **L'ingestion par URL existe** : `POST /api/media/ingest-url` accepte `url`, `source_app`, `locale`, `idempotency_key` et `folder_id`. Un texte sélectionné peut passer par `POST /api/media/ingest-shared-content` (`share_type: text`, qui devient une note). Une page derrière une connexion ou un paywall n'est pas récupérable par le serveur avec la seule URL.
-- **CORS** : `CORS_ORIGINS` vaut `*` par défaut (`media_summarizer/api/main.py:87`). Il faut vérifier ce que demande une origine `chrome-extension://…` ou `moz-extension://…`.
-- **La facturation passe uniquement par RevenueCat.** L'ancien code Stripe a été supprimé (task-98). Le webhook ne reconnaît que les stores `APP_STORE`, `MAC_APP_STORE` et `PLAY_STORE` (`_get_platform`, `media_summarizer/api/endpoints/revenucat_webhook.py:183`), et `SubscriptionPlatform` ne connaît que `ios` et `android` (`media_summarizer/core/models/billing.py:26`). Un abonnement payé sur le web n'est aujourd'hui reconnu nulle part. Il ne faut pas ressusciter l'ancien code Stripe : on part de l'architecture actuelle.
-- **Domaine et pages légales** : le projet ne possède aucun domaine. **task-357** a déjà étudié leur hébergement et recommande un `.com` acheté, servi par Cloudflare Pages, en attente de décision de l'owner. Le site doit se construire **sur ce choix, sans refaire ce benchmark**. Le domaine dépend du nom marketing, qui n'est pas encore choisi (**task-186**).
+## Cinq directions avec cinq approches particulières
 
-## Dimensions à couvrir
+Produire exactement **cinq propositions réellement distinctes**, A à E, de l'**app web connectée**. Pour chacune, nommer et expliquer sa thèse UX : organisation de l'information, navigation, densité, manière de retrouver les dossiers, lecture et articulation avec le chat. Les différences portent sur la structure et les parcours, pas sur cinq palettes de couleurs ou cinq variantes d'une landing page. Ne pas décider à l'avance laquelle gagne.
 
-1. **Périmètre du site** : un site vitrine (présentation, liens vers les stores, page d'installation de l'extension, support, `/privacy` et `/terms` de task-357) ou une app web (bibliothèque consultable dans le navigateur). Dans les deux cas, le site porte le **paiement Stripe** (dimension 10), donc une connexion au compte et une page d'abonnement. Chiffrer l'écart d'effort, recommander, et laisser l'owner trancher.
-2. **Stack et hébergement du site**, dans la continuité de la recommandation de task-357.
-3. **Framework d'extension** : WXT, Plasmo, CRXJS ou Manifest V3 sans framework. Critères : un seul code pour Chrome, Edge et Firefox, maintenance par un développeur seul, partage de code TypeScript avec `mobile/`.
-4. **Navigateurs cibles et publication** : Chrome Web Store (qui couvre aussi Edge et Brave, ou faut-il Edge Add-ons ?), Firefox Add-ons, Safari (Safari Web Extension, qui demande un projet Xcode et un compte Apple Developer : peut-on la livrer avec l'app iOS ou macOS existante ?). Pour chacun : coût, délai d'examen, et règles d'examen qui nous concernent (justification des permissions `activeTab` contre `<all_urls>`, politique de confidentialité exigée, règles « Limited Use » sur les données).
-5. **Authentification de l'extension et du site** (le site en a besoin pour le paiement ; dire si une même solution sert aux deux), au moins trois options comparées : `chrome.identity.launchWebAuthFlow` avec Google et Apple, email et mot de passe, appairage depuis l'app mobile (QR code ou code à saisir), session ouverte sur le site web. Pour chacune : changements backend, compatibilité Firefox et Safari, stockage du refresh token (`chrome.storage.local` et ses risques), révocation par appareil (`lineage_id`).
-6. **Ce qu'on capture** : l'URL seule (endpoint existant), le texte ou le HTML de la page (nouveau contrat backend, seule façon de couvrir les pages derrière connexion ou paywall), la sélection (vers une note), le PDF ouvert dans le navigateur. Dire ce que la première version retient.
-7. **UX** : bouton de barre d'outils, raccourci clavier, menu contextuel, popup de confirmation avec choix du dossier et des tags (comme la modale de partage mobile, task-206), suivi de l'état du traitement. Pour chaque fonction de Recall citée plus haut, la garder ou l'écarter, en le justifiant.
-8. **Impact backend et produit** : valeur de `source_app`, CORS, quotas. Un enregistrement depuis l'extension compte dans le même quota que sur mobile, et l'abonnement ne s'achète pas dans l'extension : comment l'extension renvoie vers la page de paiement du site ou vers l'app.
-9. **Coût sur douze mois et charge de maintenance** pour un développeur seul, frais Stripe compris.
-10. **Paiement Stripe sur le site** :
-    - **Intégration** : Stripe en direct (Checkout, Customer Portal, webhooks vers notre backend) ou Stripe branché sur RevenueCat (intégration Stripe de RevenueCat, ou RevenueCat Web Billing qui s'appuie sur Stripe). Critère principal : une seule source de vérité pour les droits, pour qu'un abonné web soit reconnu dans l'app mobile et inversement. Dire ce que chaque option change dans le webhook, dans `SubscriptionPlatform` et dans `docs/REVENUECAT_ENTITLEMENTS.md`.
-    - **Catalogue** : correspondance avec les tiers `S`, `M` et `L` et les durées existantes, cohérence des prix avec les stores.
-    - **Règles des stores** : ce que l'app mobile a le droit de dire ou de lier vers un paiement web (App Store guidelines 3.1.1 et 3.1.3, liens externes autorisés aux États-Unis et dans l'UE, règles Google Play), avec des sources datées. Et le cas d'un utilisateur abonné sur deux canaux à la fois.
-    - **TVA et facturation** : Stripe Tax ou équivalent pour un vendeur solo dans l'UE, factures, remboursements, résiliation. Comparer, au moins pour le coût et la charge administrative, avec un marchand officiel (Paddle, Lemon Squeezy).
-11. **4 propositions de design du site**, réellement différentes (structure de page, ton, place donnée à l'extension par rapport aux apps mobiles, présentation des offres), et non quatre variantes de couleur d'une même page.
-    - **Design system** : *Amber Clarity*, le même que l'app. Les tokens font autorité dans `mobile/src/constants/theme.ts`, la référence visuelle est `mobile-design-mockups/my_design_system/DESIGN.md`. Il s'adapte au web, il ne se réinvente pas.
-    - **Convention des maquettes** : un répertoire par proposition, `mobile-design-mockups/website_direction_a_<slug>/` à `website_direction_d_<slug>/`, contenant un `code.html` autonome et un `screen.png` (voir `digest_direction_a_sommaire` à `digest_direction_d_fiche_unique`, task-408).
-    - **Pages couvertes par chaque proposition**, au minimum : l'accueil (promesse, captures de l'app, liens vers les stores), l'installation de l'extension, et la page d'abonnement qui mène au paiement Stripe, avec les tiers `S`, `M` et `L`.
-    - **Tailles** : chaque proposition est rendue à 1440 px (ordinateur, là où l'extension s'installe) et à 390 px (mobile).
-    - Le README compare les 4 et en recommande une.
+Toutes couvrent le même périmètre fonctionnel. Les fonctions secondaires peuvent apparaître dans des vues, menus ou modales atteignables du prototype, mais leur accès doit être identifiable dans la matrice. La vitrine publique, les pages légales, l'installation de l'extension et l'abonnement restent étudiés ; ils ne remplacent pas les écrans connectés.
 
-## Livrable
+## Bibliothèque agréable avec beaucoup de dossiers
 
-- `docs/research/task-XXX-<description-courte>/README.md`, avec le front-matter `owner_decision: pending`, les tableaux comparatifs, une recommandation argumentée et un périmètre de première version découpé en lots.
-- Les 4 maquettes du site sous `mobile-design-mockups/website_direction_*/`.
+C'est un critère discriminant de cette passe, pas une remarque annexe. Chaque direction doit montrer et expliquer son fonctionnement avec un petit espace puis avec un corpus de référence commun d'**au moins 200 dossiers, trois niveaux de profondeur, des noms longs et des homonymes dans des parents différents**.
 
-**Aucune implémentation** : pas de code applicatif, aucun achat, aucune publication.
+Illustrer les parcours concrets : retrouver rapidement un dossier peu utilisé ; identifier le dossier actif et son chemin ; naviguer entre dossiers sans perdre sa place ; parcourir une longue liste sans bloquer la lecture ; créer/renommer un dossier ; choisir une destination lors d'un ajout ou d'un déplacement. Montrer les états de recherche/filtrage des dossiers ou l'autre mécanisme retenu, les branches repliées/dépliées, le défilement, les libellés longs et les résultats ambigus. Expliquer aussi comment la proposition tient à 1 000 dossiers.
+
+Une arborescence entièrement dépliée, une grille ou une rangée interminable de dossiers, ou une capture avec cinq dossiers ne démontre pas la réponse au besoin. Chaque direction choisit une approche cohérente et en expose les compromis. Documenter navigation clavier, focus et adaptation responsive. Ne pas simuler la grande bibliothèque seulement en écrivant « 200 dossiers » dans un compteur : les données et interactions du prototype doivent permettre d'examiner les parcours.
+
+## Livrables attendus
+
+1. Nouveau `docs/research/task-424-website-and-browser-extension/README.md`, `owner_decision: pending`, avec inventaire et matrice de couverture, comparaison des cinq approches, analyse spécifique des nombreux dossiers, intégration du chatbot, recommandation argumentée, coûts actualisés et découpage en lots/dépendances. Les fonctionnalités différées dans les lots restent explicitement recensées.
+2. Cinq maquettes sous `mobile-design-mockups/web_app/direction_a_<slug>/` à `direction_e_<slug>/`. Chaque répertoire contient un `code.html` autonome sans requête réseau, un `screen.png` de référence desktop à 1440 px et un `screen-mobile.png` à 390 px. Les anciens répertoires de directions devenus obsolètes sont remplacés pour qu'il n'existe qu'un jeu actif de cinq directions ; les READMEs rejetés conservent l'historique.
+3. Pour chaque direction, des captures identifiées `screen-library-many-folders.png`, `screen-media-chat.png` et `screen-folder-chat.png`, montrant respectivement la bibliothèque chargée, le chat dans Lecture d'un média et le chat dans Sources d'un dossier. Le prototype rend aussi visibles les autres fonctions recensées : IA/génération et historique, digest, recherche, ajout/rangement et compte. Les captures proviennent du HTML réellement rendu.
+4. Comparaison fondée sur des parcours et des références UX sourcées, avec forces/faiblesses, effort et recommandation. Aucune nouvelle sélection de modèle LLM.
+
+**Aucune implémentation applicative, aucun achat, aucune publication.** Le diff de l'agent reste limité au dossier de recherche task-424, aux maquettes `mobile-design-mockups/web_app/` et à sa tâche. Ne pas lancer de tests automatisés de l'app ; rendre et inspecter les maquettes.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [x] #1 Le README part du fait que l'app web est décidée et dit **comment** la faire : périmètre fonctionnel connecté, stack, hébergement, session de navigateur, CORS, partage de code avec mobile/ ; il tranche entre parité complète dès le premier lot et un sous-ensemble en lecture d'abord, en chiffrant les deux ; et il reprend la recommandation d'hébergement de task-357 au lieu de la refaire
-- [x] #2 Au moins trois frameworks d'extension sont comparés sur une grille commune (Chrome/Edge/Firefox avec un seul code, maintenance, partage de code avec mobile/)
-- [x] #3 Chaque navigateur cible a son coût de publication, son délai d'examen et les règles d'examen applicables, avec des sources datées ; le cas Safari est traité explicitement
-- [x] #4 Au moins trois options d'authentification sont comparées, chacune avec les changements backend qu'elle demande, en partant du constat que le flux OAuth web actuel n'émet aucun token
-- [x] #5 Le périmètre de capture de la première version (URL, contenu de page, sélection, PDF) est défini, avec les changements de contrat d'API qu'il demande
-- [x] #6 Chaque fonction de l'extension Recall listée dans la description est gardée ou écartée pour la première version, avec sa justification
-- [x] #7 Le paiement Stripe sur le site est traité : Stripe en direct comparé à Stripe via RevenueCat, avec les changements du webhook et du modèle de facturation que chaque option demande, et ce que l'app mobile a le droit de dire d'un paiement web, sources datées à l'appui
-- [x] #8 4 propositions de design de l'app web, distinctes, chacune dans son propre répertoire mobile-design-mockups/web_app/direction_<lettre>_<slug>/ (code.html autonome + screen.png), couvrant au minimum les écrans connectés bibliothèque, fiche média et digest, conformes au design system Amber Clarity, avec le desktop comme rendu de référence et un rendu responsive secondaire
-- [x] #9 Le README compare les 4 propositions de design et en recommande une
-- [x] #10 Le README porte owner_decision: pending et propose un découpage de l'implémentation en lots
-- [x] #11 Aucun fichier hors de docs/research/task-424-*/, de mobile-design-mockups/web_app/ et de ce fichier de tâche n'est modifié
+- [x] #1 Le nouveau README est produit en mode redo et explique comment il intègre les décisions des rejets successifs, dont celle du 2026-10-10 ; l'app web connectée Deepn est le périmètre acquis et aucun ancien minimum de quatre directions ne borne cette passe.
+- [x] #2 Un inventaire actuel des fonctionnalités, actions et états de l'app, fondé sur les routes, composants, hooks, services et API du dépôt, existe avec ses références de code ; la liste indicative de la description n'est pas traitée comme exhaustive.
+- [x] #3 Une matrice relie chaque fonctionnalité existante et le chatbot validé à son équivalent web, à un emplacement identifiable dans chacune des cinq maquettes et à un lot d'implémentation ; toute contrainte de plateforme ou fonction différée est explicitement documentée, sans omission implicite ni réintroduction de fonctions supprimées.
+- [x] #4 Exactement cinq directions A à E de l'app web connectée sont livrées sous mobile-design-mockups/web_app/, chacune avec une approche UX particulière expliquée ; elles diffèrent par leurs structures et parcours tout en couvrant le même périmètre.
+- [x] #5 Dans chacune des cinq directions, le composeur de chat persistant suit la Decision de task-434 : média dans Lecture et dossier dans Sources, aucune portée bibliothèque ni entrée de chat persistante dans les autres onglets ; le prototype montre la conversation et son historique.
+- [x] #6 Les maquettes et le README rendent visibles les états d'envoi, de réponse en streaming, d'arrêt, d'échec partiel et de reprise du chat ; l'analyse web suit la Decision de task-430 pour les deux portées, sans réouvrir l'architecture ou le choix gpt-6-luna de task-439.
+- [x] #7 Chaque direction possède un jeu de données et des états examinables pour au moins 200 dossiers sur trois niveaux avec noms longs et homonymes ; le README documente aussi le comportement attendu à 1 000 dossiers et compare les compromis des cinq approches.
+- [x] #8 Chaque direction illustre la recherche ou le mécanisme de repérage retenu pour les dossiers, le chemin du dossier actif, le retour à la liste sans perte de place et le choix d'une destination lors d'un ajout ou déplacement ; le défilement, les branches et les libellés longs sont traités explicitement.
+- [x] #9 Les cinq prototypes donnent un accès identifiable à la bibliothèque, aux pages dossier et média, aux aperçus, au lecteur et aux langues de lecture, à la consultation/génération/historique des artefacts, au digest, à la recherche, aux ajouts et actions de rangement, au compte et aux autres fonctionnalités de l'inventaire ; ils montrent la cible complète même si la livraison est découpée.
+- [x] #10 Chaque direction contient code.html autonome sans requête réseau, screen.png rendu desktop à 1440 px, screen-mobile.png à 390 px, screen-library-many-folders.png, screen-media-chat.png et screen-folder-chat.png ; les captures sont issues du rendu inspecté du HTML, conformes à Amber Clarity et au nom Deepn.
+- [x] #11 Le README compare les cinq directions sur une grille commune incluant exhaustivité, bibliothèque avec beaucoup de dossiers, lecture/chat, accessibilité clavier, responsive et effort, avec références UX sourcées ; il en recommande une en motivant les compromis.
+- [x] #12 Le README actualise les impacts sur stack/hébergement/session/CORS/partage de code, coûts et lots à partir du dépôt courant et du chatbot retenu ; les conclusions déjà acquises sur extension, paiement et task-357 sont reprises ou leurs révisions explicitement justifiées et sourcées.
+- [x] #13 Le nouveau README porte owner_decision: pending et distingue clairement la recommandation des décisions déjà actées ; l'implémentation task-425 demeure dépendante de task-424 et les éventuelles dépendances des lots avec le chatbot sont identifiées.
+- [x] #14 Aucun fichier hors de docs/research/task-424-website-and-browser-extension/, de mobile-design-mockups/web_app/ et du fichier de task-424 n'est modifié ; les archives de recherche existantes sont préservées et un seul jeu actif de cinq directions est présenté.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -164,5 +163,18 @@ Les onze AC sont cochés. Quatre d'entre eux — **#2, #3, #5, #6** — et une p
 **La recommandation attend la validation de l'owner.** La tâche reste en `To Do` ; `owner_decision` vaut `pending`. C'est l'owner qui bascule le champ à `ok`, `abandoned`, `redo` ou `more`.
 
 **Périmètre touché** : ce fichier de tâche (AC et notes), le `README.md` de recherche, et les quatre répertoires `mobile-design-mockups/web_app/direction_*`. Aucun fichier de code applicatif, de configuration ou d'infrastructure n'est modifié — les numéros de ligne cités dans le README sont des lectures.
-<!-- SECTION:NOTES:END -->
 
+2026-10-10 — Nouvelle passe demandée par l'owner : cinq nouvelles directions, parité fonctionnelle inventoriée, chatbot selon les Decisions de task-434/task-430 et UX de bibliothèque démontrée sur de nombreux dossiers. Le README actif est remis en redo ; la Phase 0 du prochain dispatch doit l'archiver avant la nouvelle recherche. Les critères de cette passe sont remis à zéro. Les notes ci-dessus décrivent uniquement les livrables antérieurs, qui ne satisfont pas les nouvelles exigences.
+
+2026-10-10 — **Troisième passe produite, mode redo.** Le README `redo` du jour a été archivé en `README.owner-rejected-2026-10-10.md` (Phase 0) ; les deux rejets (2026-10-05, 2026-10-10) ont été relus et leur prise en compte est tracée en §0 du nouveau README.
+
+- **AC #1, #13** : nouveau `README.md` en `owner_decision: pending` ; tableau « acté / repris / recommandé » en tête ; task-425 reste dépendante de task-424 ; dépendances du lot WC avec task-431 et task-439 en §10.4.
+- **AC #2, #3** : inventaire F1–F74 depuis les routes, composants, hooks, services et API (§1), matrice fonctionnalité → web → A..E → lot (§2). Trois écarts nommés : notifications push (différées), share sheet (remplacée par l'extension, le dépôt et le collage), barre repliée (sans objet sur bureau). Tags non réintroduits, et retirés du lot X2 de l'extension.
+- **AC #4, #9, #10** : cinq directions sous `mobile-design-mockups/web_app/` : A arbre latéral, B colonnes, C barre de saut, D flux à facettes, E onglets de travail. Chacune a `code.html` autonome, `screen.png` 1440, `screen-mobile.png` 390, `screen-library-many-folders.png`, `screen-media-chat.png`, `screen-folder-chat.png`. Les quatre anciens répertoires sont supprimés. Sources, build et captures dans `docs/research/task-424-website-and-browser-extension/mockup-build/`. Les captures passent par le protocole DevTools : Chrome ne descend pas sous 500 px de large avec `--window-size`.
+- **AC #5, #6** : composeur uniquement dans Lecture (média) et Sources (dossier), historique, états envoi / flux / arrêt / échec partiel / reprise / refus / minutes adressables par `#cs=` (§6). Conséquences web : CORS de la façade REST `STREAM`, flux par `fetch` (pas `EventSource`), reprise par `/refresh`, un seul onglet attaché.
+- **AC #7, #8** : corpus déterministe de 295 dossiers (15/83/197, homonymes ×20, noms jusqu'à 91 caractères), variantes à 7 et 1 018 ; six parcours rejoués par direction (§5).
+- **AC #11, #12** : grille pondérée sourcée (§7) ; recommandation **A + palette ⌘K de C**, repli C (§8). Stack, session, hébergement, extension et paiement repris ; ajouts : CORS du flux, auth sociale web à vérifier, lot WC ; total 42 à 63 j (§9–§11).
+- **AC #14** : seuls `docs/research/task-424-*/`, `mobile-design-mockups/web_app/` et ce fichier sont modifiés.
+
+**La recommandation attend la validation de l'owner.** La tâche reste `To Do`. Rien n'est commité : l'arbre de travail principal portait déjà des modifications non commitées d'autres tâches.
+<!-- SECTION:NOTES:END -->

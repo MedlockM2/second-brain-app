@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deepn — Direction A — « L'arbre latéral »</title>
+<!--
+  task-424, troisième passe — maquette de l'APP WEB CONNECTÉE de Deepn. Autonome : aucune
+  balise <link>, <img> ni <script src>, donc aucune requête réseau.
+  Généré par docs/research/task-424-website-and-browser-extension/mockup-build/build.mjs
+  (noyau commun + coquille propre à la direction) : modifier les sources, pas ce fichier.
+
+  - Tokens : mobile/src/constants/theme.ts, clair et sombre, repris verbatim.
+  - Polices : Plus Jakarta Sans et Inter déclarées ; sans réseau, repli système.
+  - Icônes : contours exacts d'Ionicons.ttf (@expo/vector-icons), extraits par extract_icons.py.
+  - Couvertures : bloc teinté portant le glyphe du type, substitut déclaré des vignettes.
+  - Corpus : 295 dossiers sur trois niveaux, noms longs et homonymes (data.js) ; variantes
+    à 7 et à 1 018 dossiers par #corpus=small / #corpus=xl.
+  - Chaque état est adressable par le hash ; le bouton « Parcours de la maquette » liste
+    les parcours de l'inventaire. #shot=1 le masque pour les captures.
+-->
+<style>
+/* Shared base of the five directions. Tokens are mobile/src/constants/theme.ts, verbatim,
+   light and dark. Type scale 32 / 20 / 16 / 14 / 13 only. Fonts: Plus Jakarta Sans for
+   headings and Inter for text, as DESIGN.md prescribes; a mockup with no network falls
+   back to the system stack, which is the only declared visual gap. */
+:root {
+  --primary: #ffcb05; --on-primary: #1c1b1a; --primary-tint: rgba(255, 203, 5, 0.05); --primary-30: rgba(255, 203, 5, 0.3);
+  --background: #fcf9f6; --surface: #ffffff; --surface-container: #f1edea; --surface-container-high: #ebe7e5; --surface-container-low: #f7f3f0;
+  --text-main: #2b2d42; --text-muted: #8d99ae; --text-subtle: #5c6880; --outline: #78776f; --outline-variant: #c8c7bd;
+  --highlight: #fff0b3; --on-highlight: #1c1b1a; --scrim: rgba(43, 45, 66, 0.35); --glass: rgba(252, 249, 246, 0.9);
+  --error: #ba1a1a; --on-error: #ffffff; --error-container: #ffdad6; --error-tint: rgba(186, 26, 26, 0.1);
+  --short-container: #d6e4fd; --cover-veil: rgba(252, 249, 246, 0.72);
+  --shadow: 0 8px 24px rgba(43, 45, 66, 0.04); --shadow-pop: 0 12px 32px rgba(43, 45, 66, 0.12);
+  --r-sm: 4px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-full: 9999px;
+  --font-head: "Plus Jakarta Sans", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --primary: #f0bf2a; --on-primary: #1c1b1a; --primary-tint: rgba(240, 191, 42, 0.05); --primary-30: rgba(240, 191, 42, 0.3);
+  --background: #171511; --surface: #211e19; --surface-container: #2d2a25; --surface-container-high: #37332c; --surface-container-low: #262320;
+  --text-main: #f1ebe1; --text-muted: #9aa3b4; --text-subtle: #c6cdd9; --outline: #a8a69a; --outline-variant: #3d3932;
+  --highlight: #5c4a12; --on-highlight: #ffe9a8; --scrim: rgba(0, 0, 0, 0.6); --glass: rgba(33, 30, 25, 0.92);
+  --error: #ffb4ab; --on-error: #690005; --error-container: #93000a; --error-tint: rgba(255, 180, 171, 0.08);
+  --short-container: #1a4975; --cover-veil: rgba(23, 21, 17, 0.72);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35); --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--background); color: var(--text-main); font: 400 16px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; overflow: hidden; }
+::selection { background: var(--primary-30); }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--r-md); }
+.ico { width: 20px; height: 20px; fill: currentColor; flex: none; display: inline-block; vertical-align: middle; }
+.ico.s16 { width: 16px; height: 16px; } .ico.s18 { width: 18px; height: 18px; } .ico.s24 { width: 24px; height: 24px; } .ico.s14 { width: 14px; height: 14px; }
+h1, h2, h3 { font-family: var(--font-head); margin: 0; }
+.display { font: 700 32px/1.2 var(--font-head); letter-spacing: -0.5px; }
+.headline { font: 600 20px/1.35 var(--font-head); }
+.label { font-size: 14px; font-weight: 500; line-height: 1.4; }
+.small { font-size: 13px; line-height: 1.45; }
+.muted { color: var(--text-muted); } .subtle { color: var(--text-subtle); }
+.caps { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-subtle); }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.grow { flex: 1; min-width: 0; }
+.scroll { overflow-y: auto; overscroll-behavior: contain; }
+.kbd { font: 500 13px/1 var(--font-body); padding: 3px 6px; border-radius: var(--r-sm); background: var(--surface-container-high); color: var(--text-subtle); }
+mark { background: var(--highlight); color: var(--on-highlight); border-radius: 2px; padding: 0 1px; }
+
+/* Buttons and fields */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border-radius: var(--r-full); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.btn.primary { background: var(--primary); color: var(--on-primary); }
+.btn.tonal { background: var(--surface-container); color: var(--text-main); }
+.btn.ghost { color: var(--text-subtle); }
+.btn.ghost:hover, .btn.tonal:hover { background: var(--surface-container-high); }
+.btn.danger { background: var(--error); color: var(--on-error); }
+.icon-btn { width: 40px; height: 40px; border-radius: var(--r-full); display: inline-flex; align-items: center; justify-content: center; color: var(--text-subtle); flex: none; }
+.icon-btn:hover { background: var(--surface-container); }
+.field { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: var(--r-full); background: var(--surface-container); color: var(--text-subtle); }
+.field input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font-size: 14px; color: var(--text-main); }
+.field input::placeholder { color: var(--text-muted); }
+.field:focus-within { box-shadow: 0 0 0 2px var(--primary); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: var(--r-full); background: var(--surface); box-shadow: inset 0 0 0 1px rgba(0,0,0,.05); font-size: 13px; color: var(--text-subtle); white-space: nowrap; }
+[data-theme="dark"] .chip { box-shadow: inset 0 0 0 1px var(--outline-variant); }
+.chip.on { background: var(--primary); color: var(--on-primary); box-shadow: none; }
+.seg { display: inline-flex; padding: 4px; gap: 4px; border-radius: var(--r-full); background: var(--surface-container); }
+.seg button { height: 32px; padding: 0 16px; border-radius: var(--r-full); font-size: 14px; font-weight: 600; color: var(--text-subtle); display: inline-flex; align-items: center; gap: 6px; }
+.seg button.on { background: var(--primary); color: var(--on-primary); }
+.badge { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: var(--r-sm); background: var(--surface-container-high); font-size: 11px; font-weight: 700; letter-spacing: 0.04em; color: var(--text-subtle); }
+.badge.short { background: var(--short-container); }
+.badge.err { background: var(--error-container); color: var(--error); }
+[data-theme="dark"] .badge.err { color: var(--error); }
+.count { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.callout { border-left: 4px solid var(--primary); background: var(--primary-tint); padding: 12px 16px; border-radius: 0 var(--r-md) var(--r-md) 0; }
+.card { background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.divider { height: 1px; background: var(--outline-variant); opacity: .6; }
+
+/* Covers: a tinted block carrying the type glyph stands in for the real thumbnail. */
+.cover { position: relative; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.85); flex: none; overflow: hidden; }
+.cover .ico { width: 40%; height: 40%; }
+.cover.processing::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%); }
+
+/* Media rows */
+.mrow { display: flex; gap: 12px; align-items: center; padding: 8px; border-radius: var(--r-lg); min-width: 0; text-align: left; width: 100%; }
+.mrow:hover { background: var(--surface-container-low); }
+.mrow.sel { background: var(--surface-container); }
+.mrow .meta { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-muted); min-width: 0; }
+.mrow .t { font-weight: 600; font-size: 14px; line-height: 1.35; }
+
+/* Media page */
+.hero { position: relative; height: 200px; border-radius: var(--r-xl); overflow: hidden; display: flex; align-items: flex-end; }
+.hero .veil { width: 100%; padding: 12px 16px; background: var(--cover-veil); backdrop-filter: blur(12px); }
+.metaline { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--text-subtle); align-items: center; }
+.metaline a { display: inline-flex; gap: 4px; align-items: center; color: var(--text-main); font-weight: 600; text-decoration: none; }
+.reader p { margin: 0 0 16px; max-width: 68ch; }
+.reader p .pn { font-size: 12px; color: var(--text-muted); margin-right: 8px; font-variant-numeric: tabular-nums; user-select: none; }
+.reader p.cited { background: var(--primary-tint); box-shadow: -12px 0 0 var(--primary-tint), 12px 0 0 var(--primary-tint); border-radius: 2px; }
+.progress { height: 4px; background: var(--surface-container); border-radius: var(--r-full); overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--primary); }
+
+/* AI panel */
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.tile { background: var(--surface); border-radius: var(--r-lg); padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow); min-height: 112px; }
+.tile .st { font-size: 13px; font-weight: 600; margin-top: auto; display: inline-flex; gap: 4px; align-items: center; }
+.hist { display: flex; gap: 12px; align-items: center; padding: 10px 8px; border-radius: var(--r-md); }
+.hist:hover { background: var(--surface-container-low); }
+
+/* Chat — the persistent composer and the thread. */
+.composer { display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; border-radius: 24px; background: var(--surface); box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--outline-variant); }
+.composer textarea { flex: 1; min-height: 24px; max-height: 120px; resize: none; border: 0; outline: 0; background: none; font-size: 15px; line-height: 1.5; padding: 7px 0; }
+.composer textarea::placeholder { color: var(--text-muted); }
+.composer .send { width: 36px; height: 36px; border-radius: var(--r-full); background: var(--primary); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.composer .send.stop { background: var(--text-main); color: var(--background); }
+.composer .send[disabled] { background: var(--surface-container-high); color: var(--text-muted); }
+.composer .scope { font-size: 12px; font-weight: 600; color: var(--text-subtle); background: var(--surface-container); border-radius: var(--r-full); padding: 2px 8px; align-self: center; white-space: nowrap; }
+.thread { display: flex; flex-direction: column; gap: 14px; }
+.msg.user { align-self: flex-end; max-width: 85%; background: var(--surface-container); border-radius: 18px 18px 4px 18px; padding: 8px 14px; font-size: 15px; }
+.msg.assistant { font-size: 15px; line-height: 1.6; }
+.msg cite { font-style: normal; font-size: 11px; font-weight: 700; color: var(--on-primary); background: var(--primary); border-radius: var(--r-full); padding: 1px 6px; vertical-align: 1px; cursor: pointer; }
+.msg .caret { display: inline-block; width: 8px; height: 16px; background: var(--primary); vertical-align: -2px; margin-left: 2px; border-radius: 1px; }
+.msg-state { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-subtle); margin-top: 6px; flex-wrap: wrap; }
+.msg-state.err { color: var(--error); }
+.msg-state .btn { min-height: 28px; padding: 0 10px; font-size: 13px; }
+.banner { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-radius: var(--r-md); background: var(--surface-container); font-size: 13px; color: var(--text-subtle); }
+.banner.warn { background: var(--primary-tint); box-shadow: inset 4px 0 0 var(--primary); }
+.banner.err { background: var(--error-tint); color: var(--error); }
+.typing i { display: inline-block; width: 6px; height: 6px; margin-right: 3px; border-radius: 50%; background: var(--text-muted); }
+.convlist button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border-radius: var(--r-md); width: 100%; text-align: left; }
+.convlist button:hover, .convlist button.on { background: var(--surface-container); }
+
+/* Overlays */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding-top: 10vh; }
+.modal { background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); width: min(560px, calc(100vw - 32px)); max-height: 78vh; display: flex; flex-direction: column; overflow: hidden; }
+.modal header { display: flex; align-items: center; gap: 8px; padding: 16px 16px 8px 20px; }
+.modal .body { padding: 8px 20px 16px; overflow-y: auto; }
+.modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; background: var(--surface-container-low); }
+.menu { position: absolute; z-index: 30; background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); padding: 6px; min-width: 220px; }
+.menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: var(--r-md); font-size: 14px; text-align: left; }
+.menu button:hover { background: var(--surface-container); }
+.menu button.danger { color: var(--error); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text-main); color: var(--background); padding: 10px 16px; border-radius: var(--r-full); font-size: 14px; z-index: 60; display: flex; gap: 12px; align-items: center; }
+
+/* Folder rows shared by pickers */
+.frow { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px; border-radius: var(--r-md); width: 100%; text-align: left; font-size: 14px; color: var(--text-main); min-width: 0; }
+.frow:hover { background: var(--surface-container-low); }
+.frow.on { background: var(--surface-container); font-weight: 600; }
+.frow .ico { color: var(--outline); }
+.frow .path { font-size: 12px; color: var(--text-muted); }
+.crumbs { display: flex; align-items: center; gap: 2px; font-size: 13px; color: var(--text-subtle); min-width: 0; flex-wrap: nowrap; }
+.crumbs button { padding: 2px 6px; border-radius: var(--r-sm); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crumbs button:hover { background: var(--surface-container); color: var(--text-main); }
+.crumbs .ico { color: var(--text-muted); }
+
+/* Prototype-only walkthrough index (hidden on captures) */
+#walk { position: fixed; left: 12px; bottom: 12px; z-index: 80; font: 13px/1.4 var(--font-body); }
+#walk > button { background: var(--text-main); color: var(--background); border-radius: var(--r-full); padding: 6px 12px; font-weight: 600; box-shadow: var(--shadow-pop); }
+#walk .panel { position: absolute; bottom: 40px; left: 0; width: 340px; max-height: 70vh; overflow: auto; background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); padding: 10px; }
+#walk .panel a { display: block; padding: 5px 8px; border-radius: var(--r-sm); text-decoration: none; }
+#walk .panel a:hover { background: var(--surface-container); }
+#walk .panel h4 { margin: 8px 8px 4px; font: 600 12px/1 var(--font-body); text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+body.shot #walk { display: none; }
+
+/* Direction A — three panes. Desktop reference 1440 px; responsive below 900 px. */
+.A { display: grid; grid-template-columns: 300px minmax(0, 1fr); height: 100vh; }
+.A.with-chat { grid-template-columns: 300px minmax(0, 1fr) 400px; }
+.A-side { display: flex; flex-direction: column; padding: 16px 12px; background: var(--surface-container-low); min-height: 0; }
+.A-tree { min-height: 0; margin: 0 -4px; padding: 0 4px; }
+.A-tree .frow.tr { gap: 2px; padding-right: 2px; min-height: 34px; }
+.A-tree .frow .path { font-size: 12px; color: var(--text-muted); }
+.tw { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-sm); color: var(--text-muted); flex: none; }
+.tw:hover { background: var(--surface-container-high); }
+.tw.more { opacity: 0; } .frow:hover .tw.more, .frow.on .tw.more { opacity: 1; }
+.A-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.A-top { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 24px; flex: none; }
+.A-burger { display: none; }
+.A-content { flex: 1; padding: 8px 40px 120px; min-height: 0; }
+.A-composer { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(720px, calc(100% - 48px)); }
+.A-chat { display: flex; flex-direction: column; padding: 16px 20px; background: var(--surface); box-shadow: -1px 0 0 var(--outline-variant); min-height: 0; }
+.A-sub { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.A-scrim { display: none; }
+@media (max-width: 1100px) { .A.with-chat { grid-template-columns: 260px minmax(0, 1fr) 340px; } .A { grid-template-columns: 260px minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .A, .A.with-chat { grid-template-columns: minmax(0, 1fr); }
+  .A-side { position: fixed; inset: 0 auto 0 0; width: 86vw; max-width: 340px; z-index: 50; transform: translateX(-100%); transition: transform .2s; box-shadow: var(--shadow-pop); }
+  .A.drawer .A-side { transform: none; }
+  .A.drawer .A-scrim { display: block; position: fixed; inset: 0; background: var(--scrim); z-index: 45; }
+  .A-burger { display: inline-flex; }
+  .A-top { padding: 0 8px; }
+  .A-content { padding: 4px 16px 120px; }
+  .A-composer { width: calc(100% - 24px); bottom: 12px; }
+  .A-chat { position: fixed; inset: 15vh 0 0 0; z-index: 35; border-radius: 20px 20px 0 0; box-shadow: var(--shadow-pop); padding-bottom: 90px; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// Generated by extract_icons.py from Ionicons.ttf — do not edit.
+const ICON_SPRITE = `<svg xmlns="http://www.w3.org/2000/svg" style="display:none"><symbol id="i-search-outline" viewBox="0 0 512 512"><path d="M207 49Q290 43 347 102Q401 160 393 238Q388 289 359 326L354 332L408 386Q462 440 463 444Q466 453 459.5 459.5Q453 466 444 463Q440 462 386 408L332 354L326 359Q289 388 238 393Q171 400 117 359Q100 347 87 330Q44 277 48.5 209.5Q53 142 102 95Q147 53 207 49ZM237 81Q237 81 237 81Q212 78 189 84Q150 93 122 122Q88 155 82 202Q73 270 119 319Q161 362 221 362Q261 362 295 341Q331 319 349 281Q363 251 362 217Q361 188 349 163Q324 107 266 88Q252 83 237 81Z"/></symbol><symbol id="i-folder-outline" viewBox="0 0 512 512"><path d="M64 65Q66 64 112.0 64.5Q158 65 163 66Q172 69 192 82Q206 92 210 94L215 96H334Q430 97 443.5 97.5Q457 98 465 102Q488 113 494 138Q496 144 496 272Q496 378 495.5 393.0Q495 408 490 417Q484 430 471 439Q462 445 450 447Q445 448 256.0 448.0Q67 448 62 447Q50 445 41 439Q28 430 22 417Q17 408 16.5 392.0Q16 376 16.0 256.0Q16 136 16.5 120.0Q17 104 22 95Q30 79 46 71Q55 66 64 65ZM110 96H66L62 98Q54 102 50 111Q48 115 48 145V176H256H464V161Q464 146 462 142Q458 135 450 130L447 128H328Q209 128 205 126Q195 123 175 109Q159 99 156.0 98.0Q153 97 110 96ZM464 303V208H256H48V303V397L50 402Q54 411 64 414Q68 416 256.0 416.0Q444 416 448 414Q458 411 462 402Q462 402 464 397Z"/></symbol><symbol id="i-folder-open-outline" viewBox="0 0 512 512"><path d="M92 65Q98 64 140 64Q190 64 200 68Q206 70 222.5 81.0Q239 92 243.0 94.0Q247 96 333.5 96.5Q420 97 425 98Q448 106 458 127Q464 140 464 163V179L470 182Q476 185 482 191Q496 205 496 224Q496 228 488.0 311.0Q480 394 479 401Q476 418 464.0 430.5Q452 443 436 447Q429 448 256.0 448.0Q83 448 76 447Q55 442 42 423Q34 412 32 390Q31 377 23.5 303.0Q16 229 16 223Q16 205 30 191Q36 185 42 182L48 179V144V110L51 103Q61 72 92 65ZM96 97Q89 99 85 106Q81 111 80.5 116.0Q80 121 80 145V176H256H432V160Q431 145 430 141Q426 134 418 130L414 128H328Q242 127 238 126Q229 124 208 110Q192 100 189.0 98.0Q186 96 142.5 96.5Q99 97 96 97ZM454 209Q454 209 454 209Q451 208 255.5 208.0Q60 208 58 209Q52 212 49 219Q48 222 55 295Q62 368 64 384Q65 398 67 402Q70 410 79 414Q79 414 83 416H256H429L433 414Q442 410 445 402Q447 398 448 388Q449 379 456 301Q464 223 463 220Q461 212 454 209Z"/></symbol><symbol id="i-folder" viewBox="0 0 512 512"><path d="M60 65Q66 64 112 64H158L166 67Q173 69 190.5 81.0Q208 93 211.5 94.5Q215 96 333 96L452 97L457 99Q470 103 480 113Q489 122 493 134Q495 140 496 156V171L494 173L491 176H256H21L19 173L16 171V142Q16 113 18 106Q22 91 33.5 80.0Q45 69 60 65ZM19 210 21 208H256H491L493 210L496 213V306Q496 399 494 406Q490 420 479 431Q469 441 456 446Q456 446 450 448H256H62L56 446Q43 441 33 431Q22 420 18 406Q16 399 16 306Q16 306 16 213Z"/></symbol><symbol id="i-chevron-forward" viewBox="0 0 512 512"><path d="M179 89Q179 89 179 89Q187 87 195 91Q198 92 273 167Q335 228 343.5 238.0Q352 248 352.0 256.0Q352 264 343.5 274.0Q335 284 273 345Q213 405 203.0 414.0Q193 423 186 424Q177 425 169.5 419.0Q162 413 161 404Q159 396 163 389Q164 386 229 321Q229 321 294 256L229 191Q164 126 163 123Q159 116 161 108Q163 92 179 89Z"/></symbol><symbol id="i-chevron-down" viewBox="0 0 512 512"><path d="M102 162Q102 162 102 162Q113 157 123 163Q127 165 191 229Q191 229 256 294L321 229Q385 165 389 163Q398 157 409 162Q426 169 424 186Q423 193 414.0 203.0Q405 213 345 273Q284 335 274.0 343.5Q264 352 256.0 352.0Q248 352 238.0 343.5Q228 335 167 273Q107 213 98.0 203.0Q89 193 88 186Q86 170 102 162Z"/></symbol><symbol id="i-chevron-back" viewBox="0 0 512 512"><path d="M322 89Q322 89 322 89Q329 87 337.0 90.5Q345 94 349 101Q355 112 349 123Q348 126 283 191Q283 191 218 256L283 321Q348 386 349 389Q353 396 351 404Q350 413 342.5 419.0Q335 425 326 424Q319 423 309.0 414.0Q299 405 239 345Q178 284 169.0 274.0Q160 264 160.0 256.0Q160 248 168.5 238.5Q177 229 237 169Q309 96 313.5 93.0Q318 90 322 89Z"/></symbol><symbol id="i-add" viewBox="0 0 512 512"><path d="M248 99Q248 99 248 99Q253 95 259.5 96.5Q266 98 270 104Q270 104 272 107V173V240H338H404L408 242Q416 247 416.0 256.0Q416 265 408 270Q408 270 405 272H339H272V339V405L270 408Q265 416 256.0 416.0Q247 416 242 408Q242 408 240 405V339V272H173H107L104 270Q96 265 96.0 256.0Q96 247 103 243Q103 243 107 240H173H240V173V107L242 104Q244 101 248 99Z"/></symbol><symbol id="i-close" viewBox="0 0 512 512"><path d="M136 121Q136 121 136 121Q145 118 154 122Q157 124 207 173Q207 173 256 222L306 173Q347 131 354.0 125.5Q361 120 369 120Q375 121 378 122Q387 127 390 135Q394 145 390 154Q388 157 339 207Q339 207 290 256L339 305Q379 345 385.5 352.5Q392 360 392 367Q392 378 385.0 385.0Q378 392 367 392Q360 392 352.5 385.5Q345 379 305 339Q305 339 256 290L207 339Q167 379 159.5 385.5Q152 392 145 392Q134 392 127.0 385.0Q120 378 120 367Q120 360 126.5 352.5Q133 345 173 305Q173 305 222 256L173 207Q133 166 126.5 159.0Q120 152 120 144Q120 127 136 121Z"/></symbol><symbol id="i-ellipsis-horizontal" viewBox="0 0 512 512"><path d="M84 210Q97 206 111 210Q127 215 137 231Q153 256 137 281Q122 304 96 304Q70 304 55.5 281.5Q41 259 53 235Q63 215 84 210ZM246 209Q259 206 272 211Q297 220 302.5 245.5Q308 271 290 290Q275 304 256.0 304.0Q237 304 222.5 290.0Q208 276 208 256Q208 239 219.0 226.0Q230 213 246 209ZM404 210Q404 210 404 210Q417 206 431 210Q447 215 457 231Q473 256 457 281Q442 304 416 304Q390 304 375.5 281.5Q361 259 373 235Q383 215 404 210Z"/></symbol><symbol id="i-file-tray-outline" viewBox="0 0 512 512"><path d="M115 65Q121 64 259 64H396L403 66Q434 75 445 106Q446 111 463 192L481 273L480 333Q480 394 479 398Q468 439 429 447Q422 448 256.0 448.0Q90 448 83 447Q44 439 33 398Q32 394 32 333L31 273L49 192Q66 111 67 106Q76 82 96 71Q105 67 115 65ZM400 100 395 97H257Q147 97 131.0 97.0Q115 97 110 101Q102 106 98 115Q97 118 82.5 185.5Q68 253 68 255Q68 256 131 256Q183 256 191.0 256.5Q199 257 203 261Q207 265 208 275Q209 289 217 300Q227 314 244 318Q276 327 295 299Q302 289 304 275Q305 265 309 261Q313 257 321.0 256.5Q329 256 381 256Q444 256 444 255Q444 253 429.5 186.0Q415 119 414 116Q411 105 400 100ZM178 289Q178 289 178 289Q178 288 121 288Q121 288 64 288V340Q64 382 65.0 388.5Q66 395 70 402Q75 410 85 414Q85 414 90 416H256H422L427 414Q437 410 442 402Q446 395 447.0 388.5Q448 382 448 340Q448 340 448 288H391Q334 288 334 289Q326 318 306 334Q284 352 256.0 352.0Q228 352 206 334Q186 319 178 289Z"/></symbol><symbol id="i-newspaper-outline" viewBox="0 0 512 512"><path d="M59 34 64 32 209 33H355L360 36Q373 42 379 53Q384 62 384 89V112H412Q441 112 446 113Q459 115 468.5 124.5Q478 134 480 146Q480 152 480.0 283.5Q480 415 480 423Q477 445 462 461Q445 477 422 480Q413 481 246.0 480.5Q79 480 74 478Q43 469 34 438Q32 433 31.5 253.5Q31 74 32 67Q36 42 59 34ZM349 66 347 64H209Q96 64 81.5 64.5Q67 65 65 69Q64 71 64 251V431L66 434Q70 441 77 445L81 448H221H360L358 443Q356 438 354 432L352 425V247V69ZM109 113Q111 112 146 112Q174 112 179.0 112.5Q184 113 187.5 117.0Q191 121 191.5 126.5Q192 132 192 160Q192 189 191.0 195.0Q190 201 186 204Q181 208 143 208Q108 208 104.5 206.0Q101 204 99 200L96 196V160V124L98 120Q102 114 109 113ZM236 112Q239 112 273 112Q303 112 308.0 113.0Q313 114 317 119Q320 122 320.0 128.0Q320 134 317.0 137.0Q314 140 311 142L307 144H271H235L232 142Q219 134 226 120Q229 114 236 112ZM445 146 443 144H413H384V284V424L387 429Q392 440 403 445Q408 448 416.0 448.0Q424 448 429 445Q440 440 445 429L448 424V286V148ZM236 176Q239 176 273 176Q303 176 308.0 177.0Q313 178 317 183Q320 186 320.0 192.0Q320 198 317.0 201.0Q314 204 311 206L307 208H271H235L232 206Q219 198 226 184Q229 178 236 176ZM108 240Q111 240 209.5 240.0Q308 240 311.0 242.0Q314 244 317.0 247.0Q320 250 320.0 256.0Q320 262 317.0 265.0Q314 268 311 270L307 272H207H107L104 270Q91 262 98 248Q101 242 108 240ZM108 304Q111 304 209.5 304.0Q308 304 311.0 306.0Q314 308 317.0 311.0Q320 314 320.0 320.0Q320 326 317.0 329.0Q314 332 311 334L307 336H207H107L104 334Q91 326 98 312Q101 306 108 304ZM108 368Q108 368 108 368Q111 368 209.5 368.0Q308 368 311.0 370.0Q314 372 317.0 375.0Q320 378 320.0 384.0Q320 390 317.0 393.0Q314 396 311 398Q311 398 307 400H207H107L104 398Q91 390 98 376Q101 370 108 368Z"/></symbol><symbol id="i-person-outline" viewBox="0 0 512 512"><path d="M237 34Q255 31 274 34Q307 39 330 62Q362 94 360 141Q359 168 346 194Q337 213 321 228Q301 247 276 254Q256 259 236 254Q210 247 189 225Q163 199 154 162Q152 153 152.0 138.0Q152 123 154 114Q160 85 179 64Q203 40 237 34ZM275 67Q259 62 244 65Q222 68 207 82Q181 106 184 144Q186 163 195 180Q208 208 232 218Q270 235 302 202Q328 175 328 137Q328 118 321 104Q307 75 275 67ZM228 290Q237 289 255.5 289.0Q274 289 283 290Q328 295 365 314Q448 355 463 438Q464 446 464 452Q459 476 437 480Q431 480 256.0 480.0Q81 480 75 480Q53 476 48 452Q48 446 49 438Q64 355 147 314Q184 295 228 290ZM272 321Q272 321 272 321Q208 316 155.5 345.0Q103 374 86 424Q80 440 80 446Q80 448 256.0 448.0Q432 448 432 446Q432 434 421 411Q403 373 363.5 349.0Q324 325 272 321Z"/></symbol><symbol id="i-sparkles-outline" viewBox="0 0 512 512"><path d="M81 2Q95 -5 102 9Q104 12 112.0 33.0Q120 54 121.0 55.0Q122 56 145 65Q172 76 175 82Q180 94 170 101Q168 102 144.5 111.0Q121 120 120.5 121.0Q120 122 111 145Q104 163 101.5 168.0Q99 173 94 175Q88 177 81.5 174.5Q75 172 65 145Q56 122 55.0 121.0Q54 120 33 112Q7 102 5 99Q0 94 0 88Q0 81 5 76Q7 74 30.5 65.0Q54 56 55.0 55.0Q56 54 65.0 31.0Q74 8 76.0 5.5Q78 3 81 2ZM392 34Q401 30 409 35Q413 38 428 75Q439 105 439.0 105.0Q439 105 470.0 117.0Q501 129 503 130Q509 133 511 139Q515 149 506 156Q503 158 471 171L439 183L427 215Q414 247 412 250Q408 256 400.0 256.0Q392 256 387 250Q386 248 373.5 215.5Q361 183 361.0 183.0Q361 183 329 171Q293 157 290 152Q285 141 293 133Q296 130 328.0 118.0Q360 106 360.5 105.0Q361 104 373.5 72.5Q386 41 387.5 38.5Q389 36 392 34ZM91 69 88 61 86 65Q85 69 84 72Q81 80 71 84Q63 87 62.5 88.0Q62 89 69 91Q77 95 79.5 97.0Q82 99 84.5 106.5Q87 114 87.5 114.0Q88 114 91 107Q96 96 107 91Q114 89 114.0 88.0Q114 87 106.5 84.5Q99 82 97.0 79.5Q95 77 91 69ZM406 108Q401 94 400 94Q400 94 399.0 95.5Q398 97 397.0 100.5Q396 104 394 108Q388 123 387 126Q384 130 364 138Q360 140 356.5 141.0Q353 142 351.5 143.0Q350 144 350 144Q350 145 364 150Q381 156 385 160Q387 162 393 178Q395 183 396.5 186.5Q398 190 399.0 192.0Q400 194 400 194Q401 193 407 178Q412 163 415.5 159.5Q419 156 434 151Q450 145 450 144Q450 144 448.0 143.0Q446 142 442.5 140.5Q439 139 434 137Q418 131 416 129Q412 125 406 108ZM200 130Q215 124 227 137Q230 141 251.5 197.0Q273 253 274.0 254.0Q275 255 330.0 276.0Q385 297 387 298Q393 301 397 309Q403 320 397 331Q393 339 387 342Q385 343 330.0 364.0Q275 385 274.0 386.0Q273 387 252 443L230 500L225 504Q218 512 208 512Q196 512 188 502Q186 499 164.0 442.5Q142 386 142.0 386.0Q142 386 87.0 364.5Q32 343 28 341Q16 334 16.0 320.0Q16 306 28 299Q31 297 86.5 275.5Q142 254 142.0 254.0Q142 254 163.5 198.0Q185 142 187 139Q191 133 200 130ZM227 223Q227 223 227 223Q209 175 208 174Q208 174 205.5 180.0Q203 186 198.5 197.0Q194 208 189 221Q171 268 169.5 271.0Q168 274 164 278Q160 282 98 306Q61 320 61.0 320.0Q61 320 98 334Q160 358 164 362Q168 366 169.5 369.0Q171 372 189 419Q194 432 198.5 443.0Q203 454 205.5 460.0Q208 466 208 466Q209 465 227.5 417.0Q246 369 249.0 365.0Q252 361 257.0 358.5Q262 356 308.0 338.5Q354 321 354.0 320.0Q354 319 305.5 300.5Q257 282 254.0 280.0Q251 278 248.5 274.5Q246 271 227 223Z"/></symbol><symbol id="i-sparkles" viewBox="0 0 512 512"><path d="M82 1Q87 -1 92.5 1.0Q98 3 100 7Q102 9 110.5 31.0Q119 53 120.0 55.0Q121 57 143.0 65.5Q165 74 169 76Q175 79 175.5 87.0Q176 95 170 99Q168 101 145.0 110.0Q122 119 120.5 120.5Q119 122 110.0 145.0Q101 168 99 170Q95 176 87.5 175.5Q80 175 76 170Q74 167 65.5 144.0Q57 121 55.0 120.0Q53 119 30.5 110.0Q8 101 6 100Q0 96 0 88Q0 82 5 77Q7 75 30.5 66.0Q54 57 55.5 55.5Q57 54 66 31Q76 4 82 1ZM392 34Q400 30 407 34Q411 36 414.0 41.5Q417 47 426 72Q439 104 440.5 105.0Q442 106 471 117Q505 130 508 134Q512 139 511.5 145.5Q511 152 506 156Q503 159 473.5 170.0Q444 181 442 182Q439 184 425 219Q416 243 413.0 248.5Q410 254 405 255Q396 258 389 251Q386 248 374.5 218.5Q363 189 362 186Q360 183 356.5 181.5Q353 180 318 166Q293 157 290 151Q284 141 293 132Q295 130 327.0 118.0Q359 106 360.5 104.5Q362 103 374.0 72.0Q386 41 387.5 38.5Q389 36 392 34ZM200 130Q200 130 200 130Q214 125 225 136Q225 136 230 140L251 195Q272 249 274.0 251.5Q276 254 279.0 255.5Q282 257 333.5 277.0Q385 297 388 299Q394 303 398 310Q402 320 398 330Q394 338 387 342Q385 343 333.5 363.0Q282 383 279.0 384.5Q276 386 274.0 388.5Q272 391 251 445Q251 445 230 500L225 504Q218 512 208 512Q195 512 188 502Q186 499 165.0 444.5Q144 390 141.5 387.0Q139 384 86.5 364.0Q34 344 30 343Q23 339 18 331Q14 322 17 313Q20 304 28 299Q31 297 83.5 277.0Q136 257 138.5 255.0Q141 253 142.5 251.5Q144 250 164.5 196.0Q185 142 187 139Q192 132 200 130Z"/></symbol><symbol id="i-book-outline" viewBox="0 0 512 512"><path d="M42 49Q47 48 61 48Q170 51 221 85Q229 90 239.5 100.0Q250 110 253 115Q256 119 256.0 119.0Q256 119 259 115Q262 110 272.5 100.0Q283 90 291 85Q332 58 411 50Q455 46 469 49Q482 51 490 62Q495 68 495.5 84.0Q496 100 496 224Q496 345 495.5 362.0Q495 379 491 385Q486 392 478.5 396.0Q471 400 453 400Q379 400 331 416Q299 426 276 451Q265 461 261.5 463.0Q258 465 251 463Q248 462 236 451Q219 433 199 423Q154 402 67 401Q39 400 32 396Q24 391 20 383Q17 377 16.5 359.0Q16 341 16 223Q16 100 16.5 84.0Q17 68 22 62Q30 51 42 49ZM81 81Q67 80 57 80H48V224V368H54Q61 369 71.5 369.0Q82 369 100 370Q188 376 232 405L240 410V286Q240 182 239.5 169.0Q239 156 234 146Q227 132 215 121Q177 87 81 81ZM464 224V80H452Q418 81 384 86Q301 99 278 146Q273 156 272.5 169.0Q272 182 272 286Q272 286 272 410L280 405Q311 385 358 376Q400 369 440 369Q451 369 458 368Q458 368 464 368Z"/></symbol><symbol id="i-send" viewBox="0 0 512 512"><path d="M35 49Q35 49 35 49Q41 48 46 49Q49 50 261.5 138.0Q474 226 479 228Q494 236 495.5 254.0Q497 272 483 282Q479 285 262 374Q262 374 46 464H40Q29 464 22 456Q17 451 16.5 443.0Q16 435 16 382Q17 320 18 317Q22 309 30 306Q34 304 151.5 282.0Q269 260 270.0 259.0Q271 258 271.0 256.0Q271 254 270.0 253.5Q269 253 153.0 231.5Q37 210 33 209Q23 206 19 197Q19 197 17 193L16 131Q16 69 17 66Q21 51 35 49Z"/></symbol><symbol id="i-stop" viewBox="0 0 512 512"><path d="M109 82Q109 82 109 82Q114 80 255.5 80.0Q397 80 402 82Q424 87 430 108Q432 114 432.0 256.0Q432 398 430 404Q424 424 404 430Q398 432 256.0 432.0Q114 432 108 430Q88 424 82 404Q80 398 80.0 256.0Q80 114 82 108Q88 87 109 82Z"/></symbol><symbol id="i-arrow-up" viewBox="0 0 512 512"><path d="M249 77Q249 77 249 77Q258 74 267 79Q271 81 345.5 156.0Q420 231 422.0 236.0Q424 241 424 244Q424 252 418 259Q408 272 392 267Q388 265 334.5 212.0Q281 159 280.5 159.0Q280 159 280 289Q280 289 279 419L277 423Q273 431 264 434Q256 437 248 434Q239 431 235 423Q235 423 233 419L232 288V157L178 211Q124 265 120 267Q104 272 94 259Q88 252 88 244Q88 241 89.5 236.0Q91 231 165.5 156.5Q240 82 243.0 80.0Q246 78 249 77Z"/></symbol><symbol id="i-time-outline" viewBox="0 0 512 512"><path d="M241 49Q256 48 269 49Q351 54 407 113Q452 161 462 228Q464 238 464.0 256.0Q464 274 462 284Q454 339 421 382Q405 405 382 421Q339 454 284 462Q274 464 256.0 464.0Q238 464 228 462Q173 454 130 421Q107 405 91 382Q58 339 50 284Q48 274 48.0 256.0Q48 238 50 228Q58 174 91 130Q107 108 130 91Q181 53 241 49ZM284 82Q278 81 261.5 80.5Q245 80 240 81Q212 84 193 92Q149 109 119.5 145.0Q90 181 82 229Q81 238 81.0 256.0Q81 274 82 283Q89 326 114.0 360.0Q139 394 178 414Q214 432 256.0 432.0Q298 432 334 414Q372 394 397.0 360.5Q422 327 430 284Q431 275 431.0 256.5Q431 238 430 229Q420 169 378 129Q338 92 284 82ZM252 113Q252 113 252 113Q258 111 263.5 114.0Q269 117 271 124Q272 127 272 191Q272 191 272 256H314Q355 256 359 258Q372 264 367 278Q364 286 355 288Q350 288 301 288Q301 288 252 288L248 286Q244 283 242 280Q242 280 240 277V202Q240 127 241 124Q243 115 252 113Z"/></symbol><symbol id="i-chatbubbles-outline" viewBox="0 0 512 512"><path d="M265 34Q274 33 293.5 33.0Q313 33 322 35Q350 39 376 52Q413 70 439.0 101.5Q465 133 475 172Q493 246 453 310L447 318L455 348Q462 373 463.0 379.5Q464 386 461 392Q456 402 447 404Q439 407 403 394L370 382L355 387Q297 406 249 396Q205 387 170 359Q154 347 141 331Q115 299 106 259Q95 214 106 172Q119 121 158 85Q202 43 265 34ZM315 66Q287 62 260 67Q213 76 179.0 108.0Q145 140 136 184Q123 243 154 294Q176 328 210.5 348.0Q245 368 285 368Q310 368 345 356Q361 351 370 351H379L403 360Q427 368 427.5 368.0Q428 368 421.5 346.5Q415 325 415 320Q414 311 424 295Q444 264 447 228Q453 170 414.5 122.5Q376 75 315 66ZM61 217Q61 217 61 217Q69 214 75.5 219.0Q82 224 82 232Q82 236 78 245Q57 288 68 335Q73 354 85 374Q90 382 91 387Q91 387 92 392L88 417Q83 442 83.0 442.5Q83 443 105.0 434.5Q127 426 132 425Q139 424 155 429Q181 437 205 437Q239 437 271 421Q283 415 290.0 418.0Q297 421 300 428Q302 437 295 444Q289 449 271.5 456.0Q254 463 240 466Q194 475 146 459Q146 459 137 456L108 468Q80 479 76 479Q63 482 54 471Q48 464 48 456Q48 454 54 424Q54 424 60 394L56 388Q38 359 33 324Q30 302 34 280Q38 251 50 228Q55 219 61 217Z"/></symbol><symbol id="i-chatbubble-ellipses-outline" viewBox="0 0 512 512"><path d="M228 34Q238 33 259.5 33.0Q281 33 290 34Q345 43 387 74Q448 117 470.0 187.0Q492 257 466 328Q452 367 423.5 399.0Q395 431 358 449Q319 469 274.0 472.0Q229 475 174 455Q165 452 161.5 452.0Q158 452 121.0 465.5Q84 479 81 480Q73 481 65 477Q53 471 51 457Q51 452 61 414L72 377L65 366Q36 318 33 264Q31 236 36 210Q43 175 59 146Q86 99 130.0 70.0Q174 41 228 34ZM283 66Q260 63 241 65Q215 67 192 75Q131 96 95.5 148.5Q60 201 65 264Q68 310 92 349Q101 364 103 373Q104 379 94 415Q92 423 90.5 429.5Q89 436 88.0 440.0Q87 444 87 444Q87 444 117.5 433.0Q148 422 154 421Q165 419 187 426Q204 432 212 434Q268 448 320 430Q370 414 404.0 373.0Q438 332 446 280Q453 229 434.0 182.0Q415 135 374 104Q334 73 283 66ZM148 226Q153 224 161.0 224.5Q169 225 174 228Q184 233 189 243Q191 248 191.0 256.0Q191 264 189 269Q182 284 165 288Q155 289 145.0 284.0Q135 279 131 269Q129 264 129 256Q129 244 135 236Q140 230 148 226ZM245 226Q258 221 270 227Q285 234 287.5 250.5Q290 267 278 278Q265 292 246.5 286.0Q228 280 224 261Q223 250 229.0 240.0Q235 230 245 226ZM340 226Q340 226 340 226Q345 224 353.0 224.5Q361 225 366 228Q376 233 381 243Q383 248 383.0 256.0Q383 264 381 269Q374 284 357 288Q347 289 337.0 284.0Q327 279 323 269Q321 264 321 256Q321 244 327 236Q332 230 340 226Z"/></symbol><symbol id="i-refresh" viewBox="0 0 512 512"><path d="M254 42Q254 42 254 42Q258 41 264 44Q266 45 308.5 87.5Q351 130 351.5 134.0Q352 138 352.0 139.0Q352 140 351.5 142.5Q351 145 308.0 188.0Q265 231 262 233Q256 235 250 233Q240 229 240 218Q240 213 245.0 207.0Q250 201 271 180Q280 171 286.0 165.0Q292 159 295.0 155.5Q298 152 298 152Q297 151 273 150Q239 150 221 155Q185 164 157.5 190.0Q130 216 119 251Q105 296 119 338Q134 383 171.5 410.5Q209 438 256 438Q303 438 341.0 410.0Q379 382 393 337Q398 321 399 302Q400 290 402.0 286.0Q404 282 410 279Q416 277 422 279Q432 284 432 298Q432 322 423 349Q410 388 380.5 417.5Q351 447 312 461Q256 479 200 461Q152 445 120.0 406.0Q88 367 81 317Q79 295 81 274Q87 229 112.5 192.5Q138 156 179 136Q204 124 231 120Q240 118 263.0 118.0Q286 118 290 119Q290 119 295 120L268 93Q247 72 243.5 67.0Q240 62 240 57Q240 53 243.5 48.5Q247 44 251 43Q253 43 254 42Z"/></symbol><symbol id="i-alert-circle-outline" viewBox="0 0 512 512"><path d="M241 49Q256 48 269 49Q351 54 407 113Q452 161 462 228Q464 238 464.0 256.0Q464 274 462 284Q454 339 421 382Q405 405 382 421Q339 454 284 462Q274 464 256.0 464.0Q238 464 228 462Q173 454 130 421Q107 405 91 382Q58 339 50 284Q48 274 48.0 256.0Q48 238 50 228Q58 174 91 130Q107 108 130 91Q181 53 241 49ZM284 82Q278 81 261.5 80.5Q245 80 240 81Q212 84 193 92Q149 109 119.5 145.0Q90 181 82 229Q81 238 81.0 256.0Q81 274 82 283Q89 326 114.0 360.0Q139 394 178 414Q214 432 256.0 432.0Q298 432 334 414Q372 394 397.0 360.5Q422 327 430 284Q431 275 431.0 256.5Q431 238 430 229Q420 169 378 129Q338 92 284 82ZM247 146Q262 139 272 151Q277 158 277 168Q277 180 274.5 235.0Q272 290 271 292Q269 300 262 303Q256 305 250 303Q243 300 241 292Q240 290 237.5 235.0Q235 180 235 168Q234 161 236 158Q239 150 247 146ZM250 329Q250 329 250 329Q256 327 262 329Q273 332 275.5 343.5Q278 355 269 363Q256 375 243 363Q234 355 236.5 343.5Q239 332 250 329Z"/></symbol><symbol id="i-checkmark" viewBox="0 0 512 512"><path d="M411 113Q411 113 411 113Q416 111 420 113Q428 115 431 123Q434 131 429.5 137.0Q425 143 313.0 270.5Q201 398 199 398Q194 401 188 399Q184 398 133.5 347.5Q83 297 81 295Q77 286 83 279Q91 268 103 274Q105 275 148 318Q148 318 191 361L193 358Q195 356 299.5 236.5Q404 117 406.0 115.5Q408 114 411 113Z"/></symbol><symbol id="i-checkmark-circle" viewBox="0 0 512 512"><path d="M242 49Q312 44 370 82Q387 94 403 110Q453 159 463 232Q464 239 464.0 256.0Q464 273 463 280Q453 353 403.0 403.0Q353 453 280 463Q273 464 256.0 464.0Q239 464 232 463Q159 453 109 403Q59 353 50 281Q40 206 82 142Q110 101 151.5 76.5Q193 52 242 49ZM359 162Q359 162 359 162Q352 159 345 162Q342 164 274 244Q220 308 218.5 310.0Q217 312 194.5 287.0Q172 262 168.5 259.0Q165 256 160.5 256.0Q156 256 154 257Q148 259 145 265Q144 267 144.0 272.0Q144 277 146 279Q148 284 178.0 316.5Q208 349 210 350Q214 352 217 352Q223 352 232.0 342.5Q241 333 296 267Q365 186 366 183Q369 177 367.0 171.0Q365 165 359 162Z"/></symbol><symbol id="i-link-outline" viewBox="0 0 512 512"><path d="M125 144Q132 143 172.0 142.5Q212 142 215 144Q226 148 226 160Q226 167 220 173Q217 177 211.0 177.5Q205 178 171 178Q136 179 129.0 180.0Q122 181 111 186Q88 196 76.5 217.0Q65 238 67 264Q68 285 81.5 302.5Q95 320 115 328Q129 334 175 334L215 335L218 337Q231 346 224 360Q220 367 213 369Q208 371 170.0 370.5Q132 370 124 368Q106 365 91 357Q61 341 44.0 310.5Q27 280 31 246Q34 207 60.0 179.0Q86 151 125 144ZM297 144Q299 143 338.5 142.5Q378 142 385 143Q442 152 469 203Q489 241 479 283Q470 316 446.0 339.0Q422 362 388 368Q380 370 342.0 370.5Q304 371 299 369Q288 366 286.5 355.0Q285 344 294 337L297 335L337 334Q377 334 384 332Q411 326 428.5 305.0Q446 284 446 256Q446 207 401 186Q390 181 383.0 180.0Q376 179 341 178Q307 178 301.0 177.5Q295 177 292 173Q286 167 286 160Q286 148 297 144ZM158 239Q158 239 158 239Q160 238 257.5 238.0Q355 238 358 240Q367 244 368.5 253.5Q370 263 362 269Q359 272 356.0 273.0Q353 274 255 274Q255 274 157 273L153 271Q140 261 148 248Q152 240 158 239Z"/></symbol><symbol id="i-document-text-outline" viewBox="0 0 512 512"><path d="M192 32Q241 32 249.5 33.0Q258 34 266 38Q272 41 348.0 117.0Q424 193 426 199Q431 207 431.5 220.0Q432 233 432 320Q432 425 430.0 431.5Q428 438 424.5 445.5Q421 453 413.0 461.0Q405 469 397 473Q386 479 372.0 479.5Q358 480 256.0 480.0Q154 480 140.0 479.5Q126 479 115 473Q107 469 99.0 461.0Q91 453 87.5 445.5Q84 438 82.0 431.5Q80 425 80.0 256.0Q80 87 82.0 80.5Q84 74 87.5 66.5Q91 59 99.0 51.0Q107 43 115.0 39.0Q123 35 128.5 34.0Q134 33 192 32ZM240 121V64H190Q140 64 136 65Q116 70 113 91Q112 97 112.0 256.0Q112 415 113 421Q115 438 131 445L136 448H256H376L382 445Q397 437 399 421Q400 415 400 320V225L340 224Q279 224 275 222Q262 218 252.5 207.5Q243 197 241 184Q240 179 240 121ZM331 192H377L325 139L272 87V134L273 181L275 185Q277 188 281.0 190.0Q285 192 331 192ZM169 274Q172 272 257 272L342 273L345 275Q350 279 351 285Q354 298 342 303Q340 304 256.0 304.0Q172 304 170 303Q160 299 160 288Q160 278 169 274ZM169 353Q169 353 169 353Q171 352 256.0 352.0Q341 352 343 354Q350 357 351 363Q352 366 352 367Q354 372 348 379Q346 381 342.5 382.5Q339 384 256.0 384.0Q173 384 169 382Q163 379 161 372Q158 360 169 353Z"/></symbol><symbol id="i-image-outline" viewBox="0 0 512 512"><path d="M259 64Q399 64 416.0 64.5Q433 65 443 70Q471 83 479 113Q480 119 480.0 256.0Q480 393 479 399Q470 431 440 443Q431 447 411.5 447.5Q392 448 256.0 448.0Q120 448 100.5 447.5Q81 447 72 443Q42 431 33 399Q32 393 32.0 256.0Q32 119 33 113Q41 83 69 70Q76 67 81.0 66.0Q86 65 87.5 64.5Q89 64 259 64ZM428 98 423 96H256H89L84 98Q68 105 65 122Q64 128 64 222V316L113 272Q163 229 168 226Q190 214 212 225Q220 229 266 275L312 321L327 307Q344 289 355 286Q360 284 369.5 284.0Q379 284 386 286Q395 289 424 314L448 333V231Q448 128 447 122Q444 105 428 98ZM325 129Q349 124 367.0 139.5Q385 155 384 179Q383 196 371 208Q360 221 342.5 223.5Q325 226 311 217Q295 207 290 190Q286 177 290 163Q298 135 325 129ZM343 162Q341 160 336.0 160.5Q331 161 329 162Q322 165 320.5 172.5Q319 180 324 186Q332 195 342 191Q347 188 350 183Q354 176 351 170Q348 164 343 162ZM198 254Q189 249 179 257Q177 259 120 309L64 359V373Q64 387 65 392Q69 407 85 414L90 416H154L217 417L253 380L290 344L245 300Q201 255 198 254ZM378 318Q378 318 378 318Q375 316 370.5 316.0Q366 316 364 317Q362 317 313.0 366.0Q264 415 264 416Q264 416 343 416Q343 416 422 416L427 414Q448 406 448 381Q448 381 448 375L415 348Q381 320 378 318Z"/></symbol><symbol id="i-cloud-upload-outline" viewBox="0 0 512 512"><path d="M240 49Q255 47 270 49Q323 53 361.5 87.5Q400 122 412 177Q414 186 414.0 186.0Q414 186 423 188Q458 195 483 218Q495 230 503 244Q518 276 508 312Q500 339 478.0 357.0Q456 375 424 382Q414 383 366.5 383.5Q319 384 316 383Q307 381 305 372Q303 365 306.5 359.5Q310 354 316 352Q320 352 364 352Q416 352 431 347Q467 336 477 304Q479 298 479 285Q479 269 473 257Q470 250 462 243Q441 222 407 218Q394 216 390 212Q385 208 383 196Q378 161 360 134Q347 114 327 101Q307 88 283 83Q274 81 256 81Q233 81 217 86Q183 97 161 126Q150 141 144 158Q142 163 139 166Q135 170 118 173Q72 180 48 212Q38 225 34 241Q33 248 33.0 262.0Q33 276 34 282Q41 306 58 322Q78 342 110 349Q117 351 157 351Q190 352 195.5 352.5Q201 353 204 358Q210 364 207.5 372.5Q205 381 196 383Q193 384 162.5 384.0Q132 384 122 383Q70 378 36 346Q18 328 10 308Q-2 280 0.5 250.5Q3 221 20 197Q32 178 52 165Q77 148 107 142L116 140L120 132Q129 114 142 99Q181 54 240 49ZM250 177Q250 177 250 177Q253 176 256 176Q261 176 267.5 181.5Q274 187 300 213Q328 241 332.5 246.5Q337 252 336 258Q335 266 327.5 270.0Q320 274 313 270Q310 269 291 250Q291 250 272 231V341V451L270 455Q268 459 265.0 461.5Q262 464 256.0 464.0Q250 464 247.0 461.5Q244 459 242 455Q242 455 240 451V341V231L221 250Q202 269 199 270Q192 274 184.5 270.0Q177 266 176 258Q175 252 179.5 246.5Q184 241 212 213Q246 179 250 177Z"/></symbol><symbol id="i-trash-outline" viewBox="0 0 512 512"><path d="M204 34Q208 33 257 33H307L313 36Q328 43 334 59Q336 64 336 80V96H386Q436 96 439 98Q444 101 447 106Q451 115 443 123Q439 128 425 128H415L405 283Q396 437 394 444Q388 469 363 478L356 480H256H156L149 478Q119 467 116 433Q115 424 106 276L97 128H87Q77 128 75 127Q68 125 65 118Q63 112 66.0 105.5Q69 99 75 97Q76 96 126 96H176V80Q176 64 178 59Q185 40 204 34ZM302 67 300 64H257Q215 64 213 65Q208 67 208 83V96H256H304V83Q304 69 302 67ZM383 132V128H256H129V133Q130 138 139 286Q146 403 147.5 421.5Q149 440 153 443Q154 445 157.5 446.5Q161 448 256.0 448.0Q351 448 355 446Q362 443 364 432Q364 425 373.0 280.5Q382 136 383 132ZM177 162Q179 161 184.0 160.5Q189 160 191 162Q197 165 199 170Q200 172 204.0 285.0Q208 398 208 402Q206 416 192 416Q180 416 177 404Q176 401 172.0 287.0Q168 173 169 170Q172 165 177 162ZM248 163Q253 159 259.5 160.5Q266 162 270 168L272 171V288V405L270 408Q265 416 256.0 416.0Q247 416 242 408L240 405V288V171L242 168Q244 165 248 163ZM320 162Q320 162 320 162Q323 160 329 161Q339 161 342 170Q342 170 344 174L340 288Q336 401 335 404Q333 410 328 414Q321 418 313.0 414.5Q305 411 304 402Q304 398 308.0 285.0Q312 172 313 170Q315 165 320 162Z"/></symbol><symbol id="i-create-outline" viewBox="0 0 512 512"><path d="M446 48Q450 47 457 51Q467 57 463 69Q462 73 454 81Q445 90 441.5 90.0Q438 90 430 82Q421 73 423 68Q424 65 432.0 57.5Q440 50 443 49Q445 48 446 48ZM309 180 402 88H406Q410 88 416 94Q426 104 424 109Q423 112 331 204L239 295L226 299Q213 304 211 304Q207 303 212 286L217 272ZM97 113Q97 113 97 113Q102 112 189.0 112.0Q276 112 279 114Q288 119 288.0 128.0Q288 137 279 142Q276 144 186.5 144.5Q97 145 94 146Q86 150 82 157Q82 157 81 161V288V415L82 419Q87 426 95 430Q99 432 224.0 432.0Q349 432 353 430Q361 426 366 419Q366 419 367 415L368 317V220L370 216Q374 210 381.5 208.5Q389 207 394 212Q399 217 399.5 227.5Q400 238 400 320Q400 320 400 419L398 424Q388 453 360 462Q360 462 354 464H224H94L88 462Q72 457 61 443Q54 435 50 424Q50 424 48 418V288V158L50 152Q54 141 61 133Q75 115 97 113Z"/></symbol><symbol id="i-swap-horizontal-outline" viewBox="0 0 512 512"><path d="M297 33Q299 33 303.5 32.5Q308 32 310.5 33.0Q313 34 371.0 92.0Q429 150 430 153Q434 160 430 167Q428 170 370.0 228.5Q312 287 308 287Q301 289 296 286Q290 283 289 277Q288 274 288.0 273.0Q288 272 288.5 268.0Q289 264 334 220L378 176H235Q92 176 89.0 174.5Q86 173 83.5 169.5Q81 166 81.0 160.0Q81 154 83.0 151.0Q85 148 88.5 146.0Q92 144 235 144H378L334 100Q289 56 289 52Q286 40 297 33ZM201 226Q201 226 201 226Q203 225 208.0 224.5Q213 224 215 226Q222 229 223 235Q224 238 224.0 239.0Q224 240 223.5 244.0Q223 248 178 292Q178 292 134 336H277Q420 336 423 338Q432 342 432.0 352.0Q432 362 423 366Q420 368 277 368Q277 368 134 368L178 412Q223 456 223.5 460.0Q224 464 224.0 465.0Q224 466 223 469Q222 475 216 478Q211 481 204 479Q200 479 141.5 420.0Q83 361 81 359Q78 352 81 345Q83 343 140.5 285.0Q198 227 201 226Z"/></symbol><symbol id="i-moon-outline" viewBox="0 0 512 512"><path d="M164 36Q176 30 183 34Q188 37 191 42Q193 48 188 60Q179 87 177 121Q174 177 197 224Q227 285 287 315Q310 326 332 331Q395 345 451 324Q464 319 469.0 321.0Q474 323 477.5 328.0Q481 333 480 338Q478 346 467 365Q428 432 356 462Q312 480 264 480Q221 480 182 465Q136 448 100 412Q71 383 55 348Q32 300 32 248Q32 200 50 156Q66 117 96.5 85.0Q127 53 164 36ZM147 91Q147 91 147 91Q149 83 148.5 82.5Q148 82 141 87Q93 124 74 184Q59 229 66 276Q76 345 126.5 393.0Q177 441 246 447Q279 450 312 442Q369 429 411 387Q432 366 430 364Q429 363 421 365Q386 370 353 367Q295 361 246.0 328.0Q197 295 170 243Q149 203 145 159Q142 126 147 91Z"/></symbol><symbol id="i-sunny-outline" viewBox="0 0 512 512"><path d="M248 35Q253 31 259.5 32.5Q266 34 270 40Q272 43 272 70Q272 101 267.5 106.5Q263 112 256.0 112.0Q249 112 244.5 106.5Q240 101 240 70Q240 43 242.0 40.0Q244 37 248 35ZM102 95Q109 91 116 95Q120 96 138.5 115.0Q157 134 158 138Q161 148 153.5 154.5Q146 161 136 157Q132 155 113.5 136.0Q95 117 94 114Q90 101 102 95ZM396 95Q404 91 411.0 95.0Q418 99 419 107Q419 112 416.0 116.5Q413 121 398 136Q376 159 369 159Q362 159 357 154Q351 146 355 137Q356 133 374.5 114.5Q393 96 396 95ZM241 161Q244 161 258.5 161.0Q273 161 281 163Q309 171 329 193Q346 213 351 241Q354 257 350 273Q345 303 324.0 324.0Q303 345 273 350Q257 354 241 351Q205 345 182.5 318.0Q160 291 160 256Q160 233 170 214Q192 170 241 161ZM274 195Q259 190 245 193Q227 196 213.5 208.0Q200 220 195 238Q193 244 193.0 256.0Q193 268 195 274Q205 307 238 318Q256 323 274 318Q307 307 317 274Q319 268 319.0 256.0Q319 244 317 238Q307 204 274 195ZM44 240Q47 240 73 240Q95 240 99.5 241.0Q104 242 108 245Q119 257 106 268Q101 272 70 272Q43 272 40 270Q27 262 34 248Q37 242 44 240ZM442 240H468L472 242Q480 247 480.0 256.0Q480 265 472 270Q469 272 442 272Q411 272 406 268Q397 260 401 250Q404 242 411 241Q413 240 414.0 240.0Q415 240 442 240ZM144 354Q152 354 156.5 361.0Q161 368 157 375Q156 379 137.5 397.5Q119 416 116 417Q108 421 101.0 417.0Q94 413 93 405Q93 400 96.0 395.5Q99 391 114 376Q133 357 136.5 355.0Q140 353 144 354ZM364 354Q369 352 376 355Q380 357 398.5 376.0Q417 395 418 398Q421 408 413.5 415.0Q406 422 396 417Q393 416 374.5 397.5Q356 379 355 375Q352 369 354.5 363.0Q357 357 364 354ZM250 401Q250 401 250 401Q256 399 262 401Q269 404 271 412Q272 415 272.0 442.0Q272 469 270 472Q265 480 256.0 480.0Q247 480 242 472Q240 469 240.0 441.5Q240 414 241 411Q244 404 250 401Z"/></symbol><symbol id="i-language-outline" viewBox="0 0 512 512"><path d="M188 49Q198 46 204 54Q208 58 208 80V96H274Q341 96 343 98Q350 101 351 107Q352 110 352 111Q354 116 348 123Q345 126 340.5 127.0Q336 128 317 128H293L288 144Q263 215 227 266Q219 277 219.0 278.0Q219 279 236.5 296.0Q254 313 261 319Q272 329 272 336Q272 344 266.0 348.5Q260 353 252.5 351.5Q245 350 215 320L198 303L194 307Q177 326 158 343Q138 362 114.5 380.0Q91 398 84 399Q75 402 68.5 394.5Q62 387 65 378Q67 373 78 366Q108 347 143 314Q174 284 176 279Q177 278 170 269Q152 246 132.5 215.5Q113 185 112 178Q111 172 115 166Q118 162 124.5 161.0Q131 160 136 162Q140 164 150 182Q166 210 188 240L198 253L204 243Q233 199 254 143Q259 130 259.0 129.0Q259 128 152.0 128.0Q45 128 41.5 126.5Q38 125 36 123Q30 116 32 111Q32 110 33 107Q34 101 41 98Q43 96 110 96H176V80Q176 63 177 60Q179 51 188 49ZM361 210Q366 207 372.0 208.5Q378 210 381 215Q383 218 431 331Q471 423 476.0 436.5Q481 450 478 455Q472 467 460 463Q455 462 451.5 456.5Q448 451 438 428L426 400H368H310L299 426Q285 458 282 461Q275 466 268 463Q263 462 259.5 457.0Q256 452 256 446Q257 443 305.5 329.0Q354 215 356.0 213.0Q358 211 361 210ZM390 317Q369 266 368 266Q366 268 345.0 317.5Q324 367 324.5 367.5Q325 368 368 368Q368 368 412 367Z"/></symbol><symbol id="i-log-out-outline" viewBox="0 0 512 512"><path d="M90 82Q96 80 179 80Q249 80 261.0 81.0Q273 82 283 86Q312 100 319 126Q320 130 320.0 154.0Q320 178 319 181Q317 188 310 191Q299 195 292 186Q288 181 288 154Q288 132 286 129Q279 115 261 113Q255 112 177.0 112.0Q99 112 95 114Q87 118 83 125L81 129V256V383L83 387Q87 394 95 398Q99 400 181.5 400.0Q264 400 269 399Q281 397 286 386Q288 382 288 360Q288 330 293 325Q303 315 314 324Q318 328 319.0 332.0Q320 336 320 357Q320 387 316 397Q305 424 277 430Q271 432 182 432L92 431L85 429Q59 419 50 392L48 385V256V127L50 120Q54 107 65 96Q76 86 90 82ZM361 161Q361 161 361 161Q363 160 368.0 160.5Q373 161 375 162Q378 163 420 205Q453 238 458.5 244.5Q464 251 464.0 256.0Q464 261 458.5 267.5Q453 274 420 307Q377 350 374 351Q367 353 361 350Q354 347 353 341Q352 338 352.0 337.0Q352 336 352.5 332.0Q353 328 381 300Q381 300 409 272H290H171L168 270Q160 265 160.0 256.0Q160 247 167 243Q167 243 171 240H290H409L381 212Q353 184 353 180Q350 168 361 161Z"/></symbol><symbol id="i-bug-outline" viewBox="0 0 512 512"><path d="M237 34Q258 29 280 35Q296 39 309 48Q328 61 339.5 82.0Q351 103 352 126V134L355 136Q375 149 386 168L390 175L392 171Q398 157 400 122Q400 108 401 105Q404 100 410 97Q416 95 423 98Q430 101 431 108Q432 112 431.5 129.0Q431 146 430 153Q424 189 406 209L400 215V244V272H434Q467 272 471 274Q477 277 479.0 284.0Q481 291 477.5 296.5Q474 302 467 304Q462 305 431 305H400V320Q399 347 392 367L390 374L398 382Q421 406 428 433Q435 460 431 470Q427 479 416 480Q412 480 407.0 477.0Q402 474 401 470Q400 467 399 457Q397 428 378 407Q374 403 373 403Q347 440 305 455Q281 464 256 464Q229 464 205 454Q163 439 139 403Q138 403 134 408Q115 427 113 457Q112 467 111 470Q108 480 96 480Q85 480 81 470Q79 464 81 447Q86 410 114 382L122 374L120 367Q113 347 112 320V305H81Q50 305 45 304Q38 302 34.5 296.5Q31 291 33.0 284.0Q35 277 41 274Q45 272 78 272H112V243V214L108 209Q80 179 80 120Q80 105 85 101Q89 96 96.0 96.0Q103 96 107 101Q112 105 112 121Q113 147 116 159Q120 175 123 175Q123 175 128 167Q139 151 155 140L160 136V127Q160 92 183 65Q205 41 237 34ZM245 65Q215 70 200 97Q193 110 193 119Q193 121 195 120Q202 118 220 115Q268 107 312 118L319 120V118Q319 116 317 110Q313 95 301.0 83.0Q289 71 274.0 66.5Q259 62 245 65ZM290 146Q290 146 290 146Q282 145 261.5 144.5Q241 144 233 145Q167 153 149 196Q146 205 145.0 215.5Q144 226 144 273Q144 329 145 337Q150 364 166.0 386.0Q182 408 206 420Q221 428 237 430Q237 430 240 431V311Q240 191 241 188Q244 176 256.0 176.0Q268 176 271 188Q272 191 272 311Q272 311 272 431L275 430Q306 425 329 404Q360 377 367 337Q368 328 368.0 272.0Q368 216 366 208Q358 157 290 146Z"/></symbol><symbol id="i-bulb-outline" viewBox="0 0 512 512"><path d="M242 17Q246 16 257.0 16.0Q268 16 274 17Q330 23 370 63Q393 87 406 119Q419 154 415.0 195.0Q411 236 391 267Q382 281 358 304Q331 331 324 346L320 353V371V390L317 393Q311 401 303.0 400.0Q295 399 290 392L288 388V369Q288 351 290 344Q299 316 338 279Q350 268 355 261Q378 233 382 198Q389 145 362 105Q328 53 265 49Q226 46 192.5 65.0Q159 84 141 120Q127 149 128.5 184.5Q130 220 148 248Q155 260 179 284Q211 315 219 335Q224 348 224 370V388L222 392Q217 400 209.0 400.0Q201 400 195 393L192 390V371V353L188 345Q180 331 154 304Q133 284 129 278Q92 228 96 164Q100 117 128.5 79.5Q157 42 201 26Q217 20 233 18Q240 17 242 17ZM211 226Q214 224 218.5 224.0Q223 224 230.0 228.5Q237 233 243.5 236.0Q250 239 256.0 239.0Q262 239 268.5 236.0Q275 233 282.0 228.5Q289 224 293 224Q301 224 305 229Q310 233 309.5 240.5Q309 248 303 253Q292 262 279 267L272 269V327Q272 385 271 388Q270 395 264.0 398.0Q258 401 252 399Q243 397 241 389Q240 385 240 327V269L233 267Q220 262 209 253Q201 247 202.0 238.0Q203 229 211 226ZM201 418Q204 416 256.0 416.0Q308 416 311 418Q316 421 319 426Q321 432 319 438Q316 445 309 447Q307 448 256.0 448.0Q205 448 203 447Q196 445 193 438Q191 432 194 425Q196 420 201 418ZM217 466Q217 466 217 466Q220 464 256.0 464.0Q292 464 295 466Q304 470 304.0 480.0Q304 490 295 494Q292 496 256 496Q225 496 220.0 495.0Q215 494 211 489Q209 486 209.0 480.0Q209 474 211.0 471.0Q213 468 217 466Z"/></symbol><symbol id="i-open-outline" viewBox="0 0 512 512"><path d="M316 49Q319 48 377.5 48.0Q436 48 439 50Q445 53 447 60Q448 63 448 121V179L446 183Q444 186 441.0 189.0Q438 192 432.0 192.0Q426 192 422.5 189.0Q419 186 417.5 182.5Q416 179 416 141V103L316 202Q217 301 214 302Q208 306 200.5 302.0Q193 298 192 291Q191 284 201.0 273.0Q211 262 293 180L393 80H355Q317 80 313.0 78.0Q309 76 306.5 73.0Q304 70 304.0 64.0Q304 58 307 55Q311 50 316 49ZM81 113Q81 113 81 113Q86 112 173.0 112.0Q260 112 262 114Q271 119 271.0 128.0Q271 137 262 142Q260 144 170.5 144.5Q81 145 78 146Q70 150 66 157Q66 157 64 161V288V415L66 419Q71 426 79 430Q82 432 207.5 432.0Q333 432 337 430Q345 426 349 419Q349 419 351 415L352 317V220L354 216Q358 210 365.0 208.5Q372 207 378 212Q383 217 383.5 227.5Q384 238 384 320Q384 320 384 419L382 424Q372 453 343 462Q343 462 337 464H208H78L72 462Q56 457 44 443Q38 435 34 424Q34 424 32 418V288V158L34 152Q38 141 44 133Q59 115 81 113Z"/></symbol><symbol id="i-play-circle-outline" viewBox="0 0 512 512"><path d="M241 49Q256 48 269 49Q351 54 407 113Q452 161 462 228Q464 238 464.0 256.0Q464 274 462 284Q454 339 421 382Q405 405 382 421Q339 454 284 462Q274 464 256.0 464.0Q238 464 228 462Q173 454 130 421Q107 405 91 382Q58 339 50 284Q48 274 48.0 256.0Q48 238 50 228Q58 174 91 130Q107 108 130 91Q181 53 241 49ZM284 82Q278 81 261.5 80.5Q245 80 240 81Q212 84 193 92Q149 109 119.5 145.0Q90 181 82 229Q81 238 81.0 256.0Q81 274 82 283Q89 326 114.0 360.0Q139 394 178 414Q214 432 256.0 432.0Q298 432 334 414Q372 394 397.0 360.5Q422 327 430 284Q431 275 431.0 256.5Q431 238 430 229Q420 169 378 129Q338 92 284 82ZM207 177Q207 177 207 177Q210 175 213.5 176.5Q217 178 274.0 212.5Q331 247 333 249Q336 252 336.0 256.0Q336 260 333 263Q330 266 274.0 300.0Q218 334 214 335Q210 337 207.0 335.0Q204 333 202.0 330.5Q200 328 200.0 256.0Q200 184 202.0 181.5Q204 179 207 177Z"/></symbol><symbol id="i-headset-outline" viewBox="0 0 512 512"><path d="M233 33Q240 33 255.5 33.0Q271 33 278 33Q345 41 400 88Q474 151 480 244Q481 275 467 325Q454 365 444 390Q430 422 406 445Q390 462 372 471Q343 485 317 477Q301 472 287 460Q272 446 279 427Q280 422 324.5 344.5Q369 267 372 263Q380 252 396 252Q405 252 418 260Q435 270 443 280Q445 283 446 278Q446 277 446 274Q456 222 424 166Q400 123 358.0 96.0Q316 69 269 65Q216 60 166.0 88.5Q116 117 88 166Q64 209 64 255Q64 277 67 282Q68 283 69 280Q77 270 94 260Q107 252 116 252Q132 252 140 263Q143 267 187.5 344.5Q232 422 233 427Q240 446 225 460Q211 472 195 477Q151 491 106 446Q91 431 80 413Q67 391 51 342Q30 280 32 244Q37 174 82 118Q98 98 118 82Q170 40 233 33ZM108 289Q96 296 93 303Q88 312 88 330Q88 349 94 368Q107 403 132 426Q162 455 184 447Q188 445 196 441L203 437L202 434Q200 431 159.0 358.5Q118 286 117.0 285.0Q116 284 108 289ZM413 295Q413 295 413 295Q410 292 403 288Q403 288 396 284L395 286Q394 288 352.0 362.0Q310 436 309.5 436.5Q309 437 312.5 439.0Q316 441 321.0 443.5Q326 446 328 447Q340 451 358.5 441.5Q377 432 392 414Q415 385 423 352Q427 329 423 312Q420 301 413 295Z"/></symbol><symbol id="i-videocam-outline" viewBox="0 0 512 512"><path d="M76 113Q81 112 180 112H279L285 114Q315 123 329 150Q334 161 335.0 171.0Q336 181 336 251Q336 334 335 341Q332 363 316 380Q299 396 278 399Q272 400 176 400Q96 400 82.0 399.5Q68 399 58 395Q25 380 18 346Q16 339 16.0 256.0Q16 173 18 166Q22 147 36 132Q53 116 76 113ZM454 129Q458 128 465.5 128.5Q473 129 479 131Q488 137 493 147L495 151V256V361L493 366Q482 388 460 384Q455 383 452 382Q450 381 408.5 352.0Q367 323 363 319Q354 312 352 300Q352 295 352.0 256.0Q352 217 352 212Q354 201 361 194Q365 190 408.0 160.0Q451 130 454 129ZM278 146Q274 144 176.0 144.0Q78 144 73 146Q52 153 49 175Q48 180 48.0 256.0Q48 332 49 337Q52 360 74 366Q78 368 178 368L277 367L283 365Q295 359 301 347L303 341L304 258Q304 175 302 170Q300 161 293.0 154.5Q286 148 278 146ZM464 256Q464 256 464 256Q464 230 464.0 208.0Q464 186 464.0 173.0Q464 160 464 160Q463 161 423 188Q423 188 384 216V256V296L423 323L463 351Q464 352 464.0 339.5Q464 327 464.0 305.5Q464 284 464 256Z"/></symbol><symbol id="i-mic-outline" viewBox="0 0 512 512"><path d="M247 49Q286 45 312 70Q331 89 335 116Q336 125 336.0 183.5Q336 242 335 251Q331 275 315.5 292.5Q300 310 277 317Q269 319 256 319Q238 319 222 312Q210 306 200 296Q184 281 178 257Q176 250 176.0 187.5Q176 125 177 118Q180 90 200.0 70.5Q220 51 247 49ZM268 82Q249 77 234 86Q220 92 214 105Q210 113 209.0 122.5Q208 132 208 183Q208 245 210 251Q212 262 221.5 272.0Q231 282 242 286Q255 290 268 286Q281 283 290.5 273.0Q300 263 302 251Q304 245 304.0 183.5Q304 122 302 116Q300 104 290.0 94.0Q280 84 268 82ZM122 194Q122 194 122 194Q136 187 143 202Q144 205 144 227Q144 267 157 291Q170 317 194.0 333.0Q218 349 247 351Q281 354 310.5 337.5Q340 321 356 291Q368 267 368 227Q368 205 369 202Q372 196 378 193Q385 191 391.0 194.0Q397 197 399 204Q400 207 400.0 230.5Q400 254 399 261Q393 295 373 323Q356 348 331.0 363.0Q306 378 280 382Q277 382 275 383Q275 383 272 383V408V432H296Q320 432 324 433Q333 435 335.5 444.0Q338 453 331 459Q328 462 324.5 463.0Q321 464 256.0 464.0Q191 464 187.5 463.0Q184 462 181 459Q174 453 176.5 444.0Q179 435 188 433Q192 432 216 432Q216 432 240 432V408V383H237Q235 382 232 382Q188 375 154.5 341.5Q121 308 113 261Q112 254 112.0 230.5Q112 207 113 204Q115 197 122 194Z"/></symbol><symbol id="i-camera-outline" viewBox="0 0 512 512"><path d="M202 81Q204 80 258.0 80.5Q312 81 316 82Q327 86 334 94Q337 97 350.5 119.0Q364 141 368.0 142.5Q372 144 405.0 144.0Q438 144 444 146Q469 151 478 177L480 184V288V392L478 399Q474 410 464 419Q455 428 444 431Q438 432 256.0 432.0Q74 432 68 431Q43 424 34 399L32 392V288V184L34 177Q39 163 51.5 153.5Q64 144 79 144H83L84 138Q85 129 89 124Q94 120 112 120Q128 120 131 122Q140 126 140 139Q140 143 140.0 143.5Q140 144 142 144Q146 142 161 119Q175 97 178 94Q186 84 202 81ZM257 112Q205 112 202 115Q201 116 188 137Q172 162 165 167Q157 173 150.5 174.0Q144 175 113 176Q83 176 77.5 176.5Q72 177 68.5 181.0Q65 185 64.5 196.5Q64 208 64 288Q64 387 65 390Q68 396 74 399Q77 400 256.0 400.0Q435 400 438 399Q444 396 447 390Q448 387 448 288Q448 208 447.5 196.5Q447 185 443.5 181.0Q440 177 435.0 176.5Q430 176 400 176L363 175L358 173Q348 169 341 162Q337 158 323.5 136.5Q310 115 307.5 113.5Q305 112 257 112ZM247 177Q275 174 298 186Q312 193 324 204Q351 232 351.5 271.0Q352 310 325 338Q297 368 256 368Q214 368 185.5 337.0Q157 306 161 264Q162 250 167 237Q176 212 198.0 195.5Q220 179 247 177ZM269 210Q269 210 269 210Q248 205 229 214Q195 231 192.5 268.0Q190 305 222 326Q228 330 236.0 333.0Q244 336 256.0 336.0Q268 336 276 333Q299 325 311 304Q321 287 319.5 267.0Q318 247 306 232Q291 214 269 210Z"/></symbol><symbol id="i-layers-outline" viewBox="0 0 512 512"><path d="M246 49Q269 47 286 53Q292 55 369.0 90.0Q446 125 449 128Q464 138 463.5 153.5Q463 169 448 178Q443 180 417.5 192.0Q392 204 392.0 204.5Q392 205 419.0 217.0Q446 229 449 231Q471 246 462 267Q458 275 448 281Q445 284 419.5 295.5Q394 307 394.0 307.5Q394 308 421.0 321.5Q448 335 452 338Q470 353 462 371Q458 379 448 386Q446 387 373.0 420.5Q300 454 291 458Q261 470 229 460Q223 459 146.0 424.0Q69 389 64 386Q55 380 51 370Q46 360 50.5 349.5Q55 339 67 333Q72 330 96.5 319.5Q121 309 121.0 308.5Q121 308 118.5 307.0Q116 306 112.0 304.5Q108 303 103 300Q64 282 58 277Q53 272 51 267Q44 253 54 239Q60 232 94 217Q101 213 107.5 210.5Q114 208 117.5 206.0Q121 204 121.0 204.0Q121 204 97 193Q64 178 58 173Q50 166 49 157Q45 140 62 128Q67 125 144.5 89.5Q222 54 225 53Q234 50 246 49ZM270 81Q256 78 242 81Q237 83 161.5 117.0Q86 151 85 152Q85 152 90.0 154.5Q95 157 104.0 161.0Q113 165 123 170Q163 188 169 191Q229 219 237 221Q254 227 274 222Q281 220 340 192Q344 190 383.5 172.5Q423 155 426 153L428 152L423 150Q419 148 347.5 115.5Q276 83 270 81ZM164 224 160 222 123 239Q86 255 85 256L162 292Q173 297 203 311Q233 324 240 326Q256 330 272 326Q281 324 345 294Q351 291 389 274Q400 269 408.5 265.0Q417 261 422.0 258.5Q427 256 427 256Q426 255 389.5 238.5Q353 222 352.0 222.0Q351 222 321.0 236.0Q291 250 285 252Q255 261 226 251Q220 249 194.0 237.5Q168 226 164 224ZM391 342Q391 342 391 342Q355 325 354.5 325.0Q354 325 323.5 339.0Q293 353 286 355Q256 366 225 355Q218 353 189.5 339.5Q161 326 160 327Q159 327 122.5 343.0Q86 359 85 360Q85 360 120.5 376.5Q156 393 193.5 410.0Q231 427 236 429Q242 431 256.0 431.0Q270 431 275 430Q279 428 317.0 411.0Q355 394 391.0 377.0Q427 360 427 360Q426 359 391 342Z"/></symbol><symbol id="i-albums-outline" viewBox="0 0 512 512"><path d="M140 65Q141 64 257 64H374L377 67Q383 72 384 78Q385 92 371 95Q367 96 256.0 96.0Q145 96 141 95Q129 93 128.5 81.0Q128 69 140 65ZM108 112Q111 112 257 112H404L408 114Q416 119 416.0 128.0Q416 137 408 142L405 144H256H107L104 142Q91 134 98 120Q101 114 108 112ZM80 162Q85 161 255.5 160.5Q426 160 431 162Q443 165 452.0 175.0Q461 185 463 197Q464 202 464 304Q464 388 463.5 402.0Q463 416 459 423Q453 437 439 444Q433 446 429 447Q424 448 256.0 448.0Q88 448 83 447Q79 446 73 444Q59 437 53 423Q49 416 48.5 402.0Q48 388 48 304Q48 202 49 197Q51 185 60.0 175.0Q69 165 80 162ZM425 194Q425 194 425 194Q422 192 256.0 192.0Q90 192 87.0 193.5Q84 195 82.5 197.5Q81 200 80 303Q80 303 80 407L82 410Q84 412 86 414Q86 414 89 416H256H423L426 414Q428 412 430 410Q430 410 432 407V303Q431 200 429.5 197.5Q428 195 425 194Z"/></symbol><symbol id="i-star-outline" viewBox="0 0 512 512"><path d="M269 38Q270 41 295 116L320 192H402Q484 192 488 194Q495 198 496 206Q496 214 491 219Q489 222 424.5 266.0Q360 310 359.5 310.5Q359 311 384.5 385.5Q410 460 410 464Q410 470 405 475Q399 482 390 479Q387 479 321.5 431.5Q256 384 256.0 384.0Q256 384 190 431Q142 466 131.0 473.5Q120 481 117 480Q116 480 113 479Q107 478 104 471Q101 467 104.5 455.5Q108 444 128 385Q153 311 152.5 310.5Q152 310 87.5 266.0Q23 222 21 220Q15 214 16.5 205.5Q18 197 25 194Q29 192 111 192H192L212 133Q237 56 240.0 46.5Q243 37 248.0 34.5Q253 32 259.5 33.0Q266 34 269 38ZM275 158Q275 158 275 158L256 101Q256 101 237.5 157.5Q219 214 216.5 217.5Q214 221 211.0 222.5Q208 224 146 224Q146 224 85 225L132 257Q180 290 182 292Q188 297 188 304Q188 308 168.5 364.5Q149 421 149.5 421.0Q150 421 198.5 386.0Q247 351 250 349Q256 347 262 349Q265 351 313.5 386.0Q362 421 362.5 421.0Q363 421 343.5 364.5Q324 308 324 304Q324 297 330 292Q332 290 380 257Q380 257 427 225L366 224Q304 224 301.0 222.5Q298 221 295.5 217.5Q293 214 275 158Z"/></symbol><symbol id="i-star" viewBox="0 0 512 512"><path d="M248 34Q248 34 248 34Q253 32 259.5 33.0Q266 34 269 38Q271 41 300 132Q300 132 320 192H402Q484 192 488 194Q495 198 496 206Q496 214 491 219Q489 222 424.5 266.0Q360 310 359.5 310.5Q359 311 384.5 385.5Q410 460 410 464Q410 472 404.0 476.5Q398 481 390 479Q387 479 321.5 431.5Q256 384 256.0 384.0Q256 384 190.5 431.5Q125 479 121 480Q115 481 108.5 476.5Q102 472 102 465Q102 461 128 386Q128 386 153 311L151 309Q149 308 85.5 264.0Q22 220 19 217Q15 212 16.5 205.0Q18 198 23 195Q23 195 27 192H110H192L212 133Q237 56 240.5 46.5Q244 37 248 34Z"/></symbol><symbol id="i-pin-outline" viewBox="0 0 512 512"><path d="M243 17Q247 16 259 17Q277 17 292 25Q303 30 313 40Q332 59 336 88Q338 110 328 131Q311 165 276 173L272 174V317Q272 460 271 465Q270 471 264.5 483.0Q259 495 258 495Q255 496 253.5 494.0Q252 492 247 482Q242 469 241.0 464.5Q240 460 240 317V174L236 173Q223 170 212 163Q190 148 181.0 123.0Q172 98 180 72Q187 51 203.5 36.0Q220 21 243 17ZM268 49Q268 49 268 49Q260 47 249 49Q224 52 213 75Q203 96 213 117Q222 134 239 141Q256 147 273 141Q284 137 292.5 127.0Q301 117 303 105Q304 101 303.5 92.5Q303 84 302.0 83.5Q301 83 300 86Q291 99 274 95Q260 91 257.0 76.5Q254 62 266 53Q270 50 268 49Z"/></symbol><symbol id="i-pin" viewBox="0 0 512 512"><path d="M243 17Q247 16 258.5 16.5Q270 17 278 19Q311 29 327.0 59.0Q343 89 332 121Q326 138 314 150Q297 168 276 173L272 174V317Q272 460 271 465Q270 471 264.5 483.0Q259 495 258 495Q255 496 253.5 494.0Q252 492 247 482Q242 469 241.0 464.5Q240 460 240 317V175L231 172Q209 165 194.0 146.5Q179 128 176 105Q174 82 184 61Q202 24 243 17ZM291 51Q291 51 291 51Q279 45 268.5 51.0Q258 57 256 69Q255 78 260.5 85.5Q266 93 275 95Q293 100 301 83Q306 74 303.0 64.5Q300 55 291 51Z"/></symbol><symbol id="i-home-outline" viewBox="0 0 512 512"><path d="M244 34Q261 28 275 38Q277 40 307 68L336 96V77Q337 58 338 57Q341 51 347 49Q349 48 377 48H404L408 50Q412 53 414 56L416 60V117L417 173L454 209Q492 245 493 248Q497 252 495 260Q495 264 490.0 268.0Q485 272 480 272Q473 272 459 258L448 248V352Q448 455 446 459Q441 472 427 478L422 480H369H316L312 478Q308 475 306 472L304 469V397L303 324L301 322L299 320H256H213L211 322L209 324L208 397V469L206 472Q204 475 200 478L196 480H143H90L85 478Q70 472 66 458Q64 453 64.0 350.5Q64 248 63.5 248.0Q63 248 52 259Q36 275 26 271Q11 264 17 250Q19 247 31 235Q48 218 141.5 129.0Q235 40 237 38Q239 36 244 34ZM336 140Q257 64 256.5 64.0Q256 64 176 140L96 216V332V448H136H176V384V320L178 314Q185 299 200 291L205 289H256H307L312 291Q327 299 334 314L336 320V384V448H376H416V332V216ZM384 111V80H376H368V103V127L376 134L384 142Z"/></symbol><symbol id="i-return-down-forward-outline" viewBox="0 0 512 512"><path d="M41 146Q41 146 41 146Q49 142 57 147Q64 152 64 170Q64 200 73 219Q80 233 91 245Q106 260 126 267Q137 271 156.0 271.5Q175 272 288 272Q288 272 425 272L406 252Q390 236 387.0 232.0Q384 228 384 222Q385 215 392.0 210.5Q399 206 406 209Q409 210 443.5 245.0Q478 280 479 282Q481 288 479 294Q478 296 443.5 331.0Q409 366 406 367Q399 370 392.0 365.5Q385 361 384 354Q384 348 387.0 344.0Q390 340 406 324Q406 324 425 304H281Q160 303 145.0 302.5Q130 302 115 297Q90 289 71 270Q44 244 35 207Q32 195 31.5 176.0Q31 157 33 153Q36 148 41 146Z"/></symbol><symbol id="i-list-outline" viewBox="0 0 512 512"><path d="M75 113Q90 110 101.5 120.0Q113 130 112 146Q111 158 102.5 166.5Q94 175 82 176Q67 176 57 166Q41 150 51 130Q59 115 75 113ZM153 130 157 128H304Q451 128 454 130Q463 134 463.5 143.5Q464 153 456 158L452 160H307Q162 160 157 160Q148 158 145 150Q141 136 153 130ZM68 226Q73 224 81.0 224.5Q89 225 93 227Q104 232 109 242Q111 248 111.0 256.0Q111 264 109 270Q98 291 76 288Q62 286 54.0 274.5Q46 263 49 251Q52 233 68 226ZM158 240Q160 240 304.5 240.0Q449 240 452 241Q461 243 463.5 252.0Q466 261 459 267Q456 270 452.5 271.0Q449 272 303.0 272.0Q157 272 154 271Q146 267 144.5 258.5Q143 250 150 244Q153 242 155.0 241.0Q157 240 158 240ZM71 337Q82 334 93.0 339.0Q104 344 109 355Q116 370 107 385Q99 398 84.0 399.5Q69 401 58 390Q46 379 49 363Q50 353 57 346Q63 340 71 337ZM153 354Q153 354 153 354Q156 352 304 352Q304 352 453 352L456 355Q469 362 462 375Q460 378 457 381Q457 381 454 384H305H157L153 382Q142 377 145 364Q146 357 153 354Z"/></symbol><symbol id="i-grid-outline" viewBox="0 0 512 512"><path d="M58 34Q61 33 137 33H214L219 36Q232 42 237 54L239 59L240 134Q240 209 238 214Q235 227 223 234Q216 239 206.5 239.5Q197 240 134 240L59 239L54 237Q42 232 36 220Q33 215 32 209Q32 203 32.0 136.5Q32 70 32 64Q35 41 58 34ZM297 34Q301 33 377 33H454L459 36Q477 44 480 64Q480 70 480.0 136.5Q480 203 480 209Q479 215 476 220Q470 232 458 237L453 239L378 240Q315 240 305.5 239.5Q296 239 289 234Q277 227 274 214Q272 209 272 134L273 59L275 54Q281 39 297 34ZM207 66 206 64H136Q67 64 65.5 65.5Q64 67 64.0 136.0Q64 205 65.5 206.5Q67 208 136 208H206L207 206Q208 204 208.0 136.0Q208 68 207 66ZM376 64H306L305 66Q304 68 304.0 136.0Q304 204 305 206L306 208H376Q445 208 446.5 206.5Q448 205 448.0 136.0Q448 67 446.5 65.5Q445 64 376 64ZM58 274Q62 272 137 272L213 273L219 275Q229 280 234 289Q239 296 239.5 305.5Q240 315 240 378L239 453L237 458Q232 470 220 476Q215 479 209 480Q203 480 136.5 480.0Q70 480 64 480Q52 478 43.0 469.0Q34 460 32 448Q32 442 32.0 375.5Q32 309 32 303Q34 292 42 284Q49 276 58 274ZM299 273Q303 272 376 272Q436 272 445.5 272.5Q455 273 462 277Q472 282 477 293Q479 297 480 303Q480 309 480.0 375.5Q480 442 480 448Q478 460 469.0 469.0Q460 478 448 480Q442 480 375.5 480.0Q309 480 303 480Q297 479 292 476Q280 470 275 458L273 453L272 378Q272 315 272.5 305.5Q273 296 278 289Q286 276 299 273ZM66 305 64 306V376Q64 445 65.5 446.5Q67 448 136 448H206L207 446Q208 444 208.0 375.5Q208 307 206.5 305.5Q205 304 136.5 304.0Q68 304 66 305ZM446 305Q444 304 375.5 304.0Q307 304 305.5 305.5Q304 307 304.0 375.5Q304 444 305 446Q305 446 306 448H376Q445 448 446.5 446.5Q448 445 448 376Q448 376 448 306Z"/></symbol><symbol id="i-filter-outline" viewBox="0 0 512 512"><path d="M25 130 29 128H256H483L487 130Q500 136 495 150Q492 157 483 159Q478 160 256.0 160.0Q34 160 29 159Q20 157 17 150Q13 136 25 130ZM108 240Q111 240 257 240H404L408 242Q416 247 416.0 256.0Q416 265 408 270L405 272H256H107L104 270Q91 262 98 248Q101 242 108 240ZM201 354Q201 354 201 354Q204 352 256.0 352.0Q308 352 311 354Q316 357 319 362Q321 368 319 374Q316 381 309 383Q307 384 256.0 384.0Q205 384 203 383Q196 381 193 374Q191 368 194 361Q196 356 201 354Z"/></symbol><symbol id="i-arrow-forward" viewBox="0 0 512 512"><path d="M262 89Q262 89 262 89Q270 87 279 91Q283 93 357.5 168.0Q432 243 434.0 248.0Q436 253 436 257Q435 265 426.0 275.0Q417 285 356 345Q281 420 276.0 422.0Q271 424 268 424Q260 424 253 418Q240 408 245 392Q247 388 300.0 334.5Q353 281 353.0 280.5Q353 280 223 280Q223 280 93 279L90 277Q82 274 79 267Q74 258 77.0 248.5Q80 239 89 235Q89 235 93 233L224 232H354L301 178Q247 125 246 121Q242 111 246.5 101.5Q251 92 262 89Z"/></symbol><symbol id="i-reorder-three-outline" viewBox="0 0 512 512"><path d="M89 162Q92 160 256.0 160.0Q420 160 423 162Q430 165 431 172Q434 185 423 190L419 192H256H93L89 190Q78 185 81 172Q82 165 89 162ZM423 242Q432 247 432 256Q432 266 422 271Q419 272 256.0 272.0Q93 272 90 271Q82 267 80.5 258.5Q79 250 86 244Q89 242 91.0 241.0Q93 240 94.0 240.0Q95 240 257.5 240.0Q420 240 423 242ZM89 322Q89 322 89 322L93 320H256H419L423 322Q436 328 431 342Q428 349 419 351Q414 352 256.0 352.0Q98 352 93 351Q84 349 81 342Q77 328 89 322Z"/></symbol><symbol id="i-copy-outline" viewBox="0 0 512 512"><path d="M222 33H343L349 35Q368 41 380 55Q399 74 400 102V112H410Q426 113 440 120Q468 134 477 164Q481 177 480 303V417L478 424Q473 443 460 457Q445 472 424 478L417 480H303Q177 481 164 477Q150 473 139 463Q114 442 112 410V400H102Q85 399 73 393Q47 380 37 355Q33 344 32.5 330.5Q32 317 32 221Q32 123 32.5 108.5Q33 94 38 83Q46 60 68 46Q82 37 94 34Q99 33 100.5 33.0Q102 33 222 33ZM336 65Q332 64 219.5 64.0Q107 64 102 65Q89 67 78.0 78.5Q67 90 65 103Q64 108 64.0 220.0Q64 332 65 336Q68 353 83 362Q92 368 105 368H112V271V174L114 167Q125 131 158 117Q168 113 180.0 112.5Q192 112 271 112H368V105Q368 87 355 75Q347 67 336 65ZM418 146Q418 146 418 146Q412 144 296.0 144.0Q180 144 174 146Q151 152 146 175Q144 180 144 296Q144 391 144.5 405.5Q145 420 149 427Q154 437 165 443Q168 445 174.0 446.5Q180 448 295.5 448.0Q411 448 416 447Q427 445 436.0 435.5Q445 426 447 415Q448 410 448.0 295.5Q448 181 447 176Q445 166 436.5 157.0Q428 148 418 146Z"/></symbol><symbol id="i-git-branch-outline" viewBox="0 0 512 512"><path d="M145 34Q151 33 160.0 33.0Q169 33 174 34Q190 37 203.0 48.5Q216 60 220 75Q227 96 220 117Q216 130 205.0 141.0Q194 152 182 156L176 158V231V304L179 302Q197 290 247 279Q288 271 305 263Q323 254 330.0 239.0Q337 224 334 222Q333 221 328 219Q317 215 306.5 204.0Q296 193 292 181Q279 142 307 115Q326 96 352.0 96.0Q378 96 397 115Q419 136 415 167Q413 185 402.0 199.5Q391 214 375 220L367 223L366 228Q359 270 322 290Q303 300 255 311Q206 321 192 332Q183 339 179 349Q177 355 180 355Q185 355 197 364Q215 377 221.0 397.0Q227 417 220 437Q216 450 205.0 461.0Q194 472 181 476Q151 486 127 471Q107 458 99.5 437.5Q92 417 100 395Q104 382 115.5 370.5Q127 359 141 355L144 354V256V158L138 156Q126 152 115.0 141.0Q104 130 100 117Q93 96 100 75Q104 60 117.0 48.5Q130 37 145 34ZM173 67Q163 63 153 65Q138 68 131 83Q128 88 128.5 96.0Q129 104 131 109Q136 120 147 125Q152 128 160.0 128.0Q168 128 173 125Q184 120 189 109Q191 104 191.0 96.0Q191 88 189 83Q184 72 173 67ZM365 131Q355 127 345 129Q330 132 323 147Q320 152 320.5 160.0Q321 168 323 173Q328 184 339 189Q344 192 352.0 192.0Q360 192 365 189Q376 184 381 173Q383 168 383.0 160.0Q383 152 381 147Q376 136 365 131ZM173 387Q173 387 173 387Q163 383 153 385Q138 388 131 403Q128 408 128.5 416.0Q129 424 131 429Q136 440 147 445Q152 448 160.0 448.0Q168 448 173 445Q184 440 189 429Q191 424 191.0 416.0Q191 408 189 403Q184 392 173 387Z"/></symbol><symbol id="i-menu-outline" viewBox="0 0 512 512"><path d="M73 146 76 144H256H436L439 146Q448 150 448.0 160.0Q448 170 439 174L436 176H256H76L73 174Q64 170 64.0 160.0Q64 150 73 146ZM76 241Q79 240 257.5 240.0Q436 240 439.0 242.0Q442 244 445.0 247.0Q448 250 448.0 256.0Q448 262 445.0 265.0Q442 268 439 270L435 272H256H77L73 270Q70 268 67.0 265.0Q64 262 64.0 256.0Q64 250 67 247Q71 242 76 241ZM73 338Q73 338 73 338L76 336H256H436L439 338Q448 342 448.0 352.0Q448 362 439 366Q439 366 436 368H256H76L73 366Q64 362 64.0 352.0Q64 342 73 338Z"/></symbol><symbol id="i-calendar-outline" viewBox="0 0 512 512"><path d="M120 35Q125 31 131.5 32.5Q138 34 142 40Q144 43 144 54V64H256H368V54Q368 43 370 40Q375 32 384.0 32.0Q393 32 398 40Q400 43 400 53V64H414Q432 65 443 70Q470 83 478 113Q480 118 480.5 265.5Q481 413 480 422Q477 445 462 461Q446 477 423 480Q415 480 256.0 480.0Q97 480 89 480Q67 477 51 462Q35 445 32 422Q31 413 31.5 265.5Q32 118 34 113Q42 83 69 70Q80 65 98 64H112V53Q112 39 120 35ZM427 98Q422 96 256 96H89L84 98Q75 102 69 111Q64 119 64 136V144H256H448V135Q448 126 447 121Q443 104 427 98ZM448 300V176H256H64V300V424L67 429Q72 440 83 445L88 448H256H424L429 445Q440 440 445 429L448 424ZM289 209Q291 208 297.5 208.5Q304 209 307 211Q320 218 320 232Q320 244 310.0 251.5Q300 259 288 255Q279 252 275 243Q270 234 274 224Q278 213 289 209ZM384 210Q393 212 397.5 221.0Q402 230 399 238Q394 254 378 256Q363 257 355.5 244.5Q348 232 355 220Q359 214 367.0 210.0Q375 206 384 210ZM126 290Q136 286 147 291Q158 296 159.5 308.5Q161 321 152 329Q146 336 136 336Q121 336 114 322Q110 312 114 303Q118 294 126 290ZM206 290Q210 288 217 289Q232 289 238 302Q242 310 239 320Q236 329 227.0 333.5Q218 338 210 335Q194 330 192.5 314.0Q191 298 206 290ZM288 290Q291 289 296 288Q306 288 314 296Q323 306 319.0 318.5Q315 331 302 335Q291 338 281.5 331.0Q272 324 272 312Q272 296 288 290ZM365 291Q382 283 394 296Q400 303 400 312Q400 322 393.0 329.0Q386 336 376 336Q366 336 360 329Q351 321 352.5 308.5Q354 296 365 291ZM131 369Q142 366 151.0 373.5Q160 381 160 392Q160 407 146.5 413.5Q133 420 121.0 410.0Q109 400 113 386Q117 371 131 369ZM210 369Q218 367 227.0 371.5Q236 376 239 384Q242 394 238 402Q234 410 227 413Q219 417 210 415Q198 412 194 400Q190 390 194.5 381.0Q199 372 210 369ZM290 369Q290 369 290 369Q301 366 310.0 372.5Q319 379 320 390Q321 410 302 415Q291 418 282.0 411.5Q273 405 272 394Q271 374 290 369Z"/></symbol><symbol id="i-today-outline" viewBox="0 0 512 512"><path d="M120 35Q125 31 131.5 32.5Q138 34 142 40Q144 43 144 54V64H256H368V54Q368 43 370 40Q375 32 384.0 32.0Q393 32 398 40Q400 43 400 53V64H414Q432 65 443 70Q470 83 478 113Q480 118 480.5 265.5Q481 413 480 422Q477 445 462 461Q446 477 423 480Q415 480 256.0 480.0Q97 480 89 480Q67 477 51 462Q35 445 32 422Q31 413 31.5 265.5Q32 118 34 113Q42 83 69 70Q80 65 98 64H112V53Q112 39 120 35ZM427 98Q422 96 256 96H89L84 98Q75 102 69 111Q64 119 64 136V144H256H448V135Q448 126 447 121Q443 104 427 98ZM448 300V176H256H64V300V424L67 429Q72 440 83 445L88 448H256H424L429 445Q440 440 445 429L448 424ZM115 210Q119 208 159.5 208.0Q200 208 205 210Q216 214 221 224Q225 232 224 276Q224 313 222 318Q218 328 209 333Q201 336 160.0 336.0Q119 336 111 333Q102 328 98 318Q96 313 96 276Q95 232 99 224Q104 214 115 210ZM192 272V240H160H128V272V304H160H192Z"/></symbol><symbol id="i-school-outline" viewBox="0 0 512 512"><path d="M252 49Q257 48 262 49Q264 50 377.5 115.0Q491 180 493 184L496 187V279V372L494 375Q490 384 480.0 384.0Q470 384 466 375Q464 372 464.0 296.0Q464 220 463.5 220.0Q463 220 440 233L416 247V309V372L414 375Q412 379 407.5 382.0Q403 385 332.0 424.5Q261 464 256.0 464.0Q251 464 180.0 424.5Q109 385 104.5 382.0Q100 379 98 375L96 372V309V247L60 227Q24 206 21 204Q16 199 16.0 192.0Q16 185 21 181Q24 178 137.0 113.5Q250 49 252 49ZM65 192Q65 193 160.0 247.0Q255 301 256.0 301.0Q257 301 352.0 247.0Q447 193 447.0 192.5Q447 192 351.5 137.5Q256 83 255.5 83.0Q255 83 160.0 137.5Q65 192 65 192ZM185 298Q131 267 129 266L128 297Q128 302 128 312V359L178 387Q229 415 234 418L240 421V375L239 329ZM384 312Q384 299 384.0 288.5Q384 278 384.0 271.5Q384 265 384.0 265.0Q384 265 328 297Q328 297 273 329L272 375V421L278 418Q283 415 334 387Q334 387 384 359Z"/></symbol><symbol id="i-help-circle-outline" viewBox="0 0 512 512"><path d="M242 65Q261 63 284 66Q313 71 340 84Q395 110 424.5 163.5Q454 217 447 278Q441 327 413.0 367.0Q385 407 340 428Q285 456 224.5 445.5Q164 435 120 391Q98 369 84 341Q64 301 64.0 256.0Q64 211 84 171Q113 112 172 84Q203 69 242 65ZM279 98Q272 97 257.0 96.5Q242 96 235 97Q181 105 143 143Q105 181 98 233Q94 256 98 279Q107 341 156.0 380.5Q205 420 267 416Q320 412 359.5 378.0Q399 344 412 293Q419 264 414 233Q407 181 369.0 143.0Q331 105 279 98ZM243 145Q248 144 261.0 144.5Q274 145 279 146Q300 152 314 169Q327 185 326 207Q325 224 316.5 236.5Q308 249 287 264Q267 278 265 293Q264 305 257 308Q246 314 239 303Q232 292 243 270Q251 255 271 240Q290 227 295 218Q297 212 297.0 204.0Q297 196 295 192Q288 178 272 174Q267 173 258.5 172.5Q250 172 245 173Q225 177 217 195Q214 200 214 202Q214 209 208 214Q200 220 191 213Q184 206 188 192Q193 174 208.5 161.0Q224 148 243 145ZM241 330Q241 330 241 330Q251 325 261 331Q269 337 270 346Q270 355 265 361Q259 368 250 368Q242 368 237 362Q229 355 230.5 345.0Q232 335 241 330Z"/></symbol><symbol id="i-text-outline" viewBox="0 0 512 512"><path d="M147 80Q152 79 156 80Q163 82 166 88Q167 90 227.5 251.0Q288 412 288 416Q288 426 279 430Q273 433 267 430Q260 428 257 421Q255 417 237 368L219 320H152H85L65 372Q46 424 43 427Q37 432 32.0 432.0Q27 432 22 427Q16 423 16 415Q16 412 77.0 249.5Q138 87 141.0 84.0Q144 81 147 80ZM206 287Q206 286 179 214L151 143V144Q97 282 97 287Q97 288 152 288Q174 288 190.0 287.5Q206 287 206 287ZM384 177Q390 176 400.0 176.0Q410 176 415 177Q447 181 469 203Q486 220 493 248Q495 255 495.5 336.0Q496 417 495 420Q494 426 487 430Q478 434 470 427Q464 423 464 410V402L458 407Q430 432 382 432Q361 432 346 425Q314 411 306 377Q301 358 306 341Q315 309 350 294Q375 283 448 280H464V269Q462 245 451 230Q433 208 401 208Q384 208 370 215Q362 219 354.5 226.5Q347 234 342.5 242.0Q338 250 334 253Q327 258 319 253Q309 248 310 238Q311 230 321 215Q345 183 384 177ZM464 319Q464 319 464 319V312H461Q434 311 393 316Q372 319 360 325Q336 336 336 359Q336 377 348 389Q356 396 367 399Q384 404 408 397Q454 385 462 335Q463 326 464 319Z"/></symbol><symbol id="i-globe-outline" viewBox="0 0 512 512"><path d="M248 32Q269 30 300 36Q355 47 399.0 83.5Q443 120 464 172Q491 241 472.5 312.5Q454 384 397 430Q329 484 244.0 479.5Q159 475 98 414Q38 354 32 269Q29 207 58 152Q79 111 115 82Q150 53 193 41Q215 35 248 32ZM239 144Q240 144 240 106L239 68L235 70Q216 79 201 103Q183 129 185 133Q186 136 214 141Q238 145 239 144ZM287 76Q281 72 277 70L272 67V106Q272 144 273 144Q280 144 300 140Q326 135 327 133Q329 129 311 103Q300 85 287 76ZM171 90Q172 88 173.0 86.0Q174 84 174.5 83.0Q175 82 175 82Q175 82 166 87Q151 95 138 104L133 109L137 111Q153 121 154 120Q154 120 159.5 109.0Q165 98 171 90ZM346 87Q337 82 337 82Q337 82 337.5 83.0Q338 84 339.0 86.0Q340 88 341 90Q347 98 352.5 109.0Q358 120 358 120Q359 121 375 111L379 109L374 104Q361 94 346 87ZM116 136Q111 133 110.5 132.5Q110 132 105 138Q79 170 70 210Q65 230 65 238Q65 240 96 240H128L129 226Q131 193 140 161Q143 150 142 150Q138 150 116 136ZM417 151Q411 142 406 137L402 132L396 135Q374 150 370 150Q369 150 372 161Q381 193 383 226L384 240H416Q447 240 447 238Q447 230 442 210Q435 178 417 151ZM180 166Q175 164 174 163Q173 163 172.5 164.5Q172 166 170 171Q163 199 161 226Q160 233 160 236L159 240H200H240V208V176L232 175Q206 174 180 166ZM342 171Q339 163 338.5 163.0Q338 163 334 165Q309 173 280 175L272 176V208V240H312H353L352 236Q352 233 351 226Q349 199 342 171ZM129 286 128 272H96Q65 272 65 274Q65 282 70 302Q80 343 106 375L110 380L118 375Q125 370 133.5 366.0Q142 362 142.5 361.5Q143 361 140 351Q131 319 129 286ZM240 304V272H200H159L160 276Q160 279 161 286Q163 313 170 341Q172 346 172.5 347.5Q173 349 174 349Q183 345 205.0 340.5Q227 336 236 336H240ZM352 276 353 272H312H272V304V336H276Q285 336 307.0 340.5Q329 345 338 349Q339 349 339.5 347.5Q340 346 342 341Q349 313 351 286Q352 279 352 276ZM447 274Q447 272 416 272H384L383 286Q381 318 372 350Q369 361 369.5 361.5Q370 362 378.5 366.0Q387 370 394 375L402 380L406 375Q432 343 442 302Q447 282 447 274ZM240 406Q240 395 240.0 387.5Q240 380 239.5 375.5Q239 371 239.0 369.5Q239 368 239 368Q223 369 204.0 373.0Q185 377 185 379Q183 383 201 409Q217 433 235 442L240 445ZM283 369Q277 369 275 368H272V406V445L277 442Q295 433 311 409Q329 383 327 379Q327 378 310.0 374.0Q293 370 283 369ZM154 392Q153 392 143.5 397.5Q134 403 134 404Q134 407 156 420Q173 430 175 430Q175 430 174.5 429.0Q174 428 173.0 426.0Q172 424 171 422Q165 414 159.5 403.0Q154 392 154 392ZM366 396Q366 396 366 396Q359 392 358.5 392.0Q358 392 352.5 402.5Q347 413 342 421Q340 424 339.0 426.0Q338 428 337.5 429.0Q337 430 337 430Q337 430 346 425Q365 416 375 406Q375 406 378 404L376 402Q374 400 366 396Z"/></symbol><symbol id="i-card-outline" viewBox="0 0 512 512"><path d="M92 81Q96 80 259 81H421L427 83Q463 94 475 125Q479 136 479.5 149.5Q480 163 480.0 256.0Q480 349 479.5 362.5Q479 376 475 387Q463 419 427 429L420 431H256H92L85 429Q49 419 37 387Q33 376 32.5 362.5Q32 349 32.0 256.0Q32 163 32.5 149.5Q33 136 37 125Q44 109 59.0 96.5Q74 84 92 81ZM420 114Q416 112 259.0 112.0Q102 112 97 113Q86 114 76.5 123.5Q67 133 65 144Q64 149 64 155V162H256H448V153Q447 138 440 128Q432 118 420 114ZM448 295V222H256H64V295V369L66 374Q74 393 92 398Q97 400 256.0 400.0Q415 400 420 398Q438 393 446 374L448 369ZM119 271Q119 271 119 271Q122 271 153 271Q153 271 185 271L189 273Q203 281 206 298Q209 318 204 331Q200 341 191 346Q184 350 150 350Q150 350 121 349L116 347Q106 343 101 333Q101 333 99 327V310Q99 292 101 288Q107 275 119 271Z"/></symbol><symbol id="i-extension-puzzle-outline" viewBox="0 0 512 512"><path d="M201 34Q219 30 236 35Q252 40 264.0 53.0Q276 66 280 82Q282 89 282 100V112H318Q349 112 355.5 113.0Q362 114 371 118Q387 127 394 142Q398 151 399.0 157.0Q400 163 400 193V230H411Q441 230 460 249Q477 265 479 288Q481 301 477 314Q472 332 458 344Q440 361 412 361H400V395Q400 437 394 450Q384 470 361 478Q355 480 315.5 480.5Q276 481 271 480Q262 478 258 471Q256 467 256.0 446.5Q256 426 254 422Q244 400 217 400Q195 400 182 419Q177 428 176 451L175 468L173 472Q170 476 166 478L162 480H121Q86 480 79.0 479.0Q72 478 62 474Q46 466 38 450Q34 440 33.0 433.0Q32 426 32 391V350L34 346Q36 342 40 339L44 337L64 336Q85 336 89 334Q109 326 114 304Q117 291 111.5 279.0Q106 267 95 261Q86 256 64 256Q46 256 42 254Q34 250 32 241Q31 236 32 197Q32 165 33.0 158.5Q34 152 38 143Q46 127 62 118Q70 114 77.0 113.0Q84 112 114 112H151V98Q152 85 154 78Q161 57 177 45Q189 37 201 34ZM227 66Q227 66 227 66Q218 63 209 65Q199 67 192.0 75.0Q185 83 183 93Q183 99 183 114Q183 134 177 139Q173 143 166.0 143.5Q159 144 125 144Q125 144 82 144L78 146Q74 148 70 152Q66 157 65.0 163.0Q64 169 64 195Q64 195 64 224H75Q92 224 105 230Q140 247 146 284Q149 299 145 313Q136 347 107 361Q93 368 75 368Q75 368 64 368V399V431L67 435Q69 439 72 442Q77 446 83.0 447.0Q89 448 114 448Q114 448 144 448V438Q145 422 152 409Q169 373 209 369Q235 366 257.5 380.0Q280 394 286 419Q288 425 288 437Q288 437 289 448H319Q343 448 349.0 447.5Q355 447 360 443Q363 440 365 436Q365 436 367 432L368 387Q368 351 368.5 345.0Q369 339 373 335Q378 329 399 329Q415 329 420 329Q433 326 441.0 315.0Q449 304 448 291Q446 280 438.5 272.5Q431 265 420 263Q414 262 398.0 262.0Q382 262 378 260Q371 257 369 249Q368 246 368.0 204.0Q368 162 366 158Q362 150 355 146Q355 146 350 144H308Q266 144 263.0 143.0Q260 142 256 140Q252 136 251.0 132.0Q250 128 250 111Q249 91 248 86Q242 71 227 66Z"/></symbol><symbol id="i-keypad-outline" viewBox="0 0 512 512"><path d="M116 18Q128 15 140 18Q152 20 162 30Q176 44 176.0 64.0Q176 84 162.0 98.0Q148 112 128.0 112.0Q108 112 94.0 98.0Q80 84 80.0 64.0Q80 44 94 30Q104 20 116 18ZM244 18Q256 15 268 18Q280 20 290 30Q304 44 304.0 64.0Q304 84 290.0 98.0Q276 112 256.0 112.0Q236 112 222.0 98.0Q208 84 208.0 64.0Q208 44 222 30Q232 20 244 18ZM372 18Q384 15 396 18Q408 20 418 30Q432 44 432.0 64.0Q432 84 418.0 98.0Q404 112 384.0 112.0Q364 112 350.0 98.0Q336 84 336.0 64.0Q336 44 350 30Q360 20 372 18ZM136 50Q128 46 121.0 49.5Q114 53 112 61Q111 70 117.5 76.0Q124 82 132 79Q144 76 144 64Q144 54 136 50ZM264 50Q256 46 249.0 49.5Q242 53 240 61Q239 70 245.5 76.0Q252 82 260 79Q272 76 272 64Q272 54 264 50ZM392 50Q384 46 377.0 49.5Q370 53 368 61Q367 70 373.5 76.0Q380 82 388 79Q400 76 400 64Q400 54 392 50ZM116 146Q128 143 140 146Q152 148 162 158Q176 172 176.0 192.0Q176 212 162.0 226.0Q148 240 128.0 240.0Q108 240 94.0 226.0Q80 212 80.0 192.0Q80 172 94 158Q104 148 116 146ZM244 146Q256 143 268 146Q280 148 290 158Q304 172 304.0 192.0Q304 212 290.0 226.0Q276 240 256.0 240.0Q236 240 222.0 226.0Q208 212 208.0 192.0Q208 172 222 158Q232 148 244 146ZM372 146Q384 143 396 146Q408 148 418 158Q432 172 432.0 192.0Q432 212 418.0 226.0Q404 240 384.0 240.0Q364 240 350.0 226.0Q336 212 336.0 192.0Q336 172 350 158Q360 148 372 146ZM136 178Q128 174 121.0 177.5Q114 181 112 189Q111 198 117.5 204.0Q124 210 132 207Q144 204 144 192Q144 182 136 178ZM264 178Q256 174 249.0 177.5Q242 181 240 189Q239 198 245.5 204.0Q252 210 260 207Q272 204 272 192Q272 182 264 178ZM392 178Q384 174 377.0 177.5Q370 181 368 189Q367 198 373.5 204.0Q380 210 388 207Q400 204 400 192Q400 182 392 178ZM116 274Q128 271 140 274Q152 276 162 286Q176 300 176.0 320.0Q176 340 162.0 354.0Q148 368 128.0 368.0Q108 368 94.0 354.0Q80 340 80.0 320.0Q80 300 94 286Q104 276 116 274ZM244 274Q256 271 268 274Q280 276 290 286Q304 300 304.0 320.0Q304 340 290.0 354.0Q276 368 256.0 368.0Q236 368 222.0 354.0Q208 340 208.0 320.0Q208 300 222 286Q232 276 244 274ZM372 274Q384 271 396 274Q408 276 418 286Q432 300 432.0 320.0Q432 340 418.0 354.0Q404 368 384.0 368.0Q364 368 350.0 354.0Q336 340 336.0 320.0Q336 300 350 286Q360 276 372 274ZM136 306Q128 302 121.0 305.5Q114 309 112 317Q111 326 117.5 332.0Q124 338 132 335Q144 332 144 320Q144 310 136 306ZM264 306Q256 302 249.0 305.5Q242 309 240 317Q239 326 245.5 332.0Q252 338 260 335Q272 332 272 320Q272 310 264 306ZM392 306Q384 302 377.0 305.5Q370 309 368 317Q367 326 373.5 332.0Q380 338 388 335Q400 332 400 320Q400 310 392 306ZM244 402Q256 399 268 402Q280 404 290 414Q304 428 304.0 448.0Q304 468 290.0 482.0Q276 496 256.0 496.0Q236 496 222.0 482.0Q208 468 208.0 448.0Q208 428 222 414Q232 404 244 402ZM264 434Q264 434 264 434Q256 430 249.0 433.5Q242 437 240 445Q239 454 245.5 460.0Q252 466 260 463Q272 460 272 448Q272 438 264 434Z"/></symbol><symbol id="i-return-up-back-outline" viewBox="0 0 512 512"><path d="M105 146Q105 146 105 146Q112 142 119.5 146.0Q127 150 128 158Q128 164 125.0 168.0Q122 172 106 188Q106 188 87 208H226Q366 208 373 209Q412 214 441 242Q468 268 477 305Q484 335 479 355Q477 364 470 367Q456 372 450 359Q448 355 448 342Q448 312 439 293Q431 277 419 265Q396 244 366 241Q356 240 221 240Q221 240 87 240L106 260Q122 276 125.0 280.0Q128 284 128 290Q127 297 120.0 301.5Q113 306 106 303Q104 302 69.5 268.0Q35 234 34 231Q32 228 32.0 224.0Q32 220 33.5 217.5Q35 215 69.0 181.0Q103 147 105 146Z"/></symbol><symbol id="i-pulse" viewBox="0 0 512 512"><path d="M171 49Q171 49 171 49Q185 44 191 58Q192 61 217.5 216.0Q243 371 244.0 372.5Q245 374 265.5 301.0Q286 228 288 222Q291 213 298 210Q302 207 308.0 209.0Q314 211 317 215Q319 218 333 261Q333 261 347 304H367H386L390 298Q397 283 412.5 276.5Q428 270 443 274Q465 279 474 297Q491 330 464 355Q450 369 429 368Q416 367 405 360Q395 353 390 342Q390 342 386 336H361Q335 336 332 335Q325 333 322 327Q320 324 313 301Q311 295 309.0 290.0Q307 285 306.0 282.0Q305 279 305 279Q305 279 280.0 366.0Q255 453 254 456Q251 462 244 463Q232 467 226 456Q224 452 198.5 298.5Q173 145 173 144Q173 144 170.0 156.0Q167 168 161.5 188.5Q156 209 150 234Q127 325 126 328Q123 334 116 335Q113 336 78.5 336.0Q44 336 40.5 334.0Q37 332 35 328Q26 315 40 306Q40 306 44 304H72H100L130 181Q161 59 162 56Q165 51 171 49Z"/></symbol><symbol id="i-sync" viewBox="0 0 512 512"><path d="M230 63Q239 61 258.5 61.5Q278 62 287 64Q372 78 419 150Q451 197 451 253V262L460 253Q470 243 473 242Q480 238 487 242Q493 245 495.0 252.0Q497 259 493 265Q490 270 467.5 291.5Q445 313 443 314Q435 317 429 314Q426 312 401.0 288.5Q376 265 375 263Q372 255 376 248Q378 245 381.5 242.5Q385 240 390 240Q398 240 401 244Q402 246 411 254L419 261L418 252Q417 213 401 182Q388 157 368 138Q326 98 269.0 93.5Q212 89 164 121Q148 132 132 149Q122 160 115 160Q103 160 100 148Q98 140 107 129Q157 73 230 63ZM69 198Q69 198 69 198Q76 194 83 198Q86 200 111.0 223.5Q136 247 137 249Q138 252 138 257Q138 263 133.5 267.5Q129 272 122.0 272.0Q115 272 102 260Q102 260 93 251V259Q93 293 109 326Q132 376 181.0 401.0Q230 426 284 416Q341 406 383 359Q389 352 396 352Q405 352 409.5 359.0Q414 366 411 374Q404 389 375 411Q321 451 255 451Q210 451 169 430Q121 406 92.0 362.0Q63 318 61 263Q61 263 60 251L51 260Q36 275 26 271Q19 267 17.0 260.0Q15 253 19 247Q22 243 44.5 221.0Q67 199 69 198Z"/></symbol><symbol id="i-wifi-outline" viewBox="0 0 512 512"><path d="M219 74Q231 73 255.5 73.0Q280 73 292 74Q414 85 490 162Q511 182 512 189Q513 195 510.0 199.5Q507 204 490 220Q470 240 467 242Q460 245 453 242Q451 241 441 232Q419 211 395 196Q345 166 288 159Q277 158 256.0 158.0Q235 158 224 159Q134 170 71 232Q61 241 59 242Q52 245 46 242Q42 240 22.5 220.5Q3 201 2 198Q-3 189 10 174Q31 149 64 127Q131 82 219 74ZM296 106Q286 105 262.5 104.5Q239 104 229 105Q166 110 116 134Q76 153 46 182L37 191L45 198L52 205L57 200Q122 144 203 130Q246 122 287 127Q383 137 456 201L460 205L467 198L475 191L466 182Q399 118 296 106ZM235 199Q346 192 406 251Q423 269 423 277Q423 283 419.5 287.0Q416 291 402 306Q383 324 380 326Q372 331 363 325Q360 323 358 321Q348 310 324 298Q294 282 256.0 282.0Q218 282 188 298Q164 310 154 321Q152 323 149 325Q140 331 132 326Q129 324 110 306Q95 291 91.5 286.5Q88 282 89 276Q90 268 105 252Q153 204 235 199ZM294 233Q283 231 260.0 231.0Q237 231 234 231Q193 236 167 248Q143 260 129 274L126 277L133 283L140 290L143 288Q164 271 192 261Q221 251 256.0 251.0Q291 251 320 261Q348 271 369 288L372 290L379 283Q384 278 384.0 276.5Q384 275 378 269Q365 258 345 248Q323 238 294 233ZM242 321Q295 315 326 348Q332 354 333 357Q336 364 333 370Q332 372 299.5 404.0Q267 436 263 438Q256 442 249 438Q246 436 213.0 404.5Q180 373 179 370Q176 364 179 357Q183 348 199 337Q219 324 242 321ZM276 354Q276 354 276 354Q272 353 259.0 352.5Q246 352 243 353Q241 353 236 355Q232 356 224.5 359.5Q217 363 217.0 363.5Q217 364 236.0 382.5Q255 401 256.0 401.0Q257 401 276.0 382.5Q295 364 295.0 363.5Q295 363 288.0 359.5Q281 356 276 354Z"/></symbol><symbol id="i-options-outline" viewBox="0 0 512 512"><path d="M324 82Q339 78 353 83Q371 90 379 107L382 112H415Q448 112 452 113Q461 115 463.5 124.0Q466 133 459 139Q456 142 452.5 143.0Q449 144 415 144H381L380 147Q376 157 366 165Q342 185 314 171Q300 164 293 150L291 144H177Q63 144 59.5 143.0Q56 142 53 139Q46 133 48.5 124.0Q51 115 60 113Q64 112 177 112H291L293 106Q300 93 314 86Q319 83 324 82ZM344 115Q338 111 334 112Q333 112 331 113Q327 114 323.5 118.5Q320 123 320 128Q320 135 325.5 140.0Q331 145 338 144Q349 142 351.5 131.0Q354 120 344 115ZM166 209Q183 206 198 214Q212 221 219 234L221 240H335Q448 240 452 241Q461 243 463.5 252.0Q466 261 459 267Q456 270 452.5 271.0Q449 272 335 272H221L219 278Q216 283 210 289Q196 304 177 304Q159 304 146 293Q136 285 132 275L131 272H97Q63 272 59.5 271.0Q56 270 53 267Q46 261 48.5 252.0Q51 243 60 241Q64 240 97 240H130L132 236Q142 214 166 209ZM183 242Q170 235 163 248Q158 255 161.5 263.0Q165 271 174 272Q183 273 188.5 265.5Q194 258 191 250Q188 244 183 242ZM324 338Q339 334 353 339Q371 346 379 363L382 368H415Q448 368 452 369Q461 371 463.5 380.0Q466 389 459 395Q456 398 452.5 399.0Q449 400 415 400H381L380 403Q376 413 366 421Q342 441 314 427Q300 420 293 406L291 400H177Q63 400 59.5 399.0Q56 398 53 395Q46 389 48.5 380.0Q51 371 60 369Q64 368 177 368H291L293 362Q300 349 314 342Q319 339 324 338ZM344 371Q344 371 344 371Q338 367 334 368Q333 368 331 369Q327 370 323.5 374.5Q320 379 320 384Q320 391 325.5 396.0Q331 401 338 400Q349 398 351.5 387.0Q354 376 344 371Z"/></symbol><symbol id="i-documents-outline" viewBox="0 0 512 512"><path d="M207 18Q213 16 266.0 16.0Q319 16 325 18Q332 19 341.0 27.0Q350 35 391 77Q457 144 459 149Q463 157 463.5 169.5Q464 182 464 258V351L462 357Q455 378 438 390Q428 397 418.5 398.5Q409 400 381 400H353L352 423Q352 446 350 452Q346 467 334 478Q322 490 308 494Q301 496 200.5 496.0Q100 496 95 495Q79 492 67.0 480.0Q55 468 50 451Q48 446 48.0 304.5Q48 163 50 157Q57 130 83 118Q93 112 129 112H160V94Q160 67 163 56Q168 42 180.0 31.5Q192 21 207 18ZM296 97V48H257Q219 48 215 49Q201 51 195 65Q192 70 192 91V112H197Q211 112 220 116Q225 119 233.0 126.5Q241 134 295 189Q345 239 348.0 245.5Q351 252 351.5 258.0Q352 264 352 316V368H383L413 367L417 365Q426 360 430 350Q432 346 432 265V184H385Q346 184 337.0 183.5Q328 183 320 179Q308 173 301 160Q297 153 296.5 145.0Q296 137 296 97ZM419 151Q419 151 374 105L329 59V102Q329 144 330 146Q333 151 339.0 151.5Q345 152 378 152Q389 152 398.5 152.0Q408 152 413.5 151.5Q419 151 419 151ZM184 194V144H144Q103 144 101 145Q89 149 83 160L81 164V304V444L83 449Q88 457 96 462L101 464H200Q298 464 303 462Q313 458 318 448L320 443V362V280H271Q222 280 217 279Q194 273 186 250L184 243ZM262 201Q262 201 262 201Q217 156 217 155Q216 155 216.0 161.0Q216 167 216.0 176.5Q216 186 216 197Q216 240 218.0 242.0Q220 244 222.5 246.0Q225 248 266 248Q279 248 288.0 248.0Q297 248 302.0 248.0Q307 248 307 248Q307 247 262 201Z"/></symbol></svg>`;
+
+// Shared corpus of the five web-app directions (task-424, pass 3).
+// Deterministic: the same seed gives the same 240 folders in every direction, so the
+// five prototypes are examined on the very same library.
+
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Roots and their children, written by hand so that the library reads like a real one:
+// long names, a few very long ones, and the same names under different parents.
+const ROOTS = [
+  ["Neurosciences de l'attention", ["Mémoire de travail", "Fatigue attentionnelle et récupération", "Sommeil", "Notes de lecture", "Entretiens", "Méthodes de mesure (EEG, oculométrie, temps de réaction)"]],
+  ["Histoire économique de l'Europe industrielle (1780-1914) — séminaire du jeudi", ["Révolution industrielle britannique", "Chemins de fer", "Banques et crédit", "Notes de lecture", "Sources primaires", "Exposé de mars"]],
+  ["Projet Deepn", ["Concurrence", "Entretiens utilisateurs", "Pricing", "Design", "Recrutement", "Références", "2025"]],
+  ["Cuisine", ["Fermentation", "Pain au levain", "Cuisine japonaise", "Recettes à tester", "Techniques de base"]],
+  ["Philosophie", ["Stoïcisme", "Phénoménologie", "Éthique appliquée", "Notes de lecture", "Entretiens", "Cours en ligne"]],
+  ["Santé et sport", ["Course à pied", "Nutrition", "Mobilité et étirements", "Sommeil", "Références"]],
+  ["Climat et énergie", ["Rapports du GIEC — résumés pour décideurs", "Nucléaire", "Renouvelables", "Politiques publiques", "Entretiens", "2024", "2025"]],
+  ["Musique", ["Théorie et harmonie", "Jazz modal", "Production", "Entretiens", "À écouter"]],
+  ["Lectures du club du mardi", ["2024", "2025", "Romans", "Essais", "À proposer au groupe"]],
+  ["Développement logiciel", ["Architecture", "TypeScript", "Bases de données", "Accessibilité web", "Conférences", "Notes de lecture", "Références"]],
+  ["Voyages", ["Japon", "Portugal", "Islande", "Idées pour 2026"]],
+  ["Psychologie cognitive et sciences de l'apprentissage appliquées à l'enseignement secondaire", ["Répétition espacée", "Charge cognitive", "Motivation", "Notes de lecture", "Méthodes de mesure", "Entretiens"]],
+  ["Finances personnelles", ["Épargne retraite", "Immobilier", "Fiscalité", "Références"]],
+  ["Design d'interfaces", ["Typographie", "Navigation", "Recherche et filtres", "Accessibilité web", "Notes de lecture", "Études de cas"]],
+  ["Parentalité", ["Sommeil", "Langage", "Écrans", "Références"]],
+];
+
+// Third level: drawn from a small pool, which is exactly what produces homonyms in
+// different parents ("Notes de lecture", "2025", "Entretiens"…), plus a few names
+// that only make sense where they are.
+const LEAF_POOL = ["Notes de lecture", "À relire", "Entretiens", "Références", "2024", "2025", "Méthodes", "Cas pratiques", "Archives", "Brouillons de synthèse", "Séance 1", "Séance 2", "Séance 3", "Questions ouvertes", "Citations à vérifier"];
+const SPECIAL_LEAVES = {
+  "Mémoire de travail": ["Modèle de Baddeley et Hitch", "Empan et entraînement — ce que disent vraiment les méta-analyses", "Notes de lecture"],
+  "Fatigue attentionnelle et récupération": ["Restauration de l'attention (nature, pauses)", "Notes de lecture", "Entretiens"],
+  "Entretiens utilisateurs": ["Vague 1 — étudiants", "Vague 2 — chercheurs", "Vague 3 — podcasteurs", "Synthèse"],
+  "Concurrence": ["Recall", "Readwise", "NotebookLM", "Snipd"],
+  "Japon": ["Kyoto", "Tokyo", "Hokkaido en hiver"],
+  "Chemins de fer": ["Notes de lecture", "Cartes et statistiques", "Sources primaires"],
+};
+
+function buildCorpus(size) {
+  const rand = mulberry32(size === "xl" ? 1000 : 424);
+  const folders = [];
+  let n = 0;
+  const add = (name, parent, depth) => {
+    const f = { id: "f" + (++n), name, parent: parent ? parent.id : null, depth, children: [], count: 0, lastOpened: Math.floor(rand() * 220) };
+    folders.push(f);
+    if (parent) parent.children.push(f);
+    return f;
+  };
+  const unsorted = { id: "f0", name: "Non classés", parent: null, depth: 0, children: [], count: 12, lastOpened: 0, isDefault: true };
+  if (size === "small") {
+    const small = [["Neurosciences de l'attention", ["Mémoire de travail", "Sommeil"]], ["Projet Deepn", ["Concurrence"]], ["Cuisine", []]];
+    for (const [r, cs] of small) {
+      const root = add(r, null, 0);
+      for (const c of cs) {
+        const child = add(c, root, 1);
+        if (c === "Mémoire de travail") add("Notes de lecture", child, 2);
+      }
+    }
+  } else {
+    for (const [r, cs] of ROOTS) {
+      const root = add(r, null, 0);
+      for (const c of cs) {
+        const child = add(c, root, 1);
+        const leaves = SPECIAL_LEAVES[c] || LEAF_POOL.filter(() => rand() < 0.17).slice(0, 4);
+        for (const l of leaves) add(l, child, 2);
+      }
+    }
+    if (size === "xl") {
+      // Push the same library to ~1 000 folders: more roots of the kinds a heavy user
+      // accumulates (one per course, per client, per year), each three levels deep.
+      const kinds = ["Cours", "Client", "Lecture suivie", "Projet", "Veille"];
+      let k = 0;
+      while (folders.length < 990) {
+        const root = add(`${kinds[k % kinds.length]} — ${String(Math.floor(k / kinds.length) + 1).padStart(2, "0")} · ${ROOTS[k % ROOTS.length][1][0]}`, null, 0);
+        for (let i = 0; i < 6; i++) {
+          const child = add(LEAF_POOL[(k + i * 3) % LEAF_POOL.length] + (i > 3 ? ` (${i})` : ""), root, 1);
+          for (let j = 0; j < 4; j++) add(LEAF_POOL[(k * 7 + i + j * 5) % LEAF_POOL.length], child, 2);
+        }
+        k++;
+      }
+    }
+  }
+  for (const f of folders) f.count = f.children.length ? Math.floor(rand() * 6) : 1 + Math.floor(rand() * 14);
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  byId.set(unsorted.id, unsorted);
+  const roots = folders.filter((f) => !f.parent);
+  const sortByName = (a, b) => a.name.localeCompare(b.name, "fr");
+  roots.sort(sortByName);
+  for (const f of folders) f.children.sort(sortByName);
+  // The two folders the walkthroughs open, pinned to stable ids whatever the corpus.
+  const memory = folders.find((f) => f.name === "Mémoire de travail");
+  if (memory) memory.count = 9;
+  const leafMemory = memory && memory.children.find((c) => c.name === "Notes de lecture");
+  if (leafMemory) leafMemory.lastOpened = 180; // a rarely used one, for the "find it again" walkthrough
+  return { folders, byId, roots, unsorted, memory, leafMemory };
+}
+
+const CORPORA = {};
+function corpus(size) {
+  return CORPORA[size] || (CORPORA[size] = buildCorpus(size));
+}
+
+function folderPath(c, f) {
+  const out = [];
+  let cur = f;
+  while (cur) { out.unshift(cur); cur = cur.parent ? c.byId.get(cur.parent) : null; }
+  return out;
+}
+function descendantCount(f) {
+  return f.children.reduce((s, c) => s + 1 + descendantCount(c), 0);
+}
+function totalSources(f) {
+  return f.count + f.children.reduce((s, c) => s + totalSources(c), 0);
+}
+
+// Accent- and case-insensitive match, the way the mobile picker's filterFoldersByName
+// matches (mobile/src/lib/folderSearch.ts), extended to the path for disambiguation.
+function fold(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+function searchFolders(c, query, limit = 50) {
+  const q = fold(query.trim());
+  if (!q) return [];
+  const terms = q.split(/\s+/);
+  const hits = [];
+  for (const f of c.folders) {
+    const name = fold(f.name);
+    const path = fold(folderPath(c, f).map((p) => p.name).join(" "));
+    // Every term somewhere in the path, and the last one in the folder's own name:
+    // "neuro notes" finds the « Notes de lecture » under Neurosciences, and a folder is
+    // never a hit only because one of its ancestors matches.
+    if (!terms.every((t) => path.includes(t)) || !name.includes(terms[terms.length - 1])) continue;
+    // Name matches rank above path-only matches, prefix above infix, recent above stale.
+    const score = (terms.every((t) => name.includes(t)) ? 0 : 100) + (name.startsWith(terms[0]) ? 0 : 10) + f.lastOpened / 100;
+    hits.push({ f, score });
+  }
+  hits.sort((a, b) => a.score - b.score);
+  return hits.slice(0, limit).map((h) => h.f);
+}
+function homonymCount(c, f) {
+  return c.folders.filter((o) => o.name === f.name).length;
+}
+
+// ---------------------------------------------------------------- media
+
+const MEDIA = [
+  { id: "m1", type: "podcast", title: "Comment l'attention se fatigue — et comment la reposer", creator: "Huberman Lab", duration: "1 h 52", age: "Il y a 2 h", folder: "memory", lang: "EN", progress: 0.38, color: "#3b4a6b" },
+  { id: "m2", type: "article", title: "Working memory is not a muscle: a meta-analysis of 87 training studies", creator: "Psychological Bulletin", duration: "24 min", age: "Hier", folder: "memory", lang: "EN", color: "#6b5b3b" },
+  { id: "m3", type: "video", title: "Baddeley explique son modèle en 15 minutes", creator: "Cambridge Talks", duration: "15 min", age: "Il y a 3 j", folder: "memory", lang: "EN", color: "#2f5d50" },
+  { id: "m4", type: "document", title: "Cowan 2010 — The Magical Mystery Four.pdf", creator: "PDF · 14 pages", duration: "14 p.", age: "Il y a 4 j", folder: "memory", lang: "EN", color: "#7a6e5d" },
+  { id: "m5", type: "short", title: "Pourquoi on oublie un numéro en 20 secondes", creator: "@sciencecourte", duration: "58 s", age: "Il y a 5 j", folder: "memory", lang: "FR", color: "#5d3b6b" },
+  { id: "m6", type: "podcast", title: "La charge mentale des open spaces, mesurée", creator: "France Culture — La Méthode scientifique", duration: "58 min", age: "Il y a 1 sem.", folder: "memory", lang: "FR", color: "#3b5d6b" },
+  { id: "m7", type: "article", title: "Ce que les pauses courtes font vraiment à la mémoire de travail", creator: "The Conversation", duration: "9 min", age: "Il y a 2 sem.", folder: "memory", lang: "FR", color: "#6b3b3b" },
+  { id: "m8", type: "imagePost", title: "Schéma du calepin visuo-spatial (carrousel)", creator: "@cogsci.sketches", duration: "6 images", age: "Il y a 3 sem.", folder: "memory", lang: "EN", color: "#4a6b3b" },
+  { id: "m9", type: "audio", title: "Note vocale — idée d'exercice pour le séminaire", creator: "Note vocale", duration: "2 min", age: "Il y a 1 mois", folder: "memory", lang: "FR", color: "#5b5b5b" },
+  { id: "m10", type: "video", title: "Inside the race to build the next generation of batteries", creator: "Undecided with Matt Ferrell", duration: "21 min", age: "Il y a 40 min", folder: null, lang: "EN", status: "processing", color: "#3b6b5d" },
+  { id: "m11", type: "article", title: "Le levain, une écologie microbienne à domicile", creator: "Le Monde", duration: "11 min", age: "Il y a 5 h", folder: null, lang: "FR", color: "#7a5d3b" },
+  { id: "m12", type: "link", title: "Vidéo en direct — conférence d'ouverture", creator: "youtube.com", duration: "", age: "Hier", folder: null, lang: "EN", status: "failed", color: "#6b6b6b" },
+  { id: "m13", type: "podcast", title: "Stoïcisme : Épictète pour les gens pressés", creator: "Philosophize This!", duration: "41 min", age: "Hier", folder: null, lang: "EN", color: "#4b3b6b" },
+  { id: "m14", type: "text", title: "Note partagée — liste des questions pour l'entretien n° 7", creator: "Note partagée", duration: "1 min", age: "Il y a 2 j", folder: null, lang: "FR", color: "#5d5d4a" },
+  { id: "m15", type: "short", title: "Le geste qui sauve votre pain au levain", creator: "@boulange.maison", duration: "45 s", age: "Il y a 3 j", folder: null, lang: "FR", color: "#6b4a3b" },
+];
+const TYPE_META = {
+  podcast: { label: "PODCAST", icon: "headset-outline" },
+  article: { label: "ARTICLE", icon: "newspaper-outline" },
+  video: { label: "VIDÉO", icon: "play-circle-outline" },
+  short: { label: "SHORT", icon: "videocam-outline" },
+  imagePost: { label: "PHOTOS", icon: "image-outline" },
+  audio: { label: "AUDIO", icon: "mic-outline" },
+  text: { label: "TEXTE", icon: "text-outline" },
+  document: { label: "DOC", icon: "document-text-outline" },
+  link: { label: "LIEN", icon: "link-outline" },
+};
+
+// Generic sources for any other folder, derived from its name so that each folder
+// shows its own believable list without hand-writing 240 of them.
+const GENERIC_TITLES = [
+  ["podcast", "Épisode : {n} — ce que l'on sait vraiment"], ["article", "{n} : l'état de l'art en 2026"], ["video", "Conférence — {n}, introduction"],
+  ["document", "Polycopié — {n}.pdf"], ["short", "{n} en 60 secondes"], ["article", "Cinq erreurs courantes sur « {n} »"], ["podcast", "Entretien long sur {n}"],
+];
+function sourcesOf(c, f) {
+  if (f === c.memory || (f && f.name === "Mémoire de travail")) return MEDIA.filter((m) => m.folder === "memory");
+  if (f && f.isDefault) return MEDIA.filter((m) => !m.folder);
+  const rand = mulberry32(f.id.length * 97 + f.name.length * 13 + f.depth);
+  const out = [];
+  for (let i = 0; i < f.count; i++) {
+    const [type, tpl] = GENERIC_TITLES[(i + f.name.length) % GENERIC_TITLES.length];
+    out.push({ id: `g${f.id}-${i}`, type, title: tpl.replace("{n}", f.name), creator: ["Arte", "Radio France", "Medium", "YouTube", "Substack"][i % 5], duration: `${5 + Math.floor(rand() * 60)} min`, age: `Il y a ${1 + Math.floor(rand() * 9)} sem.`, lang: "FR", color: ["#3b4a6b", "#6b5b3b", "#2f5d50", "#5d3b6b", "#6b3b3b"][i % 5], generic: true });
+  }
+  return out;
+}
+function mediaById(id) {
+  return MEDIA.find((m) => m.id === id) || MEDIA[0];
+}
+
+// ---------------------------------------------------------------- reading
+
+const PREVIEW = {
+  blurb: "Un épisode sur la fatigue attentionnelle : pourquoi elle n'est pas de l'ennui, ce qui la provoque au travail, et les trois formes de pause qui la réparent réellement.",
+  points: ["La fatigue attentionnelle vient de l'effort d'inhibition, pas de la durée de la tâche.", "Une pause qui sollicite encore l'attention dirigée (téléphone, messages) ne repose pas.", "Dix minutes de « regard large » en extérieur restaurent mieux qu'une sieste courte."],
+};
+const PARAGRAPHS = [
+  "Commençons par une distinction que l'on fait rarement : être fatigué d'une tâche et s'ennuyer pendant une tâche sont deux états qui se ressemblent de l'extérieur, mais qui n'ont presque rien en commun dans le cerveau.",
+  "L'ennui est un signal de valeur : la tâche ne rapporte pas assez par rapport à ce qu'elle coûte. La fatigue attentionnelle, elle, apparaît même quand la tâche nous passionne. Ce qui s'use, ce n'est pas l'intérêt, c'est la capacité à tenir à distance tout ce qui n'est pas la tâche.",
+  "C'est ce que les chercheurs appellent l'attention dirigée. Elle repose sur un effort constant d'inhibition : ignorer la conversation à côté, la notification, l'idée qui vient de surgir. Cet effort a un coût mesurable en temps de réaction au bout de quarante à soixante minutes.",
+  "Le piège, c'est la pause. Quand on prend son téléphone pour « se reposer », on demande à ce même système d'inhibition de trier un flux de stimulations très saillantes. On change de contenu, mais on ne change pas de régime attentionnel.",
+  "Les études sur la restauration de l'attention montrent un effet assez robuste : dix à quinze minutes dans un environnement qui attire l'attention sans l'exiger — un parc, une fenêtre sur des arbres, le ciel — suffisent à faire remonter les performances sur des tâches de mémoire de travail.",
+  "On parle de fascination douce. Le regard est attiré, mais rien ne demande à être trié ni retenu. Le système d'inhibition peut enfin relâcher son effort.",
+  "Deuxième forme de pause efficace : le regard large. Élargir volontairement le champ visuel, regarder l'horizon plutôt qu'un point, active des circuits associés à la baisse de vigilance et au calme. C'est l'inverse exact de la fixation sur un écran.",
+  "Troisième forme : le mouvement sans but. Marcher sans destination, sans podcast dans les oreilles. Plusieurs personnes nous ont dit trouver cela insupportable au début, et c'est justement le signe que l'attention dirigée était encore aux commandes.",
+  "Ce qui ne marche pas, en revanche, c'est la sieste très courte prise à la place de ces pauses. Elle aide la vigilance, mais n'a pas d'effet mesurable sur la fatigue d'inhibition elle-même.",
+  "Si vous ne retenez qu'une chose : la bonne pause n'est pas celle qui vous distrait, c'est celle qui ne vous demande rien.",
+];
+
+// ---------------------------------------------------------------- AI artifacts
+
+const ARTIFACT_TYPES = [
+  { key: "summaryShort", label: "Résumé", icon: "document-text-outline" },
+  { key: "summaryDetailed", label: "Résumé détaillé", icon: "documents-outline" },
+  { key: "notes", label: "Notes d'apprentissage", icon: "school-outline" },
+  { key: "flashcards", label: "Flashcards", icon: "albums-outline" },
+  { key: "quiz", label: "Quiz", icon: "help-circle-outline" },
+];
+const MEDIA_ARTIFACTS = { summaryShort: "generated", flashcards: "generated", notes: "generating", summaryDetailed: "idle", quiz: "idle" };
+const FOLDER_ARTIFACTS = { summaryShort: "idle", summaryDetailed: "generated", notes: "idle", flashcards: "failed", quiz: "queued" };
+const MEDIA_HISTORY = [
+  { type: "flashcards", title: "Fatigue attentionnelle : 12 cartes", when: "Hier, 21:14" },
+  { type: "summaryShort", title: "La bonne pause ne demande rien", when: "Hier, 21:02" },
+];
+const FOLDER_HISTORY = [
+  { type: "summaryDetailed", title: "Mémoire de travail : capacité, fatigue et récupération", when: "Il y a 2 j", sources: 9 },
+  { type: "quiz", title: "Quiz — modèles de la mémoire de travail", when: "Il y a 1 sem.", sources: 7 },
+  { type: "summaryDetailed", title: "Mémoire de travail : ce que disent les méta-analyses", when: "Il y a 2 sem.", sources: 6 },
+];
+const FLASHCARDS = [
+  ["Quelle est la différence entre fatigue attentionnelle et ennui ?", "L'ennui signale une valeur trop faible de la tâche ; la fatigue attentionnelle vient de l'usure de l'effort d'inhibition, même quand la tâche intéresse."],
+  ["Pourquoi le téléphone ne repose-t-il pas ?", "Il sollicite le même système d'inhibition avec des stimulations très saillantes."],
+  ["Qu'est-ce que la « fascination douce » ?", "Un environnement qui attire l'attention sans l'exiger, comme un parc ou le ciel."],
+];
+const QUIZ = {
+  question: "Au bout de combien de temps l'effort d'inhibition a-t-il un coût mesurable en temps de réaction ?",
+  options: [["A", "10 à 15 minutes"], ["B", "40 à 60 minutes"], ["C", "Deux heures"], ["D", "Il n'a pas de coût mesurable"]],
+  correct: "B",
+  explanation: "L'épisode situe la baisse mesurable entre quarante et soixante minutes d'attention dirigée (§3).",
+};
+
+// ---------------------------------------------------------------- chat
+// The validated scopes (task-434 Decision): a media item (in Lecture) and a folder
+// (in Sources). Nothing at library level. History is durable (task-430 Decision §3).
+
+const CHAT = {
+  media: {
+    conversations: [
+      { id: "c1", title: "Fatigue ou ennui ?", when: "Aujourd'hui, 09:12", turns: 3, active: true },
+      { id: "c2", title: "Les trois pauses, appliquées au bureau", when: "Hier", turns: 5 },
+      { id: "c3", title: "Sources citées dans l'épisode", when: "Il y a 4 j", turns: 2, interrupted: true },
+    ],
+    messages: [
+      { role: "user", text: "Quelle différence fait-il entre la fatigue attentionnelle et l'ennui ?" },
+      { role: "assistant", text: "Il les oppose sur leur origine. L'ennui est un <b>signal de valeur</b> : la tâche ne rapporte pas assez pour ce qu'elle coûte <cite>§2</cite>. La fatigue attentionnelle apparaît <b>même quand la tâche passionne</b>, parce que ce qui s'use est l'effort d'inhibition — tenir à distance ce qui n'est pas la tâche <cite>§2</cite> <cite>§3</cite>." },
+      { role: "user", text: "Et donc, quelle pause pour une après-midi de relecture ?" },
+    ],
+    streaming: "Pour une relecture, l'épisode recommande une pause qui ne demande rien : dix à quinze minutes dehors ou face à une fenêtre <cite>§5</cite>, ou une marche sans but et sans écouteurs <cite>§8</cite>. À éviter : le téléphone, qui sollicite le même système d'inhibition que la relec",
+    suggestions: ["Résume les trois pauses en une ligne chacune", "Quelles études sont citées ?", "Qu'est-ce qui ne marche pas ?"],
+  },
+  folder: {
+    conversations: [
+      { id: "d1", title: "Points communs sur la récupération", when: "Aujourd'hui, 10:40", turns: 4, active: true },
+      { id: "d2", title: "Désaccords entre Cowan et Baddeley", when: "Il y a 3 j", turns: 6 },
+    ],
+    messages: [
+      { role: "user", text: "Sur quoi ces sources sont-elles d'accord à propos de la récupération de l'attention ?" },
+      { role: "assistant", text: "Trois sources convergent : une pause n'aide que si elle <b>cesse de solliciter l'attention dirigée</b> <cite>1</cite> <cite>7</cite>, et l'entraînement ne fait pas « grossir » la mémoire de travail au-delà des tâches entraînées <cite>2</cite>. Le podcast de France Culture ajoute une mesure en open space qui va dans le même sens <cite>6</cite>.", stopped: true, partial: "Réponse arrêtée par vous — le texte reçu est conservé." },
+      { role: "user", text: "Lesquelles se contredisent sur la capacité ?" },
+      { role: "assistant", text: "Cowan défend une limite d'environ quatre éléments <cite>4</cite>, là où la vidéo sur Baddeley présente", failed: true },
+    ],
+    streaming: "Cowan défend une limite d'environ <b>quatre éléments</b> <cite>4</cite>, là où la présentation de Baddeley décrit des sous-systèmes dont la capacité dépend du format — verbal ou visuo-spatial <cite>3</cite> <cite>8</cite>. La méta-analyse ne tranche pas entre les deux modèles mais",
+    suggestions: ["Fais un tableau des désaccords", "Quelle source lire en premier ?", "Qu'est-ce qui manque dans ce dossier ?"],
+  },
+};
+
+// ---------------------------------------------------------------- misc
+
+const DIGEST = {
+  daily: { count: 4, items: ["m1", "m11", "m13", "m14"] },
+  weekly: { count: 11, items: ["m2", "m3", "m4", "m6", "m7"] },
+};
+const SEARCH_HITS = [
+  { media: "m1", snippet: "…la bonne <mark>pause</mark> n'est pas celle qui vous distrait, c'est celle qui ne vous demande rien." },
+  { media: "m7", snippet: "…ce que les <mark>pauses</mark> courtes font vraiment à la mémoire de travail, selon trois expériences…" },
+  { media: "m6", snippet: "…les salariés interrogés prennent leur <mark>pause</mark> sur le téléphone dans 71 % des cas…" },
+  { media: "m15", snippet: "…laissez la pâte en <mark>pause</mark> 30 minutes après le premier pétrissage…" },
+];
+const READING_LANGUAGES = ["Français", "English", "Deutsch", "Español", "Italiano", "Nederlands", "Português", "العربية", "हिन्दी", "日本語", "中文"];
+
+// Shared core of the five directions: hash router, shared renderers, shared dialogs.
+// Every direction supplies DIR (shell, library, destination picker, chat container);
+// everything that is the *same feature* in all five is rendered here, so the five
+// differ by structure and walkthroughs, not by five re-drawings of one artifact viewer.
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+const icon = (name, cls = "") => `<svg class="ico ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+
+// ---------------------------------------------------------------- state & router
+
+const DEFAULTS = { s: "home", corpus: "ref", tab: "", chat: "off", cs: "idle", theme: "light", beta: "1", dp: "daily", dpos: "1" };
+let S = { ...DEFAULTS };
+const UI = { expanded: new Set(), pins: new Set(), menu: null };
+
+function parseHash() {
+  const out = { ...DEFAULTS };
+  for (const part of location.hash.replace(/^#/, "").split("&")) {
+    if (!part) continue;
+    const [k, v = ""] = part.split("=");
+    out[k] = decodeURIComponent(v);
+  }
+  return out;
+}
+function hashOf(st) {
+  return "#" + Object.entries(st).filter(([k, v]) => v !== "" && v != null && DEFAULTS[k] !== v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
+}
+function go(patch, { replace = false } = {}) {
+  const next = { ...S, ...patch };
+  for (const k of Object.keys(next)) if (next[k] === null) delete next[k];
+  const h = hashOf(next);
+  if (replace) history.replaceState(null, "", h); else location.hash = h;
+  if (replace) render();
+}
+// "go" links carry a patch as JSON in data-go.
+document.addEventListener("click", (e) => {
+  const el = e.target.closest("[data-go],[data-act]");
+  if (!el) { if (UI.menu) { UI.menu = null; render(); } return; }
+  e.preventDefault();
+  if (el.dataset.go) go(JSON.parse(el.dataset.go));
+  if (el.dataset.act) { const [fn, ...args] = el.dataset.act.split(":"); (DIR.acts?.[fn] || ACTS[fn])?.(...args, el, e); }
+});
+const goAttr = (patch) => `data-go='${esc(JSON.stringify(patch))}'`;
+window.addEventListener("hashchange", () => { S = parseHash(); render(); });
+
+const ACTS = {
+  toggle(id) { UI.expanded.has(id) ? UI.expanded.delete(id) : UI.expanded.add(id); render(); },
+  pin(id) { UI.pins.has(id) ? UI.pins.delete(id) : UI.pins.add(id); render(); },
+  menu(kind, id, el) { const r = el.getBoundingClientRect(); UI.menu = { kind, id, x: Math.min(r.left, innerWidth - 240), y: r.bottom + 4 }; render(); },
+  theme() { go({ theme: S.theme === "dark" ? "light" : "dark" }); },
+};
+
+// ---------------------------------------------------------------- helpers
+
+const C = () => corpus(S.corpus);
+const curFolder = () => C().byId.get(S.f) || C().memory || C().roots[0];
+const curMedia = () => mediaById(S.m || "m1");
+function cover(m, size = 56) {
+  const t = TYPE_META[m.type];
+  return `<div class="cover ${m.status === "processing" ? "processing" : ""}" style="width:${size}px;height:${size}px;background:${m.color}">${icon(t.icon)}</div>`;
+}
+function typeBadge(m) {
+  if (m.status === "failed") return `<span class="badge err">ÉCHEC</span>`;
+  return `<span class="badge ${m.type === "short" ? "short" : ""}">${TYPE_META[m.type].label}</span>`;
+}
+function mediaRow(m, { sel = false, size = 56, folderChip = "" } = {}) {
+  const sub = m.status === "processing" ? "En cours de traitement" : esc(m.creator);
+  return `<button class="mrow ${sel ? "sel" : ""}" ${goAttr({ s: "media", m: m.id, tab: "reader", chat: "off", cs: "idle", modal: null })}>
+    ${cover(m, size)}
+    <div class="grow"><div class="t clamp2">${esc(m.title)}</div>
+      <div class="meta">${typeBadge(m)}<span class="ell">${sub}</span><span>·</span><span style="white-space:nowrap">${esc(m.age)}</span>${folderChip}</div></div>
+    <span class="icon-btn" data-act="menu:media:${m.id}" title="Actions sur cette source" aria-label="Actions sur cette source">${icon("ellipsis-horizontal", "s18")}</span>
+  </button>`;
+}
+// Nearest parent first: in a narrow row the end of a long path is what gets cut, and the
+// end is exactly what tells two « Notes de lecture » apart.
+function parentHint(f) { const p = folderPath(C(), f); p.pop(); return p.reverse().map((x) => x.name).join(" · ") || "Racine de la bibliothèque"; }
+function pathText(f) { return folderPath(C(), f).map((p) => p.name).join(" › "); }
+function parentPathText(f) { const p = folderPath(C(), f); p.pop(); return p.map((x) => x.name).join(" › "); }
+// Marks the query terms in a name, accent-insensitively.
+function hl(name, q) {
+  if (!q) return esc(name);
+  const terms = fold(q).split(/\s+/).filter(Boolean);
+  const f = fold(name);
+  const marks = new Array(name.length).fill(false);
+  for (const t of terms) { let i = f.indexOf(t); while (i >= 0) { for (let k = i; k < i + t.length; k++) marks[k] = true; i = f.indexOf(t, i + 1); } }
+  let out = "", open = false;
+  for (let i = 0; i < name.length; i++) {
+    if (marks[i] && !open) { out += "<mark>"; open = true; }
+    if (!marks[i] && open) { out += "</mark>"; open = false; }
+    out += esc(name[i]);
+  }
+  return out + (open ? "</mark>" : "");
+}
+function crumbs(f, { onlyParents = false, root = "Bibliothèque" } = {}) {
+  const p = folderPath(C(), f);
+  if (onlyParents) p.pop();
+  return `<nav class="crumbs" aria-label="Chemin du dossier"><button ${goAttr({ s: "library", f: null })}>${root}</button>${p.map((x) => `${icon("chevron-forward", "s14")}<button title="${esc(x.name)}" ${goAttr({ s: "folder", f: x.id, tab: "sources", chat: "off" })}>${esc(x.name)}</button>`).join("")}</nav>`;
+}
+const recentFolders = (n = 6) => [...C().folders].sort((a, b) => a.lastOpened - b.lastOpened).slice(0, n);
+
+// ---------------------------------------------------------------- media page pieces
+
+function mediaHero(m, { height = 200 } = {}) {
+  return `<div class="hero" style="height:${height}px;background:linear-gradient(135deg, ${m.color}, ${m.color}cc)">
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.25)">${icon(TYPE_META[m.type].icon, "s24")}</div>
+    <div class="veil"><div class="small subtle">${esc(m.creator)}</div><h1 class="headline clamp2">${esc(m.title)}</h1></div></div>`;
+}
+function metaLine(m) {
+  return `<div class="metaline"><a href="#" title="Ouvrir sur la source">${icon("open-outline", "s16")} ${m.type === "podcast" ? "podcasts.apple.com" : m.type === "article" ? "theconversation.com" : "youtube.com"}</a><span>12 sept. 2026</span><span>${esc(m.duration)}</span><span>Anglais → Français</span><span>10 paragraphes</span></div>`;
+}
+function mediaTabs(m, extra = "") {
+  const t = S.tab || "reader";
+  return `<div class="row" style="gap:12px"><div class="seg" role="tablist" aria-label="Sections du média">
+    <button role="tab" class="${t === "reader" ? "on" : ""}" ${goAttr({ tab: "reader" })}>${icon("book-outline", "s16")} Lecture</button>
+    <button role="tab" class="${t === "ai" ? "on" : ""}" ${goAttr({ tab: "ai", chat: "off" })}>${icon("sparkles-outline", "s16")} IA</button></div>${extra}
+    <span class="grow"></span><button class="icon-btn" data-act="menu:media:${m.id}" aria-label="Actions pour cette source" title="Ranger, renommer, supprimer">${icon("ellipsis-horizontal")}</button></div>`;
+}
+function previewBlock() {
+  return `<section class="callout" aria-label="L'essentiel"><div class="caps" style="margin-bottom:4px">L'essentiel</div><p style="margin:0 0 8px">${PREVIEW.blurb}</p>
+    <ul style="margin:0;padding-left:18px">${PREVIEW.points.map((p) => `<li>${p}</li>`).join("")}</ul></section>`;
+}
+function readerText({ cited = [] } = {}) {
+  return `<div class="row" style="margin:24px 0 8px"><h2 class="headline grow">Texte intégral</h2>
+      <button class="chip" title="Afficher le texte original (anglais)">${icon("language-outline", "s16")} Voir l'original (EN)</button></div>
+    <div class="reader">${PARAGRAPHS.map((p, i) => `<p id="p${i + 1}" class="${cited.includes(i + 1) ? "cited" : ""}"><span class="pn">§${i + 1}</span>${p}</p>`).join("")}</div>`;
+}
+function mediaStateBody(m) {
+  if (m.status === "processing")
+    return `<div class="card" style="padding:24px;display:flex;gap:16px;align-items:center">${icon("sync", "s24")}<div><div class="label">Transcription de la vidéo…</div><div class="small muted">Cela prend généralement moins d'une minute. La page se met à jour seule.</div></div></div>`;
+  if (m.status === "failed")
+    return `<div class="card" style="padding:24px"><div class="row" style="color:var(--error)">${icon("alert-circle-outline")}<b>Le traitement a échoué</b></div>
+      <p class="subtle" style="margin:8px 0 16px">Le contenu en direct ne peut pas être importé. Réessayez quand l'enregistrement sera publié.</p>
+      <div class="callout"><b>Cette source n'est pas encore prise en charge.</b><div class="small subtle">Si vous voulez qu'elle le soit un jour :</div>
+      <button class="btn tonal" style="margin-top:8px">Demander cette source</button></div></div>`;
+  return "";
+}
+
+// ---------------------------------------------------------------- AI tab (media and folder)
+
+function aiPanel(scope) {
+  const states = scope === "folder" ? FOLDER_ARTIFACTS : MEDIA_ARTIFACTS;
+  const hist = scope === "folder" ? FOLDER_HISTORY : MEDIA_HISTORY;
+  const st = (s) => ({ generated: `${icon("checkmark-circle", "s16")} Généré`, generating: `${icon("sync", "s16")} Génération…`, queued: `${icon("time-outline", "s16")} En file`, failed: `<span style="color:var(--error)">${icon("alert-circle-outline", "s16")} Échec · Réessayer</span>`, idle: `<span class="btn primary" style="min-height:30px;padding:0 12px">Générer</span>` })[s];
+  return `<section aria-label="Générer"><div class="caps" style="margin:4px 0 8px">Générer ${scope === "folder" ? "sur tout le dossier, sous-dossiers compris" : ""}</div>
+    <div class="tiles">${ARTIFACT_TYPES.map((a) => `<div class="tile">${icon(a.icon, "s24")}<div class="label">${a.label}</div><div class="st">${st(states[a.key])}</div></div>`).join("")}</div>
+    ${scope === "folder" ? `<div class="banner" style="margin-top:8px">${icon("layers-outline", "s16")} Les sources ont changé depuis le dernier résumé détaillé : une nouvelle génération ajoute une entrée à l'historique, l'ancienne est conservée.</div>` : ""}</section>
+    <section style="margin-top:24px" aria-label="Historique"><div class="caps" style="margin-bottom:6px">Historique</div>
+    ${hist.map((h) => { const a = ARTIFACT_TYPES.find((x) => x.key === h.type); return `<button class="hist" style="width:100%;text-align:left" ${goAttr({ s: "artifact", art: h.type, from: scope })}><div class="icon-btn" style="background:var(--surface-container)">${icon(a.icon, "s18")}</div><div class="grow"><div class="label ell">${esc(h.title)}</div><div class="small muted">${a.label} · ${h.when}${h.sources ? ` · ${h.sources} sources` : ""}</div></div>${icon("chevron-forward", "s16")}</button>`; }).join("")}</section>`;
+}
+function artifactView(type = "summaryShort") {
+  const a = ARTIFACT_TYPES.find((x) => x.key === type) || ARTIFACT_TYPES[0];
+  let body = "";
+  if (type === "flashcards")
+    body = `<div class="small muted" style="margin-bottom:12px">12 cartes · Espace pour retourner, ← → pour passer</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">${FLASHCARDS.map(([q, r], i) => `<div class="card" style="padding:16px"><div class="caps">Question</div><p style="margin:6px 0 12px;font-weight:600">${q}</p>${i === 0 ? `<div class="caps">Réponse</div><p style="margin:6px 0 0">${r}</p>` : `<button class="chip">Retourner la carte</button>`}</div>`).join("")}</div>`;
+  else if (type === "quiz")
+    body = `<div class="progress" style="margin-bottom:12px"><i style="width:30%"></i></div><div class="small muted">Question 3 sur 10</div><p class="headline" style="margin:8px 0 16px">${QUIZ.question}</p>${QUIZ.options.map(([l, t]) => `<div class="card" style="padding:12px 16px;margin-bottom:8px;display:flex;gap:12px;${l === QUIZ.correct ? "box-shadow:inset 0 0 0 2px var(--primary)" : ""}"><b>${l}</b>${t}${l === QUIZ.correct ? `<span class="grow"></span>${icon("checkmark-circle")}` : ""}</div>`).join("")}<div class="callout" style="margin-top:12px"><div class="caps">Explication</div>${QUIZ.explanation}</div>`;
+  else
+    body = `<div class="callout"><div class="caps">Points clés</div><ul style="margin:6px 0 0;padding-left:18px">${PREVIEW.points.map((p) => `<li>${p}</li>`).join("")}</ul></div><h3 class="headline" style="margin:20px 0 6px">À retenir</h3><p style="margin:0">La bonne pause n'est pas celle qui distrait : c'est celle qui ne demande rien à l'attention dirigée.</p>`;
+  return `<article style="max-width:760px"><div class="caps">${a.label} · généré hier à 21:02 · ${S.from === "folder" ? "9 sources" : "1 source"}</div><h1 class="display" style="margin:6px 0 20px">La bonne pause ne demande rien</h1>${body}</article>`;
+}
+
+// ---------------------------------------------------------------- chat
+
+function chatScope() {
+  if (S.s === "media" && (S.tab || "reader") === "reader") return "media";
+  if (S.s === "folder" && (S.tab || "sources") === "sources") return "folder";
+  return null; // no composer anywhere else — task-434 Decision
+}
+function scopeLabel(scope) {
+  return scope === "media" ? "Ce média" : `Ce dossier · ${curFolder() === C().memory ? 9 : totalSources(curFolder())} sources`;
+}
+function composer(scope, { compact = false } = {}) {
+  const busy = S.cs === "sending" || S.cs === "streaming" || S.cs === "resuming";
+  const ph = compact ? (scope === "media" ? "Question sur ce média…" : "Question sur les sources de ce dossier…") : scope === "media" ? "Poser une question sur ce média…" : "Poser une question sur les sources de ce dossier…";
+  return `<form class="composer" onsubmit="return false" aria-label="Discussion">
+    ${compact ? "" : `<span class="scope" title="Portée de la discussion">${scopeLabel(scope)}</span>`}
+    <textarea rows="1" placeholder="${ph}" aria-label="${ph}" ${goAttr(S.chat === "open" ? {} : { chat: "open" })}>${S.cs === "draft" ? "Lesquelles se contredisent sur la capacité ?" : ""}</textarea>
+    <button class="icon-btn" title="Conversations précédentes" aria-label="Conversations précédentes" ${goAttr({ chat: "open", cs: "history" })}>${icon("time-outline", "s18")}</button>
+    ${busy ? `<button class="send stop" title="Arrêter la réponse (Échap)" aria-label="Arrêter la réponse" ${goAttr({ cs: "stopped" })}>${icon("stop", "s16")}</button>` : `<button class="send" title="Envoyer (Entrée)" aria-label="Envoyer" ${goAttr({ chat: "open", cs: "streaming" })}>${icon("arrow-up", "s18")}</button>`}
+  </form>`;
+}
+function convList(scope) {
+  const d = CHAT[scope];
+  return `<div class="convlist"><div class="row" style="margin-bottom:6px"><div class="caps grow">Conversations · ${scope === "media" ? "ce média" : "ce dossier"}</div><button class="btn tonal" style="min-height:32px" ${goAttr({ cs: "idle", conv: "new" })}>${icon("add", "s16")} Nouvelle</button></div>
+    ${d.conversations.map((c) => `<button class="${c.active ? "on" : ""}" ${goAttr({ cs: "idle", conv: c.id })}><span class="label">${esc(c.title)}</span><span class="small muted">${c.when} · ${c.turns} échanges${c.interrupted ? " · dernière réponse interrompue" : ""}</span></button>`).join("")}
+    <p class="small muted" style="margin:10px 4px 0">L'historique est conservé sur votre compte et retrouvé sur tous vos appareils. Il n'existe pas de discussion sur toute la bibliothèque.</p></div>`;
+}
+// The thread, in the state the hash asks for. All states of task-430 Decision §6:
+// sending, streaming, voluntary stop (partial kept), partial failure (new attempt,
+// never concatenated), resume after reload/navigation, explicit refusal.
+function thread(scope) {
+  const d = CHAT[scope];
+  if (S.cs === "history") return convList(scope);
+  if (S.conv === "new") return `<div class="small muted" style="padding:8px 0">Nouvelle conversation sur ${scope === "media" ? "ce média" : "les sources de ce dossier"}.</div><div class="row" style="flex-wrap:wrap">${d.suggestions.map((x) => `<button class="chip">${x}</button>`).join("")}</div>`;
+  let tail = "";
+  const user = (t) => `<div class="msg user">${t}</div>`;
+  const asst = (t, extra = "") => `<div class="msg assistant">${t}${extra}</div>`;
+  // Three earlier messages: question, answer (on a folder, one the user had stopped,
+  // kept as such in the history), then the question being answered now.
+  const html = d.messages.slice(0, 3).map((m) => m.role === "user" ? user(m.text) : asst(m.text, m.stopped ? `<div class="msg-state">${icon("stop", "s14")} ${m.partial}</div>` : "")).join("");
+  switch (S.cs) {
+    case "sending": tail = `<div class="msg-state"><span class="typing"><i></i><i></i><i></i></span> Envoi de la question…</div>`; break;
+    case "streaming": tail = asst(d.streaming + `<span class="caret"></span>`, `<div class="msg-state">${icon("pulse", "s14")} Réponse en cours · vous pouvez quitter la page, elle continue · <button class="btn ghost" ${goAttr({ cs: "stopped" })}>Arrêter</button></div>`); break;
+    case "stopped": tail = asst(d.streaming.replace(/<cite>[^<]*<\/cite>\s*$/, ""), `<div class="msg-state">${icon("stop", "s14")} Réponse arrêtée par vous. Le texte reçu est conservé. <button class="btn ghost" ${goAttr({ cs: "streaming" })}>Relancer</button></div>`); break;
+    case "failed": tail = asst(d.streaming.slice(0, 120) + "…", `<div class="msg-state err">${icon("alert-circle-outline", "s14")} La réponse s'est interrompue : le service n'a pas pu terminer. Le texte reçu est conservé. <button class="btn tonal" ${goAttr({ cs: "streaming" })}>Réessayer</button></div><div class="small muted">Une nouvelle tentative écrit une nouvelle réponse ; elle ne complète pas celle-ci. Aucun second débit de minutes.</div>`); break;
+    case "resuming": tail = `<div class="banner">${icon("sync", "s16")} Reprise de la réponse là où elle en était… (la page a été rechargée)</div>` + asst(d.streaming.slice(0, 160) + `<span class="caret"></span>`); break;
+    case "refused": tail = `<div class="banner err">${icon("alert-circle-outline", "s16")} Ce dossier contient trop de texte pour une conversation (plafond de contexte atteint). Ouvrez un sous-dossier plus petit pour en discuter.</div>`; break;
+    case "quota": tail = `<div class="banner warn">${icon("time-outline", "s16")} Vous n'avez plus de minutes jusqu'au 1er novembre. Les conversations existantes restent lisibles.</div>`; break;
+    default: tail = asst(d.streaming.replace(/<cite>[^<]*<\/cite>\s*$/, "") + " — même s'il est intéressant, il sollicite le même système.");
+  }
+  return `<div class="thread">${html}${tail}</div>`;
+}
+function chatHeader(scope, { close = true } = {}) {
+  const d = CHAT[scope];
+  return `<div class="row" style="gap:6px"><div class="grow"><div class="label ell">${S.cs === "history" ? "Historique" : esc(S.conv === "new" ? "Nouvelle conversation" : d.conversations[0].title)}</div><div class="small muted ell">${scope === "media" ? "Discussion sur ce média" : "Discussion sur les sources de ce dossier"}</div></div>
+    <button class="icon-btn" title="Conversations" aria-label="Conversations" ${goAttr({ cs: S.cs === "history" ? "idle" : "history" })}>${icon("chatbubbles-outline", "s18")}</button>
+    ${close ? `<button class="icon-btn" title="Réduire (la réponse continue)" aria-label="Réduire la discussion" ${goAttr({ chat: "off" })}>${icon("close", "s18")}</button>` : ""}</div>`;
+}
+
+// ---------------------------------------------------------------- other surfaces
+
+function homeBody() {
+  const recent = MEDIA.filter((m) => !m.folder).concat(MEDIA.slice(0, 3));
+  return `<div style="display:flex;flex-direction:column;gap:24px">
+    <div class="banner warn">${icon("time-outline", "s16")} Vous avez utilisé 82 % des minutes de ce mois. Elles se renouvellent le 1er novembre. <span class="grow"></span><button class="icon-btn" aria-label="Masquer l'alerte">${icon("close", "s16")}</button></div>
+    <button class="card" style="padding:16px 20px;display:flex;gap:16px;align-items:center;text-align:left" ${goAttr({ s: "unsorted", pos: "1" })}><div class="icon-btn" style="background:var(--primary);color:var(--on-primary)">${icon("file-tray-outline")}</div><div class="grow"><div class="label">Tri des non classés</div><div class="small muted">12 sources attendent un dossier</div></div>${icon("chevron-forward")}</button>
+    <section><h2 class="headline" style="margin-bottom:12px">Ajouts récents</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px">${recent.slice(0, 6).map((m) => `<button style="text-align:left" ${goAttr({ s: "media", m: m.id, tab: "reader" })}>${cover(m, 150).replace('width:150px', 'width:100%;aspect-ratio:1')}<div class="small clamp2" style="font-weight:600;margin-top:6px">${esc(m.title)}</div><div class="small muted">${m.status === "processing" ? "En cours de traitement" : m.status === "failed" ? "Échec de l'import" : esc(m.creator)}</div></button>`).join("")}</div></section>
+    <section><h2 class="headline" style="margin-bottom:12px">Reprendre</h2><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">${MEDIA.slice(0, 4).map((m, i) => `<div class="card" style="padding:4px">${mediaRow(m, { size: 48 })}<div class="progress" style="margin:0 12px 8px"><i style="width:${[38, 72, 15, 55][i]}%"></i></div></div>`).join("")}</div></section></div>`;
+}
+function digestBody() {
+  const per = S.dp === "weekly" ? "weekly" : "daily";
+  const d = DIGEST[per];
+  const pos = Math.min(+S.dpos || 1, d.items.length);
+  const m = mediaById(d.items[pos - 1]);
+  return `<div class="row" style="margin-bottom:16px"><div class="seg"><button class="${per === "daily" ? "on" : ""}" ${goAttr({ dp: "daily", dpos: "1" })}>Quotidien · ${DIGEST.daily.count}</button><button class="${per === "weekly" ? "on" : ""}" ${goAttr({ dp: "weekly", dpos: "1" })}>Hebdomadaire · ${DIGEST.weekly.count}</button></div><span class="grow"></span>
+    <div class="row">${d.items.map((_, i) => `<span style="width:8px;height:8px;border-radius:50%;background:${i + 1 === pos ? "var(--primary)" : "var(--outline-variant)"}"></span>`).join("")}<span class="small subtle" style="margin-left:6px">${pos} / ${d.items.length}</span>
+    <button class="icon-btn" aria-label="Précédent (←)" ${goAttr({ dpos: String(Math.max(1, pos - 1)) })}>${icon("chevron-back")}</button><button class="icon-btn" aria-label="Suivant (→)" ${goAttr({ dpos: String(Math.min(d.items.length, pos + 1)) })}>${icon("chevron-forward")}</button></div></div>
+    <div style="max-width:760px">${mediaHero(m, { height: 180 })}<div style="margin:12px 0">${metaLine(m)}</div><div class="seg" style="margin-bottom:16px"><button class="on">${icon("book-outline", "s16")} Lecture</button><button>${icon("sparkles-outline", "s16")} IA</button></div>${previewBlock()}<p class="small muted" style="margin-top:12px">${icon("return-down-forward-outline", "s14")} La page complète de ce média — et sa discussion — s'ouvre avec « Ouvrir ». Le digest ne porte pas de composeur : ce n'est ni l'onglet Lecture d'un média ni l'onglet Sources d'un dossier.</p><button class="btn tonal" ${goAttr({ s: "media", m: m.id, tab: "reader" })}>Ouvrir le média</button></div>`;
+}
+function searchBody(q = S.sq || "pause") {
+  const folders = searchFolders(C(), q, 6);
+  return `<div class="small muted" style="margin-bottom:12px">${SEARCH_HITS.length} résultats dans le texte de vos sources · ${folders.length} dossiers</div>
+    ${folders.length ? `<div class="caps" style="margin-bottom:6px">Dossiers</div><div style="margin-bottom:16px">${folders.map((f) => `<button class="frow" ${goAttr({ s: "folder", f: f.id, tab: "sources" })}>${icon("folder-outline", "s18")}<span>${hl(f.name, q)}</span><span class="path ell grow">${esc(parentHint(f))}</span></button>`).join("")}</div>` : ""}
+    <div class="caps" style="margin-bottom:6px">Dans le texte</div>${SEARCH_HITS.map((h) => { const m = mediaById(h.media); return `<button class="mrow" style="align-items:flex-start" ${goAttr({ s: "media", m: m.id, tab: "reader" })}>${cover(m, 48)}<div class="grow"><div class="t">${esc(m.title)}</div><div class="small subtle" style="margin-top:2px">${h.snippet}</div><div class="meta" style="margin-top:4px">${typeBadge(m)} ${esc(m.creator)}</div></div></button>`; }).join("")}
+    <div class="small muted" style="text-align:center;padding:16px">Fin des résultats</div>`;
+}
+function unsortedBody() {
+  const items = MEDIA.filter((m) => !m.folder && !m.status);
+  const pos = Math.min(+S.pos || 1, items.length);
+  const m = items[pos - 1];
+  return `<div style="max-width:640px;margin:0 auto"><div class="row" style="margin-bottom:12px"><div class="label grow">Tri des non classés</div><span class="small subtle">${pos} / ${items.length}</span></div>
+    <div class="card" style="overflow:hidden">${mediaHero(m, { height: 220 }).replace('border-radius:var(--r-xl)', '')}<div style="padding:16px 20px"><div class="metaline" style="margin-bottom:8px">${typeBadge(m)} ${esc(m.creator)} · ${esc(m.age)}</div><p style="margin:0">${PREVIEW.blurb}</p></div></div>
+    <div class="row" style="justify-content:center;gap:12px;margin-top:16px"><button class="btn tonal">${icon("trash-outline", "s16")} Écarter <span class="kbd">D</span></button><button class="btn tonal" ${goAttr({ s: "media", m: m.id, tab: "reader" })}>${icon("book-outline", "s16")} Approfondir <span class="kbd">O</span></button><button class="btn primary" ${goAttr({ modal: "move", target: m.id })}>${icon("folder-outline", "s16")} Ranger <span class="kbd">R</span></button></div>
+    <p class="small muted" style="text-align:center">← → pour passer d'une source à l'autre</p></div>`;
+}
+function accountBody() {
+  const beta = S.beta !== "0";
+  const item = (ic, label, hint, patch, danger) => `<button class="frow" style="min-height:52px;${danger ? "color:var(--error)" : ""}" ${patch ? goAttr(patch) : ""}>${icon(ic, "s18")}<span class="grow"><span class="label" style="display:block">${label}</span>${hint ? `<span class="small muted">${hint}</span>` : ""}</span>${icon("chevron-forward", "s16")}</button>`;
+  return `<div style="max-width:640px"><div class="small muted">Connecté avec</div><div class="headline" style="margin-bottom:16px">vous@exemple.fr</div>
+    <div class="card" style="padding:16px 20px;margin-bottom:24px"><div class="caps">Votre forfait</div><div class="row" style="margin-top:6px"><div class="headline grow">${beta ? "Accès bêta" : "Forfait M"}</div><span class="chip">${beta ? "Bêta" : "Actif"}</span></div>
+      <div class="row" style="margin-top:12px;align-items:flex-end"><div class="grow"><div class="caps">Minutes restantes</div><div class="display">412 <span class="small muted">/ 2 400</span></div></div><div style="text-align:right"><div class="caps">Renouvellement</div><div class="label">1 nov. 2026</div></div></div>
+      <p class="small subtle" style="margin:8px 0 0">${beta ? "Pendant la bêta, chaque compte reçoit l'allocation du plus grand forfait. Aucune entrée vers l'abonnement n'est affichée (task-429)." : "Les minutes couvrent l'audio et la vidéo envoyés. Les articles et pages web n'en coûtent aucune."}</p>
+      ${beta ? "" : `<button class="btn primary" style="margin-top:12px" ${goAttr({ s: "paywall" })}>Changer de forfait</button>`}</div>
+    <div class="caps" style="margin-bottom:4px">Réglages</div>
+    ${item("language-outline", "Langue de lecture", "Français · une modification par mois", { s: "settings", sub: "reading" })}
+    ${item("globe-outline", "Langue de l'app", "Suivre le navigateur", { s: "settings", sub: "ui" })}
+    ${item(S.theme === "dark" ? "moon-outline" : "sunny-outline", "Thème", S.theme === "dark" ? "Sombre" : "Clair", { s: "settings", sub: "theme" })}
+    ${item("extension-puzzle-outline", "Extension navigateur", "Relier ce navigateur à l'extension", { s: "settings", sub: "extension" })}
+    <div class="caps" style="margin:16px 0 4px">Aide</div>
+    ${item("bulb-outline", "Demandes de fonctionnalités", "Tableau de suggestions", null)}
+    ${item("bug-outline", "Signaler un bug", "Avec une pièce jointe si besoin", { modal: "bug" })}
+    <div class="caps" style="margin:16px 0 4px">Compte</div>
+    ${item("log-out-outline", "Se déconnecter", "Sur ce navigateur uniquement", { modal: "signout" })}
+    ${item("trash-outline", "Supprimer mon compte", "Définitif, avec tout ce que vous avez enregistré", { s: "settings", sub: "delete" }, true)}
+    <p class="small muted" style="margin-top:16px">Confidentialité · Conditions d'utilisation · Deepn par Second Brain Labs</p></div>`;
+}
+function settingsBody() {
+  const sub = S.sub || "reading";
+  if (sub === "theme") return `<h1 class="display">Thème</h1><p class="subtle">L'apparence de Deepn. Le choix reste sur ce navigateur.</p>${["Suivre l'appareil", "Clair", "Sombre"].map((t, i) => `<button class="frow" style="min-height:48px" ${i ? goAttr({ theme: i === 2 ? "dark" : "light" }) : ""}>${icon(i === 2 ? "moon-outline" : "sunny-outline", "s18")}<span class="grow">${t}</span>${(i === 2) === (S.theme === "dark") && i ? icon("checkmark") : ""}</button>`).join("")}`;
+  if (sub === "ui") return `<h1 class="display">Langue de l'app</h1><p class="subtle">La langue de l'interface. La langue de vos résumés et textes est la langue de lecture, réglée à part.</p><button class="frow on" style="min-height:48px">Suivre le navigateur ${icon("checkmark")}</button>${READING_LANGUAGES.map((l) => `<button class="frow" style="min-height:44px">${l}</button>`).join("")}`;
+  if (sub === "extension") return `<h1 class="display">Extension navigateur</h1><p class="subtle">Enregistrez la page que vous lisez en un clic. L'extension se relie à votre compte depuis cette page.</p><div class="card" style="padding:20px;display:flex;gap:20px;align-items:center"><div class="display" style="letter-spacing:6px">482 913</div><div class="small subtle">Saisissez ce code dans l'extension. Il expire dans 10 minutes.</div></div><div class="caps" style="margin:20px 0 6px">Navigateurs reliés</div><div class="frow">${icon("globe-outline", "s18")}<span class="grow">Chrome sur MacBook · relié le 3 oct.</span><button class="btn ghost">Délier</button></div>`;
+  if (sub === "delete") return `<h1 class="display">Supprimer le compte</h1><div class="banner err" style="margin:12px 0">${icon("alert-circle-outline", "s16")} Cette action est irréversible.</div><p>La suppression efface définitivement votre compte et tout ce que vous avez enregistré : bibliothèque et dossiers, textes, résumés, notes, flashcards, quiz, conversations, digests, index de recherche, adresse e-mail.</p><div class="callout"><b>Votre abonnement</b><div class="small">Supprimer le compte n'annule pas un abonnement pris sur l'App Store, Google Play ou le web : annulez-le d'abord.</div></div><label class="row" style="margin:16px 0"><input type="checkbox"> Je comprends que mon compte et toutes mes données seront effacés.</label><button class="btn danger">Supprimer mon compte</button>`;
+  return `<h1 class="display">Langue de lecture</h1><p class="subtle">La langue dans laquelle vos textes et résumés sont écrits. Vous pouvez la changer une fois par mois.</p><div class="banner" style="margin-bottom:12px">${icon("calendar-outline", "s16")} Prochain changement possible le 3 novembre 2026.</div>${READING_LANGUAGES.map((l, i) => `<button class="frow ${i === 0 ? "on" : ""}" style="min-height:44px">${l}${i === 0 ? `<span class="grow"></span>${icon("checkmark")}` : ""}</button>`).join("")}`;
+}
+function paywallBody() {
+  return `<div style="max-width:760px"><h1 class="display">Choisir un forfait</h1><p class="subtle">Chaque forfait fait tout. Ils ne diffèrent que par la quantité envoyée.</p>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0">${[["S", "600 min", "4,99 €"], ["M", "2 400 min", "9,99 €"], ["L", "6 000 min", "19,99 €"]].map(([n, a, p], i) => `<div class="card" style="padding:16px;${i === 1 ? "box-shadow:inset 0 0 0 2px var(--primary)" : ""}">${i === 1 ? `<span class="chip on">Recommandé pour vous</span>` : ""}<div class="headline" style="margin-top:8px">${n}</div><div class="small subtle">${a} par mois</div><div class="display" style="margin-top:8px">${p}<span class="small muted">/mois</span></div></div>`).join("")}</div>
+    <button class="btn primary">Commencer avec M — 9,99 €/mois</button><p class="small muted">Paiement par Stripe, rattaché à votre compte via RevenueCat. Un abonnement pris sur l'App Store ou Google Play se gère dans ce store. Résiliable à tout moment. Conditions · Confidentialité</p></div>`;
+}
+function loginBody(register = false) {
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px"><div class="card" style="width:min(400px,100%);padding:32px"><div class="row" style="margin-bottom:24px"><div class="icon-btn" style="background:var(--primary);color:var(--on-primary)">${icon("layers-outline")}</div><b class="headline">Deepn</b></div>
+    <h1 class="display">${register ? "Créer un compte" : "Bon retour"}</h1><p class="subtle" style="margin-top:4px">${register ? "Commencez votre bibliothèque de connaissances." : "Connectez-vous pour retrouver votre bibliothèque."}</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:16px"><button class="btn tonal">Continuer avec Google</button><button class="btn tonal">Se connecter avec Apple</button><div class="small muted" style="text-align:center">ou</div>
+    <label class="field"><input placeholder="vous@exemple.fr" aria-label="E-mail"></label><label class="field"><input type="password" placeholder="${register ? "Au moins 8 caractères" : "Votre mot de passe"}" aria-label="Mot de passe"></label>
+    <button class="btn primary" ${goAttr({ s: register ? "onboarding" : "home" })}>${register ? "Créer le compte" : "Se connecter"}</button></div>
+    <p class="small subtle" style="text-align:center;margin-top:16px">${register ? `Déjà un compte ? <a href="#" ${goAttr({ s: "login" })}>Se connecter</a>` : `Pas de compte ? <a href="#" ${goAttr({ s: "register" })}>Créer un compte</a>`}</p></div></div>`;
+}
+function onboardingBody() {
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px"><div class="card" style="width:min(480px,100%);padding:32px"><h1 class="display">Choisissez votre langue de lecture</h1><p class="subtle">Les contenus seront traduits dans cette langue si besoin.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:16px 0">${READING_LANGUAGES.map((l, i) => `<button class="frow ${i === 0 ? "on" : ""}">${l}</button>`).join("")}</div><button class="btn primary" style="width:100%" ${goAttr({ s: "home" })}>Continuer</button></div></div>`;
+}
+
+// ---------------------------------------------------------------- shared dialogs
+
+function modalShell(title, body, footer = "", { wide = false } = {}) {
+  return `<div class="scrim" ${goAttr({ modal: null })}><div class="modal" style="${wide ? "width:min(760px,calc(100vw - 32px))" : ""}" role="dialog" aria-modal="true" aria-label="${esc(title)}" onclick="event.stopPropagation()">
+    <header><h2 class="headline grow">${title}</h2><button class="icon-btn" aria-label="Fermer" ${goAttr({ modal: null })}>${icon("close")}</button></header><div class="body">${body}</div>${footer ? `<footer>${footer}</footer>` : ""}</div></div>`;
+}
+function addDialog() {
+  if (S.modal === "add2") return modalShell("Votre média est en cours d'enregistrement", `<p style="margin-top:0">L'import a commencé : vous pouvez fermer cette fenêtre. Voulez-vous aussi le ranger dans un dossier ?</p>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Non, le laisser dans Non classés</button><button class="btn primary" ${goAttr({ modal: "move", target: "m10" })}>Choisir un dossier</button>`);
+  return modalShell("Ajouter à votre bibliothèque", `
+    <label class="field" style="border-radius:var(--r-md)">${icon("link-outline", "s18")}<input placeholder="Coller un lien — article, vidéo, épisode de podcast" value="https://www.youtube.com/watch?v=…" aria-label="Lien"></label>
+    <p class="small muted" style="margin:6px 4px 16px">Le traitement commence dès l'ajout. Vous choisissez le dossier ensuite.</p>
+    <div style="border:2px dashed var(--outline-variant);border-radius:var(--r-lg);padding:24px;text-align:center">${icon("cloud-upload-outline", "s24")}<div class="label" style="margin-top:6px">Déposer des fichiers ici, ou <u>parcourir</u></div><div class="small muted">PDF, documents Office, images, fichiers audio · 1 fichier par import</div></div>
+    <p class="small muted" style="margin:12px 4px 0">Astuce : déposez un fichier n'importe où dans Deepn, ou collez un lien avec ⌘V hors d'un champ de saisie.</p>`,
+    `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary" ${goAttr({ modal: "add2" })}>Ajouter</button>`);
+}
+function sharedModal() {
+  const m = S.modal;
+  if (!m) return "";
+  if (m === "add" || m === "add2") return addDialog();
+  if (m === "move" || m === "pick") return DIR.destinationPicker();
+  if (m === "palette" && DIR.palette) return DIR.palette();
+  if (m === "rename") return modalShell("Renommer ce dossier", `<label class="field" style="border-radius:var(--r-md)"><input value="${esc(curFolder().name)}" aria-label="Nom du dossier"></label><p class="small muted">255 caractères au plus.</p>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary">Enregistrer</button>`);
+  if (m === "newfolder") return modalShell("Nouveau dossier", `<div class="small muted" style="margin-bottom:6px">Dans : ${esc(S.f ? pathText(curFolder()) : "Bibliothèque (racine)")}</div><label class="field" style="border-radius:var(--r-md)"><input placeholder="Nom du dossier" aria-label="Nom du dossier"></label>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary">Créer</button>`);
+  if (m === "delete") { const f = curFolder(); const n = descendantCount(f); return modalShell("Supprimer ce dossier ?", `<p style="margin-top:0">« ${esc(f.name)} » sera supprimé. Toutes ses sources vont dans Non classés — aucune n'est supprimée.${n ? ` Ses ${n} sous-dossiers sont supprimés aussi, et leurs sources vont dans Non classés.` : ""}</p>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn danger">Supprimer</button>`); }
+  if (m === "renamemedia") return modalShell("Renommer cette source", `<label class="field" style="border-radius:var(--r-md)"><input value="${esc(curMedia().title)}" aria-label="Nom de la source"></label>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary">Enregistrer</button>`);
+  if (m === "deletemedia") return modalShell("Supprimer cette source ?", `<p style="margin-top:0">« ${esc(curMedia().title)} » sera retirée de votre bibliothèque. Cette action est irréversible.</p>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn danger">Supprimer</button>`);
+  if (m === "signout") return modalShell("Se déconnecter ?", `<p style="margin-top:0">Vous serez déconnecté de ce navigateur. Les autres appareils restent connectés.</p>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary" ${goAttr({ s: "login", modal: null })}>Oui, me déconnecter</button>`);
+  if (m === "bug") return modalShell("Signaler un bug", `<label class="small subtle">Sujet</label><label class="field" style="border-radius:var(--r-md);margin:4px 0 12px"><input placeholder="Résumé du problème"></label><label class="small subtle">Description</label><textarea style="width:100%;min-height:120px;border:0;border-radius:var(--r-md);background:var(--surface-container);padding:12px;margin-top:4px" placeholder="Étapes, ce que vous attendiez, ce qui s'est passé…"></textarea><div class="row" style="margin-top:12px"><button class="btn tonal">${icon("cloud-upload-outline", "s16")} Joindre un fichier</button><span class="small muted">Image, vidéo, PDF ou ZIP — 25 Mo au plus</span></div>`, `<button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary">Envoyer</button>`);
+  return "";
+}
+function contextMenu() {
+  if (!UI.menu) return "";
+  const { kind, x, y } = UI.menu;
+  const rows = kind === "media"
+    ? [["folder-outline", "Ranger dans un dossier…", { modal: "move", target: UI.menu.id }], ["create-outline", "Renommer", { modal: "renamemedia", m: UI.menu.id }], ["trash-outline", "Supprimer", { modal: "deletemedia", m: UI.menu.id }, true]]
+    : [["create-outline", "Renommer", { modal: "rename", f: UI.menu.id }], ["swap-horizontal-outline", "Déplacer le dossier…", { modal: "move", target: "folder:" + UI.menu.id }], ["add", "Nouveau sous-dossier", { modal: "newfolder", f: UI.menu.id }], [UI.pins.has(UI.menu.id) ? "pin" : "pin-outline", UI.pins.has(UI.menu.id) ? "Désépingler" : "Épingler", null], ["trash-outline", "Supprimer", { modal: "delete", f: UI.menu.id }, true]];
+  return `<div class="menu" style="left:${x}px;top:${y}px" role="menu">${rows.map(([ic, l, p, d]) => `<button role="menuitem" class="${d ? "danger" : ""}" ${p ? goAttr(p) : `data-act="pin:${UI.menu.id}"`}>${icon(ic, "s18")}${l}</button>`).join("")}</div>`;
+}
+function toast() {
+  return S.toast ? `<div class="toast">${esc(S.toast)}<button style="color:var(--primary);font-weight:600" ${goAttr({ toast: null })}>Annuler</button></div>` : "";
+}
+
+// ---------------------------------------------------------------- walkthrough index
+
+function walkthroughs() {
+  const c = C();
+  const mem = c.memory, leaf = c.leafMemory || mem;
+  const L = (label, patch) => `<a href="${hashOf({ ...DEFAULTS, ...patch })}">${label}</a>`;
+  return `<div id="walk"><button data-act="walk">Parcours de la maquette</button>${UI.walk ? `<div class="panel" onclick="event.stopPropagation()">
+    <h4>Corpus</h4>${L("Petite bibliothèque (7 dossiers)", { s: "library", corpus: "small" })}${L("Référence : 295 dossiers, 3 niveaux, homonymes", { s: "library" })}${L("1 018 dossiers", { s: "library", corpus: "xl" })}
+    <h4>Dossiers</h4>${L("Retrouver « Notes de lecture » peu utilisé (homonyme)", { s: "library", q: "notes lecture" })}${L("Dossier actif et son chemin", { s: "folder", f: leaf.id, tab: "sources" })}${L("Choisir une destination (déplacer)", { s: "media", m: "m11", modal: "move", target: "m11" })}${L("Créer un dossier", { s: "folder", f: mem.id, tab: "sources", modal: "newfolder" })}${L("Renommer un dossier", { s: "folder", f: mem.id, tab: "sources", modal: "rename" })}${L("Supprimer un dossier", { s: "folder", f: mem.id, tab: "sources", modal: "delete" })}${DIR.extraWalks ? DIR.extraWalks(L) : ""}
+    <h4>Chat (portées média et dossier)</h4>${L("Média · composeur au repos (Lecture)", { s: "media", m: "m1", tab: "reader" })}${L("Média · envoi", { s: "media", m: "m1", tab: "reader", chat: "open", cs: "sending" })}${L("Média · réponse en streaming", { s: "media", m: "m1", tab: "reader", chat: "open", cs: "streaming" })}${L("Média · arrêt volontaire", { s: "media", m: "m1", tab: "reader", chat: "open", cs: "stopped" })}${L("Média · échec partiel", { s: "media", m: "m1", tab: "reader", chat: "open", cs: "failed" })}${L("Média · reprise après rechargement", { s: "media", m: "m1", tab: "reader", chat: "open", cs: "resuming" })}${L("Média · historique des conversations", { s: "media", m: "m1", tab: "reader", chat: "open", cs: "history" })}${L("Dossier · conversation (Sources)", { s: "folder", f: mem.id, tab: "sources", chat: "open", cs: "streaming" })}${L("Dossier · plafond de contexte refusé", { s: "folder", f: c.roots[0].id, tab: "sources", chat: "open", cs: "refused" })}${L("Dossier · minutes épuisées", { s: "folder", f: mem.id, tab: "sources", chat: "open", cs: "quota" })}${L("Onglet IA : pas de composeur", { s: "media", m: "m1", tab: "ai" })}
+    <h4>Média</h4>${L("Lecture : L'essentiel, texte, traduction", { s: "media", m: "m1", tab: "reader" })}${L("IA : générer, historique", { s: "media", m: "m1", tab: "ai" })}${L("Artefact : résumé", { s: "artifact", art: "summaryShort" })}${L("Artefact : flashcards", { s: "artifact", art: "flashcards" })}${L("Artefact : quiz", { s: "artifact", art: "quiz" })}${L("En cours de traitement", { s: "media", m: "m10", tab: "reader" })}${L("Échec + demander la source", { s: "media", m: "m12", tab: "reader" })}${L("Renommer la source", { s: "media", m: "m1", modal: "renamemedia" })}${L("Supprimer la source", { s: "media", m: "m1", modal: "deletemedia" })}
+    <h4>Dossier</h4>${L("Sources (sous-dossiers puis médias)", { s: "folder", f: mem.id, tab: "sources" })}${L("IA du dossier", { s: "folder", f: mem.id, tab: "ai" })}${L("Non classés", { s: "folder", f: "f0", tab: "sources" })}
+    <h4>Autres</h4>${L("Accueil", { s: "home" })}${L("Ajouter (lien, fichier)", { s: "home", modal: "add" })}${L("Ajouter → ranger ?", { s: "home", modal: "add2" })}${L("Tri des non classés", { s: "unsorted", pos: "1" })}${L("Digest quotidien", { s: "digest" })}${L("Digest hebdomadaire", { s: "digest", dp: "weekly", dpos: "2" })}${L("Recherche plein texte", { s: "search", sq: "pause" })}${L("Compte (bêta)", { s: "account" })}${L("Compte (après la bêta)", { s: "account", beta: "0" })}${L("Abonnement web (après la bêta)", { s: "paywall", beta: "0" })}${L("Langue de lecture", { s: "settings", sub: "reading" })}${L("Langue de l'app", { s: "settings", sub: "ui" })}${L("Thème", { s: "settings", sub: "theme" })}${L("Extension : relier ce navigateur", { s: "settings", sub: "extension" })}${L("Signaler un bug", { s: "account", modal: "bug" })}${L("Se déconnecter", { s: "account", modal: "signout" })}${L("Supprimer le compte", { s: "settings", sub: "delete" })}${L("Connexion", { s: "login" })}${L("Inscription", { s: "register" })}${L("Langue à l'inscription", { s: "onboarding" })}${L("Thème sombre", { s: "media", m: "m1", tab: "reader", theme: "dark" })}
+  </div>` : ""}</div>`;
+}
+ACTS.walk = () => { UI.walk = !UI.walk; render(); };
+
+// ---------------------------------------------------------------- render
+
+function render() {
+  document.documentElement.dataset.theme = S.theme === "dark" ? "dark" : "light";
+  document.body.classList.toggle("shot", S.shot === "1");
+  let html;
+  if (S.s === "login") html = loginBody(false);
+  else if (S.s === "register") html = loginBody(true);
+  else if (S.s === "onboarding") html = onboardingBody();
+  else html = DIR.shell();
+  $("#app").innerHTML = html + sharedModal() + contextMenu() + toast() + walkthroughs();
+  DIR.after?.();
+  // A conversation opens on its latest message, where the state of the answer is.
+  document.querySelectorAll(".thread").forEach((th) => { const sc = th.closest(".scroll"); if (sc) sc.scrollTop = sc.scrollHeight; });
+}
+function boot() {
+  document.body.insertAdjacentHTML("afterbegin", ICON_SPRITE);
+  S = parseHash();
+  // Expand the branch of the active folder, the way every direction reveals it.
+  const f = C().byId.get(S.f);
+  if (f) folderPath(C(), f).forEach((p) => UI.expanded.add(p.id));
+  render();
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); go({ modal: DIR.palette ? "palette" : "pick" }); }
+    if (e.key === "Escape" && S.modal) go({ modal: null });
+    DIR.onKey?.(e);
+  });
+}
+
+// Direction A — « L'arbre latéral ». The hierarchy is always on screen: a filterable
+// tree in a left rail, the content in the middle, the conversation in a right pane.
+// Reference: the sidebar of file managers and note apps (Finder, VS Code, Notion,
+// Obsidian); keyboard model: WAI-ARIA treeview.
+
+const DIR = {
+  id: "a",
+  name: "L'arbre latéral",
+  shell() {
+    const scope = chatScope();
+    const chatOpen = scope && S.chat === "open";
+    return `<div class="A ${chatOpen ? "with-chat" : ""} ${S.drawer === "1" ? "drawer" : ""}">
+      ${sidebar()}
+      <div class="A-scrim" ${goAttr({ drawer: null })}></div>
+      <main class="A-main">${topbar()}<div class="A-content scroll" id="content">${content()}</div>${scope ? `<div class="A-composer">${composer(scope)}</div>` : ""}</main>
+      ${chatOpen ? `<aside class="A-chat" aria-label="Discussion">${chatHeader(scope)}<div class="scroll grow" style="margin-top:12px">${thread(scope)}</div><div class="small muted" style="margin-top:8px">${icon("return-down-forward-outline", "s14")} Les citations surlignent le passage ou ouvrent la source.</div></aside>` : ""}
+    </div>`;
+  },
+  destinationPicker() {
+    const q = S.pq || "";
+    const target = S.target || "";
+    const isFolder = target.startsWith("folder:");
+    const hits = q ? searchFolders(C(), q, 40) : null;
+    const sel = C().byId.get(S.dest) || C().leafMemory || C().memory;
+    const body = `<label class="field">${icon("search-outline", "s18")}<input value="${esc(q)}" placeholder="Filtrer les dossiers" aria-label="Filtrer les dossiers"></label>
+      ${q ? `<div class="small muted" style="margin:8px 4px">${hits.length} dossiers correspondent · le chemin départage les homonymes</div>${hits.slice(0, 9).map((f) => `<button class="frow ${f === sel ? "on" : ""}" ${goAttr({ dest: f.id })}>${icon("folder-outline", "s18")}<span class="grow" style="min-width:0"><span class="ell" style="display:block">${hl(f.name, q)}</span><span class="path ell" style="display:block">${esc(parentHint(f))}</span></span></button>`).join("")}`
+      : `<div class="caps" style="margin:12px 4px 4px">Récents</div>${recentFolders(3).map((f) => `<button class="frow" ${goAttr({ dest: f.id })}>${icon("time-outline", "s18")}<span class="ell grow">${esc(f.name)}</span><span class="path ell" style="max-width:45%">${esc(parentHint(f))}</span></button>`).join("")}
+        <div class="caps" style="margin:12px 4px 4px">Tous les dossiers</div>${isFolder ? "" : `<button class="frow">${icon("file-tray-outline", "s18")}Non classés</button>`}${treeRows({ picker: true, sel })}`}
+      <button class="frow" style="margin-top:4px;color:var(--text-subtle)">${icon("add", "s18")} Nouveau dossier dans « ${esc(sel.name)} »</button>`;
+    return modalShell(isFolder ? "Déplacer le dossier vers…" : "Ranger dans un dossier", body,
+      `<div class="grow small subtle ell" style="align-self:center">Destination : <b>${esc(pathText(sel))}</b></div><button class="btn ghost" ${goAttr({ modal: null })}>Annuler</button><button class="btn primary" ${goAttr({ modal: null, toast: `Rangé dans « ${sel.name} »` })}>Ranger ici</button>`);
+  },
+  extraWalks: (L) => L("Panneau latéral replié sur mobile (tiroir)", { s: "folder", f: corpus("ref").memory.id, tab: "sources", drawer: "1" }) + L("Épingler / menu d'un dossier", { s: "library" }),
+  onKey(e) {
+    if (e.key === "/" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#treefilter")?.focus(); }
+  },
+  after() {
+    // Reveal the active folder in the full tree (the last match: pins and recents come first).
+    const on = [...document.querySelectorAll(".A-tree .frow.on")].pop();
+    if (on) on.scrollIntoView({ block: "center" });
+  },
+};
+UI.pins.add(corpus("ref").memory.id);
+
+function sidebar() {
+  const q = S.q || "";
+  const nav = (ic, label, patch, active, badge = "") => `<button class="frow ${active ? "on" : ""}" ${goAttr({ ...patch, drawer: null })}>${icon(ic, "s18")}<span class="grow">${label}</span>${badge}</button>`;
+  const pins = [...UI.pins].map((id) => C().byId.get(id)).filter(Boolean);
+  const hits = q ? searchFolders(C(), q, 400) : null;
+  return `<nav class="A-side" aria-label="Navigation">
+    <div class="row" style="padding:4px 4px 12px"><div class="icon-btn" style="background:var(--primary);color:var(--on-primary);width:32px;height:32px">${icon("layers-outline", "s18")}</div><b class="headline grow">Deepn</b>
+      <button class="btn primary" style="min-height:34px;padding:0 12px" ${goAttr({ modal: "add" })} title="Ajouter un lien ou un fichier">${icon("add", "s18")} Ajouter</button></div>
+    ${nav("home-outline", "Accueil", { s: "home" }, S.s === "home")}
+    ${nav("search-outline", "Recherche", { s: "search", sq: "pause" }, S.s === "search", `<span class="kbd">⌘K</span>`)}
+    ${nav("newspaper-outline", "Digest", { s: "digest" }, S.s === "digest")}
+    ${nav("file-tray-outline", "Non classés", { s: "folder", f: "f0", tab: "sources" }, S.f === "f0", `<span class="count">12</span>`)}
+    <div class="row" style="margin:16px 4px 6px"><span class="caps grow">Dossiers</span><span class="count">${C().folders.length}</span><button class="icon-btn" style="width:28px;height:28px" title="Nouveau dossier" aria-label="Nouveau dossier" ${goAttr({ modal: "newfolder", f: null })}>${icon("add", "s16")}</button></div>
+    <label class="field" style="min-height:36px;margin-bottom:8px">${icon("filter-outline", "s16")}<input id="treefilter" value="${esc(q)}" placeholder="Filtrer les dossiers" aria-label="Filtrer les dossiers" oninput="go({q:this.value||null},{replace:true});setTimeout(()=>{const i=document.getElementById('treefilter');i.focus();i.setSelectionRange(i.value.length,i.value.length)})">${q ? `<button ${goAttr({ q: null })} aria-label="Effacer le filtre">${icon("close", "s16")}</button>` : `<span class="kbd">/</span>`}</label>
+    <div class="A-tree scroll grow" role="tree" aria-label="Dossiers">
+      ${q ? `<div class="small muted" style="padding:2px 8px 6px">${hits.length} dossiers correspondent · branches ouvertes sur les résultats</div>${filteredTree(hits, q)}`
+        : `${pins.length ? `<div class="caps" style="padding:4px 8px">Épinglés</div>${pins.map((f) => treeRow(f, 0, { flat: true })).join("")}` : ""}
+           <div class="caps" style="padding:10px 8px 4px">Récents</div>${recentFolders(3).map((f) => treeRow(f, 0, { flat: true })).join("")}
+           <div class="caps" style="padding:10px 8px 4px">Tous</div>${treeRows({ sel: C().byId.get(S.f) })}`}
+    </div>
+    <div class="divider" style="margin:8px 0"></div>
+    ${nav("person-outline", "Compte", { s: "account" }, S.s === "account" || S.s === "settings")}
+  </nav>`;
+}
+function treeRow(f, depth, { flat = false, picker = false, sel = null, q = "" } = {}) {
+  const active = sel ? f === sel : f.id === S.f && (S.s === "folder");
+  const open = UI.expanded.has(f.id);
+  const kids = f.children.length;
+  const goto = picker ? { dest: f.id } : { s: "folder", f: f.id, tab: "sources", chat: "off", drawer: null };
+  return `<div class="frow tr ${active ? "on" : ""}" role="treeitem" aria-level="${depth + 1}" ${kids && !flat ? `aria-expanded="${open}"` : ""} style="padding-left:${4 + depth * 16}px" title="${esc(pathText(f))}">
+    ${kids && !flat ? `<button class="tw" data-act="toggle:${f.id}" aria-label="${open ? "Replier" : "Déplier"}">${icon(open ? "chevron-down" : "chevron-forward", "s14")}</button>` : `<span class="tw"></span>`}
+    <button class="row grow" style="min-width:0;height:34px" ${goAttr(goto)}>${icon(f.isDefault ? "file-tray-outline" : open && kids ? "folder-open-outline" : "folder-outline", "s16")}<span class="ell">${q ? hl(f.name, q) : esc(f.name)}</span>${flat && f.parent ? `<span class="path ell">${esc(C().byId.get(f.parent).name)}</span>` : ""}</button>
+    ${picker ? "" : `<span class="count" title="${f.count} sources">${f.count}</span><button class="tw more" data-act="menu:folder:${f.id}" aria-label="Actions du dossier">${icon("ellipsis-horizontal", "s14")}</button>`}
+  </div>`;
+}
+function treeRows(opts = {}, list = C().roots, depth = 0) {
+  return list.map((f) => treeRow(f, depth, opts) + (UI.expanded.has(f.id) ? treeRows(opts, f.children, depth + 1) : "")).join("");
+}
+// Matches plus their ancestors, expanded: the path is what tells two « Notes de lecture » apart.
+function filteredTree(hits, q) {
+  const keep = new Set();
+  for (const f of hits) folderPath(C(), f).forEach((p) => keep.add(p.id));
+  const walk = (list, depth) => list.filter((f) => keep.has(f.id)).map((f) => treeRow(f, depth, { q }) + walk(f.children, depth + 1)).join("");
+  // Under a filter every kept branch reads open.
+  keep.forEach((id) => UI.expanded.add(id));
+  return walk(C().roots, 0);
+}
+function topbar() {
+  let left = "";
+  if (S.s === "folder" && S.f !== "f0") left = crumbs(curFolder(), { onlyParents: true });
+  else if (S.s === "media") { const f = curMedia().folder ? C().memory : C().unsorted; left = crumbs(f); }
+  else if (S.s === "artifact") left = `<button class="btn ghost" onclick="history.back()">${icon("chevron-back", "s16")} Retour</button>`;
+  return `<header class="A-top"><button class="icon-btn A-burger" aria-label="Ouvrir la navigation" ${goAttr({ drawer: "1" })}>${icon("menu-outline")}</button><div class="grow" style="min-width:0">${left}</div>
+    <button class="icon-btn" title="Thème" aria-label="Changer de thème" data-act="theme">${icon(S.theme === "dark" ? "sunny-outline" : "moon-outline", "s18")}</button></header>`;
+}
+function content() {
+  switch (S.s) {
+    case "home": return `<h1 class="display" style="margin-bottom:20px">Accueil</h1>${homeBody()}`;
+    case "library": return libraryOverview();
+    case "folder": return folderPage();
+    case "media": return mediaPage();
+    case "artifact": return artifactView(S.art);
+    case "digest": return `<h1 class="display" style="margin-bottom:16px">Digest</h1>${digestBody()}`;
+    case "search": return `<label class="field" style="max-width:640px;margin-bottom:16px;min-height:48px">${icon("search-outline")}<input value="${esc(S.sq || "")}" placeholder="Rechercher dans votre bibliothèque" aria-label="Rechercher"></label>${searchBody()}`;
+    case "unsorted": return unsortedBody();
+    case "account": return accountBody();
+    case "settings": return `<div style="max-width:640px">${settingsBody()}</div>`;
+    case "paywall": return paywallBody();
+  }
+  return "";
+}
+function libraryOverview() {
+  return `<h1 class="display">Bibliothèque</h1><p class="subtle" style="margin:4px 0 16px">${C().folders.length} dossiers · tous les médias, du plus récent au plus ancien. Choisissez un dossier dans l'arbre, ou filtrez-le avec <span class="kbd">/</span>.</p>
+    <div class="row" style="margin-bottom:8px"><span class="caps grow">Tous les médias</span><span class="small muted">Trié par date d'ajout</span></div>
+    <div style="max-width:880px">${MEDIA.map((m) => mediaRow(m)).join("")}</div>`;
+}
+function folderHead(f) {
+  const isDefault = f.isDefault;
+  const t = S.tab || "sources";
+  return `<div class="row" style="align-items:flex-start;margin:4px 0 12px"><div class="grow" style="min-width:0"><h1 class="display" style="overflow-wrap:anywhere">${esc(f.name)}</h1>
+      <div class="small muted">${f.count} sources${f.children.length ? ` · ${f.children.length} sous-dossiers` : ""}${homonymCount(C(), f) > 1 ? ` · ${homonymCount(C(), f) - 1} autres dossiers portent ce nom` : ""}</div></div>
+      ${isDefault ? "" : `<button class="icon-btn" data-act="pin:${f.id}" title="${UI.pins.has(f.id) ? "Désépingler" : "Épingler"}" aria-label="Épingler">${icon(UI.pins.has(f.id) ? "pin" : "pin-outline", "s18")}</button><button class="icon-btn" data-act="menu:folder:${f.id}" aria-label="Actions pour ce dossier">${icon("ellipsis-horizontal")}</button>`}</div>
+    <div class="seg" role="tablist" style="margin-bottom:16px"><button class="${t === "sources" ? "on" : ""}" ${goAttr({ tab: "sources" })}>${icon("layers-outline", "s16")} Sources</button><button class="${t === "ai" ? "on" : ""}" ${goAttr({ tab: "ai", chat: "off" })}>${icon("sparkles-outline", "s16")} IA</button></div>`;
+}
+function folderPage() {
+  const f = S.f === "f0" ? C().unsorted : curFolder();
+  if ((S.tab || "sources") === "ai") return folderHead(f) + `<div style="max-width:880px">${aiPanel("folder")}</div>`;
+  const src = sourcesOf(C(), f);
+  return folderHead(f) + `<div style="max-width:880px">
+    ${f.children.length ? `<div class="caps" style="margin-bottom:6px">Dossiers</div><div class="A-sub">${f.children.map((c) => `<button class="card" style="padding:12px;text-align:left;display:flex;gap:10px;align-items:center" ${goAttr({ s: "folder", f: c.id, tab: "sources" })} title="${esc(c.name)}">${icon("folder-outline", "s24")}<span class="grow" style="min-width:0"><span class="label clamp2">${esc(c.name)}</span><span class="small muted">${c.count} sources${c.children.length ? ` · ${c.children.length} dossiers` : ""}</span></span></button>`).join("")}</div><div class="caps" style="margin:16px 0 6px">Sources · ${src.length}</div>` : ""}
+    ${src.length ? src.map((m) => mediaRow(m)).join("") : `<div class="muted" style="padding:24px 0">Ce dossier est vide. Les médias que vous y rangez apparaîtront ici.</div>`}</div>`;
+}
+function mediaPage() {
+  const m = curMedia();
+  const t = S.tab || "reader";
+  const state = mediaStateBody(m);
+  return `<div style="max-width:760px;margin:0 auto">${mediaHero(m)}<div style="margin:12px 0 16px">${metaLine(m)}</div>${mediaTabs(m)}
+    <div style="margin-top:16px">${state || (t === "ai" ? aiPanel("media") : previewBlock() + readerText({ cited: S.chat === "open" ? [2, 3] : [] }))}</div></div>`;
+}
+
+boot();
+</script>
+</body>
+</html>

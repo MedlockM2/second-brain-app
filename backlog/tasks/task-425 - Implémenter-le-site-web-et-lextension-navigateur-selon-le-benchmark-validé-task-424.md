@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-04 16:22'
-updated_date: '2026-10-04 17:50'
+updated_date: '2026-10-10 14:09'
 labels:
   - feature
   - web
@@ -35,7 +35,7 @@ L'hébergement du site suit le README task-424. Si **task-357** (pages légales)
 ## Notes pour l'owner (non vérifiables par l'agent)
 
 - **Publication** : la soumission au Chrome Web Store, à Firefox Add-ons, et à Safari si retenu, ainsi que la mise en ligne du site, se font par l'owner, après le merge.
-- **Nom marketing** : une fiche de store et un domaine portent le nom du produit, encore provisoire (task-186). Publier sous « Media Summarizer » puis renommer coûte une nouvelle soumission.
+- **Nom marketing** : le nom définitif est **Deepn** (décision owner du 2026-10-10, `docs/BRAND_IDENTITY.md`). Utiliser Deepn sur le site et les fiches d’extension. Le rebrand mobile reste à appliquer (task-186) ; aucun achat de domaine n’est attesté par ce choix.
 - **Stripe** : créer le compte Stripe, activer le mode live, configurer la TVA et, si l'option RevenueCat est retenue, connecter Stripe à RevenueCat, sont des actions de l'owner. Le développement se fait en mode test, avec des clés lues depuis Secrets Manager, jamais commitées (le dépôt est public).
 - **Test manuel** : charger l'extension non empaquetée dans Chrome contre l'API `-dev`, enregistrer une page, et vérifier qu'elle apparaît dans l'app mobile. Les changements backend, s'il y en a, ne sont actifs qu'après le déploiement par push sur `main`.
 <!-- SECTION:DESCRIPTION:END -->

@@ -1,0 +1,38 @@
+/* Direction D — icon rail, facets, list, reading pane. */
+.D { display: grid; grid-template-columns: 76px 264px 420px minmax(0, 1fr); height: 100vh; }
+.D:has(> .D-page) { grid-template-columns: 76px minmax(0, 1fr); }
+.D-rail { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; background: var(--surface-container-low); box-shadow: 1px 0 0 var(--outline-variant); }
+.D-ri { position: relative; width: 64px; padding: 6px 0; border-radius: var(--r-lg); display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; color: var(--text-subtle); }
+.D-ri.on { background: var(--surface-container-high); color: var(--text-main); }
+.D-ri.on .ico { color: var(--text-main); }
+.D-badge { position: absolute; top: 2px; right: 10px; font-style: normal; font-size: 10px; background: var(--primary); color: var(--on-primary); border-radius: var(--r-full); padding: 0 5px; }
+.D-add { width: 48px; height: 48px; border-radius: 16px; background: var(--primary); color: var(--on-primary); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; box-shadow: var(--shadow); }
+.D-facets { padding: 16px 14px 24px; background: var(--surface-container-low); min-height: 0; }
+.D-facets .menu button { align-items: flex-start; }
+.D-on { background: var(--surface-container); }
+.D-sel { display: flex; gap: 6px; align-items: center; margin-top: 8px; padding: 8px 6px 8px 12px; border-radius: var(--r-md); background: var(--primary-tint); box-shadow: inset 4px 0 0 var(--primary); }
+.D-list { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--background); box-shadow: 1px 0 0 var(--outline-variant); }
+.D-listhead { padding: 16px 16px 4px; }
+.D-pane { position: relative; display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
+.D-empty { align-items: center; justify-content: center; color: var(--text-muted); }
+.D-conv { padding: 16px 24px 24px; }
+.D-composer { position: absolute; left: 12px; right: 12px; bottom: 12px; }
+.D-reader .D-composer { left: 24px; right: 24px; bottom: 16px; }
+.D-sheet { position: absolute; left: 0; right: 0; bottom: 0; height: 62%; display: flex; flex-direction: column; padding: 10px 24px 96px; background: var(--surface); border-radius: 20px 20px 0 0; box-shadow: 0 -12px 32px rgba(43, 45, 66, 0.12); }
+.D-page { min-height: 0; }
+.D-mfilter { display: none; }
+.D-pick { position: fixed; right: 40px; top: 70px; width: 380px; }
+.D-pick button { align-items: flex-start; }
+@media (max-width: 1200px) { .D { grid-template-columns: 76px 240px 360px minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .D, .D:has(> .D-page) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) 64px; }
+  .D-rail { order: 2; flex-direction: row; justify-content: space-around; padding: 4px; }
+  .D-rail > .icon-btn, .D-rail > .grow, .D-theme, .D-mhide { display: none; }
+  .D-ri { width: auto; flex: 1; }
+  .D-mfilter { display: flex; gap: 8px; margin-bottom: 10px; overflow-x: auto; }
+  .D-add { margin: 0; width: 44px; height: 44px; }
+  .D-facets { display: none; }
+  .D-pane { display: none; }
+  .D-listhead { padding: 12px 16px 4px; }
+  .D-pick { right: 8px; left: 8px; width: auto; }
+}

@@ -2,964 +2,639 @@
 owner_decision: pending   # pending | ok | abandoned | redo | more
 ---
 
-# Benchmark : l'app web du second cerveau, le site public qui l'entoure, et l'extension navigateur
+# Benchmark : l'app web connectée de Deepn — cinq directions, la bibliothèque à 200 dossiers et plus, le chat
 
 ## Owner Validation
 
-**Decision**:
-
-**Validated at**:
+**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
+**Validated at**: _(date ISO à remplir par l'owner)_
 
 ---
 
 ## Recommendation
 
-**Une app web React, pure SPA, servie sur une origine à elle (`app.<domaine>`), qui partage avec `mobile/` ses 14 455 lignes de logique sans partager une seule ligne de composant. Une session de navigateur portée par un cookie `HttpOnly` de rafraîchissement, avec plafond absolu, parce que le modèle actuel du dépôt — un refresh glissant d'un an sans plafond — est exactement ce que la RFC 10017 interdit à un client navigateur. Le site public reste Astro, statique, sur `www.<domaine>`. Et la parité avec le mobile est la destination, pas le premier lot : on livre la lecture d'abord, en quatre lots, parce qu'une des six surfaces que l'owner a listées — l'abonnement — est de toute façon interdite d'affichage par task-429. Proposition de design retenue : la direction A, « Le classeur ».**
+**Direction A, « L'arbre latéral », avec la palette ⌘K de la direction C greffée dessus.** C'est l'app web en trois volets : l'arbre des dossiers à gauche (filtrable, épinglés et récents en tête), la page ouverte au centre, la conversation à droite quand on l'ouvre.
 
-En une ligne par dimension, avec le fait qui tranche :
+**Repli : C, « La barre de saut »**, si l'owner préfère une page de lecture pleine largeur à une hiérarchie toujours visible.
 
-| Dimension | Décision recommandée | Le fait qui tranche |
+Le fait qui tranche est le critère que la décision du 2026-10-10 déclare majeur : **une bibliothèque agréable avec beaucoup de dossiers**. La §5 rejoue les six parcours exigés sur le même corpus de 295 dossiers. **A est la seule direction qui les réussit tous dans la même surface, sans changer de mode** :
+
+- retrouver un dossier peu utilisé (filtre `/` qui garde les ancêtres visibles) ;
+- voir le dossier actif et son chemin (surligné dans l'arbre, et fil d'Ariane) ;
+- passer d'un dossier à l'autre sans perdre sa place (l'arbre ne bouge pas quand le centre change) ;
+- créer ou renommer sur place ;
+- choisir une destination (le même arbre, dans le sélecteur).
+
+Les quatre autres directions ont chacune un parcours où il faut changer de surface :
+
+- **B** perd la vue en colonnes dès qu'on ouvre un média.
+- **C** demande de se souvenir d'un nom, ou de passer par l'index.
+- **D** sépare la structure dans un dialogue « Gérer les dossiers ».
+- **E** demande d'ouvrir un onglet pour chaque endroit.
+
+**Ce que la palette de C ajoute à A, et pourquoi elle est nécessaire.** À 1 000 dossiers (§5.3), un arbre, même filtré, reste un outil de parcours. Retrouver un dossier dont on se souvient du nom va plus vite par recherche que par arbre. La palette (⌘K) cherche dans les dossiers, les médias et les actions. Elle affiche le **parent immédiat en premier**, ce qui départage les 20 « Notes de lecture » du corpus. Elle ne coûte qu'un composant, déjà dessiné dans C (`screen-palette.png`).
+
+**Le chat suit exactement la Decision de task-434** dans les cinq directions :
+
+- le composeur persistant n'existe que dans **Lecture** d'un média et dans **Sources** d'un dossier ;
+- il n'y a aucune portée bibliothèque ;
+- l'onglet IA, le digest, l'accueil et la recherche n'ont aucun composeur.
+
+Sur bureau, A ouvre la conversation dans un **volet droit** : le texte reste lisible à côté, et les citations `§n` surlignent le paragraphe cité. Les états de task-430 sont dessinés et adressables : envoi, flux, arrêt volontaire, échec partiel, reprise après rechargement, refus de contexte et minutes épuisées (§6).
+
+**Ce que cette passe change dans le chiffrage technique de la passe du 2026-10-10.** Stack, hébergement, session et partage de code sont **repris** (§9). Trois ajouts viennent du chat et des dossiers :
+
+1. **Un deuxième CORS.** Le flux SSE passe par une **API Gateway REST dédiée en mode `STREAM`** (Decision de task-430 §5). C'est une seconde façade, avec son propre traitement CORS.
+2. **Le flux s'authentifie par `fetch`, pas par `EventSource`.** `EventSource` ne peut pas envoyer d'en-tête `Authorization`. Le client web lit donc le flux par `fetch` + `ReadableStream`, avec le jeton d'accès en mémoire.
+3. **Un lot de plus, WC, pour le chat web**, dépendant du backend du chat (découpage de task-431) et de task-439. Le total passe de 33 à 50 j à **42 à 63 j** pour la parité complète, extension Chrome comprise (§10).
+
+### Ce qui est déjà acté, et ce que ce README recommande
+
+| | Statut | Où |
 |---|---|---|
-| **Nature du livrable** | **Deux applications sur deux origines** : `www.<domaine>` statique (vitrine, pages légales, page d'installation de l'extension), `app.<domaine>` application connectée. L'API reste `api.<domaine>`. | La RFC 10017 §9.4 : « deploy one application per origin to leverage [browser] protections ». Et Astro écrit lui-même que les frameworks d'application excellent sur « logged-in admin dashboards, inboxes », là où lui vise « content-driven websites ». Deux outils, deux jobs, un seul domaine. §3 |
-| **Stack de l'app web** | **Vite 8 + React 19 + React Router 8 en mode framework avec `ssr: false`** (SPA pré-rendue au build). Aucun serveur de rendu. | C'est la seule stack qui (a) ne demande aucun runtime serveur à opérer, (b) parle le même React que `mobile/`, donc rien de neuf à apprendre, et (c) est documentée pour l'hébergement statique : « deploy the `build/client` directory to whatever static host you prefer ». §3.2 |
-| **Stack du site public** | **Astro, inchangé.** La recommandation de la passe 1 tient : le texte légal reste la version `.md` du dépôt. | Le site public n'est pas devenu une app : il reste 6 pages de contenu. §3.4 |
-| **React Native Web** | **Rejeté**, et ce n'est pas un rejet de principe : `react-native-web` 0.21.3 est vivant (2026-09-25) et Expo SDK 55 a bien une cible web. | Les 22 901 lignes de `mobile/app` + `mobile/src/components` sont des **mises en page de téléphone** : barre d'onglets basse, colonne unique, feuilles modales. Une app web de bureau ne les réutilise pas, elle les remplace. RNW ferait donc payer le coût d'un second bundler, de 7 dépendances natives à remplacer et d'une couche d'abstraction, pour réutiliser du code qu'on jette. §3.3 |
-| **Partage de code avec `mobile/`** | **Oui, et c'est le changement majeur par rapport à la passe 1.** 14 455 lignes sont déjà platform-free et directement importables ; 2 339 de plus le deviennent avec un adaptateur mince. Pas de `packages/` au lot 1 : l'app web **importe** `mobile/src/{types,lib,services,i18n,constants}` par un alias Vite. | Mesure, pas opinion : sur 44 202 lignes de TS/TSX dans `mobile/`, seuls 13 fichiers sur 85 dans ces cinq dossiers importent `react-native` ou un module `expo-*`. §4 |
-| **Authentification** | **Cookie `HttpOnly` de rafraîchissement posé par l'API + access token en mémoire seulement** (jamais `localStorage`). Plus deux obligations backend nouvelles : un **plafond absolu** et une **expiration par inactivité** sur les lignées de type navigateur. | RFC 10017 §6.3.2.3 : un serveur « MUST NOT, upon issuing a rotated refresh token, extend the lifetime of the new refresh token beyond the lifetime of the initial refresh token ». Le dépôt fait littéralement l'inverse : « chaque /refresh repose expires_at à now + 1 an » (`docs/AUTHENTICATION_SETUP.md`). §6 |
-| **CORS** | **Deux endroits à changer, et le premier n'est pas celui que la passe 1 avait identifié** : `cors_configuration` de l'API Gateway (`infrastructure/terraform/modules/platform/lambda_api.tf:138-144`, `allow_credentials = false` aujourd'hui) **puis** `CORS_ORIGINS`. | AWS, verbatim : « **If you configure CORS for an API, API Gateway ignores CORS headers returned from your backend integration.** » Le `CORSMiddleware` de FastAPI est donc inerte sur l'API déployée. §1.1 |
-| **Hébergement** | **Cloudflare Workers static assets**, deux projets (un par origine), sur le domaine de task-357. | « Requests to static assets are free and unlimited », `not_found_handling = "single-page-application"` est documenté pour exactement ce cas, et 20 000 fichiers / 25 MiB par fichier sur l'offre gratuite. §5 |
-| **Parité ou lecture d'abord** | **Lecture d'abord, en 4 lots, parité comme destination déclarée.** Chiffrage : 20 à 35 jours pour l'app en lecture, 32 à 50 jours pour la parité d'un coup, et **8 à 15 % de surcoût** pour rattraper l'écriture ensuite. | La parité au premier lot n'est **pas disponible** : l'abonnement, l'une des six surfaces listées, doit être masqué pendant la beta (task-429, `Done`, trois mois, date de début non fixée). On ne peut pas livrer en lot 1 un écran qu'aucun utilisateur n'a le droit de voir. §7 |
-| **L'extension** | **Reprise telle quelle de la passe 1** (WXT, Chrome Web Store d'abord, capture URL + texte + sélection, `activeTab`), avec **un seul point que la décision de l'app web déplace** : c'est désormais l'app web, et non l'app mobile, qui peut délivrer l'appairage. L'écran mobile « Relier un navigateur » sort du chemin critique. §10 |
-| **Paiement** | **Repris tel quel** : Stripe Billing branché sur RevenueCat, jamais en direct, `SubscriptionPlatform.web`, Stripe Tax, Managed Payments en repli. Dernier lot. | Revérifié le 2026-10-06 : RevenueCat écrit toujours « there are no additional RevenueCat fees to support subscriptions and purchases on the web », et l'intégration Stripe Billing laisse produits, portail et TVA chez Stripe. §11 |
-| **Design** | **Direction A, « Le classeur »** (trois volets), avec un emprunt à B (la marge d'artefacts) et un à D (la palette de commandes). | C'est la seule des quatre dont la coquille sert **les trois surfaces** — bibliothèque, fiche media, digest — sans nouvelle mise en page, donc la seule où le lot 2 ne redessine pas ce que le lot 1 a dessiné. §12 |
+| Une app web connectée, pas une vitrine | **acté** (rejet du 2026-10-05) | §0 |
+| Chat à portée média (Lecture) et dossier (Sources), pas de bibliothèque | **acté** (task-434) | §6 |
+| Architecture du chat, SSE reprenable, `gpt-6-luna` Standard | **acté** (task-430, task-439) | §6.3 |
+| Nom Deepn | **acté** (`docs/BRAND_IDENTITY.md`) | toutes les maquettes |
+| Extension WXT, Stripe via RevenueCat, hébergement Cloudflare de task-357 | **repris** des passes précédentes, rien ne les remet en cause | §11 |
+| Direction A + palette de C | **recommandé** | §8 |
+| Lots W0–W4, WC, X1–X3 | **recommandé** | §10 |
 
-### Les lots, et pourquoi dans cet ordre
+---
+
+## 0. Mode redo : ce que cette passe intègre
+
+Le README actif portait `owner_decision: redo`. Il a été archivé en `README.owner-rejected-2026-10-10.md`, conformément au workflow. Deux rejets s'appliquent : les consignes du 2026-10-05 restent en vigueur quand celles du 2026-10-10 ne les remplacent pas.
+
+| Consigne | Origine | Comment cette passe y répond |
+|---|---|---|
+| L'app web est le périmètre ; ne pas rouvrir « vitrine ou app » | 2026-10-05 | Rien n'est rouvert. Les cinq maquettes sont des écrans **connectés** ; la vitrine, les pages légales et l'installation de l'extension restent étudiées (§9.5, §11). |
+| Maquettes sous `mobile-design-mockups/web_app/direction_<x>_<slug>/`, rendu desktop de référence, Amber Clarity | 2026-10-05 | Fait. Les quatre anciens répertoires sont supprimés : il n'existe plus qu'un jeu actif de cinq directions. |
+| **Exactement cinq** directions A–E, distinctes par leur structure et leurs parcours | 2026-10-10 §1 | §4. Hiérarchie toujours visible (A) ; hiérarchie disposée en chemin (B) ; rappel par recherche sans hiérarchie visible (C) ; contenu d'abord, dossier comme filtre (D) ; espace de travail à onglets avec sommaire (E). |
+| Intégrer le chat selon la **Decision** de task-434 (direction F, média/Lecture et dossier/Sources), pas sa Recommendation D | 2026-10-10 §2 | §6. Aucune direction n'a de portée bibliothèque ni de composeur hors de ces deux onglets. |
+| Inventaire refait depuis le code, matrice fonctionnalité → source → web → A..E → lot | 2026-10-10 §3 | §1 (inventaire, 74 lignes) et §2 (matrice). |
+| Corpus d'au moins 200 dossiers, trois niveaux, noms longs, homonymes ; comportement à 1 000 | 2026-10-10 §4 | §3 et §5 : 295 dossiers sur trois niveaux, variante de 1 018 dossiers dans chaque prototype. |
+| Captures dédiées, issues du HTML rendu | 2026-10-10 §5 | Chaque direction a `screen.png` (1440), `screen-mobile.png` (390), `screen-library-many-folders.png`, `screen-media-chat.png` et `screen-folder-chat.png`, plus une capture propre à son mécanisme pour C, D. |
+| Conserver les conclusions acquises sur l'extension, le paiement et l'hébergement ; sourcer toute révision | 2026-10-10 §5 | §11 : rien n'est révisé ; deux points sont **ajoutés** (CORS du flux, auth du flux). |
+| Ne pas réintroduire les tags | 2026-10-10 §3 | Aucune maquette n'a de tags. Le lot X2 de la passe précédente mentionnait « tags » dans la popup de l'extension : **retiré** (§11). |
+
+**Ce qui n'est pas repris de la passe rejetée : ses quatre directions et sa recommandation « A, Le classeur ».** Le Classeur était aussi un trois-volets. La nouvelle direction A n'en est pas la reconduction : le rejet portait sur le traitement des nombreux dossiers, et c'est justement ce qui est neuf ici (filtre avec ancêtres, épinglés et récents, sélecteur de destination arborescent, palette ⌘K, corpus réel, comportement à 1 000).
+
+---
+
+## 1. Inventaire actuel des fonctionnalités de l'app
+
+Il est établi depuis le code, pas depuis la liste indicative de la tâche. Les sources sont les routes de `mobile/app/` (27 fichiers), les composants de `mobile/src/components/` (33), les hooks (13), les services (21), les contextes (5) et les routes d'API que ces services appellent. Les libellés du catalogue `mobile/src/i18n/en.ts` ont servi de contre-vérification : chaque section du catalogue correspond à au moins une ligne ci-dessous.
+
+**Ce qui n'est pas dans l'inventaire, et pourquoi.** Les routes d'API `feeds`, `follows`, `podcasts` et `podcast-search` ainsi que `PATCH /api/digest/settings` existent dans `media_summarizer/api/endpoints/`, mais aucun écran mobile ne les appelle (`grep` sur `mobile/src` et `mobile/app` : zéro référence). `follows.py` n'est même pas monté. Ce ne sont pas des fonctionnalités de l'app : l'app web ne les porte pas. Les **tags** ont été supprimés et ne reviennent pas.
+
+Les lignes sont numérotées (F1…F74) pour que la matrice du §2 y renvoie.
+
+### 1.1 Entrée, compte, session
+
+| # | Fonctionnalité / action / état | Source |
+|---|---|---|
+| F1 | Connexion e-mail + mot de passe | `app/(auth)/login.tsx`, `authService.ts` → `POST /api/auth/login` |
+| F2 | Inscription | `app/(auth)/register.tsx` → `POST /api/auth/register` |
+| F3 | Connexion Google | `SocialAuthButtons.tsx`, `useGoogleSignIn.ts` → `POST /api/auth/google/native` |
+| F4 | Connexion Apple | `SocialAuthButtons.tsx` → `POST /api/auth/apple/native` |
+| F5 | Choix de la langue de lecture à l'inscription (garde bloquante) | `app/onboarding/language.tsx`, `(tabs)/_layout.tsx` (garde) |
+| F6 | Rafraîchissement de session, expiration | `sessionManager.ts`, `tokenStorage.ts` → `POST /api/auth/refresh` |
+| F7 | Écran d'erreur au démarrage | `StartupErrorGate.tsx`, `StartupErrorScreen.tsx` |
+| F8 | Synchronisation du fuseau horaire | `useDeviceTimezoneSync.ts` → `PATCH /api/auth/me` |
+| F9 | Notifications push (digest, « Ready to deepen ») | `usePushNotifications.ts`, `pushNotificationService.ts` → `/api/push-token` |
+
+### 1.2 Accueil et ajout
+
+| # | Fonctionnalité | Source |
+|---|---|---|
+| F10 | Ajouts récents (12 vignettes, états en cours / échec) | `app/(tabs)/inbox.tsx`, `HomeTile.tsx`, `useMediaList.ts` |
+| F11 | « Reprendre » (médias et dossiers récents, progression) | `useHomeSections.ts` → `GET /api/engagements/recent` |
+| F12 | Carte d'entrée « Tri des non classés » avec compte | `inbox.tsx` → `GET /api/folders/unsorted-count` |
+| F13 | Alerte de minutes (masquable) | `MinutesWarningBanner.tsx`, `usageWarningDismissal.ts` |
+| F14 | Bandeau d'essai gratuit | `FreeTrialNotice.tsx` |
+| F15 | Ajouter un lien (saisie) | `AddSourceSheet.tsx`, `UrlEntryDialog.tsx` → `POST /api/media/ingest-url` |
+| F16 | Importer un fichier (PDF, Office, image, audio) | `AddSourceSheet.tsx`, `localImport.ts`, `presignedUpload.ts` → `POST /api/media/upload-url`, `/upload`, `/upload-audio` |
+| F17 | Importer une photo de la galerie | `AddSourceSheet.tsx` |
+| F18 | Prendre une photo (bouton appareil) | `inbox.tsx` (« home.takePhotoA11y ») |
+| F19 | Partage depuis une autre app (share sheet, texte, note) | `+native-intent.tsx`, `ShareIntentContext.tsx`, `sharedContentService.ts` → `/api/media/ingest-shared-content` |
+| F20 | Confirmation après ajout : « ranger dans un dossier ? » | `app/share-confirmation.tsx` |
+| F21 | Refus d'ajout : quota, format, taille, transfert, note vide | `share-confirmation.tsx`, `quotaError.ts`, catalogue `share.*`, `upload.*` |
+| F22 | Rafraîchissement des vignettes en cours de traitement | `useProcessingRefresh.ts`, `mediaSaveNotice.ts` |
+
+### 1.3 Bibliothèque et dossiers
+
+| # | Fonctionnalité | Source |
+|---|---|---|
+| F23 | Bibliothèque : section Dossiers (repliable, préférence mémorisée) | `app/(tabs)/search.tsx`, `useFoldersSectionExpanded.ts` |
+| F24 | « Tous les médias », du plus récent au plus ancien, paginé | `search.tsx` → `GET /api/media` |
+| F25 | Filtrage local des dossiers par nom pendant la saisie | `lib/folderSearch.ts` |
+| F26 | Créer un dossier à la racine depuis la Bibliothèque | `search.tsx` (task-436), `RenameDialog.tsx` → `POST /api/folders` |
+| F27 | Page dossier, onglet **Sources** : sous-dossiers puis médias | `app/media/folders/[id].tsx`, `SubfolderCard.tsx`, `MediaListCard.tsx` |
+| F28 | Page dossier, onglet **IA** (génération sur tout le sous-arbre) | `folders/[id].tsx`, `ArtifactsPanel.tsx` |
+| F29 | Explorateur de dossiers (racine) avec entrée « Non classés » | `app/media/folders/index.tsx` |
+| F30 | Renommer un dossier (appui long ou `…`) | `useFolderActions.ts`, `RenameDialog.tsx` → `PUT /api/folders/{id}` |
+| F31 | Supprimer un dossier (les sources vont dans Non classés, le sous-arbre est supprimé) | `useFolderActions.ts` → `DELETE /api/folders/{id}` |
+| F32 | Sélecteur de dossier : recherche, Non classés, arbre, création en ligne | `FolderPickerView.tsx`, `app/media/folder.tsx` |
+| F33 | Ranger / déplacer un média | `useMediaActions.ts` → `PATCH /api/media/{id}` |
+| F34 | Renommer un média | `useMediaActions.ts`, `RenameDialog.tsx` |
+| F35 | Supprimer un média | `useMediaActions.ts` → `DELETE /api/media/{id}` |
+| F36 | Menus contextuels (appui long avec copie soulevée) | `AnchoredContextMenu.tsx` |
+| F37 | Tri des non classés : file figée, Écarter / Approfondir / Ranger, balayage | `app/media/unsorted-review.tsx`, `FolderSaveSheet.tsx` |
+| F38 | État vide, échec de chargement, nouvel essai (bibliothèque et dossiers) | `search.tsx`, `folders/*.tsx` |
+| F39 | Badges de type (dont SHORT et PHOTOS), marqueur d'échec, balayage de traitement | `mediaTypeDisplay.ts`, `MediaFailureBadge.tsx`, `MediaProcessingSweep.tsx` |
+| F40 | Titre générique d'un média sans nom (« Vidéo YouTube — date ») | `lib/mediaTitle.ts` |
+
+### 1.4 Média et lecture
+
+| # | Fonctionnalité | Source |
+|---|---|---|
+| F41 | Bandeau de couverture, créateur, titre | `MediaDetailHero.tsx` |
+| F42 | Ligne de métadonnées : lien vers la source, date, durée, langue, longueur | `MediaDetailHero.tsx` |
+| F43 | Onglets **Lecture** / **IA** | `CompletedDetailView.tsx`, `ScreenTabs.tsx` |
+| F44 | « L'essentiel » (aperçu `review_blurb`, trois états) | `SourcePreview.tsx` |
+| F45 | Texte intégral, paragraphes sélectionnables | `TranscriptReader.tsx` → `GET /api/media/{id}/raw-content` |
+| F46 | Traduction automatique dans la langue de lecture ; bascule original / traduction | `TranscriptReader.tsx`, `useTranslationRefresh.ts` (task-419) |
+| F47 | États de traduction : en cours, échec, bloquée, « vérifier à nouveau » | catalogue `transcript.*` |
+| F48 | Barre repliée (miniature, titre, segment, progression de lecture) | `MediaReaderBar.tsx` |
+| F49 | Suivi de lecture (alimente « Reprendre ») | `engagementService.ts` → `POST /api/engagements` |
+| F50 | États du média : en traitement, trop long, échec avec message par code | `app/media/[id].tsx`, `useMediaDetailPolling.ts`, catalogue `mediaError.*` |
+| F51 | « Demander cette source » après un échec non pris en charge | `SourceSupportRequestCard.tsx` → `POST /api/bug-reports` |
+| F52 | Menu `…` du média : Ranger, Renommer, Supprimer | `useMediaActions.ts` |
+
+### 1.5 IA
+
+| # | Fonctionnalité | Source |
+|---|---|---|
+| F53 | Cinq types à générer : Résumé, Résumé détaillé, Notes, Flashcards, Quiz | `ArtifactsPanel.tsx`, `ArtifactTile.tsx` → `POST /api/artifacts` |
+| F54 | États par type : générer / en file / génération / généré / échec | `ArtifactTile.tsx` |
+| F55 | Historique append-only, avec nombre de sources | `ArtifactHistoryRow.tsx`, `lib/artifactHistory.ts` |
+| F56 | Refus : dossier vide, trop de sources, trop de texte, média sans texte | `lib/artifactRefusal.ts` |
+| F57 | Visionneuse : résumé (points clés, à retenir), résumé détaillé (contexte, thèmes, citations, conclusion), notes (objectifs, concepts, actions, glossaire) | `app/artifacts/[artifactId].tsx` |
+| F58 | Flashcards à retourner | `[artifactId].tsx` |
+| F59 | Quiz : progression, options, correction, explication | `[artifactId].tsx` |
+| F60 | Artefact en attente, échec, « Générer à nouveau » | `[artifactId].tsx` |
+
+### 1.6 Digest, recherche
+
+| # | Fonctionnalité | Source |
+|---|---|---|
+| F61 | Choix de la période : piles quotidienne / hebdomadaire | `app/(tabs)/digest/index.tsx`, `DigestCoverStack.tsx` |
+| F62 | Carrousel d'une période (pages média complètes, points, position « 3 / 7 ») | `digest/[period].tsx`, `PaginationDots.tsx` |
+| F63 | Recherche plein texte avec extraits surlignés | `search.tsx`, `searchService.ts` → `GET /api/search/transcripts`, `lib/highlightSnippet.ts` |
+
+### 1.7 Compte et réglages
+
+| # | Fonctionnalité | Source |
+|---|---|---|
+| F64 | E-mail du compte, carte de forfait (bêta, essai, actif, minutes restantes, renouvellement) | `app/(tabs)/account.tsx`, `SubscriptionStatusCard.tsx`, `PurchasesContext.tsx` → `/api/entitlements/status` |
+| F65 | Paywall : forfaits, recommandation, achat, conditions — **masqué pendant la bêta** (task-429) | `app/paywall.tsx`, `purchaseService.ts`, `pricingService.ts` |
+| F66 | Langue de lecture (une modification par mois) | `app/settings/reading-language.tsx` |
+| F67 | Langue de l'app (11 langues, suivre l'appareil, RTL) | `app/settings/interface-language.tsx` |
+| F68 | Thème clair / sombre / appareil | `app/settings/theme.tsx`, `ThemeContext.tsx` |
+| F69 | Demandes de fonctionnalités (tableau externe) | `feedbackService.ts` → `GET /api/feedback/token` |
+| F70 | Signaler un bug, avec pièce jointe | `app/bug-report.tsx`, `bugReportService.ts` |
+| F71 | Se déconnecter | `account.tsx`, `AuthContext.tsx` → `POST /api/auth/logout` |
+| F72 | Supprimer le compte (avertissements, abonnement à annuler, accusé, confirmation) | `app/settings/delete-account.tsx` → `DELETE /api/account` |
+
+### 1.8 À ajouter, validé mais pas encore implémenté
+
+| # | Fonctionnalité | Source de la décision |
+|---|---|---|
+| F73 | **Chat** multi-tours, portée média (Lecture) et dossier (Sources), historique, flux, arrêt, reprise, échec partiel | task-434 Decision, task-430 Decision |
+| F74 | **Extension navigateur** et son appairage | passes précédentes de task-424 (§11) |
+
+---
+
+## 2. Matrice de couverture
+
+Pour chaque ligne : l'équivalent web, l'emplacement dans chaque direction et le lot (§10). « Commun » signifie que la surface est la même dans les cinq prototypes : rendu partagé, placé différemment par chaque coquille (lien « Parcours de la maquette » en bas à gauche de chaque prototype). Les emplacements se vérifient dans les prototypes par le hash indiqué en §3.3.
+
+| # | Équivalent web | A — arbre | B — colonnes | C — saut | D — facettes | E — onglets | Lot |
+|---|---|---|---|---|---|---|---|
+| F1–F4 | Écran de connexion / inscription ; Google via Google Identity Services, Apple via Sign in with Apple JS (§9.4) | Commun : `#s=login`, `#s=register` | idem | idem | idem | idem | W0 |
+| F5 | Même garde, page `#s=onboarding` | Commun | idem | idem | idem | idem | W0 |
+| F6 | Cookie `HttpOnly` + jeton en mémoire (§9.3) | invisible | invisible | invisible | invisible | invisible | W0 |
+| F7 | Error boundary React | invisible | invisible | invisible | invisible | invisible | W0 |
+| F8 | `Intl.DateTimeFormat().resolvedOptions().timeZone` | invisible | invisible | invisible | invisible | invisible | W0 |
+| F9 | **Différé, contrainte de plateforme** : Web Push possible, mais demande permission, service worker et VAPID ; hors des lots ci-dessous, l'app mobile reste le canal des notifications | — | — | — | — | — | hors lot (§10.3) |
+| F10–F14 | Page Accueil | lien « Accueil » de la barre latérale | onglet « Accueil » du haut | « Accueil » de la barre | icône Accueil du rail | « Accueil » de la barre | W1 |
+| F15–F17 | Dialogue « Ajouter » : champ lien, zone de dépôt (fichiers, images) ; **en plus** : dépôt n'importe où, ⌘V hors champ | bouton « Ajouter » de la barre latérale | bouton « Ajouter » du haut | « Ajouter » ou palette | bouton + du rail | « Ajouter » de la barre | W3 |
+| F18 | **Contrainte** : pas d'appareil photo sur bureau ; sur mobile, `<input accept="image/*" capture>` | idem F15 | idem | idem | idem | idem | W3 |
+| F19 | **Remplacé** par l'extension (X1), le dépôt et le collage | — | — | — | — | — | X1 |
+| F20 | Second écran du dialogue « Ajouter » → sélecteur de destination | Commun `#modal=add2` puis sélecteur propre à la direction | idem | idem | idem | idem | W3 |
+| F21 | Messages identiques (mêmes catalogues), refus de quota **sans paywall pendant la bêta** | dans le dialogue | idem | idem | idem | idem | W3 |
+| F22 | Relecture bornée des vignettes en cours | invisible | invisible | invisible | invisible | invisible | W1 |
+| F23–F24 | Bibliothèque | arbre + « Tous les médias » (`#s=library`) | colonnes (racine = 1re colonne) | Index A–Z (`#s=library`) | « Tous les médias » sans facette | onglet « Sommaire » | W1 |
+| F25 | Repérage de dossier | filtre `/` avec ancêtres | « Aller à un dossier » + filtre par colonne au-delà de 20 | palette ⌘K + filtre de l'index | facette « Dans le dossier… » | filtre du sommaire | W1 |
+| F26 | Créer un dossier | `+` de l'en-tête Dossiers, `…` › Nouveau sous-dossier | `+` en tête de chaque colonne | palette › « Nouveau dossier » | « Gérer les dossiers » › Nouveau | « + Dossier » du sommaire | W3 |
+| F27 | Page dossier, Sources | centre | dernière colonne | page pleine largeur | liste filtrée + volet de lecture | onglet de travail | W1 |
+| F28 | Page dossier, IA | onglet IA du centre | onglet IA de la colonne | onglet IA de la page | onglet IA de la liste | onglet IA de l'onglet | W1 (lecture), W3 (générer) |
+| F29 | Non classés | entrée « Non classés » de la barre latérale | 1re ligne de la 1re colonne | « Non classés · 12 » de la barre | icône du rail | « Non classés » du sommaire | W1 |
+| F30–F31 | Renommer / supprimer un dossier | `…` sur la ligne d'arbre et sur la page | `…` de la colonne de détail | `…` de la page | `…` de la liste, « Gérer les dossiers » | `…` de l'onglet | W3 |
+| F32–F33 | Sélecteur de destination | dialogue : filtre, récents, arbre | dialogue : colonnes miniatures + « Aller à » | palette « Ranger dans… » | puce « Dossier ▾ » ouvrant une liste à saisie | dialogue : sommaire racines + deux niveaux | W3 |
+| F34–F35 | Renommer / supprimer un média | menu `…` de la ligne et du lecteur, clic droit | idem | idem | idem | idem | W3 |
+| F36 | Menu contextuel : clic droit, bouton `…`, Maj+F10 | idem | idem | idem | idem | idem | W3 |
+| F37 | Tri des non classés : touches ← → et D / O / R | `#s=unsorted` | onglet « Non classés » | « Non classés » de la barre | icône du rail | « Non classés » de la barre | W3 |
+| F38–F40 | États vides, erreurs, badges, titres génériques | Commun | idem | idem | idem | idem | W1 |
+| F41–F45 | Page média, Lecture | centre | à côté de la colonne de ses voisins | pleine largeur | volet de lecture à droite de la liste | onglet de travail | W1 |
+| F46–F47 | Bascule original / traduction (puce « Voir l'original ») | Commun | idem | idem | idem | idem | W1 |
+| F48 | **Pas d'équivalent nécessaire** : sur bureau, les onglets Lecture / IA restent visibles ; sur 390 px, barre collante | — | — | — | — | — | W1 |
+| F49 | Progression de lecture envoyée au défilement | invisible | invisible | invisible | invisible | invisible | W1 |
+| F50–F51 | États en traitement / échec, « Demander cette source » | `#s=media&m=m10`, `m=m12` | idem | idem | idem | idem | W1 |
+| F52 | Menu `…` du média | à droite des onglets | idem | idem | idem + puce « Dossier ▾ » | idem | W3 |
+| F53–F56 | Onglet IA : tuiles, états, historique, refus | Commun (`#tab=ai`) | idem | idem | idem | idem | W1 (lecture), W3 (générer) |
+| F57–F60 | Visionneuse d'artefact (flashcards : Espace, ← →) | page `#s=artifact` | idem | idem | idem | idem | W1 ; interactions W3 |
+| F61–F62 | Digest : choix de période + lecture page par page (← →) | « Digest » | onglet « Digest » | « Digest » | icône du rail | « Digest » | W2 |
+| F63 | Recherche plein texte + dossiers correspondants | « Recherche » (⌘K) | champ du haut | palette › « Rechercher dans le texte » | icône du rail | champ du haut | W2 |
+| F64 | Compte, carte de forfait (bêta) | « Compte » | avatar | avatar | icône du rail | avatar | W2 |
+| F65 | Paywall web (Stripe via RevenueCat), **absent pendant la bêta** | Commun `#s=paywall&beta=0` | idem | idem | idem | idem | W4 |
+| F66–F68 | Réglages : langue de lecture, langue de l'app (**RTL sans redémarrage** : `dir="rtl"`), thème | Commun `#s=settings&sub=…` | idem | idem | idem | idem | W2 |
+| F69–F70 | Demandes de fonctionnalités, signaler un bug (pièce jointe par `<input type=file>`) | Commun | idem | idem | idem | idem | W2 |
+| F71 | Déconnexion (« sur ce navigateur ») | Commun | idem | idem | idem | idem | W0 |
+| F72 | Suppression du compte (le texte d'abonnement ajoute le cas web) | Commun | idem | idem | idem | idem | W2 |
+| F73 | Chat : composeur dans Lecture / Sources uniquement | conversation en volet droit | conversation en partage horizontal de la colonne | carte flottante au-dessus du composeur | dossier : volet droit ; média : feuille dans le volet de lecture | vue partagée dans l'onglet, séparateur déplaçable | WC |
+| F74 | Extension : page « Relier ce navigateur » | Compte › Extension | idem | idem | idem | idem | X1 |
+| — | **Ajout web, absent du mobile** : déplacer un dossier (l'API l'accepte : `PUT /api/folders/{id}` avec `parent_folder_id`) | `…` › Déplacer | idem | idem | « Gérer les dossiers », glisser-déposer | `…` › Déplacer | W3 |
+| — | **Ajout web** : épingler un dossier | épingle sur la page et dans le menu | — | puces « Épinglés » de l'index | — | — | W1 (local) |
+
+**Rien n'est supprimé implicitement.** Les trois écarts sont nommés :
+
+- **F9, notifications push** : différé, avec sa contrainte (Web Push).
+- **F19, share sheet** : remplacé par l'extension, le dépôt et le collage.
+- **F48, barre repliée** : sans objet sur bureau.
+
+La caméra (F18) a son équivalent mobile web et aucun sur bureau.
+
+---
+
+## 3. Méthode des maquettes
+
+### 3.1 Un noyau commun, cinq coquilles
+
+Chaque `code.html` est autonome : ni `<link>`, ni `<img>`, ni `<script src>`, donc aucune requête réseau. Il est produit par `docs/research/task-424-website-and-browser-extension/mockup-build/build.mjs` à partir de trois parties :
+
+- **un noyau commun** : corpus, rendus du lecteur, de l'onglet IA, de la visionneuse, du chat, du digest, de la recherche, du tri et du compte ;
+- **une coquille par direction**, qui porte la navigation, le repérage des dossiers, le sélecteur de destination et l'emplacement de la conversation ;
+- **les contours exacts d'Ionicons.ttf**, la fonte de l'app, extraits par `extract_icons.py`.
+
+Ce partage est voulu : les cinq directions diffèrent par leur **structure et leurs parcours**, pas par cinq dessins de la même visionneuse de quiz. Pour changer une maquette, on modifie les sources puis on relance `build.mjs` et `shoot.sh`.
+
+Les tokens sont ceux de `mobile/src/constants/theme.ts`, clair et sombre, repris tels quels. L'échelle de texte est limitée à 32 / 20 / 16 / 14 / 13 px. Deux écarts déclarés :
+
+- **Polices** : Plus Jakarta Sans et Inter sont déclarées, mais sans réseau la maquette affiche la police système de repli.
+- **Couvertures** : un bloc teinté portant le glyphe du type remplace la vignette réelle.
+
+### 3.2 Le corpus de référence, identique dans les cinq
+
+Le corpus est généré de façon déterministe (`mockup-build/data.js`), avec la même graine pour les cinq directions.
+
+| Corpus | Dossiers | Par niveau | Hash |
+|---|---|---|---|
+| Petit | 7 | 3 / 3 / 1 | `#corpus=small` |
+| **Référence** | **295** | **15 / 83 / 197** | défaut |
+| Grand | **1 018** | 38 / 221 / 759 | `#corpus=xl` |
+
+- **Noms longs** : par exemple « Psychologie cognitive et sciences de l'apprentissage appliquées à l'enseignement secondaire » (91 caractères) ou « Histoire économique de l'Europe industrielle (1780-1914) — séminaire du jeudi ».
+- **Homonymes dans des parents différents** : « Références » ×21, « Notes de lecture » ×20, « Entretiens » ×19, « Archives » ×17.
+- **Le dossier rare des parcours** : « Neurosciences de l'attention › Mémoire de travail › Notes de lecture », ouvert il y a six mois. C'est un homonyme parmi vingt, enfoui au troisième niveau.
+
+### 3.3 États adressables
+
+Chaque état est une URL. Le bouton « Parcours de la maquette », en bas à gauche, liste une soixantaine de parcours, et `#shot=1` le masque pour les captures. Exemples :
+
+- `#s=folder&f=f5&q=neuro%20notes` (A) : retrouver le dossier rare ;
+- `#s=media&m=m1&chat=open&cs=resuming` : reprise d'une réponse après rechargement ;
+- `#s=account&beta=0` : compte après la bêta ;
+- `#theme=dark` : thème sombre.
+
+### 3.4 Captures
+
+Les captures sont produites par `mockup-build/shoot.sh`, qui pilote Chrome sans interface par le protocole DevTools (`cdp_shot.mjs`). **Ce détail compte** : l'option `--window-size` de Chrome ne descend pas sous **500 px** de large (mesuré : `innerWidth` = 500 pour une fenêtre demandée à 390). Une capture « 390 px » faite par la ligne de commande est donc une mise en page de 500 px rognée. Le script émule un viewport exact et journalise `innerWidth` et `scrollWidth` : **390 × 844, sans défilement horizontal**, pour les cinq. Desktop à 1440 × 900, mobile à 390 × 844 en densité 2. Chaque capture a été relue. Rendu vérifié dans Chrome uniquement.
+
+---
+
+## 4. Les cinq directions
+
+### A — « L'arbre latéral » (`direction_a_arbre_lateral/`)
+
+**Thèse : la hiérarchie est toujours visible.**
+
+- **Navigation.** Une barre latérale de 300 px porte Accueil, Recherche, Digest, Non classés, puis les dossiers : un filtre (`/`), les **épinglés**, les **récents**, puis l'arbre complet.
+- **Contenu.** Le centre affiche la page ouverte, avec le fil d'Ariane du dossier actif.
+- **Conversation.** La droite s'ouvre en volet de 400 px quand on écrit dans le composeur.
+- **Clavier.** Le modèle WAI-ARIA *treeview* : flèches, Début/Fin, recherche par première lettre, `*` pour déplier les frères.
+- **Filtre.** Il garde les ancêtres de chaque résultat et déplie leurs branches : c'est ce qui départage deux « Notes de lecture ».
+- **Mobile.** La barre latérale devient un tiroir (`screen-mobile.png`), la conversation une feuille.
+- **Référence.** La barre latérale des gestionnaires de fichiers et des apps de notes (Finder, VS Code, Notion, Obsidian).
+
+### B — « Les colonnes » (`direction_b_colonnes/`)
+
+**Thèse : le chemin est la mise en page.**
+
+- **Navigation.** Une colonne par niveau, de gauche à droite (colonnes de Miller, la vue en colonnes du Finder). La dernière colonne est la page du dossier.
+- **Repérage.** Le champ « Aller à un dossier… » (⌘K) saute n'importe où et reconstruit les colonnes. Au-delà de 20 dossiers, une colonne a son propre filtre.
+- **Clavier.** ← → entre colonnes, ↑ ↓ dans une colonne.
+- **Média.** Un média s'ouvre à côté de la **liste de ses voisins**, pour lire un dossier source après source.
+- **Conversation.** Elle partage la colonne horizontalement, avec une poignée de redimensionnement.
+- **Mobile.** Un niveau par écran, comme l'app Fichiers.
+
+### C — « La barre de saut » (`direction_c_barre_de_saut/`)
+
+**Thèse : au-delà de quelques centaines de dossiers, se souvenir d'un nom va plus vite que parcourir l'arbre.** Aucun arbre n'est affiché en permanence. Trois outils le remplacent :
+
+- **la barre de saut** : chaque segment du chemin ouvre la liste de ses voisins (`screen.png`), comme la barre de saut d'Xcode ou la barre d'adresse de l'Explorateur Windows ;
+- **la palette ⌘K** : dossiers, médias et actions, avec le parent immédiat en premier et le marqueur « homonyme » (`screen-palette.png`) ;
+- **l'index A–Z** : une entrée par **nom**, et un nom porté par 20 dossiers est **une seule entrée** qui liste ses 20 parents (`screen-library-many-folders.png`).
+
+La page est pleine largeur, la meilleure pour la lecture. La conversation est une carte flottante au-dessus du composeur.
+
+### D — « Le flux à facettes » (`direction_d_flux_a_facettes/`)
+
+**Thèse : on cherche un contenu, pas un contenant.**
+
+- **Bibliothèque.** C'est la liste de toutes les sources. Un dossier est un **filtre** qu'on choisit en tapant (facette « Dans le dossier… »), avec l'option « Inclure les sous-dossiers ». D'autres facettes s'y ajoutent : type et état.
+- **Page dossier.** C'est cette liste filtrée, et son onglet Sources **est** la liste. La lecture se fait dans un volet à droite (liste–détail, comme dans un client mail).
+- **Structure.** Elle se modifie dans un dialogue séparé, « Gérer les dossiers » (`screen-manage-folders.png`).
+- **Conversation.** Pour un dossier, elle occupe le volet de droite ; pour un média, c'est une feuille dans le volet de lecture.
+
+### E — « Les onglets de travail » (`direction_e_onglets_de_travail/`)
+
+**Thèse : on ne perd jamais sa place, parce que chaque endroit est un onglet.**
+
+- **Onglets.** Chaque dossier ou média ouvert reste ouvert, avec son défilement, son onglet interne et sa conversation. Un point ambre signale l'onglet où une réponse s'écrit.
+- **Carte de la bibliothèque.** Un **sommaire** : les racines à gauche, deux niveaux disposés dans la page (enfants en lignes, petits-enfants en puces), sans rien à déplier.
+- **Conversation.** Elle s'ouvre en vue partagée dans l'onglet, avec un séparateur déplaçable.
+- **Mobile.** Les onglets deviennent un sélecteur en grille (`screen-mobile.png`).
+
+---
+
+## 5. La bibliothèque avec beaucoup de dossiers
+
+### 5.1 Les six parcours, rejoués sur le corpus de référence
+
+Les cellules résument les parcours rejoués dans chaque prototype. « 1 surface » signifie que le parcours se fait sans quitter la vue où l'on est.
+
+| Parcours | A — arbre | B — colonnes | C — saut | D — facettes | E — onglets |
+|---|---|---|---|---|---|
+| **Retrouver un dossier peu utilisé** (le « Notes de lecture » de Mémoire de travail) | `/` puis « neuro notes » : 3 résultats, ancêtres visibles ; **1 surface** | « Aller à » puis « neuro notes » : 3 résultats avec parent ; les colonnes se reconstruisent | ⌘K puis « neuro notes » : 3 résultats, parent d'abord ; **le plus rapide quand on se souvient du nom** | facette : 20 résultats pour « notes », parent sous chaque nom | filtre du sommaire : 20 puces surlignées dans 9 racines ; il faut faire défiler |
+| **Identifier le dossier actif et son chemin** | ligne surlignée dans l'arbre **et** fil d'Ariane | colonnes surlignées : le chemin est la mise en page | barre de saut | parent au-dessus du nom dans la puce de facette | fil d'Ariane, et nom de l'onglet |
+| **Passer d'un dossier à l'autre sans perdre sa place** | l'arbre ne bouge pas, le centre change | les colonnes restent tant qu'on ne quitte pas la bibliothèque ; **ouvrir un média les remplace** | voisins par la barre de saut ; un dossier éloigné demande la palette | la liste change, la facette se reconstruit | **meilleur** : chaque endroit reste un onglet |
+| **Parcourir une longue liste sans bloquer la lecture** | arbre défilant indépendant (virtualisé à l'implémentation) | colonnes défilant indépendamment | index sur sa propre page, pas à côté de la lecture | liste et lecture côte à côte | sommaire dans son propre onglet |
+| **Créer / renommer** | sur place dans l'arbre | `+` en tête de colonne | commande de la palette | dialogue séparé | `+ Dossier`, `…` |
+| **Choisir une destination** (ajout, déplacement) | même arbre filtrable dans le dialogue, avec récents | colonnes miniatures + « Aller à » | palette « Ranger dans… » | liste à saisie ancrée à la puce « Dossier ▾ » | sommaire racines + deux niveaux |
+
+### 5.2 Libellés longs, branches, défilement, clavier, responsive
+
+| | A | B | C | D | E |
+|---|---|---|---|---|---|
+| **Libellés longs** | une ligne avec ellipse, chemin complet en infobulle ; titre de page sur plusieurs lignes | **deux lignes** dans une colonne de 250 px, puis ellipse | segment de barre limité à 240 px, index en entier sur plusieurs colonnes | puce de facette sur plusieurs lignes | ligne d'enfant sur plusieurs lignes |
+| **Branches** | dépliées à la demande ; la branche active est révélée | pas de dépliage : un niveau par colonne | pas d'arbre | pas d'arbre, sauf dans « Gérer » | deux niveaux toujours visibles, le troisième en puces |
+| **Résultats ambigus** | ancêtres affichés | parent immédiat en premier | parent en premier + marqueur « homonyme » ; index groupé | parent en premier | racine en titre de section |
+| **Clavier** | WAI-ARIA *treeview* | ← → ↑ ↓ entre et dans les colonnes | ⌘K, ↑ ↓ ↵, Tab pour le chemin complet | J / K dans la liste | ⌘T, ⌘W, ⌃Tab |
+| **390 px** | tiroir | un niveau par écran | barre réduite au segment courant + loupe ; rail A–Z | barre de filtre + feuille | sélecteur d'onglets en grille |
+
+### 5.3 À 1 000 dossiers
+
+Les cinq prototypes s'ouvrent sur 1 018 dossiers avec `#corpus=xl` : 38 racines, 221 dossiers au deuxième niveau, 759 au troisième.
+
+| | Ce qui tient | Ce qui casse, et le remède |
+|---|---|---|
+| **A** | Le filtre reste instantané : c'est un parcours en mémoire, comme `filterFoldersByName` aujourd'hui. Les épinglés et les récents restent en tête. | L'arbre complet devient long (38 racines repliées, c'est encore une liste courte ; c'est le dépliage qui rallonge). Remède : **virtualisation** de la liste aplatie, et palette ⌘K pour le saut par nom (la greffe recommandée). |
+| **B** | Une colonne ne montre que des frères : au plus 38 lignes à la racine. | Une profondeur de 5 (`MAX_FOLDER_DEPTH = 5`, `media_summarizer/core/models/folder.py:18`) veut dire 5 colonnes de 250 px + le détail = 1 810 px : **défilement horizontal**, le défaut connu des colonnes de Miller. |
+| **C** | **La meilleure** : une recherche ne voit pas le nombre de dossiers. L'index groupe les homonymes : 1 018 dossiers, environ 160 noms. | Sans nom en tête, l'index devient un long document ; on parcourt mal ce qu'on ne connaît pas. |
+| **D** | La facette à saisie se comporte comme la palette. | « Inclure les sous-dossiers » sur une racine de 30 dossiers mélange 300 sources. La structure n'est visible que dans « Gérer les dossiers ». |
+| **E** | Les onglets ne dépendent pas du volume. | Le sommaire de 38 sections devient un long document ; le filtre est indispensable. |
+
+**Le coût côté serveur, le même pour les cinq.** `GET /api/folders` renvoie la liste à plat **en une seule réponse, sans pagination**, avec `media_count` pour chaque dossier (`media_summarizer/api/endpoints/folders.py:181-194`). Le modèle de réponse indique que ce comptage est « a full pass over the user's library partition » (`folders.py:117-118`). À 1 000 dossiers, la réponse reste petite, de l'ordre de 200 à 300 Ko de JSON, et le parcours reste borné par la bibliothèque, pas par le nombre de dossiers. **Aucun nouvel endpoint n'est nécessaire pour l'arbre.** Ce point n'a pas été mesuré sur `-dev` (§12).
+
+**Les récents existent déjà côté API**, ce que la passe précédente n'avait pas relevé. `GET /api/engagements/recent` mêle médias et dossiers (`kind: Literal["media", "folder"]`, `media_summarizer/api/endpoints/engagements.py:42`). Les « Récents » de A, C et D ne demandent donc rien de neuf. **Les épinglés sont neufs** : stockés en local par navigateur au lot W1, ou sous forme d'un champ de dossier si l'owner les veut sur tous les appareils.
+
+---
+
+## 6. Le chat dans les cinq directions
+
+### 6.1 Les portées, exactement celles de la Decision de task-434
+
+| Écran | Composeur | Raison |
+|---|---|---|
+| Média, onglet **Lecture** | **oui**, portée « Ce média » | Decision task-434 |
+| Dossier, onglet **Sources** | **oui**, portée « Ce dossier · N sources » | Decision task-434 |
+| Média ou dossier, onglet **IA** | non ; passer sur IA réduit la conversation sans l'arrêter | Decision task-434 |
+| Bibliothèque, accueil, digest, recherche, tri, compte | non | « Aucun chat à portée bibliothèque » |
+| Page de digest | non : le digest affiche l'aperçu et renvoie à la page du média, où se trouve le composeur | la page de digest n'est pas l'onglet Lecture d'un média |
+
+C'est vérifiable dans chaque prototype : `chatScope()` (`mockup-build/core.js`) ne renvoie une portée que pour ces deux cas, et le composeur n'est rendu que dans ces cas-là.
+
+### 6.2 Les états, tous dessinés
+
+Ils suivent la Decision de task-430 §6 et sont adressables par `#cs=…` :
+
+| État | Ce que l'écran dit | Hash |
+|---|---|---|
+| Envoi | indicateur « Envoi de la question… » | `cs=sending` |
+| Flux | texte qui s'écrit, curseur, « vous pouvez quitter la page, elle continue », bouton Arrêter (Échap) | `cs=streaming` |
+| Arrêt volontaire | « Réponse arrêtée par vous. Le texte reçu est conservé. » + Relancer | `cs=stopped` |
+| Échec partiel | message d'erreur, le texte reçu est conservé, « Réessayer » ; « une nouvelle tentative écrit une nouvelle réponse ; elle ne complète pas celle-ci. Aucun second débit de minutes. » | `cs=failed` |
+| Reprise | « Reprise de la réponse là où elle en était… (la page a été rechargée) » | `cs=resuming` |
+| Refus de contexte | « Ce dossier contient trop de texte pour une conversation… Ouvrez un sous-dossier plus petit. » (refus explicite, task-430 §7) | `cs=refused` |
+| Minutes épuisées | variante bêta, sans entrée vers l'abonnement | `cs=quota` |
+| Historique | conversations de **cette** portée, « Nouvelle », mention qu'il n'existe pas de discussion sur toute la bibliothèque | `cs=history` |
+
+Le fil d'un dossier montre aussi, **dans l'historique**, une réponse arrêtée plus tôt : une réponse interrompue reste identifiable comme telle (task-430 §6). Les citations (`§2`, `1`, `7`) renvoient au paragraphe du média, qui est surligné dans le texte, ou à une source du dossier.
+
+### 6.3 Ce que le chat demande au web, et qui n'était dans aucune passe
+
+L'architecture n'est pas rouverte. Ce sont ses conséquences pour un client navigateur :
+
+1. **Deux façades, deux CORS.** Les opérations `/api/chat` restent sur l'API HTTP actuelle, déjà traitée par la passe précédente : `cors_configuration`, `allow_credentials`. Le **flux** passe par une **API Gateway REST régionale dédiée en mode `STREAM`** (Decision task-430 §5). AWS documente que le streaming de réponse est réservé aux intégrations proxy (`HTTP_PROXY`, `AWS_PROXY`), qu'il est **pris en charge par les API REST et pas par les API HTTP**, et qu'un flux dure au plus 15 minutes, avec 5 minutes d'inactivité sur un point régional ([AWS, *response transfer mode*](https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html)). En intégration proxy, ce sont la Lambda de diffusion **et** la réponse au pré-vol `OPTIONS` qui doivent porter `Access-Control-Allow-Origin: https://app.<domaine>` et autoriser l'en-tête `Authorization`. **À écrire dans le service de diffusion, pas dans Terraform seul.**
+2. **Le flux s'authentifie par en-tête, donc pas par `EventSource`.** Le constructeur `EventSource` n'accepte que l'option `withCredentials` ([MDN](https://developer.mozilla.org/en-US/docs/Web/API/EventSource/EventSource)) : il ne peut pas envoyer `Authorization: Bearer`. Le client web lit donc le SSE par `fetch` + `ReadableStream`, avec le jeton d'accès en mémoire (§9.3). C'est exactement la forme que task-430 a retenue sur mobile (`expo/fetch`, `resp.body.getReader()`). **Aucun cookie n'est nécessaire sur l'origine du flux**, donc pas de `allow_credentials` sur la façade REST, et le jeton n'apparaît jamais dans une URL.
+3. **Reprise après rechargement.** Un rechargement perd le jeton en mémoire. La séquence est : (a) `POST /api/auth/refresh` avec le cookie, (b) `GET` de la conversation sur la façade HTTP pour relire l'état durable, (c) rattachement au flux avec l'identité de génération et le curseur de séquence, en dédupliquant (task-430 §6). C'est l'état `cs=resuming`.
+4. **Plusieurs onglets.** Deux onglets sur la même conversation ouvriraient deux flux, ce qui compte dans le budget de connexions que task-430 §5 demande de définir. Recommandation : **seul l'onglet visible reste attaché**. Sur `visibilitychange` vers caché, il se détache ; au retour, il se rattache avec le curseur. Un `BroadcastChannel` partage le jeton rafraîchi entre onglets. Cela pèse surtout pour la direction E, dont c'est le principe (§7).
+5. **Arrêter, ce n'est pas fermer le flux.** Le bouton Arrêter appelle `POST …/stop` sur la façade HTTP. Fermer l'onglet ou naviguer n'est qu'une déconnexion (task-430 §6).
+6. **Partage de code avec le mobile.** Le service et le contrôleur de conversation que task-430 §1 veut communs aux deux portées doivent être écrits en `fetch` standard, sans `expo/fetch` dans leur cœur. L'app web les importe alors par l'alias `mobile/src/services` de la passe précédente (§9.2). **C'est une contrainte à transmettre au découpage de task-431**, pas une décision de ce benchmark. Elle ne coûte rien si elle est connue avant l'écriture.
+
+---
+
+## 7. Comparaison sur une grille commune
+
+Notes de 1 (faible) à 5 (fort), justifiées dans les sections citées. La pondération reflète la consigne : la bibliothèque avec beaucoup de dossiers est « un critère majeur ».
+
+| Critère | Poids | A | B | C | D | E |
+|---|---|---|---|---|---|---|
+| **Bibliothèque à 200 dossiers et plus** : les six parcours (§5.1) | ×3 | **5** | 3 | 4 | 3 | 3 |
+| **Tenue à 1 000 dossiers** (§5.3) | ×2 | 4 (5 avec la palette) | 2 | **5** | 4 | 3 |
+| **Exhaustivité** (matrice §2 : toutes les fonctions ont un emplacement) | ×2 | 5 | 5 | 5 | 4 (structure à part, facettes neuves) | 5 |
+| **Lecture et chat** : largeur, texte visible pendant la conversation | ×2 | 4 (texte à côté, ~740 px) | 3 (moitié de hauteur) | 4 (pleine largeur ; la carte masque le bas du texte) | 3 (quatre zones) | 4 (vue partagée) |
+| **Clavier et accessibilité** | ×1 | **5** (motif WAI-ARIA normalisé) | 4 | 4 | 3 | 3 (raccourcis d'onglets en concurrence avec ceux du navigateur) |
+| **Responsive 390 px** | ×1 | 4 | **5** | 4 | 3 | 3 |
+| **Continuité avec le mobile** (un dossier est un lieu ; Sources et IA) | ×1 | 5 | 4 | 5 | 2 (le dossier devient un filtre) | 4 |
+| **Effort** (§10.2) | ×1 | 4 | 3 | 4 | 2 | 2 |
+| **Total pondéré** (sur 65) | | **59** | 45 | **57** | 41 | 45 |
+
+Le calcul se lit ligne à ligne. A : 15 + 8 + 10 + 8 + 5 + 4 + 5 + 4 = 59 (sa note à 1 000 dossiers vaut 4 sans la palette, 5 avec). C : 12 + 10 + 10 + 8 + 4 + 4 + 5 + 4 = 57. B : 9 + 4 + 10 + 6 + 4 + 5 + 4 + 3 = 45. D : 9 + 8 + 8 + 6 + 3 + 3 + 2 + 2 = 41. E : 9 + 6 + 10 + 8 + 3 + 3 + 4 + 2 = 45. L'écart entre A et C est faible et assumé : **c'est pourquoi C est le repli, et pourquoi sa palette est greffée sur A.**
+
+### 7.1 Les références UX sur lesquelles la grille s'appuie
+
+| Fait | Source | Ce qu'il fonde |
+|---|---|---|
+| *Treeview* : « Right Arrow: When focus is on a closed node, opens the node », « Type-ahead … focus moves to the next node with a name that starts with the typed character », « * … Expands all siblings » | [WAI-ARIA APG, Tree View](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/) | la note clavier de A : un motif normalisé, que les lecteurs d'écran annoncent |
+| Fil d'Ariane : « not intended to show the history of pages traversed », « augment but do not replace » la navigation principale ; « The last breadcrumb … should not be a link » ; sur mobile, ils « can quickly wrap to multiple lines » | [NN/g, *Breadcrumbs: 11 Design Guidelines*](https://www.nngroup.com/articles/breadcrumbs/) | aucune direction ne fait du fil d'Ariane sa seule navigation ; C le rend actif (voisins), et le réduit au segment courant sur mobile |
+| Colonnes de Miller : « multiple levels of the hierarchy to be open at once » et « a visual representation of the current location », mais l'approfondissement rend les colonnes trop étroites et impose le défilement horizontal | [Wikipédia, *Miller columns*](https://en.wikipedia.org/wiki/Miller_columns) | la force de B sur « où suis-je », et sa faiblesse à 1 000 dossiers et 5 niveaux |
+| Quick Open : « quickly search and open a file by its name » ; un fichier ouvert ajoute un onglet, en mode aperçu tant qu'on ne l'édite pas | [VS Code, *User Interface*](https://code.visualstudio.com/docs/getstarted/userinterface) | la palette de C (greffée sur A) ; le modèle d'onglets de E, et son coût |
+| Facettes : « multiple filters, one for each different aspect of the content », pour de « extremely large content sets » ; une structure « significantly more expensive to create and maintain » ; un filtre simple « can often be easier to understand and faster to use » | [NN/g, *Filters vs. Facets*](https://www.nngroup.com/articles/filters-vs-facets/) | la note d'effort de D, et sa pertinence discutable pour une bibliothèque personnelle |
+| Liste–détail : convient aux « file browsers » ; liste de largeur fixe, détail flexible ; sur écran étroit, l'un ou l'autre | [Android Developers, *Canonical layouts*](https://developer.android.com/develop/adaptive-apps/guides/canonical-layouts) | la mise en page de D, et sa réduction sur mobile |
+| *Supporting pane*, l'autre disposition canonique de Material 3 | idem | le volet de conversation de A et E |
+
+---
+
+## 8. La recommandation en détail
+
+**A, avec la palette de C.** Concrètement, pour l'implémentation (task-425 et ses lots) :
+
+1. **La coquille** est celle de A. Barre latérale : navigation, puis Dossiers (filtre `/`, épinglés, récents, arbre virtualisé). Centre : la page. Volet droit : la conversation.
+2. **La palette ⌘K de C** : dossiers (parent immédiat en premier, marqueur « homonyme »), médias, actions. Le bouton « Recherche ⌘K » de A y mène. La recherche plein texte devient une action de la palette, en plus de sa page.
+3. **Le sélecteur de destination** est celui de A : filtre, récents, arbre, création en ligne. C'est le `FolderPickerView` mobile transposé, donc la règle « la même réponse partout à “quel dossier ?” » est conservée.
+4. **Le regroupement des homonymes** dans les résultats de la palette, emprunté à l'index de C, si l'owner le juge utile au-delà de l'affichage du parent.
+
+**Ce qui ferait choisir le repli C :** si l'owner juge que la page de lecture doit occuper tout l'écran, et qu'une hiérarchie toujours affichée encombre plus qu'elle n'aide. C est aussi la direction qui tient le mieux à 1 000 dossiers. Ce qu'elle perd : la découverte de la structure par simple regard.
+
+**Ce que la recommandation écarte, et pourquoi :**
+
+- **B** : excellente pour savoir où l'on est, mais elle mange la largeur et casse à 5 niveaux. Elle est aussi la seule qui doive changer de mise en page entière pour lire un média.
+- **D** : elle fait du dossier un filtre, ce qui contredit le modèle mobile où un dossier est un lieu avec ses onglets Sources et IA. Elle exige aussi des comptages par facette que l'API n'a pas : `GET /api/media` accepte `folder_id` (sous-dossiers compris), `type`, `status_filter` et `q` (`media_summarizer/api/endpoints/media.py`), mais ne renvoie **aucun comptage** et n'accepte qu'**un seul** type à la fois.
+- **E** : elle double les onglets du navigateur avec un second système, alourdit le budget de flux du chat (§6.3, point 4), et coûte un état d'onglets persistant à maintenir.
+
+---
+
+## 9. Stack, hébergement, session, CORS, partage de code : actualisés
+
+Tout ce qui suit est **repris** de `README.owner-rejected-2026-10-10.md`. La consigne du 2026-10-10 les conserve « lorsqu'aucun fait actuel ne les remet en cause ». Seuls les points touchés par le chat ou par la direction recommandée sont détaillés.
+
+### 9.1 Stack — reprise
+
+Vite + React 19 + React Router en mode framework `ssr: false`, SPA pré-rendue. React Native Web reste rejeté (rejeté-2026-10-10 §3.2 et §3.3). **Ce que la direction recommandée y ajoute** : un arbre virtualisé (une liste aplatie des nœuds visibles, rendue fenêtrée) et une palette. Ce sont deux composants à écrire, pas une dépendance à choisir. Si une bibliothèque de virtualisation est envisagée, c'est un choix d'implémentation, sans benchmark.
+
+### 9.2 Partage de code — repris, et une contrainte nouvelle
+
+L'alias de build vers `mobile/src/{types,lib,services,i18n,constants}` reste la forme du lot W0 (rejeté-2026-10-10 §4). **Nouveau** : `lib/folderTree.ts` et `lib/folderSearch.ts` font déjà l'arbre et le filtre dont A a besoin ; la palette les réutilise. **Contrainte nouvelle** : le client de chat doit être écrit en `fetch` standard pour être partageable (§6.3, point 6).
+
+### 9.3 Session — reprise, avec deux conséquences du chat
+
+Cookie `HttpOnly` de rafraîchissement sur `api.<domaine>`, jeton d'accès en mémoire, plafond absolu et expiration par inactivité, comme le demande la RFC 10017 (rejeté-2026-10-10 §6). **Conséquences du chat** : le jeton en mémoire **est** l'authentification du flux (§6.3, point 2), et la reprise après rechargement passe d'abord par `/refresh` (§6.3, point 3). Rien ne change dans le modèle de session.
+
+### 9.4 Connexion sociale sur le web — un point que la passe précédente n'avait pas détaillé
+
+Les deux routes natives prennent un jeton d'identité obtenu par le SDK du téléphone : `POST /api/auth/google/native` et `/apple/native` (`media_summarizer/api/endpoints/auth_social.py`). Sur le web, le jeton vient de Google Identity Services et de Sign in with Apple JS. Deux points sont **à vérifier à l'implémentation** (§12) :
+
+- que la vérification côté serveur accepte l'audience du **client OAuth web** ;
+- que Sign in with Apple accepte un *Services ID* web, qui suppose un domaine vérifié, donc task-443.
+
+L'ancienne route web `GET /api/auth/google/callback` n'émet plus de jeton depuis task-293. Ne pas la ressusciter, conclusion reprise de la passe 1.
+
+### 9.5 Hébergement et CORS — repris, et une seconde façade
+
+Cloudflare Workers static assets, deux projets : `www.<domaine>` pour la vitrine Astro, les pages légales et la page d'installation de l'extension, et `app.<domaine>` pour la SPA (rejeté-2026-10-10 §5). Le CORS de l'API HTTP se règle dans `cors_configuration` (`infrastructure/terraform/modules/platform/lambda_api.tf`), et non dans FastAPI : rejeté-2026-10-10 §1.1, toujours vrai. **Nouveau** : le CORS de la façade REST du flux, porté par la Lambda de diffusion et le pré-vol (§6.3, point 1).
+
+---
+
+## 10. Coûts et lots
+
+### 10.1 Coût fixe sur douze mois — inchangé
+
+Il est de **0 $** au-delà du domaine de task-357 / task-443 (environ 11 $) et du frais unique du Chrome Web Store, dont le montant n'est pas publié (rejeté-2026-10-10 §9.1). Le chat ajoute un coût **variable**, déjà chiffré par task-430 §6 et réglé en minutes de quota par tour. Le client web ne change pas ce coût par conversation : il ajoute des conversations, pas un coût unitaire. Le streaming REST d'API Gateway est facturé à la requête et au transfert. À l'échelle de la bêta, il reste dans le même ordre que l'API HTTP (rejeté-2026-10-10 §9.2), mais il n'est **pas chiffré ici** (§12).
+
+### 10.2 Lots
 
 | Lot | Contenu | Dépend de | Ordre de grandeur |
 |---|---|---|---|
-| **W0 — les fondations** | Session web (cookie de rafraîchissement, plafond absolu, inactivité, `/logout`), CORS en Terraform, projet Vite + React Router, coquille de la direction retenue, i18n branché sur les 11 catalogues existants, écran de connexion, rafraîchissement et multi-onglets, hébergement | task-357 pour **publier**, pas pour développer | **4 à 6 j** |
-| **W1 — lire la bibliothèque** | Ajouts récents, « Reprendre », arbre de dossiers, liste, fiche media, lecteur de transcript, artefacts en lecture, visionneuse d'artefact, états de traitement et d'échec | W0 | **8 à 12 j** |
-| **W2 — digest, recherche, compte** | Digest quotidien et hebdomadaire, recherche plein texte avec surlignage, réglages du compte en lecture (profil, langues, état d'abonnement **sans** entrée vers l'abonnement, conformément à task-429) | W0 | **5 à 8 j** |
-| **W3 — écrire** | Ingestion par URL, import de fichiers par URL présignée (API `File` du navigateur), génération d'artefacts, création / renommage / déplacement de dossiers, revue des non classés, suppression de compte | W1, W2 | **7 à 10 j** |
-| **X1 — l'extension Chrome** | WXT, action de barre d'outils, `Alt+S`, menu contextuel, extraction par `@mozilla/readability`, appairage **délivré par l'app web**, deux champs optionnels sur `IngestUrlRequest` | W0 (pour l'origine d'appairage) | **5 à 8 j** |
-| **X2 — Firefox et Edge, capture complète** | Cible Firefox (paquet de sources, déclaration de données), fiche Edge Add-ons, PDF ouvert, tags, suivi du traitement | X1 | **5 à 8 j** |
-| **W4 — l'abonnement** | Page d'abonnement, Stripe Billing via RevenueCat, `SubscriptionPlatform.web`, Stripe Tax, section « Web » de `docs/REVENUECAT_ENTITLEMENTS.md` | W2 **et la fin de la beta task-429** | **4 à 6 j** |
-| **X3 — Safari** | `xcrun safari-web-extension-packager`, cible ajoutée au projet iOS Expo | X1, Xcode | **4 à 6 j**, optionnel |
+| **W0 — fondations** | Session web, CORS (API HTTP), projet Vite + React Router, **coquille A** (barre latérale, arbre virtualisé, filtre, épinglés locaux, récents), palette ⌘K, i18n sur les 11 catalogues, connexion / inscription / langue de lecture, thème, déconnexion, hébergement | task-357 / task-443 pour **publier** | **6 à 9 j** (contre 4 à 6 à la passe précédente : arbre et palette) |
+| **W1 — lire** | Accueil (F10–F14), bibliothèque et dossiers (F23–F25, F27, F29, F38–F40), page média et lecteur (F41–F51), onglet IA en lecture (F53–F57), suivi de lecture | W0 | **8 à 12 j** |
+| **W2 — digest, recherche, compte** | F61–F64, F66–F70, F72 ; carte de forfait **sans** entrée vers l'abonnement pendant la bêta | W0 | **6 à 9 j** |
+| **W3 — écrire** | Ajouter (lien, fichier, dépôt, collage) et confirmation (F15–F21), sélecteur de destination, créer / renommer / déplacer / supprimer médias et dossiers (F26, F30–F36), **déplacer un dossier** (ajout web), tri des non classés (F37), générer et générer à nouveau (F53–F60) | W1, W2 | **8 à 11 j** |
+| **WC — chat web** | Composeur dans Lecture / Sources, volet de conversation, historique, flux par `fetch`, arrêt, reprise, échec partiel, refus, minutes (F73) ; CORS de la façade REST du flux | **le backend du chat issu de task-431** (première livraison fonctionnelle : flux reprenable, deux portées), task-439, W1 | **5 à 8 j** |
+| **X1 — extension Chrome** | Reprise de la passe 1, appairage délivré par l'app web (Compte › Extension) | W0 | **5 à 8 j** |
+| **X2 — Firefox, Edge** | Reprise ; **sans tags** dans la popup (retirés, §0) | X1 | **5 à 8 j** |
+| **W4 — abonnement web** | Paywall (F65), Stripe Billing via RevenueCat, `SubscriptionPlatform.web` | W2, **fin de la bêta** (task-429, task-442) | **4 à 6 j** |
+| **X3 — Safari** | optionnel | X1, Xcode | **4 à 6 j** |
 
-**Pourquoi W0 avant tout le reste, et pourquoi il est si petit** : parce qu'une app web en **lecture** ne demande **aucun endpoint nouveau**. Les dix-huit routes que l'app mobile appelle couvrent déjà la totalité des six surfaces listées, avec pagination par curseur (§1.3). Tout le travail backend du chemin de lecture tient dans la session et le CORS.
+**Totaux.** Parité complète avec le chat, hors X2 et X3 : W0 à W4 + WC + X1 = **42 à 63 j**. La passe précédente donnait 33 à 50 j pour les mêmes lots hors chat. Le chiffrage repose, comme alors, sur des ordres de grandeur sans donnée de vélocité du dépôt (§12).
 
-**Pourquoi W4 en dernier, et ce n'est pas un arbitrage** : task-429 est `Done`. Pendant la beta — trois mois, date de début non encore annoncée — tout compte reçoit le palier le plus élevé et **toutes les entrées vers l'abonnement sont masquées** dans l'app. L'app web doit lire le même drapeau `is_beta_access` (`/api/v1/entitlements`) et masquer la même chose. Livrer une page d'abonnement au lot 1 serait livrer un écran interdit.
+**L'ordre.** W0 → W1 → (W2 ∥ W3) → WC dès que le backend du chat est livré → W4 après la bêta. **Le chat web ne bloque pas les lots de lecture, et ne les attend pas au-delà de W1.**
 
-**Pourquoi X1 après W0 et non avant** : l'extension a besoin d'une surface où l'utilisateur est déjà authentifié pour récupérer ses jetons. La passe 1 avait choisi l'app mobile faute d'alternative, ce qui ajoutait un écran mobile au chemin critique. Avec `app.<domaine>`, cette surface existe dans le navigateur où l'extension s'installe. §10.2
+### 10.3 Différé et hors lots, explicitement
 
-### Ce que ce benchmark recommande de **ne pas** faire
+| Fonction | Statut | Raison |
+|---|---|---|
+| F9 Notifications push | hors lots | Web Push suppose service worker, VAPID et permission ; à décider après usage réel de l'app web |
+| F18 Appareil photo | équivalent mobile web seulement | contrainte de plateforme |
+| F19 Share sheet | remplacé par X1, le dépôt et le collage | contrainte de plateforme |
+| Épinglés synchronisés entre appareils | non retenu au W1 | demanderait un champ backend ; local d'abord |
 
-1. **Ne pas garder `allow_credentials = false` sur l'API Gateway** en croyant que `CORS_ORIGINS` suffit. Le middleware Python n'atteint jamais le navigateur sur l'API déployée. §1.1
-2. **Ne pas mettre le refresh token dans `localStorage`.** Ce serait un porteur d'un an, glissant et sans plafond, lisible par n'importe quel script injecté. C'est la configuration que la RFC 10017 §8.2 décrit comme n'offrant « no protection against unauthorized access from malicious JavaScript », aggravée par une durée que la même RFC interdit. §6.3
-3. **Ne pas construire un BFF au lot W0.** C'est le patron que la RFC recommande le plus fort, et il reste la trajectoire si le risque monte — mais il ajoute un composant à opérer, un secret de chiffrement de cookie hors de Secrets Manager, et un saut réseau sur chaque lecture de bibliothèque. §6.3
-4. **Ne pas adopter React Native Web pour « réutiliser l'app ».** Ce qu'on réutiliserait, ce sont des écrans de téléphone. §3.3
-5. **Ne pas créer `packages/` au lot W0.** L'alias Vite vers `mobile/src` donne le même partage sans toucher ni `mobile/package.json`, ni Metro, ni le build EAS — le chemin dont task-186 a montré qu'une erreur de nommage y coûte une place de build entière. §4.3
-6. **Ne pas livrer de page d'abonnement avant la fin de la beta.** §7.3
-7. **Ne pas dupliquer les catalogues i18n.** Les 8 471 lignes de `mobile/src/i18n/*.ts` sont des objets TS purs ; seul le provider (264 lignes) est couple. §4.2
+### 10.4 Dépendances avec le chatbot
+
+- **WC dépend du découpage de task-431**, qui n'existe pas encore en tâches dispatchables (task-431 `To Do`).
+- **task-425 reste dépendante de task-424.** Son implémenteur doit lire ce README une fois validé.
+- **Contrainte à transmettre à task-431** : client de chat en `fetch` standard (§6.3, point 6) ; CORS de la façade REST du flux pour l'origine `app.<domaine>` (§6.3, point 1).
 
 ---
 
-## 0. Ce que cette passe reprend sans le réinstruire
+## 11. Extension, paiement, task-357 : repris
 
-L'owner a juge solide, dans `README.owner-rejected-2026-10-05.md`, tout ce qui ne dépendait pas de la dimension 1, et a demande de ne pas refaire ces recherches. Repris **tel quel**, avec renvoi à la section du fichier rejeté :
+| Conclusion | Statut | Où elle est argumentée |
+|---|---|---|
+| WXT, Chrome Web Store d'abord, capture URL + texte + sélection, `activeTab` | repris | rejeté-2026-10-05 §3–§6 |
+| Appairage délivré par l'app web plutôt que par le mobile | repris | rejeté-2026-10-10 §10.2 |
+| Stripe Billing via RevenueCat, jamais en direct ; TVA ; Managed Payments en repli ; dernier lot | repris | rejeté-2026-10-05 §10, rejeté-2026-10-10 §11 |
+| Hébergement Cloudflare de task-357, Workers plutôt que Pages | repris | rejeté-2026-10-05 §0.5, rejeté-2026-10-10 §5 |
+| « Tags » dans la popup de l'extension (lot X2 ancien) | **retiré** | les tags ont été supprimés de l'app ; consigne du 2026-10-10 |
 
-| Conclusion reprise | Ou elle est argumentée |
+Aucune révision sourcée n'était nécessaire : aucun fait du dépôt ni le chatbot ne touche à ces conclusions. Le chat ne passe pas par l'extension.
+
+---
+
+## 12. Ce qui n'a pas été vérifié
+
+1. Le comportement à 1 000 dossiers est **dessiné et rendu**, pas mesuré : ni la taille réelle de `GET /api/folders`, ni sa latence sur `-dev`.
+2. Les notes de la grille (§7) sont un jugement d'expert sur les parcours rejoués dans les prototypes, **pas un test avec des utilisateurs**.
+3. Le CORS d'une API REST en mode `STREAM` sur une requête `fetch` cross-origin avec `Authorization` n'a pas été exercé. La documentation AWS citée décrit le streaming, pas le CORS de ce mode.
+4. Le coût du streaming REST d'API Gateway n'est pas chiffré.
+5. L'acceptation par le backend de l'audience d'un client OAuth web Google, et d'un *Services ID* Apple (§9.4).
+6. Les chiffrages de §10 reprennent la méthode de la passe précédente, sans donnée de vélocité.
+7. Rendu vérifié dans Chrome uniquement, à 1440 × 900 et 390 × 844, en clair, et en sombre pour l'écran Compte.
+8. Les références UX secondaires : la page NN/g sur les fil d'Ariane et celle sur les facettes ont été lues directement ; le résumé sur les colonnes de Miller vient de Wikipédia.
+9. Le montant du frais d'inscription au Chrome Web Store (inchangé depuis la passe précédente).
+
+---
+
+## 13. Sources
+
+- AWS — streaming de réponse des API REST (`responseTransferMode`, types d'intégration, REST seulement, 15 min, inactivité) : <https://docs.aws.amazon.com/apigateway/latest/developerguide/response-transfer-mode.html> ; billet : <https://aws.amazon.com/blogs/compute/building-responsive-apis-with-amazon-api-gateway-response-streaming/>
+- MDN — constructeur `EventSource`, option `withCredentials` seulement : <https://developer.mozilla.org/en-US/docs/Web/API/EventSource/EventSource>
+- W3C WAI-ARIA Authoring Practices — Tree View : <https://www.w3.org/WAI/ARIA/apg/patterns/treeview/>
+- Nielsen Norman Group — Breadcrumbs : <https://www.nngroup.com/articles/breadcrumbs/>
+- Nielsen Norman Group — Filters vs. Facets : <https://www.nngroup.com/articles/filters-vs-facets/>
+- Wikipédia — Miller columns : <https://en.wikipedia.org/wiki/Miller_columns>
+- Visual Studio Code — User Interface (Quick Open, onglets, aperçu) : <https://code.visualstudio.com/docs/getstarted/userinterface>
+- Android Developers — Canonical layouts (liste–détail, panneau d'appoint) : <https://developer.android.com/develop/adaptive-apps/guides/canonical-layouts>
+- Sources reprises des passes précédentes (RFC 10017, Cloudflare Workers, RevenueCat, Stripe, stores, WXT) : `README.owner-rejected-2026-10-10.md` §14 et `README.owner-rejected-2026-10-05.md`
+- Décisions appliquées : `docs/research/task-434-chatbot-integration-ui/README.md` et `docs/research/task-430-chatbot-architecture/README.md` (Owner Validation), `backlog/tasks/task-439 - …`, `docs/BRAND_IDENTITY.md`, `mobile-design-mockups/my_design_system/DESIGN.md`, `mobile/src/constants/theme.ts`
+
+---
+
+## 14. Livrables et périmètre
+
+| Livrable | Chemin |
 |---|---|
-| L'extension de Recall n'est **pas** disponible sur Safari (« Safari coming soon » dans sa propre doc, contre « Chrome, Firefox, Edge, and Safari » sur sa page marketing) | rejeté §0.1 |
-| Le CORS n'est pas un problème **pour l'extension** : un `fetch` depuis le service worker avec `host_permissions` n'y est pas soumis ; c'est le script de contenu qui l'est | rejeté §0.2 |
-| Le webhook RevenueCat **accepte déjà** un achat web et écrit une ligne de palier correcte : `_resolve_tier` lit l'entitlement, `_carries_product` et `_record_store_identity` tolèrent un store non mappé | rejeté §0.3 |
-| L'abonné sur deux canaux est **déjà gere** : `_active_subscription` retient la ligne dont le palier porte la plus grande allocation | rejeté §0.4 |
-| Cloudflare recommande **Workers plutôt que Pages** pour un projet neuf (« Start new projects with Workers ») | rejeté §0.5 |
-| **WXT** contre Plasmo, CRXJS et MV3 nu : Plasmo est sans release depuis le 2025-05-17 ; WXT produit l'archive de sources que Mozilla exige | rejeté §3 |
-| Coûts, délais et règles d'examen des quatre boutiques ; Safari traité et reporté ; `identity` absent de Safari | rejeté §4 |
-| Ce qu'on capture : URL + texte de page + sélection au premier lot, PDF ensuite ; deux champs optionnels sur `IngestUrlRequest` plutôt qu'un endpoint de plus | rejeté §6 |
-| Chaque fonction de Recall gardée ou écartée, y compris « Augmented Browsing » écartée pour trois raisons cumulées | rejeté §7 |
-| Quotas, `source_app`, ce que l'extension n'a pas le droit de faire, `Limited Use` | rejeté §8 |
-| **Stripe Billing branché sur RevenueCat**, jamais en direct ; les frais identiques entre les deux ; Managed Payments en repli ; Paddle écarté ; Lemon Squeezy absorbé par Stripe | rejeté §10.1 à §10.3, §10.6 |
-| Ce que l'app mobile a le droit de dire d'un paiement web (Apple 3.1.1(a), 3.1.3, 3.1.3(b) ; Google Play Payments) : rien dans l'app sur la boutique française, tout sur le site | rejeté §10.4 |
-| Catalogue S / M / L, entitlements, prix TTC, Stripe Sandboxes | rejeté §10.5 |
-
-Deux conclusions de la passe 1 sont **révisées** par cette passe, et les deux parce que l'app web change la question :
-
-1. **« Rien d'utile n'est partageable avec `mobile/` »** (rejeté §3.4) était vrai pour une extension qui envoie trois champs. C'est faux pour une app web qui réaffiche les mêmes artefacts : §4 mesure 14 455 lignes directement importables.
-2. **« Une session minimale, sur la seule page d'abonnement, et seulement au lot 3 »** (rejeté §5.5) tombe avec le périmètre. §6 traite la session complète.
-
-Un fait de contexte à noter, qui n'est **pas** une révision : **task-357 est elle-même encore `owner_decision: pending`**. Le domaine, le registrar et le fournisseur d'hébergement sont donc des recommandations, pas des décisions. Ce benchmark s'y appuie comme la tâche le demande (« se construire sur ce choix, sans refaire ce benchmark »), mais le lot W0 ne peut **publier** que quand task-357 est tranchée.
-
----
-
-## 1. Trois constats du dépôt que la passe 1 a manqués, et qui changent le chiffrage
-
-Aucun fichier de code n'est modifié par ce benchmark : les numéros de ligne ci-dessous sont des lectures.
-
-### 1.1 Le CORS de l'API déployée n'est pas celui du code Python
-
-La passe 1 a conclu (rejeté §0.2) que « le site fonctionnerait tel quel » et qu'il suffirait de « fixer `CORS_ORIGINS` à l'origine du site, en Terraform ». Le raisonnement portait sur `media_summarizer/api/main.py:86-94`. Il est juste sur ce fichier, et sans effet sur l'API déployée, parce qu'un second étage de CORS existe au-dessus.
-
-`infrastructure/terraform/modules/platform/lambda_api.tf:131-146` déclare une HTTP API avec son propre bloc :
-
-```hcl
-cors_configuration {
-  allow_origins     = ["*"]
-  allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-  allow_headers     = ["*"]
-  expose_headers    = ["X-Request-ID"]
-  max_age           = 3600
-  allow_credentials = false
-}
-```
-
-Et AWS documente, verbatim :
-
-> « If you configure CORS for an API, API Gateway automatically sends a response to preflight OPTIONS requests, even if there isn't an OPTIONS route configured for your API. For a CORS request, API Gateway adds the configured CORS headers to the response from an integration. »
-> **« If you configure CORS for an API, API Gateway ignores CORS headers returned from your backend integration. »**
-> — <https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-cors.html> (lu le 2026-10-06)
-
-Trois conséquences, dans l'ordre d'importance :
-
-1. **Le `CORSMiddleware` de FastAPI est inerte sur l'API déployée.** Ce qu'un navigateur voit, c'est la configuration Terraform. La ligne de `docs/AUTHENTICATION_SETUP.md` — « CORS_ORIGINS doit contenir le(s) domaine(s) front autorisés » — est donc incomplète et doit être corrigée par le lot W0 : il y a **deux** endroits, et celui qui compte en production est le Terraform.
-2. **`allow_credentials = false` rend une session par cookie impossible**, pas seulement risquée. Un `fetch(…, { credentials: 'include' })` cross-origin dont la réponse ne porte pas `Access-Control-Allow-Credentials: true` est rejeté par le navigateur. Le changement est une ligne, mais c'est une ligne **bloquante** : sans elle, aucun des lots W1 à W4 ne fonctionne.
-3. **`allow_origins = ["*"]` devient illégal dès qu'on passe `allow_credentials = true`.** La spécification CORS interdit `Access-Control-Allow-Origin: *` avec un mode de credentials `include`. Il faut donc passer les deux ensemble, à l'origine exacte de l'app.
-
-Et un piège à connaître, mesurable dans la source verrouillée du dépôt. Dans `starlette` 0.47.2 (`uv.lock`), `CORSMiddleware` traite le cas `allow_origins=["*"] + allow_credentials=True` de façon **conditionnelle à la présence d'un en-tête `Cookie`** dans la requête :
-
-```python
-# If request includes any cookie headers, then we must respond
-# with the specific origin instead of '*'.
-if self.allow_all_origins and has_cookie:
-    self.allow_explicit_origin(headers, origin)
-```
-— `starlette/middleware/cors.py`, lignes 157-160
-
-Autrement dit, sur une réponse simple, l'origine n'est réfléchie que si la requête portait déjà un cookie ; sinon le middleware renvoie `*` **avec** `Access-Control-Allow-Credentials: true`, combinaison que le navigateur refuse. Le tout premier `POST /api/auth/refresh` d'un navigateur neuf — celui qui n'a pas encore de cookie — tomberait donc dans le cas cassé, et les suivants passeraient : un bug intermittent, à l'allure de problème réseau. La conclusion opérationnelle est la même que ci-dessus (fixer l'origine explicitement dès le départ), mais elle explique pourquoi « ça marche chez moi » serait trompeur ici.
-
-> **Non vérifie** : ce comportement est lu dans la source de la version verrouillée, sans exécution (§13, point 3). Et il ne se manifeste que si l'on laissait `CORS_ORIGINS=*` — ce que la recommandation interdit.
-
-### 1.2 Le refresh token glissant d'un an est interdit à un client navigateur
-
-C'est le constat le plus structurant de cette passe, et il est arrivé dans l'intervalle entre les deux passes.
-
-**« OAuth 2.0 for Browser-Based Applications » est sorti du statut de draft** : c'est la **RFC 10017**, *Best Current Practice*, **BCP 212** (le même BCP que la RFC 8252 « OAuth 2.0 for Native Apps »), publiée en **août 2026**, par A. Parecki, P. De Ryck et D. Waite. Elle était `draft-ietf-oauth-browser-based-apps-27` jusque-là. La passe 1 ne la cite pas.
-
-Ce qu'elle exige d'un serveur qui émet un refresh token à un client navigateur (§6.3.2.3), verbatim :
-
-> « MUST either rotate refresh tokens on each use OR use sender-constrained refresh tokens »
-> « MUST either set a maximum lifetime on refresh tokens »
-> « expire if the refresh token has not been used within some amount of time »
-> **« MUST NOT, upon issuing a rotated refresh token, extend the lifetime of the new refresh token »** … « beyond the lifetime of the initial refresh token »
-
-Maintenant ce que le dépôt fait, verbatim (`docs/AUTHENTICATION_SETUP.md`) :
-
-> « Valeur opaque stockée en base (table auth_tokens), durée **glissante** de REFRESH_TOKEN_EXPIRE_DAYS (365 par défaut) **sans plafond absolu** : chaque /refresh repose expires_at à now + 1 an. »
-
-Confrontation, exigence par exigence :
-
-| Exigence RFC 10017 §6.3.2.3 | État du dépôt | Verdict |
-|---|---|---|
-| Rotation à chaque usage **ou** token sender-constrained | Rotation à chaque `/refresh`, ancien marque `used_at` + `is_active=false`, fenêtre de rejeu de 60 s | **Conforme** |
-| Durée de vie maximale **ou** expiration par inactivité | Ni l'une ni l'autre : la fenêtre est glissante et sans plafond | **Non conforme** |
-| La rotation ne doit pas prolonger la durée au-delà du premier token | La rotation repose `expires_at` à `now + 1 an` | **Non conforme, et c'est littéralement le contraire** |
-
-Ce n'est pas une subtilité théorique : la RFC en donne la raison dans la même section — plafonner à la durée du premier token est ce qui empêche un token volé de rester utilisable indéfiniment.
-
-**Ce qui est demande, et ce qui ne l'est pas.** La RFC 10017 est **scopée aux applications navigateur**. Le client mobile, lui, relève de la RFC 8252 et garde ses jetons dans `expo-secure-store` (Keychain / Keystore) : son refresh glissant d'un an n'est pas remis en cause par ce document. La correction est donc **par type de lignée**, pas globale : le modèle porte déjà un `lineage_id` « génère côté serveur au login et recopie à chaque rotation », ce qui est exactement le crochet où accrocher une politique de durée différenciée. C'est quelques lignes dans le service d'auth et un champ sur la ligne `auth_tokens`, pas une refonte.
-
-**Valeurs proposées pour la lignée navigateur**, à confirmer par l'owner : durée absolue **30 jours** depuis l'ouverture de session (non reposée par la rotation), expiration par inactivité **14 jours**. Le TTL DynamoDB existant (`expire_at` = `expires_at` + 7 jours) continue de nettoyer derrière.
-
-### 1.3 Une app web en lecture ne demande aucun endpoint nouveau
-
-Vérifie en listant les routes que le client mobile appelle (`mobile/src/services/*.ts`) et en les confrontant aux routeurs du dépôt. Les dix-huit routes de lecture qui servent les six surfaces de l'owner existent toutes, et toutes avec ce qu'une app de bureau demande :
-
-| Surface demandée par l'owner | Routes de lecture | Déjà paginé / filtrable ? |
-|---|---|---|
-| Ajouts récents | `GET /api/media`, `GET /api/engagements/recent`, `GET /api/folders/unsorted-count` | Oui : `cursor`, `limit` (1-100), `sort` |
-| Bibliothèque : liste et dossiers | `GET /api/media` (avec `folder_id`, `q`, `source`, `type`, `status_filter`), `GET /api/folders` | Oui, et `folder_id` « includes subfolders » |
-| Fiche media, lecteur de transcript | `GET /api/media/{id}`, `GET /api/media/{id}/raw-content` | Oui |
-| Artefacts IA | `GET /api/artifacts`, `GET /api/artifacts/{id}`, `GET /api/artifacts/{id}/content` | Oui |
-| Onglet digest (quotidien, hebdo) | `GET /api/digest/daily`, `GET /api/digest/weekly`, `GET /api/digest/settings` | Oui |
-| Recherche | `GET /api/search/transcripts` | Oui |
-| Réglages du compte, abonnement compris | `GET /api/auth/me`, `GET /api/v1/entitlements`, `GET /api/pricing` | Oui, et `/entitlements` porte déjà `is_beta_access` |
-
-Deux conséquences :
-
-1. **Le lot W0 n'a presque rien à faire côté backend** : la session (§6) et le CORS (§1.1). Tout le reste du chemin de lecture est du câblage front.
-2. **Le drapeau de beta est déjà la.** `media_summarizer/api/endpoints/entitlements.py:65-66` rend `is_free_trial` et `is_beta_access`, et `mobile/src/lib/subscriptionDisplay.ts:73-78` montre comment l'app s'en sert — un fichier `lib/` pur, donc importable par l'app web sans adaptation (§4). L'app web masque donc l'abonnement exactement comme le mobile, en lisant le même champ et en réutilisant la même fonction.
-
----
-
-## 2. Le périmètre fonctionnel de l'app web, surface par surface
-
-Les six surfaces sont celles que l'owner a écrites. Le tableau les met en face de ce qui existe côté mobile — pour mesurer, pas pour recopier. « Lignes RN » est le compte de lignes des écrans et composants mobiles qui portent cette surface ; c'est l'assiette du chiffrage de §7, pas une promesse de conversion ligne pour ligne.
-
-| # | Surface | Écrans et composants mobiles | Lignes RN | Lecture seule possible ? | Lot |
-|---|---|---|---|---|---|
-| 1 | **Ajouts récents** | `(tabs)/inbox.tsx`, `HomeTile`, `useHomeSections`, `home_unsorted_review_card` | 1 539 | Oui (la revue des non classés est une écriture) | W1 |
-| 2 | **Bibliothèque : liste et dossiers** | `media/folders/index.tsx`, `media/folders/[id].tsx`, `MediaListCard`, `SubfolderCard` | 2 082 | Oui (création, renommage, déplacement sont des écritures) | W1 |
-| 3 | **Fiche media, transcript, artefacts** | `media/[id].tsx`, `CompletedDetailView`, `MediaDetailHero`, `TranscriptReader`, `ArtifactsPanel`, `ArtifactTile`, `artifacts/[artifactId].tsx`, `ArtifactHistoryRow` | 5 171 | Oui (la **génération** d'artefact est une écriture) | W1 |
-| 4 | **Onglet digest** | `(tabs)/digest/index.tsx`, `digest/[period].tsx`, `DigestCoverStack` | 1 212 | Oui, entièrement | W2 |
-| 5 | **Recherche** | `(tabs)/search.tsx`, `lib/highlightSnippet.ts` | 1 671 | Oui, entièrement | W2 |
-| 6 | **Réglages du compte, abonnement compris** | `(tabs)/account.tsx`, `SubscriptionStatusCard`, `settings/interface-language.tsx`, `settings/reading-language.tsx`, `settings/delete-account.tsx`, `paywall.tsx` | 2 889 | **En partie seulement** : l'état d'abonnement se lit, mais l'entrée vers l'abonnement doit être **masquée** (task-429) et le paywall n'a pas de contrepartie web avant W4 | W2 (lecture) + W4 (achat) |
-| | **Total des six surfaces** | 26 fichiers | **14 564** | | |
-| — | *Hors des six surfaces, pour mémoire* | `share-confirmation.tsx`, `unsorted-review.tsx`, `AddSourceSheet`, `UrlEntryDialog`, `FolderSaveSheet`, `RenameDialog`, `FolderPickerView`, `bug-report.tsx`, `onboarding/language.tsx` | 4 114 | Non : ce sont les écritures | W3 |
-
-### 2.1 Ce que l'app web ne portera pas, et pourquoi
-
-Quatre choses de l'app mobile n'ont pas de sens dans un navigateur, et il faut le dire avant que quelqu'un les mette dans un AC :
-
-| Fonction mobile | Statut web | Raison |
-|---|---|---|
-| **Feuille de partage** (`expo-share-intent`) | Sans objet | Il n'y a pas de feuille de partage système dans un navigateur. Son équivalent web **est l'extension** : c'est la raison d'être de celle-ci, et c'est pourquoi les deux livrables de cette tâche sont complémentaires et non concurrents. |
-| **Notifications push** (`expo-notifications`) | Hors périmètre | `expo-notifications` ne supporte ni le web ni autre chose qu'Android et iOS (`platforms: ['android', 'ios']`). Un push web passerait par la Push API du navigateur et un second enregistrement de jeton côté API : une tâche à part, pas un effet de bord. |
-| **Import depuis la pellicule / le sélecteur de documents** | **Remplace**, pas porte | `expo-image-picker` et `expo-document-picker` deviennent un `<input type="file">` et l'API `File`. Le chemin d'upload lui-même (`POST /api/media/upload-url` puis `PUT` sur l'URL présignée) est identique : c'est `presignedUpload.ts` qui change d'implémentation de lecture d'octets, pas le contrat. W3. |
-| **Achat integre** (`react-native-purchases`) | **Remplace** | Il n'existe pas de version web de `react-native-purchases` ; le chemin web est le Web SDK de RevenueCat, adossé à Stripe Billing. W4, et après task-429. |
-
-### 2.2 Ce que l'app web portera et que le mobile ne porte pas
-
-Trois choses qu'un grand écran rend évidentes et qu'il serait dommage de ne pas scoper, parce qu'elles coûtent presque rien une fois la coquille posée :
-
-1. **Des raccourcis clavier.** `j`/`k` pour parcourir la liste, `Entree` pour ouvrir, `/` pour la recherche, `Cmd K` pour la palette. C'est du gratuit sur une liste déjà virtuelle, et c'est ce qui fait qu'une app de bureau se sent comme une app.
-2. **Une vraie URL par objet.** `app.<domaine>/dossier/<id>`, `/media/<id>`, `/digest/quotidien`. Partageable, mettable en favori, rechargeable — ce que l'app mobile ne peut pas offrir. Cela impose seulement que le routeur lise l'id depuis l'URL plutôt que depuis un état de navigation.
-3. **Lire à côté d'autre chose.** C'est le seul avantage que les quatre maquettes exploitent différemment, et c'est pourquoi la comparaison de §12 se joue la.
-
----
-
-## 3. La stack : Astro reste-t-il le bon choix ?
-
-### 3.1 La question posée correctement : un livrable ou deux ?
-
-La passe 1 raisonnait sur « le site ». Avec l'app web, il y a deux objets qui n'ont rien en commun :
-
-| | **Le site public** | **L'app web** |
-|---|---|---|
-| Qui le voit | un visiteur anonyme, souvent une fois | l'utilisateur connecté, souvent |
-| Contenu | 6 pages fixes, dont deux écrites en Markdown dans le dépôt | 100 % de données de l'API, zéro contenu statique |
-| Ce qui compte | arriver vite, être indexable, porter des URL que les stores exigent | garder l'état, ne pas recharger, répondre au clavier |
-| Rendu | HTML au build | rendu client après authentification |
-| Indexable | **oui, c'est le but** | **non, c'est interdit** : derrière une session |
-
-Astro le dit de lui-même : il est « the web framework for building content-driven websites like blogs, marketing, and e-commerce », là où « most modern web frameworks were designed for building web applications » qui excellent sur « logged-in admin dashboards, inboxes, social networks ». Il ajoute, honnêtement, qu'il « scale up to performant, powerful, dynamic web applications » — mais le choix d'outil n'a pas à être un pari sur cette montée en charge quand on peut prendre les deux outils pour leurs deux métiers.
-
-**Et la RFC 10017 fournit l'argument qui transforme ce confort en recommandation.** §9.4 :
-
-> « Browsers key many of their protections to the origin `<scheme, hostname, port>`. Deploying one application per origin allows the application to leverage these protections, and also simplifies the configuration of CORS and CSP. »
-
-Deux origines, donc : `www.<domaine>` (statique, aucune session, aucune donnée) et `app.<domaine>` (session, données personnelles, CSP serrée). Un XSS dans une page marketing ne touche alors pas le cookie de session de l'app. C'est gratuit : les deux vivent sur le même domaine et le même hébergeur.
-
-### 3.2 Les candidats pour l'app connectée, sur une grille commune
-
-Versions relevées sur `registry.npmjs.org` le **2026-10-06**.
-
-| Critère | **Vite + React + React Router** (recommandé) | **Next.js** | **TanStack Start** | **SvelteKit** | **Astro + îlots React** | **Expo Router web (RNW)** |
-|---|---|---|---|---|---|---|
-| Version, date | Vite **8.3.3** (2026-10-06) · react-router **8.4.0** (2026-09-15) | **16.3.8** (2026-09-30) | **1.168.60** (2026-09-30) | **3.0.1** (2026-10-06) | astro **7.3.6** (2026-10-06) | expo **55** dans le dépôt (latest 57.0.27) · react-native-web **0.21.3** (2026-09-25) |
-| Téléchargements npm / 30 j | 229,8 M (react-router) | 253,4 M | 65,9 M | 11,7 M | 25,4 M | 28,1 M (rnw) |
-| Licence | MIT | MIT | MIT | MIT | MIT | MIT |
-| **Serveur à opérer ?** | **Non** : `ssr: false` produit un `index.html` pré-rendu + des assets | Oui en pratique (ou un adaptateur edge à maintenir) | Oui : c'est un framework full-stack | Oui, ou un adaptateur statique avec les mêmes limites qu'un SPA | Non | Non (`expo export --platform web`) |
-| Même langage de composants que `mobile/` | **Oui**, React 19 est déjà la version du dépôt | Oui | Oui | **Non**, Svelte | Oui pour les îlots | Oui, et les mêmes primitives |
-| Routes par fichier | Oui | Oui | Oui | Oui | Oui, mais pensées pour des pages | Oui (`expo-router`) |
-| Chargement de données par route | `clientLoader` / `clientAction` | server + client | server-first | `load` | à la main dans l'îlot | `useEffect` / data loaders |
-| Ce que ça coûte d'apprendre | le moins : un routeur | un modèle serveur/client, le cache, les limites de l'edge | un modèle full-stack neuf | un second langage de composants | une frontière îlots / pages à tenir | le modèle RN **plus** ses écarts web |
-| Adapte à une app derrière session | Oui | Oui, mais on paye un serveur pour du contenu qui n'est jamais public | Oui, idem | Oui, idem | **Mal** : il faudrait un îlot géant avec son propre routeur client | Oui |
-| Verdict | **Recommandé** | Rejeté : le SSR n'acheté rien derrière une session, et ajoute un runtime à opérer | Rejeté, même raison | Rejeté : un second langage de composants pour un développeur seul | Rejeté pour l'app, **retenu pour le site public** | Rejeté, §3.3 |
-
-Le point qui tranche n'est pas la popularité : c'est qu'une app **entièrement derrière une session** ne tire **rien** du rendu serveur. Il n'y a pas de SEO à gagner (il est interdit), pas de premier rendu à accélérer pour un visiteur anonyme (il n'y en a pas), et pas de donnée à pre-charger sans le jeton de l'utilisateur. Tout ce que le SSR apporterait ici, c'est un runtime à déployer, à surveiller et à facturer. React Router documente exactement le mode dont on a besoin :
-
-> « When using React Router as a framework, you can enable 'SPA Mode' by setting `ssr:false` in your `react-router.config.ts` file. This will disable runtime server rendering and generate an `index.html` at build time that you can serve and hydrate as a SPA. »
-> « After running `react-router build`, deploy the `build/client` directory to whatever static host you prefer. »
-> — <https://reactrouter.com/how-to/spa> (lu le 2026-10-06)
-
-Deux contraintes de ce mode, à connaître et à écrire dans la tâche d'implémentation, parce qu'elles surprennent :
-
-- **La route racine est rendue au build, en Node.** « you can't call `window` or other browser-only APIs during the initial render, even when server rendering is disabled », et le projet garde une dépendance à `@react-router/node`. Le `HydrateFallback` de la racine est donc le seul endroit où l'écran d'attente se dessine.
-- **Aucun `loader` serveur ailleurs qu'a la racine** : « You cannot include à `loader` in any other routes in your app when using SPA Mode unless you are pre-rendering those pages. » Tout passe par `clientLoader`. C'est ce qu'on veut de toute façon : chaque chargement porte le jeton de l'utilisateur.
-- **L'hôte doit réécrire toutes les URL vers `index.html`.** Cloudflare le fait avec une ligne (§5).
-
-### 3.3 React Native Web : l'option à prendre au sérieux, puis à refuser
-
-C'est le candidat qu'il fallait instruire, parce que si l'app web pouvait sortir de `mobile/` par une commande, tout le reste de ce benchmark serait sans objet. Les faits d'abord, le refus ensuite.
-
-**Ce qui marche vraiment.** Expo documente une cible web de première classe : on installe `react-dom`, `react-native-web` et `@expo/metro-runtime`, on lance `npx expo start --web`, on produit avec `npx expo export --platform web`. Le dépôt a même déjà le script (`"web": "expo start --web"` dans `mobile/package.json`), et le registre npm publie bien un `@expo/metro-runtime` sous le tag `sdk-55`, c'est-a-dire la version du dépôt (55.0.12). `react-native-web` lui-même est sain : 0.21.3 publié le **2026-09-25**, 28,1 M de téléchargements sur trente jours, et Expo rappelle que RNW fait tourner le site de X. Ce n'est pas une impasse technique.
-
-**Ce qu'il faudrait remplacer.** Sur les 31 dépendances de `mobile/package.json`, celles qui ne tournent pas dans un navigateur :
-
-| Dépendance | Statut web | Ce qu'il faudrait |
-|---|---|---|
-| `expo-secure-store` | **Non supporté** : « Android, iOS, tvOS, Included in Expo Go » | Un adaptateur. Et de toute façon la session web ne doit pas stocker de jeton (§6). |
-| `expo-notifications` | **Non supporté** : `platforms: ['android', 'ios']` | Rien, hors périmètre (§2.1) |
-| `react-native-purchases` | Pas de cible web | Le Web SDK de RevenueCat (§11) |
-| `expo-share-intent` | Natif seulement | Rien : c'est l'extension (§2.1) |
-| `expo-glass-effect` | **iOS et tvOS seulement**, et « only available on iOS 26 and above » | Degrade en `View` — donc le matériau du `GlassSurface` disparaît |
-| `expo-image-picker`, `expo-document-picker`, `expo-file-system` | Partiel / natif | `<input type="file">` + API `File` |
-| `@sentry/react-native` | SDK distinct côté navigateur (`@sentry/react` 11.4.0, 2026-10-02) | Un adaptateur dans `lib/crashReporting.ts` |
-
-Sept dépendances à traiter, dont deux qui disparaissent et cinq qui demandent un adaptateur. Pris isolement, c'est faisable.
-
-**Pourquoi c'est quand même non.** Un seul argument, et il suffit : **ce qu'on réutiliserait n'est pas réutilisable.**
-
-Les 22 901 lignes de `mobile/app` (12 912) et `mobile/src/components` (9 989) ne sont pas des composants génériques : ce sont des **mises en page de téléphone**. Une barre d'onglets basse de 64 px (`a-tabbar` dans les maquettes existantes), une colonne unique, des feuilles modales qui montent du bas (`AddSourceSheet`, `FolderSaveSheet`, `RenameDialog`), un `SafeAreaView`, des cibles tactiles de 48 px minimum, une liste virtualisée à une colonne. Les quatre maquettes de cette passe (§12) montrent ce qu'une app de bureau demande à la place : des volets, une arborescence permanente, un tableau triable, une marge d'artefacts, une palette de commandes. **Aucune de ces structures n'existe dans `mobile/app`.**
-
-Donc, avec RNW, on paierait :
-
-- un second bundler (Metro) à faire cohabiter avec la CI mobile, pour produire un artefact web ;
-- sept adaptateurs de dépendances ;
-- l'écriture en `View`/`Text` plutôt qu'en HTML, donc un surcoût permanent sur tout ce qui est du ressort du navigateur : CSS Grid, `position: sticky`, `backdrop-filter`, le focus clavier, `::selection`, les media queries de conteneur — exactement ce que les quatre maquettes utilisent ;
-- et la contrainte que chaque correction d'un composant partage soit testée sur trois plateformes au lieu d'une ;
-
-…pour réutiliser **zéro** mise en page et une poignée de composants atomiques (une puce, une jauge) qui se réécrivent en dix lignes de CSS.
-
-Le partage utile n'est pas la. Il est dans la couche en dessous, qui ne dépend d'aucune primitive de rendu — et c'est précisément ce que §4 mesure.
-
-> **A noter pour l'avenir, sans l'acter** : si un jour une app de bureau *native* (Electron, Tauri) devenait un sujet, RNW redeviendrait une option, parce que la question serait alors « une app, trois plateformes » et non « deux formes d'interface ». Ce n'est pas la question ici.
-
-### 3.4 Le site public : Astro, inchangé
-
-Rien de ce que la passe 1 a conclu n'est périmé pour les six pages publiques (`/`, `/extension`, `/abonnement`, `/privacy`, `/terms`, `/support`) :
-
-- Astro **7.3.6** (2026-10-06, MIT) rend du HTML statique par défaut, sans hydratation à écrire.
-- Le point décisif reste le même : `/privacy` et `/terms` doivent rester **la version du dépôt** (`docs/compliance/*.md`), ce qu'une collection de contenu Astro lit directement. task-357 insiste sur « où vit le texte », et un générateur qui lit les `.md` existants est ce qui évite une seconde version du texte légal.
-- `/.well-known/apple-developer-domain-association.txt` reste un fichier statique à la racine publique.
-- Pas de mesure d'audience au premier lot : elle ajouterait un bandeau de consentement et une mention dans la politique de confidentialité pour une donnée que personne n'exploitera.
-
-**Un seul ajout** : la page `/abonnement` publique, au lot W0, est une **page de prix non connectée et sans bouton** — et pendant la beta elle ne doit pas non plus promettre un achat imminent. Le bouton arrive avec W4.
-
----
-
-## 4. Partage de code avec `mobile/` : la réponse a changé, et voici la mesure
-
-La passe 1 concluait « rien d'utile n'est partageable » (rejeté §3.4). L'owner demande de reposer la question pour une app web « qui réaffiche les mêmes artefacts ». La réponse est oui, et elle se mesure.
-
-### 4.1 L'inventaire, couche par couche
-
-Comptes obtenus sur le dépôt le **2026-10-06** (`wc -l` sur `mobile/app` et `mobile/src`, total 44 202 lignes de `.ts`/`.tsx`). « Couple » signifie : le fichier importe `react-native` ou un module `expo-*`.
-
-| Couche | Lignes | Fichiers | Dont couplés | Lignes couplées | **Importable tel quel** |
-|---|---|---|---|---|---|
-| `src/i18n` (11 catalogues + runtime) | 8 735 | 15 | 1 (`index.tsx`, le provider) | 264 | **8 471** |
-| `src/lib` (fonctions pures de domaine) | 3 677 | 28 | 6 | 946 | **2 731** |
-| `src/services` (clients d'API) | 3 062 | 21 | 7 | 1 141 | **1 921** |
-| `src/types` (contrats) | 1 236 | 8 | 1 (`sharedContent.ts`) | 252 | **984** |
-| `src/constants` (dont `theme.ts`) | 348 | 2 | 0 | 0 | **348** |
-| **Sous-total logique** | **17 058** | **74** | **15** | **2 603** | **14 455** |
-| `src/contexts` | 2 025 | 4 | — | — | partiellement (voir 4.2) |
-| `src/hooks` | 2 218 | 12 | — | — | partiellement |
-| `src/components` | 9 989 | 33 | tous | — | **0** |
-| `app/` (écrans) | 12 912 | 26 | tous | — | **0** |
-
-**14 455 lignes directement importables par une app web React**, sans RNW, sans adaptateur, sans refactoring : **33 % du code mobile total, et 85 % de sa couche logique.** C'est le chiffre qui renverse la conclusion de la passe 1.
-
-Les quinze fichiers couplés, et par quoi :
-
-| Fichier | Lignes | Couple par | Coût de l'adaptateur |
-|---|---|---|---|
-| `services/tokenStorage.ts` | 64 | `expo-secure-store` | **Nul** : la session web n'a pas de jeton à stocker (§6) |
-| `services/authService.ts` | 152 | `expo-*` | Faible : les deux ou trois appels de stockage derrière une interface |
-| `services/purchaseService.ts` | 190 | `react-native-purchases`, `Platform` | Remplace par le Web SDK (W4) |
-| `services/pushNotificationService.ts` | 233 | `expo-notifications`, `Platform` | Hors périmètre |
-| `services/sharedContentService.ts` | 185 | `Platform` | **Trivial** : `Platform.OS` sert à calculer `source_app` |
-| `services/localFileTransfer.ts` | 269 | `expo-file-system` | Réécrit avec l'API `File` (W3) |
-| `services/feedbackService.ts` | 48 | `expo-*` | Faible |
-| `lib/crashReporting.ts` | 328 | `@sentry/react-native` | Un adaptateur vers `@sentry/react` |
-| `lib/localImport.ts` | 246 | `expo-image-picker`, `expo-document-picker` | Réécrit (W3) |
-| `lib/googleOAuth.ts` | 60 | `expo-auth-session` | Remplace par le flux web (§6) |
-| `lib/deviceTimezone.ts` | 49 | `expo-localization` | **Trivial** : `Intl.DateTimeFormat().resolvedOptions().timeZone` |
-| `lib/usageWarningDismissal.ts` | 41 | stockage | Trivial |
-| `lib/startupErrorGuard.ts` | 222 | `react-native` | Spécifique au démarrage natif, non nécessaire |
-| `types/sharedContent.ts` | 252 | `expo-share-intent` | Non nécessaire (pas de feuille de partage web) |
-| `i18n/index.tsx` | 264 | `Alert`, `I18nManager`, `expo-localization`, `expo-secure-store` | **Un provider web de ~80 lignes**, qui lit les mêmes `CATALOGS` |
-
-### 4.2 Ce que le partage acheté, concrètement
-
-Ce n'est pas « quelques interfaces ». C'est :
-
-- **Les 11 catalogues i18n** (8 471 lignes, ~900 clés chacun), y compris les familles de pluriel et l'arabe en RTL. Les dupliquer serait garantir qu'ils divergent dès la première tâche produit.
-- **Le modèle de domaine complet** : `types/media.ts` (328 lignes) porte les statuts, les types de media, les plateformes source ; `types/artifacts.ts` les cinq types d'artefact ; `types/upload.ts` le contrat d'upload.
-- **Les règles métier qu'une app web doit reproduire à l'identique sous peine de mentir** : `lib/planCopy.ts` (661 lignes, la formulation des paliers et des quotas), `lib/quotaError.ts` (170, l'interprétation d'un 429), `lib/getFriendlyErrorMessage.ts` (312, la table de correspondance code d'erreur → clé i18n), `lib/subscriptionDisplay.ts` (147, dont la lecture de `is_beta_access`), `lib/folderTree.ts` (171, la construction de l'arborescence), `lib/highlightSnippet.ts` (244, le surlignage des résultats de recherche), `lib/mediaTitle.ts`, `lib/mediaTypeDisplay.ts`, `lib/relativeTime.ts`, `lib/formatDuration.ts`, `lib/artifact*.ts`.
-- **Les clients d'API** : `apiClient.ts` (93) et les treize services qui l'utilisent — y compris la pagination par curseur et la gestion des erreurs HTTP (`lib/httpError.ts`).
-
-Pris ensemble, c'est **la différence entre une app web qui dit la même chose que l'app mobile et une app web qui dit à peu près la même chose**. Sur les refus de quota et la formulation des paliers, « à peu près » est un bug.
-
-### 4.3 Comment partager : trois formes, et pourquoi la plus pauvre gagne au lot W0
-
-| | **A. Alias de build vers `mobile/src`** (recommandé) | **B. `packages/core` en espace de travail npm** | **C. Pas de partage, duplication** |
-|---|---|---|---|
-| Ce qu'on fait | le projet web déclare `resolve.alias` (Vite) + `paths` (tsconfig) vers `../mobile/src/{types,lib,services,i18n,constants}` | on déplace ces cinq dossiers dans `packages/core`, et `mobile/` comme `web/` l'importent | on recopie |
-| Touche à `mobile/package.json` | **Non** | Oui | Non |
-| Touche à Metro / au build EAS | **Non** : Metro ne voit pas le dossier web, qui n'est pas dans son `projectRoot` | **Oui** : `watchFolders`, résolution monorepo, et le build EAS doit embarquer le paquet | Non |
-| Risque sur la CI mobile | **Nul** | Réel. `task-186` documente qu'un simple nom de cible mal choisi a tue un build EAS en `XCODE_BUILD_ERROR` : c'est le chemin fragile du dépôt | Nul |
-| Qui casse en cas de refactoring mobile | le build web, visiblement, au `tsc` | personne (le contrat est explicite) | personne (et c'est le problème : la copie dérive en silence) |
-| Comment on empêche un import couple | une règle de lint qui interdit `react-native` et `expo-*` sous l'alias, ou simplement l'échec du bundler | la frontière du paquet | rien |
-| Coût initial | ~0 j | 1 à 2 j, dont la moitié à revalider la CI mobile | 0 j, puis une dette permanente |
-
-**Recommandation : A au lot W0, B quand un troisième consommateur apparaît** — c'est-a-dire quand l'extension voudra `quotaError.ts` et deux clés i18n (lot X1 ou X2). Le déclencheur est explicite, ce qui évite la discussion.
-
-Et une nuance par rapport à la règle « order cleanups first » du `CLAUDE.md` : B **n'est pas** une restructuration que W1 à W4 viendraient peupler. Les cinq dossiers ne changent pas de contenu ; seule leur adresse change. Passer de A à B est une tâche mécanique (un `git mv`, deux lignes de configuration), pas une migration — et la faire plus tard ne fait rien faire deux fois. Ce qui serait à faire deux fois, c'est l'inverse : revalider le build EAS maintenant, pour un partage dont on n'a pas encore vérifié la forme.
-
----
-
-## 5. Hébergement
-
-Le fournisseur est celui de task-357 (Cloudflare) et ce benchmark ne le rediscute pas. Ce qui change avec l'app web, c'est **ce qu'on y pose** : deux projets au lieu d'un, et un mode SPA à activer.
-
-### 5.1 Ce que Cloudflare Workers static assets offre, et ce que ça coûte
-
-| Fait | Source |
-|---|---|
-| **« Requests to static assets are free and unlimited. »** Les requêtes qui atteignent le code du Worker, elles, sont facturées au tarif Workers | <https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/> |
-| **« There is no additional cost for storing Assets. »** | idem |
-| **`not_found_handling = "single-page-application"`** : « Sets your application to return à `200 OK` response with `index.html` for requests which don't match a static asset » — exactement la réécriture que React Router demande | <https://developers.cloudflare.com/workers/static-assets/> |
-| **`not_found_handling = "404-page"`** pour le site public, qui veut de vrais 404 | idem |
-| Limites de l'offre gratuite : **20 000 fichiers** par version (100 000 en payant), **25 MiB** par fichier, aucun plafond de taille totale documenté | <https://developers.cloudflare.com/workers/platform/limits/> |
-| Offre gratuite Workers : **100 000 requêtes/jour**, 10 ms de CPU par requête | idem |
-
-Conséquence chiffrée : **l'app web ne consomme pas le quota de 100 000 requêtes/jour**, parce qu'une SPA ne sert que des assets statiques et appelle l'API AWS directement. Le quota Workers ne devient un sujet que si l'on choisit le BFF de §6.3, qui fait passer chaque appel d'API par le Worker. C'est un coût cache de cette option, et il est quantifié : une session de lecture de 50 medias fait de l'ordre de 100 à 200 requêtes d'API, donc ~500 sessions/jour avant de toucher le plafond gratuit.
-
-### 5.2 Les deux projets, et ce qu'ils servent
-
-| Origine | Projet | Contenu | `not_found_handling` | Session |
-|---|---|---|---|---|
-| `www.<domaine>` (et l'apex en redirection) | site public | build Astro : 6 pages, `/.well-known/…` | `404-page` | aucune |
-| `app.<domaine>` | app web | `build/client` de React Router | `single-page-application` | cookie de l'API |
-| `api.<domaine>` | — | inchangé : API Gateway → Lambda | — | émet le cookie |
-
-### 5.3 Les alternatives, pour mémoire
-
-| Option | Pour | Contre | Verdict |
-|---|---|---|---|
-| **Cloudflare Workers static assets** | 0 $, requêtes d'assets illimitées, mode SPA documenté, même fournisseur que task-357, même zone DNS | il faut deux projets | **Recommandé** |
-| S3 + CloudFront (tout chez AWS, en Terraform) | tout dans l'IaC existante ; ferait fonctionner l'alias `api` tel qu'il est déjà écrit | un module Terraform neuf, une fonction CloudFront ou une règle d'erreur 403→`index.html` pour le mode SPA, un coût non nul, et **la perte d'Email Routing** que task-357 juge décisive | Rejeté, pour les raisons de task-357 §3 |
-| EAS Hosting | recommandé par Expo, zéro configuration | n'a de sens que si l'app web sort de `mobile/` par `expo export`, c'est-a-dire avec RNW — rejeté en §3.3 ; et ça ajoute un fournisseur | Rejeté |
-| Cloudflare Pages | fonctionne | Cloudflare écrit « Start new projects with Workers » (rejeté §0.5) | Rejeté pour un projet neuf |
-
----
-
-## 6. Authentification : une session complète dans le navigateur
-
-C'est le point que l'owner a explicitement demande de réinstruire — « rafraîchissement, déconnexion, multi-onglets, là où le README ne prévoyait une session que sur la page d'abonnement ».
-
-### 6.1 Ce qui existe, lu dans le dépôt
-
-- Les sessions s'ouvrent par `POST /api/auth/google/native`, `/apple/native`, `/register` ou `/login`. Toutes rendent `access_token` **et** `refresh_token` **dans le corps JSON**.
-- `GET /api/auth/google/callback` et `/apple/callback` existent mais « **N'émet aucun token de session** : il n'y a plus de client web pour en recevoir » (task-293). Le seul cookie encore posé est `oauth_state_<provider>`, garde CSRF de 10 minutes — et c'est la preuve que **l'API sait déjà poser un cookie à travers API Gateway** (`auth_social.py:91`, `response.set_cookie`), donc le transport n'est pas à construire.
-- L'access token est un JWT de 60 min (`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`), et `get_current_user` relit l'utilisateur en DynamoDB à chaque requête — donc raccourcir sa durée ne coûte que des rafraîchissements, jamais de la cohérence.
-- Le refresh est opaque, en base, **glissant sur un an sans plafond**, rotate à chaque `/refresh` avec une fenêtre de rejeu de 60 s, et porte un `lineage_id` qui est « l'identité de la session d'un appareil […] et c'est ce que /logout révoque ».
-
-Deux détails de ce modèle sont des **cadeaux** pour une app web, et il faut les nommer :
-
-1. **La fenêtre de rejeu de 60 s** (task-294) : « Un token consomme depuis moins de 60 s rejoue le couple déjà émis au lieu de répondre 401 ». C'est exactement le remède au problème classique du multi-onglets, où deux onglets rafraîchissent en même temps et l'un invalide l'autre. Le mécanisme est déjà la.
-2. **Le `lineage_id`** : une lignée par session de navigateur, révocable seule. « Se déconnecter de ce navigateur » existe déjà côté modèle.
-
-### 6.2 Ce que la RFC 10017 impose, et ce qu'elle recommande
-
-La RFC 10017 (BCP 212, août 2026) classe trois patrons « in decreasing order of security » (§6) :
-
-| Patron | Qui détient les jetons | Ce que la RFC en dit |
-|---|---|---|
-| **Backend For Frontend (BFF)** | un composant serveur, session par cookie, qui **proxifie** chaque appel | « This architecture is strongly recommended for business applications, sensitive applications, and applications that handle personal data. » |
-| **Token-mediating backend** | le backend obtient les jetons et remet **l'access token** au front | à n'adopter que si l'on a vérifié qu'un BFF complet n'est pas viable |
-| **Browser-based OAuth client** | tout dans le navigateur, client public, Authorization Code + PKCE | « vulnerable to all attack scénarios » quand du code malveillant s'exécute |
-
-Et un quatrième cas, souvent oublié, qui est **exactement le notre** (§7.1, « Single-domain apps not using OAuth ») : un front navigateur et un backend de la même organisation, où « server-side cookie sessions are often enough », OAuth ayant été conçu « for third-party or federated access to APIs ». Notre app web n'est pas un client OAuth de notre API : c'est une interface de première partie sur une session maison. Le Sign-in Google ou Apple est un flux OAuth **en amont**, qui produit *notre* session, pas un jeton Google que l'app web porterait.
-
-Sur le stockage, §8.2 est sans ambiguïté :
-
-> `localStorage` : « does not protect against unauthorized access from malicious JavaScript »
-> Cookies écrits par JS : « this practice is NOT RECOMMENDED »
-> Service Worker : « MUST NOT store tokens in any persistent storage API that is shared with the main window »
-> et, globalement : « none of these options can fully mitigate token exfiltration »
-
-### 6.3 Les quatre options, sur la même grille
-
-| | **A. Jetons en JS (`localStorage`)** | **B. Cookie `HttpOnly` de rafraîchissement + access en mémoire** (recommandé) | **C. BFF sur Cloudflare Worker** | **D. Pas de session : liens à usage unique depuis le mobile** |
-|---|---|---|---|---|
-| Ce que le navigateur détient | refresh **et** access, lisibles par tout script | **rien de persistant** : un cookie que JS ne lit pas, et un access token dans une variable de module | rien du tout | un jeton court, le temps d'une page |
-| Survit à un rechargement | oui | **oui** (le cookie rejoue `/refresh`) | oui | **non** |
-| Multi-onglets | oui, et les onglets se volent la rotation | **oui**, le cookie est partage ; la course est arbitrée par la fenêtre de 60 s + un verrou `navigator.locks` | oui | sans objet |
-| Déconnexion | effacer le stockage + `/logout` | **`/logout` + suppression du cookie**, côté serveur, donc fiable | idem | sans objet |
-| **Changements backend** | **aucun** | **bornes** : un drapeau de client sur les 4 endpoints d'ouverture de session, pose et suppression du cookie, lecture du cookie dans `/refresh`, et la politique de durée par lignée (§1.2) | les mêmes, plus un Worker | aucun au-delà de l'appairage |
-| **Changements infra** | CORS : `allow_origins` explicite suffit | CORS : `allow_origins` explicite **et** `allow_credentials = true` (§1.1) | **aucun CORS** (même origine), mais un Worker à déployer et un secret de chiffrement de cookie à gérer hors Secrets Manager | CORS explicite |
-| Conformité RFC 10017 | **non** : §8.2 sur le stockage, et la durée d'un an viole §6.3.2.3 | **oui**, une fois la politique de durée posée ; c'est le cas §7.1 « server-side cookie sessions are often enough » | **oui**, c'est le patron recommandé | oui, mais inutilisable |
-| Surface d'attaque restante | un XSS exfiltre une session d'un an | un XSS peut **agir** pendant que l'onglet est ouvert, mais ne peut pas emporter de jeton réutilisable ailleurs | idem, et « request-proxying / client hijacking » | nulle |
-| Latence par lecture | directe vers AWS | directe vers AWS | **un saut de plus** (navigateur → Cloudflare → AWS) | — |
-| Coût d'exploitation | 0 | 0 | un Worker, son quota de 100 000 req/j (§5.1), sa supervision | 0 |
-| Verdict | **Rejeté** | **Recommandé** | **Trajectoire**, pas lot W0 | **Rejeté** : l'owner veut consulter sa bibliothèque, pas cliquer un lien depuis son téléphone à chaque fois |
-
-**Sur le BFF, pour être juste avec l'option que la RFC recommande le plus fort.** Son avantage est réel et il n'est pas théorique : aucun jeton n'atteint le navigateur, et il n'y a plus de CORS du tout. Ce qui le fait attendre, ce sont trois coûts concrets, aucun insurmontable, tous nouveaux :
-
-1. **Un secret de chiffrement de cookie** qui vit chez Cloudflare et non dans Secrets Manager — donc une seconde autorité de secrets dans un projet qui n'en a qu'une (`AGENTS.md`, task-252).
-2. **Un saut réseau sur chaque lecture.** Une fiche media, c'est trois à cinq appels ; une bibliothèque qu'on parcourt, des dizaines.
-3. **Le quota gratuit de 100 000 requêtes/jour** devient la limite de l'app, alors qu'en option B les requêtes d'assets sont « free and unlimited » et les appels d'API vont directement à AWS.
-
-Le déclencheur pour y passer, à écrire noir sur blanc : **le jour où l'app web accepte du contenu tiers dans sa page** (une intégration, un script analytics, un lecteur embarqué), parce que c'est ce qui rend l'hypothèse XSS réaliste. Tant que `app.<domaine>` ne charge que son propre bundle sous une CSP qui l'interdit, l'écart entre B et C se réduit à « un XSS qui n'existe pas ».
-
-### 6.4 Pourquoi B, et ce qu'elle coûte exactement
-
-Les trois arguments, par ordre de force :
-
-1. **C'est le seul compromis qui enlève le jeton du JavaScript sans ajouter un composant à opérer.** L'app web ne voit jamais le refresh token ; elle appelle `/api/auth/refresh` avec `credentials: 'include'` et reçoit un access token qu'elle garde en mémoire. Un script injecté peut faire des requêtes pendant que l'onglet est ouvert — ce qu'aucune architecture navigateur n'empêche, la RFC le dit — mais il ne peut pas emporter un porteur d'un an.
-2. **Le transport existe déjà.** L'API pose un cookie aujourd'hui (`oauth_state_<provider>`), à travers API Gateway HTTP API en payload 2.0. Il n'y a rien à découvrir sur ce chemin.
-3. **La politique de durée est de toute façon obligatoire** (§1.2). Une fois qu'on écrit un plafond par lignée, le cookie ne coûte presque plus rien : c'est le même endpoint, une réponse qui pose un `Set-Cookie` au lieu d'un champ JSON.
-
-Ce que ça coûte, précisément, au lot W0 :
-
-| Travail | Ou | Taille |
-|---|---|---|
-| Un drapeau de client sur `/login`, `/register`, `/google/native`, `/apple/native` : « session de navigateur » → le refresh part en cookie et **pas** dans le corps JSON | `media_summarizer/api/endpoints/auth.py`, `auth_social.py` | petit |
-| `/refresh` lit le cookie quand il est la, et repose un cookie neuf à la rotation | idem | petit |
-| `/logout` supprime le cookie en plus de révoquer la lignée | idem | très petit |
-| **Politique de durée par type de lignée** : plafond absolu + inactivité (§1.2) | service d'auth + un champ sur `auth_tokens` | **moyen — c'est le vrai morceau** |
-| Attributs du cookie : `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/api/auth`, pas d'attribut `Domain` (host-only sur `api.<domaine>`) | idem | très petit |
-| `cors_configuration` : origine explicite + `allow_credentials = true`, et `CORS_ORIGINS` aligné | `lambda_api.tf`, variables d'environnement | **une ligne chacun, mais bloquantes** |
-| `docs/AUTHENTICATION_SETUP.md` : la section CORS corrigée (deux étages), la session navigateur décrite, la politique de durée écrite | doc | petit |
-
-**Pourquoi `SameSite=Lax` suffit, et pourquoi ce n'est pas un pari.** `app.<domaine>` et `api.<domaine>` partagent le même domaine enregistrable : une requête de l'un vers l'autre est *same-site* au sens de l'attribut `SameSite`, qui raisonne en « site » et non en « origine ». Le cookie est donc envoyé sur les appels de l'app et **pas** sur une requête venue d'un site tiers — c'est la protection CSRF qu'on cherche. `Strict` fonctionnerait aussi pour l'app, mais casserait le cookie d'état OAuth au retour de Google ; `Lax` est déjà la valeur retenue pour `oauth_state_<provider>`.
-
-> **A vérifier à l'implémentation, pas ici** : que le `Set-Cookie` traverse bien API Gateway HTTP API en payload 2.0 **sur une réponse cross-origin lue par un `fetch` avec `credentials: 'include'`**. Le cookie d'état OAuth existant est posé sur une **navigation**, pas sur un `fetch` : le chemin est le même côté serveur, mais il n'a jamais été exercé depuis un XHR. §13, point 2.
-
-### 6.5 Rafraîchissement, déconnexion, multi-onglets : le détail demande
-
-| Situation | Comportement retenu |
-|---|---|
-| **Au chargement de l'app** | Aucun access token en mémoire → un `POST /api/auth/refresh` immédiat, dans le `clientLoader` de la route racine. S'il répond 401, on va à l'écran de connexion. C'est la seule façon de savoir si la session vit, le cookie étant illisible par JS. |
-| **Expiration de l'access token** | Un intercepteur dans `apiClient.ts` : sur un 401, un seul rafraîchissement, puis la requête est rejouée. `apiClient.ts` fait 93 lignes et porte déjà la notion d'erreur HTTP (`lib/httpError.ts`) : c'est le bon endroit, et il est partage avec le mobile (§4). |
-| **Deux onglets rafraîchissent en même temps** | Un verrou `navigator.locks.request('session-refresh', …)` sérialise les rafraîchissements d'une même origine. Et si le verrou manque, la **fenêtre de rejeu de 60 s** du backend (task-294) rend la course inoffensive : le second appel reçoit le couple déjà émis au lieu d'un 401. Deux filets, dont un déjà en place. |
-| **Un onglet se déconnecte** | `POST /api/auth/logout` révoque la lignée et supprime le cookie. Les autres onglets le découvrent à leur prochain appel (401 → `/refresh` → 401 → connexion). Un `BroadcastChannel` peut les prévenir tout de suite : c'est du confort, pas de la sécurité. |
-| **Inactivité longue** | Au-delà de la fenêtre d'inactivité (14 j propose), le refresh est mort côté serveur : reconnexion. C'est l'exigence de la RFC, et c'est aussi ce qu'on attend d'un navigateur partage. |
-| **Plafond absolu atteint** | Reconnexion, 30 j propose. Le mobile, lui, ne change pas : sa lignée garde son régime. |
-| **Fermeture du navigateur** | Le cookie est persistant, pas de session : il survit, dans les limites du plafond et de l'inactivité. |
-
-### 6.6 Comment on se connecte : trois chemins, et ce qu'ils demandent
-
-| Chemin | État du dépôt | Ce que W0 ajoute |
-|---|---|---|
-| **Email + mot de passe** | `POST /api/auth/login` existe et rend le couple en JSON | Le drapeau de session navigateur. **C'est tout.** |
-| **Google** | `GET /api/auth/google/login` → `callback` existe mais n'émet aucun jeton (task-293) ; `GOOGLE_REDIRECT_URI` est déjà enregistré chez Google | Le callback pose le cookie et redirige vers `app.<domaine>`. C'est exactement ce que task-293 avait retiré **faute de client web** — il y en a un maintenant. Rien à déclarer chez Google. |
-| **Apple** | `GET /api/auth/apple/login` → `callback`, même état, `client_secret` ES256 généré à la volée | Idem. Apple n'accepte que des `return URL` en `https`, ce qui est le cas de `api.<domaine>`. |
-
-C'est le point où la décision de l'owner **simplifie** le travail au lieu de l'alourdir : les deux flux OAuth web sont déjà écrits, déjà enregistrés chez les fournisseurs, et il ne leur manque que l'émission de session que task-293 avait supprimée pour une raison aujourd'hui périmée.
-
-> Un compte créé par Google ou Apple **n'a pas de mot de passe**, et aucun endpoint ne permet d'en poser un (constat de la passe 1, rejeté §5.2). Ce n'est plus gênant : le web offre les trois chemins, dont les deux sociaux.
-
----
-
-## 7. Parité complète ou lecture d'abord : les deux chiffrées
-
-C'est la question que l'owner demande de trancher « chiffres à l'appui ».
-
-### 7.1 La méthode, et son incertitude
-
-Il n'y a pas de donnée historique de vélocité dans ce dépôt, donc deux estimations indépendantes, puis leur recoupement.
-
-**Méthode 1 — par les lots** (bottom-up) : chaque lot est découpé en écrans, chaque écran est estimé à vue, en supposant la direction de design arrêtée, la couche de données partagée (§4), et aucun test automatise (`AGENTS.md`).
-
-**Méthode 2 — par les lignes** (top-down) : §2 compte 14 564 lignes de RN pour les six surfaces. Une re-expression web n'est pas une traduction ligne pour ligne : on perd les objets `StyleSheet`, les branches `Platform`, le `SafeAreaView`, les gestes, les props d'accessibilité natives et les animations `Reanimated` ; on gagne du CSS. Hypothèse retenue : **45 à 60 % du compte RN**, soit **6 550 à 8 740 lignes** de TSX + CSS. A **350 à 500 lignes/jour** livrées, câblage et relecture compris : **13 à 25 jours** pour la présentation des six surfaces en lecture.
-
-Les deux méthodes se recoupent à +/- 20 %, ce qui est le mieux qu'on puisse honnêtement affirmer. **Les fourchettes ci-dessous doivent être lues comme des ordres de grandeur, pas comme un engagement** (§13, point 1).
-
-### 7.2 Les deux scénarios
-
-**Scénario « lecture d'abord »** — les six surfaces en lecture, puis l'écriture.
-
-| Lot | Contenu | Jours |
-|---|---|---|
-| W0 | Fondations : session, CORS, coquille, i18n, connexion, hébergement | 4 – 6 |
-| W1 | Ajouts récents, dossiers, liste, fiche media, transcript, artefacts en lecture | 8 – 12 |
-| W2 | Digest, recherche, compte en lecture | 5 – 8 |
-| | **Sous-total : une app web consultable** | **17 – 26** |
-| W3 | Écriture : URL, imports, génération d'artefacts, dossiers, revue des non classés, suppression de compte | 7 – 10 |
-| W4 | Abonnement (après task-429) | 4 – 6 |
-| | **Total jusqu'a la parité** | **28 – 42** |
-
-**Scénario « parité d'un coup »** — tout, au premier lot.
-
-| Poste | Jours |
-|---|---|
-| Fondations (identiques) | 4 – 6 |
-| Les six surfaces, lecture **et** écriture ensemble | 20 – 32 |
-| Abonnement | **non livrable** (§7.3) |
-| Integration et mise au point d'un lot de cette taille (un seul passage de revue sur ~30 écrans) | 4 – 8 |
-| **Total** | **28 – 46**, abonnement exclu |
-
-### 7.3 Le fait qui tranche : la parité au premier lot n'est pas disponible
-
-**task-429 est `Done`.** Pendant la beta — trois mois, date de début **non encore annoncée** par l'owner — tout compte reçoit l'allocation du palier le plus élevé et, côté client, « aucun autre chemin ne mène au paywall ». L'app web doit se comporter comme l'app mobile : lire `is_beta_access` (`/api/v1/entitlements`), masquer l'entrée vers l'abonnement, et afficher « accès beta au palier le plus élevé » avec la jauge.
-
-Donc **l'une des six surfaces que l'owner a listées — « les réglages du compte, abonnement compris » — ne peut pas être complète au premier lot, quel que soit le scénario.** Ce n'est pas un arbitrage de priorité, c'est une règle produit déjà implémentée. La question « parité complète dès le premier lot ? » a une réponse factuelle : non, et la partie manquante est la même dans les deux scénarios.
-
-### 7.4 Ce que coûte le rattrapage, et pourquoi il est bon marché
-
-Ajouter l'écriture à des écrans déjà livrés n'est pas gratuit. Ce qu'il faut rouvrir :
-
-| Ce qu'on rouvre | Pourquoi |
-|---|---|
-| La fiche media | ajouter le bouton « Générer », ses états, ses refus (`lib/artifactRefusal.ts`, déjà partage) |
-| La liste et l'arbre de dossiers | menus contextuels, création, renommage, déplacement, suppression, et les états optimistes qui vont avec |
-| La coquille | une entrée « Ajouter » globale, une boite de dialogue d'URL, une zone de dépôt de fichiers |
-| Le compte | suppression de compte, et plus tard l'abonnement |
-| L'i18n | les clés d'écriture, déjà présentes dans les catalogues partagés — donc **zéro** traduction nouvelle |
-
-Le surcoût est de l'ordre de **8 à 15 %** du coût de l'écriture elle-même : on repasse sur la structure et les états, pas sur la mise en page ni sur les textes. C'est la fourchette que donne la comparaison des deux totaux ci-dessus (28–42 contre 28–46), et elle est cohérente avec le fait que les deux scénarios partagent les mêmes fondations et les mêmes catalogues.
-
-### 7.5 Recommandation : lecture d'abord, et la raison n'est pas le coût
-
-Les trois totaux sont **du même ordre**. Ce n'est donc pas le prix qui décide, ce sont trois choses que le découpage acheté et que le lot unique ne peut pas offrir :
-
-1. **Une app utilisable après 17 à 26 jours au lieu de 28 à 46.** Et ce qui est livre est exactement ce que l'owner a décrit vouloir : consulter son second cerveau dans un navigateur.
-2. **Des lots qu'un agent peut implémenter.** Un lot de 30 jours n'est pas un lot : c'est un projet, qu'un seul passage ne finit pas et dont les critères d'acceptation deviennent invisibles. Quatre lots de 5 à 12 jours sont revus, corrigés et fusionnés un par un.
-3. **La décision de design se vérifie tôt.** La direction retenue (§12) est un pari sur une coquille. Si elle se révèle fausse à l'usage, la corriger après W1 coûte une semaine ; la corriger après un lot unique de parité en coûte cinq.
-
-**Et la parité reste la destination, écrite comme telle** : W3 n'est pas conditionnel, il n'attend aucune donnée de beta, il est juste après. C'est la différence avec la passe 1, où l'app web entière était suspendue à un signal qui n'arriverait jamais.
-
----
-
-## 8. Le découpage en lots, en détail
-
-Les ordres de grandeur sont ceux de §7. Rien dans ces lots ne prévoit de couche de compatibilité : rien n'est déployé (`AGENTS.md`, « Nothing is deployed yet »), il n'y a pas d'app web existante à ménager.
-
-### Lot W0 — les fondations *(c'est le périmètre à donner à task-425)*
-
-**Backend**
-1. Session de navigateur sur `/login`, `/register`, `/google/native`, `/apple/native`, `/refresh`, `/logout` : refresh en cookie `HttpOnly` au lieu du corps JSON (§6.4).
-2. Les deux callbacks OAuth web émettent enfin une session et redirigent vers `app.<domaine>`.
-3. Politique de durée par type de lignée : plafond absolu et expiration par inactivité pour les lignées de navigateur (§1.2).
-4. `docs/AUTHENTICATION_SETUP.md` : les deux étages de CORS, la session navigateur, la politique de durée.
-
-**Infrastructure**
-5. `cors_configuration` de l'API Gateway : `allow_origins` = l'origine de l'app, `allow_credentials = true` (§1.1).
-6. `CORS_ORIGINS` aligné sur la même valeur.
-7. Deux projets Cloudflare Workers static assets, `not_found_handling` par projet (§5.2).
-
-**Front**
-8. Projet `web/` : Vite 8, React 19, React Router 8 en mode framework, `ssr: false`.
-9. Alias de build et `paths` tsconfig vers `mobile/src/{types,lib,services,i18n,constants}` (§4.3), avec un garde-fou contre les imports couplés.
-10. Les tokens de `theme.ts` convertis en variables CSS — un seul fichier généré, pas une seconde palette écrite à la main.
-11. Provider i18n web (~80 lignes) sur les `CATALOGS` existants, y compris `dir="rtl"` pour l'arabe.
-12. Coquille de la direction retenue, routes vides mais nommées, écran d'attente (`HydrateFallback`).
-13. Connexion : email, Google, Apple. Rafraîchissement, verrou multi-onglets, déconnexion (§6.5).
-14. Garde d'erreur de démarrage, équivalent web de `StartupErrorGate`.
-15. `app.<domaine>` : `noindex`, et une CSP qui interdit tout script tiers (c'est ce qui rend le choix de §6.3 défendable).
-
-**Site public (Astro)**
-16. Les six pages, dont `/privacy` et `/terms` rendues depuis `docs/compliance/*.md`, et `/.well-known/apple-developer-domain-association.txt`.
-17. `/abonnement` : page de prix non connectée, sans bouton, et sans promesse d'achat pendant la beta.
-
-**Note à l'owner, hors AC** : les changements backend ne sont actifs qu'après un push sur `main` et le déploiement de l'image Lambda. La mise en ligne des deux projets Cloudflare et l'achat du domaine sont des actions de l'owner, et dépendent de task-357 et de task-186.
-
-### Lot W1 — lire la bibliothèque
-1. Ajouts récents et « Reprendre » (`GET /api/media`, `/api/engagements/recent`, `/api/folders/unsorted-count`).
-2. Arbre de dossiers (`lib/folderTree.ts`, partage) et liste paginée par curseur.
-3. Fiche media : en-tête, lecteur de transcript, états de préparation du texte, échecs.
-4. Artefacts en lecture, visionneuse d'artefact, historique.
-5. États vides, de chargement et d'échec pour chacun des écrans ci-dessus, avec les clés i18n existantes.
-6. Routes profondes : `/dossier/<id>`, `/media/<id>` rechargeables (§2.2).
-
-### Lot W2 — digest, recherche, compte
-1. Digest quotidien et hebdomadaire, positions, états vides.
-2. Recherche plein texte (`/api/search/transcripts`) avec `lib/highlightSnippet.ts` partage.
-3. Compte : profil, langue d'interface, langue de lecture (et son refus `reading_language_change_too_soon`), état d'abonnement **sans entrée vers l'abonnement** tant que `is_beta_access` est vrai.
-4. Raccourcis clavier et palette de commandes (§2.2).
-
-### Lot W3 — écrire
-1. Ingestion par URL (`POST /api/media/ingest-url`), avec choix du dossier.
-2. Import de fichiers : `<input type="file">` + API `File` → `POST /api/media/upload-url` puis `PUT` présigné puis `POST /api/media/upload`.
-3. Génération d'artefacts, avec les refus de `lib/artifactRefusal.ts`.
-4. Dossiers : création, renommage, déplacement, suppression.
-5. Revue des non classés.
-6. Suppression de compte.
-
-### Lot X1 — l'extension Chrome
-Identique au lot 1 de la passe 1 (rejeté §12), **moins** l'écran mobile d'appairage, **plus** la page d'appairage de l'app web (§10.2). Les deux endpoints d'appairage et les deux champs optionnels sur `IngestUrlRequest` sont inchangés.
-
-### Lot X2 — Firefox et Edge, capture complète
-Inchangé (rejeté §12, lot 2).
-
-### Lot W4 — l'abonnement *(après la beta task-429)*
-Inchangé (rejeté §12, lot 3), avec une seule différence : la page d'abonnement est un **écran de l'app web**, derrière la session de §6, et non une page publique à qui il faut inventer une session. C'est l'économie que l'app web fait sur ce lot.
-
-### Lot X3 — Safari *(optionnel)*
-Inchangé (rejeté §12, lot 4).
-
-### Ce qui bloque la publication, mais pas le développement
-
-| Prérequis | Bloque | Ne bloque pas |
-|---|---|---|
-| **task-357** (domaine, encore `pending`) | la mise en ligne des deux origines, l'URL de la fiche de store, le cookie sur `api.<domaine>` | l'écriture de l'app web, qui se développé contre l'API `-dev` et une origine locale |
-| **task-186** (nom marketing) | le wordmark, la fiche Chrome Web Store | tout le reste |
-| **task-429** (beta, `Done`) | **W4** | W0 à W3, X1 à X3 |
-
----
-
-## 9. Coût sur douze mois
-
-### 9.1 Dépenses fixes
-
-| Poste | Montant sur 12 mois | Source |
-|---|---|---|
-| Nom de domaine `.com` | **~11 $** | task-357 ; le domaine est de toute façon un prérequis de l'API, de l'adresse DSA et de Sign in with Apple |
-| Hébergement du site public (Cloudflare, offre gratuite) | **0 $** | « Requests to static assets are free and unlimited », « There is no additional cost for storing Assets » |
-| Hébergement de l'app web (même chose, second projet) | **0 $** | idem ; une SPA ne réveille jamais le code du Worker |
-| TLS, DNS, adresse de contact (Email Routing) | **0 $** | task-357 |
-| Inscription développeur Chrome Web Store | **frais unique, montant non publié** par Google | <https://developer.chrome.com/docs/webstore/register> — revérifié le 2026-10-06 : la page dit « pay a one-time registration fee » et ne donne aucun chiffre (§13, point 6) |
-| Microsoft Edge Add-ons (lot X2) | **0 $** | « There is no registration fee » |
-| Firefox Add-ons (lot X2) | **0 $** | aucun frais documenté |
-| Apple Developer Program (lot X3) | **99 $/an, déjà payé** | l'app est en TestFlight depuis le 2026-09-02 |
-| **Total fixe attribuable à cette tâche** | **0 $** au-delà des ~11 $ que task-357 engage déjà, plus un frais unique Chrome | |
-
-**L'app web ne coûte pas d'abonnement.** C'est le résultat le plus utile de cette section : le choix d'une SPA statique sur un hébergement gratuit, qui parle directement à l'API existante, met le coût d'infrastructure à zéro. Le coût de l'app web est **du temps** (§7), pas de l'argent.
-
-### 9.2 Le coût variable : les appels d'API en plus
-
-Une app web ajoute du trafic à l'API existante. Ordre de grandeur :
-
-- Une session de lecture sérieuse (ouvrir la bibliothèque, parcourir trois dossiers, lire deux fiches avec leur transcript et leurs artefacts) : **100 à 200 requêtes**.
-- API Gateway HTTP API : **1,00 $ par million d'appels** jusqu'a 300 millions (puis 0,90 $). Chaque requête couvre jusqu'a 512 ko de charge utile.
-- Soit, pour 1 000 sessions de lecture par mois : **~0,2 $/mois** d'API Gateway, plus le Lambda correspondant, qui reste dans les mêmes ordres.
-
-Autrement dit : **a l'échelle des testeurs de la beta, et même à celle des premiers milliers d'utilisateurs, le coût variable de l'app web est inférieur au prix du domaine.** Le poste qui pourrait devenir visible n'est pas l'API, c'est le transfert S3 des couvertures et des fichiers media si l'app web les affichait en pleine résolution — un sujet de cache, pas de benchmark.
-
-> Tarif relevé sur la page de tarification AWS le 2026-10-06. La page ne porte pas de table par région : les chiffres cités viennent de ses exemples chiffres, sans région nommée (§13, point 7).
-
-### 9.3 Charge de maintenance
-
-C'est le vrai coût récurrent, et il faut le dire franchement : **l'app web ajoute un second client à faire évoluer.** C'était l'argument central de la passe 1 contre elle, et il reste vrai — ce qui change, c'est sa taille mesurée :
-
-| Ce qui double | Ce qui ne double pas |
-|---|---|
-| La **présentation** : chaque tâche produit qui touche un écran touche désormais deux mises en page | Les **contrats** : un champ ajoute à l'API est lu par la couche partagée, donc une fois |
-| Les **états** d'une nouvelle fonctionnalité (vide, chargement, échec) | Les **textes** : un catalogue, 11 langues, deux clients (§4.2) |
-| La **revue visuelle** manuelle | Les **règles métier** : quotas, paliers, refus, surlignage, arborescence (§4.2) |
-| — | Le **déploiement** : un push sur `main` déploie le backend ; Cloudflare se déploie depuis le dépôt ; il n'y a pas de review de store pour l'app web, contrairement à l'app mobile |
-
-Et un point en faveur de l'app web sur la charge : **elle se corrige en quelques minutes**, sans review de store, sans OTA, sans qu'un testeur ait à mettre à jour quoi que ce soit. C'est le seul client du projet dont un correctif atteint tout le monde immédiatement.
-
----
-
-## 10. L'extension : ce qui est repris, et le seul point que l'app web déplace
-
-### 10.1 Repris tel quel
-
-L'owner a juge ces conclusions solides et demande de ne pas les réinstruire. Elles sont reprises **sans modification** et le détail reste dans `README.owner-rejected-2026-10-05.md` :
-
-- **WXT** (0.21.4, 2026-08-11 ; commits le 2026-10-04), contre Plasmo (sans release depuis le 2025-05-17), CRXJS (greffon Vite centré Chrome) et MV3 nu — rejeté §3.
-- **Chrome Web Store seulement au premier lot**, Edge et Brave installant la même fiche ; Firefox au lot suivant avec son paquet de sources et sa déclaration de données ; Safari en dernier et optionnel — rejeté §4.
-- **Capture URL + texte de page + sélection**, par deux champs optionnels sur `IngestUrlRequest` ; PDF au lot suivant ; extraction par `@mozilla/readability` (0.6.0, Apache-2.0) dans le script de contenu — rejeté §6.
-- **Permissions limitées à `activeTab`, `storage`, `contextMenus`**, tous les appels réseau depuis le service worker, aucun `<all_urls>`, aucune collecte d'historique — rejeté §7, §8.3.
-- **Chaque fonction de Recall gardée ou écartée**, y compris « Augmented Browsing » écartée — rejeté §7.
-- **Le CORS n'est pas un problème pour l'extension** — rejeté §0.2. Cela reste vrai : le resserrement de `cors_configuration` de §1.1 ne la concerne pas, puisqu'un `fetch` depuis le service worker avec `host_permissions` n'est pas soumis au CORS.
-
-### 10.2 Le seul point que la décision de l'owner déplace : qui délivre l'appairage
-
-La passe 1 recommandait l'**appairage depuis l'app mobile** (un code à six chiffres affiché dans l'app, saisi dans la popup de l'extension), et son premier argument était : c'est la seule option qui marche sur les quatre navigateurs, parce que l'API `identity` n'existe pas dans Safari. Cet argument tient, et il n'est pas remis en cause.
-
-Ce qui change, c'est qu'il existe maintenant **une surface authentifiée dans le navigateur où l'extension s'installe**. Le mécanisme reste exactement le même — deux endpoints, un code à usage unique, un TTL court, un compteur d'échecs porté par le code — mais l'écran qui affiche le code peut être une page de `app.<domaine>` au lieu d'un écran de l'app mobile.
-
-| | **Appairage depuis l'app mobile** (passe 1) | **Appairage depuis l'app web** (ce que l'app web rend possible) |
-|---|---|---|
-| Ce que l'utilisateur fait | ouvre son téléphone, va dans Compte → Relier un navigateur, lit un code, le saisit dans la popup | clique « Connecter » dans la popup, un onglet `app.<domaine>/extension/connecter` s'ouvre, il y est déjà connecté, il valide |
-| Endpoints backend | deux, identiques | **les mêmes deux** |
-| Fonctionne sur Chrome / Firefox / Safari | oui, à l'identique | **oui, à l'identique** : aucune API d'extension spécifique, juste un onglet et un sondage |
-| Demande un écran mobile | **oui** — donc une tâche mobile dans le chemin critique de l'extension | **non** |
-| Demande que l'app web existe | non | **oui** — d'où l'ordre X1 après W0 |
-| Utilisable si l'utilisateur n'a pas le téléphone sous la main | non | oui |
-
-**Recommandation : l'app web délivre l'appairage, et l'écran mobile devient optionnel.** La forme technique est celle d'un octroi par sondage, la même que le *Device Authorization Grant* (RFC 8628) : l'extension génère un nonce, ouvre l'onglet avec ce nonce, et sonde l'API jusqu'a ce que la page l'ait autorise. Aucune API d'extension au-delà de `tabs.create`, donc aucune divergence Chrome / Firefox / Safari.
-
-C'est le seul endroit où ce benchmark touche à une conclusion que l'owner a déclarée acquise, et il le fait parce que la décision sur l'app web **supprime la contrainte qui avait dicté cette conclusion**. Si l'owner préfère garder l'appairage depuis le mobile, rien d'autre ne bouge : les deux endpoints sont les mêmes et l'écran mobile redevient simplement un prérequis de X1.
-
-### 10.3 Ce que l'app web change aussi pour la popup de l'extension
-
-Un point mineur mais concret : la passe 1 écrivait qu'en cas de refus de quota, « la popup affiche le refus et renvoie **vers l'app mobile**, pas vers le site, tant que le lot 3 n'existe pas » (rejeté §8.2). Avec l'app web, la popup renvoie vers `app.<domaine>` — où l'utilisateur voit sa jauge, son palier et, après la beta, son abonnement. Un lien, pas une fonctionnalité.
-
----
-
-## 11. Paiement : repris tel quel, et ce que l'app web y change
-
-Les conclusions de la passe 1 sont reprises intégralement (rejeté §10). Revérifiées le **2026-10-06** sur la documentation RevenueCat :
-
-- **Stripe Billing branché sur RevenueCat**, jamais Stripe en direct. RevenueCat décrit les trois moteurs de facturation web (RevenueCat Billing, Stripe Billing, Paddle Billing) et confirme, pour Stripe Billing, que produits, abonnements, gestion d'abonnement, localisation, multi-devise et TVA « all live in Stripe », RevenueCat gardant les entitlements.
-- **Aucun frais RevenueCat supplémentaire** : « there are no additional RevenueCat fees to support subscriptions and purchases on the web ».
-- Le travail côté webhook reste **additif** : `SubscriptionPlatform.web`, le mappage de `STRIPE` et `RC_BILLING` dans `_get_platform`, et rien du tout sur `_resolve_tier` qui lit le palier depuis l'entitlement (rejeté §0.3, §10.2).
-- **Stripe Tax** pour commencer, **Managed Payments** documenté en repli, **Paddle** écarté, **Lemon Squeezy** = Stripe Managed Payments (rejeté §10.6).
-- **Les règles des stores** sont inchangées : rien dans l'app mobile sur la boutique française, tout ce qu'on veut sur le web, et 3.1.3(b) autorise à honorer dans l'app un abonnement acheté sur le web (rejeté §10.4).
-
-Ce que l'app web change, et c'est une simplification :
-
-| | Avec le site vitrine (passe 1) | Avec l'app web (ici) |
-|---|---|---|
-| Ou vit la page d'abonnement | une page publique, à qui il faut inventer une session (rejeté §5.5 proposait un lien à usage unique depuis le mobile) | **un écran de l'app web**, derrière la session de §6 |
-| Un visiteur sans l'app peut-il payer ? | **non**, c'était la limite franche de la passe 1 | **oui** : il créé un compte sur `app.<domaine>` et paie |
-| Ce que le lot paiement doit construire côté auth | une primitive de session courte, spécifique | **rien** : la session existe depuis W0 |
-| Le portail client | Stripe | Stripe, atteint depuis l'app web |
-
-Autrement dit, la décision de l'owner **retiré du lot paiement** le morceau le plus incertain de la passe 1. Le lot W4 redevient ce qu'il devrait être : trois produits Stripe, un import dans RevenueCat, une page, deux lignes de backend.
-
-> **Un seul point à surveiller à l'implémentation** : RevenueCat precise que ce sont Apple et Google qui décident, par boutique, si un paiement alternatif peut être présente, et qu'il faut donc « only surface web checkout links where you're éligible ». Cela ne concerne que l'app mobile (qui, par recommandation, n'en parle pas du tout), pas l'app web.
-
----
-
-## 12. Les quatre propositions de design
-
-### 12.1 Ce qui a été produit
-
-Quatre répertoires sous `mobile-design-mockups/web_app/`, chacun avec un `code.html` autonome (aucune balise `<link>`, `<script>` ni `<img>`, donc **aucune requête réseau**) et un `screen.png` :
-
-| Répertoire | Titre | Ce que la coquille est |
-|---|---|---|
-| `web_app/direction_a_classeur_trois_volets/` | **A — « Le classeur »** | trois volets permanents : arborescence, liste, lecture |
-| `web_app/direction_b_table_de_lecture/` | **B — « La table de lecture »** | barre haute + grille de couvertures ; la lecture prend tout le cadre, artefacts en marge |
-| `web_app/direction_c_tableau_de_bord/` | **C — « Le tableau de bord »** | barre latérale de 4 destinations ; bibliothèque en tableau triable ; panneau de propriétés |
-| `web_app/direction_d_plein_ecran/` | **D — « Le plein écran »** | aucune chrome permanente ; une colonne ; palette de commandes |
-
-Chaque fichier rend **quatre cadres** : les trois écrans connectés que l'owner a demandés — **bibliothèque, fiche media, digest** — à **1440 x 900 px** (le rendu de référence : la zone utile d'un portable 1440 pt une fois la chrome du navigateur retirée), puis un quatrième cadre à **390 x 844** comme rendu responsive secondaire. Les cadres sont en `overflow: hidden` : ce qui ne tient pas est coupe à l'image, exactement comme à l'écran. C'est la mesure elle-même, et c'est pourquoi certaines directions montrent du vide là où d'autres montrent du contenu coupe.
-
-Conventions respectées :
-
-- **Tous les tokens viennent de `mobile/src/constants/theme.ts`**, recopiés en variables CSS en tête de chaque fichier : les couleurs (dont `primaryTint` à 5 %, `coverTitleVeil` à 72 %, `highlight`), les six espacements, les cinq rayons, l'ombre `soft` (`0 8px 24px rgba(43, 45, 66, 0.04)`), les trois cibles tactiles. Aucune couleur hors palette, aucune taille de texte hors échelle (32 / 20 / 16 / 14 / 13).
-- **Les composants de `DESIGN.md` servent à ce à quoi ils servent** : le *Segmented Control* (pilule, actif en amber sur texte sombre), le *Callout Aside* (filet 4 px + fond à 5 % du primaire), les *Metadata Chips* (pilule, fond `surface`, contour à 5 % de noir), la barre haute en `backdrop-filter` (directions B et D).
-- **Les icônes sont les contours exacts d'Ionicons** (512 unités/em) repris des maquettes de task-408 et task-410 — pas des dessins approches.
-
-Trois écarts assumés, les mêmes dans les quatre fichiers :
-
-1. **Les polices.** `DESIGN.md` prescrit Plus Jakarta Sans pour les titres et Inter pour le corps. Une maquette sans réseau ne peut pas les charger : les quatre déclarent une pile système. C'est le seul écart visuel au design system, et il disparaît à l'implémentation — un site web, contrairement à l'app, **peut** charger les deux fontes.
-2. **Les couvertures.** L'app affiche de vraies vignettes ; une maquette sans réseau ne peut pas. Un bloc teinté de la palette portant l'icône de type tient la place. C'est un substitut déclaré, pas une proposition graphique.
-3. **Un glyphe composé.** Le stock d'icônes extrait des maquettes précédentes n'avait pas de loupe. Le symbol `ion-search-stroke` est composé à partir de la définition SVG d'Ionicons (`search-outline`, forme à trait), et non extrait de la fonte. Les 24 autres glyphes sont les contours de la fonte.
-
-Et le nom : les quatre portent le placeholder **« Media Summarizer »**. Le nom marketing n'est pas tranche (task-186) et **ce benchmark n'en propose pas**.
-
-### 12.2 Comparaison
-
-| | **A — Le classeur** | **B — La table de lecture** | **C — Le tableau de bord** | **D — Le plein écran** |
-|---|---|---|---|---|
-| **Structure** | grille 272 / 404 / reste ; la sélection remplace la navigation | barre haute + grille 4 colonnes ; la lecture prend tout le cadre | barre latérale 216 px + page complète ; bibliothèque en `<table>` | une colonne centrée à chaque route ; rien de permanent |
-| **Combien de mises en page pour les 3 surfaces** | **une** : la même coquille sert la bibliothèque, la fiche et le digest | **trois** : grille, lecture, revue | **deux** : tableau et page à deux colonnes | **deux** : liste et page de lecture |
-| **Repère permanent (« où suis-je ? »)** | **le meilleur** : l'arborescence et la liste ne bougent jamais | aucun : les dossiers sont des filtres, pas un lieu | bon : 4 destinations + les dossiers | **aucun**, par construction |
-| **Mesure du texte** | 680 px dans un volet de 724 — juste | **720 px, centré** : le plus confortable | 720 px, mais face à un panneau de propriétés | 720 px, centré |
-| **Ou vivent les artefacts IA** | derrière un segment « Texte complet / IA » — ce que fait l'app (`folder.tab.sources` / `folder.tab.ai`) | **dans la marge, visibles pendant la lecture** | dans un panneau de propriétés, avec l'état de chacun | en pied de page, après le texte |
-| **Traitement du digest** | liste + volet de lecture, même coquille | une page éditoriale qu'on lit sans cliquer — **le meilleur usage du grand écran pour le digest** | un parcours mesure (2 / 4 lus, sélecteur de jours) | **un media par écran**, transposition directe de `digest/[period].tsx` |
-| **Densité d'information** | haute | moyenne | **la plus haute** | la plus basse |
-| **Usage de la largeur de 1440** | entièrement | partiellement (1040 centré) | entièrement | **très peu** : deux marges vides |
-| **Coût responsive** | moyen : les volets se replient vers l'IA mobile | **faible** : la grille passe à une colonne, rien à replier | **élevé** : le tableau ne passe pas, il faut une seconde présentation de la bibliothèque | **nul** : la même mise en page sert les deux |
-| **Fidélité au design system** | bonne | **la meilleure** : la plus proche du « warm éditorial » de la north star | **la moins bonne** : un tableau de données a besoin de filets, ce que la « no-line rule » proscrit pour les divisions larges (écart déclaré dans son `code.html`) | bonne : le sectionnement se fait par blocs de couleur, exactement ce que `DESIGN.md` prescrit |
-| **Ce qu'elle emprunte au mobile** | le segment Sources / IA | rien | **les 4 destinations, à l'identique** | **toute l'architecture d'information** |
-| **Risque principal** | le volet de lecture est le plus étroit des quatre | on ne sait jamais où l'on est dans l'arborescence | elle ressemble à une console d'administration, pas à un lieu de lecture | elle ne justifie pas le grand écran — c'est-a-dire la raison d'être de l'app web |
-| **Coût de construction** | moyen (une coquille, trois contenus) | moyen-élevé (trois mises en page) | élevé (tableau + panneau + seconde présentation mobile) | **le plus faible** |
-
-### 12.3 Recommandation : la direction A, avec deux emprunts
-
-**Le fait qui tranche est le découpage en lots.** A est la seule direction dont **la coquille sert les trois surfaces sans nouvelle mise en page**. Concrètement : le lot W1 dessine les trois volets et y met la bibliothèque et la fiche media ; le lot W2 y met le digest, la recherche et le compte **sans redessiner la coquille**. Dans les directions B, C et D, le lot W2 ouvre une mise en page de plus. Sur un découpage dont le but explicite est de livrer tôt et de corriger tôt (§7.5), c'est la propriété qui compte le plus.
-
-Trois arguments de plus, dans l'ordre :
-
-1. **C'est la seule qui ne perd jamais la place de l'utilisateur.** Un dossier de 23 sources se parcourt en ouvrant et refermant des fiches ; dans A, la liste et son défilement ne bougent pas. C'est aussi ce qui rend les raccourcis clavier évidents : haut et bas parcourent la liste, le volet de droite suit.
-2. **Elle transpose un arbitrage que l'app a déjà tranché.** Le segment « Sources / IA » de la fiche de dossier (`folder.tab.sources`, `folder.tab.ai`) existe dans les onze catalogues i18n. A le réutilise tel quel ; les trois autres inventent un autre endroit pour les artefacts, donc d'autres clés.
-3. **Elle degrade proprement.** Sous 900 px, les trois volets deviennent un et la sélection redevient une navigation : c'est l'architecture de l'app mobile, qu'on n'a pas à redessiner.
-
-**Deux emprunts à faire**, tous deux bon marché :
-
-- **De B : la marge d'artefacts, mais seulement quand il y a la place.** A 1440 px, le volet de lecture fait 724 px et la marge ne rentre pas — les artefacts restent derrière le segment. Au-delà de ~1680 px (un écran externe, ou la fenêtre maximisée d'un grand moniteur), le volet gagne assez de largeur pour révéler la marge de B. C'est une `@container` sur le volet, pas une seconde maquette, et c'est la façon de ne pas renoncer au meilleur trait de B.
-- **De D : la palette de commandes (`Cmd K`).** A a une arborescence, donc elle n'a pas *besoin* d'une palette pour naviguer. Mais la palette de D fait une chose qu'aucun volet ne fait : chercher **dans le texte intégral** et sauter directement au passage (`/api/search/transcripts`, déjà la, §1.3). C'est un composant, pas une architecture, et il s'ajoute à n'importe quelle coquille.
-
-**Ce qui écarte les trois autres, et à quelle condition y revenir :**
-
-- **B** est la plus juste par rapport à ce que le produit *est* — un outil de lecture longue — et c'est la direction que je recommanderais si l'app web n'avait qu'une surface. Elle en a six, et B ne donne de réponse élégante qu'a une seule. **Y revenir si** l'usage montre qu'on ouvre l'app web pour lire une pièce à la fois plutôt que pour parcourir sa bibliothèque.
-- **C** a le meilleur outil pour la bibliothèque : avec 184 contenus, trier par durée pour trouver quoi écouter en vingt minutes est une vraie fonction, qu'aucune autre direction n'offre. Elle paie cela par un tableau qui heurte le design system et par **deux présentations de la bibliothèque à maintenir**. **Y revenir si** la bibliothèque dépasse quelques centaines d'éléments et que le tri devient quotidien — le tableau deviendrait alors le mode « Liste » du volet central de A, ce que la maquette de B esquisse déjà avec son segment Grille / Liste.
-- **D** est la moins chère et la plus cohérente avec le mobile, et c'est exactement ce qui la disqualifie : elle ne justifie pas le grand écran. L'owner a écrit « une app web se juge d'abord sur grand écran : c'est sa raison d'être ». D rend sur 1440 px ce que le téléphone rend sur 390, avec deux marges vides. **A garder** pour une chose precise : sa palette de commandes, empruntée ci-dessus.
-
-> **Aucun chiffre de conversion ni aucune donnée d'usage n'étaie cette recommandation** : elle est argumentée sur des faits du projet — le découpage en lots, les clés i18n existantes, la largeur de mesure du texte, la « no-line rule » du design system — et non sur des mesures, qui n'existent pas (§13, point 9).
-
----
-
-## 13. Ce qui n'a pas pu être vérifié dans cette passe
-
-Liste explicite, pour que l'owner sache ce qui est source et ce qui ne l'est pas.
-
-1. **Les chiffrages de §7 ne reposent sur aucune mesure historique.** Il n'existe pas de donnée de vélocité dans ce dépôt. Les deux méthodes (par les lots et par les lignes) se recoupent à +/- 20 %, ce qui est tout ce qu'on peut honnêtement affirmer. Le ratio de conversion « 45 à 60 % du compte de lignes RN » est une **hypothèse**, pas une observation.
-2. **Que `Set-Cookie` traverse API Gateway HTTP API en payload 2.0 sur une réponse lue par un `fetch` cross-origin avec `credentials: 'include'`** n'a pas été exercé. Le cookie d'état OAuth existant le prouve pour une **navigation**, pas pour un XHR. C'est la première chose à vérifier au lot W0, et elle n'est vérifiable qu'après déploiement.
-3. **Le comportement de `starlette` 0.47.2 décrit en §1.1** est lu dans la source de la version verrouillée (`uv.lock`), **sans exécution**. La conclusion opérationnelle n'en dépend pas : il faut fixer l'origine explicitement de toute façon.
-4. **Les valeurs de durée proposées en §1.2** (30 jours de plafond absolu, 14 jours d'inactivité) sont un point de départ raisonnable, pas une exigence de la RFC : celle-ci impose l'existence d'un plafond, pas sa valeur.
-5. **Les sections 7 à 11 de la RFC 10017 n'ont été lues que par extraits.** Le document fait ~153 000 caractères et l'outil de lecture le tronque ; §6.1.4.3, §6.3.2.3, §7, §8.2 et §9.4 ont été lus et sont cités verbatim, le reste non.
-6. **Le montant du frais d'inscription au Chrome Web Store** n'est toujours pas publié par Google. Revérifié le 2026-10-06 : la page d'inscription dit « pay a one-time registration fee » sans aucun chiffre. Même limite que la passe 1 et que task-357 §9.
-7. **Les tarifs API Gateway de §9.2** viennent des exemples chiffres de la page de tarification AWS, qui ne nomme aucune région. Un tarif par région (Irlande, Paris) n'a pas pu être extrait.
-8. **Le Web SDK de RevenueCat n'a pas été audité.** Sa page de vue d'ensemble a été relue et confirme le modèle à trois moteurs de facturation ; la page dédiée au SDK navigateur à répondu 404 à l'URL essayée. Le paquet `@revenuecat/purchases-js` est bien publié (1.68.0, 2026-10-05, MIT), mais son API n'a pas été examinée — c'est du ressort du lot W4.
-9. **Aucune donnée d'usage n'étaie la recommandation de design de §12.3** ni le choix du sous-ensemble de lecture de §8. Les deux sont argumentés sur des faits du dépôt, pas sur des mesures.
-10. **Le rendu des quatre maquettes n'a été vérifié que dans un seul moteur** (Chrome, par la production des `screen.png`). `@container` et `position: sticky` n'ont pas été essayés dans Firefox ni dans Safari.
-11. **La compatibilité de `navigator.locks`** (§6.5) n'a pas été vérifiée navigateur par navigateur. La recommandation ne dépend pas de sa présence : la fenêtre de rejeu de 60 s du backend suffit à rendre la course inoffensive.
-12. **Le coût du passage de l'alias de build (option A de §4.3) à `packages/core` (option B)** est estimé à 1-2 jours sans l'avoir essayé. Ce qui est sûr, c'est que l'option A ne touche ni Metro ni EAS ; ce qui n'est pas mesure, c'est le coût de l'option B sur le build EAS.
-
----
-
-## 14. Sources
-
-Toutes consultées le **2026-10-06**, sauf mention contraire.
-
-**Normes et sécurité**
-
-- **RFC 10017, « OAuth 2.0 for Browser-Based Applications », BCP 212, août 2026** (A. Parecki, P. De Ryck, D. Waite ; ex-`draft-ietf-oauth-browser-based-apps-27`) — <https://www.rfc-editor.org/rfc/rfc10017.html> et <https://datatracker.ietf.org/doc/draft-ietf-oauth-browser-based-apps/>. Sections citées : §6 (les trois patrons), §6.1.4.3 (BFF « strongly recommended […] applications that handle personal data »), §6.3.2.3 (les trois exigences sur les refresh tokens), §7.1 (applications de domaine unique sans OAuth), §8.2 (stockage dans le navigateur), §9.4 (une application par origine)
-- RFC 8628, « OAuth 2.0 Device Authorization Grant » — cité en §10.2 pour la **forme** de l'octroi par sondage, pas comme protocole à implémenter
-
-**Plateformes et hébergement**
-
-- AWS, CORS des HTTP APIs (« API Gateway ignores CORS headers returned from your backend integration ») — <https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-cors.html>
-- AWS, tarification API Gateway — <https://aws.amazon.com/api-gateway/pricing/>
-- Cloudflare, Workers static assets (`not_found_handling`, `single-page-application`, `run_worker_first`) — <https://developers.cloudflare.com/workers/static-assets/>
-- Cloudflare, facturation et limites des static assets (« Requests to static assets are free and unlimited ») — <https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/>
-- Cloudflare, limites de la plateforme (20 000 fichiers par version, 25 MiB par fichier, 100 000 requêtes/jour en offre gratuite) — <https://developers.cloudflare.com/workers/platform/limits/>
-- Cloudflare Pages, encart « Start new projects with Workers » — <https://developers.cloudflare.com/pages/> (via la passe 1, 2026-10-05)
-
-**Frameworks**
-
-- React Router, mode SPA (`ssr: false`, pré-rendu de la racine, `clientLoader`, réécriture de l'hôte) — <https://reactrouter.com/how-to/spa>
-- Astro, « Why Astro? » (sites orientés contenu contre frameworks d'application) — <https://docs.astro.build/en/concepts/why-astro/>
-- Expo, support du web (`react-dom`, `react-native-web`, `@expo/metro-runtime`, `expo export --platform web`) — <https://docs.expo.dev/workflow/web/>
-- Expo Router, rendu statique (modes `static` / `server`, limites) — <https://docs.expo.dev/router/reference/static-rendering/>
-- Expo, `expo-secure-store` (« Android, iOS, tvOS ») — <https://docs.expo.dev/versions/latest/sdk/securestore/>
-- Expo, `expo-notifications` (`platforms: ['android', 'ios']`) — <https://docs.expo.dev/versions/latest/sdk/notifications/>
-- Expo, `expo-glass-effect` (« iOS, tvOS », iOS 26+) — <https://docs.expo.dev/versions/latest/sdk/glass-effect/>
-- Registre npm, versions relevées le 2026-10-06 : `astro` 7.3.6 · `next` 16.3.8 · `@sveltejs/kit` 3.0.1 · `react-router` 8.4.0 · `@tanstack/react-start` 1.168.60 · `vite` 8.3.3 · `react-native-web` 0.21.3 · `expo` 57.0.27 (`@expo/metro-runtime` sous le tag `sdk-55` : 55.0.12) · `@revenuecat/purchases-js` 1.68.0 · `@sentry/react` 11.4.0 · `wxt` 0.21.4 · `@mozilla/readability` 0.6.0
-- Téléchargements npm sur 30 jours (`api.npmjs.org`), 2026-10-06 : `next` 253,4 M · `react-router` 229,8 M · `@tanstack/react-start` 65,9 M · `react-native-web` 28,1 M · `astro` 25,4 M · `@sveltejs/kit` 11,7 M
-
-**Paiement**
-
-- RevenueCat, vue d'ensemble du web (trois moteurs de facturation, « there are no additional RevenueCat fees […] on the web », ce que l'intégration Stripe Billing couvre et ne couvre pas) — <https://www.revenuecat.com/docs/web/overview>
-- Les autres sources de paiement (tarifs Stripe, Managed Payments, Paddle, Lemon Squeezy, lignes directrices Apple 3.1.1 / 3.1.3, politique Payments de Google Play) sont celles de la passe 1 — `README.owner-rejected-2026-10-05.md` §14
-
-**Extension**
-
-- Chrome Web Store, inscription développeur (frais unique, montant non publié) — <https://developer.chrome.com/docs/webstore/register>
-- Les autres sources d'extension (WXT, Plasmo, CRXJS, requêtes réseau et CORS dans Chrome, `chrome.storage`, politiques Mozilla, Safari web extensions, `identity` non supporté) sont celles de la passe 1 — `README.owner-rejected-2026-10-05.md` §14
-
-**Dépôt (lecture seule)**
-
-- `README.owner-rejected-2026-10-05.md` — la passe 1 et le retour de l'owner, qui fait autorité sur le périmètre
-- `docs/research/task-357-legal-pages-hosting/README.md` — domaine, hébergement, pages légales, adresse de contact ; **encore `owner_decision: pending`**
-- `docs/AUTHENTICATION_SETUP.md` — flux natifs, callback web sans jeton (task-293), `lineage_id`, refresh glissant d'un an sans plafond, fenêtre de rejeu de 60 s (task-294), CORS
-- `infrastructure/terraform/modules/platform/lambda_api.tf:131-146` — `cors_configuration` de la HTTP API (`allow_origins = ["*"]`, `allow_credentials = false`), stage `$default`, intégration `AWS_PROXY` payload 2.0
-- `media_summarizer/api/main.py:86-94` — `CORSMiddleware`, `CORS_ORIGINS`, `allow_credentials=True`
-- `media_summarizer/api/endpoints/auth_social.py:91` — `response.set_cookie` : la preuve que le transport par cookie fonctionne à travers API Gateway
-- `media_summarizer/api/endpoints/entitlements.py:49-66` — `is_free_trial`, `is_beta_access`
-- `media_summarizer/api/endpoints/media.py:1254-1275` — `GET /api/media` et ses filtres (`folder_id`, `q`, `source`, `type`, `status_filter`, `cursor`, `limit`, `sort`)
-- `media_summarizer/api/endpoints/{folders,digest,artifacts,search,engagements,pricing}.py` — les routes de lecture de §1.3
-- `mobile/package.json` — les 31 dépendances, dont le script `web` déjà présent et l'absence de `react-dom` / `react-native-web`
-- `mobile/src/{types,lib,services,i18n,constants}` — l'inventaire mesure de §4.1
-- `mobile/src/lib/subscriptionDisplay.ts:73-78` — la lecture de `is_beta_access`
-- `mobile/src/constants/theme.ts` et `mobile-design-mockups/my_design_system/DESIGN.md` — tokens et règles du design system
-- `uv.lock` — `starlette` 0.47.2, dont `starlette/middleware/cors.py` a été lu dans le cache de `uv`
-- `backlog/tasks/task-186…`, `task-357…`, `task-425…`, `task-429…` (celle-ci **`Done`**)
-
----
-
-## 15. Note de périmètre
-
-Ce benchmark n'a modifié que :
-
-- `docs/research/task-424-website-and-browser-extension/README.md` (ce fichier) ;
-- les quatre répertoires `mobile-design-mockups/web_app/direction_{a,b,c,d}_*/` ;
-- le fichier de tâche `backlog/tasks/task-424…` : les critères d'acceptation #1, #8 et #11, que le retour de l'owner a rendus inexacts, et la section `Implementation Notes`.
-
-`README.owner-rejected-2026-10-05.md` est **conservé tel quel** : il porte le retour de l'owner et il reste la source des conclusions reprises en §0, §10 et §11.
-
-**Aucun fichier de code applicatif, de configuration ou d'infrastructure n'est touché.** Tous les numéros de ligne cités sont des lectures. Les quatre maquettes ne contiennent aucune requête réseau, ce qui a été vérifié sur les fichiers produits (ni `<link>`, ni `<script>`, ni `<img>`, ni aucune URL absolue).
+| Ce README (`owner_decision: pending`) | `docs/research/task-424-website-and-browser-extension/README.md` |
+| README archivé de la passe rejetée | `README.owner-rejected-2026-10-10.md` (et celui du 2026-10-05, inchangé) |
+| Sources des maquettes, script de build, captures | `docs/research/task-424-website-and-browser-extension/mockup-build/` |
+| Direction A | `mobile-design-mockups/web_app/direction_a_arbre_lateral/` |
+| Direction B | `mobile-design-mockups/web_app/direction_b_colonnes/` |
+| Direction C | `mobile-design-mockups/web_app/direction_c_barre_de_saut/` (+ `screen-palette.png`) |
+| Direction D | `mobile-design-mockups/web_app/direction_d_flux_a_facettes/` (+ `screen-manage-folders.png`) |
+| Direction E | `mobile-design-mockups/web_app/direction_e_onglets_de_travail/` |
+
+Chaque répertoire contient `code.html`, `screen.png` (1440), `screen-mobile.png` (390), `screen-library-many-folders.png`, `screen-media-chat.png` et `screen-folder-chat.png`. Les quatre répertoires de la passe précédente (`direction_a_classeur_trois_volets`, `direction_b_table_de_lecture`, `direction_c_tableau_de_bord`, `direction_d_plein_ecran`) sont supprimés ; ils restent dans l'historique git et sont décrits dans le README archivé.
+
+Aucun code applicatif, aucune configuration et aucune infrastructure ne sont modifiés. Rien n'a été acheté ni publié.
