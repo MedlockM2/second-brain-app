@@ -37,7 +37,7 @@ import {
 const easProjectId = "fad6e877-590d-4143-bbaa-fdd013b01c43";
 
 /** The launcher label, modulo the `locales/*.json` overrides. */
-const appName = "Media Summarizer";
+const appName = "Deepn";
 
 /**
  * The label under the icon in the iOS share sheet: expo-share-intent writes this
@@ -50,18 +50,18 @@ const appName = "Media Summarizer";
  * option also names the native target and the generated `ios/<Name>/` directory,
  * with non-alphanumerics removed (`getShareExtensionName`, .../ios/constants.js),
  * and EAS resolves iOS build credentials *per target name*. task-347 set this to
- * `appName`, which strips to `MediaSummarizer` — identical to the app target — so
- * the app target got handed the extension's provisioning profile and its
+ * `appName`, whose pre-rebrand value stripped to `MediaSummarizer` — identical to
+ * the app target — so the app target got handed the extension's provisioning profile and its
  * entitlements. iOS build 5 died on it (`XCODE_BUILD_ERROR`: profile app ID
  * `…core.share-extension` "does not match the bundle ID com.secondbrainlabs.core",
  * plus a vanished Sign In with Apple capability). The failure is invisible locally
  * and costs a full EAS build slot, so keep the stripped forms distinct:
- * "Media Summarizer Share" → `MediaSummarizerShare` ≠ `MediaSummarizer`.
+ * "Deepn Share" → `DeepnShare` ≠ `Deepn`.
  *
  * The extension's bundle id derives from the app's (`<appId>.share-extension`) and
  * not from this string, so a rename needs no new App ID and no new profile.
  */
-const iosShareExtensionName = "Media Summarizer Share";
+const iosShareExtensionName = "Deepn Share";
 
 const googleReservedClientScheme = (clientId?: string): string | null => {
   const suffix = ".apps.googleusercontent.com";

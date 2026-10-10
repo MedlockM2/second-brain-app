@@ -1,12 +1,12 @@
 # Privacy Policy
 
-**Media Summarizer**
+**Deepn**
 **Last updated:** 2026-08-12
 **Effective date:** 2026-08-12
 
 ## 1. Introduction
 
-Media Summarizer ("we", "us", "our") operates the Media Summarizer mobile application (the "Service"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.
+Second Brain Labs ("we", "us", "our") operates the Deepn mobile application (the "Service"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.
 
 By using the Service, you agree to the collection and use of information in accordance with this policy.
 

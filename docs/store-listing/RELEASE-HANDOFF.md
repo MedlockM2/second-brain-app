@@ -1,6 +1,8 @@
 # Release Operations Handoff
 
-Step-by-step guide for submitting Media Summarizer to the Apple App Store and Google Play Store.
+> Brand update (2026-10-10): **Deepn** is the final marketing name. This document uses the target name; the mobile and console renames remain pending (task-186). See `docs/BRAND_IDENTITY.md`.
+
+Step-by-step guide for submitting Deepn to the Apple App Store and Google Play Store.
 
 ## Prerequisites
 
@@ -95,7 +97,7 @@ eas submit --platform ios --profile production --latest
 
 ### Step 3: Submit for App Store Review
 
-1. Open App Store Connect > Apps > Media Summarizer
+1. Open App Store Connect > Apps > Deepn
 2. Go to the current version (1.0)
 3. Fill in all metadata:
    - Copy description from `app-store-connect.md`
@@ -138,7 +140,7 @@ eas submit --platform android --profile production --latest
 
 ### Step 2: Internal Testing Validation
 
-1. Open Google Play Console > Media Summarizer > Testing > Internal testing
+1. Open Google Play Console > Deepn > Testing > Internal testing
 2. Verify the build appears (may take a few minutes)
 3. Share the internal testing link with test devices
 4. Install and test the critical path (same as iOS step 2.4)

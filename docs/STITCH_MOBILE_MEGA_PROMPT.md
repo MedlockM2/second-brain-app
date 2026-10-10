@@ -1,4 +1,4 @@
-Design a complete App Mode mobile UI system for an app called "Media Summarizer".
+Design a complete App Mode mobile UI system for an app called "Deepn".
 
 You are designing for iOS and Android.
 
@@ -7,7 +7,7 @@ Create a distinctive, production-grade mobile app concept for a share-first know
 This app helps users turn the media they send into a private, searchable knowledge base and a weekly in-app review habit.
 
 CORE PRODUCT TRUTH
-- A user shares a URL from another app into Media Summarizer.
+- A user shares a URL from another app into Deepn.
 - The app ingests and processes the media into a faithful transcript.
 - The user can then generate optional AI artifacts on demand: summary, quiz, notes.
 - The user can search across their own submitted-media knowledge base using:

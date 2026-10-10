@@ -1,16 +1,16 @@
 # Terms of Service
 
-**Media Summarizer**
+**Deepn**
 **Last updated:** 2026-05-19
 **Effective date:** 2026-05-19
 
 ## 1. Acceptance of Terms
 
-By downloading, installing, or using the Media Summarizer application ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
+By downloading, installing, or using the Deepn application ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Service.
 
 ## 2. Service Description
 
-Media Summarizer is a mobile application that allows you to:
+Deepn is a mobile application that allows you to:
 
 - Share URLs (articles, podcasts, YouTube videos, and other media) for processing
 - Receive AI-generated summaries, notes, and quizzes based on submitted content

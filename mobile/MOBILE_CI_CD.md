@@ -1,6 +1,8 @@
 # Mobile CI/CD: Build, Sign & Distribute
 
-This document describes the mobile build and distribution pipeline for Media Summarizer.
+> Final marketing name: **Deepn** (owner decision, 2026-10-10; see `docs/BRAND_IDENTITY.md`). task-186 renamed what the user sees (display name `Deepn`, share-sheet label `Deepn Share` → target `DeepnShare`); binaries built before that change still carry the old name. Identifiers the user never sees keep `media-summarizer` on purpose (Expo slug, deep-link scheme, npm package, GCP project), and remaining `Media Summarizer` mentions are dated historical observations.
+
+This document describes the mobile build and distribution pipeline for Deepn.
 
 ## Overview
 
@@ -124,22 +126,22 @@ they are not interchangeable:
 
 | Target | Bundle identifier |
 |---|---|
-| `MediaSummarizer` | `com.secondbrainlabs.core` |
-| `MediaSummarizerShare` | `com.secondbrainlabs.core.share-extension` |
+| `Deepn` | `com.secondbrainlabs.core` |
+| `DeepnShare` | `com.secondbrainlabs.core.share-extension` |
 
 **The two target names must never be equal**, because that left column is the key
 EAS resolves credentials by. The extension's target name is not written anywhere
 directly: expo-share-intent derives it from `iosShareExtensionName` in
 `app.config.ts` by stripping non-alphanumerics, and the app's from `expo.name` the
 same way. task-347 set `iosShareExtensionName` to the app name so the share-sheet
-row would be findable; both then stripped to `MediaSummarizer`, and iOS build 5
+row would be findable; both then stripped to `MediaSummarizer` (the pre-rebrand name), and iOS build 5
 (2026-09-04, commit `5fbab97`) died in `XCODE_BUILD_ERROR` with the extension's
 profile applied to the app target — *"has app ID `com.secondbrainlabs.core.share-extension`,
 which does not match the bundle ID `com.secondbrainlabs.core` (in target
 'MediaSummarizer')"* — and Sign In with Apple gone with the swapped entitlements.
 Nothing catches this before the build: the config resolves, the prebuild succeeds,
-and one EAS slot is spent. Hence the label "Media Summarizer Share", which strips to
-`MediaSummarizerShare`. Closed the same day: with it, iOS `1.0.0 (6)` (commit
+and one EAS slot is spent. Hence a label of the form "<App Name> Share" — "Media Summarizer Share" at the
+time, "Deepn Share" → `DeepnShare` since task-186. Closed the same day: with it, iOS `1.0.0 (6)` (commit
 `919f47a`) built in 7 min 38 s, auto-submitted, and the owner installed it from
 TestFlight — the first iOS binary of this project to carry a share extension whose
 target name differs from the app's.
@@ -377,8 +379,8 @@ worth keeping straight:
   [Submit Profiles](#submit-profiles)); the app page is
   `https://appstoreconnect.apple.com/apps/6778072060/distribution/info`. Its
   store-facing name reads **`Second Brain Labs - Core`** (SKU `SBL-CORE`), not the
-  legacy `Media Summarizer` that the app binary still carries — `task-186` is about
-  the app itself, not this record. The name stays editable from that page for as long
+  app's display name (`Deepn` since task-186, `Media Summarizer` in builds before it) —
+  task-186 renamed the app itself, not this record. The name stays editable from that page for as long
   as the app is unpublished. Metadata to paste:
   `docs/store-listing/app-store-connect.md`.
 - **The tester group is set up**, on Internal Testing rather than an external group,

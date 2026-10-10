@@ -1,10 +1,12 @@
 # Google Play Store Metadata
 
+> Brand update (2026-10-10): **Deepn** is the final marketing name. This document uses the target name; the mobile and console renames remain pending (task-186). See `docs/BRAND_IDENTITY.md`.
+
 ## App Identity
 
 | Field | Value |
 |-------|-------|
-| App Name (max 30) | Media Summarizer |
+| App Name (max 30) | Deepn |
 | Package Name | com.secondbrainlabs.core |
 | Category | Productivity |
 | Content Rating | Everyone |
@@ -50,15 +52,14 @@ Relevant fields, in the order the form presents them (Play Console UI as of
 
 | Subscription | Name | Length |
 |---|---|---|
-| `text_only_monthly` | Media Summarizer Reader | 23 |
-| `mix_monthly` | Media Summarizer Mix | 20 |
-| `audio_heavy_monthly` | Media Summarizer Audio-Heavy | 28 |
+| `text_only_monthly` | Deepn Reader | 12 |
+| `mix_monthly` | Deepn Mix | 9 |
+| `audio_heavy_monthly` | Deepn Audio-Heavy | 17 |
 
 The tier word (`Reader`, `Mix`, `Audio-Heavy`) is a product name and is never
-translated — same rule as the App Store Display Name. The `Media Summarizer` prefix
-is the app-name placeholder `task-186` exists to settle; if that task renames the
-app, these three Names change with it. They are editable at any time, unlike the
-product IDs.
+translated — same rule as the App Store Display Name. The `Deepn` prefix is the
+final app name chosen on 2026-10-10 (see `docs/BRAND_IDENTITY.md`). These Names are
+prepared copy to apply in Play Console; product IDs remain unchanged.
 
 ### Benefits (≤ 4 per subscription, 40 characters each)
 
@@ -95,14 +96,14 @@ Turn podcasts, videos & articles into AI summaries, notes, and flashcards.
 ## Full Description (max 4000 chars)
 
 ```
-Media Summarizer turns everything you read, watch, and listen to into organized knowledge you can actually use.
+Deepn turns everything you read, watch, and listen to into organized knowledge you can actually use.
 
 Share any link from your favorite apps and get AI-powered summaries, detailed notes, and flashcards in seconds. Podcasts, YouTube videos, articles, TikTok, Instagram, and more - all captured and transformed into your personal knowledge base.
 
 HOW IT WORKS
 
 1. Share a link from any app (Chrome, YouTube, Instagram, TikTok, WhatsApp, podcast apps, and more)
-2. Media Summarizer turns audio, video, documents, and photos into text automatically
+2. Deepn turns audio, video, documents, and photos into text automatically
 3. Generate summaries, notes, and flashcards on demand
 4. Review, search, and organize your growing media library
 
@@ -142,7 +143,7 @@ SUPPORTED CONTENT TYPES
 
 PRICING
 
-Media Summarizer is a subscription, with three monthly plans. Every plan does everything; they differ only in how much you send. Articles, web pages, and X posts cost nothing against your monthly time, and reading your library is always unlimited.
+Deepn is a subscription, with three monthly plans. Every plan does everything; they differ only in how much you send. Articles, web pages, and X posts cost nothing against your monthly time, and reading your library is always unlimited.
 
 Perfect for students, researchers, lifelong learners, and anyone who consumes more content than they can remember.
 
@@ -195,7 +196,7 @@ Users can request account and data deletion via:
 
 | Field | Value |
 |-------|-------|
-| Developer Name | Media Summarizer |
+| Developer Name | Second Brain Labs |
 | Email | support@mediasummarizer.com |
 | Website | https://mediasummarizer.com |
 | Privacy Policy | https://mediasummarizer.com/privacy |

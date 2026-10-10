@@ -1,6 +1,6 @@
 # Google Play Data Safety Declaration
 
-**Media Summarizer**
+**Deepn**
 **Last updated:** 2026-05-19
 
 This document describes the Data Safety declarations required for Google Play Console submission. Answers map directly to the Data Safety form in Google Play Console.

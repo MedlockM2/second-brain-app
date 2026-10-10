@@ -1,6 +1,6 @@
 # Apple App Privacy Disclosures
 
-**Media Summarizer**
+**Deepn**
 **Last updated:** 2026-05-19
 
 This document describes the App Privacy disclosures required for the Apple App Store submission. These answers correspond to the App Privacy section in App Store Connect.
@@ -85,7 +85,7 @@ after 90 days without the app registering it again.
 
 ## Data NOT Collected
 
-The following data types are NOT collected by Media Summarizer:
+The following data types are NOT collected by Deepn:
 
 - Health & Fitness
 - Financial Info

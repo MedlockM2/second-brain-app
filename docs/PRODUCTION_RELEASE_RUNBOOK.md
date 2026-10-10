@@ -1,6 +1,8 @@
 # Production Release Runbook
 
-This document covers the end-to-end process for publishing Media Summarizer to the
+> Brand update (2026-10-10): **Deepn** is the final marketing name. This document uses the target name; the mobile and console renames remain pending (task-186). See `docs/BRAND_IDENTITY.md`.
+
+This document covers the end-to-end process for publishing Deepn to the
 iOS App Store and Google Play Store, including hotfix procedures and rollback strategies.
 
 ## Table of Contents
@@ -30,7 +32,7 @@ iOS App Store and Google Play Store, including hotfix procedures and rollback st
 > push is blocked today*. Until then, ship through the `internal` profile
 > (TestFlight + Play internal track), not through this runbook.
 
-Media Summarizer uses **EAS Build** and **EAS Submit** for production releases. The
+Deepn uses **EAS Build** and **EAS Submit** for production releases. The
 pipeline supports two paths:
 
 - **Standard release**: feature work merged to `main`, tagged, built, and promoted
@@ -191,7 +193,7 @@ Allow 24-48 hours of internal testing before promoting.
 ### Step 4: Promote to Production (iOS)
 
 1. Log in to [App Store Connect](https://appstoreconnect.apple.com)
-2. Navigate to: My Apps > Media Summarizer > App Store
+2. Navigate to: My Apps > Deepn > App Store
 3. Click the "+" button to create a new version (if not auto-created)
 4. Select the build from TestFlight
 5. Update "What's New" text for this version
@@ -207,7 +209,7 @@ Expected timeline: Apple review typically takes 24-48 hours (can be faster for u
 ### Step 5: Promote to Production (Android)
 
 1. Log in to [Google Play Console](https://play.google.com/console)
-2. Navigate to: Media Summarizer > Release > Production
+2. Navigate to: Deepn > Release > Production
 3. Click "Create new release"
 4. Add the build from Internal Testing (or upload the AAB directly)
 5. Update release notes
@@ -512,7 +514,7 @@ Maintain a release log at `docs/RELEASE_LOG.md` with the following format for ea
 ### Release Announcement (Internal)
 
 ```
-Subject: [Release] Media Summarizer v<X.Y.Z> submitted to stores
+Subject: [Release] Deepn v<X.Y.Z> submitted to stores
 
 Summary: Version <X.Y.Z> has been submitted to the App Store and Google Play
 for review.
@@ -533,7 +535,7 @@ Status tracking: docs/RELEASE_LOG.md
 ### Release Live Notification
 
 ```
-Subject: [Live] Media Summarizer v<X.Y.Z> is now available
+Subject: [Live] Deepn v<X.Y.Z> is now available
 
 Version <X.Y.Z> is now live on:
 - [ ] App Store (iOS)
@@ -545,7 +547,7 @@ All monitoring channels are green. No action required.
 ### Hotfix Notification
 
 ```
-Subject: [HOTFIX] Media Summarizer v<X.Y.Z> - <brief description>
+Subject: [HOTFIX] Deepn v<X.Y.Z> - <brief description>
 
 A critical issue has been identified:
 - Issue: <description>
@@ -564,7 +566,7 @@ Current mitigation:
 ### Rollback Notification
 
 ```
-Subject: [ROLLBACK] Media Summarizer v<X.Y.Z> rolled back
+Subject: [ROLLBACK] Deepn v<X.Y.Z> rolled back
 
 A rollback has been initiated:
 - Affected version: v<X.Y.Z>

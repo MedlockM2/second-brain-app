@@ -27,7 +27,7 @@ tags:
 - runFlow: utils/login.yaml
 
 # iOS asks for confirmation before handing a scheme URL to the app
-# ('Open in "Media Summarizer"?'), and without that confirmation the paywall
+# ('Open in "Deepn"?'), and without that confirmation the paywall
 # never mounts. autoVerify dismisses the dialog; Android opens the scheme
 # directly and ignores the flag.
 - openLink:

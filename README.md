@@ -1,11 +1,14 @@
-# Media Summarizer
+# Deepn
 
 Plateforme "second cerveau" : enregistrer n'importe quel média en un share, l'organiser dans des dossiers, générer à la demande des artefacts IA (résumé, notes, flashcards).
+
+Nom commercial définitif choisi le 2026-10-10. Identité, distinction avec l’entité légale et suivi du rebrand : [docs/BRAND_IDENTITY.md](docs/BRAND_IDENTITY.md).
 
 ## Documentation
 
 | Document | Statut | Rôle |
 |----------|--------|------|
+| `docs/BRAND_IDENTITY.md` | Décidé | Nom commercial Deepn et périmètre du rebrand |
 | `docs/MOBILE_APP_IMPLEMENTATION_PLAN.md` | Authoritative | Spec produit V1 complète |
 | `docs/CANONICAL_MEDIA_API_CONTRACT.md` | Frozen | Contrats API (5 endpoints canoniques) |
 | `docs/CANONICAL_MEDIA_API_OPENAPI.yaml` | Frozen | OpenAPI spec |

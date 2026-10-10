@@ -1,4 +1,4 @@
-# Stitch Prompt Pack - Media Summarizer Mobile Share-First
+# Stitch Prompt Pack - Deepn Mobile Share-First
 
 This document is the current source of truth for generating mobile UI concepts in Stitch.
 
@@ -24,7 +24,7 @@ Primary references:
 
 Use these facts as non-negotiable when generating or reviewing Stitch output:
 
-- Brand name: `Media Summarizer`
+- Brand name: `Deepn`
 - Device type: mobile only, `App Mode`, iOS + Android considered
 - Product shape: a mobile knowledge app that turns shared media links into transcripts, reusable AI artifacts, searchable personal knowledge, and a weekly in-app review digest
 - Supported source families: podcast episode URLs, article URLs, YouTube URLs, short-form video URLs, direct audio links
@@ -110,9 +110,9 @@ Unfrozen product areas for design only:
 Use this first. It is intentionally broad enough to generate the entire app concept while making Search and Weekly Digest first-class product surfaces from the very start.
 
 ```text
-Design an App Mode mobile UI concept for a product called "Media Summarizer".
+Design an App Mode mobile UI concept for a product called "Deepn".
 
-This is a share-first iOS and Android app for turning personal media intake into a searchable knowledge base. A user shares a URL from another app into Media Summarizer, the app ingests and processes the media into a faithful transcript, the user can generate optional AI artifacts on demand, the user can search across their submitted-media knowledge base using direct keywords or semantically related language, and once per week the user receives an in-app digest that summarizes the media they sent that week.
+This is a share-first iOS and Android app for turning personal media intake into a searchable knowledge base. A user shares a URL from another app into Deepn, the app ingests and processes the media into a faithful transcript, the user can generate optional AI artifacts on demand, the user can search across their submitted-media knowledge base using direct keywords or semantically related language, and once per week the user receives an in-app digest that summarizes the media they sent that week.
 
 Product context:
 - Transcript-first experience, not dashboard-first
@@ -244,7 +244,7 @@ Use this after the seed if the structure is promising but the visual language is
 Edit scope: overall visual system, app shell, main navigation, auth screen, inbox shell, search shell, weekly digest shell
 
 Keep fixed:
-- Media Summarizer brand name
+- Deepn brand name
 - App Mode mobile layout
 - first-class surfaces for Inbox, Search, Weekly Digest, and Account
 - transcript-first product positioning

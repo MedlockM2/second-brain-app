@@ -33,9 +33,9 @@ Target 6 screenshots for both platforms, capturing the core user journey.
 
 ### Screenshot 1: Share Flow (Entry Point)
 
-**Screen**: Android Share Sheet / iOS Share Extension showing Media Summarizer as a target
+**Screen**: Android Share Sheet / iOS Share Extension showing Deepn as a target
 **Caption**: "Share from any app to start learning"
-**Notes**: Show the share sheet with a recognizable source app (e.g., YouTube or Chrome) in the background. Highlight that Media Summarizer appears in the share targets.
+**Notes**: Show the share sheet with a recognizable source app (e.g., YouTube or Chrome) in the background. Highlight that Deepn appears in the share targets.
 
 ### Screenshot 2: Inbox / Media Library
 

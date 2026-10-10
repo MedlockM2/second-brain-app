@@ -1,8 +1,10 @@
 # Mobile E2E Testing Strategy
 
+> Final marketing name: **Deepn** (owner decision, 2026-10-10; see `docs/BRAND_IDENTITY.md`). task-186 renamed what the user sees (display name `Deepn`, share-sheet label `Deepn Share` → target `DeepnShare`); binaries built before that change still carry the old name. Identifiers the user never sees keep `media-summarizer` on purpose (Expo slug, deep-link scheme, npm package, GCP project), and remaining `Media Summarizer` mentions are dated historical observations.
+
 ## Overview
 
-This document describes the automated end-to-end testing strategy for the Media Summarizer mobile app. The primary framework is **Maestro**, with a targeted **Appium fallback** for iOS share-extension gaps.
+This document describes the automated end-to-end testing strategy for the Deepn mobile app. The primary framework is **Maestro**, with a targeted **Appium fallback** for iOS share-extension gaps.
 
 Reference ADR: `docs/ADR/mobile-e2e-test-strategy-maestro-first.md`
 
@@ -141,7 +143,7 @@ reduced to an auth smoke test and tagged `skipped`.
 
 ### iOS share extension
 
-The iOS share extension (`MediaSummarizerShare`) is a separate native extension process.
+The iOS share extension (`DeepnShare`) is a separate native extension process.
 Maestro **cannot** reliably:
 - Trigger the native iOS share sheet from a third-party app
 - Interact with the share extension UI rendered in a separate process
@@ -182,7 +184,7 @@ If the iOS share extension gap becomes a release blocker, implement targeted App
 2. The Appium test should:
    - Open Safari with a test URL
    - Tap the iOS share button
-   - Find and tap "Media Summarizer" in the share sheet
+   - Find and tap "Deepn Share" in the share sheet
    - Verify the share extension UI renders
    - Verify the URL is passed to the main app
 

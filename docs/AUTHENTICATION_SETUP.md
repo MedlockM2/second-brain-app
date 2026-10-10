@@ -1,4 +1,4 @@
-# Guide d’Authentification — Media Summarizer
+# Guide d’Authentification — Deepn
 
 Objectif
 - Décrire les flux d’authentification supportés par l’API (OAuth Google/Apple + fallback email/mot de passe)

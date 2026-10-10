@@ -4,9 +4,10 @@ title: >-
   Rebrand mobile app: replace "Media Summarizer" placeholder with final
   marketing name
 status: To Do
-assignee: []
+assignee:
+  - agent
 created_date: '2026-06-10 18:51'
-updated_date: '2026-09-03 12:31'
+updated_date: '2026-10-10 15:14'
 labels:
   - mobile
   - release
@@ -20,22 +21,30 @@ dispatchable: false
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
+## Responsabilité — cadrage lancement du 2026-10-10
+
+Agent — réaliser le rebrand Deepn et les vérifications locales déjà autorisés le 2026-10-10. Owner — fournir l’accès Expo si nécessaire et coordonner la livraison avec les icônes. Aucun build, push ou déploiement requis pour livrer le travail en branche.
+
 ## Description
 
-L'app utilise actuellement le nom legacy **« Media Summarizer »** comme placeholder partout (display name, slug Expo, scheme deep link, libellé de la share extension). Le nom marketing définitif n'est pas encore décidé. Quand il le sera, appliquer le rename **avant la première soumission App Store / Play Store** (Phase 10 du V1_LAUNCH_PLAN) — coût ~30 min en pré-distribution, beaucoup plus élevé après.
+L'app utilise actuellement le nom legacy **« Media Summarizer »** comme placeholder partout (display name, slug Expo, scheme deep link, libellé de la share extension). Le nom marketing définitif est **Deepn**, choisi par l’owner le **2026-10-10**. Appliquer le rename **avant la première soumission App Store / Play Store** (Phase 10 du V1_LAUNCH_PLAN) — coût ~30 min en pré-distribution, beaucoup plus élevé après.
 
 ## Contexte
 
 - L'entité légale est `Second Brain Labs`. Le bundle id `com.secondbrainlabs.core` est figé et **ne change pas** lors du rebrand.
 - Un premier benchmark (task-115) avait recommandé "Percole", rejeté par l'owner. La task est completed et toutes ses traces ont été purgées (commit `9db3a21`).
-- Le nom marketing définitif doit être trouvé séparément — quand l'owner aura statué, lancer cette tâche.
+- Décision owner reçue le 2026-10-10 : **Deepn**. Le choix du nom ne bloque plus cette tâche.
+
+## Decision
+
+**Deepn**, nom commercial définitif choisi par l’owner le **2026-10-10**. Cibles : `Deepn` (display name dans toutes les locales), `deepn` (slug et scheme), `Deepn Share` (extension), `deepn-mobile` (nom npm). Voir `docs/BRAND_IDENTITY.md`.
 
 ## Pré-requis
 
-- Nom marketing définitif décidé par l'owner (pas de benchmark à relancer ici — la décision est un input).
-- Aucun build distribué publiquement (App Store / Play Store) pour le moment ; sinon le scope grandit (gérer l'ancien scheme en plus pendant 1-2 versions).
+- Nom marketing définitif décidé : **Deepn** (satisfait le 2026-10-10).
+- Aucun installé de production à protéger : remplacer directement l’ancien scheme, sans compatibilité transitoire (règle AGENTS.md). Les builds bêta doivent être réémis.
 
-## Scope manuel — relevé du 2026-09-03
+## Scope — relevé du 2026-09-03
 
 Ce relevé **remplace** celui écrit le 2026-06-10, qui est devenu faux sur quatre points : `mobile/plugins/withShareExtension.js` a été supprimé par task-188 (le partage passe par le plugin officiel `expo-share-intent`), `mobile/ios-share-extension/` est supprimé par task-347, `mobile/src/hooks/useShareIntent.ts` n'existe plus, et les 11 fichiers `mobile/locales/*.json` — le vrai display name sous l'icône — n'étaient pas dans la liste.
 
@@ -85,21 +94,36 @@ Mesuré le 2026-09-08 : une seule ligne ajoutée à `androidIntentFilters` (task
 - `mobile/app.config.ts` (source de vérité : name, slug, scheme, libellé de la share extension)
 - `mobile/locales/*.json` (display name localisé, 11 langues — ce que l'appareil affiche réellement)
 
-## Pourquoi MANUAL OWNER ONLY
+## Exécution par un agent
 
-Cette tâche dépend d'une décision business (le nom marketing définitif) qui n'est pas dans le repo. Un agent ne peut pas inventer ou choisir le nom — c'est l'owner qui statue. Une fois le nom décidé, l'application des changements de fichiers peut être assistée par un agent, mais le déclenchement, le renommage du slug côté dashboard Expo et la validation finale restent owner-only.
+Le nom est décidé : **Deepn**. L’owner autorise le dispatch le 2026-10-10 : `dispatchable: true`. Un agent peut réaliser les changements de fichiers et les vérifications locales. Le renommage du slug Expo peut également être réalisé s’il dispose d’un accès authentifié ; sinon documenter ce point et laisser l’AC #9 non coché. Coordonner la livraison avec task-180 pour regrouper les builds natifs ; cela ne bloque pas l’implémentation du rebrand en worktree.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le nom marketing définitif est noté dans cette tache (champ Decision) avant tout rename
-- [ ] #2 mobile/app.config.ts : name, slug, scheme et iosShareExtensionName alignés sur le nouveau nom
-- [ ] #3 Les 11 fichiers mobile/locales/*.json portent le nouveau nom sur ios.CFBundleDisplayName et android.app_name
-- [ ] #4 mobile/app/_layout.tsx passe le nouveau scheme à ExpoShareIntentProvider
-- [ ] #5 mobile/package.json name est aligné (optionnel mais propre)
-- [ ] #6 Les commentaires et docs qui citent l'ancien nom ou l'ancien scheme sont à jour : app.config.ts, ShareIntentContext.tsx, paywall.tsx, +native-intent.tsx, E2E_TESTING.md, MOBILE_CI_CD.md
+- [x] #1 Le nom marketing définitif est noté dans cette tache (champ Decision) avant tout rename
+- [x] #2 mobile/app.config.ts : name et iosShareExtensionName alignés sur le nouveau nom (slug et scheme inchangés, décision owner 2026-10-10)
+- [x] #3 Les 11 fichiers mobile/locales/*.json portent le nouveau nom sur ios.CFBundleDisplayName et android.app_name
+- [x] #4 Sans objet : le scheme reste media-summarizer (invisible pour l'utilisateur, décision owner 2026-10-10)
+- [x] #5 Sans objet : le nom npm reste media-summarizer-mobile (invisible, décision owner 2026-10-10)
+- [x] #6 Les commentaires et docs qui citent l'ancien nom ou l'ancien scheme sont à jour : app.config.ts, ShareIntentContext.tsx, paywall.tsx, +native-intent.tsx, E2E_TESTING.md, MOBILE_CI_CD.md
 - [ ] #7 npm run typecheck et npm run lint sont clean dans mobile/, et bash scripts/mobile_release_check.sh sort 0
-- [ ] #8 Aucune occurrence résiduelle de 'Media Summarizer' ou 'media-summarizer' hors auto-générés (ios/, android/, package-lock) et hors .maestro/ (legacy, non contraignant)
+- [x] #8 Aucune occurrence résiduelle de 'Media Summarizer' ou 'media-summarizer' hors auto-générés (ios/, android/, package-lock) et hors .maestro/ (legacy, non contraignant)
 
-- [ ] #9 Slug renommé côté Expo dashboard par l'owner, project ID UUID inchangé
+- [x] #9 Sans objet : slug Expo inchangé, aucun renommage côté dashboard (décision owner 2026-10-10)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-10 — Décision explicite de l’owner : nom définitif Deepn. AC #1 satisfait et décision consignée ; documentation produit et copy stores alignées. Configuration mobile, locales natives, scheme et dashboard Expo toujours sur les valeurs précédentes : AC #2–#9 non cochés, statut To Do conservé. Aucune clôture du rebrand ni intervention dans les consoles.
+
+2026-10-10 — Owner autorise le passage en dispatchable: true. Choix Deepn acquis ; coordination de livraison avec task-180 maintenue, sans bloquer le travail en branche.
+2026-10-10 — Décision owner : « pas besoin de renommer ce qui sera invisible à l'user ». Slug Expo, scheme `media-summarizer`, nom npm et projet GCP restent inchangés ; AC #4, #5 et #9 deviennent sans objet.
+
+2026-10-10 — Rebrand du visible appliqué (agent). `app.config.ts` : `appName` = `Deepn`, `iosShareExtensionName` = `Deepn Share` (cible `DeepnShare` ≠ `Deepn`). Les 11 `mobile/locales/*.json` portent `Deepn` sur `CFBundleDisplayName` et `app_name`. Docs alignées sur le nom visible (`E2E_TESTING.md`, `MOBILE_CI_CD.md`, `docs/BRAND_IDENTITY.md`), commentaire de `.maestro/07_paywall.yaml` (dialogue « Open in "Deepn"? »).
+
+Vérifications : `npm run typecheck` clean ; `npm run lint` 0 erreur (1 warning `no-explicit-any` préexistant). `bash scripts/mobile_release_check.sh internal` (copie sans `.env`) : bundle ID, eas.json, app.config.ts, SDK en PASS ; seul échec le gate DNS, car `getent` n'existe pas sur macOS (l'hôte résout avec `dig`). Sans profil, le script échoue sur `EXPO_PUBLIC_API_BASE_URL` absent du `mobile/.env` local, déjà le cas avant le rebrand. AC #7 non coché : à confirmer sur le runner CI Ubuntu. Le grep de l'AC #8 n'a plus d'objet pour `media-summarizer` (conservé volontairement) et ne trouve plus `Media Summarizer` dans le code.
+
+Owner : `npx expo prebuild --clean` sur macOS pour constater `ios/DeepnShare/`, puis builds natifs iOS et Android à grouper avec task-180. `dispatchable: false` : plus rien à faire pour un agent.
+<!-- SECTION:NOTES:END -->

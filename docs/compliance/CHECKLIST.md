@@ -1,6 +1,6 @@
 # App Store Compliance Checklist
 
-**Media Summarizer**
+**Deepn**
 **Last updated:** 2026-05-19
 
 This checklist tracks readiness for Apple App Store and Google Play submission.

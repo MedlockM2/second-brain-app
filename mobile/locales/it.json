@@ -1,10 +1,10 @@
 {
   "ios": {
-    "CFBundleDisplayName": "Media Summarizer",
+    "CFBundleDisplayName": "Deepn",
     "NSPhotoLibraryUsageDescription": "Serve ad allegare immagini ai tuoi contenuti.",
     "NSCameraUsageDescription": "Serve a fotografare un documento o una pagina e importarlo nella tua libreria."
   },
   "android": {
-    "app_name": "Media Summarizer"
+    "app_name": "Deepn"
   }
 }

@@ -2,13 +2,20 @@
 
 Diagnostic et correctif du 2026-10-10. Le propriétaire a demandé d’appliquer
 `iosHideView: false`, puis de committer et pousser. Aucun build natif local ni
-reproduction sur appareil par l’agent ; le push peut déclencher la CI habituelle.
+reproduction sur appareil par l’agent. Le build iOS 13 du commit `f05bd7c`
+a réussi et sa soumission App Store Connect est terminée.
 
 **Retour propriétaire du 2026-10-10 :** comparaison effectuée sur son appareil,
 le partage via « Plus… » fait planter l'app source, tandis que la sélection par
 l'autre chemin fonctionne. Ce résultat confirme le facteur de reproduction
 rapporté upstream. L'app source, sa version, le contenu et le build exact de ce
-contrôle ne sont pas précisés ; le contournement n'a pas encore été essayé.
+contrôle ne sont pas précisés.
+
+**Validation finale propriétaire du 2026-10-10 :** après déploiement du
+correctif et mise à jour de l’application, le scénario a été retesté sur
+appareil : fonctionnement attendu, plus de gel de l’app source. Le propriétaire
+confirme la clôture de TASK-438. Cette validation ne documente pas une matrice
+exhaustive des apps sources, types de contenu et états chaud/froid.
 
 ## Conclusion
 
@@ -22,14 +29,14 @@ cohérente avec notre code généré, pas une cause mesurée sur notre appareil.
 Le contournement appliqué est `iosHideView: false` dans les options
 du plugin, dans `app.config.ts`. L'[issue #216](https://github.com/achorein/expo-share-intent/issues/216)
 rapporte qu'il supprime le gel sur Expo 56 / package 7.0.0, avec une brève
-apparition de la modale de l'extension. Son efficacité sur notre build reste à
-confirmer. Les deux issues étaient ouvertes lors de la consultation.
+apparition de la modale de l'extension. Son efficacité sur notre build est
+confirmée par le propriétaire. Les deux issues étaient ouvertes lors de la consultation.
 
 **Décision propriétaire : appliquer l’option native `iosHideView: false`.**
 Le correctif utilise le chemin du plugin qui attend `viewDidAppear`, sans patch
-de dépendance. Son efficacité sur le build distribué reste à confirmer en
-rejouant le parcours via « Plus… », avec le flash de modale possible accepté
-comme compromis. Le commentaire de configuration renvoie à ce diagnostic.
+de dépendance. Le propriétaire confirme la disparition du gel après mise à
+jour du build distribué. Le flash de modale possible est accepté comme
+compromis. Le commentaire de configuration renvoie à ce diagnostic.
 
 ## Preuve dans notre configuration et le natif généré
 
@@ -144,7 +151,7 @@ dans la feuille de partage, retour par geste système ou sélecteur d'apps, rés
 
 | Option | Travail et coût | Limite |
 | --- | --- | --- |
-| `iosHideView: false` | Une option de plugin, prebuild, nouveau build iOS et contrôle sur appareil ; aucune nouvelle dépendance | Flash de la modale rapporté upstream ; efficacité locale à confirmer |
+| `iosHideView: false` | Une option de plugin, prebuild, nouveau build iOS et contrôle sur appareil ; aucune nouvelle dépendance | Flash de la modale rapporté upstream ; efficacité confirmée sur appareil par le propriétaire |
 | Patch du template : démarrer dans `viewDidAppear` en conservant la transparence | Patch versionné via `patch-package` déjà présent, garde contre un second traitement, entretien aux mises à jour, nouveau build et contrôle sur appareil | Plus de code natif maintenu ; proposition upstream non validée ici |
 | Attendre upstream | Suivre #216/#217 | Aucun délai garanti ; le symptôme reste présent |
 
@@ -162,5 +169,5 @@ un nouveau binaire iOS ; une mise à jour JavaScript OTA seule ne peut le livrer
 - `npm run lint` : exit 0, un warning préexistant dans
   `src/services/purchaseService.ts:136`.
 - `npx tsc --noEmit` : exit 0.
-- Aucun test automatisé ajouté ou exécuté. Correctif de configuration appliqué ;
-  confirmation après installation du nouveau binaire iOS encore nécessaire.
+- Aucun test automatisé ajouté ou exécuté. Correctif de configuration déployé
+  et validé par le propriétaire après installation du nouveau binaire iOS.

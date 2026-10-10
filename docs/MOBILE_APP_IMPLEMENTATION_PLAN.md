@@ -1,4 +1,4 @@
-# Plan d'Implémentation Produit Mobile - Media Summarizer
+# Plan d'Implémentation Produit Mobile - Deepn
 
 > Note de cadrage: ce document conserve du contexte de conception initial. Pour l'état d'avancement, l'ordonnancement réel et les priorités, le backlog fait foi.
 

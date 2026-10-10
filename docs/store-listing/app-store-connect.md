@@ -1,10 +1,12 @@
 # App Store Connect Metadata
 
+> Brand update (2026-10-10): **Deepn** is the final marketing name. This document uses the target name; the mobile and console renames remain pending (task-186). See `docs/BRAND_IDENTITY.md`.
+
 ## App Identity
 
 | Field | Value |
 |-------|-------|
-| App Name | Media Summarizer |
+| App Name | Deepn |
 | Subtitle | Your Second Brain for Media |
 | Bundle ID | com.secondbrainlabs.core |
 | SKU | com-secondbrainlabs-core-v1 |
@@ -27,16 +29,14 @@ inside a group instead of two concurrent subscriptions.
 
 | Field | Value |
 |-------|-------|
-| Reference Name (internal) | Second Brain Plans |
-| Localized Display Name (en-US, ≤ 30 chars) | Second Brain Plans |
+| Reference Name (internal) | Deepn Plans |
+| Localized Display Name (en-US, ≤ 30 chars) | Deepn Plans |
 
-**Created in App Store Connect on 2026-09-02 as `Second Brain Plans`**, not the
-`Media Summarizer Plans` this table used to hold. The rest of this file, and the app
-itself, still say `Media Summarizer` — the placeholder `task-186` exists to replace
-once a marketing name is decided. If `Second Brain` *is* that decision, `task-186`
-has to land before the version metadata is written, because the App Store listing,
-the screenshots and this group name all consume the final name (`V1_LAUNCH_PLAN.md`
-Phase 10, sub-step 0).
+**Existing console value recorded on 2026-09-02: `Second Brain Plans`.** The table
+above is the target copy following the owner's choice of **Deepn** on 2026-10-10;
+the console rename has not been performed by this documentation update. Apply
+`Deepn Plans` alongside the app listing and screenshots before submission
+(`V1_LAUNCH_PLAN.md`, Phase 10). Product identifiers remain unchanged.
 
 The group display name is customer-visible (iOS Settings → Subscriptions). Names are
 editable at any time — **except while an item sits in a submission**, see below. The
@@ -282,14 +282,14 @@ exercised cheaply, and why a test subscription does not survive a week.
 ## Description (max 4000 chars)
 
 ```
-Media Summarizer turns everything you read, watch, and listen to into organized knowledge you can actually use.
+Deepn turns everything you read, watch, and listen to into organized knowledge you can actually use.
 
 Share any link from your favorite apps and get AI-powered summaries, detailed notes, and flashcards in seconds. Podcasts, YouTube videos, articles, TikTok, Instagram, and more - all captured and transformed into your personal knowledge base.
 
 HOW IT WORKS
 
 1. Share a link from any app (Chrome, YouTube, Instagram, TikTok, WhatsApp, podcast apps, and more)
-2. Media Summarizer turns audio, video, documents, and photos into text automatically
+2. Deepn turns audio, video, documents, and photos into text automatically
 3. Generate summaries, notes, and flashcards on demand
 4. Review, search, and organize your growing media library
 
@@ -329,7 +329,7 @@ SUPPORTED CONTENT TYPES
 
 PRICING
 
-Media Summarizer is a subscription, with three monthly plans. Every plan does everything; they differ only in how much you send. Articles, web pages, and X posts cost nothing against your monthly time, and reading your library is always unlimited.
+Deepn is a subscription, with three monthly plans. Every plan does everything; they differ only in how much you send. Articles, web pages, and X posts cost nothing against your monthly time, and reading your library is always unlimited.
 
 Perfect for students, researchers, lifelong learners, and anyone who consumes more content than they can remember.
 
@@ -355,7 +355,7 @@ Turn podcasts, videos, and articles into summaries, notes, and flashcards. Share
 ## What's New (v1.0)
 
 ```
-Welcome to Media Summarizer! In this first release:
+Welcome to Deepn! In this first release:
 
 - Share links from any app to start building your media library
 - Podcasts, YouTube, TikTok, Instagram, WhatsApp, documents, and photos all come back as text
@@ -408,12 +408,12 @@ Purpose: App Functionality, Analytics
 ## Review Notes for Apple
 
 ```
-Media Summarizer requires an account to use. A test account will be provided in the review submission.
+Deepn requires an account to use. A test account will be provided in the review submission.
 
 The app uses a Share Extension to receive URLs from other apps. To test:
 1. Open Safari and navigate to any article or YouTube video
 2. Tap the Share button
-3. Select "Media Summarizer" from the share sheet
+3. Select "Deepn" from the share sheet
 4. The link appears in the app's inbox and processing begins
 
 Audio transcription uses Deepgram (third-party speech-to-text service).

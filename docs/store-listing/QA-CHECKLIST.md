@@ -6,7 +6,7 @@ Run this checklist before every store submission. All items must pass before sub
 
 ### App Name and Identity
 
-- [ ] App name is identical across both stores ("Media Summarizer")
+- [ ] App name is identical across both stores ("Deepn")
 - [ ] Bundle ID / Package Name matches app.config.ts (`com.secondbrainlabs.core`)
 - [ ] Version number in store listing matches the build being submitted
 - [ ] Category selections are correct (Productivity primary, Education secondary for iOS)

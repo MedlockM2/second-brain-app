@@ -1,10 +1,10 @@
 {
   "ios": {
-    "CFBundleDisplayName": "Media Summarizer",
+    "CFBundleDisplayName": "Deepn",
     "NSPhotoLibraryUsageDescription": "आपके मीडिया में तस्वीरें जोड़ने के लिए इस्तेमाल होता है।",
     "NSCameraUsageDescription": "किसी दस्तावेज़ या पन्ने की तस्वीर लेकर उसे आपकी लाइब्रेरी में लाने के लिए इस्तेमाल होता है।"
   },
   "android": {
-    "app_name": "Media Summarizer"
+    "app_name": "Deepn"
   }
 }
