@@ -3,9 +3,10 @@ id: TASK-469
 title: >-
   Retrouver, reprendre et supprimer les conversations passées d'un média ou d'un
   dossier depuis la feuille de chat
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 18:01'
+updated_date: '2026-10-10 22:40'
 labels:
   - mobile
   - chat
@@ -19,6 +20,21 @@ references:
   - >-
     mobile-design-mockups/chatbot_integration_ui/direction_f_composeur_persistant/code.html
   - mobile-design-mockups/my_design_system/DESIGN.md
+modified_files:
+  - mobile/src/components/chat/ChatHistoryList.tsx
+  - mobile/src/components/chat/ChatSheet.tsx
+  - mobile/src/components/chat/ChatDock.tsx
+  - mobile/src/i18n/en.ts
+  - mobile/src/i18n/fr.ts
+  - mobile/src/i18n/es.ts
+  - mobile/src/i18n/de.ts
+  - mobile/src/i18n/it.ts
+  - mobile/src/i18n/pt.ts
+  - mobile/src/i18n/nl.ts
+  - mobile/src/i18n/ja.ts
+  - mobile/src/i18n/zh.ts
+  - mobile/src/i18n/ar.ts
+  - mobile/src/i18n/hi.ts
 priority: medium
 type: feature
 ordinal: 76000
@@ -54,10 +70,26 @@ Vérification visuelle sur appareil, sur un build de dev pointant l'API dev : pl
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La feuille de chat donne accès à la liste des conversations de la portée courante, plus récentes d'abord, avec première question ou titre, date, nombre de tours et état du dernier tour
-- [ ] #2 Choisir une conversation passée recharge son fil et reprend le flux si une génération y est active
-- [ ] #3 Une nouvelle conversation peut être ouverte sur la même portée, y compris depuis l'état conversation pleine
-- [ ] #4 Une conversation peut être supprimée après confirmation par la route de suppression
-- [ ] #5 Aucun nouvel onglet ni nouvelle destination n'est ajouté ; les chaînes nouvelles existent dans les onze catalogues et pseudo.ts, et les cibles tactiles font au moins 48 pt
-- [ ] #6 npx tsc --noEmit et le lint du projet mobile passent
+- [x] #1 La feuille de chat donne accès à la liste des conversations de la portée courante, plus récentes d'abord, avec première question ou titre, date, nombre de tours et état du dernier tour
+- [x] #2 Choisir une conversation passée recharge son fil et reprend le flux si une génération y est active
+- [x] #3 Une nouvelle conversation peut être ouverte sur la même portée, y compris depuis l'état conversation pleine
+- [x] #4 Une conversation peut être supprimée après confirmation par la route de suppression
+- [x] #5 Aucun nouvel onglet ni nouvelle destination n'est ajouté ; les chaînes nouvelles existent dans les onze catalogues et pseudo.ts, et les cibles tactiles font au moins 48 pt
+- [x] #6 npx tsc --noEmit et le lint du projet mobile passent
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Historique des conversations dans la feuille de chat, sans nouvel onglet ni nouvelle destination.
+
+- Bouton « Conversations passées » dans l'en-tête de la feuille. La vue historique remplace le fil, avec un retour annoncé, et masque le composeur pendant ce temps.
+- `ChatHistoryList` affiche la liste par portée via `ChatService.listConversations`, plus récentes d'abord, paginée (« Afficher plus », curseur). Chaque ligne donne la première question (ou « sans question »), la date, le nombre de questions (pluriel par `tCount`), l'état du dernier tour (en cours, répondue, échec, interrompue) et marque la conversation ouverte. Rôles liste et bouton, cibles ≥ 48 pt (ligne 56 pt).
+- Choisir une ligne appelle `selectConversation` du `ChatSessionContext`, qui recharge le fil et reprend le flux si une génération est active. La suppression passe par une confirmation (`Alert`) puis `deleteConversation` ; si c'est la conversation ouverte, le contexte l'oublie.
+- La nouvelle conversation sur la même portée reste disponible dans l'en-tête et dans l'action du refus `conversation_full` (task-468).
+- 18 clés `chat.history.*` ajoutées aux onze catalogues (`pseudo.ts` les transforme automatiquement).
+
+Vérifications : `npx tsc --noEmit` passe ; `npm run lint` donne 0 erreur (1 avertissement préexistant).
+
+Note à l'owner : vérification sur un build de dev pointant l'API dev déployée (plusieurs conversations sur un même média, reprise, suppression, nouvelle conversation après une conversation pleine).
+<!-- SECTION:FINAL_SUMMARY:END -->
