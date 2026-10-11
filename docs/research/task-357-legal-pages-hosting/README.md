@@ -1,13 +1,18 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: ok   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : publier les pages légales exigées par le paywall, sans domaine possédé
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: Accept with modifications. La recommandation A1 n'est pas retenue telle quelle : la question a changé depuis ce benchmark.
+- **Le domaine sera acheté de toute façon** (task-443) : l'API, l'app web et la connexion Apple sur le web en ont besoin. La comparaison des hébergements gratuits sans domaine (§2, §3, §8) ne s'applique plus.
+- **Hébergement tout AWS, dans Terraform**, comme pour l'app web (décision de task-424 du même jour). Le domaine et le DNS sont dans Route 53. Les pages légales sont publiées en **HTML statique sur `www.<domaine>`** (S3 + CloudFront), générées depuis `docs/compliance/privacy-policy.md` et `terms-of-service.md`. Pas de Cloudflare.
+- **L'URL de la politique de confidentialité est fixée avant la première soumission à Apple** (§0.2) : par exemple `https://www.<domaine>/privacy` et `https://www.<domaine>/terms`, chemins à fixer par l'implémentation. Ce sont des pages publiques, pas des PDF, non modifiables par le visiteur (§1).
+- **Une adresse de contact dédiée sur le domaine**, jamais une adresse personnelle (§7.2). Elle doit pouvoir recevoir des messages et y répondre : code de vérification d'Apple, demandes RGPD, `mailto:` de l'écran de suppression de compte. Le moyen de la recevoir et d'y répondre est un choix d'implémentation.
+- **Avant publication, le contenu des pages est mis à jour**, et c'est le principal risque de ce chantier. Il faut le nom Deepn (la politique et `mobile/src/constants/legal.ts` citent encore `privacy@mediasummarizer.com`), la nouvelle adresse de contact, et les sous-traitants réels et actuels (modèle du chat, RevenueCat, et ceux qui s'ajouteront).
+**Validated at**: 2026-10-11
 
 ---
 

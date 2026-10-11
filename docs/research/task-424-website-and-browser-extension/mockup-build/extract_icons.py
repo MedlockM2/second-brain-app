@@ -24,7 +24,9 @@ camera-outline layers-outline albums-outline star-outline star pin-outline pin h
 return-down-forward-outline list-outline grid-outline filter-outline arrow-forward
 reorder-three-outline copy-outline git-branch-outline menu-outline calendar-outline today-outline
 school-outline help-circle-outline text-outline globe-outline card-outline extension-puzzle-outline
-keypad-outline return-up-back-outline pulse sync wifi-outline options-outline documents-outline""".split()
+keypad-outline return-up-back-outline pulse sync wifi-outline options-outline documents-outline
+library-outline camera contrast-outline folder-open images-outline document-attach-outline arrow-back
+checkmark-circle-outline shield-checkmark information-circle-outline""".split()
 
 glyphmap = json.loads((VENDOR / "glyphmaps/Ionicons.json").read_text())
 font = TTFont(str(VENDOR / "Fonts/Ionicons.ttf"))

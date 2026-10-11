@@ -1,13 +1,28 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: more   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : l'app web connectée de Deepn — cinq directions, la bibliothèque à 200 dossiers et plus, le chat
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: Complément demandé (2026-10-11). L'interface est décidée ; neuf points du reste du README sont revus ci-dessous. Le complément les intègre sans rouvrir ce qui est acté.
+
+**Acté : l'interface de l'app web sur ordinateur est la direction de l'owner**, `mobile-design-mockups/web_app_owner_direction/` (maquette `code.html`, captures `screens/`, et son `README.md`, qui fait foi pour chaque écran ; sources dans `mockup-build/dir_owner*.{js,css}`). Elle remplace la direction A et tout ce qui lui est propre : barre latérale et arbre virtualisé, épinglés, palette ⌘K, sélecteur arborescent. Les dossiers n'ont qu'un niveau : on ne crée jamais un dossier dans un autre, et « Déplacer le dossier » n'existe pas.
+
+**Consignes du complément :**
+
+1. **Pas de version téléphone de l'app web en V1.** Sous 900 px, `app.<domaine>` invite à installer l'app mobile, avec les liens vers les stores. Les écrans téléphone de la maquette (`screens/21-tel-*` à `37-tel-*`) restent une référence pour plus tard, hors périmètre. Le rejet de React Native Web (§9.1) tient donc pour la V1. Écrire, sans le rouvrir, qu'il serait à réévaluer si une version téléphone fidèle à l'app était un jour demandée.
+2. **Le paiement web n'est pas figé.** Retirer « Stripe Billing via RevenueCat » des conclusions reprises (§11) et du lot W4. Le choix du moteur sera fait par une étude dédiée à la fin de la bêta. Les options à y comparer sont Paddle (vendeur à la place de Deepn : TVA, factures, litiges), RevenueCat Billing avec ses liens d'achat hébergés, et Stripe Billing. Les sources sont les pages RevenueCat Web SDK, Paddle et Web Purchase Links.
+3. **Remplacer le chiffrage en jours (§10.2) par un découpage en tâches de backlog**, établi sur la direction de l'owner, au format de ce que task-431 fait pour le chat. Chaque tâche a un périmètre, ses dépendances et des AC satisfaisables par un agent en worktree (règle du `CLAUDE.md`). Le complément liste ces tâches ; il ne les crée pas dans le backlog.
+4. **Connexion Google et Apple sur le web (§9.4)** : le serveur accepte déjà les audiences web. C'est `GOOGLE_CLIENT_ID` dans `_google_native_accepted_audiences` et `APPLE_CLIENT_ID` dans la vérification Apple (`media_summarizer/api/endpoints/auth_social.py`). Retirer ce point de « à vérifier » ; il reste la création des identifiants web, et pour Apple le domaine vérifié (task-443).
+5. **Le domaine de l'API (task-445) devient un prérequis du développement de l'app web**, pas seulement de sa publication. La session repose sur un cookie posé par `api.<domaine>`. Le reporter dans les dépendances du découpage.
+6. **Vérifier sur dev le CORS de la façade de streaming du chat** (§12, point 3), qui existe depuis task-467. Lancer un pré-vol `OPTIONS` depuis une origine web avec l'en-tête `Authorization`, et consigner le résultat. Si le CORS manque, en faire une tâche du découpage.
+7. **Appairage de l'extension en un clic.** La page Compte de l'app web, déjà connectée, transmet à l'extension un jeton qui lui est propre, via `externally_connectable` (déclaré pour la seule origine `app.<domaine>`). Le code à recopier ne reste qu'en secours. Préciser la portée et la révocation de ce jeton.
+8. **Frais du Chrome Web Store** : 5 $, payés une fois, publiés par Google. Corriger §10.1 et §12, point 9.
+9. **Hébergement tout AWS, dans Terraform.** Le domaine et le DNS sont dans Route 53 ; `app.<domaine>` (l'app web) et `www.<domaine>` (pages légales et page d'installation de l'extension, en HTML statique) sont sur S3 + CloudFront ; l'API est sur `api.<domaine>` via le domaine personnalisé d'API Gateway. Pas de Cloudflare, pas d'Astro. Remplacer §9.5 et la ligne Cloudflare du §11 en conséquence. Ce choix vaut aussi pour task-357, validé le même jour.
+10. **Identité du texte extrait par l'extension.** Le texte envoyé par le navigateur (`extracted_text`, §6 de `README.owner-rejected-2026-10-05.md`) peut venir d'une page payante ou privée. Il ne doit jamais prendre l'identité de l'adresse seule : sinon un autre compte qui enregistre le même lien le recevrait par la mise en commun des transcripts (`media_summarizer/core/services/media_identity.py`, `generate_media_key`). La règle à écrire dans le contrat est une identité propre au compte (`generate_account_scoped_media_key`), ou au minimum l'adresse et ce texte ensemble, comme pour les articles (`generate_article_media_key`, task-392). Le complément tranche entre les deux et reporte la règle dans le découpage en tâches. L'app mobile n'est pas concernée : ses chemins sont déjà publics par construction, ou propres au compte.
+**Validated at**: _(date ISO à remplir par l'owner lors du passage à `ok`)_
 
 ---
 

@@ -1,0 +1,107 @@
+/* The web app on a phone: the mobile app's screens. Sizes follow mobile/src/constants/theme.ts
+   (Spacing 16 gutter, TouchTarget 44/56, BorderRadius) and the components named in
+   dir_owner_phone.js. */
+.P { position: relative; display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: var(--background); overflow: hidden; }
+.P-scroll { flex: 1; min-height: 0; padding-bottom: 104px; }
+.P-pad { padding-left: 16px; padding-right: 16px; }
+
+/* Tab bar: a floating glass pill, as NativeTabs draws it on iOS 26. */
+.P-tabs { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 64px; display: flex; border-radius: 32px; background: var(--glass); backdrop-filter: blur(16px); box-shadow: var(--shadow-pop), inset 0 0 0 1px rgba(0,0,0,.04); z-index: 10; }
+.P-tabs button { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 500; color: var(--text-muted); border-radius: 28px; margin: 4px; }
+.P-tabs button.on { color: var(--primary); background: var(--surface-container); }
+[data-theme="dark"] .P-tabs button.on { color: var(--primary); }
+
+/* Accueil */
+.P-home { display: flex; flex-direction: column; gap: 24px; padding: 16px 0 0; }
+.P-home > .banner { margin: 0 16px; }
+.P-deck { position: relative; display: block; margin: 0 16px; padding: 0 8px 8px 0; text-align: left; }
+.P-deck .plate { position: absolute; border-radius: var(--r-xl); }
+.P-deck .plate.back { left: 16px; right: 0; top: 16px; bottom: 0; background: var(--surface-container-high); }
+.P-deck .plate.mid { left: 8px; right: 4px; top: 8px; bottom: 4px; background: var(--surface-container); }
+.P-deck-face { position: relative; display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: var(--r-xl); background: var(--surface); }
+.P-deck-ico { position: relative; width: 44px; height: 44px; border-radius: var(--r-lg); background: var(--primary-tint); box-shadow: inset 0 0 0 1px var(--primary-30); display: flex; align-items: center; justify-content: center; flex: none; }
+.P-deck-ico b { position: absolute; right: -8px; bottom: -8px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: var(--r-full); background: var(--primary); color: var(--on-primary); font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.P-deck-label { flex: 1; font-size: 16px; font-weight: 600; }
+.P-deck-go { width: 44px; height: 44px; border-radius: 50%; background: var(--text-main); color: var(--surface); display: flex; align-items: center; justify-content: center; flex: none; }
+.P-rowhead { padding: 0 16px; margin-bottom: 12px; } .P-rowhead > .ico { color: var(--primary); }
+.P-track { display: flex; gap: 16px; overflow-x: auto; padding: 0 16px 4px; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.P-track .htile { scroll-snap-align: start; scroll-margin-left: 16px; }
+.P-fabs { position: absolute; right: 16px; bottom: 92px; display: flex; gap: 12px; align-items: center; z-index: 9; }
+.P-fab { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-pop); }
+.P-fab.add { background: var(--primary); color: var(--on-primary); }
+.P-fab.cam { background: var(--text-main); color: var(--surface); }
+
+/* Recherche */
+.P-pill { position: sticky; top: 8px; z-index: 5; margin: 8px 16px 16px; min-height: 44px; background: var(--glass); backdrop-filter: blur(16px); box-shadow: var(--shadow), inset 0 0 0 1px rgba(0,0,0,.04); }
+.P-fgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 0; }
+.P-fgrid .ftile { padding: 8px 4px; }
+.P-mcard { display: flex; gap: 12px; align-items: center; width: 100%; padding: 8px 0; text-align: left; min-width: 0; }
+.P-mcard .meta { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-muted); }
+.P-mcard .t { display: block; font-size: 14px; font-weight: 600; line-height: 1.35; margin: 2px 0; }
+
+/* Screen header (ScreenHeader) */
+.P-head { display: flex; align-items: center; gap: 4px; height: 56px; padding: 0 8px; flex: none; }
+.P-title { flex: 1; text-align: center; font: 600 17px/1.3 var(--font-head); }
+
+/* Media page: the cover band edge to edge, glass buttons, the title strip. */
+.P-hero { position: relative; aspect-ratio: 4 / 3; display: flex; align-items: flex-end; overflow: hidden; }
+.P-hero-glyph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.25); }
+.P-hero-glyph .ico { width: 72px; height: 72px; }
+.P-glass { position: absolute; top: 12px; width: 40px; height: 40px; border-radius: 50%; background: var(--cover-veil); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; color: var(--text-main); z-index: 2; }
+.P-glass.l { left: 12px; } .P-glass.r { right: 12px; }
+.P-strip { width: 100%; padding: 10px 16px 12px; background: var(--cover-veil); backdrop-filter: blur(12px); }
+.P-strip h1 { font: 600 20px/1.3 var(--font-head); margin-top: 2px; }
+.P-seg { display: flex; width: 100%; } .P-seg button { flex: 1; justify-content: center; height: 40px; }
+.P-art { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 16px; margin-bottom: 8px; border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow); text-align: left; }
+.P-art > .ico:first-child { color: var(--text-subtle); }
+.P-art .small .ico { width: 14px; height: 14px; vertical-align: -2px; }
+
+/* ChatDock and ChatSheet */
+.P-dock { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 8; }
+.P-dock.intabs { bottom: 84px; }
+.P-dockfield { display: flex; align-items: center; gap: 10px; width: 100%; height: 52px; padding: 0 16px; border-radius: 26px; background: var(--glass); backdrop-filter: blur(16px); box-shadow: var(--shadow-pop), inset 0 0 0 1px var(--outline-variant); color: var(--text-muted); font-size: 15px; text-align: left; }
+.P-dockfield > .ico:last-child { width: 32px; height: 32px; padding: 7px; border-radius: 50%; background: var(--surface-container-high); color: var(--text-muted); }
+.P-scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 20; }
+.P-sheet { position: absolute; left: 0; right: 0; bottom: 0; height: 92%; z-index: 21; display: flex; flex-direction: column; background: var(--surface); border-radius: 20px 20px 0 0; box-shadow: var(--shadow-pop); }
+.P-sheet.short { height: auto; }
+.P-grab { width: 40px; height: 5px; border-radius: 3px; background: var(--outline-variant); margin: 8px auto 4px; flex: none; }
+.P-sheethead { display: flex; align-items: center; gap: 2px; padding: 4px 8px 8px 16px; box-shadow: 0 1px 0 var(--surface-container); flex: none; }
+.P-sheethead > .icon-btn:first-child { margin-left: -8px; }
+.P-sheetbody { flex: 1; min-height: 0; padding: 12px 16px; }
+.P-sheetfoot { padding: 8px 12px 16px; flex: none; }
+.P-sheetfoot .composer { box-shadow: inset 0 0 0 1px var(--outline-variant); }
+
+/* Digest */
+.P-pack { height: 300px; width: 100%; margin-bottom: 20px; }
+.P-pack .pcard { left: 0; right: 0; }
+.P-band { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 8px; flex: none; }
+
+/* Revue des non classés */
+.P-tcard { margin: 16px 0 12px; padding: 16px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow); }
+.P-tcard ul { margin: 0; padding-left: 20px; } .P-tcard li { margin: 4px 0; }
+.P-actions { display: flex; gap: 8px; padding: 8px 16px 20px; flex: none; }
+.P-actions button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; border-radius: var(--r-xl); background: var(--surface-container); font-size: 14px; font-weight: 600; }
+.P-actions button.on { background: var(--primary); color: var(--on-primary); }
+
+/* Compte: the menu card */
+.P-menu { background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow); padding: 4px 0; }
+.P-menu-item, .P-opt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 8px 16px; text-align: left; }
+.P-menu-ico { width: 36px; height: 36px; border-radius: var(--r-md); background: var(--primary-tint); box-shadow: inset 0 0 0 1px var(--primary-30); color: var(--primary); display: flex; align-items: center; justify-content: center; flex: none; }
+.P-menu-item > .ico:last-child { color: var(--text-muted); }
+.P-menu-item.danger { color: var(--error); }
+.P-menu-item.danger .P-menu-ico { background: var(--error-tint); box-shadow: none; color: var(--error); }
+.P-menu-sep { height: 1px; background: var(--surface-container); margin: 4px 16px; }
+.P .frow { min-height: 48px; }
+.P .toast { bottom: 96px; }
+
+/* DigestCoverStack: three covers, the front one upright with the caption strip. */
+.pack { position: relative; display: block; padding-top: 28px; }
+.pcard { position: absolute; left: 6%; right: 6%; bottom: 0; height: calc(100% - 28px); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.35); overflow: hidden; }
+.pcard .ico { width: 64px; height: 64px; }
+.pcard.c2 { transform: translateY(-26px) rotate(-5deg) scale(.94); }
+.pcard.c1 { transform: translateY(-12px) rotate(4deg) scale(.97); }
+.pcap { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: var(--cover-veil); backdrop-filter: blur(12px); color: var(--text-main); }
+.pcap .headline { flex: 1; text-align: left; }
+.pill { background: var(--primary); color: var(--on-primary); border-radius: var(--r-full); padding: 2px 10px; font-size: 13px; font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--outline-variant); }
+.dot.on { background: var(--primary); }
