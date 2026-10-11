@@ -7,7 +7,7 @@ status: Done
 assignee:
   - codex
 created_date: '2026-10-11 20:51'
-updated_date: '2026-10-11 21:02'
+updated_date: '2026-10-11 21:06'
 labels:
   - mobile
   - chat
@@ -77,6 +77,8 @@ Validation intermédiaire : typecheck mobile/core et lint core passent ; lint mo
 
 AC1–4 reformulés comme chemins de code câblés et vérifiables dans le worktree, à périmètre inchangé, conformément à AGENTS.md : la validation visuelle après distribution appartient à la note owner, pas à un gate d'implémentation. Revue manuelle des chemins : première ouverture et envoi partagent la même question provisoire ; le verrou est posé avant le premier await ; le tour accepté remplace la question locale atomiquement puis le suivi SSE est lancé sans await ; les snapshots de contexte changent à chaque publication. Les callbacks vérifient l'identité du follower, l'epoch et, pour le flux, la conversation/le tour/la tentative ; les lectures emploient une version et conservent le texte/cursor les plus récents. Aucun changement de protocole ni nouvel appel payant de diagnostic.
 Vérification finale : typecheck mobile et core exit 0, lint core exit 0, lint mobile exit 0 avec uniquement le warning préexistant purchaseService.ts:136 ; lint ciblé des cinq fichiers mobile modifiés exit 0 après la dernière modification ; git diff --check exit 0. Deux nouvelles clés couvertes par les 11 catalogues, contrôlées par le typage Catalog. Aucun test automatisé ajouté ou exécuté. Aucun rendu sur appareil exercé et aucune latence backend mesurée.
+
+Après validation owner (« push »), branche feedback/chat-immediate-stream intégrée sans conflit sur main le 2026-10-11. Feedback inscrit comme merged dans docs/testflight-feedback-log.md. Distribution mobile prise en charge par le workflow Mobile OTA or Build au push ; validation sur appareil encore à réaliser après distribution.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
