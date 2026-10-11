@@ -14,8 +14,10 @@ worker (task-463) writes the fragments, this reads them.
 The route takes the **generation identity** -- ``turn_id`` and ``attempt_id`` -- and
 a **sequence cursor** (Decision point 6):
 
-- ``204`` when the conversation has no generation in flight: the app then reads the
-  conversation from the main API for the final answer;
+- ``204`` when the conversation has no generation in flight, or when the one in
+  flight is lost (``core/models/chat.is_attempt_lost``): the app then reads the
+  conversation from the main API, which seals a lost turn and shows the final
+  answer;
 - ``409 generation_stale`` when the identity named is no longer the live one, with
   the live one in the body;
 - otherwise ``200 text/event-stream``: the fragments after the cursor are replayed,
@@ -23,9 +25,12 @@ a **sequence cursor** (Decision point 6):
   :data:`POLL_INTERVAL_SECONDS`. Each event carries its sequence number as its SSE
   ``id`` so the app de-duplicates across reconnections. The terminal ``end`` event
   is sent only once the turn's final state is **read back persisted**, then the
-  stream closes. A replaced attempt ends the stream with ``replaced``; a stream that
-  reaches :data:`MAX_STREAM_SECONDS` ends with ``reconnect`` and the app resumes
-  from its cursor.
+  stream closes. A stream that reaches :data:`MAX_STREAM_SECONDS` ends with
+  ``reconnect`` and the app resumes from its cursor.
+
+This door is read-only, so it never seals a lost generation itself (task-470): it
+treats one as over and closes the stream **without** an ``end``, since no terminal
+state is persisted yet. The app's next read of the conversation seals it.
 """
 
 from __future__ import annotations
@@ -55,7 +60,7 @@ from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
 
 from media_summarizer.api.dependencies.auth import get_current_user  # noqa: E402
 from media_summarizer.core.models.auth import AuthUser  # noqa: E402
-from media_summarizer.core.models.chat import TERMINAL_TURN_STATUSES  # noqa: E402
+from media_summarizer.core.models.chat import TERMINAL_TURN_STATUSES, is_attempt_lost  # noqa: E402
 from media_summarizer.utils import chat_db  # noqa: E402
 from media_summarizer.utils.logging_config import log_event, setup_logging  # noqa: E402
 
@@ -112,6 +117,9 @@ async def stream_generation(
     live_attempt = conversation.active_attempt_id
     live_index = conversation.active_turn_index
     if not live_turn or not live_attempt or live_index is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    live = await chat_db.get_attempt(user_id, conversation_id, live_index, live_attempt)
+    if live is None or is_attempt_lost(live):
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     if (turn_id and turn_id != live_turn) or (attempt_id and attempt_id != live_attempt):
         return JSONResponse(
@@ -184,14 +192,6 @@ async def _follow(
                 # The conversation was deleted under the stream.
                 yield _event("end", {"turn_id": turn_id, "attempt_id": attempt_id, "status": "deleted"})
                 return
-            if answer.attempt_id != attempt_id:
-                # A newer attempt replaced this one: its answer starts from nothing
-                # and is never appended to this one's text (Decision point 6).
-                yield _event(
-                    "replaced",
-                    {"turn_id": turn_id, "turn_index": turn_index, "attempt_id": answer.attempt_id},
-                )
-                return
             if answer.status in TERMINAL_TURN_STATUSES:
                 # Sealed: every fragment of this attempt was written before the
                 # seal, so drain what is left (page by page), then announce the
@@ -218,6 +218,19 @@ async def _follow(
                         "last_seq": cursor,
                         "text": answer.text,
                     },
+                )
+                return
+            attempt = await chat_db.get_attempt(user_id, conversation_id, turn_index, attempt_id)
+            if attempt is None or is_attempt_lost(attempt):
+                # Lost and not sealed yet: over, but with no persisted end to send.
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "chat.stream.generation_lost",
+                    "Generation lost; closing the stream without an end",
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    attempt_id=attempt_id,
                 )
                 return
 

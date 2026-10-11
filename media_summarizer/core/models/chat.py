@@ -10,18 +10,22 @@ One table, ``chat``, partitioned by account (``user_id``) with a string sort key
 ``sk``. Every item of a conversation lives under the ``CONV#<conversation_id>``
 prefix, so one conversation is one key range and an account is one partition —
 which is what makes deleting a conversation and erasing an account a query and a
-loop of deletes. Five kinds of item, deliberately distinct:
+loop of deletes. Four kinds of item, deliberately distinct:
 
 - the **conversation** (scope, frozen source snapshot, turn count, the live
   generation if there is one);
 - the **messages**: per turn, the user's question and the assistant's answer.
   The assistant message also carries the turn's state, because the answer *is*
   what a turn produces;
-- the **attempts**: one per generation run of a turn. An attempt is the identity
-  every conditional write is fenced on;
+- the **attempt**: the generation run of a turn, one per turn. It is the
+  identity every conditional write is fenced on;
 - the **fragments**: the streamed text of one attempt, one item per flush, the
-  only items with a TTL;
-- the **dispatch intent**: what the outbox relay sends to the chat queue.
+  only items with a TTL.
+
+A turn whose generation is lost is never relaunched: it is sealed and the user
+asks again (owner amendment of 2026-10-11 under Decision point 4). The rule that
+says when a generation is lost is :func:`is_attempt_lost`, shared by the API, the
+worker and the stream Lambda.
 
 Turns are not stored inside the conversation item: complement C1.8 of the
 benchmark shows an ``UpdateItem`` is billed on the size of the whole item, so a
@@ -36,7 +40,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Any, ClassVar, Dict, List, Optional, Sequence
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -103,10 +107,6 @@ class ChatAttemptStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     INTERRUPTED = "interrupted"
-    #: Replaced by a newer attempt of the same turn. Terminal: from here the
-    #: attempt can write nothing, which is what fences a worker that comes back
-    #: after its lease was given up.
-    SUPERSEDED = "superseded"
 
 
 LIVE_ATTEMPT_STATUSES = frozenset({ChatAttemptStatus.QUEUED, ChatAttemptStatus.GENERATING})
@@ -115,11 +115,6 @@ LIVE_ATTEMPT_STATUSES = frozenset({ChatAttemptStatus.QUEUED, ChatAttemptStatus.G
 class ChatRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
-
-
-class ChatDispatchStatus(str, Enum):
-    PENDING = "pending"
-    DISPATCHED = "dispatched"
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +175,6 @@ def fragment_sk(conversation_id: str, attempt_id: str, seq: int) -> str:
     return f"{fragments_prefix(conversation_id, attempt_id)}{seq:08d}"
 
 
-def dispatch_intent_sk(conversation_id: str, attempt_id: str) -> str:
-    return f"{conversation_children_prefix(conversation_id)}OUT#{attempt_id}"
-
-
 #: Sort key of the account's "turn in flight" marker (task-462): one item per
 #: account, outside every ``CONV#`` range, written in the transaction that accepts
 #: a turn and removed once that turn is sealed. It is what makes "one turn in
@@ -191,10 +182,11 @@ def dispatch_intent_sk(conversation_id: str, attempt_id: str) -> str:
 #: rather than a query racing a concurrent submission.
 TURN_IN_FLIGHT_SK = "INFLIGHT"
 
-#: How long a marker holds the account if its turn is never sealed (a worker that
-#: died and a recovery that has not run yet). Past it, a new turn may take the
-#: marker over: a stuck turn must not lock an account out of the chat. Above the
-#: longest a Lambda generation can live (15 minutes).
+#: How long a marker holds the account if its turn is never sealed (a lost turn
+#: nobody has read since). Past it, a new turn may take the marker over: a stuck
+#: turn must not lock an account out of the chat. Above the longest a Lambda
+#: generation can live (15 minutes). In practice the next send seals the lost turn
+#: the marker names (``chat_service.send_turn``) long before this.
 TURN_IN_FLIGHT_GUARD = timedelta(minutes=15)
 
 
@@ -416,8 +408,8 @@ class ChatAssistantMessage(_ChatItem):
 
     Exists from the moment the turn is accepted, with no ``text``. ``attempt_id``
     is the attempt allowed to produce it: the one a seal must come from, and the
-    one whose answer ``text`` holds once sealed. A newer attempt replaces it and
-    starts from nothing — its answer is never appended to another's partial.
+    one whose answer ``text`` holds once sealed. A turn has one attempt and never
+    gets another: a lost generation is sealed, and the user's retry is a new turn.
     """
 
     KIND: ClassVar[str] = "assistant_message"
@@ -427,7 +419,6 @@ class ChatAssistantMessage(_ChatItem):
     role: ChatRole = ChatRole.ASSISTANT
     status: ChatTurnStatus = ChatTurnStatus.ACCEPTED
     attempt_id: str
-    attempt_count: int = 1
     text: Optional[str] = None
     interruption_cause: Optional[ChatInterruptionCause] = None
     error_code: Optional[str] = None
@@ -449,19 +440,18 @@ class ChatAssistantMessage(_ChatItem):
 
 
 class ChatAttempt(_ChatItem):
-    """One generation run of a turn: the generation identity is (turn, attempt)."""
+    """The generation run of a turn: the generation identity is (turn, attempt)."""
 
     KIND: ClassVar[str] = "attempt"
 
     turn_id: str
     turn_index: int
     attempt_id: str
-    #: 1 for the first run of the turn, then +1 per replacement.
-    attempt_number: int = 1
     status: ChatAttemptStatus = ChatAttemptStatus.QUEUED
-    #: The worker's lease while ``generating``. Past it, the attempt may be
-    #: superseded by a new one; it is never re-claimed in place, because its
-    #: fragments are already out and a second run would repeat them.
+    #: The worker's lease while ``generating``. Past it (and its grace), the
+    #: generation is lost and sealed (:func:`is_attempt_lost`); it is never
+    #: re-claimed, because its fragments are already out and a second run would
+    #: repeat them.
     lease_expires_at: Optional[datetime] = None
     #: Set by the stop route; the worker reads it while streaming. Closing the
     #: stream on the phone does not set it (Decision point 6).
@@ -498,28 +488,6 @@ class ChatFragment(_ChatItem):
         return item
 
 
-class ChatDispatchIntent(_ChatItem):
-    """What the outbox relay sends to the chat queue for one attempt.
-
-    Written in the same transaction as the attempt it launches (Decision point
-    4). It carries only what any relay needs — whichever mechanism task-458
-    selects — : the identities the worker re-reads everything from, the dispatch
-    state and its timestamps.
-    """
-
-    KIND: ClassVar[str] = "dispatch_intent"
-
-    turn_id: str
-    turn_index: int
-    attempt_id: str
-    dispatch_status: ChatDispatchStatus = ChatDispatchStatus.PENDING
-    created_at: datetime = Field(default_factory=_now_utc)
-    dispatched_at: Optional[datetime] = None
-
-    def sort_key(self) -> str:
-        return dispatch_intent_sk(self.conversation_id, self.attempt_id)
-
-
 _ITEM_MODELS: Dict[str, Any] = {
     model.KIND: model
     for model in (
@@ -528,7 +496,6 @@ _ITEM_MODELS: Dict[str, Any] = {
         ChatAssistantMessage,
         ChatAttempt,
         ChatFragment,
-        ChatDispatchIntent,
     )
 }
 
@@ -536,3 +503,46 @@ _ITEM_MODELS: Dict[str, Any] = {
 def chat_item_from_dynamodb(item: Dict[str, Any]) -> _ChatItem:
     """Rebuild any item of the table from its ``kind``."""
     return _ITEM_MODELS[item["kind"]].from_dynamodb_item(item)
+
+
+# ---------------------------------------------------------------------------
+# Lost generations (task-470)
+# ---------------------------------------------------------------------------
+
+#: A ``queued`` attempt older than this is lost: its message never reached a
+#: worker (the API died between the acceptance and the send, or SQS lost it) or
+#: reached one too late to be worth answering. It must exceed the longest normal
+#: wait in the queue: the worker runs at most ``maximum_concurrency = 10``
+#: invocations, so a turn may wait behind a full fleet, and an answer usually ends
+#: within a minute or two of its claim (600 s is the worker's hard timeout, not
+#: its typical run). Five minutes is past any queue wait the fleet produces and
+#: still short enough that the user is told and can ask again.
+QUEUED_LOST_AFTER = timedelta(seconds=300)
+
+#: A ``generating`` attempt whose lease ran out this long ago is lost: its worker
+#: died. The margin is there so that a live worker whose renewal is a little late
+#: (a slow DynamoDB write, a garbage collection, a cold network) is never sealed
+#: under it: the worker renews every third of its lease, so 15 s is more than a
+#: whole missed renewal on top of the lease itself.
+LEASE_GRACE = timedelta(seconds=15)
+
+
+def lost_cutoffs(now: datetime) -> Tuple[datetime, datetime]:
+    """``(queued_before, lease_before)``: an attempt older or expired before them is lost."""
+    return now - QUEUED_LOST_AFTER, now - LEASE_GRACE
+
+
+def is_attempt_lost(attempt: ChatAttempt, *, now: Optional[datetime] = None) -> bool:
+    """**The lost-turn rule**, the one place it is written.
+
+    ``queued`` for longer than :data:`QUEUED_LOST_AFTER`, or ``generating`` with a
+    lease past :data:`LEASE_GRACE`. A lost generation is never relaunched: the
+    readers that find one seal it (``chat_db.seal_lost_attempt``), and the user
+    asks again. A terminal attempt is not lost, it is over.
+    """
+    queued_before, lease_before = lost_cutoffs(now or _now_utc())
+    if attempt.status == ChatAttemptStatus.QUEUED:
+        return attempt.created_at < queued_before
+    if attempt.status == ChatAttemptStatus.GENERATING:
+        return attempt.lease_expires_at is not None and attempt.lease_expires_at < lease_before
+    return False

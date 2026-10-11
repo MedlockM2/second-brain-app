@@ -109,7 +109,7 @@ _USER_PARTITION_TABLES: Tuple[Tuple[str, Optional[str]], ...] = (
     # account stay addressable — device data held with no account left to serve.
     ("USER_PUSH_TOKENS_TABLE", "push_token"),
     # Every chat item of the account — conversations, messages, attempts,
-    # fragments, dispatch intents — sits in its partition under one sort key
+    # fragments, the in-flight marker — sits in its partition under one sort key
     # (task-457), so the whole chat goes with one partition sweep.
     ("CHAT_TABLE", "sk"),
 )

@@ -173,9 +173,12 @@ acknowledges the message. So a message in `chat-dlq` means three crashes on one
 attempt — read the `worker-chat` log for its `attempt_id`. The body is
 `{user_id, conversation_id, turn_id, turn_index, attempt_id}`; the turn's state is
 the assistant message `CONV#<conversation_id>#MSG#<turn_index:04d>#1` of the
-`chat-<env>` table. Do **not** redrive it: the attempt is `generating` with an
-expired lease, and the recovery (task-465) replaces it with a new attempt; a
-redriven message would only find it superseded. Purge it once the cause is fixed.
+`chat-<env>` table. Do **not** redrive it: a chat turn is never relaunched
+(task-470). Its attempt is `generating` with an expired lease, so the turn is lost
+and the next read of the conversation seals it — `failed` / `generation_lost` and
+refunded, or `interrupted` / `provider_error` if text was shown — and the user asks
+again. A redriven message would only seal it the same way. Purge it once the cause
+is fixed.
 
 ### Symptoms
 

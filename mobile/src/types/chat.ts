@@ -79,13 +79,13 @@ export interface ChatMessage {
   interruption_cause?: ChatInterruptionCause | null;
   error_code?: string | null;
   attempt_id?: string | null;
-  attempt_count?: number | null;
   completed_at?: string | null;
 }
 
 /**
- * The generation identity: the turn, and the attempt allowed to produce its
- * answer. A newer attempt of the same turn starts from nothing.
+ * The generation identity: the turn, and the attempt producing its answer. A
+ * turn has one attempt; a lost generation is sealed failed and asked again as a
+ * new turn.
  */
 export interface ChatGeneration {
   turn_id: string;
@@ -148,5 +148,4 @@ export type ChatStreamEvent =
         text?: string | null;
       };
     }
-  | { type: "replaced"; data: ChatGeneration }
   | { type: "reconnect"; data: { turn_id: string; attempt_id: string; after_seq: number } };

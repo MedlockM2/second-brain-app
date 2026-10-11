@@ -2,8 +2,10 @@
 
 Durable state of the conversational chat, built by task-457 from the owner's
 decision in `docs/research/task-430-chatbot-architecture/README.md` (Owner
-Validation, points 3, 4, 6 and 7). This is the reference the other chat tasks
-cite (API, worker, SSE stream, outbox relay).
+Validation, points 3, 4, 6 and 7, and the owner's amendment of 2026-10-11 under
+point 4). This is the reference the other chat tasks cite (API, worker, SSE
+stream). The API sends each accepted turn to the chat queue itself, and a turn whose send or generation is lost is sealed, never relaunched
+(task-470, §3.11).
 
 | Piece | Location |
 |---|---|
@@ -34,8 +36,11 @@ cite (API, worker, SSE stream, outbox relay).
 ## 2. Items
 
 Every item carries `user_id`, `conversation_id`, `sk` and `kind`. Timestamps are
-ISO-8601 UTC strings with the same `+00:00` offset everywhere, so DynamoDB's string
-comparison is the chronological one (the lease condition relies on it). Ids are
+ISO-8601 UTC strings. Items written from a model end in `Z` (pydantic's JSON mode);
+attributes set by an update expression (`lease_expires_at`, `started_at`,
+`ended_at`, …) end in `+00:00` (`isoformat`). A condition compares an attribute
+with a value in that attribute's own format, so DynamoDB's string comparison is the
+chronological one (the lease and lost-turn conditions rely on it). Ids are
 opaque: `cv_…` (conversation), `tn_…` (turn), `at_…` (attempt).
 
 | `kind` | `sk` | Holds |
@@ -43,9 +48,8 @@ opaque: `cv_…` (conversation), `tn_…` (turn), `at_…` (attempt).
 | `conversation` | `CONV#<cid>` | scope, frozen source snapshot, turn count, the live generation |
 | `user_message` | `CONV#<cid>#MSG#<turn:04d>#0` | the question of a turn |
 | `assistant_message` | `CONV#<cid>#MSG#<turn:04d>#1` | the answer of a turn **and the turn's state** |
-| `attempt` | `CONV#<cid>#ATT#<turn:04d>#<attempt_id>` | one generation run of a turn: lease, stop request |
+| `attempt` | `CONV#<cid>#ATT#<turn:04d>#<attempt_id>` | the generation run of a turn (one per turn): lease, stop request |
 | `fragment` | `CONV#<cid>#FRAG#<attempt_id>#<seq:08d>` | one flush of streamed text, with TTL |
-| `dispatch_intent` | `CONV#<cid>#OUT#<attempt_id>` | what the outbox relay sends to the chat queue |
 | `turn_in_flight` | `INFLIGHT` | the account's one turn in flight (task-462), outside every conversation range |
 
 Consequences of the key layout:
@@ -54,8 +58,8 @@ Consequences of the key layout:
   are `CONV#<cid>#…`;
 - messages come back in conversation order, each question before its answer
   (`#0` < `#1`); `turn_index` is 1-based;
-- fragments are keyed **per attempt**: two attempts of one turn never share a
-  range, so a new attempt cannot be read as the continuation of an old one;
+- fragments are keyed **per attempt**, the generation identity the stream and
+  its resume cursor are built on;
 - turns are **not** stored inside the conversation item. An `UpdateItem` is billed
   on the full item size (complement C1.8), so a growing conversation item would
   make every write dearer than the last.
@@ -106,11 +110,10 @@ Exists from the moment the turn is accepted, with no `text`.
 |---|---|
 | `turn_id`, `turn_index` | the turn's identity and position |
 | `status` | `accepted` → `generating` → `completed` \| `failed` \| `interrupted` |
-| `interruption_cause` | only with `interrupted`: `cancelled` (stop requested), `output_limit` (`finish_reason == "length"`), `provider_error` (failure after text was streamed — a partial answer is not taken back) |
-| `attempt_id` | the attempt allowed to produce the answer; the one that produced it once sealed |
-| `attempt_count` | 1, +1 per replacement |
+| `interruption_cause` | only with `interrupted`: `cancelled` (stop requested), `output_limit` (`finish_reason == "length"`), `provider_error` (any technical break after text was streamed — a provider failure or a lost worker; a partial answer is not taken back) |
+| `attempt_id` | the turn's attempt: the one allowed to produce the answer, and the one that produced it once sealed |
 | `text` | the final answer, set by the seal. A 32,000-token answer is ~130 kB, under the 400 kB item limit |
-| `error_code`, `error_message` | on `failed` or a `provider_error` interruption |
+| `error_code`, `error_message` | on `failed` or a `provider_error` interruption. Among the codes: `dispatch_failed` (the API could not send the turn to the queue), `generation_lost` (§3.11) |
 | `llm_usage` | `ArtifactLlmUsage` (model, tokens, cache, cost; `usage_estimated` when a stream ended without its usage) |
 | `quota_period_key`, `quota_minutes_debited`, `quota_cost_eur` | the debit applied for the turn, written after it (task-462); what a refund credits back, on that period. Absent when no debit was applied |
 | `created_at`, `started_at`, `completed_at` | |
@@ -122,15 +125,14 @@ on behalf of a generation is fenced on its attempt.
 
 | Attribute | Notes |
 |---|---|
-| `attempt_number` | 1, 2, … |
-| `status` | `queued` → `generating` → `completed` \| `failed` \| `interrupted`; or `queued`/`generating` → `superseded` |
+| `status` | `queued` → `generating` → `completed` \| `failed` \| `interrupted`; or `queued` → terminal directly (stop before the claim, failed send, lost) |
 | `lease_expires_at` | the worker's lease while `generating` |
 | `cancel_requested_at` | set by the stop route; the worker reads it while streaming |
 | `error_code`, `created_at`, `started_at`, `ended_at` | |
 
-An attempt whose lease expired is **never re-claimed in place**: its fragments are
-already out and a second run would repeat them. It is replaced by a new attempt
-(§3.5).
+A turn has **one** attempt. An attempt whose lease expired is **never re-claimed**:
+its fragments are already out and a second run would repeat them. Its turn is lost
+and sealed (§3.11); the user's retry is a new turn.
 
 ### 2.5 Fragment
 
@@ -138,13 +140,6 @@ already out and a second run would repeat them. It is replaced by a new attempt
 `created_at`, `fragment_expires_at` = write time + 1 day. A transport buffer: the
 stream replays the fragments after the client's cursor, then follows new ones; once
 sealed, the final text is on the message and the fragments only serve a resume.
-
-### 2.6 Dispatch intent
-
-`turn_id`, `turn_index`, `attempt_id`, `dispatch_status` (`pending` →
-`dispatched`), `created_at`, `dispatched_at`. Written in the same transaction as
-the attempt it launches. It holds only what any relay needs; how it is sent, and
-whatever the relay needs on top (a stream, an index), is task-458/465's choice.
 
 ## 3. Writes, transitions and their conditions
 
@@ -156,7 +151,7 @@ All in `utils/chat_db.py`. A write refused because the state moved on returns
 
 Put, `attribute_not_exists(sk)`. Writes the snapshot — the only write that does.
 
-### 3.2 `accept_turn` — transaction, 6 items
+### 3.2 `accept_turn` — transaction, 5 items
 
 | Item | Write | Condition |
 |---|---|---|
@@ -164,7 +159,6 @@ Put, `attribute_not_exists(sk)`. Writes the snapshot — the only write that doe
 | user message | put | not exists |
 | assistant message | put, `accepted`, `attempt_id` | not exists |
 | attempt | put, `queued` | not exists |
-| dispatch intent | put, `pending` | not exists |
 | in-flight marker `INFLIGHT` | put: conversation, turn, `in_flight_until` = now + 15 min | not exists, **or** `in_flight_until < now` |
 
 Refusal raises `TurnNotAcceptedError` with `conversation_not_found`,
@@ -172,23 +166,32 @@ Refusal raises `TurnNotAcceptedError` with `conversation_not_found`,
 another conversation) or `turn_count_changed` (read off the conversation's old image,
 `ReturnValuesOnConditionCheckFailure`). `idempotency_token` becomes the
 `ClientRequestToken`: the same request repeated within ten minutes is not written
-twice. Nothing is sent to SQS here (Decision point 4: the outbox does it).
+twice. Nothing is sent to SQS here: once the transaction and the debit are done,
+`chat_service.send_turn` sends `{user_id, conversation_id, turn_id, turn_index,
+attempt_id}` to `CHAT_QUEUE`. If that send fails, the turn is sealed `failed` /
+`dispatch_failed` (§3.7) and refunded, and the route answers with it. A replayed
+request sends nothing.
 
 ### 3.3 `claim_attempt` — transaction, 3 items
 
 attempt `queued` → `generating` with a lease; answer `accepted|generating` →
 `generating` if it still names this attempt; conversation `last_turn_status`, if
-its active attempt is this one. `False` = duplicate delivery, replaced or ended
-attempt: acknowledge without calling the provider. The worker re-reads the attempt
+its active attempt is this one. `False` = duplicate delivery, ended attempt, or a
+redelivery after a crash (`generating`): acknowledge without calling the provider —
+a redelivery never relaunches a generation; the worker seals the turn if it is
+already lost (§3.11). The worker re-reads the attempt
 afterwards, since a stop may have been requested before the claim.
 
 `renew_attempt_lease`: update conditional on `generating`. `False` = stop working.
+The worker renews from a heartbeat every third of its 30-second lease for the whole
+generation, so the model's reasoning before its first token and the waits between
+retries never let the lease lapse under a live worker.
 
 ### 3.4 `append_fragment` — transaction, 2 items
 
 ConditionCheck attempt `status = generating` + put fragment `attribute_not_exists`.
-`False` = the attempt was superseded or sealed: a stale worker can no longer add
-text. A sequence written twice raises `FragmentAlreadyWrittenError` (a bug, not a
+`False` = the attempt was sealed (by its worker, a stop, or a reader that found it
+lost): a stale worker can no longer add text. A sequence written twice raises `FragmentAlreadyWrittenError` (a bug, not a
 race). The stop request does **not** fence fragments: the worker flushes what it
 has, then seals `interrupted`.
 
@@ -196,30 +199,16 @@ Reads: `list_fragments(after_seq=cursor)` (strongly consistent, ascending) and
 `get_last_fragment_seq` (the highest persisted sequence, read by the conversation
 endpoint before a resume).
 
-### 3.5 `replace_attempt` — transaction, 5 items
-
-| Item | Write | Condition |
-|---|---|---|
-| old attempt | `superseded` | `queued`, or `generating` with `lease_expires_at < now` |
-| assistant message | `attempt_id = new`, `attempt_count + 1`, `accepted` | names the old attempt, not terminal |
-| conversation | `active_attempt_id = new` | active attempt is the old one |
-| new attempt | put, `queued` | not exists |
-| new dispatch intent | put, `pending` | not exists |
-
-From the commit on, every write of the old attempt fails its condition. The new
-attempt starts from an empty answer.
-
 ### 3.6 `request_cancellation`
 
 Update `cancel_requested_at = if_not_exists(…)` on the attempt, conditional on
-`queued|generating`. A stop aimed at an ended or replaced generation is refused
-instead of landing on a newer one. Closing the stream does not call it.
+`queued|generating`. A stop aimed at an ended generation is refused. Closing the stream does not call it.
 
 ### 3.7 `seal_turn` — transaction, 3 items
 
 | Item | Write | Condition |
 |---|---|---|
-| attempt | terminal status, `ended_at`, lease removed | `queued` or `generating` |
+| attempt | terminal status, `ended_at`, lease removed | `queued` or `generating`; for a lost turn, the lost state itself (§3.11) |
 | assistant message | `status`, `text`, cause, error, usage, `completed_at` | names this attempt, `accepted|generating` |
 | conversation | `last_turn_status`, active generation removed | active attempt is this one |
 
@@ -229,14 +218,10 @@ marker is deleted if it names this turn (`release_turn_in_flight`): a marker
 already taken over by a newer turn past its guard must not make the seal fail, and
 a release that fails costs at most the 15-minute guard. **The terminal state is committed before anything announces the end**:
 the stream's terminal event and any notification come after this call and read
-what it wrote (Decision point 3). Sealing from `queued` exists for a turn the relay
-gave up on.
+what it wrote (Decision point 3). Sealing from `queued` exists for a turn whose send
+failed or that was lost before a worker claimed it.
 
-### 3.8 `mark_intent_dispatched`
-
-`pending` → `dispatched`. `False` if already dispatched.
-
-### 3.8b `record_turn_debit`
+### 3.8 `record_turn_debit`
 
 Update of the assistant message, `attribute_exists(sk)`: the period key, minutes
 and cost of the turn's debit, written by the send route once the debit is applied.
@@ -256,26 +241,69 @@ held it.
 `("CHAT_TABLE", "sk")` in `_USER_PARTITION_TABLES`: the account partition is
 queried and every item deleted, whatever its kind.
 
+### 3.11 Lost turns — `is_attempt_lost`, `seal_lost_attempt`
+
+Owner amendment of 2026-10-11 under Decision point 4: a turn whose launch or
+generation is lost is **not relaunched**. It is sealed and the user asks again with
+the app's retry button. Nothing sits between the API and the queue: no intent item,
+no relay, no scheduled sweeper and no attempt replacement.
+
+**The rule**, written once in `core/models/chat.py` (`is_attempt_lost`) and shared
+by the API, the worker and the stream Lambda. An attempt is lost when it is:
+
+| State | Lost when | Constant | Why this value |
+|---|---|---|---|
+| `queued` | `created_at` older than 300 s | `QUEUED_LOST_AFTER` | past the longest normal queue wait with the worker at `maximum_concurrency = 10` (timeout 600 s); short enough that the user hears of it |
+| `generating` | `lease_expires_at` passed by more than 15 s | `LEASE_GRACE` | more than one missed renewal on top of the 30-second lease, so a live worker whose renewal is a little late is never sealed |
+
+**The seal** (`chat_db.seal_lost_attempt`): `seal_turn` with `only_if_lost_at`,
+whose attempt condition is the rule itself — still `queued` with `created_at <
+now - 300 s`, or still `generating` with `lease_expires_at < now - 15 s`. A worker
+renewing its lease at the same moment wins the race.
+
+- no visible text: `failed` / `generation_lost`, then refunded
+  (`refund_unanswered_turn`);
+- some fragments: `interrupted` / `provider_error`, `error_code =
+  generation_lost`, with the text rebuilt from the fragments, so the app shows the
+  partial and its retry button unchanged.
+
+The `INFLIGHT` marker is released as for every seal.
+
+**Who applies it** (`chat_service.seal_if_lost`, or the predicate alone):
+
+- the conversation read (`get_conversation_view`), which the app calls back in the
+  foreground, at the end or break of a stream, and every 2 s while polling;
+- the send of a turn, before `accept_turn`: for the conversation's active attempt
+  and for the turn named by the account's `INFLIGHT` marker — otherwise a lost turn
+  would block the conversation (`turn_in_flight`) or the account for 15 minutes;
+- the worker: a delivered attempt still `queued` but already lost is sealed, not
+  generated; a refused claim on a `generating` attempt whose lease is past its grace
+  (a redelivery after a crash) seals it. A redelivery never relaunches a generation;
+- the stream Lambda, read-only: a lost generation is treated as over — the open
+  stream closes **without** an `end`, since no terminal state is persisted yet, and a
+  new opening answers `204`. The app then reads the conversation, and that read
+  seals.
+
 ## 4. State diagram
 
 ```
 turn (assistant message)        attempt
 accepted ──claim──► generating  queued ──claim──► generating
    │                    │          │                  │
-   └────────seal────────┤          ├──replace──► superseded ◄──replace (lease expired)
-                        ▼          └──seal──┐         │
-          completed | failed | interrupted  ▼         ▼ seal
-                                completed | failed | interrupted
+   └────────seal────────┤          └──seal──┐         │ seal
+                        ▼                   ▼         ▼
+          completed | failed | interrupted  completed | failed | interrupted
 ```
 
-A replacement sets the turn back to `accepted` under the new attempt.
+A lost attempt (§3.11) is sealed like any other, from `queued` or `generating`;
+nothing ever sets a turn back to `accepted`.
 
 ## 5. Read operations
 
 `get_conversation`, `list_conversations_by_scope` (LSI page + cursor),
 `list_messages`, `get_assistant_message`, `get_attempt`, `list_attempts`,
-`list_fragments`, `get_last_fragment_seq`, `get_dispatch_intent`. All base-table
-reads are strongly consistent.
+`list_fragments`, `fragments_text`, `get_last_fragment_seq`. All base-table reads
+are strongly consistent.
 
 ## 6. Not decided here
 
@@ -283,5 +311,4 @@ reads are strongly consistent.
   explicit parameters in `core/services/chat_prompt.py` — the storage model has no
   limit of its own. The one turn in flight per account is the `INFLIGHT` marker
   above.
-- How intents are sent and how stuck turns are recovered: task-458 / task-465.
 - Routes, queue, worker, stream: task-461 to task-464.

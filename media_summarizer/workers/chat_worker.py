@@ -6,20 +6,26 @@ worker; the LLM call, the corpus and the usage come from the layers shared with 
 (``core/services/llm_client.py``, ``llm_corpus.py``) and the prompt and its budget
 from ``core/services/chat_prompt.py``, the module the API accepted the turn with.
 
-**Message.** What the outbox relay sends for one dispatch intent (task-458/465):
+**Message.** What the API sends once it has accepted a turn
+(``chat_service.send_turn``):
 ``{"user_id", "conversation_id", "turn_id", "turn_index", "attempt_id"}``.
 Everything else is re-read from the chat table.
 
-**One message, one attempt.** The attempt is claimed under a lease; a duplicate
-delivery, or an attempt already replaced or ended, is acknowledged without calling
-the provider (Decision point 4). The turn was debited when it was accepted: nothing
-here debits. A crash after the provider call can still lead to a second call --
-by a replacement attempt with its own identity, never an append to this one.
+**One message, one attempt, one generation.** The attempt is claimed under a lease;
+a duplicate delivery, or an attempt already ended, is acknowledged without calling
+the provider. The turn was debited when it was accepted: nothing here debits. A
+generation is never relaunched (owner amendment of 2026-10-11 under Decision point
+4): a message whose attempt is already lost (``core/models/chat.is_attempt_lost``)
+is sealed instead of answered late, and a redelivery that finds its attempt
+``generating`` under an expired lease -- the previous invocation crashed -- seals
+the lost turn and acknowledges.
 
 **Stream.** Deltas are grouped and flushed as numbered fragments every
 :data:`FLUSH_INTERVAL_SECONDS`, each write fenced on the attempt still being live.
-While streaming, the worker renews its lease and re-reads the stop request; a stop
-closes the provider stream and the partial answer is sealed ``interrupted``.
+The lease is renewed by a heartbeat for the whole generation, retries and the
+model's reasoning before its first token included, so a live worker is never taken
+for a lost one. While streaming the worker re-reads the stop request; a stop closes
+the provider stream and the partial answer is sealed ``interrupted``.
 
 **Endings** (``chat_db.seal_turn`` commits the final text and state before anything
 announces the end, Decision point 3):
@@ -39,8 +45,9 @@ A turn sealed ``failed`` with no visible text is refunded
 (``chat_service.refund_unanswered_turn``, owner decision of 2026-10-10).
 
 **Redelivery.** The SQS visibility of this queue is set for an interactive turn, not
-the artifacts' 30 minutes; a worker that dies mid-turn is recovered from its lease
-(task-465), and the late redelivery finds the attempt replaced and stands down.
+the artifacts' 30 minutes. A worker that dies mid-turn leaves its lease to expire;
+the next reader -- the app's read of the conversation, the next send, or the
+redelivery itself -- seals the turn, and the user asks again.
 """
 
 from __future__ import annotations
@@ -55,11 +62,13 @@ from typing import Any, Dict, List, Optional
 
 from media_summarizer.core.models.chat import (
     ChatAttempt,
+    ChatAttemptStatus,
     ChatConversation,
     ChatFragment,
     ChatInterruptionCause,
     ChatTurnStatus,
     ChatUserMessage,
+    is_attempt_lost,
 )
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
 from media_summarizer.core.services import chat_prompt, chat_service, llm_client, llm_corpus
@@ -80,10 +89,10 @@ logger = logging.getLogger(__name__)
 WORKER_NAME = "chat"
 
 #: How long a claim holds the attempt without a renewal. Short, because past it
-#: the recovery replaces the attempt (task-465): a dead worker costs the user this
-#: long plus the recovery's cadence, not a queue visibility.
+#: (and ``core/models/chat.LEASE_GRACE``) the turn is lost and sealed by whoever
+#: reads it next: a dead worker costs the user this long, not a queue visibility.
 LEASE_SECONDS = int(os.environ.get("CHAT_LEASE_SECONDS", "30"))
-#: Renewed well before it runs out.
+#: Renewed well before it runs out, by :class:`_LeaseHeartbeat`.
 LEASE_RENEW_SECONDS = LEASE_SECONDS / 3
 #: Deltas are grouped into one fragment write at most this often (complement C1.8).
 FLUSH_INTERVAL_SECONDS = 0.2
@@ -111,7 +120,6 @@ class _StreamState:
         self.next_seq = 0
         now = time.monotonic()
         self.last_flush = now
-        self.last_renew = now
         self.last_cancel_check = now
         #: Set when the fence refused a write: the attempt is not ours any more.
         self.fenced_out = False
@@ -142,22 +150,13 @@ class _StreamState:
         return True
 
     async def on_delta(self, text: str) -> Optional[bool]:
-        """The stream callback: buffer, flush, renew, watch for a stop."""
+        """The stream callback: buffer, flush, watch for a stop or a lost lease."""
+        if self.fenced_out:
+            return False
         self.buffer.append(text)
         now = time.monotonic()
         if now - self.last_flush >= FLUSH_INTERVAL_SECONDS and not await self.flush():
             return False
-        if now - self.last_renew >= LEASE_RENEW_SECONDS:
-            self.last_renew = now
-            if not await chat_db.renew_attempt_lease(
-                user_id=self.user_id,
-                conversation_id=self.conversation_id,
-                turn_index=self.attempt.turn_index,
-                attempt_id=self.attempt.attempt_id,
-                lease_expires_at=_now() + timedelta(seconds=LEASE_SECONDS),
-            ):
-                self.fenced_out = True
-                return False
         if now - self.last_cancel_check >= CANCEL_CHECK_SECONDS:
             self.last_cancel_check = now
             current = await chat_db.get_attempt(
@@ -170,6 +169,51 @@ class _StreamState:
                 self.cancel_requested = True
                 return False
         return None
+
+
+class _LeaseHeartbeat:
+    """Renews the attempt's lease every :data:`LEASE_RENEW_SECONDS` while it runs.
+
+    Independent of the stream: a reasoning model can think for a minute before its
+    first token, and a retry waits between calls, and neither produces a delta. A
+    refused renewal means the turn is no longer this worker's (sealed by a stop or
+    a reader); the stream state is marked fenced out and stops at its next delta.
+    """
+
+    def __init__(self, state: _StreamState) -> None:
+        self.state = state
+        self.task: Optional[asyncio.Task[None]] = None
+
+    async def _run(self) -> None:
+        attempt = self.state.attempt
+        while True:
+            await asyncio.sleep(LEASE_RENEW_SECONDS)
+            try:
+                renewed = await chat_db.renew_attempt_lease(
+                    user_id=self.state.user_id,
+                    conversation_id=self.state.conversation_id,
+                    turn_index=attempt.turn_index,
+                    attempt_id=attempt.attempt_id,
+                    lease_expires_at=_now() + timedelta(seconds=LEASE_SECONDS),
+                )
+            except Exception as exc:  # noqa: BLE001 - the next beat tries again
+                log_event(logger, logging.WARNING, "chat.lease_renew_failed", "Lease renewal failed", exc_info=exc)
+                continue
+            if not renewed:
+                self.state.fenced_out = True
+                return
+
+    async def __aenter__(self) -> "_LeaseHeartbeat":
+        self.task = asyncio.create_task(self._run())
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        if self.task is not None:
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
 
 
 def _corpus_sources(conversation: ChatConversation) -> List[Dict[str, Any]]:
@@ -306,9 +350,33 @@ async def process_message(message: Dict[str, Any]) -> None:
         reset_log_context(context_token)
 
 
+async def _seal_lost(attempt: ChatAttempt) -> bool:
+    """Seal a lost attempt instead of generating it; ``True`` if it was lost."""
+    if not is_attempt_lost(attempt):
+        return False
+    sealed = await chat_service.seal_if_lost(attempt)
+    log_event(
+        logger,
+        logging.WARNING,
+        "chat.lost_on_delivery",
+        "Delivered attempt is already lost; not generating it",
+        attempt_status=attempt.status.value,
+        sealed=sealed,
+    )
+    return True
+
+
 async def _process_attempt(
     *, user_id: str, conversation_id: str, turn_index: int, attempt_id: str
 ) -> None:
+    queued = await chat_db.get_attempt(user_id, conversation_id, turn_index, attempt_id)
+    if queued is None:
+        # Deleted with its conversation: nothing left to answer.
+        return
+    if queued.status == ChatAttemptStatus.QUEUED and await _seal_lost(queued):
+        # Delivered too late: the user has been told it failed, or will be at the
+        # next read. A late answer would land on a turn the app shows as failed.
+        return
     claimed = await chat_db.claim_attempt(
         user_id=user_id,
         conversation_id=conversation_id,
@@ -317,11 +385,17 @@ async def _process_attempt(
         lease_expires_at=_now() + timedelta(seconds=LEASE_SECONDS),
     )
     if not claimed:
+        # A duplicate delivery, an ended attempt, or a redelivery after a crash:
+        # never generated again. The crashed one's turn is lost once its lease and
+        # grace run out; seal it if that is already the case.
+        current = await chat_db.get_attempt(user_id, conversation_id, turn_index, attempt_id)
+        if current is not None and await _seal_lost(current):
+            return
         log_event(
             logger,
             logging.INFO,
             "chat.claim_declined",
-            "Attempt already claimed, replaced or ended; standing down",
+            "Attempt already claimed or ended; standing down",
         )
         return
 
@@ -331,6 +405,16 @@ async def _process_attempt(
         # Deleted between the claim and now: nothing left to answer.
         return
 
+    state = _StreamState(attempt=attempt, conversation_id=conversation_id, user_id=user_id)
+    async with _LeaseHeartbeat(state):
+        await _answer(attempt=attempt, conversation=conversation, state=state)
+
+
+async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state: _StreamState) -> None:
+    """Generate and seal the answer of a claimed attempt, under its lease heartbeat."""
+    user_id = state.user_id
+    conversation_id = state.conversation_id
+    turn_index = attempt.turn_index
     seal_kwargs: Dict[str, Any] = {
         "attempt": attempt,
         "user_id": user_id,
@@ -361,7 +445,7 @@ async def _process_attempt(
         corpus_sources = await llm_corpus.download_transcripts(_corpus_sources(conversation))
     except Exception as exc:
         # A redelivery could not reclaim this attempt (it is generating now), so
-        # failing the message would only leave the turn hanging until recovery.
+        # failing the message would only leave the turn hanging until it is lost.
         log_event(logger, logging.ERROR, "chat.corpus_unavailable", "Could not read the corpus", exc_info=exc)
         await _seal(
             **seal_kwargs,
@@ -388,7 +472,6 @@ async def _process_attempt(
         )
         return
 
-    state = _StreamState(attempt=attempt, conversation_id=conversation_id, user_id=user_id)
     try:
         result = await _stream_with_retries(
             messages,
@@ -423,7 +506,7 @@ async def _process_attempt(
         return
 
     if state.fenced_out:
-        # Replaced or sealed by someone else while streaming: their state wins.
+        # Sealed by someone else while streaming: their state wins.
         log_event(logger, logging.WARNING, "chat.fenced_out", "Attempt no longer live; stopped streaming")
         return
     if not await state.flush():

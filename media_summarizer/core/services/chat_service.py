@@ -1,5 +1,6 @@
 """Conversations of the chat: open, list, read, delete (task-461); send a turn,
-stop it, and refund a turn that never answered (task-462).
+stop it, and refund a turn that never answered (task-462); seal a lost turn
+(task-470).
 
 Owner decision: docs/research/task-430-chatbot-architecture/README.md, Owner
 Validation. Point 1: a multi-turn chat over **one media or one folder**, with a
@@ -29,12 +30,14 @@ from typing import List, Optional, Tuple
 
 from media_summarizer.core.models.chat import (
     ChatAssistantMessage,
+    ChatAttempt,
     ChatConversation,
     ChatConversationSummary,
     ChatScope,
     ChatSource,
     ChatSourceSnapshot,
     ChatTurnStatus,
+    is_attempt_lost,
     new_conversation_id,
     scope_activity_prefix,
 )
@@ -45,11 +48,17 @@ from media_summarizer.core.services.artifact_service import (
     resolve_scope_sources,
 )
 from media_summarizer.core.services.quota_enforcer import QuotaCheckResult
-from media_summarizer.utils import chat_db
+from media_summarizer.utils import chat_db, sqs
 from media_summarizer.utils.chat_db import ChatMessage, TurnNotAcceptedError
+from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
+
+CHAT_QUEUE = required_env("CHAT_QUEUE")
+
+#: The ``error_code`` of a turn whose message could not be sent to the chat queue.
+DISPATCH_FAILED = "dispatch_failed"
 
 
 class ChatServiceError(Exception):
@@ -271,10 +280,20 @@ async def list_conversations(
 
 
 async def get_conversation_view(*, user_id: str, conversation_id: str) -> ConversationView:
-    """The conversation, its messages in order, and the generation to resume."""
+    """The conversation, its messages in order, and the generation to resume.
+
+    The read the app falls back on -- back in the foreground, at the end or the
+    break of a stream, every 2 s while polling -- is also where a lost turn is
+    found and sealed (:func:`seal_if_lost`), so the app sees it failed with its
+    retry button instead of waiting on it.
+    """
     conversation = await chat_db.get_conversation(user_id, conversation_id)
     if conversation is None:
         raise ChatConversationNotFoundError()
+    if await _seal_active_if_lost(conversation):
+        conversation = await chat_db.get_conversation(user_id, conversation_id)
+        if conversation is None:
+            raise ChatConversationNotFoundError()
     messages = await chat_db.list_messages(user_id, conversation_id)
 
     active: Optional[ActiveGeneration] = None
@@ -294,6 +313,85 @@ async def get_conversation_view(*, user_id: str, conversation_id: str) -> Conver
             ),
         )
     return ConversationView(conversation=conversation, messages=messages, active_generation=active)
+
+
+# ---------------------------------------------------------------------------
+# Lost turns (task-470)
+# ---------------------------------------------------------------------------
+
+
+async def seal_if_lost(attempt: ChatAttempt) -> bool:
+    """Seal the attempt's turn if the lost-turn rule says it is lost.
+
+    The rule is ``core/models/chat.is_attempt_lost``; the conditional write is
+    ``chat_db.seal_lost_attempt``. A turn sealed ``failed`` is refunded here, like
+    every unanswered turn. ``True`` when this call sealed it.
+    """
+    if not is_attempt_lost(attempt):
+        return False
+    status = await chat_db.seal_lost_attempt(attempt)
+    if status is None:
+        return False
+    log_event(
+        logger,
+        logging.WARNING,
+        "chat.turn.lost_sealed",
+        "Lost chat generation sealed; the user may ask again",
+        user_id=attempt.user_id,
+        conversation_id=attempt.conversation_id,
+        turn_id=attempt.turn_id,
+        attempt_id=attempt.attempt_id,
+        attempt_status=attempt.status.value,
+        status=status.value,
+    )
+    if status == ChatTurnStatus.FAILED:
+        message = await chat_db.get_assistant_message(
+            attempt.user_id, attempt.conversation_id, attempt.turn_index
+        )
+        if message is not None:
+            await refund_unanswered_turn(user_id=attempt.user_id, message=message)
+    return True
+
+
+async def _seal_turn_if_lost(*, user_id: str, conversation_id: str, turn_index: int, attempt_id: str) -> bool:
+    attempt = await chat_db.get_attempt(user_id, conversation_id, turn_index, attempt_id)
+    return attempt is not None and await seal_if_lost(attempt)
+
+
+async def _seal_active_if_lost(conversation: ChatConversation) -> bool:
+    """Seal the conversation's live generation if it is lost."""
+    if not conversation.active_attempt_id or conversation.active_turn_index is None:
+        return False
+    return await _seal_turn_if_lost(
+        user_id=conversation.user_id,
+        conversation_id=conversation.conversation_id,
+        turn_index=conversation.active_turn_index,
+        attempt_id=conversation.active_attempt_id,
+    )
+
+
+async def _seal_in_flight_if_lost(user_id: str) -> bool:
+    """Seal the turn the account's in-flight marker names, if it is lost.
+
+    Without this, a lost turn in another conversation would hold the whole account
+    off the chat until the marker's guard expires.
+    """
+    marker = await chat_db.get_turn_in_flight(user_id)
+    if not marker:
+        return False
+    conversation_id = str(marker.get("conversation_id") or "")
+    turn_index = int(marker.get("turn_index") or 0)
+    if not conversation_id or turn_index <= 0:
+        return False
+    message = await chat_db.get_assistant_message(user_id, conversation_id, turn_index)
+    if message is None:
+        return False
+    return await _seal_turn_if_lost(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        turn_index=turn_index,
+        attempt_id=message.attempt_id,
+    )
 
 
 async def delete_conversation(*, user_id: str, conversation_id: str) -> int:
@@ -319,7 +417,8 @@ class AcceptedChatTurn:
     attempt_id: str
     status: ChatTurnStatus
     #: Minutes this request debited: 0 when the turn was already charged (a
-    #: replay) or the debit failed.
+    #: replay) or the debit failed. Kept when the send then failed: the refund
+    #: credited them back.
     minutes_debited: int
     #: ``True`` when the request was a retry of a turn already accepted.
     replayed: bool
@@ -428,17 +527,25 @@ async def send_turn(
        one turn in flight per account.
     2. The context budget of this turn (``chat_prompt``): refused, never cut.
     3. The minute allowance, checked before any write; a refusal debits nothing.
-    4. One transaction writes the turn, its question, its first attempt, its
-       dispatch intent and the account's in-flight marker. Nothing is sent to
-       SQS here: the outbox relay sends the intent (Decision point 4).
+    4. One transaction writes the turn, its question, its attempt and the
+       account's in-flight marker.
     5. The debit, after the write and under the logical turn's token, so a failed
-       write leaves no debit and a retry, a network resume or a replacement attempt
-       never debits again. It is best-effort like every debit: if it fails, the turn
-       still runs and the account is simply not charged for it. When it is applied,
-       its period and amount are written on the turn for a possible refund.
+       write leaves no debit and a retry or a network resume never debits again.
+       It is best-effort like every debit: if it fails, the turn still runs and the
+       account is simply not charged for it. When it is applied, its period and
+       amount are written on the turn for a possible refund.
+    6. The message to the chat queue (:func:`_dispatch_turn`). If the send fails,
+       the turn is sealed ``failed`` / ``dispatch_failed`` and refunded, and the
+       route still answers with it: the app reads it back failed and offers a retry
+       under a new ``client_request_id``. An error response would make the app
+       replay the same id, which only finds the same failed turn.
+
+    Before the ceilings, a lost turn that would hold the conversation or the
+    account (``core/models/chat.is_attempt_lost``) is sealed, so it does not lock
+    either until a guard expires.
 
     A request repeated with the same ``client_request_id`` is answered with the turn
-    it already created (``replayed=True``).
+    it already created (``replayed=True``), and sends nothing.
     """
     text = question.strip()
     if len(text) > chat_prompt.MAX_QUESTION_CHARS:
@@ -454,6 +561,12 @@ async def send_turn(
     replay = await _replayed_turn(user_id=user_id, conversation=conversation, turn_id=turn_id)
     if replay is not None:
         return await _answer_replay(user_id=user_id, conversation=conversation, replay=replay)
+
+    if await _seal_active_if_lost(conversation):
+        conversation = await chat_db.get_conversation(user_id, conversation_id)
+        if conversation is None:
+            raise ChatConversationNotFoundError()
+    await _seal_in_flight_if_lost(user_id)
 
     if conversation.turn_count >= chat_prompt.MAX_TURNS_PER_CONVERSATION:
         raise ChatConversationFullError(
@@ -514,14 +627,67 @@ async def send_turn(
         turn_id=turn_id,
         turn_index=accepted.answer.turn_index,
     )
+    status = await _dispatch_turn(accepted.attempt)
     return AcceptedChatTurn(
         turn_id=accepted.answer.turn_id,
         turn_index=accepted.answer.turn_index,
         attempt_id=accepted.attempt.attempt_id,
-        status=accepted.answer.status,
+        status=status,
         minutes_debited=minutes,
         replayed=False,
     )
+
+
+async def _dispatch_turn(attempt: ChatAttempt) -> ChatTurnStatus:
+    """Send the accepted turn to the chat worker; seal it failed if that fails.
+
+    The message carries identities only; the worker re-reads everything else
+    from the chat table. Returns the turn's status as the route reports it.
+    """
+    try:
+        await sqs.send_message(
+            CHAT_QUEUE,
+            {
+                "user_id": attempt.user_id,
+                "conversation_id": attempt.conversation_id,
+                "turn_id": attempt.turn_id,
+                "turn_index": attempt.turn_index,
+                "attempt_id": attempt.attempt_id,
+            },
+        )
+        return ChatTurnStatus.ACCEPTED
+    except Exception as exc:  # noqa: BLE001 - any failure to send loses the turn
+        log_event(
+            logger,
+            logging.ERROR,
+            "chat.turn.dispatch_failed",
+            "Could not send the chat turn to its queue; sealing it failed",
+            user_id=attempt.user_id,
+            conversation_id=attempt.conversation_id,
+            turn_id=attempt.turn_id,
+            attempt_id=attempt.attempt_id,
+            exc_info=exc,
+        )
+    sealed = await chat_db.seal_turn(
+        user_id=attempt.user_id,
+        conversation_id=attempt.conversation_id,
+        turn_index=attempt.turn_index,
+        attempt_id=attempt.attempt_id,
+        status=ChatTurnStatus.FAILED,
+        error_code=DISPATCH_FAILED,
+    )
+    if not sealed:
+        # Ended in between (a stop that a worker could not have seen): its state wins.
+        message = await chat_db.get_assistant_message(
+            attempt.user_id, attempt.conversation_id, attempt.turn_index
+        )
+        return message.status if message is not None else ChatTurnStatus.FAILED
+    message = await chat_db.get_assistant_message(
+        attempt.user_id, attempt.conversation_id, attempt.turn_index
+    )
+    if message is not None:
+        await refund_unanswered_turn(user_id=attempt.user_id, message=message)
+    return ChatTurnStatus.FAILED
 
 
 async def stop_turn(
@@ -534,8 +700,8 @@ async def stop_turn(
     """Record a stop request on the live generation named by the caller.
 
     Refused as ``generation_stale`` when ``(turn_id, attempt_id)`` is not the
-    conversation's live generation any more -- ended, or replaced by a newer
-    attempt -- so a late tap can never stop the wrong answer. This only records the
+    conversation's live generation any more -- it ended -- so a late tap can never
+    stop the wrong answer. This only records the
     request: the worker observes it, stops reading the provider's stream and seals
     the partial answer ``interrupted`` (Decision point 6). Closing the stream on the
     phone is not a stop.
@@ -571,8 +737,8 @@ def is_refundable(message: ChatAssistantMessage) -> bool:
 async def refund_unanswered_turn(*, user_id: str, message: ChatAssistantMessage) -> int:
     """Refund a sealed turn if the rule says so, from the debit it recorded.
 
-    For the callers that seal a turn ``failed`` -- the chat worker (task-463) and
-    the outbox recovery (task-465) -- right after ``chat_db.seal_turn`` returned
+    For the callers that seal a turn ``failed`` -- the chat worker (task-463), a
+    failed send and a lost turn (task-470) -- right after the seal returned
     ``True``. A turn with no recorded debit (none applied, or its record was lost)
     is not refunded. Idempotent: the refund has its own token.
     """
@@ -611,6 +777,7 @@ __all__ = [
     "is_refundable",
     "open_conversation",
     "refund_unanswered_turn",
+    "seal_if_lost",
     "send_turn",
     "stop_turn",
     "turn_id_for_request",

@@ -65,8 +65,8 @@ resource "aws_iam_policy" "lambda_worker" {
           aws_sqs_queue.media_completed_events.arn,
           aws_sqs_queue.instagram_ingestion.arn,
           aws_sqs_queue.transcript_translation.arn,
-          # Consumed by worker-chat (task-463). Who sends to it is the outbox
-          # relay's choice (task-458/465), which adds its own grant.
+          # Consumed by worker-chat (task-463). The API sends to it (task-470,
+          # grant in the API policy below); the worker never does.
           aws_sqs_queue.chat.arn,
           # Both directions on one queue (task-369): the digest scheduler sends
           # to it, and the push notification worker both receives from it and
@@ -241,6 +241,9 @@ resource "aws_iam_policy" "lambda_api" {
           aws_sqs_queue.media_completed_events.arn,
           aws_sqs_queue.instagram_ingestion.arn,
           aws_sqs_queue.transcript_translation.arn,
+          # The API sends each accepted chat turn itself, right after the
+          # acceptance transaction and the debit (task-470).
+          aws_sqs_queue.chat.arn,
         ]
       },
       {

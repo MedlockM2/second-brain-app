@@ -8,16 +8,17 @@ Every state-changing write of the chat goes through this module, so the API and
 the worker share one set of conditions instead of each writing its own. Three
 guarantees of the owner's Decision (task-430, points 3 and 6) live here:
 
-- **an old attempt can never touch a newer generation.** Each write made on
-  behalf of an attempt is conditional on that attempt still being live, and
-  replacing an attempt marks the old one ``superseded`` in the same
-  transaction that installs the new one;
+- **an ended generation can never be written to again.** Each write made on
+  behalf of an attempt is conditional on that attempt still being live, so a
+  worker that comes back after its turn was sealed is fenced out;
 - **the terminal state is persisted before anyone is told.** :func:`seal_turn`
   writes the final text and the terminal status atomically and returns only once
   DynamoDB has committed them; the stream and the app read the sealed message,
   never a worker's own idea of having finished;
-- **a turn and its dispatch intent are accepted together or not at all**
-  (:func:`accept_turn`), which is what the outbox relay builds on.
+- **a turn is accepted whole or not at all** (:func:`accept_turn`). The API then
+  sends it to the chat queue itself; a turn whose send or generation is lost is
+  sealed by :func:`seal_lost_attempt` and never relaunched (owner amendment of
+  2026-10-11 under Decision point 4).
 
 Refusals follow ``utils/media_artifacts.py``: a write refused because the state
 moved on returns ``False`` (the caller lost a race and acknowledges), anything
@@ -35,6 +36,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 from boto3.dynamodb.conditions import Key
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
+from pydantic import TypeAdapter
 
 from media_summarizer.core.models.chat import (
     TERMINAL_TURN_STATUSES,
@@ -46,8 +48,6 @@ from media_summarizer.core.models.chat import (
     ChatAttemptStatus,
     ChatConversation,
     ChatConversationSummary,
-    ChatDispatchIntent,
-    ChatDispatchStatus,
     ChatFragment,
     ChatInterruptionCause,
     ChatRole,
@@ -58,9 +58,9 @@ from media_summarizer.core.models.chat import (
     attempts_prefix,
     conversation_children_prefix,
     conversation_sk,
-    dispatch_intent_sk,
     fragment_sk,
     fragments_prefix,
+    lost_cutoffs,
     message_sk,
     messages_prefix,
     new_attempt_id,
@@ -82,6 +82,7 @@ CHAT_TABLE = required_env("CHAT_TABLE")
 SCOPE_ACTIVITY_INDEX = "scope-activity-index"
 
 _serializer = TypeSerializer()
+_DATETIME: TypeAdapter[datetime] = TypeAdapter(datetime)
 _deserializer = TypeDeserializer()
 
 ChatMessage = Union[ChatUserMessage, ChatAssistantMessage]
@@ -354,7 +355,6 @@ class AcceptedTurn:
     question: ChatUserMessage
     answer: ChatAssistantMessage
     attempt: ChatAttempt
-    intent: ChatDispatchIntent
 
 
 async def accept_turn(
@@ -366,19 +366,19 @@ async def accept_turn(
     turn_id: Optional[str] = None,
     idempotency_token: Optional[str] = None,
 ) -> AcceptedTurn:
-    """Record a turn, its first attempt and its dispatch intent in one transaction.
+    """Record a turn and its attempt in one transaction.
 
-    Five writes, all or none (Decision point 4): the conversation takes the turn
-    and marks it as the live generation, the question and the empty answer are
-    written, the first attempt is queued and the intent the relay will send is
-    left ``pending``. Nothing is sent to SQS from here.
+    Four writes, all or none: the conversation takes the turn and marks it as the
+    live generation, the question and the empty answer are written, and the
+    attempt is queued. Nothing is sent to SQS from here: the caller sends the
+    message once this has committed (``chat_service.send_turn``).
 
     ``expected_turn_count`` is the ``turn_count`` the caller read: the condition
     on it makes two concurrent submissions on one conversation one turn.
     ``idempotency_token`` is passed to DynamoDB as ``ClientRequestToken``, so a
     retried request inside ten minutes does not write the turn twice.
 
-    A sixth item takes the account's turn-in-flight marker (task-462): one turn
+    A fifth item takes the account's turn-in-flight marker (task-462): one turn
     in flight per account, all conversations together. The put is conditional on
     no live marker -- absent, or past its :data:`TURN_IN_FLIGHT_GUARD` -- so two
     submissions on two conversations cannot both win. ``seal_turn`` and
@@ -419,15 +419,6 @@ async def accept_turn(
         attempt_id=attempt_id,
         created_at=now,
     )
-    intent = ChatDispatchIntent(
-        user_id=user_id,
-        conversation_id=conversation_id,
-        turn_id=turn_id,
-        turn_index=turn_index,
-        attempt_id=attempt_id,
-        created_at=now,
-    )
-
     conversation_key = _key(user_id, conversation_sk(conversation_id))
     transaction = _Transaction()
     transaction.update(
@@ -455,7 +446,6 @@ async def accept_turn(
     transaction.put(question.to_dynamodb_item())
     transaction.put(answer.to_dynamodb_item())
     transaction.put(attempt.to_dynamodb_item())
-    transaction.put(intent.to_dynamodb_item())
     transaction.put(
         {
             "user_id": user_id,
@@ -476,14 +466,14 @@ async def accept_turn(
         if not _refused_by_condition(exc):
             raise
         raise TurnNotAcceptedError(_turn_refusal_reason(exc, expected_turn_count)) from exc
-    return AcceptedTurn(question=question, answer=answer, attempt=attempt, intent=intent)
+    return AcceptedTurn(question=question, answer=answer, attempt=attempt)
 
 
 def _turn_refusal_reason(exc: ClientError, expected_turn_count: int) -> str:
     reasons = exc.response.get("CancellationReasons", [])
     first = reasons[0] if reasons else {}
     if first.get("Code") != "ConditionalCheckFailed":
-        marker = reasons[5] if len(reasons) > 5 else {}
+        marker = reasons[4] if len(reasons) > 4 else {}
         if marker.get("Code") == "ConditionalCheckFailed":
             # Another conversation of the account holds a live turn.
             return "account_turn_in_flight"
@@ -502,7 +492,7 @@ def _turn_refusal_reason(exc: ClientError, expected_turn_count: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Attempts: claim, lease, cancellation, replacement
+# Attempts: claim, lease, cancellation
 # ---------------------------------------------------------------------------
 
 
@@ -526,10 +516,10 @@ async def claim_attempt(
     """Start generating an attempt under a lease, or refuse.
 
     Only a ``queued`` attempt that is still the turn's current one can be
-    claimed. ``False`` means the delivery is a duplicate, or the attempt was
-    replaced or ended: the worker acknowledges without calling the provider. An
-    attempt whose lease expired is *not* claimable again — see
-    :func:`replace_attempt`.
+    claimed. ``False`` means the delivery is a duplicate, or the attempt already
+    ended: the worker acknowledges without calling the provider. An attempt whose
+    lease expired is *not* claimable again: a redelivery never relaunches a
+    generation, and the lost turn is sealed instead (:func:`seal_lost_attempt`).
 
     The worker re-reads the attempt afterwards: a stop requested before the
     claim is already on it.
@@ -620,8 +610,7 @@ async def request_cancellation(
     """Record a stop request on a live attempt (Decision point 6).
 
     Conditional on the attempt named by the caller still being live, so a stop
-    aimed at a generation that has ended or been replaced is refused rather than
-    landing on a newer one. Asking twice is harmless: the first request time is
+    aimed at a generation that has ended is refused. Asking twice is harmless: the first request time is
     kept. The worker observes the request; this write stops nothing by itself.
     """
     session = get_session()
@@ -647,101 +636,6 @@ async def request_cancellation(
         raise
 
 
-@dataclass(frozen=True)
-class ReplacementAttempt:
-    attempt: ChatAttempt
-    intent: ChatDispatchIntent
-
-
-async def replace_attempt(
-    *,
-    user_id: str,
-    conversation_id: str,
-    turn_index: int,
-    stale_attempt_id: str,
-) -> Optional[ReplacementAttempt]:
-    """Give a turn a new attempt in place of one that will not finish.
-
-    Allowed while the old attempt is ``queued`` (its intent never got through)
-    or ``generating`` with an expired lease (its worker is gone). One
-    transaction marks it ``superseded`` — after which none of its writes can
-    succeed — points the answer and the conversation at the new attempt, and
-    queues the new attempt with its own dispatch intent. The new attempt starts
-    from nothing: the old one's fragments stay under the old attempt id and are
-    never concatenated.
-
-    Returns ``None`` when refused: the old attempt is live, ended, or already
-    replaced.
-    """
-    stale = await get_attempt(user_id, conversation_id, turn_index, stale_attempt_id)
-    if stale is None:
-        return None
-    now = _now()
-    replacement = ChatAttempt(
-        user_id=user_id,
-        conversation_id=conversation_id,
-        turn_id=stale.turn_id,
-        turn_index=turn_index,
-        attempt_id=new_attempt_id(),
-        attempt_number=stale.attempt_number + 1,
-        created_at=now,
-    )
-    intent = ChatDispatchIntent(
-        user_id=user_id,
-        conversation_id=conversation_id,
-        turn_id=stale.turn_id,
-        turn_index=turn_index,
-        attempt_id=replacement.attempt_id,
-        created_at=now,
-    )
-    transaction = _Transaction()
-    transaction.update(
-        _key(user_id, stale.sort_key()),
-        update="SET #st = :superseded, ended_at = :now",
-        condition=("attribute_exists(sk) AND (#st = :queued OR (#st = :generating AND lease_expires_at < :now))"),
-        names={"#st": "status"},
-        values={
-            ":superseded": ChatAttemptStatus.SUPERSEDED.value,
-            ":queued": ChatAttemptStatus.QUEUED.value,
-            ":generating": ChatAttemptStatus.GENERATING.value,
-            ":now": now.isoformat(),
-        },
-    )
-    transaction.update(
-        _key(user_id, message_sk(conversation_id, turn_index, ChatRole.ASSISTANT)),
-        update=("SET attempt_id = :new, attempt_count = attempt_count + :one, #st = :accepted"),
-        condition="attempt_id = :old AND #st IN (:accepted, :generating)",
-        names={"#st": "status"},
-        values={
-            ":new": replacement.attempt_id,
-            ":old": stale_attempt_id,
-            ":one": 1,
-            ":accepted": ChatTurnStatus.ACCEPTED.value,
-            ":generating": ChatTurnStatus.GENERATING.value,
-        },
-    )
-    transaction.update(
-        _key(user_id, conversation_sk(conversation_id)),
-        update="SET active_attempt_id = :new, last_turn_status = :accepted, updated_at = :now",
-        condition="active_attempt_id = :old",
-        values={
-            ":new": replacement.attempt_id,
-            ":old": stale_attempt_id,
-            ":accepted": ChatTurnStatus.ACCEPTED.value,
-            ":now": now.isoformat(),
-        },
-    )
-    transaction.put(replacement.to_dynamodb_item())
-    transaction.put(intent.to_dynamodb_item())
-    try:
-        await transaction.commit("chat.replace_attempt", user_id=user_id)
-    except ClientError as exc:
-        if _refused_by_condition(exc):
-            return None
-        raise
-    return ReplacementAttempt(attempt=replacement, intent=intent)
-
-
 # ---------------------------------------------------------------------------
 # Fragments
 # ---------------------------------------------------------------------------
@@ -755,8 +649,8 @@ async def append_fragment(fragment: ChatFragment) -> bool:
     """Write one flush of streamed text, fenced on its attempt being live.
 
     The fragment and a condition check on its attempt (``generating``) commit
-    together, so a worker whose attempt was superseded or sealed can no longer
-    add text. Returns ``False`` in that case: the worker stops. A sequence
+    together, so a worker whose attempt was sealed -- by itself, a stop, or a
+    reader that found it lost -- can no longer add text. Returns ``False`` in that case: the worker stops. A sequence
     number written twice raises :class:`FragmentAlreadyWrittenError` — the
     worker numbers its own flushes, so that is a bug, not a race.
     """
@@ -844,21 +738,27 @@ async def seal_turn(
     error_code: Optional[str] = None,
     error_message: Optional[str] = None,
     llm_usage: Optional[ArtifactLlmUsage] = None,
+    only_if_lost_at: Optional[datetime] = None,
 ) -> bool:
     """Persist a turn's final answer and terminal state, from its live attempt only.
 
     One transaction: the attempt ends (from ``queued`` or ``generating``), the
     answer takes the text, the status and its cause — conditional on naming this
     attempt and not being terminal yet — and the conversation releases the live
-    generation, conditional on it being this attempt. A superseded attempt fails
-    every one of those conditions and returns ``False``.
+    generation, conditional on it being this attempt. An attempt that already
+    ended fails every one of those conditions and returns ``False``.
 
     Returns only after DynamoDB has committed: anything that announces the end of
     a turn (the stream's terminal event, a notification) must come after this
     call and read what it wrote (Decision point 3).
 
     ``queued`` is accepted as a starting point so that a turn whose attempt was
-    never claimed — the relay gave up on it — can still be sealed ``failed``.
+    never claimed -- its send failed, or it is lost -- can still be sealed.
+
+    ``only_if_lost_at`` narrows the attempt's condition to the lost-turn rule
+    evaluated at that instant (:func:`seal_lost_attempt`): still ``queued`` since
+    before the queue cutoff, or still ``generating`` with a lease expired before
+    the grace cutoff. A worker that renews its lease at the same moment wins.
     """
     if status not in TERMINAL_TURN_STATUSES:
         raise ValueError(f"{status.value} is not a terminal turn status")
@@ -896,11 +796,21 @@ async def seal_turn(
         attempt_set.append("error_code = :error_code")
         attempt_values[":error_code"] = error_code
 
+    attempt_condition = "attribute_exists(sk) AND #st IN (:queued, :generating)"
+    if only_if_lost_at is not None:
+        queued_before, lease_before = lost_cutoffs(only_if_lost_at)
+        attempt_condition = (
+            "attribute_exists(sk) AND ((#st = :queued AND created_at < :queued_before) "
+            "OR (#st = :generating AND lease_expires_at < :lease_before))"
+        )
+        attempt_values[":queued_before"] = _stored_timestamp(queued_before)
+        attempt_values[":lease_before"] = lease_before.isoformat()
+
     transaction = _Transaction()
     transaction.update(
         _key(user_id, attempt_sk(conversation_id, turn_index, attempt_id)),
         update="SET " + ", ".join(attempt_set) + " REMOVE lease_expires_at",
-        condition="attribute_exists(sk) AND #st IN (:queued, :generating)",
+        condition=attempt_condition,
         names={"#st": "status"},
         values=attempt_values,
     )
@@ -927,6 +837,67 @@ async def seal_turn(
     # over by a newer turn past its guard, and that must not make a seal fail.
     await release_turn_in_flight(user_id=user_id, conversation_id=conversation_id, turn_index=turn_index)
     return True
+
+
+def _stored_timestamp(value: datetime) -> str:
+    """A datetime as ``to_dynamodb_item`` stores it, so the two compare as strings.
+
+    Items are written through pydantic's JSON mode, which ends a UTC time with
+    ``Z`` where ``isoformat`` writes ``+00:00``.
+    """
+    return str(_DATETIME.dump_python(value, mode="json"))
+
+
+async def fragments_text(*, user_id: str, conversation_id: str, attempt_id: str) -> str:
+    """Every fragment of an attempt joined in order: the text its stream showed."""
+    parts: List[str] = []
+    cursor = -1
+    while page := await list_fragments(
+        user_id=user_id, conversation_id=conversation_id, attempt_id=attempt_id, after_seq=cursor
+    ):
+        parts.extend(fragment.text for fragment in page)
+        cursor = page[-1].seq
+    return "".join(parts)
+
+
+#: The ``error_code`` of a turn sealed because its generation was lost.
+GENERATION_LOST = "generation_lost"
+
+
+async def seal_lost_attempt(attempt: ChatAttempt, *, now: Optional[datetime] = None) -> Optional[ChatTurnStatus]:
+    """Seal the turn of a lost attempt (``core/models/chat.is_attempt_lost``).
+
+    Never relaunched (owner amendment of 2026-10-11 under Decision point 4):
+
+    - no visible text: ``failed`` / ``generation_lost``, refundable;
+    - some fragments: ``interrupted`` / ``provider_error`` with the text rebuilt
+      from them, so the app shows what was read and its retry button.
+      ``provider_error`` covers every technical break after text, a lost worker
+      included.
+
+    The write is conditional on this attempt and on its lost state at ``now``
+    (:func:`seal_turn`, ``only_if_lost_at``), so a worker that renews its lease
+    meanwhile wins. Returns the status sealed, ``None`` when refused. The caller
+    refunds a ``failed`` seal (``chat_service.seal_if_lost``).
+    """
+    now = now or _now()
+    text = await fragments_text(
+        user_id=attempt.user_id, conversation_id=attempt.conversation_id, attempt_id=attempt.attempt_id
+    )
+    shown = bool(text.strip())
+    status = ChatTurnStatus.INTERRUPTED if shown else ChatTurnStatus.FAILED
+    sealed = await seal_turn(
+        user_id=attempt.user_id,
+        conversation_id=attempt.conversation_id,
+        turn_index=attempt.turn_index,
+        attempt_id=attempt.attempt_id,
+        status=status,
+        text=text if shown else None,
+        interruption_cause=ChatInterruptionCause.PROVIDER_ERROR if shown else None,
+        error_code=GENERATION_LOST,
+        only_if_lost_at=now,
+    )
+    return status if sealed else None
 
 
 async def release_turn_in_flight(*, user_id: str, conversation_id: str, turn_index: Optional[int] = None) -> bool:
@@ -1003,40 +974,6 @@ def _usage_item(usage: Optional[ArtifactLlmUsage]) -> Optional[Dict[str, Any]]:
     # Same boundary conversion as ``MediaArtifactRecord.to_dynamodb_item``.
     item["cost_eur"] = Decimal(str(usage.cost_eur))
     return item
-
-
-# ---------------------------------------------------------------------------
-# Outbox
-# ---------------------------------------------------------------------------
-
-
-async def get_dispatch_intent(user_id: str, conversation_id: str, attempt_id: str) -> Optional[ChatDispatchIntent]:
-    item = await _get_item(user_id, dispatch_intent_sk(conversation_id, attempt_id))
-    return ChatDispatchIntent.from_dynamodb_item(item) if item else None
-
-
-async def mark_intent_dispatched(*, user_id: str, conversation_id: str, attempt_id: str) -> bool:
-    """Record that the relay sent the intent. ``False`` if it already was."""
-    session = get_session()
-    try:
-        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
-            table = await dynamodb.Table(CHAT_TABLE)
-            await table.update_item(
-                Key=_key(user_id, dispatch_intent_sk(conversation_id, attempt_id)),
-                UpdateExpression="SET dispatch_status = :dispatched, dispatched_at = :now",
-                ConditionExpression="attribute_exists(sk) AND dispatch_status = :pending",
-                ExpressionAttributeValues={
-                    ":dispatched": ChatDispatchStatus.DISPATCHED.value,
-                    ":pending": ChatDispatchStatus.PENDING.value,
-                    ":now": _now().isoformat(),
-                },
-            )
-            return True
-    except ClientError as exc:
-        if _is_conditional_failure(exc):
-            return False
-        _log_dynamodb_error("chat.mark_intent_dispatched", exc, table=CHAT_TABLE, user_id=user_id)
-        raise
 
 
 # ---------------------------------------------------------------------------

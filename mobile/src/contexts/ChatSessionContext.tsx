@@ -202,7 +202,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           turn_index: active.turn_index,
           attempt_id: active.attempt_id,
         },
-        // A new attempt starts from nothing: never append it to another's text.
+        // Another generation starts from nothing: never append it to this one's text.
         streamingText: sameAttempt ? session.streamingText : "",
         lastSeq: sameAttempt ? session.lastSeq : -1,
       });
@@ -232,14 +232,6 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
             streamingText: session.streamingText + event.data.text,
             lastSeq: event.data.seq,
             phase: "streaming",
-          });
-          return;
-        }
-        case "replaced": {
-          update(scope, scopeId, {
-            generation: event.data,
-            streamingText: "",
-            lastSeq: -1,
           });
           return;
         }
@@ -283,7 +275,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
         { generation: session.generation, afterSeq: session.lastSeq },
         {
           onEvent: (event) => {
-            if (event.type === "end" || event.type === "reconnect" || event.type === "replaced") {
+            if (event.type === "end" || event.type === "reconnect") {
               ended = event;
             }
             applyEvent(scope, scopeId, event);
@@ -306,7 +298,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
         schedulePoll(key, scope, scopeId);
         return;
       }
-      if (last?.type === "reconnect" || last?.type === "replaced") {
+      if (last?.type === "reconnect") {
         entry.lastStreamAttempt = 0; // asked to reconnect: no back-off
         await followRef.current(scope, scopeId);
         return;
@@ -401,8 +393,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       try {
         await ChatService.stopTurn(conversationId, session.generation);
       } catch (error) {
-        // generation_stale: the answer already ended or was replaced; the
-        // durable state says which.
+        // generation_stale: the answer already ended; the durable state says
+        // how.
         update(scope, scopeId, { error });
         await sync(scope, scopeId);
       }

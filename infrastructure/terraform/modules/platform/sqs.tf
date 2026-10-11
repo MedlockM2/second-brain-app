@@ -227,8 +227,8 @@ resource "aws_sqs_queue" "artifact_generator" {
 }
 
 # =============================================================================
-# Chat (task-463) -- one message per attempt of a chat turn, sent by the outbox
-# relay (task-458/465), consumed by worker-chat. Its own queue and its own policy,
+# Chat (task-463) -- one message per chat turn, sent by the API right after it
+# accepted the turn (task-470), consumed by worker-chat. Its own queue and its own policy,
 # independent of the artifact generator's (Decision point 2 of
 # docs/research/task-430-chatbot-architecture/README.md).
 #
@@ -237,9 +237,10 @@ resource "aws_sqs_queue" "artifact_generator" {
 #     shared 32 000-token output ceiling, reasoning included, with room left;
 #   - visibility 660 s = that timeout + 60 s, so a redelivery never overlaps a
 #     live invocation. Deliberately not the artifacts' 1 800 s, and not the
-#     usual 6x either: a redelivery is not how a chat turn recovers. A worker that
-#     dies is caught by its 30-second lease, and the recovery (task-465) replaces
-#     the attempt; the late redelivery then finds it superseded and stands down.
+#     usual 6x either: a chat turn never recovers by redelivery, it is never
+#     relaunched at all (task-470). A worker that dies leaves its 30-second lease
+#     to expire, the next read seals the lost turn, and the user asks again; a
+#     late redelivery finds it sealed or lost and stands down.
 #     The ESM's maximum_concurrency, not throttling retries, bounds the fleet;
 #   - maxReceiveCount 3: the worker acknowledges every outcome it can name (it
 #     seals the turn), so a message only comes back when an invocation crashed;

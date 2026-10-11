@@ -10,8 +10,8 @@
 # account and is never shared.
 #
 # PK user_id, SK sk. Every item of a conversation sits under "CONV#<id>" in the
-# account's partition: the conversation, its messages, its attempts, its
-# fragments and its dispatch intents. That one-partition-per-account layout is
+# account's partition: the conversation, its messages, its attempts and its
+# fragments. That one-partition-per-account layout is
 # what lets account erasure empty the table with a single partition query
 # (_USER_PARTITION_TABLES in core/services/account_deletion_service.py).
 #
@@ -94,5 +94,5 @@ resource "aws_dynamodb_table" "chat" {
 
 output "chat_table_name" {
   value       = aws_dynamodb_table.chat.name
-  description = "Durable chat state: conversations, messages, attempts, fragments, dispatch intents (task-457)"
+  description = "Durable chat state: conversations, messages, attempts, fragments (task-457)"
 }
