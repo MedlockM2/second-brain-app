@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-11 15:59'
+updated_date: '2026-10-11 16:08'
 labels:
   - benchmark
   - scoping
@@ -50,9 +51,19 @@ Le `Decision`, point 4 : en V1, l'extension envoie l'adresse de la page, que le 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 docs/research/task-490-paywalled-page-capture/README.md existe avec owner_decision: pending et une section Owner Validation vide
-- [ ] #2 Le README compare l'envoi du HTML au serveur extrait par trafilatura et l'extraction dans le navigateur, pour l'extension et pour le partage depuis Safari sur iPhone, avec ses sources datées
-- [ ] #3 Le README fixe une taille d'envoi plafonnée et la règle d'identité du complément §10 pour chaque voie
-- [ ] #4 Le README décrit les permissions demandées par chaque voie et se conclut par une recommandation
-- [ ] #5 Aucun fichier hors de docs/research/ n'est modifié
+- [x] #1 docs/research/task-490-paywalled-page-capture/README.md existe avec owner_decision: pending et une section Owner Validation vide
+- [x] #2 Le README compare l'envoi du HTML au serveur extrait par trafilatura et l'extraction dans le navigateur, pour l'extension et pour le partage depuis Safari sur iPhone, avec ses sources datées
+- [x] #3 Le README fixe une taille d'envoi plafonnée et la règle d'identité du complément §10 pour chaque voie
+- [x] #4 Le README décrit les permissions demandées par chaque voie et se conclut par une recommandation
+- [x] #5 Aucun fichier hors de docs/research/ n'est modifié
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Benchmark produit le 2026-10-11 : docs/research/task-490-paywalled-page-capture/README.md, owner_decision: pending. La tâche reste To Do jusqu'à la décision de l'owner (cycle de vie des benchmarks, CLAUDE.md).
+
+Recommandation : le navigateur envoie le HTML nettoyé de la page (plafond 2 000 000 octets, le même que le téléchargement serveur) dans un champ optionnel `page_html` de ingest-url. Le serveur l'extrait avec le même trafilatura et le range sous `generate_article_media_key(url, sha256(texte))`, jamais sous l'adresse seule. Un HTML non extractible est traité comme absent, pour ne jamais passer par `_unreadable_page`. Sur iPhone, `expo-share-intent` 6.1.1 le permet par `NSExtensionActivationSupportsWebPageWithMaxCount` et `preprocessorInjectJS`, dans une tâche `mobile` à part.
+
+Mesures sur 11 pages réelles : HTML nettoyé de 73 à 298 Ko par article, et texte extrait identique avant et après nettoyage. Point à trancher : l'extension lirait la page au clic (permission `scripting`), ce que le complément de task-424 excluait pour la V1.
+<!-- SECTION:NOTES:END -->
