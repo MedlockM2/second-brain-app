@@ -3,10 +3,10 @@ id: TASK-466
 title: >-
   Faire respecter Retry-After aux réessais du worker de chat et documenter la
   politique de débit LLM retenue par task-459
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 18:00'
-updated_date: '2026-10-11 14:40'
+updated_date: '2026-10-11 14:59'
 labels:
   - backend
   - llm
@@ -59,9 +59,21 @@ Après merge et déploiement, il n'y a pas de 429 à provoquer en `-dev` : lire 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 L'erreur de refus levée par la couche LLM commune expose le délai Retry-After en secondes quand l'en-tête est présent et lisible, en nombre de secondes ou en date HTTP, et la classification de llm_failure est inchangée
-- [ ] #2 Les réessais de chat_worker.py attendent au moins Retry-After, plus une gigue aléatoire, et restent bornés par MAX_PROVIDER_CALLS
-- [ ] #3 Un Retry-After supérieur à l'attente maximale nommée du chat scelle le tour en échec avec refusal_reason rate_limit et le rembourse, sans nouvel appel au fournisseur
-- [ ] #4 docs/INGESTION_WORKERS_PROVIDERS.md décrit la politique de débit LLM retenue par le Decision de task-459 : pas de contrôle partagé du TPM, palier du compte, comportement au 429 du chat et des artefacts, alarme llm-provider-refused comme signal, conditions de réouverture
-- [ ] #5 Aucune table, aucune variable LLM_TPM_LIMIT ni aucun plafond de sortie par type n'est ajouté ; ruff check et mypy passent sur les fichiers Python modifiés
+- [x] #1 L'erreur de refus levée par la couche LLM commune expose le délai Retry-After en secondes quand l'en-tête est présent et lisible, en nombre de secondes ou en date HTTP, et la classification de llm_failure est inchangée
+- [x] #2 Les réessais de chat_worker.py attendent au moins Retry-After, plus une gigue aléatoire, et restent bornés par MAX_PROVIDER_CALLS
+- [x] #3 Un Retry-After supérieur à l'attente maximale nommée du chat scelle le tour en échec avec refusal_reason rate_limit et le rembourse, sans nouvel appel au fournisseur
+- [x] #4 docs/INGESTION_WORKERS_PROVIDERS.md décrit la politique de débit LLM retenue par le Decision de task-459 : pas de contrôle partagé du TPM, palier du compte, comportement au 429 du chat et des artefacts, alarme llm-provider-refused comme signal, conditions de réouverture
+- [x] #5 Aucune table, aucune variable LLM_TPM_LIMIT ni aucun plafond de sortie par type n'est ajouté ; ruff check et mypy passent sur les fichiers Python modifiés
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-11 — Livré.
+
+- `llm_failure.parse_retry_after` lit les deux formes de `Retry-After` : secondes (y compris fractionnaires) ou date HTTP. Une date passée vaut 0 ; une valeur illisible vaut `None`.
+- `LlmProviderRefusedError.retry_after_seconds` est renseigné dans `llm_client._raise_for_provider_error`. `classify_llm_failure` n'a pas changé.
+- `chat_worker` : chaque attente vaut `max(backoff, Retry-After)` plus une gigue aléatoire de 0 à 0,5 s, avec au plus `MAX_PROVIDER_CALLS` = 3 appels. Au-delà de `MAX_RETRY_WAIT_SECONDS` = 10 s, l'erreur est relancée sans nouvel appel ; le chemin existant scelle alors le tour `failed` avec `provider_refused_rate_limit` et le rembourse. Le bail est couvert pendant l'attente par le heartbeat ajouté par task-470.
+- `docs/INGESTION_WORKERS_PROVIDERS.md`, « LLM rate policy » : pas de contrôle partagé du TPM, palier Build puis Launch, comportement au 429 du chat et des artefacts, alarme `llm-provider-refused` comme signal, conditions de réouverture.
+- Aucune table, aucun `LLM_TPM_LIMIT`, aucun plafond par type. ruff et mypy propres.
+<!-- SECTION:NOTES:END -->
