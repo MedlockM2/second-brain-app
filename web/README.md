@@ -57,6 +57,10 @@ What works and what does not **until `api.<domain>` exists** (task-443, then tas
   and `SameSite=Strict` keeps the browser from sending it back. Sign in again after a reload.
 - With `app.<domain>` and `api.<domain>` on the same site, the cookie rides along and a reload
   keeps the session.
+- Importing a file sends its bytes from the browser straight to S3 through a presigned PUT. The
+  `documents` and `audio` buckets answer that origin's CORS preflight only once the same
+  `web_app_origin` is applied (`aws_s3_bucket_cors_configuration` in
+  `infrastructure/terraform/modules/platform/s3.tf`); before that, a link imports but a file does not.
 
 ## Deployment
 

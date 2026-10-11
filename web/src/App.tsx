@@ -5,6 +5,7 @@ import { useI18n } from "./i18n/I18nProvider";
 import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { EmptyPage } from "./pages/EmptyPage";
+import { FolderPage } from "./pages/FolderPage";
 import { HomePage } from "./pages/HomePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { MediaPage } from "./pages/MediaPage";
@@ -51,8 +52,7 @@ function AppRoutes() {
               <Route index element={<HomePage />} />
               <Route path="library" element={<LibraryPage />} />
               <Route path="media/:mediaId" element={<MediaPage />} />
-              {/* Filled by task-478. */}
-              <Route path="folders/:folderId" element={<EmptyPage />} />
+              <Route path="folders/:folderId" element={<FolderPage />} />
               <Route path="digest" element={<Titled page="digest" />} />
               <Route path="unsorted" element={<Titled page="unsorted" />} />
               <Route path="search" element={<Titled page="search" />} />

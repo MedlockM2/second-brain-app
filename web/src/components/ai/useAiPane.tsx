@@ -4,12 +4,13 @@ import { formatDate, tCount, type TranslationKey } from "@media-summarizer/core/
 import type {
   ArtifactContentResponse,
   ArtifactCreateResult,
+  ArtifactDetail,
   ArtifactListResponse,
   ArtifactScope,
   ArtifactSummary,
 } from "@media-summarizer/core/types/artifacts";
 import type { ArtifactType } from "@media-summarizer/core/types/media";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../../api";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon, type IconName } from "../Icon";
@@ -26,6 +27,13 @@ import { ArtifactBody, artifactContentTitle } from "./ArtifactBody";
  * entry of a type drives its pill, an in-flight request flips the pill at once,
  * the history is re-read every 3 s while anything in it is queued or generating,
  * and a refusal is worded from its code (`describeArtifactRefusal`).
+ *
+ * A media holds one entry per type for good, so a type is generated once (again
+ * only after a failure). A folder gains a new entry each time its sources
+ * change (task-322): given `scopeMediaIds`, the pane reads the source snapshot
+ * of the newest entry of each type and offers to generate again only when the
+ * folder's sources differ from it — a request over the same set would answer
+ * the entry already stored.
  */
 export const ARTIFACT_PILLS: readonly { type: ArtifactType; labelKey: TranslationKey; icon: IconName }[] = [
   { type: "summary_short", labelKey: "artifacts.type.summaryShort", icon: "document-text-outline" },
@@ -49,8 +57,7 @@ export function useAiPane({
   scopeId,
   lockedMessage,
   showSourceCount,
-  generationAvailable = (latest) => !latest || latest.status === "failed",
-  notice,
+  scopeMediaIds,
 }: {
   scope: ArtifactScope;
   scopeId: string;
@@ -58,10 +65,8 @@ export function useAiPane({
   lockedMessage?: string | null;
   /** A folder's history names how many sources each entry read. */
   showSourceCount: boolean;
-  /** Whether a type can be generated (again) given its newest entry. */
-  generationAvailable?: (latest: ArtifactSummary | undefined) => boolean;
-  /** Shown under the pills (a folder whose sources changed). */
-  notice?: ReactNode;
+  /** A folder's current sources; absent for a media. */
+  scopeMediaIds?: readonly string[];
 }): { spec: PaneSpec; wide: boolean } {
   const { t, tw } = useI18n();
   const [history, setHistory] = useState<ArtifactSummary[] | null>(null);
@@ -134,6 +139,40 @@ export function useAiPane({
 
   const open = (history ?? []).find((artifact) => artifact.artifact_id === openId) ?? null;
 
+  // The source snapshot of each newest entry, read once: an entry is immutable.
+  const [snapshots, setSnapshots] = useState<Record<string, readonly string[] | null>>({});
+  const reading = useRef(new Set<string>());
+  useEffect(() => {
+    if (!scopeMediaIds) return;
+    const missing = [...latestByType.values()].filter(
+      (artifact) => !(artifact.artifact_id in snapshots) && !reading.current.has(artifact.artifact_id),
+    );
+    for (const artifact of missing) {
+      reading.current.add(artifact.artifact_id);
+      apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`)
+        .then((detail) => detail.sources.map((source) => source.media_item_id))
+        // Unknown counts as different: offering a generation is the harmless side.
+        .catch(() => null)
+        .then((sources) => {
+          reading.current.delete(artifact.artifact_id);
+          setSnapshots((current) => ({ ...current, [artifact.artifact_id]: sources }));
+        });
+    }
+  }, [latestByType, snapshots, scopeMediaIds]);
+
+  const sourcesChanged = (latest: ArtifactSummary) => {
+    if (!scopeMediaIds) return false;
+    const snapshot = snapshots[latest.artifact_id];
+    if (!snapshot) return true;
+    const current = new Set(scopeMediaIds);
+    return snapshot.length !== current.size || snapshot.some((id) => !current.has(id));
+  };
+  const generationAvailable = (latest: ArtifactSummary | undefined) =>
+    !latest || latest.status === "failed" || sourcesChanged(latest);
+  const staleTypes = [...latestByType.values()].filter(
+    (latest) => latest.status === "ready" && scopeMediaIds && snapshots[latest.artifact_id] && sourcesChanged(latest),
+  );
+
   if (locked) {
     return {
       wide: false,
@@ -191,6 +230,7 @@ export function useAiPane({
     <>
       <div className="caps" style={{ margin: "4px 0 10px" }}>
         {t("artifacts.panel.generateHeading")}
+        {scope === "folder" && ` · ${tw("ai.wholeFolder")}`}
       </div>
       <div className="pills">
         {ARTIFACT_PILLS.map((pill) => {
@@ -199,30 +239,51 @@ export function useAiPane({
           const busy = state === "queued" || state === "generating";
           const canGenerate = !busy && generationAvailable(latest);
           const canOpen = !busy && state === "ready";
+          // A ready entry opens; generating again over changed sources is the +.
           const onClick = () => {
-            if (canGenerate) void generate(pill.type);
-            else if (canOpen && latest) setOpenId(latest.artifact_id);
+            if (canOpen && latest) setOpenId(latest.artifact_id);
+            else if (canGenerate) void generate(pill.type);
           };
+          const label = t(pill.labelKey);
+          const generateA11y = t("artifacts.a11yGenerate", { label });
           return (
-            <button
-              key={pill.type}
-              type="button"
-              className="pill"
-              disabled={!canGenerate && !canOpen}
-              aria-label={canGenerate ? t("artifacts.a11yGenerate", { label: t(pill.labelKey) }) : t(pill.labelKey)}
-              onClick={onClick}
-            >
-              <Icon name={pill.icon} size={18} />
-              <span className="grow">
-                <span style={{ display: "block", fontSize: 14, fontWeight: 500 }}>{t(pill.labelKey)}</span>
-                <PillStatus state={state} />
-              </span>
-              {canGenerate && <Icon name="add" size={18} />}
-            </button>
+            <div key={pill.type} className="pill">
+              <button
+                type="button"
+                className="pill-main"
+                disabled={!canGenerate && !canOpen}
+                aria-label={canOpen ? label : generateA11y}
+                onClick={onClick}
+              >
+                <Icon name={pill.icon} size={18} />
+                <span className="grow">
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 500 }}>{label}</span>
+                  <PillStatus state={state} />
+                </span>
+                {canGenerate && !canOpen && <Icon name="add" size={18} />}
+              </button>
+              {canGenerate && canOpen && (
+                <button
+                  type="button"
+                  className="icon-btn"
+                  style={{ width: 32, height: 32 }}
+                  aria-label={generateA11y}
+                  title={generateA11y}
+                  onClick={() => void generate(pill.type)}
+                >
+                  <Icon name="add" size={18} />
+                </button>
+              )}
+            </div>
           );
         })}
       </div>
-      {notice}
+      {staleTypes.length > 0 && (
+        <div className="banner" style={{ marginTop: 10 }}>
+          <Icon name="layers-outline" size={18} />
+          <span>{tw("ai.sourcesChanged")}</span>
+        </div>
+      )}
       {refusal && (
         <div className="banner-err" role="alert" style={{ marginTop: 10 }}>
           <Icon name="information-circle-outline" size={18} />

@@ -313,3 +313,34 @@ output "covers_bucket_name" {
   description = "Name of the S3 bucket for re-hosted media cover thumbnails"
   value       = aws_s3_bucket.covers.bucket
 }
+
+# The web app uploads a file the way the mobile app does -- a presigned PUT
+# straight to `uploads/` (task-345) -- but from a browser, which sends the PUT
+# only after a CORS preflight the bucket must answer (task-478). Only the PUT
+# of the web app's origin is allowed: downloads stay presigned GETs that no
+# page needs to read through CORS. The Content-Type is not part of the
+# signature, so it is the one request header to allow. No origin (staging,
+# prod until app.<domain> exists) means no rule at all.
+resource "aws_s3_bucket_cors_configuration" "documents_upload" {
+  count  = var.web_app_origin == "" ? 0 : 1
+  bucket = aws_s3_bucket.documents.id
+
+  cors_rule {
+    allowed_methods = ["PUT"]
+    allowed_origins = [var.web_app_origin]
+    allowed_headers = ["content-type"]
+    max_age_seconds = 3000
+  }
+}
+
+resource "aws_s3_bucket_cors_configuration" "audio_upload" {
+  count  = var.web_app_origin == "" ? 0 : 1
+  bucket = aws_s3_bucket.audio.id
+
+  cors_rule {
+    allowed_methods = ["PUT"]
+    allowed_origins = [var.web_app_origin]
+    allowed_headers = ["content-type"]
+    max_age_seconds = 3000
+  }
+}
