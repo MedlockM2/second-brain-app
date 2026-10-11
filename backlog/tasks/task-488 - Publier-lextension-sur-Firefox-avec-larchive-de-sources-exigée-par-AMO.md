@@ -1,7 +1,7 @@
 ---
 id: TASK-488
 title: 'Publier l''extension sur Firefox, avec l''archive de sources exigée par AMO'
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-11 15:59'
