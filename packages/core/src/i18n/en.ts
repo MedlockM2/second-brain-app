@@ -962,6 +962,8 @@ export const en = {
   "chat.composer.stopA11y": "Stop the answer",
   "chat.thread.questionA11y": "Your question: {text}",
   "chat.thread.sourceA11y": "source {ref}, {title}",
+  "chat.thread.sending": "Sending your question…",
+  "chat.thread.retrySend": "Retry sending",
   "chat.thread.waiting": "Reading the sources…",
   "chat.thread.writing": "The answer is being written…",
   "chat.thread.interruptedCancelled": "Stopped. The answer above is incomplete.",

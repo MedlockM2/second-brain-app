@@ -823,6 +823,8 @@ export const de: Catalog = {
   "chat.composer.stopA11y": "Antwort stoppen",
   "chat.thread.questionA11y": "Deine Frage: {text}",
   "chat.thread.sourceA11y": "Quelle {ref}, {title}",
+  "chat.thread.sending": "Frage wird gesendet…",
+  "chat.thread.retrySend": "Erneut senden",
   "chat.thread.waiting": "Quellen werden gelesen…",
   "chat.thread.writing": "Die Antwort wird geschrieben…",
   "chat.thread.interruptedCancelled": "Gestoppt. Die Antwort oben ist unvollständig.",

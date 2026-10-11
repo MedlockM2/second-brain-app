@@ -673,6 +673,8 @@ export const zh: Catalog = {
   "chat.composer.stopA11y": "停止回答",
   "chat.thread.questionA11y": "你的问题：{text}",
   "chat.thread.sourceA11y": "来源 {ref}，{title}",
+  "chat.thread.sending": "正在发送问题…",
+  "chat.thread.retrySend": "重新发送",
   "chat.thread.waiting": "正在阅读来源…",
   "chat.thread.writing": "回答正在撰写…",
   "chat.thread.interruptedCancelled": "已停止。上面的回答不完整。",

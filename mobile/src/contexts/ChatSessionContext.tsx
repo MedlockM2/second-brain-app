@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { AppState, type AppStateStatus } from "react-native";
-import { ChatService } from "../services/chatService";
+import { ChatService, type ChatStreamOpening } from "../services/chatService";
 import type {
   ChatConversationDetail,
   ChatGeneration,
@@ -18,89 +18,58 @@ import type {
 import { useAuth } from "./AuthContext";
 
 /**
- * The chat's conversation controller (task-467), mounted above the navigation.
- *
- * Decision point 1 of docs/research/task-430-chatbot-architecture/README.md: the
- * conversation controller is shared by the media and the folder scope, and **the
- * navigation does not carry the lifetime of a generation**. So the state lives
- * here, keyed by scope, and a screen that comes back finds it as it was.
- *
- * Decision point 6, how an answer is followed:
- *
- * - the stream is opened with the generation identity and the last sequence held,
- *   and a fragment whose sequence is already held is dropped;
- * - `204` (nothing in flight) or a stream that cannot be opened → the conversation
- *   is read back; while a generation is still in flight and no stream can be held,
- *   it is read back every few seconds instead;
- * - back to the foreground, the durable state is read first, then the stream is
- *   resumed or the final answer taken from it;
- * - leaving a screen, going to the background or a dropped connection closes the
- *   stream and nothing else. **Only `stopGeneration`, an explicit user action,
- *   asks the server to stop.**
+ * Shared by the media and folder chat, above navigation (task-467, task-497).
+ * React receives a new session snapshot on every change, including fragments.
+ * Refs keep synchronous access for transports and the pre-network send lock.
+ * Leaving a screen or backgrounding only disconnects: only stopGeneration asks
+ * the server to stop. Reconnects resume the same generation after the last seq.
  */
+export type ChatSessionPhase = "idle" | "sending" | "streaming" | "polling";
 
-export type ChatSessionPhase =
-  /** Nothing in flight. */
-  | "idle"
-  /** Opening a conversation or sending a question. */
-  | "sending"
-  /** An answer is being written and followed on the stream. */
-  | "streaming"
-  /** An answer is in flight but followed by reading the conversation back. */
-  | "polling";
+export interface PendingChatQuestion {
+  question: string;
+  clientRequestId: string;
+  createdAt: string;
+  status: "sending" | "failed";
+}
 
 export interface ChatSession {
   scope: ChatScope;
   scopeId: string;
   conversation: ChatConversationDetail | null;
-  /** The generation being followed, if any. */
+  /** Local until accepted; a failed send retains its id for an uncertain retry. */
+  pendingQuestion: PendingChatQuestion | null;
   generation: ChatGeneration | null;
-  /** Text of the generation being followed, assembled from its fragments. */
   streamingText: string;
-  /** Highest fragment sequence held for `generation`; -1 for none. */
   lastSeq: number;
   phase: ChatSessionPhase;
-  /** The last refusal or failure of an action, for the screen to word. */
   error: unknown;
 }
 
 interface ChatSessionContextValue {
-  getSession: (scope: ChatScope, scopeId: string) => ChatSession;
-  /** Open a new conversation on the scope and make it the active one. */
-  startConversation: (scope: ChatScope, scopeId: string) => Promise<ChatConversationDetail>;
-  /** Make an existing conversation the active one, and resume it if it is generating. */
-  selectConversation: (
-    scope: ChatScope,
-    scopeId: string,
-    conversationId: string,
-  ) => Promise<ChatConversationDetail>;
-  /** Ask a question in the active conversation, opening one if there is none. */
-  sendQuestion: (scope: ChatScope, scopeId: string, question: string) => Promise<void>;
-  /** The explicit stop. The only path that calls the stop route. */
+  sessions: ReadonlyMap<string, ChatSession>;
+  selectConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<void>;
+  /** Resolves at acceptance, never waits for generation; false on failure or a superseded send. */
+  sendQuestion: (scope: ChatScope, scopeId: string, question: string) => Promise<boolean>;
   stopGeneration: (scope: ChatScope, scopeId: string) => Promise<void>;
-  /** Delete a conversation; forget it if it was the active one. */
   deleteConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<void>;
-  /** Re-read the active conversation from the server. */
   refresh: (scope: ChatScope, scopeId: string) => Promise<void>;
-  /** Forget the active conversation of a scope (a new one starts on the next question). */
   clearActive: (scope: ChatScope, scopeId: string) => void;
+  dismissError: (scope: ChatScope, scopeId: string) => void;
 }
 
 const ChatSessionContext = createContext<ChatSessionContextValue | null>(null);
-
-/** How often a generation followed without a stream is read back. */
+const EMPTY_SESSIONS: ReadonlyMap<string, ChatSession> = new Map();
 const POLL_INTERVAL_MS = 2_000;
-/** How long a failed stream waits before being tried again while polling. */
 const STREAM_RETRY_MS = 10_000;
-/** Two stream openings in a row are at least this far apart. */
 const MIN_RECONNECT_MS = 1_000;
-
 const scopeKey = (scope: ChatScope, scopeId: string) => `${scope}:${scopeId}`;
 
 const emptySession = (scope: ChatScope, scopeId: string): ChatSession => ({
   scope,
   scopeId,
   conversation: null,
+  pendingQuestion: null,
   generation: null,
   streamingText: "",
   lastSeq: -1,
@@ -108,22 +77,29 @@ const emptySession = (scope: ChatScope, scopeId: string): ChatSession => ({
   error: null,
 });
 
-/** Per-scope transport state, outside React state: it never renders. */
+/** Per-scope transport state: none of this is rendered. */
 interface Follower {
   abort: AbortController | null;
   pollTimer: ReturnType<typeof setTimeout> | null;
   lastStreamAttempt: number;
-  /** The id of the question being sent, kept for a retry of the same question. */
-  pendingRequest: { question: string; clientRequestId: string } | null;
+  /** Invalidates operations when the active conversation changes. */
+  epoch: number;
+  /** Only the latest conversation read may publish its result. */
+  readVersion: number;
+  sending: boolean;
 }
 
 export function ChatSessionProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const accountId = user?.id;
   const sessionsRef = useRef<Map<string, ChatSession>>(new Map());
   const followersRef = useRef<Map<string, Follower>>(new Map());
-  const [, setVersion] = useState(0);
+  const appStateRef = useRef(AppState.currentState);
+  const [snapshot, setSnapshot] = useState(() => ({ accountId, sessions: EMPTY_SESSIONS }));
 
-  const render = useCallback(() => setVersion((value) => value + 1), []);
+  const publish = useCallback(() => {
+    setSnapshot({ accountId, sessions: new Map(sessionsRef.current) });
+  }, [accountId]);
 
   const getSession = useCallback(
     (scope: ChatScope, scopeId: string): ChatSession =>
@@ -134,54 +110,106 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
   const update = useCallback(
     (scope: ChatScope, scopeId: string, patch: Partial<ChatSession>) => {
       const key = scopeKey(scope, scopeId);
-      const current = sessionsRef.current.get(key) ?? emptySession(scope, scopeId);
+      const current = getSession(scope, scopeId);
       sessionsRef.current.set(key, { ...current, ...patch });
-      render();
+      publish();
     },
-    [render],
+    [getSession, publish],
   );
 
   const follower = useCallback((key: string): Follower => {
     let entry = followersRef.current.get(key);
     if (!entry) {
-      entry = { abort: null, pollTimer: null, lastStreamAttempt: 0, pendingRequest: null };
+      entry = {
+        abort: null,
+        pollTimer: null,
+        lastStreamAttempt: 0,
+        epoch: 0,
+        readVersion: 0,
+        sending: false,
+      };
       followersRef.current.set(key, entry);
     }
     return entry;
   }, []);
 
-  /** Close the stream and stop polling. A disconnect: the server is not told. */
-  const disconnect = useCallback(
-    (key: string) => {
-      const entry = follower(key);
-      entry.abort?.abort();
-      entry.abort = null;
-      if (entry.pollTimer) clearTimeout(entry.pollTimer);
-      entry.pollTimer = null;
-    },
-    [follower],
+  const isCurrent = useCallback(
+    (key: string, entry: Follower, epoch: number) =>
+      followersRef.current.get(key) === entry && entry.epoch === epoch,
+    [],
   );
 
-  // The two functions below call each other through refs, so the latest
-  // closures are always the ones scheduled.
+  /** A transport disconnect, never a server-side stop. */
+  const disconnect = useCallback((key: string) => {
+    const entry = followersRef.current.get(key);
+    if (!entry) return;
+    entry.abort?.abort();
+    entry.abort = null;
+    if (entry.pollTimer) clearTimeout(entry.pollTimer);
+    entry.pollTimer = null;
+  }, []);
+
+  const reset = useCallback(
+    (scope: ChatScope, scopeId: string) => {
+      const key = scopeKey(scope, scopeId);
+      const entry = follower(key);
+      entry.epoch += 1;
+      entry.readVersion += 1;
+      entry.sending = false;
+      entry.lastStreamAttempt = 0;
+      disconnect(key);
+      sessionsRef.current.set(key, emptySession(scope, scopeId));
+      publish();
+      return entry;
+    },
+    [disconnect, follower, publish],
+  );
+
   const syncRef = useRef<(scope: ChatScope, scopeId: string) => Promise<void>>(async () => {});
   const followRef = useRef<(scope: ChatScope, scopeId: string) => Promise<void>>(async () => {});
 
-  /** Read the conversation back, then follow what is still in flight. */
+  const schedulePoll = useCallback(
+    (scope: ChatScope, scopeId: string) => {
+      if (appStateRef.current === "background") return;
+      const key = scopeKey(scope, scopeId);
+      const entry = follower(key);
+      const epoch = entry.epoch;
+      if (entry.pollTimer) clearTimeout(entry.pollTimer);
+      entry.pollTimer = setTimeout(() => {
+        entry.pollTimer = null;
+        if (isCurrent(key, entry, epoch)) void syncRef.current(scope, scopeId);
+      }, POLL_INTERVAL_MS);
+    },
+    [follower, isCurrent],
+  );
+
+  /** Reconcile durable state, then start following without awaiting the stream. */
   const sync = useCallback(
     async (scope: ChatScope, scopeId: string) => {
       const key = scopeKey(scope, scopeId);
       const session = getSession(scope, scopeId);
       const conversationId = session.conversation?.conversation_id;
-      if (!conversationId) return;
+      // An uncertain send is reconciled by retrying its request id, not by
+      // matching question text against older, potentially identical questions.
+      if (!conversationId || session.pendingQuestion || appStateRef.current === "background")
+        return;
+      const entry = follower(key);
+      const epoch = entry.epoch;
+      const readVersion = ++entry.readVersion;
+      const ownsRead = () => isCurrent(key, entry, epoch) && entry.readVersion === readVersion;
       let detail: ChatConversationDetail;
       try {
         detail = await ChatService.getConversation(conversationId);
       } catch (error) {
+        if (!ownsRead()) return;
         update(scope, scopeId, { error });
-        schedulePoll(key, scope, scopeId);
+        schedulePoll(scope, scopeId);
         return;
       }
+      if (!ownsRead()) return;
+      // Fragments may have arrived while the read was pending: preserve the
+      // latest text and cursor, not the snapshot taken before the request.
+      const current = getSession(scope, scopeId);
       const active = detail.active_generation ?? null;
       if (!active) {
         disconnect(key);
@@ -191,10 +219,14 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           streamingText: "",
           lastSeq: -1,
           phase: "idle",
+          error: null,
         });
         return;
       }
-      const sameAttempt = session.generation?.attempt_id === active.attempt_id;
+      const sameAttempt =
+        current.generation?.attempt_id === active.attempt_id &&
+        current.generation?.turn_id === active.turn_id;
+      if (!sameAttempt) disconnect(key);
       update(scope, scopeId, {
         conversation: detail,
         generation: {
@@ -202,66 +234,52 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           turn_index: active.turn_index,
           attempt_id: active.attempt_id,
         },
-        // Another generation starts from nothing: never append it to this one's text.
-        streamingText: sameAttempt ? session.streamingText : "",
-        lastSeq: sameAttempt ? session.lastSeq : -1,
+        streamingText: sameAttempt ? current.streamingText : "",
+        lastSeq: sameAttempt ? current.lastSeq : -1,
+        error: null,
       });
-      await followRef.current(scope, scopeId);
+      void followRef.current(scope, scopeId);
     },
-    // schedulePoll is a hoisted function declaration below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [disconnect, getSession, update],
+    [disconnect, follower, getSession, isCurrent, schedulePoll, update],
   );
-
-  function schedulePoll(key: string, scope: ChatScope, scopeId: string) {
-    const entry = follower(key);
-    if (entry.pollTimer) clearTimeout(entry.pollTimer);
-    entry.pollTimer = setTimeout(() => {
-      entry.pollTimer = null;
-      void syncRef.current(scope, scopeId);
-    }, POLL_INTERVAL_MS);
-  }
 
   const applyEvent = useCallback(
     (scope: ChatScope, scopeId: string, event: ChatStreamEvent) => {
       const session = getSession(scope, scopeId);
-      switch (event.type) {
-        case "fragment": {
-          if (event.data.seq <= session.lastSeq) return; // already held
-          update(scope, scopeId, {
-            streamingText: session.streamingText + event.data.text,
-            lastSeq: event.data.seq,
-            phase: "streaming",
-          });
-          return;
-        }
-        default:
-          return;
-      }
+      if (event.type !== "fragment" || event.data.seq <= session.lastSeq) return;
+      update(scope, scopeId, {
+        streamingText: session.streamingText + event.data.text,
+        lastSeq: event.data.seq,
+        phase: "streaming",
+      });
     },
     [getSession, update],
   );
 
-  /** Open (or resume) the stream of the live generation, falling back on reads. */
   const follow = useCallback(
     async (scope: ChatScope, scopeId: string) => {
       const key = scopeKey(scope, scopeId);
       const entry = follower(key);
       const session = getSession(scope, scopeId);
       const conversationId = session.conversation?.conversation_id;
-      if (!conversationId || !session.generation) return;
-      if (entry.abort) return; // already following
-
-      // A stream that keeps failing (or dropping as soon as it opens) must not
-      // turn into a tight reconnect loop: past a failure, reads take over and
-      // the stream is tried again every STREAM_RETRY_MS.
+      const generation = session.generation;
+      if (!conversationId || !generation || entry.abort || appStateRef.current === "background")
+        return;
+      const epoch = entry.epoch;
+      const ownsGeneration = () => {
+        const current = getSession(scope, scopeId);
+        return (
+          isCurrent(key, entry, epoch) &&
+          current.conversation?.conversation_id === conversationId &&
+          current.generation?.turn_id === generation.turn_id &&
+          current.generation?.attempt_id === generation.attempt_id
+        );
+      };
       const now = Date.now();
       const wait = session.phase === "polling" ? STREAM_RETRY_MS : MIN_RECONNECT_MS;
-      const mayStream =
-        ChatService.streamingAvailable() && now - entry.lastStreamAttempt >= wait;
-      if (!mayStream) {
-        if (session.phase !== "polling") update(scope, scopeId, { phase: "polling" });
-        schedulePoll(key, scope, scopeId);
+      if (!ChatService.streamingAvailable() || now - entry.lastStreamAttempt < wait) {
+        update(scope, scopeId, { phase: "polling" });
+        schedulePoll(scope, scopeId);
         return;
       }
       entry.lastStreamAttempt = now;
@@ -270,189 +288,244 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       update(scope, scopeId, { phase: "streaming" });
 
       let ended: ChatStreamEvent | null = null;
-      const opening = await ChatService.followStream(
-        conversationId,
-        { generation: session.generation, afterSeq: session.lastSeq },
-        {
-          onEvent: (event) => {
-            if (event.type === "end" || event.type === "reconnect") {
-              ended = event;
-            }
-            applyEvent(scope, scopeId, event);
+      let opening: ChatStreamOpening;
+      try {
+        opening = await ChatService.followStream(
+          conversationId,
+          { generation, afterSeq: session.lastSeq },
+          {
+            onEvent: (event) => {
+              if (controller.signal.aborted || entry.abort !== controller || !ownsGeneration())
+                return;
+              if (event.type === "end" || event.type === "reconnect") ended = event;
+              applyEvent(scope, scopeId, event);
+            },
           },
-        },
-        controller.signal,
-      );
+          controller.signal,
+        );
+      } catch (error) {
+        opening = { kind: "unavailable", error };
+      }
       if (entry.abort === controller) entry.abort = null;
-      if (controller.signal.aborted) return; // a disconnect we asked for
+      if (controller.signal.aborted || !ownsGeneration()) return;
 
       const last = ended as ChatStreamEvent | null;
       if (opening.kind === "stale") {
         update(scope, scopeId, { generation: opening.live, streamingText: "", lastSeq: -1 });
-        entry.lastStreamAttempt = 0; // a known generation to follow: no back-off
-        await followRef.current(scope, scopeId);
-        return;
-      }
-      if (opening.kind === "unavailable") {
+        entry.lastStreamAttempt = 0;
+        void syncRef.current(scope, scopeId);
+      } else if (opening.kind === "unavailable") {
         update(scope, scopeId, { phase: "polling" });
-        schedulePoll(key, scope, scopeId);
-        return;
-      }
-      if (last?.type === "reconnect") {
-        entry.lastStreamAttempt = 0; // asked to reconnect: no back-off
-        await followRef.current(scope, scopeId);
-        return;
-      }
-      // 204, an `end`, or a dropped connection: the durable state decides.
-      await syncRef.current(scope, scopeId);
-    },
-    // schedulePoll is a hoisted function declaration.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [applyEvent, follower, getSession, update],
-  );
-
-  syncRef.current = sync;
-  followRef.current = follow;
-
-  const startConversation = useCallback(
-    async (scope: ChatScope, scopeId: string) => {
-      const key = scopeKey(scope, scopeId);
-      disconnect(key);
-      update(scope, scopeId, { phase: "sending", error: null });
-      try {
-        const detail = await ChatService.openConversation(scope, scopeId);
-        sessionsRef.current.set(key, { ...emptySession(scope, scopeId), conversation: detail });
-        render();
-        return detail;
-      } catch (error) {
-        update(scope, scopeId, { phase: "idle", error });
-        throw error;
+        schedulePoll(scope, scopeId);
+      } else if (last?.type === "reconnect") {
+        entry.lastStreamAttempt = 0;
+        void followRef.current(scope, scopeId);
+      } else {
+        // End, idle or a dropped connection: durable state decides what follows.
+        void syncRef.current(scope, scopeId);
       }
     },
-    [disconnect, render, update],
+    [applyEvent, follower, getSession, isCurrent, schedulePoll, update],
   );
+
+  // Assign after commit; the transport callbacks always use the latest account.
+  useEffect(() => {
+    syncRef.current = sync;
+    followRef.current = follow;
+  }, [sync, follow]);
 
   const selectConversation = useCallback(
     async (scope: ChatScope, scopeId: string, conversationId: string) => {
       const key = scopeKey(scope, scopeId);
-      disconnect(key);
-      const detail = await ChatService.getConversation(conversationId);
-      sessionsRef.current.set(key, { ...emptySession(scope, scopeId), conversation: detail });
-      render();
-      await sync(scope, scopeId);
-      return detail;
+      const entry = reset(scope, scopeId);
+      const epoch = entry.epoch;
+      update(scope, scopeId, { phase: "sending" });
+      try {
+        const detail = await ChatService.getConversation(conversationId);
+        if (!isCurrent(key, entry, epoch)) return;
+        update(scope, scopeId, {
+          conversation: detail,
+          generation: detail.active_generation ?? null,
+          phase: detail.active_generation ? "streaming" : "idle",
+        });
+        if (detail.active_generation) void followRef.current(scope, scopeId);
+      } catch (error) {
+        if (isCurrent(key, entry, epoch)) update(scope, scopeId, { phase: "idle", error });
+      }
     },
-    [disconnect, render, sync],
+    [isCurrent, reset, update],
   );
 
   const sendQuestion = useCallback(
     async (scope: ChatScope, scopeId: string, question: string) => {
+      question = question.trim();
       const key = scopeKey(scope, scopeId);
       const entry = follower(key);
-      let session = getSession(scope, scopeId);
-      if (!session.conversation) {
-        await startConversation(scope, scopeId);
-        session = getSession(scope, scopeId);
-      }
-      const conversationId = session.conversation!.conversation_id;
-      // The same question retried keeps its id, so the server answers with the
-      // turn it already created instead of a second one.
-      const pending =
-        entry.pendingRequest?.question === question
-          ? entry.pendingRequest
-          : { question, clientRequestId: ChatService.newClientRequestId() };
-      entry.pendingRequest = pending;
-      update(scope, scopeId, { phase: "sending", error: null });
+      const session = getSession(scope, scopeId);
+      if (!question || entry.sending || session.generation || session.phase === "sending")
+        return false;
+      // Close the same-tick double-tap window before the first await, including
+      // when opening the first conversation. Invalidate older reads as well.
+      const epoch = entry.epoch;
+      const pending: PendingChatQuestion =
+        session.pendingQuestion?.question === question
+          ? { ...session.pendingQuestion, status: "sending" }
+          : {
+              question,
+              clientRequestId: ChatService.newClientRequestId(),
+              createdAt: new Date().toISOString(),
+              status: "sending",
+            };
+      entry.sending = true;
+      entry.readVersion += 1;
+      update(scope, scopeId, { phase: "sending", pendingQuestion: pending, error: null });
       try {
-        const turn = await ChatService.sendTurn(conversationId, question, pending.clientRequestId);
-        entry.pendingRequest = null;
+        let conversation = session.conversation;
+        if (!conversation) {
+          conversation = await ChatService.openConversation(scope, scopeId);
+          if (!isCurrent(key, entry, epoch)) return false;
+          update(scope, scopeId, { conversation });
+        }
+        const turn = await ChatService.sendTurn(
+          conversation.conversation_id,
+          question,
+          pending.clientRequestId,
+        );
+        if (!isCurrent(key, entry, epoch)) return false;
+        // Adopt the server identity immediately. The next durable read replaces
+        // these local messages; do not wait for that extra round trip to render.
+        const current = getSession(scope, scopeId).conversation!;
+        const messages = current.messages.some((message) => message.turn_id === turn.turn_id)
+          ? current.messages
+          : [
+              ...current.messages,
+              {
+                turn_id: turn.turn_id,
+                turn_index: turn.turn_index,
+                role: "user" as const,
+                text: question,
+                created_at: pending.createdAt,
+              },
+              {
+                turn_id: turn.turn_id,
+                turn_index: turn.turn_index,
+                role: "assistant" as const,
+                text: "",
+                status: turn.status,
+                attempt_id: turn.attempt_id,
+                created_at: pending.createdAt,
+              },
+            ];
+        const generation = {
+          turn_id: turn.turn_id,
+          turn_index: turn.turn_index,
+          attempt_id: turn.attempt_id,
+        };
         update(scope, scopeId, {
-          generation: {
-            turn_id: turn.turn_id,
-            turn_index: turn.turn_index,
-            attempt_id: turn.attempt_id,
+          conversation: {
+            ...current,
+            messages,
+            turn_count: Math.max(current.turn_count, turn.turn_index),
+            generating: true,
+            active_generation: generation,
+            last_turn_status: turn.status,
           },
+          pendingQuestion: null,
+          generation,
           streamingText: "",
           lastSeq: -1,
+          phase: "streaming",
+          error: null,
         });
+        entry.lastStreamAttempt = 0;
+        void followRef.current(scope, scopeId);
+        return true;
       } catch (error) {
-        update(scope, scopeId, { phase: "idle", error });
-        throw error;
+        if (isCurrent(key, entry, epoch)) {
+          update(scope, scopeId, {
+            phase: "idle",
+            pendingQuestion: { ...pending, status: "failed" },
+            error,
+          });
+        }
+        return false;
+      } finally {
+        if (isCurrent(key, entry, epoch)) entry.sending = false;
       }
-      // Read the turn back (the question appears in the history), then follow it.
-      await sync(scope, scopeId);
     },
-    [follower, getSession, startConversation, sync, update],
+    [follower, getSession, isCurrent, update],
   );
 
   const stopGeneration = useCallback(
     async (scope: ChatScope, scopeId: string) => {
       const session = getSession(scope, scopeId);
       const conversationId = session.conversation?.conversation_id;
-      if (!conversationId || !session.generation) return;
+      const generation = session.generation;
+      if (!conversationId || !generation) return;
+      const key = scopeKey(scope, scopeId);
+      const entry = follower(key);
+      const epoch = entry.epoch;
       try {
-        await ChatService.stopTurn(conversationId, session.generation);
+        await ChatService.stopTurn(conversationId, generation);
       } catch (error) {
-        // generation_stale: the answer already ended; the durable state says
-        // how.
+        if (
+          !isCurrent(key, entry, epoch) ||
+          getSession(scope, scopeId).generation?.attempt_id !== generation.attempt_id
+        )
+          return;
         update(scope, scopeId, { error });
-        await sync(scope, scopeId);
+        void syncRef.current(scope, scopeId);
       }
-      // The stream carries the interrupted end; nothing else to do here.
     },
-    [getSession, sync, update],
+    [follower, getSession, isCurrent, update],
   );
 
   const deleteConversation = useCallback(
     async (scope: ChatScope, scopeId: string, conversationId: string) => {
-      await ChatService.deleteConversation(conversationId);
-      const session = getSession(scope, scopeId);
-      if (session.conversation?.conversation_id === conversationId) {
-        disconnect(scopeKey(scope, scopeId));
-        sessionsRef.current.set(scopeKey(scope, scopeId), emptySession(scope, scopeId));
-        render();
+      const key = scopeKey(scope, scopeId);
+      const entry = follower(key);
+      const epoch = entry.epoch;
+      try {
+        await ChatService.deleteConversation(conversationId);
+        if (
+          isCurrent(key, entry, epoch) &&
+          getSession(scope, scopeId).conversation?.conversation_id === conversationId
+        ) {
+          reset(scope, scopeId);
+        }
+      } catch (error) {
+        if (isCurrent(key, entry, epoch)) update(scope, scopeId, { error });
+        throw error; // The history list owns its delete dialog.
       }
     },
-    [disconnect, getSession, render],
+    [follower, getSession, isCurrent, reset, update],
   );
 
-  const refresh = useCallback(
-    async (scope: ChatScope, scopeId: string) => {
-      await sync(scope, scopeId);
-    },
-    [sync],
-  );
-
-  const clearActive = useCallback(
+  const dismissError = useCallback(
     (scope: ChatScope, scopeId: string) => {
-      const key = scopeKey(scope, scopeId);
-      disconnect(key);
-      sessionsRef.current.set(key, emptySession(scope, scopeId));
-      render();
+      update(scope, scopeId, { error: null });
     },
-    [disconnect, render],
+    [update],
   );
 
-  // Background: close every stream (a disconnect). Foreground: read the durable
-  // state of every scope with a conversation, then resume or take the answer.
   useEffect(() => {
     const handle = (state: AppStateStatus) => {
+      appStateRef.current = state;
       if (state === "background") {
-        for (const key of followersRef.current.keys()) disconnect(key);
-        return;
-      }
-      if (state === "active") {
+        for (const [key, entry] of followersRef.current) {
+          entry.readVersion += 1;
+          disconnect(key);
+        }
+      } else if (state === "active") {
         for (const session of sessionsRef.current.values()) {
-          if (session.conversation) void sync(session.scope, session.scopeId);
+          if (session.conversation) void syncRef.current(session.scope, session.scopeId);
         }
       }
     };
     const subscription = AppState.addEventListener("change", handle);
     return () => subscription.remove();
-  }, [disconnect, sync]);
+  }, [disconnect]);
 
-  // Another account, or none: nothing of the previous one survives. Closing the
-  // streams does not stop their answers.
   useEffect(() => {
     const followers = followersRef.current;
     const sessions = sessionsRef.current;
@@ -461,54 +534,43 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       followers.clear();
       sessions.clear();
     };
-  }, [user?.id, disconnect]);
+  }, [accountId, disconnect]);
 
   const value = useMemo<ChatSessionContextValue>(
     () => ({
-      getSession,
-      startConversation,
+      // Hide the previous account's snapshot on the first render of a new one,
+      // before the cleanup effect clears its transports and synchronous state.
+      sessions: snapshot.accountId === accountId ? snapshot.sessions : EMPTY_SESSIONS,
       selectConversation,
       sendQuestion,
       stopGeneration,
       deleteConversation,
-      refresh,
-      clearActive,
+      refresh: sync,
+      clearActive: reset,
+      dismissError,
     }),
     [
-      getSession,
-      startConversation,
+      accountId,
+      snapshot,
       selectConversation,
       sendQuestion,
       stopGeneration,
       deleteConversation,
-      refresh,
-      clearActive,
+      sync,
+      reset,
+      dismissError,
     ],
   );
 
   return <ChatSessionContext.Provider value={value}>{children}</ChatSessionContext.Provider>;
 }
 
-function useChatSessionContext(): ChatSessionContextValue {
-  const context = useContext(ChatSessionContext);
-  if (!context) {
-    throw new Error("useChatSession must be used inside ChatSessionProvider");
-  }
-  return context;
-}
-
-/**
- * The chat of one scope — a media or a folder — with its actions bound.
- *
- * Re-renders when any session changes; the controller is shared, the screen only
- * reads its own scope.
- */
 export function useChatSession(scope: ChatScope, scopeId: string) {
-  const context = useChatSessionContext();
-  const session = context.getSession(scope, scopeId);
+  const context = useContext(ChatSessionContext);
+  if (!context) throw new Error("useChatSession must be used inside ChatSessionProvider");
+  const session = context.sessions.get(scopeKey(scope, scopeId)) ?? emptySession(scope, scopeId);
   return {
     session,
-    startConversation: () => context.startConversation(scope, scopeId),
     selectConversation: (conversationId: string) =>
       context.selectConversation(scope, scopeId, conversationId),
     sendQuestion: (question: string) => context.sendQuestion(scope, scopeId, question),
@@ -517,5 +579,6 @@ export function useChatSession(scope: ChatScope, scopeId: string) {
       context.deleteConversation(scope, scopeId, conversationId),
     refresh: () => context.refresh(scope, scopeId),
     clearActive: () => context.clearActive(scope, scopeId),
+    dismissError: () => context.dismissError(scope, scopeId),
   };
 }

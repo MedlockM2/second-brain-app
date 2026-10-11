@@ -11,7 +11,7 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { forwardRef } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { formatNumber, t } from "../../i18n";
@@ -78,15 +78,23 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(function Ch
         </Pressable>
       ) : (
         <Pressable
-          style={({ pressed }) => [styles.send, pressed && styles.pressed, !canSend && styles.disabled]}
+          style={({ pressed }) => [
+            styles.send,
+            pressed && styles.pressed,
+            !canSend && styles.disabled,
+          ]}
           onPress={onSend}
           disabled={!canSend}
           accessibilityRole="button"
-          accessibilityState={{ disabled: !canSend }}
-          accessibilityLabel={t("chat.composer.sendA11y")}
+          accessibilityState={{ disabled: !canSend, busy: sending }}
+          accessibilityLabel={t(sending ? "chat.thread.sending" : "chat.composer.sendA11y")}
           testID="chat-composer-send"
         >
-          <Ionicons name="arrow-up" size={22} color={Colors.onPrimary} />
+          {sending ? (
+            <ActivityIndicator size="small" color={Colors.onPrimary} />
+          ) : (
+            <Ionicons name="arrow-up" size={22} color={Colors.onPrimary} />
+          )}
         </Pressable>
       )}
     </View>

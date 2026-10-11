@@ -688,6 +688,8 @@ export const ja: Catalog = {
   "chat.composer.stopA11y": "回答を停止",
   "chat.thread.questionA11y": "あなたの質問：{text}",
   "chat.thread.sourceA11y": "ソース {ref}、{title}",
+  "chat.thread.sending": "質問を送信中…",
+  "chat.thread.retrySend": "再送信",
   "chat.thread.waiting": "ソースを読んでいます…",
   "chat.thread.writing": "回答を書いています…",
   "chat.thread.interruptedCancelled": "停止しました。上の回答は途中までです。",

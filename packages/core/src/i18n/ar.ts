@@ -760,6 +760,8 @@ export const ar: Catalog = {
   "chat.composer.stopA11y": "إيقاف الإجابة",
   "chat.thread.questionA11y": "سؤالك: {text}",
   "chat.thread.sourceA11y": "المصدر {ref}، {title}",
+  "chat.thread.sending": "جارٍ إرسال السؤال…",
+  "chat.thread.retrySend": "إعادة محاولة الإرسال",
   "chat.thread.waiting": "جارٍ قراءة المصادر…",
   "chat.thread.writing": "جارٍ كتابة الإجابة…",
   "chat.thread.interruptedCancelled": "تم الإيقاف. الإجابة أعلاه غير مكتملة.",

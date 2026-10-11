@@ -18,14 +18,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import {
-  AccessibilityInfo,
-  findNodeHandle,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { AccessibilityInfo, findNodeHandle, Pressable, StyleSheet, Text, View } from "react-native";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useChatSession } from "../../contexts/ChatSessionContext";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
@@ -51,12 +44,12 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
   const { session } = chat;
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [refusal, setRefusal] = useState<ChatRefusal | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const dockRef = useRef<View>(null);
 
   const generating = session.generation !== null;
   const sending = session.phase === "sending";
+  const refusal = session.error ? describeChatRefusal(session.error, scope) : null;
   const isFolder = scope === "folder";
 
   // Leaving the screen hides the sheet with it; the answer goes on. The sheet is
@@ -85,12 +78,8 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
   const ask = async (question: string) => {
     const text = question.trim();
     if (!text) return;
-    setRefusal(null);
-    try {
-      await chat.sendQuestion(text);
+    if (await chat.sendQuestion(text)) {
       setDraft((current) => (current.trim() === text ? "" : current));
-    } catch (error) {
-      setRefusal(describeChatRefusal(error, scope));
     }
   };
 
@@ -100,7 +89,7 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
   };
 
   const handleRefusalAction = (action: NonNullable<ChatRefusal["action"]>) => {
-    setRefusal(null);
+    chat.dismissError();
     if (action === "seePlans") {
       setOpen(false);
       router.push({ pathname: "/paywall", params: { reason: "out_of_minutes" } });
@@ -144,6 +133,7 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
         emptyText={isFolder ? t("chat.sheet.emptyFolder") : t("chat.sheet.emptyMedia")}
         placeholder={isFolder ? t("chat.dock.askFolder") : t("chat.dock.askMedia")}
         messages={conversation?.messages ?? []}
+        pendingQuestion={session.pendingQuestion}
         sources={conversation?.sources ?? []}
         live={
           session.generation
@@ -169,11 +159,9 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
               scopeId={scopeId}
               currentId={conversation?.conversation_id ?? null}
               onSelect={(conversationId) => {
-                setRefusal(null);
+                chat.dismissError();
                 setHistoryOpen(false);
-                void chat.selectConversation(conversationId).catch((error) =>
-                  setRefusal(describeChatRefusal(error, scope)),
-                );
+                void chat.selectConversation(conversationId);
               }}
               onDelete={(conversationId) => chat.deleteConversation(conversationId)}
             />
@@ -182,7 +170,7 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
         onNewConversation={
           conversation && conversation.turn_count > 0
             ? () => {
-                setRefusal(null);
+                chat.dismissError();
                 chat.clearActive();
               }
             : null
