@@ -6,11 +6,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-11 16:00'
+updated_date: '2026-10-11 16:24'
 labels:
   - extension
   - feature
 dependencies:
-  - TASK-490
   - TASK-487
 references:
   - docs/research/task-424-website-and-browser-extension/README.md
@@ -19,7 +19,6 @@ references:
 priority: medium
 type: feature
 ordinal: 99000
-dispatchable: true
 ---
 
 ## Description
