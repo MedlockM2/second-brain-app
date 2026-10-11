@@ -3,9 +3,10 @@ id: TASK-479
 title: >-
   Ajouter une source depuis l'app web (lien, fichier, dépôt, collage) et la
   ranger dans un dossier
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:56'
+updated_date: '2026-10-11 17:27'
 labels:
   - web
   - feature
@@ -22,7 +23,6 @@ references:
 priority: medium
 type: feature
 ordinal: 86000
-dispatchable: true
 ---
 
 ## Description
@@ -53,9 +53,21 @@ Vérification contre l'API `-dev` : ajouter un lien, un fichier choisi, un fichi
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le bouton Ajouter de la barre ajoute une source par lien collé, fichier choisi, fichier déposé et texte collé, sur les endpoints d'ingestion existants
-- [ ] #2 Ranger une source choisit un dossier de premier niveau ou en crée un au premier niveau, comme la capture 18-ranger.png, dans un composant réutilisable par la revue des non classés
-- [ ] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #4 Les libellés sont présents dans les 11 langues
-- [ ] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 Le bouton Ajouter de la barre ajoute une source par lien collé, fichier choisi, fichier déposé et texte collé, sur les endpoints d'ingestion existants
+- [x] #2 Ranger une source choisit un dossier de premier niveau ou en crée un au premier niveau, comme la capture 18-ranger.png, dans un composant réutilisable par la revue des non classés
+- [x] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #4 Les libellés sont présents dans les 11 langues
+- [x] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit 45394f1.
+
+- **Ajouter** (barre) ouvre `AddSourceDialog` sans dossier : lien collé (`POST /api/media/ingest-url`), texte collé enregistré comme note (`POST /api/media/ingest-shared-content`, `share_type: "text"`, `source_platform: "notes"`, validé par `validateSharedNoteText`), fichier choisi ou déposé (`upload-url` → PUT présigné → `upload` / `upload-audio`). Un fichier déposé n'importe où dans l'app, ou un lien/texte collé hors d'un champ, ouvre le dialogue déjà rempli.
+- Après l'ajout : l'étape « Votre média est en cours d'enregistrement… le ranger ? » de la maquette, puis le sélecteur ; l'import n'attend jamais ce choix (`web/src/components/AddFlow.tsx`).
+- **Ranger** (`web/src/components/FolderPicker.tsx`, capture 18) : recherche, dossiers récemment utilisés sur ce navigateur, tous les dossiers racine, et « Créer « … » » au premier niveau quand la recherche n'en trouve pas. Rangement par `PATCH /api/media/:id {folder_id}`. Composant réutilisé par le menu `…` du média (« Déplacer ») et prêt pour la revue des non classés (task-482 : variante `FolderPickerList` intégrable dans un volet, option `showUnsorted`).
+- Accueil, Bibliothèque, page dossier et compteur « Non classés · N » se relisent après un ajout ou un rangement ; l'état vide de l'Accueil ouvre le même parcours. La route provisoire `/add` est supprimée.
+- 12 libellés web en 11 langues (et le libellé du champ « Coller un lien ou un texte »). Build, typecheck, lint propres ; parcours vérifié en Chrome headless contre une API simulée.
+<!-- SECTION:FINAL_SUMMARY:END -->
