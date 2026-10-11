@@ -1,0 +1,58 @@
+---
+id: TASK-483
+title: Rechercher en plein texte depuis la barre de l'app web
+status: To Do
+assignee: []
+created_date: '2026-10-11 15:57'
+labels:
+  - web
+  - feature
+dependencies:
+  - TASK-475
+references:
+  - docs/research/task-424-website-and-browser-extension/README.md
+  - >-
+    docs/research/task-424-website-and-browser-extension/complement-response-2026-10-11.md
+  - mobile-design-mockups/web_app_owner_direction/README.md
+  - mobile-design-mockups/web_app_owner_direction/screens/03-recherche.png
+  - docs/CANONICAL_MEDIA_API_CONTRACT.md
+priority: medium
+type: feature
+ordinal: 90000
+dispatchable: true
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+## Pourquoi
+
+Source de vérité : `docs/research/task-424-website-and-browser-extension/README.md`, section **Owner Validation**, champ `Decision` du 2026-10-11, tel que précisé par `complement-response-2026-10-11.md` (même répertoire), qui prime sur la Recommendation et sur les §8 à §12 du README. Cette tâche est l'élément **W-13** du §3 du complément.
+
+L'interface est la direction de l'owner : `mobile-design-mockups/web_app_owner_direction/README.md` **fait foi** (la barre horizontale porte la « recherche plein texte » ; la Bibliothèque n'a pas de champ de recherche, pour ne pas doublonner celui de la barre), avec la capture `screens/03-recherche.png`. Le champ est posé dans la barre par le socle (task-475).
+
+## Périmètre
+
+- Le champ de recherche de la barre interroge l'endpoint de recherche existant que l'app mobile utilise, et rend les résultats comme la capture 03.
+- Un résultat ouvre la page média (route de task-477) ou le dossier (route de task-478).
+
+## Règles
+
+- Câblé sur les endpoints existants : **pas de nouvelle route** d'API.
+- Les dossiers n'ont qu'un niveau : aucun écran ne crée un dossier dans un dossier, et « Déplacer le dossier » n'existe pas.
+- Ne modifier aucun fichier de `mobile/` (lecture par l'alias seulement).
+- Rien n'est déployé : aucune compatibilité. Pas de tests automatisés.
+
+## Note à l'owner
+
+Vérification contre la capture 03 sur un compte `-dev` avec plusieurs médias indexés.
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 Le champ de recherche de la barre interroge l'endpoint de recherche existant et rend les résultats comme la capture 03-recherche.png
+- [ ] #2 Un résultat ouvre la page média ou le dossier correspondant
+- [ ] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [ ] #4 Les libellés sont présents dans les 11 langues
+- [ ] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+<!-- AC:END -->
