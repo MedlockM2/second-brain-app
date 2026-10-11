@@ -26,6 +26,19 @@ variable "project_name" {
   default     = "media-summarizer"
 }
 
+variable "web_app_origin" {
+  description = "Origin of the web app allowed by the HTTP API's CORS, e.g. https://app.<domain>. Empty for no browser origin."
+  type        = string
+
+  # No default on purpose: every environment states which browser origin may
+  # call it with the session cookie (task-473). Never "*": a cookie is not sent
+  # to a wildcard origin, and a wildcard would hand the session to any site.
+  validation {
+    condition     = var.web_app_origin == "" || can(regex("^https?://[a-z0-9.-]+(:[0-9]+)?$", var.web_app_origin))
+    error_message = "web_app_origin must be empty or a bare origin (scheme://host[:port], no path, no trailing slash, never \"*\")."
+  }
+}
+
 variable "enable_alarms" {
   description = "Provision CloudWatch alarms + SNS topics. Measured cost when on: ~$3.30/mo (43 alarms × $0.10 - free tier). Enable for an environment that is actually being watched."
   type        = bool

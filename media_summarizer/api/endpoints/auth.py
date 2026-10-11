@@ -1,14 +1,17 @@
 """
 Authentication endpoints for local email/password sessions.
 
-The session is permanent for an active user (task-294): the refresh token carries a
-*sliding* one-year expiry, reposed at every rotation, with no absolute cap. Opening
-the app at least once a year is enough to never sign in again.
+A session is a refresh-token *lineage* of one of two kinds, fixed at sign-in:
 
-Both tokens travel in the JSON body: the access token as ``access_token`` and the
-refresh token as ``refresh_token``. The only client is the mobile app, which keeps
-the refresh token in its secure store and posts it back to /refresh — it cannot
-read an httpOnly cookie, which is why the cookie transport is gone (task-293).
+- **mobile**: the refresh token carries a *sliding* one-year expiry, reposed at every
+  rotation, with no absolute cap (task-294). Opening the app at least once a year is
+  enough to never sign in again. Both tokens travel in the JSON body; the app keeps
+  the refresh token in its secure store and posts it back to /refresh.
+- **browser** (the web app, task-473): the refresh token lives in an ``HttpOnly``
+  cookie on ``api.<domain>`` and the body carries the access token only. The lineage
+  dies after a short idle period and at an absolute cap counted from the sign-in;
+  rotation never extends it. A request selects this mode with the header
+  ``X-Session-Transport: cookie`` (api/dependencies/session.py).
 
 Rotation is single-use, so /refresh keeps a 60-second grace window: a token consumed
 inside that window replays the pair it was exchanged for instead of answering 401,
@@ -27,11 +30,21 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Request,
     status,
 )
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from media_summarizer.api.dependencies.auth import get_current_user
+from media_summarizer.api.dependencies.session import (
+    clear_refresh_cookie,
+    is_web_session,
+    open_session,
+    presented_refresh_token,
+    session_response,
+    transport_accepts,
+)
 from media_summarizer.core.models import User
 from media_summarizer.core.models.auth import (
     AuthToken,
@@ -70,6 +83,7 @@ router = APIRouter()
 )
 async def register(
     request: RegisterRequest,
+    http_request: Request,
     db: DynamoDBConnection = Depends(get_db),
 ):
     email = request.email.lower().strip()
@@ -87,29 +101,16 @@ async def register(
     )
     user = await database_async.create_user(user)
 
-    # Refresh token: opens a new device-session lineage, sliding expiry
-    refresh = AuthToken.create_refresh_token(
-        user_id=user.id, email=user.email, expires_at=get_refresh_token_expires_at()
-    )
-    refresh = await database_async.create_auth_token(refresh)
-
-    # Access token: registration opens a session, no second /login round-trip needed
-    access_seconds = get_access_token_expires_seconds()
-    access_token = create_access_token(
-        data=create_token_payload(user_id=user.id, email=user.email),
-        expires_delta=timedelta(seconds=access_seconds),
-    )
-    return TokenVerificationResponse(
-        access_token=access_token,
-        refresh_token=refresh.token,
-        token_type="bearer",
-        expires_in=access_seconds,
-        user=AuthUser.from_user(user).model_dump(),
-    )
+    # Registration opens a session: no second /login round-trip needed
+    return await open_session(http_request, user, status.HTTP_201_CREATED)
 
 
 @router.post("/login", response_model=TokenVerificationResponse)
-async def login(request: LoginRequest, db: DynamoDBConnection = Depends(get_db)):
+async def login(
+    request: LoginRequest,
+    http_request: Request,
+    db: DynamoDBConnection = Depends(get_db),
+):
     email = request.email.lower().strip()
     user = await database_async.get_user_by_email(email)
     if (
@@ -121,34 +122,25 @@ async def login(request: LoginRequest, db: DynamoDBConnection = Depends(get_db))
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
 
-    # Refresh token: opens a new device-session lineage, sliding expiry
-    refresh = AuthToken.create_refresh_token(
-        user_id=user.id, email=user.email, expires_at=get_refresh_token_expires_at()
-    )
-    refresh = await database_async.create_auth_token(refresh)
-
-    # Access token
-    access_seconds = get_access_token_expires_seconds()
-    access_token = create_access_token(
-        data=create_token_payload(user_id=user.id, email=user.email),
-        expires_delta=timedelta(seconds=access_seconds),
-    )
-    return TokenVerificationResponse(
-        access_token=access_token,
-        refresh_token=refresh.token,
-        token_type="bearer",
-        expires_in=access_seconds,
-        user=AuthUser.from_user(user).model_dump(),
-    )
+    return await open_session(http_request, user)
 
 
 @router.post("/refresh", response_model=TokenVerificationResponse)
 async def refresh_token(
-    request: RefreshRequest, db: DynamoDBConnection = Depends(get_db)
+    http_request: Request,
+    request: Optional[RefreshRequest] = None,
+    db: DynamoDBConnection = Depends(get_db),
 ):
+    presented = presented_refresh_token(
+        http_request, request.refresh_token if request else None
+    )
     # Load token from DB
-    auth_token = await database_async.get_auth_token_by_token(request.refresh_token)
-    if not auth_token or auth_token.token_type != TokenType.REFRESH_TOKEN:
+    auth_token = await database_async.get_auth_token_by_token(presented)
+    if (
+        not auth_token
+        or auth_token.token_type != TokenType.REFRESH_TOKEN
+        or not transport_accepts(http_request, auth_token)
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
@@ -178,6 +170,11 @@ async def refresh_token(
         )
 
     access_seconds = get_access_token_expires_seconds()
+    # Recomputed from the lineage, never inherited: a mobile lineage slides a year
+    # from now, a browser one slides its idle period but never past its cap.
+    refresh_expires_at = get_refresh_token_expires_at(
+        auth_token.lineage_kind, auth_token.lineage_started_at
+    )
 
     if replay is not None:
         access_token, refresh_token_value = replay
@@ -194,14 +191,16 @@ async def refresh_token(
             rotated_seconds_ago=int(auth_token.rotated_seconds_ago()),
         )
     else:
-        # Rotate: sliding expiry recomputed from now, same lineage, and the successor
-        # is written before the parent is consumed so a failure in between leaves the
-        # caller with a token that still works.
+        # Rotate: same lineage, and the successor is written before the parent is
+        # consumed so a failure in between leaves the caller with a token that
+        # still works.
         new_refresh = AuthToken.create_refresh_token(
             user_id=user.id,
             email=user.email,
-            expires_at=get_refresh_token_expires_at(),
+            expires_at=refresh_expires_at,
             lineage_id=auth_token.lineage_id,
+            lineage_kind=auth_token.lineage_kind,
+            lineage_started_at=auth_token.lineage_started_at,
         )
         new_refresh = await database_async.create_auth_token(new_refresh)
 
@@ -218,18 +217,20 @@ async def refresh_token(
         refresh_token_value = new_refresh.token
         expires_in = access_seconds
 
-    return TokenVerificationResponse(
+    return session_response(
+        http_request,
         access_token=access_token,
-        refresh_token=refresh_token_value,
-        token_type="bearer",
         expires_in=expires_in,
         user=AuthUser.from_user(user).model_dump(),
+        refresh_token=refresh_token_value,
+        refresh_expires_at=refresh_expires_at,
     )
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout(
-    request: LogoutRequest,
+    http_request: Request,
+    request: Optional[LogoutRequest] = None,
     current_user: AuthUser = Depends(get_current_user),
     db: DynamoDBConnection = Depends(get_db),
 ):
@@ -238,9 +239,21 @@ async def logout(
     The refresh token names the device session; the access token only proves who
     owns it. An unknown token — already revoked, or belonging to someone else — is
     a no-op success: logout is idempotent and must not double as a probe telling a
-    caller whether a token exists.
+    caller whether a token exists. In web mode the token is the cookie, and the
+    answer drops it whatever happened.
     """
-    auth_token = await database_async.get_auth_token_by_token(request.refresh_token)
+    response = JSONResponse(content={"message": "Successfully logged out"})
+    if is_web_session(http_request):
+        clear_refresh_cookie(response)
+    try:
+        presented = presented_refresh_token(
+            http_request, request.refresh_token if request else None
+        )
+    except HTTPException:
+        # Nothing to close: a web tab whose cookie is already gone.
+        return response
+
+    auth_token = await database_async.get_auth_token_by_token(presented)
     if (
         auth_token is None
         or auth_token.token_type != TokenType.REFRESH_TOKEN
@@ -253,7 +266,7 @@ async def logout(
             "Logout presented a refresh token with no live session to close",
             user_id=current_user.id,
         )
-        return {"message": "Successfully logged out"}
+        return response
 
     revoked = await database_async.revoke_refresh_token_lineage(
         current_user.id, auth_token.lineage_id
@@ -267,7 +280,7 @@ async def logout(
         lineage_id=auth_token.lineage_id,
         tokens_revoked=revoked,
     )
-    return {"message": "Successfully logged out"}
+    return response
 
 
 @router.get("/me", response_model=AuthUser)

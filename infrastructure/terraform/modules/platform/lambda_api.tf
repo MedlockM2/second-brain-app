@@ -135,13 +135,19 @@ resource "aws_apigatewayv2_api" "main" {
   name          = "${var.project_name}-api${local.suffix}"
   protocol_type = "HTTP"
 
+  # Only the web app is subject to CORS; the mobile app is not a browser. The web
+  # session's refresh token is a cookie (task-473), and a browser neither sends a
+  # cookie to nor accepts a credentialed answer from an API that allows origin "*"
+  # — so the origin is named, credentials are allowed, and so are the headers: a
+  # credentialed preflight reads "*" as a literal header name. An empty origin
+  # (staging, prod until app.<domain> exists) means no browser origin at all.
   cors_configuration {
-    allow_origins     = ["*"]
-    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers     = ["*"]
-    expose_headers    = ["X-Request-ID"]
+    allow_origins     = var.web_app_origin == "" ? [] : [var.web_app_origin]
+    allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allow_headers     = ["authorization", "content-type", "x-request-id", "x-session-transport"]
+    expose_headers    = ["X-Request-ID", "X-Quota-Error-Code"]
     max_age           = 3600
-    allow_credentials = false
+    allow_credentials = true
   }
 
   tags = {

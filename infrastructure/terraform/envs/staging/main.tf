@@ -71,6 +71,9 @@ module "platform" {
   environment        = "staging" # literal #2
   ecr_repository_url = data.terraform_remote_state.shared.outputs.lambda_ecr_repository_url
 
+  # No web app is served against staging.
+  web_app_origin = ""
+
   # The three metered extras stay off in this blueprint. When staging existed they
   # cost, measured on Cost Explorer, ~$7.60/month for an environment with zero
   # users — it took the whole account from $0.233/day to $0.295/day (+27%) on an

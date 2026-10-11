@@ -50,6 +50,11 @@ module "platform" {
   environment        = "dev" # literal #2
   ecr_repository_url = data.terraform_remote_state.shared.outputs.lambda_ecr_repository_url
 
+  # The web app's local Vite server until app.<domain> exists (task-443, task-445).
+  # Its session does not survive a reload until then: the refresh cookie is set by
+  # the execute-api host, a third party to localhost (task-473).
+  web_app_origin = "http://localhost:5173"
+
   # dev stays cheap: no CloudWatch alarms (43 alarms ≈ $3.30/mo measured) and
   # unreserved API concurrency. The dashboard and the worker SQS polling stay ON
   # — dev is the environment actually being worked in, so its ~$3.00/mo

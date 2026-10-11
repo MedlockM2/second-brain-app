@@ -9,6 +9,8 @@ from typing import Any, Dict, Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
+from media_summarizer.core.models.auth import LineageKind
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -35,10 +37,10 @@ try:
 except Exception:
     ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# Refresh token lifetime (defaults to days, but can be overridden in minutes/seconds for dev).
-# One year, and *sliding*: every rotation recomputes the expiry from now, so there is no
-# absolute session cap. An active user never signs in again; an abandoned device stops
-# being refreshable a year after its last use.
+# Refresh token lifetime of a *mobile* lineage (defaults to days, but can be overridden in
+# minutes/seconds for dev). One year, and *sliding*: every rotation recomputes the expiry
+# from now, so there is no absolute session cap. An active user never signs in again; an
+# abandoned device stops being refreshable a year after its last use.
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", "365"))
 REFRESH_TOKEN_EXPIRE_MINUTES = int(os.environ.get("REFRESH_TOKEN_EXPIRE_MINUTES", "0"))
 REFRESH_TOKEN_EXPIRE_SECONDS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_SECONDS", "0"))
@@ -47,6 +49,14 @@ REFRESH_TOKEN_EXPIRE_SECONDS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_SECONDS"
 # the pair it was exchanged for instead of answering 401. Rotation is single-use, so
 # without this window two concurrent refreshes sign the user out.
 REFRESH_ROTATION_GRACE_SECONDS = 60
+
+# Refresh token lifetime of a *browser* lineage (task-473). A browser is a shared, less
+# guarded place than a phone's secure store, so its session is bounded twice: it dies
+# after BROWSER_REFRESH_IDLE_DAYS without a /refresh, and in any case
+# BROWSER_REFRESH_MAX_DAYS after the sign-in that opened it. Rotation never pushes the
+# expiry past that absolute cap (RFC 10017 §6.3.2.3).
+BROWSER_REFRESH_IDLE_DAYS = 7
+BROWSER_REFRESH_MAX_DAYS = 30
 
 
 def get_access_token_expires_seconds() -> int:
@@ -61,8 +71,20 @@ def get_access_token_expires_timedelta() -> timedelta:
     return timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
 
 
-def get_refresh_token_expires_at(now: Optional[datetime] = None) -> datetime:
+def get_refresh_token_expires_at(
+    kind: LineageKind = LineageKind.MOBILE,
+    lineage_started_at: Optional[datetime] = None,
+    now: Optional[datetime] = None,
+) -> datetime:
+    """Expiry of a refresh token minted now in a lineage of ``kind``.
+
+    ``lineage_started_at`` is the sign-in that opened the lineage; it only matters
+    for a browser lineage, whose expiry is capped by it.
+    """
     now = now or datetime.now(timezone.utc)
+    if kind == LineageKind.BROWSER:
+        cap = (lineage_started_at or now) + timedelta(days=BROWSER_REFRESH_MAX_DAYS)
+        return min(now + timedelta(days=BROWSER_REFRESH_IDLE_DAYS), cap)
     if REFRESH_TOKEN_EXPIRE_SECONDS > 0:
         return now + timedelta(seconds=REFRESH_TOKEN_EXPIRE_SECONDS)
     if REFRESH_TOKEN_EXPIRE_MINUTES > 0:

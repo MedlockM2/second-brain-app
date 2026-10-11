@@ -2,8 +2,10 @@
 Social authentication endpoints (Google, Apple) using OAuth/OIDC.
 
 - Native endpoints (/google/native, /apple/native) verify an id_token obtained by
-  the mobile SDK and return access + refresh tokens in JSON. This is the only path
-  that opens a session — the mobile app is the only client.
+  the mobile SDK — or, on the web app, by Google Identity Services and Sign in with
+  Apple JS — and open a session. This is the only social path that opens one. The
+  session transport follows the request (api/dependencies/session.py): tokens in
+  JSON for the mobile app, refresh in an HttpOnly cookie for the web app.
 - Web login/callback endpoints redirect to the provider and, on return, verify the
   id_token and link or create the user. They no longer issue any session material:
   the refresh cookie they used to set had no client left able to read it (task-293).
@@ -20,7 +22,7 @@ import logging
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import httpx
@@ -32,15 +34,10 @@ from jose import jwt
 from pydantic import BaseModel as PydanticBaseModel
 from pydantic import Field
 
+from media_summarizer.api.dependencies.session import open_session
 from media_summarizer.core.models import User
-from media_summarizer.core.models.auth import AuthToken, AuthUser
+from media_summarizer.core.models.auth import TokenVerificationResponse
 from media_summarizer.utils import database_async
-from media_summarizer.utils.auth_utils import (
-    create_access_token,
-    create_token_payload,
-    get_access_token_expires_seconds,
-    get_refresh_token_expires_at,
-)
 from media_summarizer.utils.database_async import DynamoDBConnection, get_db
 
 logger = logging.getLogger(__name__)
@@ -485,10 +482,12 @@ async def apple_callback(
         return _redirect_error("apple", "server_error")
 
 
-# ------------------ Native Mobile Token Endpoints ------------------
+# ------------------ Native Token Endpoints ------------------
 # These endpoints accept ID tokens obtained by native mobile SDKs
 # (expo-apple-authentication, expo-auth-session/google) and return
-# access + refresh tokens in JSON (no cookies, mobile stores in secure store).
+# access + refresh tokens in JSON, which the app keeps in its secure store. The web
+# app reaches the same endpoints with X-Session-Transport: cookie and gets its
+# refresh token as an HttpOnly cookie instead (task-473).
 
 
 class GoogleNativeRequest(PydanticBaseModel):
@@ -502,22 +501,15 @@ class AppleNativeRequest(PydanticBaseModel):
     )
 
 
-class NativeAuthResponse(PydanticBaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    user: Dict[str, Any]
-
-
-@router.post("/google/native", response_model=NativeAuthResponse)
+@router.post("/google/native", response_model=TokenVerificationResponse)
 async def google_native(
     request: GoogleNativeRequest,
+    http_request: Request,
     db: DynamoDBConnection = Depends(get_db),
 ):
     """
-    Verify a Google ID token obtained by the mobile native SDK and return
-    access + refresh tokens for the mobile app.
+    Verify a Google ID token obtained by the mobile native SDK (or Google
+    Identity Services on the web) and open a session.
     """
     accepted_audiences = _google_native_accepted_audiences()
     if not accepted_audiences:
@@ -568,26 +560,7 @@ async def google_native(
             email=email.lower().strip(), provider="google", provider_sub=sub
         )
 
-        # Refresh token: opens a new device-session lineage, sliding expiry
-        refresh = AuthToken.create_refresh_token(
-            user_id=user.id, email=user.email, expires_at=get_refresh_token_expires_at()
-        )
-        refresh = await database_async.create_auth_token(refresh)
-
-        # Create access token
-        access_seconds = get_access_token_expires_seconds()
-        access_token = create_access_token(
-            data=create_token_payload(user_id=user.id, email=user.email),
-            expires_delta=timedelta(seconds=access_seconds),
-        )
-
-        return NativeAuthResponse(
-            access_token=access_token,
-            refresh_token=refresh.token,
-            token_type="bearer",
-            expires_in=access_seconds,
-            user=AuthUser.from_user(user).model_dump(),
-        )
+        return await open_session(http_request, user)
 
     except httpx.HTTPStatusError as e:
         logger.warning(f"Google native token verification HTTP error: {e.response.status_code}")
@@ -605,14 +578,15 @@ async def google_native(
         )
 
 
-@router.post("/apple/native", response_model=NativeAuthResponse)
+@router.post("/apple/native", response_model=TokenVerificationResponse)
 async def apple_native(
     request: AppleNativeRequest,
+    http_request: Request,
     db: DynamoDBConnection = Depends(get_db),
 ):
     """
-    Verify an Apple identity token obtained by the mobile native SDK and return
-    access + refresh tokens for the mobile app.
+    Verify an Apple identity token obtained by the mobile native SDK (or Sign in
+    with Apple JS on the web) and open a session.
     """
     if not APPLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Apple OAuth not configured")
@@ -656,26 +630,7 @@ async def apple_native(
             email=email.lower().strip(), provider="apple", provider_sub=sub
         )
 
-        # Refresh token: opens a new device-session lineage, sliding expiry
-        refresh = AuthToken.create_refresh_token(
-            user_id=user.id, email=user.email, expires_at=get_refresh_token_expires_at()
-        )
-        refresh = await database_async.create_auth_token(refresh)
-
-        # Create access token
-        access_seconds = get_access_token_expires_seconds()
-        access_token = create_access_token(
-            data=create_token_payload(user_id=user.id, email=user.email),
-            expires_delta=timedelta(seconds=access_seconds),
-        )
-
-        return NativeAuthResponse(
-            access_token=access_token,
-            refresh_token=refresh.token,
-            token_type="bearer",
-            expires_in=access_seconds,
-            user=AuthUser.from_user(user).model_dump(),
-        )
+        return await open_session(http_request, user)
 
     except HTTPException:
         raise

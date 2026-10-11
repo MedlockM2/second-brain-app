@@ -6,6 +6,12 @@ fresh ``lineage_id``, and every rotation carries that same id over to its
 successor. The lineage is the server-side identity of one device session — it is
 generated here, never supplied by the client — and it is what logout revokes so
 that signing out of a tablet leaves the phone signed in (task-294).
+
+A lineage has a *kind*, fixed when it opens. A ``mobile`` lineage slides for a
+year with no cap; a ``browser`` lineage (the web app, task-473) expires after a
+short idle period and never outlives an absolute cap counted from
+``lineage_started_at``. The duration policy lives in
+``utils/auth_utils.get_refresh_token_expires_at``.
 """
 
 import secrets
@@ -36,6 +42,13 @@ class TokenType(str, Enum):
     EMAIL_VERIFICATION = "email_verification"
 
 
+class LineageKind(str, Enum):
+    """Kind of device session a refresh-token lineage belongs to."""
+
+    MOBILE = "mobile"
+    BROWSER = "browser"
+
+
 class AuthToken(BaseModel):
     """Authentication token model (access, refresh, email verification)."""
 
@@ -53,6 +66,14 @@ class AuthToken(BaseModel):
     lineage_id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Device-session lineage: constant across every rotation of a session",
+    )
+    lineage_kind: LineageKind = Field(
+        default=LineageKind.MOBILE,
+        description="Kind of the lineage, fixed at sign-in; drives the expiry policy",
+    )
+    lineage_started_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Sign-in that opened the lineage, carried over at every rotation",
     )
     replaced_by_refresh_token: Optional[str] = Field(
         default=None,
@@ -93,17 +114,18 @@ class AuthToken(BaseModel):
         email: str,
         expires_at: datetime,
         lineage_id: Optional[str] = None,
+        lineage_kind: LineageKind = LineageKind.MOBILE,
+        lineage_started_at: Optional[datetime] = None,
     ) -> "AuthToken":
         """Create a refresh token expiring at ``expires_at``.
 
-        The caller owns the expiry because the policy is sliding: every rotation
-        recomputes ``now + REFRESH_TOKEN_EXPIRE_DAYS`` instead of inheriting the
-        expiry of the token it replaces. There is no absolute session cap — a user
-        who opens the app once a year never signs in again, and an abandoned
-        device still falls out of the system on its own.
+        The caller owns the expiry because it is recomputed at every rotation
+        from the lineage's kind instead of being inherited from the token it
+        replaces (``get_refresh_token_expires_at``).
 
-        ``lineage_id`` is omitted at login (a new device session opens its own
-        lineage) and passed at rotation to keep the successor in the same lineage.
+        The lineage fields are omitted at login (a new device session opens its
+        own lineage, started now) and passed at rotation to keep the successor in
+        the same lineage, with the same kind and the same start.
         """
         return cls(
             user_id=user_id,
@@ -111,6 +133,8 @@ class AuthToken(BaseModel):
             token_type=TokenType.REFRESH_TOKEN,
             expires_at=expires_at,
             lineage_id=lineage_id or str(uuid.uuid4()),
+            lineage_kind=lineage_kind,
+            lineage_started_at=lineage_started_at or datetime.now(timezone.utc),
         )
 
     @classmethod
@@ -196,6 +220,8 @@ class AuthToken(BaseModel):
             "created_at": self.created_at.isoformat(),
             "is_active": self.is_active,
             "lineage_id": self.lineage_id,
+            "lineage_kind": self.lineage_kind.value,
+            "lineage_started_at": self.lineage_started_at.isoformat(),
             # TTL attribute — see TOKEN_TTL_MARGIN. Writing it on every put is what
             # keeps a rotated row's sweep date aligned with its own expiry.
             "expire_at": self.ttl_epoch(),
@@ -214,6 +240,7 @@ class AuthToken(BaseModel):
         used_at = None
         if "used_at" in item and item["used_at"]:
             used_at = datetime.fromisoformat(item["used_at"])
+        created_at = datetime.fromisoformat(item["created_at"])
 
         return cls(
             id=item["id"],
@@ -223,11 +250,19 @@ class AuthToken(BaseModel):
             token_type=TokenType(item["token_type"]),
             expires_at=datetime.fromisoformat(item["expires_at"]),
             used_at=used_at,
-            created_at=datetime.fromisoformat(item["created_at"]),
+            created_at=created_at,
             is_active=item.get("is_active", True),
             # A row written before lineages existed gets one of its own, which is
             # the right answer: it belongs to exactly one device session.
             lineage_id=item.get("lineage_id") or str(uuid.uuid4()),
+            # A row without a kind predates the web app (task-473): only the
+            # mobile app could have opened it.
+            lineage_kind=LineageKind(item.get("lineage_kind", LineageKind.MOBILE.value)),
+            lineage_started_at=(
+                datetime.fromisoformat(item["lineage_started_at"])
+                if item.get("lineage_started_at")
+                else created_at
+            ),
             replaced_by_refresh_token=item.get("replaced_by_refresh_token"),
             replaced_by_access_token=item.get("replaced_by_access_token"),
         )
@@ -237,10 +272,11 @@ class AuthToken(BaseModel):
 
 
 class TokenVerificationResponse(BaseModel):
-    """Session payload returned by register, login and refresh.
+    """Session payload returned by register, login, refresh and the native logins.
 
-    The refresh token travels in the JSON body: the only client is the mobile
-    app, which stores it in the secure store and sends it back to /refresh.
+    This is the mobile shape: the refresh token travels in the JSON body, and the
+    app stores it in its secure store and sends it back to /refresh. A web session
+    answers ``WebSessionResponse`` instead, its refresh token living in a cookie.
     """
 
     access_token: str = Field(..., description="JWT access token")
@@ -253,10 +289,29 @@ class TokenVerificationResponse(BaseModel):
     user: Dict[str, Any] = Field(..., description="User information")
 
 
-class RefreshRequest(BaseModel):
-    """Request model for /refresh: the refresh token is sent in the body."""
+class WebSessionResponse(BaseModel):
+    """Session payload of a web session: the refresh token is in a cookie, never here.
 
-    refresh_token: str = Field(..., description="Refresh token issued at login")
+    The web app keeps the access token in memory only; the ``HttpOnly`` refresh
+    cookie is out of reach of its scripts (task-473).
+    """
+
+    access_token: str = Field(..., description="JWT access token")
+    token_type: str = Field(default="bearer", description="Token type")
+    expires_in: int = Field(..., description="Access token lifetime in seconds")
+    user: Dict[str, Any] = Field(..., description="User information")
+
+
+class RefreshRequest(BaseModel):
+    """Request model for /refresh.
+
+    The mobile app sends its refresh token in the body. A web session sends no
+    body: its refresh token is the cookie.
+    """
+
+    refresh_token: Optional[str] = Field(
+        default=None, description="Refresh token issued at login (mobile only)"
+    )
 
 
 class LogoutRequest(BaseModel):
@@ -264,11 +319,12 @@ class LogoutRequest(BaseModel):
 
     The refresh token identifies which device session to close: the access token
     in the Authorization header says *who* is calling, not *from where*. Without
-    it the server could only revoke every session of the account.
+    it the server could only revoke every session of the account. A web session
+    sends no body: its refresh token is the cookie.
     """
 
-    refresh_token: str = Field(
-        ..., description="Refresh token of the device being signed out"
+    refresh_token: Optional[str] = Field(
+        default=None, description="Refresh token of the device being signed out (mobile only)"
     )
 
 

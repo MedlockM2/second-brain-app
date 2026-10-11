@@ -68,6 +68,10 @@ module "platform" {
   environment        = "prod" # literal #2
   ecr_repository_url = var.shared_ecr_repository_url
 
+  # https://app.<domain> once the domain exists (task-443, task-445); no browser
+  # origin until then.
+  web_app_origin = ""
+
   # MOTHBALLED until launch — owner decision of 2026-08-12, applied by task-248.
   #
   # This comment replaces an earlier one that forbade mothballing prod outright.

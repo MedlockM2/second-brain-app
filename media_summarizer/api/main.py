@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 
 from media_summarizer.api.endpoints import (
@@ -83,16 +82,10 @@ app = FastAPI(
 
 # Rate limiting is handled by API Gateway throttling (no in-process limiter needed).
 
-# Configuration CORS
-# Use CORS_ORIGINS per project convention (fallback to '*')
-allowed_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["*"],
-)
+# CORS is answered by API Gateway (cors_configuration in
+# infrastructure/terraform/modules/platform/lambda_api.tf): once an HTTP API has a CORS
+# configuration, API Gateway ignores the CORS headers of its integration, so a
+# middleware here would never be seen by a browser.
 
 
 @app.middleware("http")

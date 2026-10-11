@@ -7,42 +7,66 @@ Objectif
 
 Composants & Endpoints
 - Auth sociale native (le seul chemin qui ouvre une session sociale)
-  - POST /api/auth/google/native {"id_token": "..."} → vérifie l’id_token du SDK Google, relie/crée l’utilisateur, renvoie access_token + refresh_token en JSON
-  - POST /api/auth/apple/native {"identity_token": "...", "user": {...}} → idem via la JWKS Apple
+  - POST /api/auth/google/native {"id_token": "..."} → vérifie l’id_token (SDK Google sur mobile, Google Identity Services sur le web), relie/crée l’utilisateur, ouvre une session (mobile : access_token + refresh_token en JSON ; web : voir « Mode web »)
+  - POST /api/auth/apple/native {"identity_token": "...", "user": {...}} → idem via la JWKS Apple (SDK natif ou Sign in with Apple JS)
 - Auth sociale web (flux navigateur, conservé pour les redirect URIs enregistrées chez Google/Apple)
   - GET /api/auth/google/login → redirige vers Google avec un state lié au navigateur par un cookie oauth_state_google
-  - GET /api/auth/google/callback?code=...&state=... → échange code→tokens, vérifie id_token, relie/crée l’utilisateur, redirige FRONTEND_URL. **N’émet aucun token de session** : il n’y a plus de client web pour en recevoir
+  - GET /api/auth/google/callback?code=...&state=... → échange code→tokens, vérifie id_token, relie/crée l’utilisateur, redirige FRONTEND_URL. **N’émet aucun token de session** : l’app web ouvre la sienne par les endpoints natifs ci-dessus
   - GET /api/auth/apple/login et GET /api/auth/apple/callback → même contrat (client_secret ES256 généré à la volée)
 - Local (email/mot de passe)
   - POST /api/auth/register → crée un utilisateur local auto-vérifié et ouvre directement la session (201 + access_token + refresh_token)
-  - POST /api/auth/login → access_token 60 min (JWT) + refresh_token glissant 1 an en JSON
-  - POST /api/auth/refresh {"refresh_token": "..."} → rotation du refresh (expiration reposée à now + 1 an) + nouvel access token. Un token consommé depuis moins de 60 s rejoue le couple déjà émis au lieu de répondre 401 (fenêtre de grâce, task-294)
-  - POST /api/auth/logout {"refresh_token": "..."} → révoque la seule lignée de l’appareil qui appelle ; les autres appareils du compte gardent leur session
+  - POST /api/auth/login → access_token 60 min (JWT) + refresh_token (mobile : glissant 1 an en JSON ; web : cookie, voir « Mode web »)
+  - POST /api/auth/refresh {"refresh_token": "..."} → rotation du refresh (expiration recalculée selon le type de lignée) + nouvel access token. Un token consommé depuis moins de 60 s rejoue le couple déjà émis au lieu de répondre 401 (fenêtre de grâce, task-294). En mode web, pas de corps : le refresh est le cookie
+  - POST /api/auth/logout {"refresh_token": "..."} → révoque la seule lignée de l’appareil qui appelle ; les autres appareils du compte gardent leur session. En mode web, pas de corps : le refresh est le cookie, et la réponse l’efface
   - GET  /api/auth/me → retourne l’utilisateur courant
   - PATCH /api/auth/me {"reading_language": "...", "iana_timezone": "..."} → met à jour les préférences du compte et renvoie le profil. `reading_language` est plafonné à **un changement par mois et par compte** (task-396) : changer de langue retraduit le texte intégral de chaque média ouvert ensuite, donc l’intervalle entre deux changements est borné. Le premier réglage (choix d’onboarding) n’est pas un changement et n’est jamais refusé ; il ne démarre pas le compteur. Un second changement dans la fenêtre répond **429** avec `{"detail": {"error_code": "reading_language_change_too_soon", "available_at": "<ISO 8601>"}}` — un code stable et la date de réouverture, jamais une phrase : c’est l’app qui formule le refus depuis ses catalogues. Le profil renvoyé par les cinq endpoints de session porte `reading_language_change_available_at` (null quand un changement est possible tout de suite)
 - Exigences d’accès API
   - La plupart des routes sensibles nécessitent un access token (Authorization: Bearer <JWT>)
   - Exemple strict: POST /api/podcast-search/submit-episode → require_verified_email
 
-Transport des tokens (aucun cookie de session)
-- Refresh token
-  - Transporté dans le **corps JSON** : champ `refresh_token` des réponses de register/login/refresh, champ `refresh_token` du corps de la requête /refresh
-  - Valeur opaque stockée en base (table auth_tokens), durée **glissante** de REFRESH_TOKEN_EXPIRE_DAYS (365 par défaut) **sans plafond absolu** : chaque /refresh repose expires_at à now + 1 an. Rotation à chaque /refresh : l’ancien est marqué used_at + is_active=false et ne sert plus qu’à rejouer son successeur pendant 60 s
-  - Chaque token porte un `lineage_id` généré côté serveur au login et recopié à chaque rotation : c’est l’identité de la session d’un appareil, jamais fournie par le client, et c’est ce que /logout révoque
+Lignées et politique de durée (task-294, task-473)
+- Chaque refresh token porte un `lineage_id` généré côté serveur au login et recopié à chaque rotation : c’est l’identité de la session d’un appareil, jamais fournie par le client, et c’est ce que /logout révoque
+- Une lignée a un **type**, fixé au login par le mode de transport de la requête et recopié à chaque rotation avec `lineage_started_at` (l’instant du login). Le type décide de la durée (`get_refresh_token_expires_at`, `media_summarizer/utils/auth_utils.py`) :
+
+  | Type | Ouverte par | Inactivité max. | Plafond absolu | Rotation |
+  |---|---|---|---|---|
+  | `mobile` | l’app mobile (mode par défaut) | 1 an (REFRESH_TOKEN_EXPIRE_DAYS=365) | aucun | repose `expires_at` à now + 1 an |
+  | `browser` | l’app web (`X-Session-Transport: cookie`) | 7 jours (BROWSER_REFRESH_IDLE_DAYS) | 30 jours après le login (BROWSER_REFRESH_MAX_DAYS) | repose `expires_at` à min(now + 7 j, login + 30 j) |
+
+  - `mobile` : un utilisateur qui ouvre l’app une fois par an ne se reconnecte jamais ; un appareil abandonné tombe seul au bout d’un an
+  - `browser` : un navigateur est un lieu moins gardé que le Keychain/Keystore. La rotation ne prolonge jamais la durée initiale (RFC 10017 §6.3.2.3) : au plus tard 30 jours après le login, l’utilisateur se reconnecte, même s’il a utilisé l’app web chaque jour
+  - Une ligne écrite avant task-473 n’a ni type ni début : elle est lue comme `mobile`, débutée à sa création — seule l’app mobile pouvait l’avoir ouverte
+- Chaque transport n’accepte que les lignées qu’il ouvre : un refresh `browser` présenté dans le corps, ou un refresh `mobile` présenté par cookie, répond 401 « Invalid refresh token »
+
+Transport des tokens
+- Mode mobile (par défaut)
+  - Refresh transporté dans le **corps JSON** : champ `refresh_token` des réponses de register/login/refresh et des endpoints natifs, champ `refresh_token` du corps de /refresh et /logout
+  - Le client mobile le garde dans expo-secure-store (Keychain / Keystore)
+- Mode web (task-473), choisi par l’en-tête de requête **`X-Session-Transport: cookie`** sur login, register, google/native, apple/native, refresh et logout
+  - La réponse des routes qui ouvrent ou tournent une session ne contient que `access_token`, `token_type`, `expires_in` et `user` : **jamais** `refresh_token`
+  - Le refresh est posé en cookie `__Secure-refresh_token` : `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`, sans `Domain` (host-only sur `api.<domaine>`), `Max-Age` aligné sur l’expiration de la lignée. Le préfixe `__Secure-` fait refuser le cookie par le navigateur s’il n’est pas `Secure` ; `__Host-` exigerait `Path=/`
+  - /refresh et /logout n’ont pas de corps : ils lisent ce cookie. Un /refresh sans cookie répond 401 « Missing refresh token ». /logout efface le cookie dans tous les cas
+  - L’app web garde l’access token **en mémoire seulement**, et rouvre la session au chargement de la page par un /refresh
+  - Pourquoi un en-tête plutôt qu’un champ : /refresh et /logout n’ont pas de corps en mode web, et un en-tête personnalisé impose un pré-vol CORS. Une page d’une autre origine ne peut donc ni déclencher un /refresh authentifié par le cookie ni en lire la réponse ; `SameSite=Strict` est le second verrou
+  - Le cookie n’est utilisable que si `app.<domaine>` et `api.<domaine>` sont sur le même site enregistrable. Avec l’URL `execute-api`, il serait tiers et bloqué : l’app web en local se connecte, mais sa session ne survit pas à un rechargement tant que `api.<domaine>` n’existe pas (task-443, task-445)
+- Refresh token, commun aux deux modes
+  - Valeur opaque stockée en base (table auth_tokens). Rotation à chaque /refresh : l’ancien est marqué used_at + is_active=false et ne sert plus qu’à rejouer son successeur pendant 60 s
   - La table a un TTL (`expire_at` = expires_at + 7 jours) : une ligne périmée finit par disparaître, et la marge garantit qu’un balayage TTL ne peut pas tuer une session encore rafraîchissable
-  - Le client mobile le garde dans expo-secure-store (Keychain / Keystore). C’est le seul client, et il ne peut pas lire un cookie httpOnly : le transport par cookie a donc été supprimé (task-293), sans repli
 - Access token (header Authorization: Bearer)
   - Durée configurable (JWT_ACCESS_TOKEN_EXPIRE_MINUTES, 60 par défaut ; JWT_ACCESS_TOKEN_EXPIRE_SECONDS pour un dev flow). Sans effet sur la révocation : get_current_user relit l’utilisateur en DynamoDB à chaque requête
   - Généré à /register, /login, /refresh et sur les deux endpoints natifs
-- Le seul cookie encore posé par l’API est `oauth_state_<provider>` : garde CSRF du flux web, host-only, Secure, httpOnly, SameSite=lax, 10 minutes, lu par le callback du même hôte
+- Les autres cookies posés par l’API sont `oauth_state_<provider>` : garde CSRF du flux de redirection OAuth, host-only, Secure, httpOnly, SameSite=lax, 10 minutes, lu par le callback du même hôte
 
 CORS & Redirections
-- CORS_ORIGINS doit contenir le(s) domaine(s) front autorisés
+- Le CORS de l’API HTTP est répondu par API Gateway (`cors_configuration` de `infrastructure/terraform/modules/platform/lambda_api.tf`), pas par FastAPI : une API HTTP dotée d’une configuration CORS ignore les en-têtes CORS de son intégration
+  - Origine autorisée : la variable Terraform `web_app_origin` de chaque environnement, **jamais `*`** (un cookie n’est pas envoyé vers une origine `*`), avec `allow_credentials = true` et des en-têtes nommés (`authorization`, `content-type`, `x-request-id`, `x-session-transport`)
+  - dev : `http://localhost:5173`, le serveur local de l’app web, tant que `app.<domaine>` n’existe pas ; staging et prod : vide, aucune origine navigateur, jusqu’à `https://app.<domaine>`
+  - L’app mobile n’est pas soumise au CORS
 - FRONTEND_URL utilisé pour construire les URLs de redirection après succès/erreur d’OAuth web
 
 Sécurité & Bonnes Pratiques
 - Sessions
-  - Ne jamais logguer un refresh token : c’est un porteur de session d’un an
+  - Ne jamais logguer un refresh token : c’est un porteur de session (un an sur mobile, 30 jours sur le web)
   - Un refresh token consommé est mort passé la fenêtre de grâce de 60 s, donc un rejeu tardif répond 401 « Expired or used refresh token ». Un token révoqué par /logout n’est jamais rejouable
   - La révocation de toutes les lignées d’un compte n’existe qu’au sein de la suppression de compte, qui supprime les lignes plutôt que de les désactiver
 - OAuth
@@ -56,11 +80,12 @@ Variables d’Environnement (extrait)
   - JWT_SECRET_KEY
   - JWT_ALGORITHM=HS256
   - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
-  - REFRESH_TOKEN_EXPIRE_DAYS=365 (fenêtre glissante, sans plafond absolu)
-  - (aucune variable COOKIE_* : le refresh token ne passe plus par un cookie)
-- CORS / Frontend
-  - CORS_ORIGINS=https://app.yourdomain.com
+  - REFRESH_TOKEN_EXPIRE_DAYS=365 (lignée mobile : fenêtre glissante, sans plafond absolu)
+  - La lignée navigateur n’a pas de variable : 7 jours d’inactivité et 30 jours de plafond sont des constantes de `auth_utils.py`
+  - (aucune variable COOKIE_* : les attributs du cookie web sont fixes, `media_summarizer/api/dependencies/session.py`)
+- Frontend
   - FRONTEND_URL=https://app.yourdomain.com
+  - (aucune variable CORS_ORIGINS : le CORS est la variable Terraform `web_app_origin`)
 - Google OAuth
   - GOOGLE_CLIENT_ID
   - GOOGLE_CLIENT_SECRET
@@ -131,6 +156,20 @@ Sign-in Google mobile — un chemin par plateforme (task-325)
   # → même contrat, avec un refresh_token neuf : l’ancien est consommé
   ```
 
+- Login web (curl, depuis l’origine de l’app web)
+  ```bash path=null start=null
+  curl -i -X POST https://api.<domaine>/api/auth/login \
+    -H 'Origin: https://app.<domaine>' \
+    -H 'X-Session-Transport: cookie' \
+    -H 'Content-Type: application/json' \
+    -d '{"email": "user@example.com", "password": "your-pass"}'
+  # → set-cookie: __Secure-refresh_token=...; HttpOnly; Max-Age=604800; Path=/api/auth; SameSite=strict; Secure
+  # → {"access_token":"...","token_type":"bearer","expires_in":3600,"user":{...}}
+  curl -i -X POST https://api.<domaine>/api/auth/refresh \
+    -H 'X-Session-Transport: cookie' \
+    -b '__Secure-refresh_token=<value>'
+  ```
+
 - Appel d’une route protégée
   ```bash path=null start=null
   curl -X GET http://localhost:8000/api/auth/me \
@@ -140,7 +179,7 @@ Sign-in Google mobile — un chemin par plateforme (task-325)
 Gestion des Erreurs Courantes
 - 401 Invalid authentication token → vérifier le header Authorization
 - 401 Invalid refresh token / Expired or used refresh token → le refresh stocké est inconnu, expiré ou déjà rotaté : il faut se reconnecter
-- 422 sur /api/auth/refresh → le corps ne contient pas de champ refresh_token
+- 401 Missing refresh token sur /api/auth/refresh → ni champ refresh_token dans le corps (mobile), ni cookie (web)
 - 400 OAuth non configuré → vérifier GOOGLE_* ou APPLE_* dans l’environnement
 
 La vérification d’email par lien a été retirée : les comptes sont auto-vérifiés
@@ -153,4 +192,6 @@ Références Code
 - Auth locale: media_summarizer/api/endpoints/auth.py
 - OAuth social: media_summarizer/api/endpoints/auth_social.py
 - Dépendances/auth: media_summarizer/api/dependencies/auth.py
-- CORS & rate limiting: media_summarizer/api/main.py, media_summarizer/api/rate_limit.py
+- Transport de session (mode web, cookie): media_summarizer/api/dependencies/session.py
+- Politique de durée des lignées: media_summarizer/utils/auth_utils.py
+- CORS: infrastructure/terraform/modules/platform/lambda_api.tf (variable web_app_origin)
