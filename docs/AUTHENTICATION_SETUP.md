@@ -32,11 +32,23 @@ Lignées et politique de durée (task-294, task-473)
   |---|---|---|---|---|
   | `mobile` | l’app mobile (mode par défaut) | 1 an (REFRESH_TOKEN_EXPIRE_DAYS=365) | aucun | repose `expires_at` à now + 1 an |
   | `browser` | l’app web (`X-Session-Transport: cookie`) | 7 jours (BROWSER_REFRESH_IDLE_DAYS) | 30 jours après le login (BROWSER_REFRESH_MAX_DAYS) | repose `expires_at` à min(now + 7 j, login + 30 j) |
+  | `browser_extension` | l’appairage d’une extension navigateur (voir « Extension navigateur ») | 90 jours (EXTENSION_REFRESH_IDLE_DAYS) | 1 an après l’appairage (EXTENSION_REFRESH_MAX_DAYS) | repose `expires_at` à min(now + 90 j, appairage + 1 an) |
 
   - `mobile` : un utilisateur qui ouvre l’app une fois par an ne se reconnecte jamais ; un appareil abandonné tombe seul au bout d’un an
   - `browser` : un navigateur est un lieu moins gardé que le Keychain/Keystore. La rotation ne prolonge jamais la durée initiale (RFC 10017 §6.3.2.3) : au plus tard 30 jours après le login, l’utilisateur se reconnecte, même s’il a utilisé l’app web chaque jour
   - Une ligne écrite avant task-473 n’a ni type ni début : elle est lue comme `mobile`, débutée à sa création — seule l’app mobile pouvait l’avoir ouverte
-- Chaque transport n’accepte que les lignées qu’il ouvre : un refresh `browser` présenté dans le corps, ou un refresh `mobile` présenté par cookie, répond 401 « Invalid refresh token »
+- Chaque transport n’accepte que les lignées qu’il ouvre : un refresh `browser` présenté dans le corps, ou un refresh `mobile` présenté par cookie, répond 401 « Invalid refresh token ». Une lignée `browser_extension` passe par le corps, comme le mobile
+
+Extension navigateur (task-485, `media_summarizer/api/endpoints/extension_tokens.py`)
+- L’extension ne se connecte jamais : elle est **appairée** à un compte déjà connecté sur l’app web et reçoit le refresh d’une lignée à elle, de type `browser_extension` (durées dans le tableau ci-dessus, décision de l’owner du 2026-10-11 ; au-delà, l’extension demande de ré-appairer en un clic). Le refresh passe dans le corps JSON ; l’extension le garde dans son stockage et le présente à `/api/auth/refresh`
+- **Portée réduite** : l’access token d’une lignée d’extension porte la revendication `scope: extension`. La dépendance d’authentification (`get_current_user`, `EXTENSION_ROUTES` dans `media_summarizer/api/dependencies/auth.py`) ne l’accepte que sur `POST /api/media/ingest-url`, `POST /api/media/ingest-shared-content`, `GET /api/folders` et `POST /api/auth/logout` ; **toute autre route répond 403**. Son refresh n’a pas besoin d’access token. Le contrôle compare le chemin de la requête, pas le gabarit de route : les quatre routes sont statiques, et un écart ne peut que refuser
+- Routes (préfixe `/api/auth/extension-tokens`)
+  - `POST ""` (session web) `{"client_label": "Chrome sur macOS"}` → 201 `{lineage_id, refresh_token, expires_at}` : l’appairage en un clic, l’app web transmet le refresh à l’extension par `externally_connectable`
+  - `GET ""` (session web) → `{"extensions": [{lineage_id, client_label, paired_at, last_used_at, expires_at}]}` : une entrée par lignée vivante, appairage le plus récent d’abord
+  - `DELETE "/{lineage_id}"` (session web) → 204 : délie une extension du compte appelant (404 sinon)
+  - `POST "/pairing-code"` (session web) → 201 `{code, expires_at}` : le **code de secours**, quand le message `externally_connectable` ne passe pas. 6 chiffres, 5 minutes, usage unique ; en redemander un remplace le précédent. Stocké haché (`sha256(user_id:code)`), jamais en clair
+  - `POST "/pairing-code/claim"` (non authentifié) `{"email": "...", "code": "482913", "client_label": "..."}` → 201 `{lineage_id, refresh_token, expires_at}`. La réclamation nomme le compte par son e-mail pour que chaque erreur soit comptée **sur le code de ce compte** : à la 3e erreur le code est détruit. Sans ce compteur porté par le code, six chiffres se forcent en quelques milliers d’essais malgré le throttling d’API Gateway. Toutes les erreurs (e-mail inconnu, pas de code vivant, code faux, code détruit) répondent le même 400 `invalid_pairing_code`
+- `/logout` depuis l’extension révoque sa propre lignée. La déconnexion de l’app web **ne délie pas** l’extension (autre lignée). La suppression du compte efface toutes les lignes `auth_tokens`, lignées d’extension et codes compris
 
 Transport des tokens
 - Mode mobile (par défaut)

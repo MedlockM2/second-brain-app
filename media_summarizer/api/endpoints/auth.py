@@ -59,8 +59,8 @@ from media_summarizer.core.models.auth import (
 from media_summarizer.utils import database_async
 from media_summarizer.utils.auth_utils import (
     REFRESH_ROTATION_GRACE_SECONDS,
+    access_token_payload,
     create_access_token,
-    create_token_payload,
     get_access_token_expires_seconds,
     get_refresh_token_expires_at,
     hash_password,
@@ -204,8 +204,9 @@ async def refresh_token(
         )
         new_refresh = await database_async.create_auth_token(new_refresh)
 
+        # An extension lineage keeps its reduced scope across rotations (task-485).
         access_token = create_access_token(
-            data=create_token_payload(user_id=user.id, email=user.email),
+            data=access_token_payload(user.id, user.email, auth_token.lineage_kind),
             expires_delta=timedelta(seconds=access_seconds),
         )
 

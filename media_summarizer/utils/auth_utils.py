@@ -58,6 +58,23 @@ REFRESH_ROTATION_GRACE_SECONDS = 60
 BROWSER_REFRESH_IDLE_DAYS = 7
 BROWSER_REFRESH_MAX_DAYS = 30
 
+# Refresh token lifetime of a *browser_extension* lineage (task-485, owner decision of
+# 2026-10-11): renewed at every use, dead after 90 days without one, and a year after
+# the pairing at the latest — then the extension asks to be paired again.
+EXTENSION_REFRESH_IDLE_DAYS = 90
+EXTENSION_REFRESH_MAX_DAYS = 365
+
+# (idle days, absolute cap in days) of the lineage kinds that have a cap.
+_CAPPED_LINEAGES = {
+    LineageKind.BROWSER: (BROWSER_REFRESH_IDLE_DAYS, BROWSER_REFRESH_MAX_DAYS),
+    LineageKind.BROWSER_EXTENSION: (EXTENSION_REFRESH_IDLE_DAYS, EXTENSION_REFRESH_MAX_DAYS),
+}
+
+# The `scope` claim of an access token minted for a browser extension lineage. The
+# authentication dependency confines such a token to the few routes the extension
+# needs (api/dependencies/auth.py, EXTENSION_ROUTES).
+ACCESS_SCOPE_EXTENSION = "extension"
+
 
 def get_access_token_expires_seconds() -> int:
     if JWT_ACCESS_TOKEN_EXPIRE_SECONDS > 0:
@@ -78,13 +95,15 @@ def get_refresh_token_expires_at(
 ) -> datetime:
     """Expiry of a refresh token minted now in a lineage of ``kind``.
 
-    ``lineage_started_at`` is the sign-in that opened the lineage; it only matters
-    for a browser lineage, whose expiry is capped by it.
+    ``lineage_started_at`` is the sign-in (or pairing) that opened the lineage; it
+    only matters for a capped kind, whose expiry never passes it plus the cap.
     """
     now = now or datetime.now(timezone.utc)
-    if kind == LineageKind.BROWSER:
-        cap = (lineage_started_at or now) + timedelta(days=BROWSER_REFRESH_MAX_DAYS)
-        return min(now + timedelta(days=BROWSER_REFRESH_IDLE_DAYS), cap)
+    capped = _CAPPED_LINEAGES.get(kind)
+    if capped:
+        idle_days, max_days = capped
+        cap = (lineage_started_at or now) + timedelta(days=max_days)
+        return min(now + timedelta(days=idle_days), cap)
     if REFRESH_TOKEN_EXPIRE_SECONDS > 0:
         return now + timedelta(seconds=REFRESH_TOKEN_EXPIRE_SECONDS)
     if REFRESH_TOKEN_EXPIRE_MINUTES > 0:
@@ -252,3 +271,13 @@ def is_token_expired(token: str) -> bool:
         return False
     except Exception:
         return True  # Assume expired if we can't decode
+
+
+def access_token_payload(user_id: str, email: str, kind: LineageKind = LineageKind.MOBILE) -> Dict[str, Any]:
+    """Claims of an access token minted in a lineage of ``kind``.
+
+    A browser extension lineage carries ``scope: extension``, which confines the
+    token to the extension's routes; every other kind is a full session.
+    """
+    extra = {"scope": ACCESS_SCOPE_EXTENSION} if kind == LineageKind.BROWSER_EXTENSION else None
+    return create_token_payload(user_id=user_id, email=email, additional_data=extra)

@@ -8,10 +8,11 @@ generated here, never supplied by the client — and it is what logout revokes s
 that signing out of a tablet leaves the phone signed in (task-294).
 
 A lineage has a *kind*, fixed when it opens. A ``mobile`` lineage slides for a
-year with no cap; a ``browser`` lineage (the web app, task-473) expires after a
-short idle period and never outlives an absolute cap counted from
-``lineage_started_at``. The duration policy lives in
-``utils/auth_utils.get_refresh_token_expires_at``.
+year with no cap; a ``browser`` lineage (the web app, task-473) and a
+``browser_extension`` lineage (task-485) expire after an idle period and never
+outlive an absolute cap counted from ``lineage_started_at``. The duration policy
+lives in ``utils/auth_utils.get_refresh_token_expires_at``; an extension
+lineage also mints access tokens of reduced scope (``ACCESS_SCOPE_EXTENSION``).
 """
 
 import secrets
@@ -40,6 +41,9 @@ class TokenType(str, Enum):
     ACCESS_TOKEN = "access_token"
     REFRESH_TOKEN = "refresh_token"
     EMAIL_VERIFICATION = "email_verification"
+    # The rescue code that pairs a browser extension (task-485): six digits typed
+    # in the extension, stored hashed, single use, five minutes, three tries.
+    EXTENSION_PAIRING_CODE = "extension_pairing_code"
 
 
 class LineageKind(str, Enum):
@@ -47,6 +51,7 @@ class LineageKind(str, Enum):
 
     MOBILE = "mobile"
     BROWSER = "browser"
+    BROWSER_EXTENSION = "browser_extension"
 
 
 class AuthToken(BaseModel):
@@ -74,6 +79,14 @@ class AuthToken(BaseModel):
     lineage_started_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Sign-in that opened the lineage, carried over at every rotation",
+    )
+    client_label: Optional[str] = Field(
+        default=None,
+        description="What the lineage runs in, e.g. 'Chrome on macOS' — named for the list of linked extensions",
+    )
+    failed_attempts: int = Field(
+        default=0,
+        description="Wrong guesses against this token so far (pairing codes only)",
     )
     replaced_by_refresh_token: Optional[str] = Field(
         default=None,
@@ -116,6 +129,7 @@ class AuthToken(BaseModel):
         lineage_id: Optional[str] = None,
         lineage_kind: LineageKind = LineageKind.MOBILE,
         lineage_started_at: Optional[datetime] = None,
+        client_label: Optional[str] = None,
     ) -> "AuthToken":
         """Create a refresh token expiring at ``expires_at``.
 
@@ -135,6 +149,7 @@ class AuthToken(BaseModel):
             lineage_id=lineage_id or str(uuid.uuid4()),
             lineage_kind=lineage_kind,
             lineage_started_at=lineage_started_at or datetime.now(timezone.utc),
+            client_label=client_label,
         )
 
     @classmethod
@@ -232,6 +247,10 @@ class AuthToken(BaseModel):
             item["replaced_by_refresh_token"] = self.replaced_by_refresh_token
         if self.replaced_by_access_token:
             item["replaced_by_access_token"] = self.replaced_by_access_token
+        if self.client_label:
+            item["client_label"] = self.client_label
+        if self.failed_attempts:
+            item["failed_attempts"] = self.failed_attempts
         return item
 
     @classmethod
@@ -265,6 +284,8 @@ class AuthToken(BaseModel):
             ),
             replaced_by_refresh_token=item.get("replaced_by_refresh_token"),
             replaced_by_access_token=item.get("replaced_by_access_token"),
+            client_label=item.get("client_label"),
+            failed_attempts=int(item.get("failed_attempts", 0)),
         )
 
     def __repr__(self):

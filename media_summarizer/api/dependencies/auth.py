@@ -13,7 +13,11 @@ from fastapi.security import OAuth2PasswordBearer
 
 from media_summarizer.core.models.auth import AuthUser
 from media_summarizer.utils import database_async
-from media_summarizer.utils.auth_utils import get_user_id_from_token, verify_token
+from media_summarizer.utils.auth_utils import (
+    ACCESS_SCOPE_EXTENSION,
+    get_user_id_from_token,
+    verify_token,
+)
 from media_summarizer.utils.database_async import DynamoDBConnection, get_db
 
 # Configure logging
@@ -26,7 +30,42 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 
+# The only routes an access token of a browser extension lineage may call
+# (task-485): save the page, save a selection, list the folders to pick the
+# destination, and sign the extension out. Its refresh needs no access token.
+# Everything else answers 403, so a leaked extension token is never a key to the
+# whole account.
+#
+# Matched on the request path, not on the route template: all four are static,
+# and the template of an included route lost its prefix in FastAPI 0.13x (see
+# `_mounted_routes` in api/main.py). A mismatch can only refuse, never allow.
+EXTENSION_ROUTES = frozenset(
+    {
+        ("POST", "/api/media/ingest-url"),
+        ("POST", "/api/media/ingest-shared-content"),
+        ("GET", "/api/folders"),
+        ("POST", "/api/auth/logout"),
+    }
+)
+
+
+def _enforce_scope(payload: dict, request: Request) -> None:
+    """Refuse a reduced-scope token outside the routes its scope names."""
+    scope = payload.get("scope")
+    if scope is None:
+        return
+    path = request.url.path.rstrip("/") or "/"
+    if scope == ACCESS_SCOPE_EXTENSION and (request.method, path) in EXTENSION_ROUTES:
+        return
+    logger.warning("Reduced-scope token refused on %s %s", request.method, path)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="This token cannot be used here",
+    )
+
+
 async def get_current_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     db: DynamoDBConnection = Depends(get_db),
 ) -> AuthUser:
@@ -61,6 +100,8 @@ async def get_current_user(
                 detail="Invalid authentication token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+        _enforce_scope(payload, request)
 
         # Extract user ID from token
         user_id = payload.get("sub")
@@ -110,6 +151,7 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     token: Optional[str] = Depends(oauth2_scheme),
     db: DynamoDBConnection = Depends(get_db),
 ) -> Optional[AuthUser]:
@@ -129,7 +171,7 @@ async def get_optional_user(
         return None
 
     try:
-        return await get_current_user(token, db)
+        return await get_current_user(request, token, db)
     except HTTPException:
         # If authentication fails, return None instead of raising exception
         return None

@@ -19,6 +19,7 @@ from media_summarizer.api.endpoints import (
     digest,
     engagements,
     entitlements,
+    extension_tokens,
     feedback,
     feeds,
     folders,
@@ -138,6 +139,7 @@ app.include_router(media.router, prefix="/api/media", tags=["media"])
 app.include_router(artifacts.router, prefix="/api", tags=["artifacts"])
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(auth_social.router, prefix="/api/auth", tags=["authentication"])
+app.include_router(extension_tokens.router, prefix="/api/auth/extension-tokens", tags=["authentication"])
 app.include_router(podcast_search.router, prefix="/api/podcast-search", tags=["podcast-search"])
 app.include_router(account.router, prefix="/api/account", tags=["account"])
 app.include_router(podcasts.router, prefix="/api", tags=["podcasts"])

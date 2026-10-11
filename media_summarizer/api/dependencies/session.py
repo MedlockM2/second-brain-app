@@ -36,8 +36,8 @@ from media_summarizer.core.models.auth import (
 )
 from media_summarizer.utils import database_async
 from media_summarizer.utils.auth_utils import (
+    access_token_payload,
     create_access_token,
-    create_token_payload,
     get_access_token_expires_seconds,
     get_refresh_token_expires_at,
 )
@@ -158,7 +158,7 @@ async def open_session(
 
     access_seconds = get_access_token_expires_seconds()
     access_token = create_access_token(
-        data=create_token_payload(user_id=user.id, email=user.email),
+        data=access_token_payload(user.id, user.email, kind),
         expires_delta=timedelta(seconds=access_seconds),
     )
     return session_response(
