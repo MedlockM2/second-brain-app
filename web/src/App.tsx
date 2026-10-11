@@ -6,11 +6,11 @@ import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { DigestPage } from "./pages/DigestPage";
 import { DigestPeriodPage } from "./pages/DigestPeriodPage";
-import { EmptyPage } from "./pages/EmptyPage";
 import { FolderPage } from "./pages/FolderPage";
 import { HomePage } from "./pages/HomePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { MediaPage } from "./pages/MediaPage";
+import { SearchPage } from "./pages/SearchPage";
 import { UnsortedPage } from "./pages/UnsortedPage";
 import { InstallPage } from "./pages/InstallPage";
 import { ReadingLanguagePage } from "./pages/ReadingLanguagePage";
@@ -59,7 +59,7 @@ function AppRoutes() {
               <Route path="digest" element={<DigestPage />} />
               <Route path="digest/:period" element={<DigestPeriodPage />} />
               <Route path="unsorted" element={<UnsortedPage />} />
-              <Route path="search" element={<Titled page="search" />} />
+              <Route path="search" element={<SearchPage />} />
               <Route path="account" element={<AccountPage />} />
             </Route>
           </Route>
@@ -68,14 +68,6 @@ function AppRoutes() {
       </Routes>
     </BrowserRouter>
   );
-}
-
-function Titled({ page }: { page: "search" }) {
-  const { t } = useI18n();
-  const titles = {
-    search: t("tabs.search"),
-  };
-  return <EmptyPage title={titles[page]} />;
 }
 
 /** While the cookie is exchanged, or when the API cannot be reached. */

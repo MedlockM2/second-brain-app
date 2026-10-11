@@ -73,4 +73,7 @@ export const en = {
   "review.navHint": "← → to move from one source to the next",
   "review.fileTitle": "File in…",
   "review.backHome": "Back to Home",
+  "search.summary": "{count} in the text of your sources",
+  "search.inTextHeading": "In the text",
+  "search.title": "“{query}”",
 } as const;

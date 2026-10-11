@@ -67,4 +67,7 @@ export const es: WebCatalog = {
   "review.navHint": "← → para pasar de una fuente a otra",
   "review.fileTitle": "Guardar en…",
   "review.backHome": "Volver a Inicio",
+  "search.summary": "{count} en el texto de tus fuentes",
+  "search.inTextHeading": "En el texto",
+  "search.title": "«{query}»",
 };

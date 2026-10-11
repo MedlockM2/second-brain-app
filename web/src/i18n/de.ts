@@ -67,4 +67,7 @@ export const de: WebCatalog = {
   "review.navHint": "← → um von einer Quelle zur nächsten zu wechseln",
   "review.fileTitle": "Einordnen in…",
   "review.backHome": "Zurück zum Start",
+  "search.summary": "{count} im Text deiner Quellen",
+  "search.inTextHeading": "Im Text",
+  "search.title": "„{query}“",
 };

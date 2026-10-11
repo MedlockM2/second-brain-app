@@ -67,4 +67,7 @@ export const ar: WebCatalog = {
   "review.navHint": "← → للانتقال من مصدر إلى آخر",
   "review.fileTitle": "الحفظ في…",
   "review.backHome": "العودة إلى الرئيسية",
+  "search.summary": "{count} في نص مصادرك",
+  "search.inTextHeading": "في النص",
+  "search.title": "«{query}»",
 };

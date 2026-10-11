@@ -67,4 +67,7 @@ export const hi: WebCatalog = {
   "review.navHint": "← → एक स्रोत से दूसरे पर जाने के लिए",
   "review.fileTitle": "इसमें रखें…",
   "review.backHome": "होम पर लौटें",
+  "search.summary": "आपके स्रोतों के टेक्स्ट में {count}",
+  "search.inTextHeading": "टेक्स्ट में",
+  "search.title": "“{query}”",
 };

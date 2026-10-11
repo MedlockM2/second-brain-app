@@ -67,4 +67,7 @@ export const zh: WebCatalog = {
   "review.navHint": "← → 在来源之间切换",
   "review.fileTitle": "归入…",
   "review.backHome": "返回主页",
+  "search.summary": "在来源正文中找到 {count}",
+  "search.inTextHeading": "正文中",
+  "search.title": "“{query}”",
 };

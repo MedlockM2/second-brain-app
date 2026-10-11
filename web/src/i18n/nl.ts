@@ -67,4 +67,7 @@ export const nl: WebCatalog = {
   "review.navHint": "← → om van de ene bron naar de volgende te gaan",
   "review.fileTitle": "Opbergen in…",
   "review.backHome": "Terug naar Start",
+  "search.summary": "{count} in de tekst van je bronnen",
+  "search.inTextHeading": "In de tekst",
+  "search.title": "‘{query}’",
 };

@@ -67,4 +67,7 @@ export const ja: WebCatalog = {
   "review.navHint": "← → でソースを切り替え",
   "review.fileTitle": "整理先…",
   "review.backHome": "ホームに戻る",
+  "search.summary": "ソースの本文で {count}",
+  "search.inTextHeading": "本文",
+  "search.title": "「{query}」",
 };
