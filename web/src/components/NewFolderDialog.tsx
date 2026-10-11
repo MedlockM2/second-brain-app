@@ -1,36 +1,28 @@
 import type { Folder } from "@media-summarizer/core/types/organization";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState } from "react";
 import { apiRequest } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
+import { Dialog } from "./Dialog";
 
 /**
  * Create a folder at the root of the library. Folders have one level: the body
  * always names no parent, and no screen offers to create one inside another.
+ * `onCreated` may be async (filing a media into the new folder): the dialog
+ * stays busy until it settles, and stays open with the name if it throws.
  */
 export function NewFolderDialog({
   onCreated,
   onClose,
 }: {
-  onCreated: (folder: Folder) => void;
+  onCreated: (folder: Folder) => void | Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useI18n();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    input.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed || busy) return;
     setBusy(true);
@@ -40,7 +32,7 @@ export function NewFolderDialog({
         method: "POST",
         body: { name: trimmed, parent_folder_id: null },
       });
-      onCreated(folder);
+      await onCreated(folder);
     } catch {
       // The dialog stays open with the typed name, so a retry is one click.
       setFailed(true);
@@ -49,40 +41,36 @@ export function NewFolderDialog({
   };
 
   return (
-    <div className="scrim" onClick={onClose}>
-      <form
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("search.newFolder.title")}
-        onClick={(event) => event.stopPropagation()}
-        onSubmit={submit}
-      >
-        <h2 className="headline">{t("search.newFolder.title")}</h2>
-        <label className="field">
-          <span className="visually-hidden">{t("folderPicker.namePlaceholder")}</span>
-          <input
-            ref={input}
-            placeholder={t("folderPicker.namePlaceholder")}
-            value={name}
-            maxLength={120}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        {failed && (
-          <div className="banner-err" role="alert">
-            {t("folderPicker.createFailed")}
-          </div>
-        )}
-        <footer>
+    <Dialog
+      title={t("search.newFolder.title")}
+      onClose={onClose}
+      onSubmit={() => void submit()}
+      footer={
+        <>
           <button type="button" className="btn ghost" onClick={onClose}>
             {t("common.cancel")}
           </button>
           <button type="submit" className="btn primary" disabled={busy || !name.trim()}>
             {t("search.newFolder.create")}
           </button>
-        </footer>
-      </form>
-    </div>
+        </>
+      }
+    >
+      <label className="field">
+        <span className="visually-hidden">{t("folderPicker.namePlaceholder")}</span>
+        <input
+          autoFocus
+          placeholder={t("folderPicker.namePlaceholder")}
+          value={name}
+          maxLength={120}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      {failed && (
+        <div className="banner-err" role="alert">
+          {t("folderPicker.createFailed")}
+        </div>
+      )}
+    </Dialog>
   );
 }

@@ -338,3 +338,37 @@ export interface ListMediaResponse {
   next_cursor?: string | null;
   has_more: boolean;
 }
+
+export type TranslationStatusValue = "queued" | "in_progress" | "done" | "failed" | null;
+
+export interface TranslationMetadata {
+  /** Whether the `content` of this response is a translation, not the source text. */
+  is_translated: boolean;
+  translated_from?: string | null;
+  target_language?: string | null;
+  detected_language?: string | null;
+  detection_method?: string | null;
+  /** When true, translation is being produced asynchronously. Poll again. */
+  translation_pending?: boolean;
+  translation_status?: TranslationStatusValue;
+}
+
+export type RawContentVariant = "translated" | "original";
+
+/** GET /api/media/:id/raw-content: the full text, translated or original. */
+export interface RawContentResponse {
+  media_item_id: string;
+  content: string;
+  content_type?: string;
+  translation?: TranslationMetadata | null;
+  variant?: RawContentVariant;
+}
+
+/** PATCH /api/media/:id: a rename or a move, whichever the body named. */
+export interface PatchMediaResponse {
+  status: string;
+  media_id: string;
+  folder_id?: string | null;
+  previous_folder_id?: string | null;
+  title?: string | null;
+}

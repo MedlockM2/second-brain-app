@@ -7,6 +7,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { EmptyPage } from "./pages/EmptyPage";
 import { HomePage } from "./pages/HomePage";
 import { LibraryPage } from "./pages/LibraryPage";
+import { MediaPage } from "./pages/MediaPage";
 import { InstallPage } from "./pages/InstallPage";
 import { ReadingLanguagePage } from "./pages/ReadingLanguagePage";
 import { SessionProvider, useSession } from "./session/SessionProvider";
@@ -49,8 +50,8 @@ function AppRoutes() {
             <Route element={<AppShell />}>
               <Route index element={<HomePage />} />
               <Route path="library" element={<LibraryPage />} />
-              {/* Filled by task-477 (media) and task-478 (folder). */}
-              <Route path="media/:mediaId" element={<EmptyPage />} />
+              <Route path="media/:mediaId" element={<MediaPage />} />
+              {/* Filled by task-478. */}
               <Route path="folders/:folderId" element={<EmptyPage />} />
               <Route path="digest" element={<Titled page="digest" />} />
               <Route path="unsorted" element={<Titled page="unsorted" />} />
