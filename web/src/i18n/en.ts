@@ -69,4 +69,8 @@ export const en = {
   "digest.dailySubtitle": "yesterday's media",
   "digest.weeklySubtitle": "the past week, Monday to Sunday",
   "digest.openA11y": "Read the {period} digest from item {index}",
+  "review.fileHint": "or file it on the right →",
+  "review.navHint": "← → to move from one source to the next",
+  "review.fileTitle": "File in…",
+  "review.backHome": "Back to Home",
 } as const;

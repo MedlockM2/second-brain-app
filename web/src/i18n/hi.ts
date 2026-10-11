@@ -63,4 +63,8 @@ export const hi: WebCatalog = {
   "digest.dailySubtitle": "कल के मीडिया",
   "digest.weeklySubtitle": "पिछला हफ़्ता, सोमवार से रविवार",
   "digest.openA11y": "{period} Digest को आइटम {index} से पढ़ें",
+  "review.fileHint": "या दाईं ओर रखें →",
+  "review.navHint": "← → एक स्रोत से दूसरे पर जाने के लिए",
+  "review.fileTitle": "इसमें रखें…",
+  "review.backHome": "होम पर लौटें",
 };

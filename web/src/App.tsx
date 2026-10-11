@@ -11,6 +11,7 @@ import { FolderPage } from "./pages/FolderPage";
 import { HomePage } from "./pages/HomePage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { MediaPage } from "./pages/MediaPage";
+import { UnsortedPage } from "./pages/UnsortedPage";
 import { InstallPage } from "./pages/InstallPage";
 import { ReadingLanguagePage } from "./pages/ReadingLanguagePage";
 import { SessionProvider, useSession } from "./session/SessionProvider";
@@ -57,7 +58,7 @@ function AppRoutes() {
               <Route path="folders/:folderId" element={<FolderPage />} />
               <Route path="digest" element={<DigestPage />} />
               <Route path="digest/:period" element={<DigestPeriodPage />} />
-              <Route path="unsorted" element={<Titled page="unsorted" />} />
+              <Route path="unsorted" element={<UnsortedPage />} />
               <Route path="search" element={<Titled page="search" />} />
               <Route path="account" element={<AccountPage />} />
             </Route>
@@ -69,10 +70,9 @@ function AppRoutes() {
   );
 }
 
-function Titled({ page }: { page: "unsorted" | "search" }) {
-  const { t, tw } = useI18n();
+function Titled({ page }: { page: "search" }) {
+  const { t } = useI18n();
   const titles = {
-    unsorted: tw("nav.unsortedNoCount"),
     search: t("tabs.search"),
   };
   return <EmptyPage title={titles[page]} />;

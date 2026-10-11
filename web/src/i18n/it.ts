@@ -63,4 +63,8 @@ export const it: WebCatalog = {
   "digest.dailySubtitle": "i media di ieri",
   "digest.weeklySubtitle": "la settimana scorsa, da lunedì a domenica",
   "digest.openA11y": "Leggi il digest {period} dall'elemento {index}",
+  "review.fileHint": "oppure archiviala a destra →",
+  "review.navHint": "← → per passare da una fonte all'altra",
+  "review.fileTitle": "Archivia in…",
+  "review.backHome": "Torna alla Home",
 };

@@ -37,6 +37,13 @@ export function rememberFolder(folderId: string): void {
   }
 }
 
+/** The folders this browser filed into lately, among `roots`, most recent first. */
+export function recentFolders(roots: Folder[]): Folder[] {
+  return readRecent()
+    .map((id) => roots.find((folder) => folder.id === id && !folder.is_default))
+    .filter((folder): folder is Folder => Boolean(folder));
+}
+
 function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
 }
@@ -50,9 +57,18 @@ export type FolderPickerProps = {
   onPick: (folder: Folder) => Promise<void>;
   /** A folder the picker created, before it is picked. */
   onCreated: (folder: Folder) => void;
+  /** Number the recent folders 1 to 5, for a screen whose keys pick them. */
+  numbered?: boolean;
 };
 
-export function FolderPickerList({ roots, currentId = null, showUnsorted = true, onPick, onCreated }: FolderPickerProps) {
+export function FolderPickerList({
+  roots,
+  currentId = null,
+  showUnsorted = true,
+  onPick,
+  onCreated,
+  numbered = false,
+}: FolderPickerProps) {
   const { t, tw } = useI18n();
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -65,11 +81,7 @@ export function FolderPickerList({ roots, currentId = null, showUnsorted = true,
   const label = (folder: Folder) => (folder.is_default ? tw("nav.unsortedNoCount") : folder.name);
   const needle = fold(query.trim());
   const matches = needle ? candidates.filter((folder) => fold(label(folder)).includes(needle)) : candidates;
-  const recent = needle
-    ? []
-    : readRecent()
-        .map((id) => candidates.find((folder) => folder.id === id && !folder.is_default))
-        .filter((folder): folder is Folder => Boolean(folder));
+  const recent = needle ? [] : recentFolders(candidates);
   const exact = candidates.some((folder) => fold(label(folder)) === needle);
 
   const pick = async (folder: Folder) => {
@@ -104,7 +116,7 @@ export function FolderPickerList({ roots, currentId = null, showUnsorted = true,
     await pick(folder);
   };
 
-  const row = (folder: Folder) => {
+  const row = (folder: Folder, number?: number) => {
     const current = folder.id === currentId || (folder.is_default && !currentId);
     return (
       <button
@@ -119,6 +131,7 @@ export function FolderPickerList({ roots, currentId = null, showUnsorted = true,
         <Icon name={folder.is_default ? "file-tray-outline" : "folder-outline"} size={18} />
         <span className="grow ell">{label(folder)}</span>
         {current && <Icon name="checkmark" size={18} />}
+        {number !== undefined && <kbd className="kbd">{number}</kbd>}
       </button>
     );
   };
@@ -128,7 +141,7 @@ export function FolderPickerList({ roots, currentId = null, showUnsorted = true,
       <label className="field">
         <Icon name="search-outline" size={18} />
         <input
-          autoFocus
+          autoFocus={!numbered}
           placeholder={tw("picker.search")}
           aria-label={tw("picker.search")}
           value={query}
@@ -146,11 +159,11 @@ export function FolderPickerList({ roots, currentId = null, showUnsorted = true,
         {recent.length > 0 && (
           <>
             <div className="caps picker-cap">{tw("picker.recent")}</div>
-            {recent.map(row)}
+            {recent.map((folder, i) => row(folder, numbered ? i + 1 : undefined))}
             <div className="caps picker-cap">{tw("picker.all")}</div>
           </>
         )}
-        {matches.map(row)}
+        {matches.map((folder) => row(folder))}
         {needle && !exact && (
           <button type="button" className="frow" disabled={busy} onClick={() => void create()}>
             <Icon name="add-circle-outline" size={18} />

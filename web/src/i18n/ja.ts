@@ -63,4 +63,8 @@ export const ja: WebCatalog = {
   "digest.dailySubtitle": "昨日のメディア",
   "digest.weeklySubtitle": "先週（月曜〜日曜）",
   "digest.openA11y": "{period}の Digest を {index} 件目から読む",
+  "review.fileHint": "または右側で整理 →",
+  "review.navHint": "← → でソースを切り替え",
+  "review.fileTitle": "整理先…",
+  "review.backHome": "ホームに戻る",
 };

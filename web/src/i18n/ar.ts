@@ -63,4 +63,8 @@ export const ar: WebCatalog = {
   "digest.dailySubtitle": "وسائط الأمس",
   "digest.weeklySubtitle": "الأسبوع الماضي، من الاثنين إلى الأحد",
   "digest.openA11y": "قراءة Digest {period} بدءًا من العنصر {index}",
+  "review.fileHint": "أو احفظه في اليمين ←",
+  "review.navHint": "← → للانتقال من مصدر إلى آخر",
+  "review.fileTitle": "الحفظ في…",
+  "review.backHome": "العودة إلى الرئيسية",
 };

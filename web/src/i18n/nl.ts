@@ -63,4 +63,8 @@ export const nl: WebCatalog = {
   "digest.dailySubtitle": "de media van gisteren",
   "digest.weeklySubtitle": "de afgelopen week, maandag tot zondag",
   "digest.openA11y": "De {period} digest lezen vanaf item {index}",
+  "review.fileHint": "of berg hem rechts op →",
+  "review.navHint": "← → om van de ene bron naar de volgende te gaan",
+  "review.fileTitle": "Opbergen in…",
+  "review.backHome": "Terug naar Start",
 };

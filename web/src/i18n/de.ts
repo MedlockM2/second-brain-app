@@ -63,4 +63,8 @@ export const de: WebCatalog = {
   "digest.dailySubtitle": "die Medien von gestern",
   "digest.weeklySubtitle": "die vergangene Woche, Montag bis Sonntag",
   "digest.openA11y": "Den Digest {period} ab Eintrag {index} lesen",
+  "review.fileHint": "oder rechts einordnen →",
+  "review.navHint": "← → um von einer Quelle zur nächsten zu wechseln",
+  "review.fileTitle": "Einordnen in…",
+  "review.backHome": "Zurück zum Start",
 };

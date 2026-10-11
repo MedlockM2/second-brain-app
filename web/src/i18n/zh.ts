@@ -63,4 +63,8 @@ export const zh: WebCatalog = {
   "digest.dailySubtitle": "昨天的媒体",
   "digest.weeklySubtitle": "上周（周一至周日）",
   "digest.openA11y": "从第 {index} 项开始阅读{period} Digest",
+  "review.fileHint": "或在右侧归入文件夹 →",
+  "review.navHint": "← → 在来源之间切换",
+  "review.fileTitle": "归入…",
+  "review.backHome": "返回主页",
 };
