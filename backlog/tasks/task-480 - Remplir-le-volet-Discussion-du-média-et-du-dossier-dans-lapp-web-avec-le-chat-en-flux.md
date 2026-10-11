@@ -47,9 +47,9 @@ L'interface est la direction de l'owner : `mobile-design-mockups/web_app_owner_d
 - **Le flux** : lu par `fetch` et `ReadableStream` avec `Authorization: Bearer` sur l'URL `execute-api` de la façade. `EventSource` ne permet pas d'en-tête (README §6.3, point 6). La reprise se fait par `after_seq` ; la relecture de la conversation prend le relais en cas d'échec, comme le contrôleur mobile (task-467, `mobile/src/contexts/ChatSessionContext.tsx`).
 - **Le contrat est celui de task-470** : pas d'événement `replaced`. Un tour perdu revient en échec (`generation_lost`, `dispatch_failed`) et se relance comme une nouvelle question.
 
-## Point d'attention : réutiliser `parseSseBlock` sans Expo
+## Réutiliser `parseSseBlock`
 
-Le complément prévoit de réutiliser la fonction pure `parseSseBlock` de `mobile/src/services/chatService.ts` **sans la modifier**. Or ce fichier importe en tête `expo/fetch` et `expo-crypto` : l'importer tel quel par l'alias tirerait des modules Expo dans le bundle web. **Ne pas modifier `mobile/`** (cette tâche n'est pas routée vers task-mobile). Choisir une voie qui laisse le client web **sans aucune dépendance Expo** (par exemple résoudre ces deux spécificateurs vers des modules web dans la configuration Vite, ou un analyseur propre au web), et dire dans la note de fin laquelle et pourquoi.
+La lecture d'un bloc du flux (`parseSseBlock`) vit dans `packages/core` depuis task-493, sans aucune dépendance Expo. Le client web l'importe de là. Ne pas réécrire d'analyseur propre au web, ne pas créer d'alias vers `mobile/src`, et ne modifier aucun fichier de `mobile/`.
 
 ## Règles
 

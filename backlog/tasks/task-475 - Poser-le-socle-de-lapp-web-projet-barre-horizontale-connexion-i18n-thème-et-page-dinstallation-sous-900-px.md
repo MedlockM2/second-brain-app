@@ -6,11 +6,13 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-11 15:55'
+updated_date: '2026-10-11 16:22'
 labels:
   - web
   - feature
 dependencies:
   - TASK-473
+  - TASK-493
 references:
   - docs/research/task-424-website-and-browser-extension/README.md
   - >-
@@ -40,8 +42,8 @@ L'interface est **la direction de l'owner** : `mobile-design-mockups/web_app_own
 
 ## Périmètre
 
-- Le projet `web/`, en **Vite, React 19 et React Router en mode SPA**, avec le gestionnaire de paquets déjà utilisé par `mobile/`.
-- L'**alias de build vers `mobile/src`** (README §9.2), **en lecture** : `types`, `lib`, `services`, `i18n`, `constants`. N'importer que des modules sans dépendance Expo ni React Native. **Ne modifier aucun fichier de `mobile/`** : cette tâche n'est pas routée vers task-mobile. Si un module nécessaire en dépend, le dire dans la note de fin plutôt que de le dupliquer en silence.
+- Le projet `web/`, en **Vite, React 19 et React Router en mode SPA**, déclaré comme workspace npm à côté de `mobile/`.
+- **Le code commun vient de `packages/core`** (task-493), importé comme dépendance de workspace : types de l'API, client d'API (le web lui fournit sa façon de faire une requête et de gérer le jeton), traductions communes, constantes. **Pas d'alias vers `mobile/src`** : il remplace l'alias du README §9.2, qui ne tient pas (des modules de `mobile/src` importent Expo). **Ne modifier aucun fichier de `mobile/`**. Ce qui manque à `packages/core` et peut être neutre y est ajouté, en respectant sa règle (aucun import de plateforme, `AGENTS.md`).
 - La **barre horizontale** de la direction de l'owner : logo, Accueil, Bibliothèque, Digest, Non classés · N, recherche, Ajouter, thème, Mon compte. Les destinations sont des routes vides que les tâches d'écran rempliront.
 - **Connexion et inscription** : e-mail et mot de passe, Google par Google Identity Services, Apple par Sign in with Apple JS, choix de la langue de lecture à l'inscription (capture `19-connexion.png`).
 - La **session de W-03** (task-473) : refresh en cookie, **access token en mémoire seulement**, jamais dans `localStorage`.
@@ -61,7 +63,7 @@ Les origines JavaScript autorisées du client Google et le *Services ID* Apple (
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le projet web/ (Vite, React 19, React Router en SPA) existe, avec l'alias de build vers mobile/src en lecture et aucun fichier de mobile/ modifié
+- [ ] #1 Le projet web/ (Vite, React 19, React Router en SPA) existe comme workspace npm, importe le code commun depuis packages/core sans alias vers mobile/src, et aucun fichier de mobile/ n'est modifié
 - [ ] #2 La barre horizontale de la direction de l'owner est rendue avec ses neuf entrées, et la connexion par e-mail, Google Identity Services et Sign in with Apple JS ainsi que l'inscription avec choix de la langue de lecture sont câblées sur l'API existante
 - [ ] #3 La session suit task-473 : refresh en cookie, access token en mémoire seulement
 - [ ] #4 Sous 900 px de large, seule la page d'installation est rendue, avec les deux boutons de store et sans lien vers la version ordinateur
