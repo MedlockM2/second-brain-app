@@ -1,13 +1,13 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: abandoned   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : relais de l'outbox du chat et récupération des tours bloqués
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: Abandonné. Après lecture, l'owner revient sur le point 4 de sa décision task-430 (amendement du 2026-10-11 dans `docs/research/task-430-chatbot-architecture/README.md`). Pour simplifier l'implémentation et la maintenance, le chat suit la plupart des implémentations publiques : un tour perdu (crash de l'API avant l'envoi, envoi SQS en échec, worker mort) n'est pas relancé automatiquement, il est scellé en échec et l'utilisateur le relance. Il n'y a donc plus d'outbox à relayer ni de récupération à concevoir : ni l'option A ni ses alternatives ne sont retenues. Ce qui reste de la recommandation A (l'envoi SQS direct par l'API après la transaction, l'absence de flux DynamoDB) et la détection d'un tour perdu à la lecture sont décrits dans task-470, qui remplace task-465.
+**Validated at**: 2026-10-11
 
 ---
 

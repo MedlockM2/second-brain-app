@@ -55,6 +55,28 @@ Les anciennes consignes du complément sont conservées dans
    deuxième débit. Un crash après appel fournisseur peut toutefois provoquer un nouvel appel :
    ne pas promettre une exécution exactement une fois du LLM.
 
+   **Amendement de l'owner du 2026-10-11, qui prime sur ce point 4 et sur la phrase du point 2
+   sur la redélivrance SQS.** Pour simplifier l'implémentation et la maintenance, le chat suit
+   la pratique de la plupart des implémentations publiques (OpenAI, Vercel AI SDK, LibreChat) :
+   **un tour dont le lancement ou la génération est perdu n'est pas relancé automatiquement ; il
+   est scellé en échec et l'utilisateur le relance.** Sont perdus : un crash de l'API entre
+   l'acceptation et l'envoi, un envoi SQS en échec, un worker mort avant ou pendant la génération.
+   En conséquence : **pas d'outbox**, pas d'item d'intention d'envoi, pas de relais, pas de
+   balayeur planifié, pas d'index de récupération, pas de remplacement de tentative.
+   - L'API envoie le message vers la file de chat directement, juste après la transaction
+     d'acceptation et le débit. Si l'envoi échoue, elle scelle le tour en échec.
+   - Un tour dont la tentative reste trop longtemps en file, ou dont le bail a expiré, est
+     considéré comme perdu. Il est détecté **à la lecture**, sans processus planifié : lecture de
+     la conversation, envoi du tour suivant, livraison SQS tardive au worker. Il est alors scellé
+     en échec, et en échec partiel s'il a produit du texte.
+   - Une redélivrance SQS après crash ne relance jamais la génération.
+   - L'app propose de relancer un tour en échec, comme pour tout autre échec.
+
+   Ce qui reste exigé : l'acceptation atomique en DynamoDB, le débit unique par tour, le
+   remboursement d'un tour sans texte visible, et le fait qu'une livraison dupliquée ne crée ni
+   deuxième réponse visible ni deuxième débit. Le benchmark task-458 est abandonné : sa question
+   (le mécanisme d'outbox) n'existe plus. Task-465 est archivée et remplacée par task-470.
+
 5. **Diffusion SSE.** Une Lambda de diffusion distincte relit les fragments persistés et les
    transmet au mobile. Elle utilise FastAPI / uvicorn avec le Lambda Web Adapter, derrière une
    **API Gateway REST régionale dédiée au flux, en mode STREAM**. Conserver la façade HTTP actuelle
