@@ -767,6 +767,7 @@ async def seal_turn(
 
     now = _now().isoformat()
     answer_set = ["#st = :status", "completed_at = :now"]
+    answer_names = {"#st": "status"}
     answer_values: Dict[str, Any] = {
         ":status": status.value,
         ":now": now,
@@ -782,7 +783,10 @@ async def seal_turn(
         ("llm_usage", _usage_item(llm_usage)),
     ):
         if value is not None:
-            answer_set.append(f"{attribute} = :{attribute}")
+            # `text` is reserved by DynamoDB. Alias every optional field so all
+            # terminal paths (completion, stop and lost-turn recovery) can seal.
+            answer_names[f"#{attribute}"] = attribute
+            answer_set.append(f"#{attribute} = :{attribute}")
             answer_values[f":{attribute}"] = value
 
     attempt_set = ["#st = :status", "ended_at = :now"]
@@ -818,7 +822,7 @@ async def seal_turn(
         _key(user_id, message_sk(conversation_id, turn_index, ChatRole.ASSISTANT)),
         update="SET " + ", ".join(answer_set),
         condition="attempt_id = :attempt AND #st IN (:accepted, :generating)",
-        names={"#st": "status"},
+        names=answer_names,
         values=answer_values,
     )
     transaction.update(
