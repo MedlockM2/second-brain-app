@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-04 16:22'
-updated_date: '2026-10-10 14:48'
+updated_date: '2026-10-11 15:06'
 labels:
   - benchmark
   - scoping
@@ -177,4 +177,20 @@ Les onze AC sont cochés. Quatre d'entre eux — **#2, #3, #5, #6** — et une p
 - **AC #14** : seuls `docs/research/task-424-*/`, `mobile-design-mockups/web_app/` et ce fichier sont modifiés.
 
 **La recommandation attend la validation de l'owner.** La tâche reste `To Do`. Rien n'est commité : l'arbre de travail principal portait déjà des modifications non commitées d'autres tâches.
+
+2026-10-11 — Mode **complement**. Livrable : `docs/research/task-424-website-and-browser-extension/complement-response-2026-10-11.md`, qui répond à `complement-request-2026-10-11.md`. Le README principal n'a pas été modifié.
+
+Les onze consignes sont traitées dans l'ordre.
+
+- Les 22 tâches du découpage (W-01 à W-14, X-01 à X-04, B-01/B-01i, B-02/B-02i) remplacent le chiffrage en jours du §10.2. Elles sont listées avec leur périmètre, leurs dépendances et des AC satisfaisables, mais pas créées.
+- task-445 devient un prérequis du développement.
+- Le CORS de la façade de flux a été vérifié sur dev : le pré-vol `OPTIONS` répond 403 `MissingAuthenticationToken` et le `GET` n'a pas d'en-tête `Access-Control-*`. Le CORS manque, c'est devenu la tâche W-04.
+- L'appairage de l'extension se fait en un clic par `externally_connectable`, avec un jeton de lignée `browser_extension` à portée limitée et révocable, et un code en secours.
+- Les frais du Chrome Web Store sont corrigés à 5 $ une fois.
+- L'hébergement passe tout sur AWS : Route 53, S3 + CloudFront, et le domaine personnalisé d'API Gateway.
+- La règle d'identité du texte extrait est écrite pour l'étude reportée.
+- Le périmètre V1 de l'extension est celui des apps (`ingest-url`, `ingest-shared-content` avec `source_url`), publié sur Chrome et Edge avec le même paquet.
+- Trois points déduits sont listés au §3.6 pour validation.
+
+**La recommandation attend la validation de l'owner** (`owner_decision: pending`).
 <!-- SECTION:NOTES:END -->
