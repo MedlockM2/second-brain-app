@@ -1,9 +1,10 @@
 ---
 id: TASK-482
 title: 'Revoir les non classés dans l''app web, au clavier'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:57'
+updated_date: '2026-10-11 17:31'
 labels:
   - web
   - feature
@@ -23,7 +24,6 @@ references:
 priority: medium
 type: feature
 ordinal: 89000
-dispatchable: true
 ---
 
 ## Description
@@ -56,9 +56,21 @@ Vérification contre les captures 06 et 07 sur un compte `-dev` qui a des non cl
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La revue rend la file à gauche, la source à décider au centre et les destinations ouvertes à droite, avec Jeter, Approfondir et Ranger
-- [ ] #2 Les raccourcis 1 à 5, D, O, ← et → de la maquette agissent sur la source courante, et l'écran Plus rien à trier termine la revue
-- [ ] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #4 Les libellés sont présents dans les 11 langues
-- [ ] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 La revue rend la file à gauche, la source à décider au centre et les destinations ouvertes à droite, avec Jeter, Approfondir et Ranger
+- [x] #2 Les raccourcis 1 à 5, D, O, ← et → de la maquette agissent sur la source courante, et l'écran Plus rien à trier termine la revue
+- [x] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #4 Les libellés sont présents dans les 11 langues
+- [x] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit 637112e2.
+
+- **/unsorted** (`web/src/pages/UnsortedPage.tsx`) : la file à gauche (position « 3 / 12 », ligne courante marquée), la source à décider au centre (couverture, type, âge, titre, créateur, accroche et puces du review_blurb, ou « Pas encore de résumé court »), les destinations toujours ouvertes à droite (`FolderPickerList` de task-479, en ligne, dossiers récents numérotés 1 à 5, Non classés exclu).
+- Actions : Jeter (D, `DELETE /api/media/:id`, retrait immédiat et remise en place si l'appel échoue), Approfondir (O, ouvre la page média), Ranger (clic ou 1-5, `PATCH /api/media/:id {folder_id}`) ; ← → pour naviguer (inversées en RTL, ignorées pendant une saisie ou sous un dialogue). « Plus rien à trier » termine la revue avec un retour à l'Accueil.
+- Même file que le mobile : dossier par défaut désigné par son id, ordre chronologique croissant, une page de 100, figée à l'ouverture. Chaque décision relit le compteur « Non classés · N » de la barre.
+- `FolderPickerList` gagne `numbered` et `recentFolders()` exporté pour les raccourcis.
+- 4 libellés web en 11 langues ; build, typecheck, lint propres ; vérifié en Chrome headless (D puis 1 au clavier, appels DELETE et PATCH observés).
+<!-- SECTION:FINAL_SUMMARY:END -->
