@@ -415,6 +415,7 @@ export default function ArtifactDetailScreen() {
               type={state.type}
               payload={state.payload}
               onQuizQuestionChange={scrollToArtifactBody}
+              onQuizFinish={handleBack}
             />
           </View>
         </ScrollView>
@@ -429,10 +430,12 @@ function ArtifactBody({
   type,
   payload,
   onQuizQuestionChange,
+  onQuizFinish,
 }: {
   type: ArtifactKind;
   payload: ArtifactPayload;
   onQuizQuestionChange: () => void;
+  onQuizFinish: () => void;
 }) {
   const content = (payload?.content ?? {}) as Record<string, unknown>;
 
@@ -452,6 +455,7 @@ function ArtifactBody({
     <QuizBody
       content={content}
       onQuestionChange={onQuizQuestionChange}
+      onFinish={onQuizFinish}
     />
   );
 }
@@ -714,16 +718,18 @@ interface QuizQuestion {
 function QuizBody({
   content,
   onQuestionChange,
+  onFinish,
 }: {
   content: Record<string, unknown>;
   onQuestionChange: () => void;
+  /** "Done" on the last question: leave the quiz for wherever it was opened from. */
+  onFinish: () => void;
 }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const questions = pickQuizQuestions(content);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
 
   if (!questions || questions.length === 0) {
     return (
@@ -739,8 +745,11 @@ function QuizBody({
   const progressWidth = `${((currentIndex + 1) / questions.length) * 100}%` as const;
 
   const handleContinue = () => {
+    // No terminal "complete" state on this screen: a filled pill that cannot be
+    // pressed read as a button. The quiz records nothing on completion, so the
+    // last "Done" simply closes it and hands the reader back to the artifacts tab.
     if (isLastQuestion) {
-      setCompleted(true);
+      onFinish();
       return;
     }
     setCurrentIndex((index) => index + 1);
@@ -780,7 +789,7 @@ function QuizBody({
         onPick={setPicked}
       />
 
-      {answered && !completed ? (
+      {answered ? (
         <Pressable
           style={({ pressed }) => [
             styles.quizContinueButton,
@@ -804,22 +813,6 @@ function QuizBody({
             />
           ) : null}
         </Pressable>
-      ) : null}
-
-      {completed ? (
-        <View
-          style={styles.quizComplete}
-          accessibilityRole="text"
-          accessibilityLiveRegion="polite"
-          testID="quiz-complete"
-        >
-          <Ionicons
-            name="checkmark-circle"
-            size={Typography.headline.fontSize}
-            color={Colors.onPrimary}
-          />
-          <Text style={styles.quizCompleteText}>{t("artifact.quizComplete")}</Text>
-        </View>
       ) : null}
     </View>
   );
@@ -1562,21 +1555,6 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       opacity: 0.8,
     },
     quizContinueButtonText: {
-      fontSize: Typography.body.fontSize,
-      fontWeight: Typography.headline.fontWeight,
-      color: Colors.onPrimary,
-    },
-    quizComplete: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      minHeight: TouchTarget.comfortable,
-      paddingHorizontal: Spacing.lg,
-      borderRadius: BorderRadius.full,
-      backgroundColor: Colors.primary,
-    },
-    quizCompleteText: {
       fontSize: Typography.body.fontSize,
       fontWeight: Typography.headline.fontWeight,
       color: Colors.onPrimary,
