@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Save the page you are reading, or a selection, to your Deepn library."
+  },
+  "actionTitle": {
+    "message": "Save to Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "Save the selection to Deepn"
+  },
+  "savePage": {
+    "message": "Save this page"
+  },
+  "saving": {
+    "message": "Saving…"
+  },
+  "saved": {
+    "message": "Saved. Processing has started."
+  },
+  "folder": {
+    "message": "Folder"
+  },
+  "unsorted": {
+    "message": "Unsorted"
+  },
+  "saveFailed": {
+    "message": "This page could not be saved."
+  },
+  "notSavable": {
+    "message": "This page cannot be saved: it is not a web address."
+  },
+  "pairTitle": {
+    "message": "Link the extension to your account"
+  },
+  "pairOneClick": {
+    "message": "Open Deepn on the web, go to My account › Browser extension, and click “Link this extension”."
+  },
+  "openAccount": {
+    "message": "Open My account"
+  },
+  "pairRescue": {
+    "message": "Or type the code shown there, with your account email:"
+  },
+  "pairEmail": {
+    "message": "Your account email"
+  },
+  "pairCode": {
+    "message": "6-digit code"
+  },
+  "pairSubmit": {
+    "message": "Link"
+  },
+  "pairFailed": {
+    "message": "This code does not work. Ask for a new one if it has expired."
+  },
+  "pairExpired": {
+    "message": "The link with your account has expired. Link the extension again."
+  },
+  "signOut": {
+    "message": "Sign out"
+  },
+  "linked": {
+    "message": "Linked to your Deepn account"
+  },
+  "selectionSaved": {
+    "message": "Selection saved to Deepn"
+  },
+  "selectionFailed": {
+    "message": "The selection could not be saved."
+  },
+  "signOutFailed": {
+    "message": "Could not sign out. Check your connection and try again."
+  }
+}

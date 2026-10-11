@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Guarde a página que está a ler, ou uma seleção, na sua biblioteca Deepn."
+  },
+  "actionTitle": {
+    "message": "Guardar no Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "Guardar a seleção no Deepn"
+  },
+  "savePage": {
+    "message": "Guardar esta página"
+  },
+  "saving": {
+    "message": "A guardar…"
+  },
+  "saved": {
+    "message": "Guardado. O processamento começou."
+  },
+  "folder": {
+    "message": "Pasta"
+  },
+  "unsorted": {
+    "message": "Não organizados"
+  },
+  "saveFailed": {
+    "message": "Não foi possível guardar esta página."
+  },
+  "notSavable": {
+    "message": "Esta página não pode ser guardada: não é um endereço web."
+  },
+  "pairTitle": {
+    "message": "Associe a extensão à sua conta"
+  },
+  "pairOneClick": {
+    "message": "Abra o Deepn na web, vá a A minha conta › Extensão do navegador e clique em «Associar esta extensão»."
+  },
+  "openAccount": {
+    "message": "Abrir A minha conta"
+  },
+  "pairRescue": {
+    "message": "Ou escreva o código apresentado lá, com o email da sua conta:"
+  },
+  "pairEmail": {
+    "message": "Email da sua conta"
+  },
+  "pairCode": {
+    "message": "Código de 6 algarismos"
+  },
+  "pairSubmit": {
+    "message": "Associar"
+  },
+  "pairFailed": {
+    "message": "Este código não funciona. Peça um novo se tiver expirado."
+  },
+  "pairExpired": {
+    "message": "A associação à sua conta expirou. Associe a extensão novamente."
+  },
+  "signOut": {
+    "message": "Terminar sessão"
+  },
+  "linked": {
+    "message": "Associada à sua conta Deepn"
+  },
+  "selectionSaved": {
+    "message": "Seleção guardada no Deepn"
+  },
+  "selectionFailed": {
+    "message": "Não foi possível guardar a seleção."
+  },
+  "signOutFailed": {
+    "message": "Não foi possível terminar sessão. Verifica a ligação e tenta novamente."
+  }
+}

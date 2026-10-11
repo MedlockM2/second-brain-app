@@ -63,3 +63,29 @@ export interface AuthError {
   raw?: string;
   code?: string;
 }
+
+/** `POST /api/auth/extension-tokens` (and the rescue code's claim): a browser extension lineage. */
+export interface ExtensionTokenResponse {
+  lineage_id: string;
+  refresh_token: string;
+  expires_at: string;
+}
+
+/** One entry of `GET /api/auth/extension-tokens`: an extension linked to the account. */
+export interface LinkedExtension {
+  lineage_id: string;
+  client_label?: string | null;
+  paired_at: string;
+  last_used_at: string;
+  expires_at: string;
+}
+
+export interface LinkedExtensionsResponse {
+  extensions: LinkedExtension[];
+}
+
+/** `POST /api/auth/extension-tokens/pairing-code`: six digits for the extension's popup. */
+export interface PairingCodeResponse {
+  code: string;
+  expires_at: string;
+}

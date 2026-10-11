@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Bewaar de pagina die je leest, of een selectie, in je Deepn-bibliotheek."
+  },
+  "actionTitle": {
+    "message": "Bewaren in Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "Selectie bewaren in Deepn"
+  },
+  "savePage": {
+    "message": "Deze pagina bewaren"
+  },
+  "saving": {
+    "message": "Bezig met bewaren…"
+  },
+  "saved": {
+    "message": "Bewaard. De verwerking is begonnen."
+  },
+  "folder": {
+    "message": "Map"
+  },
+  "unsorted": {
+    "message": "Ongesorteerd"
+  },
+  "saveFailed": {
+    "message": "Deze pagina kon niet worden bewaard."
+  },
+  "notSavable": {
+    "message": "Deze pagina kan niet worden bewaard: het is geen webadres."
+  },
+  "pairTitle": {
+    "message": "Koppel de extensie aan je account"
+  },
+  "pairOneClick": {
+    "message": "Open Deepn op het web, ga naar Mijn account › Browserextensie en klik op ‘Deze extensie koppelen’."
+  },
+  "openAccount": {
+    "message": "Mijn account openen"
+  },
+  "pairRescue": {
+    "message": "Of typ de code die daar staat, met het e-mailadres van je account:"
+  },
+  "pairEmail": {
+    "message": "E-mailadres van je account"
+  },
+  "pairCode": {
+    "message": "Code van 6 cijfers"
+  },
+  "pairSubmit": {
+    "message": "Koppelen"
+  },
+  "pairFailed": {
+    "message": "Deze code werkt niet. Vraag een nieuwe aan als hij verlopen is."
+  },
+  "pairExpired": {
+    "message": "De koppeling met je account is verlopen. Koppel de extensie opnieuw."
+  },
+  "signOut": {
+    "message": "Uitloggen"
+  },
+  "linked": {
+    "message": "Gekoppeld aan je Deepn-account"
+  },
+  "selectionSaved": {
+    "message": "Selectie bewaard in Deepn"
+  },
+  "selectionFailed": {
+    "message": "De selectie kon niet worden bewaard."
+  },
+  "signOutFailed": {
+    "message": "Afmelden is mislukt. Controleer je verbinding en probeer opnieuw."
+  }
+}

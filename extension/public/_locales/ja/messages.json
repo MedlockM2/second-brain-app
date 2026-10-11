@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "読んでいるページや選択した部分を Deepn のライブラリに保存します。"
+  },
+  "actionTitle": {
+    "message": "Deepn に保存"
+  },
+  "menuSaveSelection": {
+    "message": "選択範囲を Deepn に保存"
+  },
+  "savePage": {
+    "message": "このページを保存"
+  },
+  "saving": {
+    "message": "保存中…"
+  },
+  "saved": {
+    "message": "保存しました。処理が始まりました。"
+  },
+  "folder": {
+    "message": "フォルダ"
+  },
+  "unsorted": {
+    "message": "未整理"
+  },
+  "saveFailed": {
+    "message": "このページを保存できませんでした。"
+  },
+  "notSavable": {
+    "message": "このページは Web アドレスではないため保存できません。"
+  },
+  "pairTitle": {
+    "message": "拡張機能をアカウントと連携"
+  },
+  "pairOneClick": {
+    "message": "Web 版の Deepn を開き、マイアカウント › ブラウザ拡張機能 で「この拡張機能を連携」をクリックしてください。"
+  },
+  "openAccount": {
+    "message": "マイアカウントを開く"
+  },
+  "pairRescue": {
+    "message": "または、そこに表示されたコードとアカウントのメールアドレスを入力してください："
+  },
+  "pairEmail": {
+    "message": "アカウントのメールアドレス"
+  },
+  "pairCode": {
+    "message": "6 桁のコード"
+  },
+  "pairSubmit": {
+    "message": "連携"
+  },
+  "pairFailed": {
+    "message": "このコードは使えません。期限切れの場合は新しいコードを取得してください。"
+  },
+  "pairExpired": {
+    "message": "アカウントとの連携の期限が切れました。もう一度連携してください。"
+  },
+  "signOut": {
+    "message": "サインアウト"
+  },
+  "linked": {
+    "message": "Deepn アカウントと連携済み"
+  },
+  "selectionSaved": {
+    "message": "選択範囲を Deepn に保存しました"
+  },
+  "selectionFailed": {
+    "message": "選択範囲を保存できませんでした。"
+  },
+  "signOutFailed": {
+    "message": "ログアウトできませんでした。接続を確認して再試行してください。"
+  }
+}

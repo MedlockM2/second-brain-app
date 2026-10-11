@@ -1,0 +1,32 @@
+/* The web app's tokens (web/src/styles.css), light and dark. */
+:root {
+  --primary: #ffcb05; --on-primary: #1c1b1a; --background: #fcf9f6; --surface-container: #f1edea;
+  --text-main: #2b2d42; --text-muted: #8d99ae; --text-subtle: #5c6880; --error: #ba1a1a; --outline-variant: #c8c7bd;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #f0bf2a; --background: #171511; --surface-container: #2d2a25;
+    --text-main: #f1ebe1; --text-muted: #9aa3b4; --text-subtle: #c6cdd9; --error: #ffb4ab; --outline-variant: #3d3932;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; width: 340px; padding: 14px 16px 16px; background: var(--background); color: var(--text-main); font: 400 14px/1.5 "Inter", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif; }
+h1 { font-size: 16px; margin: 4px 0 6px; }
+.head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 16px; }
+.page { padding: 10px 12px; border-radius: 12px; background: var(--surface-container); margin-bottom: 12px; }
+.title { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-subtle); margin-bottom: 4px; }
+select, input { width: 100%; height: 38px; padding: 0 12px; border-radius: 9999px; border: 0; background: var(--surface-container); color: var(--text-main); font: inherit; margin-bottom: 10px; }
+select:focus, input:focus { outline: 2px solid var(--primary); }
+.btn { width: 100%; height: 40px; border-radius: 9999px; border: 0; background: var(--surface-container); color: var(--text-main); font: inherit; font-weight: 600; cursor: pointer; }
+.btn.primary { background: var(--primary); color: var(--on-primary); }
+.btn:disabled { opacity: .6; cursor: default; }
+.link { background: none; border: 0; padding: 0; color: var(--text-subtle); text-decoration: underline; cursor: pointer; font: inherit; }
+.small { font-size: 12px; }
+.muted { color: var(--text-muted); }
+.status { min-height: 1.5em; margin: 8px 0 0; font-size: 13px; color: var(--text-subtle); }
+.status.error { color: var(--error); }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--outline-variant); }
+#rescue { margin-top: 16px; }

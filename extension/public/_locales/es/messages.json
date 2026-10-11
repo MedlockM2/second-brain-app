@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Guarda la página que estás leyendo, o una selección, en tu biblioteca de Deepn."
+  },
+  "actionTitle": {
+    "message": "Guardar en Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "Guardar la selección en Deepn"
+  },
+  "savePage": {
+    "message": "Guardar esta página"
+  },
+  "saving": {
+    "message": "Guardando…"
+  },
+  "saved": {
+    "message": "Guardado. El procesamiento ha empezado."
+  },
+  "folder": {
+    "message": "Carpeta"
+  },
+  "unsorted": {
+    "message": "Sin clasificar"
+  },
+  "saveFailed": {
+    "message": "No se pudo guardar esta página."
+  },
+  "notSavable": {
+    "message": "Esta página no se puede guardar: no es una dirección web."
+  },
+  "pairTitle": {
+    "message": "Vincula la extensión a tu cuenta"
+  },
+  "pairOneClick": {
+    "message": "Abre Deepn en la web, ve a Mi cuenta › Extensión del navegador y haz clic en «Vincular esta extensión»."
+  },
+  "openAccount": {
+    "message": "Abrir Mi cuenta"
+  },
+  "pairRescue": {
+    "message": "O escribe el código que aparece allí, con el correo de tu cuenta:"
+  },
+  "pairEmail": {
+    "message": "Correo de tu cuenta"
+  },
+  "pairCode": {
+    "message": "Código de 6 cifras"
+  },
+  "pairSubmit": {
+    "message": "Vincular"
+  },
+  "pairFailed": {
+    "message": "Este código no funciona. Pide uno nuevo si ha caducado."
+  },
+  "pairExpired": {
+    "message": "La vinculación con tu cuenta ha caducado. Vuelve a vincular la extensión."
+  },
+  "signOut": {
+    "message": "Cerrar sesión"
+  },
+  "linked": {
+    "message": "Vinculada a tu cuenta de Deepn"
+  },
+  "selectionSaved": {
+    "message": "Selección guardada en Deepn"
+  },
+  "selectionFailed": {
+    "message": "No se pudo guardar la selección."
+  },
+  "signOutFailed": {
+    "message": "No se pudo cerrar sesión. Comprueba tu conexión e inténtalo de nuevo."
+  }
+}

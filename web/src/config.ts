@@ -20,6 +20,11 @@ export const Config = {
   PLAY_STORE_URL: env.VITE_PLAY_STORE_URL ?? "",
   /** The public site (`https://www.<domain>`), home of the extension's install page. */
   SITE_URL: trimSlash(env.VITE_SITE_URL ?? ""),
+  /**
+   * The extension's ids on the Chrome Web Store and on Edge Add-ons: the same
+   * package gets a different id in each store; pairing tries them in order.
+   */
+  EXTENSION_IDS: (env.VITE_EXTENSION_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean),
   /** The feedback board, opened as-is when the API cannot sign the visitor in to it. */
   FEEDBACK_URL: env.VITE_FEEDBACK_URL ?? "",
 } as const;

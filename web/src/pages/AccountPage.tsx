@@ -1,7 +1,13 @@
 import { getFriendlyErrorMessage } from "@media-summarizer/core/errors/friendlyError";
 import { LOCALE_ENDONYMS, SUPPORTED_LOCALES } from "@media-summarizer/core/i18n/locales";
 import { formatDate, formatNumber, type TranslationKey } from "@media-summarizer/core/i18n/runtime";
-import type { AuthUser } from "@media-summarizer/core/types/auth";
+import type {
+  AuthUser,
+  ExtensionTokenResponse,
+  LinkedExtension,
+  LinkedExtensionsResponse,
+  PairingCodeResponse,
+} from "@media-summarizer/core/types/auth";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { apiRequest } from "../api";
@@ -393,18 +399,181 @@ function ThemePane() {
   );
 }
 
-/** What the extension does and where to get it; linking it is task-487's. */
+/**
+ * The extension (task-487): link the one in this browser in one click, list the
+ * linked ones and unlink them, or show a rescue code.
+ *
+ * One click asks the API for a token of the extension's own lineage and hands
+ * it over through `externally_connectable` — which only this origin may use —
+ * to each configured extension id (one per store); the first that answers
+ * wins. When none answers (not installed, another browser profile), the rescue
+ * code is the way.
+ */
+type ChromeRuntime = {
+  sendMessage: (id: string, message: unknown, callback: (response: unknown) => void) => void;
+  lastError?: unknown;
+};
+
+function sendToExtension(id: string, message: unknown): Promise<boolean> {
+  const runtime = (window as unknown as { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime;
+  if (!runtime?.sendMessage) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(false), 2000);
+    try {
+      runtime.sendMessage(id, message, (response) => {
+        window.clearTimeout(timer);
+        // Reading lastError is what tells Chrome the failure was handled.
+        resolve(!runtime.lastError && (response as { ok?: boolean } | undefined)?.ok === true);
+      });
+    } catch {
+      window.clearTimeout(timer);
+      resolve(false);
+    }
+  });
+}
+
+/** "Chrome · macOS": how the list names this browser. */
+function browserLabel(): string {
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : "Browser";
+  const os = /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /CrOS/.test(ua) ? "ChromeOS" : /Linux/.test(ua) ? "Linux" : "";
+  return os ? `${browser} · ${os}` : browser;
+}
+
 function ExtensionPane() {
-  const { tw } = useI18n();
+  const { t, tw } = useI18n();
+  const [linked, setLinked] = useState<LinkedExtension[] | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [outcome, setOutcome] = useState<"linked" | "not-found" | "failed" | null>(null);
+  const [code, setCode] = useState<PairingCodeResponse | null>(null);
+  const [round, setRound] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const [codeBusy, setCodeBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest<LinkedExtensionsResponse>("/api/auth/extension-tokens")
+      .then((response) => { if (active) { setLinked(response.extensions); setFailed(false); } })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; };
+  }, [round]);
+
+  useEffect(() => {
+    if (!code) return;
+    const timer = window.setTimeout(() => setCode(null), Math.max(0, new Date(code.expires_at).getTime() - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [code]);
+
+  const link = async () => {
+    setLinking(true);
+    setOutcome(null);
+    try {
+      const issued = await apiRequest<ExtensionTokenResponse>("/api/auth/extension-tokens", {
+        method: "POST",
+        body: { client_label: browserLabel() },
+      });
+      // Stop at the first acknowledgement so two installed copies do not
+      // intentionally share one rotating lineage.
+      let accepted = false;
+      for (const id of Config.EXTENSION_IDS) {
+        if (await sendToExtension(id, { type: "pair", token: issued.refresh_token })) {
+          accepted = true;
+          break;
+        }
+      }
+      if (accepted) {
+        setOutcome("linked");
+      } else {
+        // Nobody took the token: unlink the lineage rather than leave it orphaned.
+        await apiRequest(`/api/auth/extension-tokens/${encodeURIComponent(issued.lineage_id)}`, { method: "DELETE" }).catch(() => undefined);
+        setOutcome("not-found");
+      }
+    } catch {
+      setOutcome("failed");
+    } finally {
+      setLinking(false);
+      setRound((n) => n + 1);
+    }
+  };
+
+  const unlink = async (lineageId: string) => {
+    setFailed(false);
+    try {
+      await apiRequest(`/api/auth/extension-tokens/${encodeURIComponent(lineageId)}`, { method: "DELETE" });
+      setRound((n) => n + 1);
+    } catch {
+      setFailed(true);
+    }
+  };
+
+  const showCode = async () => {
+    setCodeBusy(true);
+    setFailed(false);
+    try {
+      setCode(await apiRequest<PairingCodeResponse>("/api/auth/extension-tokens/pairing-code", { method: "POST" }));
+    } catch {
+      setFailed(true);
+    } finally {
+      setCodeBusy(false);
+    }
+  };
+
+  const date = (iso: string) => formatDate(new Date(iso), { day: "numeric", month: "short", year: "numeric" });
+
   return (
     <Pane title={tw("account.extension")} intro={tw("account.extensionBody")}>
-      {Config.SITE_URL && (
-        <a className="btn primary" href={`${Config.SITE_URL}/extension`} target="_blank" rel="noopener noreferrer">
+      <div className="row" style={{ flexWrap: "wrap", gap: 10 }}>
+        <button type="button" className="btn primary" disabled={linking} onClick={() => void link()}>
           <Icon name="extension-puzzle-outline" size={18} />
-          {tw("account.extensionInstall")}
-        </a>
+          {linking ? tw("ext.linking") : tw("ext.link")}
+        </button>
+        {Config.SITE_URL && (
+          <a className="btn tonal" href={`${Config.SITE_URL}/extension`} target="_blank" rel="noopener noreferrer">
+            {tw("account.extensionInstall")}
+          </a>
+        )}
+      </div>
+      {outcome && (
+        <p className={outcome === "linked" ? "small subtle" : "banner-err"} role="status" style={{ marginTop: 12 }}>
+          {outcome === "linked" ? tw("ext.linkedNow") : outcome === "not-found" ? tw("ext.notFound") : t("common.somethingWentWrong")}
+        </p>
       )}
-      <p className="small muted">{tw("account.extensionLinking")}</p>
+
+      <h2 className="caps" style={{ margin: "24px 0 6px" }}>
+        {tw("ext.listTitle")}
+      </h2>
+      {failed && <p className="banner-err" role="alert">{t("common.somethingWentWrong")}</p>}
+      {linked && linked.length === 0 && <p className="small muted">{tw("ext.none")}</p>}
+      {(linked ?? []).map((extension) => (
+        <div key={extension.lineage_id} className="frow">
+          <Icon name="globe-outline" size={18} />
+          <span className="grow">
+            <span style={{ display: "block" }}>{extension.client_label ?? tw("account.extension")}</span>
+            <span className="small muted">
+              {tw("ext.pairedOn", { paired: date(extension.paired_at), used: date(extension.last_used_at) })}
+            </span>
+          </span>
+          <button type="button" className="btn ghost" onClick={() => void unlink(extension.lineage_id)}>
+            {tw("ext.unlink")}
+          </button>
+        </div>
+      ))}
+
+      <h2 className="caps" style={{ margin: "24px 0 6px" }}>
+        {tw("ext.codeTitle")}
+      </h2>
+      {code ? (
+        <div className="card" style={{ padding: 20, display: "flex", gap: 20, alignItems: "center" }}>
+          <div className="display" style={{ letterSpacing: 6 }} aria-label={code.code.split("").join(" ")}>
+            {code.code.slice(0, 3)} {code.code.slice(3)}
+          </div>
+          <div className="small subtle">{tw("ext.codeHint")}</div>
+        </div>
+      ) : (
+        <button type="button" className="btn tonal" disabled={codeBusy} onClick={() => void showCode()}>
+          {tw("ext.showCode")}
+        </button>
+      )}
     </Pane>
   );
 }

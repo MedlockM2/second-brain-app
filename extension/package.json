@@ -1,0 +1,23 @@
+{
+  "name": "@media-summarizer/extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deepn's browser extension for Chrome and Edge: save the page, save a selection, paired with the web app.",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "lint": "eslint entrypoints lib --ext .ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.270",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "~5.9.2",
+    "wxt": "~0.20.27"
+  }
+}

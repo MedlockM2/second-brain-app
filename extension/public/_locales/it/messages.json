@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Salva la pagina che stai leggendo, o una selezione, nella tua libreria Deepn."
+  },
+  "actionTitle": {
+    "message": "Salva in Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "Salva la selezione in Deepn"
+  },
+  "savePage": {
+    "message": "Salva questa pagina"
+  },
+  "saving": {
+    "message": "Salvataggio…"
+  },
+  "saved": {
+    "message": "Salvato. L'elaborazione è iniziata."
+  },
+  "folder": {
+    "message": "Cartella"
+  },
+  "unsorted": {
+    "message": "Non ordinati"
+  },
+  "saveFailed": {
+    "message": "Non è stato possibile salvare questa pagina."
+  },
+  "notSavable": {
+    "message": "Questa pagina non si può salvare: non è un indirizzo web."
+  },
+  "pairTitle": {
+    "message": "Collega l'estensione al tuo account"
+  },
+  "pairOneClick": {
+    "message": "Apri Deepn sul web, vai su Il mio account › Estensione del browser e fai clic su «Collega questa estensione»."
+  },
+  "openAccount": {
+    "message": "Apri Il mio account"
+  },
+  "pairRescue": {
+    "message": "Oppure digita il codice mostrato lì, con l'email del tuo account:"
+  },
+  "pairEmail": {
+    "message": "Email del tuo account"
+  },
+  "pairCode": {
+    "message": "Codice a 6 cifre"
+  },
+  "pairSubmit": {
+    "message": "Collega"
+  },
+  "pairFailed": {
+    "message": "Questo codice non funziona. Chiedine uno nuovo se è scaduto."
+  },
+  "pairExpired": {
+    "message": "Il collegamento al tuo account è scaduto. Collega di nuovo l'estensione."
+  },
+  "signOut": {
+    "message": "Esci"
+  },
+  "linked": {
+    "message": "Collegata al tuo account Deepn"
+  },
+  "selectionSaved": {
+    "message": "Selezione salvata in Deepn"
+  },
+  "selectionFailed": {
+    "message": "Non è stato possibile salvare la selezione."
+  },
+  "signOutFailed": {
+    "message": "Impossibile uscire. Controlla la connessione e riprova."
+  }
+}

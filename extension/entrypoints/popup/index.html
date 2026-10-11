@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- The action's tooltip: WXT reads it from this title. -->
+    <title>__MSG_actionTitle__</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="head">
+      <img src="/icon/32.png" alt="" width="24" height="24" />
+      <strong>Deepn</strong>
+    </header>
+
+    <section id="save" hidden>
+      <div class="page">
+        <div id="page-title" class="title"></div>
+        <div id="page-host" class="muted small"></div>
+      </div>
+      <label class="label" for="folder" data-msg="folder"></label>
+      <select id="folder"></select>
+      <button id="save-page" class="btn primary" type="button" data-msg="savePage"></button>
+      <p id="save-status" class="status" role="status"></p>
+      <footer class="foot">
+        <span class="muted small" data-msg="linked"></span>
+        <button id="sign-out" class="link small" type="button" data-msg="signOut"></button>
+      </footer>
+    </section>
+
+    <section id="pair" hidden>
+      <h1 data-msg="pairTitle"></h1>
+      <p id="pair-expired" class="status error" hidden data-msg="pairExpired"></p>
+      <p class="small" data-msg="pairOneClick"></p>
+      <button id="open-account" class="btn primary" type="button" data-msg="openAccount"></button>
+      <form id="rescue">
+        <p class="small muted" data-msg="pairRescue"></p>
+        <input id="email" type="email" autocomplete="email" required data-msg-placeholder="pairEmail" />
+        <input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required data-msg-placeholder="pairCode" />
+        <button class="btn" type="submit" data-msg="pairSubmit"></button>
+        <p id="pair-status" class="status error" role="status"></p>
+      </form>
+    </section>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "将你正在阅读的页面或所选内容保存到 Deepn 资料库。"
+  },
+  "actionTitle": {
+    "message": "保存到 Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "将所选内容保存到 Deepn"
+  },
+  "savePage": {
+    "message": "保存此页面"
+  },
+  "saving": {
+    "message": "正在保存…"
+  },
+  "saved": {
+    "message": "已保存，处理已开始。"
+  },
+  "folder": {
+    "message": "文件夹"
+  },
+  "unsorted": {
+    "message": "未分类"
+  },
+  "saveFailed": {
+    "message": "无法保存此页面。"
+  },
+  "notSavable": {
+    "message": "此页面无法保存：它不是网址。"
+  },
+  "pairTitle": {
+    "message": "将扩展关联到你的账户"
+  },
+  "pairOneClick": {
+    "message": "在网页版 Deepn 中打开“我的账户 › 浏览器扩展”，然后点击“关联此扩展”。"
+  },
+  "openAccount": {
+    "message": "打开我的账户"
+  },
+  "pairRescue": {
+    "message": "或者输入那里显示的代码以及你的账户邮箱："
+  },
+  "pairEmail": {
+    "message": "账户邮箱"
+  },
+  "pairCode": {
+    "message": "6 位代码"
+  },
+  "pairSubmit": {
+    "message": "关联"
+  },
+  "pairFailed": {
+    "message": "此代码无效。如已过期，请重新获取。"
+  },
+  "pairExpired": {
+    "message": "与账户的关联已过期，请重新关联扩展。"
+  },
+  "signOut": {
+    "message": "退出登录"
+  },
+  "linked": {
+    "message": "已关联到你的 Deepn 账户"
+  },
+  "selectionSaved": {
+    "message": "所选内容已保存到 Deepn"
+  },
+  "selectionFailed": {
+    "message": "无法保存所选内容。"
+  },
+  "signOutFailed": {
+    "message": "无法退出登录。请检查网络连接后重试。"
+  }
+}

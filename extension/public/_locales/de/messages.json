@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Speichere die Seite, die du liest, oder eine Auswahl in deiner Deepn-Bibliothek."
+  },
+  "actionTitle": {
+    "message": "In Deepn speichern"
+  },
+  "menuSaveSelection": {
+    "message": "Auswahl in Deepn speichern"
+  },
+  "savePage": {
+    "message": "Diese Seite speichern"
+  },
+  "saving": {
+    "message": "Wird gespeichert…"
+  },
+  "saved": {
+    "message": "Gespeichert. Die Verarbeitung hat begonnen."
+  },
+  "folder": {
+    "message": "Ordner"
+  },
+  "unsorted": {
+    "message": "Unsortiert"
+  },
+  "saveFailed": {
+    "message": "Diese Seite konnte nicht gespeichert werden."
+  },
+  "notSavable": {
+    "message": "Diese Seite kann nicht gespeichert werden: Sie ist keine Webadresse."
+  },
+  "pairTitle": {
+    "message": "Verknüpfe die Erweiterung mit deinem Konto"
+  },
+  "pairOneClick": {
+    "message": "Öffne Deepn im Web, gehe zu Mein Konto › Browser-Erweiterung und klicke auf „Diese Erweiterung verknüpfen“."
+  },
+  "openAccount": {
+    "message": "Mein Konto öffnen"
+  },
+  "pairRescue": {
+    "message": "Oder gib den dort angezeigten Code mit der E-Mail deines Kontos ein:"
+  },
+  "pairEmail": {
+    "message": "E-Mail deines Kontos"
+  },
+  "pairCode": {
+    "message": "6-stelliger Code"
+  },
+  "pairSubmit": {
+    "message": "Verknüpfen"
+  },
+  "pairFailed": {
+    "message": "Dieser Code funktioniert nicht. Fordere einen neuen an, falls er abgelaufen ist."
+  },
+  "pairExpired": {
+    "message": "Die Verknüpfung mit deinem Konto ist abgelaufen. Verknüpfe die Erweiterung erneut."
+  },
+  "signOut": {
+    "message": "Abmelden"
+  },
+  "linked": {
+    "message": "Mit deinem Deepn-Konto verknüpft"
+  },
+  "selectionSaved": {
+    "message": "Auswahl in Deepn gespeichert"
+  },
+  "selectionFailed": {
+    "message": "Die Auswahl konnte nicht gespeichert werden."
+  },
+  "signOutFailed": {
+    "message": "Abmelden fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut."
+  }
+}

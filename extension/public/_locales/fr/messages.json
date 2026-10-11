@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "Enregistrez la page que vous lisez, ou une sélection, dans votre bibliothèque Deepn."
+  },
+  "actionTitle": {
+    "message": "Enregistrer dans Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "Enregistrer la sélection dans Deepn"
+  },
+  "savePage": {
+    "message": "Enregistrer cette page"
+  },
+  "saving": {
+    "message": "Enregistrement…"
+  },
+  "saved": {
+    "message": "Enregistré. Le traitement a commencé."
+  },
+  "folder": {
+    "message": "Dossier"
+  },
+  "unsorted": {
+    "message": "Non classés"
+  },
+  "saveFailed": {
+    "message": "Cette page n'a pas pu être enregistrée."
+  },
+  "notSavable": {
+    "message": "Cette page ne peut pas être enregistrée : ce n'est pas une adresse web."
+  },
+  "pairTitle": {
+    "message": "Reliez l'extension à votre compte"
+  },
+  "pairOneClick": {
+    "message": "Ouvrez Deepn sur le web, allez dans Mon compte › Extension navigateur, puis cliquez sur « Relier cette extension »."
+  },
+  "openAccount": {
+    "message": "Ouvrir Mon compte"
+  },
+  "pairRescue": {
+    "message": "Ou saisissez le code affiché là-bas, avec l'e-mail de votre compte :"
+  },
+  "pairEmail": {
+    "message": "E-mail de votre compte"
+  },
+  "pairCode": {
+    "message": "Code à 6 chiffres"
+  },
+  "pairSubmit": {
+    "message": "Relier"
+  },
+  "pairFailed": {
+    "message": "Ce code ne fonctionne pas. Demandez-en un nouveau s'il a expiré."
+  },
+  "pairExpired": {
+    "message": "La liaison avec votre compte a expiré. Reliez l'extension à nouveau."
+  },
+  "signOut": {
+    "message": "Se déconnecter"
+  },
+  "linked": {
+    "message": "Reliée à votre compte Deepn"
+  },
+  "selectionSaved": {
+    "message": "Sélection enregistrée dans Deepn"
+  },
+  "selectionFailed": {
+    "message": "La sélection n'a pas pu être enregistrée."
+  },
+  "signOutFailed": {
+    "message": "Déconnexion impossible. Vérifiez votre connexion et réessayez."
+  }
+}

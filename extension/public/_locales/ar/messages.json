@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Deepn"
+  },
+  "extDescription": {
+    "message": "احفظ الصفحة التي تقرؤها، أو جزءًا محددًا منها، في مكتبة Deepn."
+  },
+  "actionTitle": {
+    "message": "الحفظ في Deepn"
+  },
+  "menuSaveSelection": {
+    "message": "حفظ التحديد في Deepn"
+  },
+  "savePage": {
+    "message": "حفظ هذه الصفحة"
+  },
+  "saving": {
+    "message": "جارٍ الحفظ…"
+  },
+  "saved": {
+    "message": "تم الحفظ. بدأت المعالجة."
+  },
+  "folder": {
+    "message": "المجلد"
+  },
+  "unsorted": {
+    "message": "غير مصنّف"
+  },
+  "saveFailed": {
+    "message": "تعذّر حفظ هذه الصفحة."
+  },
+  "notSavable": {
+    "message": "لا يمكن حفظ هذه الصفحة: ليست عنوان ويب."
+  },
+  "pairTitle": {
+    "message": "اربط الإضافة بحسابك"
+  },
+  "pairOneClick": {
+    "message": "افتح Deepn على الويب، وانتقل إلى حسابي › إضافة المتصفح، ثم انقر على «ربط هذه الإضافة»."
+  },
+  "openAccount": {
+    "message": "فتح حسابي"
+  },
+  "pairRescue": {
+    "message": "أو اكتب الرمز الظاهر هناك مع البريد الإلكتروني لحسابك:"
+  },
+  "pairEmail": {
+    "message": "البريد الإلكتروني لحسابك"
+  },
+  "pairCode": {
+    "message": "رمز من 6 أرقام"
+  },
+  "pairSubmit": {
+    "message": "ربط"
+  },
+  "pairFailed": {
+    "message": "هذا الرمز لا يعمل. اطلب رمزًا جديدًا إذا انتهت صلاحيته."
+  },
+  "pairExpired": {
+    "message": "انتهت صلاحية الربط بحسابك. اربط الإضافة مرة أخرى."
+  },
+  "signOut": {
+    "message": "تسجيل الخروج"
+  },
+  "linked": {
+    "message": "مرتبطة بحساب Deepn الخاص بك"
+  },
+  "selectionSaved": {
+    "message": "حُفظ التحديد في Deepn"
+  },
+  "selectionFailed": {
+    "message": "تعذّر حفظ التحديد."
+  },
+  "signOutFailed": {
+    "message": "تعذّر تسجيل الخروج. تحقق من اتصالك وحاول مرة أخرى."
+  }
+}
