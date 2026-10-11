@@ -3,9 +3,10 @@ id: TASK-493
 title: >-
   Extraire dans packages/core le code commun au mobile et au futur site web,
   avec un garde-fou contre les imports de plateforme
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 16:22'
+updated_date: '2026-10-11 16:37'
 labels:
   - mobile
   - refactor
@@ -29,7 +30,6 @@ references:
 priority: medium
 type: chore
 ordinal: 100000
-dispatchable: true
 ---
 
 ## Description
@@ -76,10 +76,32 @@ Après merge :
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 packages/core existe comme workspace npm avec un package.json racine, et l'app mobile l'importe comme dépendance de workspace
-- [ ] #2 Les types de l'API, le client d'API avec requête et jeton injectés par l'app, parseSseBlock et les catalogues de traduction vivent dans packages/core, et les imports du mobile pointent vers lui sans ancien chemin conservé
-- [ ] #3 Aucun fichier de packages/core n'importe expo, expo-*, react-native, @react-native/* ou @sentry/react-native, et une règle ESLint l'interdit
-- [ ] #4 typecheck et lint passent pour mobile/ et pour packages/core, et npx expo export --platform ios produit un bundle depuis mobile/
-- [ ] #5 Les workflows CI du mobile, la configuration EAS et le contrôle de fingerprint OTA tiennent compte du workspace
-- [ ] #6 AGENTS.md décrit packages/core, ce qui y va et l'interdit des imports de plateforme
+- [x] #1 packages/core existe comme workspace npm avec un package.json racine, et l'app mobile l'importe comme dépendance de workspace
+- [x] #2 Les types de l'API, le client d'API avec requête et jeton injectés par l'app, parseSseBlock et les catalogues de traduction vivent dans packages/core, et les imports du mobile pointent vers lui sans ancien chemin conservé
+- [x] #3 Aucun fichier de packages/core n'importe expo, expo-*, react-native, @react-native/* ou @sentry/react-native, et une règle ESLint l'interdit
+- [x] #4 typecheck et lint passent pour mobile/ et pour packages/core, et npx expo export --platform ios produit un bundle depuis mobile/
+- [x] #5 Les workflows CI du mobile, la configuration EAS et le contrôle de fingerprint OTA tiennent compte du workspace
+- [x] #6 AGENTS.md décrit packages/core, ce qui y va et l'interdit des imports de plateforme
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit efc4b2e.
+
+- La racine du dépôt est un workspace npm (`mobile/`, `packages/core`). `package-lock.json` est déplacé depuis `mobile/` sans changement de version : 1054 paquets comparés, aucun écart. `patch-package` (`--patch-dir mobile/patches`) et l'override `react-dom` passent dans le `package.json` racine.
+- `packages/core` (`@media-summarizer/core`, source TypeScript sans build, exports `./*` vers `./src/*.ts`) contient :
+  - les types de l'API (`src/types`) ;
+  - le runtime et les 11 catalogues d'i18n, ainsi que `locales` et `pseudo` (`src/i18n`) ;
+  - `httpError` et `createApiClient` (`src/api`), où l'app fournit l'URL de base, `fetch` et la lecture et le rafraîchissement du jeton ;
+  - `parseSseBlock` (`src/chat/sse.ts`).
+- Côté mobile : `mobile/src/services/apiClient.ts` relie le client au keychain. 54 fichiers importent maintenant `@media-summarizer/core/...`, sans réexport de compatibilité. Le réexport de types de `chatService`, que rien n'utilisait, est supprimé. `i18n/index.tsx` (provider React) reste dans le mobile.
+- Aucune constante n'a été déplacée : toutes dépendent de `react-native` (`Platform`) ou de `theme`.
+- Le garde-fou (`packages/core/.eslintrc.js`) interdit `expo`, `expo-*`, `react-native`, `@react-native/*`, `@sentry/react-native`, `window` et `document`. Un fichier de test a levé les 6 erreurs attendues, puis a été supprimé.
+- Vérifications : typecheck et lint passent sur `mobile/` (0 erreur, le même avertissement qu'avant) et sur `packages/core`. `npx expo export --platform ios` produit le bundle.
+- `eslint-import-resolver-typescript` est ajouté en devDependency du mobile. Sans lui, `eslint-plugin-import` ne résout pas le champ `exports` et plante.
+- CI : les 7 workflows mobile lancent `npm ci` depuis la racine et mettent en cache `package-lock.json`. Le job mobile de `pr.yml` et `main.yml` lance aussi le typecheck et le lint de `packages/core`. `mobile-ota-or-build.yml` se déclenche aussi sur `packages/core/**`, `package.json` et `package-lock.json`. La clé de cache e2e les inclut.
+- Documentation : `AGENTS.md` décrit `packages/core` (ce qui y va, l'interdit, l'injection). `mobile/MOBILE_CI_CD.md` a une section « The npm Workspace » avec ce que demande la documentation d'Expo SDK 55 : Metro configuré automatiquement, une seule version de React et de React Native, `eas` lancé depuis `mobile/`. `DEVBOX_SETUP.md` et les chemins dans les docs sont mis à jour.
+
+Note à l'owner : un changement de `packages/core` est un changement JS. Il ne déplace pas le fingerprint natif et part en mise à jour OTA, comme `mobile/src`. Le point de la note d'après merge (« le fingerprint bouge quand `packages/core` change ») est donc inexact : il faut vérifier qu'une mise à jour OTA est publiée. Le premier push changera quand même le fingerprint, parce que `mobile/package.json` change, ce qui lancera un build natif. Dans le log EAS, vérifier que `patch-package` s'applique.
+<!-- SECTION:FINAL_SUMMARY:END -->
