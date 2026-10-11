@@ -814,6 +814,8 @@ export const es: Catalog = {
   "chat.composer.stopA11y": "Detener la respuesta",
   "chat.thread.questionA11y": "Tu pregunta: {text}",
   "chat.thread.sourceA11y": "fuente {ref}, {title}",
+  "chat.thread.sending": "Enviando la pregunta…",
+  "chat.thread.retrySend": "Reintentar envío",
   "chat.thread.waiting": "Leyendo las fuentes…",
   "chat.thread.writing": "La respuesta se está escribiendo…",
   "chat.thread.interruptedCancelled": "Detenida. La respuesta anterior está incompleta.",

@@ -34,7 +34,7 @@ import { t } from "../../i18n";
 import type { ChatRefusal } from "../../lib/chatRefusal";
 import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
 import { ChatComposer } from "./ChatComposer";
-import { ChatThread } from "./ChatThread";
+import { ChatThread, type ChatThreadProps } from "./ChatThread";
 
 export interface ChatSheetProps {
   visible: boolean;
@@ -43,6 +43,7 @@ export interface ChatSheetProps {
   emptyText: string;
   placeholder: string;
   messages: ChatMessage[];
+  pendingQuestion: ChatThreadProps["pendingQuestion"];
   sources: ChatSource[];
   live: { turnIndex: number; text: string } | null;
   waiting: boolean;
@@ -123,7 +124,12 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
                   <Ionicons name="arrow-back" size={22} color={Colors.textMain} />
                 </Pressable>
               ) : null}
-              <Text ref={titleRef} style={styles.title} accessibilityRole="header" numberOfLines={1}>
+              <Text
+                ref={titleRef}
+                style={styles.title}
+                accessibilityRole="header"
+                numberOfLines={1}
+              >
                 {props.historyOpen ? t("chat.history.title") : props.title}
               </Text>
               {!props.historyOpen ? (
@@ -141,9 +147,9 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
                 <Pressable
                   style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
                   onPress={props.onNewConversation}
-                  disabled={props.generating}
+                  disabled={props.generating || props.sending}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: props.generating }}
+                  accessibilityState={{ disabled: props.generating || props.sending }}
                   accessibilityLabel={t("chat.sheet.newConversation")}
                   testID="chat-sheet-new"
                 >
@@ -172,11 +178,12 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
             >
               {props.historyOpen ? (
                 props.history
-              ) : props.messages.length === 0 ? (
+              ) : props.messages.length === 0 && !props.pendingQuestion ? (
                 <Text style={styles.empty}>{props.emptyText}</Text>
               ) : (
                 <ChatThread
                   messages={props.messages}
+                  pendingQuestion={props.pendingQuestion}
                   sources={props.sources}
                   live={props.live}
                   waiting={props.waiting}
@@ -187,7 +194,11 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
             </ScrollView>
 
             {!props.historyOpen && props.refusal ? (
-              <View style={styles.refusal} accessibilityLiveRegion="polite" testID="chat-sheet-refusal">
+              <View
+                style={styles.refusal}
+                accessibilityLiveRegion="polite"
+                testID="chat-sheet-refusal"
+              >
                 <Text style={styles.refusalText}>{props.refusal.message}</Text>
                 {props.refusal.action && refusalActionLabel ? (
                   <Pressable
@@ -203,16 +214,16 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
             ) : null}
 
             {props.historyOpen ? null : (
-            <ChatComposer
-              ref={inputRef}
-              value={props.draft}
-              onChangeText={props.onChangeDraft}
-              placeholder={props.placeholder}
-              onSend={props.onSend}
-              onStop={props.onStop}
-              generating={props.generating}
-              sending={props.sending}
-            />
+              <ChatComposer
+                ref={inputRef}
+                value={props.draft}
+                onChangeText={props.onChangeDraft}
+                placeholder={props.placeholder}
+                onSend={props.onSend}
+                onStop={props.onStop}
+                generating={props.generating}
+                sending={props.sending}
+              />
             )}
           </View>
         </KeyboardAvoidingView>

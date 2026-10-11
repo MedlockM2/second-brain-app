@@ -18,6 +18,7 @@ import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat"
 
 export interface ChatThreadProps {
   messages: ChatMessage[];
+  pendingQuestion: { question: string; status: "sending" | "failed" } | null;
   sources: ChatSource[];
   /** The answer being written for the live turn, with its turn index. */
   live: { turnIndex: number; text: string } | null;
@@ -66,6 +67,7 @@ function statusLine(message: ChatMessage): string | null {
 
 export function ChatThread({
   messages,
+  pendingQuestion,
   sources,
   live,
   waiting,
@@ -139,7 +141,9 @@ export function ChatThread({
             {status ? (
               <View style={styles.statusRow}>
                 <Ionicons
-                  name={message.status === "failed" ? "alert-circle-outline" : "remove-circle-outline"}
+                  name={
+                    message.status === "failed" ? "alert-circle-outline" : "remove-circle-outline"
+                  }
                   size={16}
                   color={message.status === "failed" ? Colors.error : Colors.textSubtle}
                 />
@@ -164,6 +168,36 @@ export function ChatThread({
           </View>
         );
       })}
+      {pendingQuestion ? (
+        <>
+          <View style={styles.questionRow}>
+            <Text
+              style={styles.question}
+              accessibilityLabel={t("chat.thread.questionA11y", { text: pendingQuestion.question })}
+            >
+              {pendingQuestion.question}
+            </Text>
+          </View>
+          {pendingQuestion.status === "sending" ? (
+            <View style={styles.pending} accessibilityLiveRegion="polite">
+              <ActivityIndicator size="small" color={Colors.textSubtle} />
+              <Text style={styles.pendingText}>{t("chat.thread.sending")}</Text>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
+              onPress={() => onRetry(pendingQuestion.question)}
+              disabled={retryDisabled}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: retryDisabled }}
+              accessibilityLabel={t("chat.thread.retrySend")}
+            >
+              <Ionicons name="refresh" size={16} color={Colors.textMain} />
+              <Text style={styles.retryLabel}>{t("chat.thread.retrySend")}</Text>
+            </Pressable>
+          )}
+        </>
+      ) : null}
     </View>
   );
 }

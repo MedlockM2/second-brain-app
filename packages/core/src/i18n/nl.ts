@@ -715,6 +715,8 @@ export const nl: Catalog = {
   "chat.composer.stopA11y": "Antwoord stoppen",
   "chat.thread.questionA11y": "Je vraag: {text}",
   "chat.thread.sourceA11y": "bron {ref}, {title}",
+  "chat.thread.sending": "Vraag verzenden…",
+  "chat.thread.retrySend": "Opnieuw verzenden",
   "chat.thread.waiting": "Bronnen worden gelezen…",
   "chat.thread.writing": "Het antwoord wordt geschreven…",
   "chat.thread.interruptedCancelled": "Gestopt. Het antwoord hierboven is onvolledig.",
