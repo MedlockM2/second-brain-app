@@ -14,4 +14,12 @@ export const zh: WebCatalog = {
   "install.appStore": "在 App Store 下载",
   "install.googlePlay": "在 Google Play 上获取",
   "session.unreachable": "目前无法连接 Deepn。请检查网络连接后重试。",
+  "home.rowBackA11y": "上一组",
+  "home.rowForwardA11y": "下一组",
+  "home.folderLabel": "文件夹",
+  "home.importFailed": "导入失败",
+  "home.emptyHint": "添加链接或拖入文件，它就会出现在这里。",
+  "library.folderTotal": "共 {count} 个",
+  "library.loadMore": "显示更多",
+  "library.end": "已到资料库末尾",
 };

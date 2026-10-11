@@ -20,4 +20,12 @@ export const en = {
   "install.appStore": "Download on the App Store",
   "install.googlePlay": "Get it on Google Play",
   "session.unreachable": "Deepn can't be reached right now. Check your connection and try again.",
+  "home.rowBackA11y": "Previous",
+  "home.rowForwardA11y": "Next",
+  "home.folderLabel": "Folder",
+  "home.importFailed": "Import failed",
+  "home.emptyHint": "Add a link or drop a file, and it will appear here.",
+  "library.folderTotal": "{count} in total",
+  "library.loadMore": "Show more",
+  "library.end": "End of the library",
 } as const;

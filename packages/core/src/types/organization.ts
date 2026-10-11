@@ -26,6 +26,11 @@ export interface Folder {
   updated_at: string;
 }
 
+/** GET /api/folders: every folder of the account, each with its own count. */
+export interface FolderListResponse {
+  folders: Folder[];
+}
+
 /** GET /api/folders/unsorted-count: the items waiting in the default folder. */
 export interface UnsortedCountResponse {
   media_count: number;

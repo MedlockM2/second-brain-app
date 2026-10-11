@@ -5,6 +5,8 @@ import { useI18n } from "./i18n/I18nProvider";
 import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
 import { EmptyPage } from "./pages/EmptyPage";
+import { HomePage } from "./pages/HomePage";
+import { LibraryPage } from "./pages/LibraryPage";
 import { InstallPage } from "./pages/InstallPage";
 import { ReadingLanguagePage } from "./pages/ReadingLanguagePage";
 import { SessionProvider, useSession } from "./session/SessionProvider";
@@ -45,8 +47,11 @@ function AppRoutes() {
           <Route path="/welcome/language" element={<ReadingLanguagePage />} />
           <Route element={<RequireReadingLanguage />}>
             <Route element={<AppShell />}>
-              <Route index element={<Titled page="home" />} />
-              <Route path="library" element={<Titled page="library" />} />
+              <Route index element={<HomePage />} />
+              <Route path="library" element={<LibraryPage />} />
+              {/* Filled by task-477 (media) and task-478 (folder). */}
+              <Route path="media/:mediaId" element={<EmptyPage />} />
+              <Route path="folders/:folderId" element={<EmptyPage />} />
               <Route path="digest" element={<Titled page="digest" />} />
               <Route path="unsorted" element={<Titled page="unsorted" />} />
               <Route path="search" element={<Titled page="search" />} />
@@ -61,11 +66,9 @@ function AppRoutes() {
   );
 }
 
-function Titled({ page }: { page: "home" | "library" | "digest" | "unsorted" | "search" | "add" }) {
+function Titled({ page }: { page: "digest" | "unsorted" | "search" | "add" }) {
   const { t, tw } = useI18n();
   const titles = {
-    home: t("tabs.home"),
-    library: tw("nav.library"),
     digest: t("tabs.digest"),
     unsorted: tw("nav.unsortedNoCount"),
     search: t("tabs.search"),

@@ -14,4 +14,12 @@ export const ar: WebCatalog = {
   "install.appStore": "تنزيل من App Store",
   "install.googlePlay": "احصل عليه من Google Play",
   "session.unreachable": "يتعذّر الوصول إلى Deepn حاليًا. تحقّق من اتصالك وحاول مرة أخرى.",
+  "home.rowBackA11y": "السابق",
+  "home.rowForwardA11y": "التالي",
+  "home.folderLabel": "مجلد",
+  "home.importFailed": "فشل الاستيراد",
+  "home.emptyHint": "أضِف رابطًا أو أفلِت ملفًا وسيظهر هنا.",
+  "library.folderTotal": "{count} إجمالًا",
+  "library.loadMore": "عرض المزيد",
+  "library.end": "نهاية المكتبة",
 };

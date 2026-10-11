@@ -14,4 +14,12 @@ export const ja: WebCatalog = {
   "install.appStore": "App Store からダウンロード",
   "install.googlePlay": "Google Play で手に入れよう",
   "session.unreachable": "現在 Deepn に接続できません。接続を確認して、もう一度お試しください。",
+  "home.rowBackA11y": "前へ",
+  "home.rowForwardA11y": "次へ",
+  "home.folderLabel": "フォルダ",
+  "home.importFailed": "インポートに失敗しました",
+  "home.emptyHint": "リンクを追加するかファイルをドロップすると、ここに表示されます。",
+  "library.folderTotal": "合計 {count}",
+  "library.loadMore": "さらに表示",
+  "library.end": "ライブラリの終わり",
 };

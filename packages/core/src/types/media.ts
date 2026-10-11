@@ -326,3 +326,15 @@ export interface MediaListItem {
   updated_at: string;
   completed_at?: string | null;
 }
+
+/**
+ * GET /api/media: one page of the library, newest first. `next_cursor` is what
+ * the next page is asked with, while `has_more` holds.
+ */
+export interface ListMediaResponse {
+  status: string;
+  items: MediaListItem[];
+  total: number;
+  next_cursor?: string | null;
+  has_more: boolean;
+}

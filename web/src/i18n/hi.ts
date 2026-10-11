@@ -14,4 +14,12 @@ export const hi: WebCatalog = {
   "install.appStore": "App Store से डाउनलोड करें",
   "install.googlePlay": "Google Play पर पाएँ",
   "session.unreachable": "अभी Deepn से कनेक्ट नहीं हो पा रहा है। अपना कनेक्शन जाँचें और फिर से कोशिश करें।",
+  "home.rowBackA11y": "पिछले",
+  "home.rowForwardA11y": "अगले",
+  "home.folderLabel": "फ़ोल्डर",
+  "home.importFailed": "इम्पोर्ट विफल रहा",
+  "home.emptyHint": "कोई लिंक जोड़ें या फ़ाइल छोड़ें, वह यहाँ दिखाई देगी।",
+  "library.folderTotal": "कुल {count}",
+  "library.loadMore": "और दिखाएँ",
+  "library.end": "लाइब्रेरी का अंत",
 };

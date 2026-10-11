@@ -14,4 +14,12 @@ export const nl: WebCatalog = {
   "install.appStore": "Download in de App Store",
   "install.googlePlay": "Ontdek het op Google Play",
   "session.unreachable": "Deepn is nu niet bereikbaar. Controleer je verbinding en probeer het opnieuw.",
+  "home.rowBackA11y": "Vorige",
+  "home.rowForwardA11y": "Volgende",
+  "home.folderLabel": "Map",
+  "home.importFailed": "Importeren mislukt",
+  "home.emptyHint": "Voeg een link toe of sleep een bestand hierheen: het verschijnt dan hier.",
+  "library.folderTotal": "{count} in totaal",
+  "library.loadMore": "Meer tonen",
+  "library.end": "Einde van de bibliotheek",
 };

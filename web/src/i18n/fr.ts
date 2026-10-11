@@ -14,4 +14,12 @@ export const fr: WebCatalog = {
   "install.appStore": "Télécharger dans l'App Store",
   "install.googlePlay": "Disponible sur Google Play",
   "session.unreachable": "Deepn est injoignable pour le moment. Vérifiez votre connexion et réessayez.",
+  "home.rowBackA11y": "Précédents",
+  "home.rowForwardA11y": "Suivants",
+  "home.folderLabel": "Dossier",
+  "home.importFailed": "Échec de l'import",
+  "home.emptyHint": "Ajoutez un lien ou déposez un fichier : il apparaîtra ici.",
+  "library.folderTotal": "{count} au total",
+  "library.loadMore": "Afficher plus",
+  "library.end": "Fin de la bibliothèque",
 };
