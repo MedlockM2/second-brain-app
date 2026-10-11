@@ -36,8 +36,10 @@ announces the end, Decision point 3):
   a new attempt would hit the same ceiling;
 - a stop: ``interrupted`` / ``cancelled``;
 - a provider failure **before** the first text: retried here, a few times, briefly
-  (Decision point 2); a permanent refusal is not retried. Exhausted or permanent:
-  ``failed``;
+  (Decision point 2), each wait at least the provider's ``Retry-After`` plus a
+  little jitter; a permanent refusal is not retried, nor a ``Retry-After`` longer
+  than :data:`MAX_RETRY_WAIT_SECONDS`. Exhausted, permanent or told to wait too
+  long: ``failed`` (``provider_refused_rate_limit`` for the last one);
 - a provider failure **after** text: ``interrupted`` / ``provider_error`` with the
   partial text -- shown text is never taken back (complement C1.11).
 
@@ -56,6 +58,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -103,6 +106,15 @@ CANCEL_CHECK_SECONDS = 1.0
 #: worker's to ride out -- the turn fails, and is refunded.
 MAX_PROVIDER_CALLS = 3
 RETRY_BACKOFF_SECONDS = (1.0, 3.0)
+#: The longest the worker waits before one retry, ``Retry-After`` included. Past
+#: it the provider is asking for more than an interactive turn can hold (the user
+#: watches a spinner), so the turn fails and is refunded at once instead. Also well
+#: under the 30-second lease, which the heartbeat renews during the wait anyway.
+#: With :data:`MAX_PROVIDER_CALLS`, a turn spends at most two such waits retrying.
+MAX_RETRY_WAIT_SECONDS = 10.0
+#: Random spread added to every wait, so concurrent turns refused together do not
+#: come back together (OpenAI's rate-limit guide: exponential backoff with jitter).
+RETRY_JITTER_SECONDS = 0.5
 
 
 def _now() -> datetime:
@@ -308,6 +320,21 @@ async def _stream_with_retries(
             transient = getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT) == LLMFailureKind.TRANSIENT
             if not transient or call == MAX_PROVIDER_CALLS - 1:
                 raise
+            retry_after = getattr(exc, "retry_after_seconds", None)
+            if retry_after is not None and retry_after > MAX_RETRY_WAIT_SECONDS:
+                # Asked to wait longer than a turn can: fail now, refunded.
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "chat.provider_retry_abandoned",
+                    "Provider asks to wait longer than a chat turn can; not retrying",
+                    call=call + 1,
+                    retry_after_seconds=retry_after,
+                    refusal_reason=getattr(exc, "refusal_reason", None),
+                )
+                raise
+            backoff = RETRY_BACKOFF_SECONDS[min(call, len(RETRY_BACKOFF_SECONDS) - 1)]
+            wait = max(backoff, retry_after or 0.0) + random.uniform(0.0, RETRY_JITTER_SECONDS)
             log_event(
                 logger,
                 logging.WARNING,
@@ -316,8 +343,10 @@ async def _stream_with_retries(
                 call=call + 1,
                 error_type=type(exc).__name__,
                 refusal_reason=getattr(exc, "refusal_reason", None),
+                retry_after_seconds=retry_after,
+                wait_seconds=round(wait, 2),
             )
-            await asyncio.sleep(RETRY_BACKOFF_SECONDS[min(call, len(RETRY_BACKOFF_SECONDS) - 1)])
+            await asyncio.sleep(wait)
     raise RuntimeError("unreachable")
 
 

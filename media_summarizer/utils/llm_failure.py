@@ -70,7 +70,10 @@ Runbook: infrastructure/observability/runbooks/pipeline-alerts.md#llm-generation
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Optional
 
 from media_summarizer.utils.logging_config import log_event
@@ -191,6 +194,11 @@ class LlmProviderRefusedError(RuntimeError):
     a worker never re-parses a provider message: ``refusal_reason`` for the
     failure metric, ``failure_kind`` for the decision to stop consuming
     deliveries.
+
+    ``retry_after_seconds`` is the provider's ``Retry-After`` read as seconds
+    (:func:`parse_retry_after`), ``None`` when the header is absent or
+    unreadable. It is the **minimum** a retry must wait: a refused call counts
+    against the limit too, so retrying earlier only deepens the throttle.
     """
 
     def __init__(
@@ -200,11 +208,39 @@ class LlmProviderRefusedError(RuntimeError):
         refusal_reason: str,
         failure_kind: str,
         provider_status: Optional[int] = None,
+        retry_after_seconds: Optional[float] = None,
     ) -> None:
         super().__init__(message)
         self.refusal_reason = refusal_reason
         self.failure_kind = failure_kind
         self.provider_status = provider_status
+        self.retry_after_seconds = retry_after_seconds
+
+
+def parse_retry_after(value: Optional[str], *, now: Optional[datetime] = None) -> Optional[float]:
+    """``Retry-After`` in seconds, from either form RFC 9110 allows.
+
+    A number of seconds (``"20"``, and the fractional values some providers
+    send), or an HTTP date, read against ``now``. A date already past is 0.
+    ``None`` when the header is absent or reads as neither: the caller then has
+    no minimum and keeps its own backoff.
+    """
+    if value is None or not value.strip():
+        return None
+    text = value.strip()
+    try:
+        seconds = float(text)
+    except ValueError:
+        try:
+            moment = parsedate_to_datetime(text)
+        except (TypeError, ValueError):
+            return None
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        seconds = (moment - (now or datetime.now(timezone.utc))).total_seconds()
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
 
 
 def classify_llm_failure(

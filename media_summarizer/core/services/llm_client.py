@@ -47,6 +47,7 @@ from media_summarizer.utils.llm_failure import (
     LLMFailureKind,
     LlmProviderRefusedError,
     classify_llm_failure,
+    parse_retry_after,
 )
 from media_summarizer.utils.logging_config import log_event
 
@@ -242,10 +243,11 @@ async def _raise_for_provider_error(
     # One parse of the provider's answer, both axes out: what the operator must do
     # about it, and whether another delivery of this message could ever get a
     # different answer.
+    retry_after = response.headers.get("Retry-After")
     failure = classify_llm_failure(
         status_code=response.status,
         body=body,
-        retry_after=response.headers.get("Retry-After"),
+        retry_after=retry_after,
     )
     log_event(
         logger,
@@ -268,6 +270,7 @@ async def _raise_for_provider_error(
             refusal_reason=failure.refusal_reason,
             failure_kind=failure.kind,
             provider_status=response.status,
+            retry_after_seconds=parse_retry_after(retry_after),
         )
     response.raise_for_status()
 
