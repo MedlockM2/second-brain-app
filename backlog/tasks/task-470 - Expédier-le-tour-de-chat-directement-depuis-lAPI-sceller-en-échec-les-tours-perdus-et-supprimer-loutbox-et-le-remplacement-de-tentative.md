@@ -3,9 +3,10 @@ id: TASK-470
 title: >-
   Expédier le tour de chat directement depuis l'API, sceller en échec les tours
   perdus, et supprimer l'outbox et le remplacement de tentative
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 14:32'
+updated_date: '2026-10-11 14:58'
 labels:
   - backend
   - chat
@@ -114,12 +115,26 @@ Après merge, push et `terraform apply` sur dev :
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Après la transaction d'acceptation et le débit, send_turn envoie vers CHAT_QUEUE le message {user_id, conversation_id, turn_id, turn_index, attempt_id} ; un envoi en échec scelle le tour en failed avec un code typé, le rembourse, et la route répond avec le tour ; un rejeu de la même requête n'envoie rien ; le rôle IAM de l'API a sqs:SendMessage sur la file de chat
-- [ ] #2 Une règle unique et partagée définit un tour perdu (queued au-delà d'un seuil d'attente, ou generating au bail dépassé d'une marge de grâce), avec des constantes nommées dont la raison est commentée
-- [ ] #3 Un tour perdu est scellé par une écriture conditionnelle sur l'identité de la tentative et son état perdu : en failed / generation_lost puis remboursé s'il n'a aucun texte visible, en interrupted / provider_error avec le texte des fragments sinon ; le marqueur INFLIGHT est libéré
-- [ ] #4 La lecture d'une conversation, l'envoi d'un tour (pour la tentative active de la conversation et pour le tour du marqueur INFLIGHT) et le worker (tentative queued perdue, ou claim refusé sur un bail expiré) appliquent la règle ; une redélivrance SQS ne relance jamais une génération
-- [ ] #5 La Lambda de diffusion ferme sans événement end le flux d'une génération perdue et répond 204 à une nouvelle ouverture
-- [ ] #6 ChatDispatchIntent, dispatch_intent_sk, get_dispatch_intent, mark_intent_dispatched, replace_attempt, ReplacementAttempt, l'état superseded, attempt_count et l'événement SSE replaced (serveur et mobile) n'existent plus ; une recherche de ces noms, et des mentions outbox / task-465 hors de docs/research et backlog, ne trouve rien
-- [ ] #7 docs/CHAT_DATA_MODEL.md, docs/CANONICAL_MEDIA_API_CONTRACT.md, docs/INGESTION_WORKERS_PROVIDERS.md, le runbook et les commentaires de sqs.tf et iam_lambda.tf décrivent le chemin sans outbox et la règle de tour perdu
-- [ ] #8 ruff check et mypy passent sur les fichiers Python modifiés ; terraform validate passe sur dev ; npx tsc --noEmit et le lint mobile passent
+- [x] #1 Après la transaction d'acceptation et le débit, send_turn envoie vers CHAT_QUEUE le message {user_id, conversation_id, turn_id, turn_index, attempt_id} ; un envoi en échec scelle le tour en failed avec un code typé, le rembourse, et la route répond avec le tour ; un rejeu de la même requête n'envoie rien ; le rôle IAM de l'API a sqs:SendMessage sur la file de chat
+- [x] #2 Une règle unique et partagée définit un tour perdu (queued au-delà d'un seuil d'attente, ou generating au bail dépassé d'une marge de grâce), avec des constantes nommées dont la raison est commentée
+- [x] #3 Un tour perdu est scellé par une écriture conditionnelle sur l'identité de la tentative et son état perdu : en failed / generation_lost puis remboursé s'il n'a aucun texte visible, en interrupted / provider_error avec le texte des fragments sinon ; le marqueur INFLIGHT est libéré
+- [x] #4 La lecture d'une conversation, l'envoi d'un tour (pour la tentative active de la conversation et pour le tour du marqueur INFLIGHT) et le worker (tentative queued perdue, ou claim refusé sur un bail expiré) appliquent la règle ; une redélivrance SQS ne relance jamais une génération
+- [x] #5 La Lambda de diffusion ferme sans événement end le flux d'une génération perdue et répond 204 à une nouvelle ouverture
+- [x] #6 ChatDispatchIntent, dispatch_intent_sk, get_dispatch_intent, mark_intent_dispatched, replace_attempt, ReplacementAttempt, l'état superseded, attempt_count et l'événement SSE replaced (serveur et mobile) n'existent plus ; une recherche de ces noms, et des mentions outbox / task-465 hors de docs/research et backlog, ne trouve rien
+- [x] #7 docs/CHAT_DATA_MODEL.md, docs/CANONICAL_MEDIA_API_CONTRACT.md, docs/INGESTION_WORKERS_PROVIDERS.md, le runbook et les commentaires de sqs.tf et iam_lambda.tf décrivent le chemin sans outbox et la règle de tour perdu
+- [x] #8 ruff check et mypy passent sur les fichiers Python modifiés ; terraform validate passe sur dev ; npx tsc --noEmit et le lint mobile passent
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-11 — Livré dans 38c3347.
+
+- Envoi direct : `chat_service._dispatch_turn` après `accept_turn` et le débit. Un échec d'envoi scelle `failed` / `dispatch_failed`, rembourse et répond 202 avec le tour. Le rejeu n'envoie rien. `sqs:SendMessage` sur `chat-queue` ajouté à la politique de l'API.
+- Règle de tour perdu : `core/models/chat.is_attempt_lost`, avec `QUEUED_LOST_AFTER` = 300 s et `LEASE_GRACE` = 15 s, raisons commentées.
+- Scellement : `chat_db.seal_lost_attempt`, via `seal_turn(only_if_lost_at=…)`, conditionnel à l'état perdu.
+- Appliquée par `get_conversation_view`, par `send_turn` (tentative active et marqueur INFLIGHT), par le worker (tentative `queued` déjà perdue, claim refusé sur bail expiré) et par la Lambda de diffusion (fermeture sans `end`, 204).
+- Écart au texte, nécessaire : le bail du worker n'était renouvelé qu'à l'arrivée d'un delta. Pendant la réflexion du modèle avant le premier token, un worker vivant aurait donc été scellé comme perdu. Le bail est désormais renouvelé par un heartbeat (`_LeaseHeartbeat`) pendant toute la génération.
+- Vérifications : ruff et mypy propres sur les fichiers Python modifiés, `terraform validate` OK sur dev, `npx tsc --noEmit` OK, lint mobile sans erreur (un avertissement préexistant dans `purchaseService.ts`).
+- Aucun déploiement ni test E2E fait : voir la note à l'owner dans la description.
+<!-- SECTION:NOTES:END -->
