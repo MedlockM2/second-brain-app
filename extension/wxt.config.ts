@@ -3,7 +3,7 @@ import { defineConfig } from "wxt";
 import { loadEnv } from "vite";
 
 /**
- * Deepn's extension for Chrome and Edge: one package for both stores (task-487).
+ * Deepn's Chromium and Firefox targets (task-487/488).
  *
  * The manifest asks for as little as the job needs (owner decision, point 4 —
  * the extension does what the apps do): `activeTab` to read the current tab's
@@ -38,7 +38,7 @@ function matchPattern(value: string): string {
 
 export default defineConfig({
   srcDir: ".",
-  zip: { artifactTemplate: "deepn-extension-{{version}}.zip" },
+  zip: { zipSources: false, artifactTemplate: "deepn-extension-{{version}}-{{browser}}.zip" },
   vite: () => ({
     resolve: {
       // The shared code is source, imported by path: the extension is its own npm
@@ -46,17 +46,30 @@ export default defineConfig({
       alias: { "@media-summarizer/core": path.resolve(__dirname, "../packages/core/src") },
     },
   }),
-  manifest: () => {
+  manifest: ({ browser }) => {
     const api = origin("VITE_API_BASE_URL");
     const webApp = origin("VITE_WEB_APP_ORIGIN");
     return {
-      minimum_chrome_version: "116",
+      ...(browser === "firefox" ? {
+        browser_specific_settings: {
+          gecko_android: { strict_min_version: "142.0" },
+          gecko: {
+            id: "{f6106a71-7280-40b0-9f84-adf2e3f9d355}",
+            strict_min_version: "140.0",
+            data_collection_permissions: {
+              required: ["authenticationInfo", "personallyIdentifyingInfo", "browsingActivity", "websiteContent"],
+            },
+          },
+        },
+      } : {
+        minimum_chrome_version: "140",
+        externally_connectable: { matches: [matchPattern(webApp)] },
+      }),
       name: "__MSG_extName__",
       description: "__MSG_extDescription__",
       default_locale: "en",
       permissions: ["activeTab", "contextMenus", "storage"],
       host_permissions: [matchPattern(api)],
-      externally_connectable: { matches: [matchPattern(webApp)] },
       action: { default_title: "__MSG_actionTitle__" },
     };
   },

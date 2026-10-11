@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import { ACCOUNT_EXTENSION_URL } from "../../lib/config";
 import { claimPairingCode, lastFolderId, listFolders, rememberFolder, savePage } from "../../lib/api";
 import { localize, msg } from "../../lib/i18n";
@@ -22,7 +23,7 @@ async function render(): Promise<void> {
 }
 
 async function showSave(): Promise<void> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url ?? "";
   const savable = /^https?:\/\//.test(url);
   $("page-title").textContent = tab?.title ?? "";
@@ -40,7 +41,7 @@ async function showSave(): Promise<void> {
   const select = $<HTMLSelectElement>("folder");
   try {
     const [folders, remembered] = await Promise.all([listFolders(), lastFolderId()]);
-    const collator = new Intl.Collator(chrome.i18n.getUILanguage(), { sensitivity: "base", numeric: true });
+    const collator = new Intl.Collator(browser.i18n.getUILanguage(), { sensitivity: "base", numeric: true });
     const byId = new Map(folders.map((folder) => [folder.id, folder]));
     const folderName = (folder: (typeof folders)[number]): string => {
       const names = [folder.is_default ? msg("unsorted") : folder.name];
@@ -96,7 +97,7 @@ async function showSave(): Promise<void> {
   };
 }
 
-$("open-account").onclick = () => void chrome.tabs.create({ url: ACCOUNT_EXTENSION_URL });
+$("open-account").onclick = () => void browser.tabs.create({ url: ACCOUNT_EXTENSION_URL });
 
 $<HTMLFormElement>("rescue").onsubmit = async (event) => {
   event.preventDefault();

@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import type { Folder, FolderListResponse } from "@media-summarizer/core/types/organization";
 import { API_BASE_URL } from "./config";
 import { clientLabel } from "./i18n";
@@ -37,7 +38,7 @@ export async function savePage(url: string, folderId: string | null): Promise<vo
   await expectOk(
     await authed("/api/media/ingest-url", {
       method: "POST",
-      body: JSON.stringify({ url, source_app: SOURCE_APP, locale: chrome.i18n.getUILanguage(), folder_id: folderId }),
+      body: JSON.stringify({ url, source_app: SOURCE_APP, locale: browser.i18n.getUILanguage(), folder_id: folderId }),
     }),
   );
 }
@@ -54,7 +55,7 @@ export async function saveSelection(text: string, sourceUrl: string | null, fold
         idempotency_key: `selection-${crypto.randomUUID()}`,
         text,
         source_url: sourceUrl && /^https?:\/\//.test(sourceUrl) ? sourceUrl : null,
-        locale: chrome.i18n.getUILanguage(),
+        locale: browser.i18n.getUILanguage(),
         folder_id: folderId,
       }),
     }),
@@ -76,10 +77,10 @@ export async function claimPairingCode(email: string, code: string): Promise<boo
 
 /** The folder last saved into, offered first next time. */
 export async function lastFolderId(): Promise<string | null> {
-  const stored = await chrome.storage.local.get("folderId");
+  const stored = await browser.storage.local.get("folderId");
   return (stored.folderId as string | undefined) ?? null;
 }
 
 export async function rememberFolder(folderId: string | null): Promise<void> {
-  await chrome.storage.local.set({ folderId });
+  await browser.storage.local.set({ folderId });
 }

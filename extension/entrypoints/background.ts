@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import { WEB_APP_ORIGIN } from "../lib/config";
 import { msg } from "../lib/i18n";
 import { lastFolderId, saveSelection } from "../lib/api";
@@ -10,17 +11,17 @@ import { NotLinkedError, savePairing } from "../lib/session";
 const MENU_ID = "save-selection";
 
 async function flash(text: string, color: string): Promise<void> {
-  await chrome.action.setBadgeBackgroundColor({ color });
-  await chrome.action.setBadgeText({ text });
-  setTimeout(() => void chrome.action.setBadgeText({ text: "" }), 3000);
+  await browser.action.setBadgeBackgroundColor({ color });
+  await browser.action.setBadgeText({ text });
+  setTimeout(() => void browser.action.setBadgeText({ text: "" }), 3000);
 }
 
 export default defineBackground(() => {
-  chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({ id: MENU_ID, title: msg("menuSaveSelection"), contexts: ["selection"] });
+  browser.runtime.onInstalled.addListener(() => {
+    browser.contextMenus.create({ id: MENU_ID, title: msg("menuSaveSelection"), contexts: ["selection"] });
   });
 
-  chrome.contextMenus.onClicked.addListener((info, tab) => {
+  browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId !== MENU_ID || !info.selectionText) return;
     void (async () => {
       try {
@@ -29,7 +30,7 @@ export default defineBackground(() => {
       } catch (error) {
         await flash("!", "#ba1a1a");
         // Not linked: the popup is where the reader links it.
-        if (error instanceof NotLinkedError) await chrome.action.openPopup?.().catch(() => undefined);
+        if (error instanceof NotLinkedError) await browser.action.openPopup?.().catch(() => undefined);
       }
     })();
   });
@@ -40,7 +41,9 @@ export default defineBackground(() => {
    * origin is checked again here, as an allow-list on the exact origin, before
    * anything is stored.
    */
-  chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  if (import.meta.env.FIREFOX) return;
+
+  browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
     const valid =
       sender.origin === WEB_APP_ORIGIN &&
       message?.type === "pair" &&

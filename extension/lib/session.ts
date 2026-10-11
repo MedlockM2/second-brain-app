@@ -1,3 +1,4 @@
+import { browser } from "wxt/browser";
 import { API_BASE_URL } from "./config";
 
 /**
@@ -33,39 +34,46 @@ export class NotLinkedError extends Error {
   }
 }
 
-const storageReady = Promise.all([
-  chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }),
-  chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }),
-]);
+// Firefox does not offer Chromium's local access restriction. It has no content
+// scripts in this extension; session storage is trusted-context-only by default.
+let storageReady: Promise<unknown> | undefined;
+function prepareStorage(): Promise<unknown> {
+  return storageReady ??= import.meta.env.FIREFOX
+    ? Promise.resolve()
+    : Promise.all([
+        browser.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }),
+        browser.storage.session.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" }),
+      ]);
+}
 
 async function readRefresh(): Promise<StoredRefresh | null> {
-  await storageReady;
-  const stored = await chrome.storage.local.get(REFRESH_KEY);
+  await prepareStorage();
+  const stored = await browser.storage.local.get(REFRESH_KEY);
   return (stored[REFRESH_KEY] as StoredRefresh | undefined) ?? null;
 }
 
 /** Keep the refresh token a pairing handed over, and forget any old session. */
 export async function savePairing(refreshToken: string): Promise<void> {
-  await storageReady;
-  await chrome.storage.local.set({ [REFRESH_KEY]: { token: refreshToken } satisfies StoredRefresh });
-  await chrome.storage.local.remove("folderId");
-  await chrome.storage.local.remove(EXPIRED_KEY);
-  await chrome.storage.session.remove(ACCESS_KEY);
+  await prepareStorage();
+  await browser.storage.local.set({ [REFRESH_KEY]: { token: refreshToken } satisfies StoredRefresh });
+  await browser.storage.local.remove("folderId");
+  await browser.storage.local.remove(EXPIRED_KEY);
+  await browser.storage.session.remove(ACCESS_KEY);
 }
 
 async function forget(expired: boolean): Promise<void> {
-  await chrome.storage.local.remove(REFRESH_KEY);
-  await chrome.storage.session.remove(ACCESS_KEY);
-  await chrome.storage.local.remove("folderId");
-  if (expired) await chrome.storage.local.set({ [EXPIRED_KEY]: true });
-  else await chrome.storage.local.remove(EXPIRED_KEY);
+  await browser.storage.local.remove(REFRESH_KEY);
+  await browser.storage.session.remove(ACCESS_KEY);
+  await browser.storage.local.remove("folderId");
+  if (expired) await browser.storage.local.set({ [EXPIRED_KEY]: true });
+  else await browser.storage.local.remove(EXPIRED_KEY);
 }
 
 export type LinkState = "linked" | "unlinked" | "expired";
 
 export async function linkState(): Promise<LinkState> {
   if (await readRefresh()) return "linked";
-  const stored = await chrome.storage.local.get(EXPIRED_KEY);
+  const stored = await browser.storage.local.get(EXPIRED_KEY);
   return stored[EXPIRED_KEY] ? "expired" : "unlinked";
 }
 
@@ -86,8 +94,8 @@ export function refresh(): Promise<string> {
     }
     if (!response.ok) throw new Error(`refresh_failed_${response.status}`);
     const body = (await response.json()) as { access_token: string; refresh_token: string; expires_in: number };
-    await chrome.storage.local.set({ [REFRESH_KEY]: { token: body.refresh_token } satisfies StoredRefresh });
-    await chrome.storage.session.set({
+    await browser.storage.local.set({ [REFRESH_KEY]: { token: body.refresh_token } satisfies StoredRefresh });
+    await browser.storage.session.set({
       [ACCESS_KEY]: { token: body.access_token, expiresAtMs: Date.now() + body.expires_in * 1000 } satisfies StoredAccess,
     });
     return body.access_token;
@@ -98,7 +106,7 @@ export function refresh(): Promise<string> {
 }
 
 export async function accessToken(): Promise<string> {
-  const stored = await chrome.storage.session.get(ACCESS_KEY);
+  const stored = await browser.storage.session.get(ACCESS_KEY);
   const access = stored[ACCESS_KEY] as StoredAccess | undefined;
   if (access && access.expiresAtMs - BUFFER_MS > Date.now()) return access.token;
   return refresh();
