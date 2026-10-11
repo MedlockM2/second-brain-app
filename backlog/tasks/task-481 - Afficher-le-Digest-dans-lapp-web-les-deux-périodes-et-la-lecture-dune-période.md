@@ -3,9 +3,10 @@ id: TASK-481
 title: >-
   Afficher le Digest dans l'app web : les deux périodes et la lecture d'une
   période
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:57'
+updated_date: '2026-10-11 17:29'
 labels:
   - web
   - feature
@@ -23,7 +24,6 @@ references:
 priority: medium
 type: feature
 ordinal: 88000
-dispatchable: true
 ---
 
 ## Description
@@ -54,9 +54,20 @@ Vérification visuelle contre les captures 04 et 05 sur un compte `-dev` qui a u
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le Digest rend Quotidien et Hebdomadaire en deux colonnes, chacune avec sa pile de couvertures, son nombre de médias, un bouton Lire et son sommaire complet dont chaque ligne ouvre la lecture à ce média
-- [ ] #2 La lecture d'une période réutilise la page média en trois volets de task-477 sous un bandeau du sommaire cliquable, avec ‹ ›, les flèches ← → du clavier et la position
-- [ ] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #4 Les libellés sont présents dans les 11 langues
-- [ ] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 Le Digest rend Quotidien et Hebdomadaire en deux colonnes, chacune avec sa pile de couvertures, son nombre de médias, un bouton Lire et son sommaire complet dont chaque ligne ouvre la lecture à ce média
+- [x] #2 La lecture d'une période réutilise la page média en trois volets de task-477 sous un bandeau du sommaire cliquable, avec ‹ ›, les flèches ← → du clavier et la position
+- [x] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #4 Les libellés sont présents dans les 11 langues
+- [x] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit 178272d.
+
+- **/digest** (`web/src/pages/DigestPage.tsx`) : Quotidien et Hebdomadaire en deux colonnes, chacune avec sa pile des trois premières couvertures, « N médias · les médias d'hier / la semaine écoulée », le bouton Lire et le sommaire complet (n°, couverture, type, créateur, titre, début de « L'essentiel ») ; chaque ligne ouvre la lecture à ce média. Période vide : messages `digest.empty*` partagés.
+- **/digest/:period?i=N** (`web/src/pages/DigestPeriodPage.tsx`) : la page média `MediaView` de task-477 sous un bandeau (`band`) qui remplace les points du mobile : retour Digest, nom de la période, ‹ ›, puces cliquables du sommaire (n°, mini-couverture, titre) qui suivent la lecture, position « 3 / 11 » ; flèches ← → du clavier (inversées en RTL, ignorées pendant la saisie ou sous un dialogue). Un média supprimé depuis sa page quitte la période.
+- Données (`web/src/media/useDigest.ts`) : `GET /api/digest/{daily,weekly}` pour les ids, la première page de la bibliothèque pour les lignes, `GET /api/media/:id` pour les rares absents — comme le mobile. Aucune nouvelle route.
+- 4 libellés web en 11 langues ; build, typecheck, lint propres ; rendu vérifié en Chrome headless (deux colonnes, lecture, flèche clavier).
+<!-- SECTION:FINAL_SUMMARY:END -->
