@@ -4,10 +4,10 @@ title: >-
   Ouvrir une session web par cookie de rafraîchissement sur api.<domaine>, avec
   une lignée navigateur plafonnée, et restreindre le CORS de l'API HTTP à l'app
   web
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:55'
-updated_date: '2026-10-11 16:45'
+updated_date: '2026-10-11 16:52'
 labels:
   - backend
   - auth
@@ -57,9 +57,24 @@ Cette vérification attend le domaine (task-443, puis task-445 pour `api.<domain
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 En mode web, login, register, google/native et apple/native posent le refresh en cookie HttpOnly; Secure; SameSite=Strict; Path=/api/auth et ne renvoient que l'access token dans le corps ; /refresh et /logout lisent ce cookie
-- [ ] #2 La lignée de type navigateur a un plafond absolu et une expiration par inactivité, la rotation ne prolonge pas la durée initiale, et la lignée mobile est inchangée
-- [ ] #3 La politique de durée par type de lignée est écrite et documentée dans docs/AUTHENTICATION_SETUP.md, avec le choix du mode web
-- [ ] #4 La cors_configuration de l'API HTTP nomme l'origine de l'app web par une variable Terraform, avec allow_credentials = true et sans *
-- [ ] #5 ruff check, mypy et terraform validate passent
+- [x] #1 En mode web, login, register, google/native et apple/native posent le refresh en cookie HttpOnly; Secure; SameSite=Strict; Path=/api/auth et ne renvoient que l'access token dans le corps ; /refresh et /logout lisent ce cookie
+- [x] #2 La lignée de type navigateur a un plafond absolu et une expiration par inactivité, la rotation ne prolonge pas la durée initiale, et la lignée mobile est inchangée
+- [x] #3 La politique de durée par type de lignée est écrite et documentée dans docs/AUTHENTICATION_SETUP.md, avec le choix du mode web
+- [x] #4 La cors_configuration de l'API HTTP nomme l'origine de l'app web par une variable Terraform, avec allow_credentials = true et sans *
+- [x] #5 ruff check, mypy et terraform validate passent
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit 13ec83a.
+
+- **Mode web** : en-tête de requête `X-Session-Transport: cookie` (login, register, google/native, apple/native, refresh, logout). Le refresh part en cookie `__Secure-refresh_token` (`HttpOnly; Secure; SameSite=Strict; Path=/api/auth`, host-only, `Max-Age` = expiration de la lignée) ; le corps ne contient que `access_token`, `token_type`, `expires_in`, `user` (`WebSessionResponse`). /refresh et /logout lisent le cookie ; /logout l'efface. Un en-tête plutôt qu'un champ : pas de corps en mode web, et un en-tête personnalisé force le pré-vol CORS (garde CSRF en plus de SameSite=Strict).
+- **Lignées** : `AuthToken.lineage_kind` (`mobile` | `browser`) et `lineage_started_at`, recopiés à chaque rotation. `get_refresh_token_expires_at(kind, lineage_started_at)` : mobile inchangé (glissant 1 an, sans plafond) ; browser = min(now + 7 j, login + 30 j). Chaque transport n'accepte que son type de lignée (401 sinon). Une ligne sans type est lue `mobile`, débutée à sa création.
+- **Factorisation** : `open_session()` dans `media_summarizer/api/dependencies/session.py` remplace les cinq copies du bloc d'émission ; `NativeAuthResponse` fusionné dans `TokenVerificationResponse`.
+- **CORS** : `cors_configuration` de l'API HTTP = `var.web_app_origin` (variable sans défaut, validée : vide ou origine nue, jamais `*`), `allow_credentials = true`, en-têtes nommés, PATCH ajouté, `X-Quota-Error-Code` exposé. dev : `http://localhost:5173` ; staging et prod : vide jusqu'à `app.<domaine>`. Le `CORSMiddleware` FastAPI (ignoré derrière le CORS d'API Gateway) et `CORS_ORIGINS` sont supprimés.
+- **Doc** : `docs/AUTHENTICATION_SETUP.md` (table de politique par type de lignée, mode web, CORS).
+- ruff, mypy, `terraform validate` (dev, staging, prod) passent.
+
+Note owner : vérification de bout en bout après task-443/445, comme décrit dans la description. Le prochain `terraform apply` sur dev remplace `*` par `http://localhost:5173` : sans effet sur l'app mobile.
+<!-- SECTION:FINAL_SUMMARY:END -->
