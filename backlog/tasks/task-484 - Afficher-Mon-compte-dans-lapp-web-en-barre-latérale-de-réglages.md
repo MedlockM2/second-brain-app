@@ -1,9 +1,10 @@
 ---
 id: TASK-484
 title: Afficher Mon compte dans l'app web en barre latérale de réglages
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:58'
+updated_date: '2026-10-11 17:37'
 labels:
   - web
   - feature
@@ -24,7 +25,6 @@ references:
 priority: medium
 type: feature
 ordinal: 91000
-dispatchable: true
 ---
 
 ## Description
@@ -58,10 +58,24 @@ Vérification contre les captures 15 et 16 sur un compte `-dev` : changer la lan
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Mon compte rend une barre latérale de réglages aux mêmes lignes et dans le même ordre que le menu mobile, les deux lignes rouges en bas, chaque ligne ouvrant son volet à droite
-- [ ] #2 La carte de formule n'a aucune entrée vers l'abonnement ni vers un paiement
-- [ ] #3 Les volets langue de lecture, langue de l'app, thème, suggestions, signaler un bug, supprimer le compte et Se déconnecter sont câblés, et la ligne Extension a son volet
-- [ ] #4 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #5 Les libellés sont présents dans les 11 langues
-- [ ] #6 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 Mon compte rend une barre latérale de réglages aux mêmes lignes et dans le même ordre que le menu mobile, les deux lignes rouges en bas, chaque ligne ouvrant son volet à droite
+- [x] #2 La carte de formule n'a aucune entrée vers l'abonnement ni vers un paiement
+- [x] #3 Les volets langue de lecture, langue de l'app, thème, suggestions, signaler un bug, supprimer le compte et Se déconnecter sont câblés, et la ligne Extension a son volet
+- [x] #4 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #5 Les libellés sont présents dans les 11 langues
+- [x] #6 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit e53fd576.
+
+- **Mon compte** (`web/src/pages/AccountPage.tsx`, routes `/account` et `/account/:section`) : barre latérale de réglages reprenant le menu mobile dans le même ordre — Votre formule ; Réglages : langue de lecture, langue de l'app, thème, + Extension navigateur (propre au web) ; Aide : Suggestions, Signaler un bug ; puis Se déconnecter et Supprimer le compte en rouge en bas. Chaque ligne ouvre son volet à droite.
+- **Formule** (`GET /api/entitlements/status`) : Accès bêta / essai / palier, minutes restantes sur incluses avec jauge, date de recharge, règle des minutes. **Aucune entrée vers l'abonnement ni vers un paiement** (bêta, task-429).
+- **Langue de lecture** : `PATCH /api/auth/me`, limite mensuelle affichée (date de réouverture) et refus 429 formulé. **Langue de l'app** : « Suivre le navigateur » ou l'une des 11, appliquée en direct, gardée dans le navigateur (`I18nProvider` gagne `preference`/`setPreference`). **Thème** : appareil / clair / sombre.
+- **Extension** : description et lien vers `www.<domaine>/extension` (`VITE_SITE_URL`) ; l'appairage, la liste et la révocation sont task-487. **Suggestions** : tableau Canny signé ouvert dans un nouvel onglet (`GET /api/feedback/token`, repli `VITE_FEEDBACK_URL`). **Signaler un bug** : formulaire en ligne (`POST /api/bug-reports`, sujet + description). **Supprimer le compte** : avertissement, liste de ce qui est effacé, case d'acquittement, confirmation, `DELETE /api/account`. **Se déconnecter** : confirmation puis fermeture de la session web.
+- 13 libellés web en 11 langues ; build, typecheck, lint propres ; rendu vérifié en Chrome headless (formule, langue de lecture bloquée jusqu'au 3 nov., bascule de l'interface en allemand).
+
+Hors périmètre noté : pièce jointe du signalement de bug (le mobile la propose) non reprise sur le web.
+<!-- SECTION:FINAL_SUMMARY:END -->
