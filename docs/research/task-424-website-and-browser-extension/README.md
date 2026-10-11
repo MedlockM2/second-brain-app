@@ -1,12 +1,24 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: ok   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : l'app web connectée de Deepn — cinq directions, la bibliothèque à 200 dossiers et plus, le chat
 
 ## Owner Validation
 
-**Decision**: Complément demandé (2026-10-11). L'interface est décidée ; neuf points du reste du README sont revus ci-dessous. Le complément les intègre sans rouvrir ce qui est acté.
+**Decision**: Accepté (2026-10-11), tel que précisé par `complement-response-2026-10-11.md`. **Ce complément prime sur la Recommendation et sur les §8 à §12 de ce README** : la direction A, la palette, Cloudflare, Astro, « Stripe Billing via RevenueCat », les lots W0 à W4 et leur chiffrage en jours ne sont pas retenus.
+
+1. **Interface** : la direction de l'owner (`mobile-design-mockups/web_app_owner_direction/`, son `README.md` fait foi écran par écran). Pas de version téléphone en V1 : sous 900 px, une page invite à installer l'app mobile.
+2. **Hébergement tout AWS, dans Terraform** : Route 53, `app.` et `www.` sur S3 + CloudFront, `api.` en domaine personnalisé d'API Gateway. Task-445 est un prérequis du développement.
+3. **Aucun paiement web avant le benchmark B-01**, à ouvrir à la fin de la bêta (Paddle, RevenueCat Billing, Stripe Billing).
+4. **Extension V1 comme les apps** : l'adresse de la page part par `ingest-url`, une sélection devient une note par `ingest-shared-content` avec son adresse d'origine. Un seul paquet pour Chrome et Edge, puis Firefox avec son archive de sources. Les pages payantes sont reportées au benchmark B-02.
+5. **Jeton de l'extension** : lignée `browser_extension` à portée réduite (complément §7), renouvelée à chaque usage. Il **expire après 90 jours sans utilisation**, avec un **plafond absolu d'un an** depuis l'appairage. Au-delà, l'extension demande de ré-appairer en un clic.
+6. **Points déduits du §3.6 du complément** : acceptés tous les trois. Pas de lien « continuer sur ordinateur » sous 900 px. La façade du flux garde son URL `execute-api`. W-02 met à jour les textes légaux, et task-444 reste la relecture et la publication par l'owner.
+7. **Découpage** : les 22 tâches du §3 du complément. **task-425 devient la création de ces tâches dans le backlog, sans code applicatif**, au format de task-431. B-01 y est créé en `dispatchable: false` jusqu'à la fin de la bêta.
+
+**Historique — consignes de la demande de complément du 2026-10-11** (traitées par `complement-response-2026-10-11.md`) :
+
+Complément demandé (2026-10-11). L'interface est décidée ; neuf points du reste du README sont revus ci-dessous. Le complément les intègre sans rouvrir ce qui est acté.
 
 **Acté : l'interface de l'app web sur ordinateur est la direction de l'owner**, `mobile-design-mockups/web_app_owner_direction/` (maquette `code.html`, captures `screens/`, et son `README.md`, qui fait foi pour chaque écran ; sources dans `mockup-build/dir_owner*.{js,css}`). Elle remplace la direction A et tout ce qui lui est propre : barre latérale et arbre virtualisé, épinglés, palette ⌘K, sélecteur arborescent. Les dossiers n'ont qu'un niveau : on ne crée jamais un dossier dans un autre, et « Déplacer le dossier » n'existe pas.
 
@@ -28,7 +40,7 @@ owner_decision: pending   # pending | ok | abandoned | redo | more
     - **Une sélection garde son adresse d'origine** : un champ optionnel sur `ingest-shared-content`, à préciser dans le contrat.
     - **Publication sur le store d'Edge dès la première version**, en plus du Chrome Web Store, avec le même paquet. Prévoir l'archive de sources exigée par la boutique de Firefox pour le lot Firefox.
     - **L'enregistrement des pages payantes ou derrière une connexion est reporté** à une étude commune à tous les clients : l'extension et le partage depuis Safari sur iPhone. Elle comparera l'envoi du HTML de la page au serveur, pour une extraction par trafilatura comme pour les liens (Readwise, Karakeep et Omnivore envoient le contenu de la page), à une extraction dans le navigateur. Elle traitera la taille de l'envoi (HTML nettoyé, plafond explicite) et appliquera la règle de la consigne 10. Le complément la décrit en une tâche de benchmark à créer ; il ne la traite pas.
-**Validated at**: _(date ISO à remplir par l'owner lors du passage à `ok`)_
+**Validated at**: 2026-10-11
 
 ---
 

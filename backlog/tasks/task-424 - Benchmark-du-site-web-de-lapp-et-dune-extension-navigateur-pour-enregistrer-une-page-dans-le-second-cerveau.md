@@ -3,10 +3,10 @@ id: TASK-424
 title: >-
   Benchmark du site web de l'app (avec paiement Stripe) et d'une extension
   navigateur pour enregistrer une page dans le second cerveau
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-04 16:22'
-updated_date: '2026-10-11 15:06'
+updated_date: '2026-10-11 15:48'
 labels:
   - benchmark
   - scoping
