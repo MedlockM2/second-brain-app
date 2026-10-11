@@ -7,14 +7,14 @@ status: To Do
 assignee:
   - agent
 created_date: '2026-09-04 15:26'
-updated_date: '2026-10-10 15:15'
+updated_date: '2026-10-11 15:00'
 labels:
   - mobile
   - compliance
 dependencies:
-  - task-357
+  - TASK-357
+  - TASK-443
 priority: high
-dispatchable: true
 ---
 
 ## Description
@@ -62,3 +62,13 @@ Les liens Privacy/Terms doivent aussi être accessibles depuis login/register et
 - [ ] #5 Les liens de confidentialité et de conditions sont accessibles depuis les écrans login/register et Account, et lisent les mêmes constantes légales que le paywall et la suppression de compte.
 - [ ] #6 Les libellés ajoutés passent par les catalogues de traduction existants et sont présents dans les 11 langues V1.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-11 — Dispatch tenté après le passage de task-357 à Done, puis arrêté avant toute modification.
+
+Le `Decision` de task-357 fixe les pages sur `https://www.<domaine>/privacy` et `/terms`, avec une adresse de contact dédiée sur ce même domaine. Or aucun domaine n'est acquis : task-443 est à l'owner, verrouillée (`dispatchable: false`), et `docs/BRAND_IDENTITY.md` interdit de déduire un domaine de « Deepn ». L'AC #1, qui demande les adresses exactes, ne peut donc pas être satisfaite, et un domaine inventé finirait dans le binaire.
+
+Dépendance TASK-443 ajoutée. La tâche redeviendra dispatchable quand le domaine et l'adresse de contact seront consignés.
+<!-- SECTION:NOTES:END -->
