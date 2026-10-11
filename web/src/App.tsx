@@ -61,6 +61,7 @@ function AppRoutes() {
               <Route path="unsorted" element={<UnsortedPage />} />
               <Route path="search" element={<SearchPage />} />
               <Route path="account" element={<AccountPage />} />
+              <Route path="account/:section" element={<AccountPage />} />
             </Route>
           </Route>
         </Route>

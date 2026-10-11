@@ -330,3 +330,27 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .mcard-row > .mcard { flex: 1; }
 .mcard.orphan { opacity: .6; pointer-events: none; }
 .mcard-row .mcard .wcover { width: 160px; }
+
+/* My account */
+.acc { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 40px; max-width: 1080px; margin: 0 auto; align-items: start; }
+.acc-nav { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2px; }
+.acc-id { display: flex; align-items: center; gap: 12px; padding: 4px 8px 16px; }
+.avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--primary); color: var(--on-primary); display: flex; align-items: center; justify-content: center; font: 700 18px/1 var(--font-head); flex: none; }
+.acc-cap { margin: 14px 8px 4px; }
+.acc-sep { height: 1px; background: var(--outline-variant); opacity: .6; margin: 12px 8px; }
+.acc-item { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: var(--r-lg); text-align: start; width: 100%; min-width: 0; text-decoration: none; color: inherit; }
+.acc-item:hover { background: var(--surface-container-low); }
+.acc-item.on { background: var(--surface); box-shadow: var(--shadow), inset 3px 0 0 var(--primary); }
+[dir="rtl"] .acc-item.on { box-shadow: var(--shadow), inset -3px 0 0 var(--primary); }
+.acc-ico { width: 36px; height: 36px; border-radius: var(--r-md); background: var(--primary-tint); color: var(--primary); display: flex; align-items: center; justify-content: center; flex: none; box-shadow: inset 0 0 0 1px var(--primary-30); }
+.acc-item.danger { color: var(--error); }
+.acc-item.danger .acc-ico { background: var(--error-tint); color: var(--error); box-shadow: none; }
+.acc-main { min-width: 0; max-width: 680px; }
+.acc-main .display { margin-bottom: 8px; }
+.acc-main .frow { min-height: 48px; }
+.plan-card { padding: 24px; margin-top: 16px; }
+.gauge { height: 6px; border-radius: 3px; background: var(--surface-container); overflow: hidden; margin-top: 8px; }
+.gauge > i { display: block; height: 100%; background: var(--primary); }
+.textarea { width: 100%; min-height: 140px; padding: 12px; border-radius: var(--r-md); background: var(--surface-container); border: 0; outline: 0; resize: vertical; font-size: 14px; color: var(--text-main); font-family: inherit; }
+.textarea:focus { box-shadow: 0 0 0 2px var(--primary); }
+.form-stack { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }

@@ -18,6 +18,10 @@ export const Config = {
   APPLE_REDIRECT_URI: env.VITE_APPLE_REDIRECT_URI ?? "",
   APP_STORE_URL: env.VITE_APP_STORE_URL ?? "",
   PLAY_STORE_URL: env.VITE_PLAY_STORE_URL ?? "",
+  /** The public site (`https://www.<domain>`), home of the extension's install page. */
+  SITE_URL: trimSlash(env.VITE_SITE_URL ?? ""),
+  /** The feedback board, opened as-is when the API cannot sign the visitor in to it. */
+  FEEDBACK_URL: env.VITE_FEEDBACK_URL ?? "",
 } as const;
 
 if (!Config.API_BASE_URL) {

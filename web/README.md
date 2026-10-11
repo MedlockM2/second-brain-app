@@ -17,7 +17,7 @@ is authoritative screen by screen). The decision behind it is
 - **Under 900 px** the app is not rendered: only the install page (`src/pages/InstallPage.tsx`).
 - **i18n**: the shared catalogues, plus the web app's own labels in `src/i18n/` (11 languages,
   `en` is the reference and a missing key is a `tsc` error). The interface language follows the
-  browser for now.
+  browser unless one is chosen in My account; the choice, like the theme, stays in this browser.
 - **Themes**: light and dark tokens in `src/styles.css`, the same values as
   `mobile/src/constants/theme.ts`. The choice stays in this browser.
 
