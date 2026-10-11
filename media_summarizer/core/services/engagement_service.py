@@ -33,10 +33,9 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from media_summarizer.core.media_ingestion.media_metadata import parse_cover_locator
-from media_summarizer.core.models.user_media import UserMediaRecord
 from media_summarizer.core.services.media_search_service import COVER_URL_EXPIRATION_SECONDS
 from media_summarizer.utils import database_async, s3
 from media_summarizer.utils import user_media as user_media_store
@@ -241,39 +240,22 @@ async def list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> Lis
 async def _hydrate_folders(user_id: str, entries: List[RecentEngagement]) -> None:
     """Fill ``item_count`` and ``preview_images`` for the folders in the row.
 
-    One partition read for the whole row rather than one ``folder-index`` query per
-    folder: up to twelve queries returning full items is more payload for less
-    information, and the row needs the newest covers of each folder, not just a
-    count. Skipped entirely when the capped row holds no folder, which is the
-    common case.
-
-    It used to be free on the Home screen, because ``GET /api/folders`` was reading
-    the same partition on every open anyway; since task-417 it no longer is, and
-    this read is now the only one of its kind left on that screen — visible in the
-    ``home.continue_learning`` span whenever the row holds a folder.
+    Read counts and bounded cover projections concurrently for just the folders
+    that made the cut. A tile must not download the entire library (including
+    unrelated folders and full records) to show a number and four covers.
     """
     folder_ids = {entry.id for entry in entries if entry.kind == KIND_FOLDER}
     if not folder_ids:
         return
 
-    per_folder: Dict[str, List[UserMediaRecord]] = {fid: [] for fid in folder_ids}
-    for record in await user_media_store.list_library_for_user(user_id):
-        bucket = per_folder.get(record.folder_id or "")
-        if bucket is not None:
-            bucket.append(record)
+    summaries = await user_media_store.folder_overviews(
+        user_id, sorted(folder_ids), preview_limit=MAX_PREVIEW_IMAGES
+    )
 
     for entry in entries:
         if entry.kind != KIND_FOLDER:
             continue
-        records = sorted(
-            per_folder.get(entry.id, []),
-            key=lambda record: record.saved_at,
-            reverse=True,
-        )
-        entry.item_count = len(records)
-        entry.preview_images = [
-            record.thumbnail_url for record in records if record.thumbnail_url
-        ][:MAX_PREVIEW_IMAGES]
+        entry.item_count, entry.preview_images = summaries[entry.id]
 
 
 async def _sign_covers(entries: List[RecentEngagement]) -> None:

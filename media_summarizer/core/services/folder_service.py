@@ -232,7 +232,9 @@ async def count_unsorted(user_id: str) -> Dict[str, Any]:
     is ``Uncategorized`` and the UI says "Unsorted", so matching on either is what
     task-297 ruled out.
     """
-    default = await ensure_default_folder(user_id)
+    default = await database_async.get_default_folder_by_user_id(user_id)
+    if default is None:
+        default, _ = await _resolve_default_folder(user_id, [])
     return {
         "folder_id": default.id,
         "media_count": await user_media_store.count_for_folder(user_id, default.id),

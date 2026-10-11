@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import aioboto3
-from boto3.dynamodb.conditions import Key
+from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
 
 from media_summarizer.core.models import Folder, JobStatus, MediaFailureCode, ProcessingJob, User, UserRssFeed
@@ -990,6 +990,33 @@ async def get_folder_by_id(folder_id: str) -> Optional[Folder]:
             e,
             table=USER_FOLDERS_TABLE,
             folder_id=folder_id,
+        )
+        raise
+
+
+async def get_default_folder_by_user_id(user_id: str) -> Optional[Folder]:
+    """Resolve the unsorted folder without transferring the whole folder tree."""
+    try:
+        session = get_session()
+        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+            table = await dynamodb.Table(USER_FOLDERS_TABLE)
+            kwargs: Dict[str, Any] = {
+                "IndexName": "user-index",
+                "KeyConditionExpression": Key("user_id").eq(user_id),
+                "FilterExpression": Attr("is_default").eq(True),
+            }
+            while True:
+                response = await table.query(**kwargs)
+                items = response.get("Items", [])
+                if items:
+                    return Folder.from_dynamodb_item(items[0])
+                last_key = response.get("LastEvaluatedKey")
+                if not last_key:
+                    return None
+                kwargs["ExclusiveStartKey"] = last_key
+    except ClientError as exc:
+        _log_dynamodb_error(
+            "get_default_folder_by_user_id", exc, table=USER_FOLDERS_TABLE, user_id=user_id
         )
         raise
 

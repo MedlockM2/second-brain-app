@@ -44,10 +44,11 @@ import crash.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
@@ -395,6 +396,80 @@ async def count_for_folder(user_id: str, folder_id: Optional[str]) -> int:
                 break
             kwargs["ExclusiveStartKey"] = last_key
     return total
+
+
+async def folder_overviews(
+    user_id: str, folder_ids: Sequence[str], *, preview_limit: int
+) -> Dict[str, Tuple[int, List[str]]]:
+    """Counts and newest covers for the folder tiles actually shown on Home.
+
+    Reuse one client for concurrent, folder-index reads. Counts return no items;
+    cover queries stop as soon as the mosaic is full and project only its URL.
+    Neither path downloads or deserializes the user's entire library.
+    """
+    if not folder_ids:
+        return {}
+    session = database_async.get_session()
+    async with session.resource(
+        "dynamodb", region_name=database_async.AWS_REGION
+    ) as dynamodb:
+        table = await dynamodb.Table(user_media_table_name())
+
+        async def overview(folder_id: str) -> Tuple[int, List[str]]:
+            base: Dict[str, Any] = {
+                "IndexName": "folder-index",
+                "KeyConditionExpression": (
+                    Key("user_id").eq(user_id)
+                    & Key("folder_sort_key").begins_with(f"{folder_id}#")
+                ),
+                "ConsistentRead": True,
+            }
+
+            async def count() -> int:
+                kwargs = {
+                    **base,
+                    "FilterExpression": Attr("deleted_at").not_exists(),
+                    "Select": "COUNT",
+                }
+                total = 0
+                while True:
+                    response = await table.query(**kwargs)
+                    total += int(response.get("Count", 0))
+                    last_key = response.get("LastEvaluatedKey")
+                    if not last_key:
+                        return total
+                    kwargs["ExclusiveStartKey"] = last_key
+
+            async def covers() -> List[str]:
+                urls: List[str] = []
+                if preview_limit <= 0:
+                    return urls
+                kwargs = {
+                    **base,
+                    "FilterExpression": (
+                        Attr("deleted_at").not_exists()
+                        & Attr("thumbnail_url").exists()
+                        & Attr("thumbnail_url").ne("")
+                        & Attr("thumbnail_url").ne(None)
+                    ),
+                    "ProjectionExpression": "thumbnail_url",
+                    "ScanIndexForward": False,
+                    "Limit": preview_limit,
+                }
+                while True:
+                    response = await table.query(**kwargs)
+                    urls.extend(item["thumbnail_url"] for item in response.get("Items", []))
+                    last_key = response.get("LastEvaluatedKey")
+                    if len(urls) >= preview_limit or not last_key:
+                        return urls[:preview_limit]
+                    kwargs["ExclusiveStartKey"] = last_key
+
+            total, urls = await asyncio.gather(count(), covers())
+            return total, urls
+
+        ids = list(dict.fromkeys(folder_ids))
+        summaries = await asyncio.gather(*(overview(folder_id) for folder_id in ids))
+    return dict(zip(ids, summaries))
 
 
 async def count_media_per_folder(user_id: str) -> Dict[str, int]:
