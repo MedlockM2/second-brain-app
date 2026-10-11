@@ -1,5 +1,5 @@
 ---
-owner_decision: more   # pending | ok | abandoned | redo | more
+owner_decision: pending   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : l'app web connectée de Deepn — cinq directions, la bibliothèque à 200 dossiers et plus, le chat

@@ -3,18 +3,17 @@ id: task-357
 title: >-
   Benchmark des façons de publier les pages légales exigées par le paywall, sans
   domaine possédé
-status: To Do
+status: Done
 assignee:
   - agent
 created_date: '2026-09-04 15:26'
-updated_date: '2026-10-10 15:15'
+updated_date: '2026-10-11 14:50'
 labels:
   - benchmark
   - mobile
   - compliance
 dependencies: []
 priority: high
-dispatchable: true
 ---
 
 ## Description

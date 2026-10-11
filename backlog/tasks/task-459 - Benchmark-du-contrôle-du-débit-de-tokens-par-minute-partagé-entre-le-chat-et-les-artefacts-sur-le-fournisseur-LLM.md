@@ -3,10 +3,10 @@ id: TASK-459
 title: >-
   Benchmark du contrôle du débit de tokens par minute partagé entre le chat et
   les artefacts sur le fournisseur LLM
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-10 17:57'
-updated_date: '2026-10-10 22:04'
+updated_date: '2026-10-11 14:50'
 labels:
   - benchmark
   - chat
