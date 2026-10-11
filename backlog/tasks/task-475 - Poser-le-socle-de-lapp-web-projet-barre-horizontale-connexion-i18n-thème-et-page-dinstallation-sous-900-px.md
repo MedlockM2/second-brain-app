@@ -3,10 +3,10 @@ id: TASK-475
 title: >-
   Poser le socle de l'app web : projet, barre horizontale, connexion, i18n,
   thème et page d'installation sous 900 px
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:55'
-updated_date: '2026-10-11 16:22'
+updated_date: '2026-10-11 17:02'
 labels:
   - web
   - feature
@@ -26,7 +26,6 @@ references:
 priority: medium
 type: feature
 ordinal: 82000
-dispatchable: true
 ---
 
 ## Description
@@ -63,10 +62,27 @@ Les origines JavaScript autorisées du client Google et le *Services ID* Apple (
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le projet web/ (Vite, React 19, React Router en SPA) existe comme workspace npm, importe le code commun depuis packages/core sans alias vers mobile/src, et aucun fichier de mobile/ n'est modifié
-- [ ] #2 La barre horizontale de la direction de l'owner est rendue avec ses neuf entrées, et la connexion par e-mail, Google Identity Services et Sign in with Apple JS ainsi que l'inscription avec choix de la langue de lecture sont câblées sur l'API existante
-- [ ] #3 La session suit task-473 : refresh en cookie, access token en mémoire seulement
-- [ ] #4 Sous 900 px de large, seule la page d'installation est rendue, avec les deux boutons de store et sans lien vers la version ordinateur
-- [ ] #5 Les libellés sont présents dans les 11 langues, et les thèmes clair et sombre existent
-- [ ] #6 Le build passe, typecheck et lint sont propres, et un document décrit le build et le lancement contre l'API -dev
+- [x] #1 Le projet web/ (Vite, React 19, React Router en SPA) existe comme workspace npm, importe le code commun depuis packages/core sans alias vers mobile/src, et aucun fichier de mobile/ n'est modifié
+- [x] #2 La barre horizontale de la direction de l'owner est rendue avec ses neuf entrées, et la connexion par e-mail, Google Identity Services et Sign in with Apple JS ainsi que l'inscription avec choix de la langue de lecture sont câblées sur l'API existante
+- [x] #3 La session suit task-473 : refresh en cookie, access token en mémoire seulement
+- [x] #4 Sous 900 px de large, seule la page d'installation est rendue, avec les deux boutons de store et sans lien vers la version ordinateur
+- [x] #5 Les libellés sont présents dans les 11 langues, et les thèmes clair et sombre existent
+- [x] #6 Le build passe, typecheck et lint sont propres, et un document décrit le build et le lancement contre l'API -dev
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit e8cb9d2.
+
+- **Projet** : `web/` (Vite 6, React 19.2, React Router 7 en SPA), membre du workspace npm. Code commun importé de `@media-summarizer/core` uniquement ; l'ESLint de `web/` refuse tout import de `mobile/`. Aucun fichier de `mobile/` modifié ; le lockfile n'ajoute que des paquets (aucune résolution existante ne bouge, vérifié). `packages/core` gagne `WebSessionResponse` et `UnsortedCountResponse`.
+- **Barre** (maquette `appbar()`) : logo, Accueil, Bibliothèque, Digest, Non classés · N (`GET /api/folders/unsorted-count`), recherche (→ `/search?q=`), Ajouter (→ `/add`), thème, Mon compte. Destinations = routes vides (titre seul) ; Mon compte porte en attendant la déconnexion.
+- **Connexion / inscription** : e-mail + mot de passe, Google Identity Services (bouton rendu par Google : GIS ne rend un ID token que par son bouton ou One Tap), Sign in with Apple JS en popup avec contrôle du `state`. Un fournisseur non configuré n'est pas affiché. Tout compte sans `reading_language` passe par `/welcome/language` (PATCH /api/auth/me).
+- **Session** (`web/src/session/sessionStore.ts`) : `X-Session-Transport: cookie` + `credentials: "include"` sur /api/auth, access token en mémoire seulement, rotation single-flight, rotation proactive 60 s avant expiration, branchée sur `createApiClient`.
+- **Sous 900 px** : seule la page d'installation est rendue (nom, une phrase, App Store / Google Play, aucun lien vers le bureau) ; ni session ni routeur montés, donc aucune requête.
+- **i18n** : catalogues propres au web en 11 langues, typés sur `en` ; langue d'interface = celle du navigateur ; `dir=rtl` pour l'arabe. **Thèmes** clair/sombre (jetons de `mobile/src/constants/theme.ts`), choix gardé dans le navigateur.
+- **Vérifs** : `npm run build`, typecheck et lint de `web/`, `packages/core` et `mobile/` propres. Rendu contrôlé en Chrome headless contre une API simulée (connexion, erreur, session après rechargement, sombre, page < 900 px) : conforme aux captures 01 et 19.
+- **Doc** : `web/README.md` (commandes, lancement contre -dev, ce qui attend `api.<domaine>`), `web/.env.example`, `AGENTS.md` (membres du workspace).
+
+Note owner : contre la vraie API -dev, la connexion attend le déploiement de task-473 et l'`apply` dev de `web_app_origin` ; avant cela le CORS `*` bloque toute requête avec credentials. Le job CI mobile ne lint pas encore `web/`.
+<!-- SECTION:FINAL_SUMMARY:END -->
