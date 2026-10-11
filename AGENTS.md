@@ -48,7 +48,8 @@ Read `README.md` for project overview and V1 scope. Read `docs/CANONICAL_MEDIA_A
 ## `packages/core` — code shared by the mobile app and the web app
 
 The repository root is an npm workspace (`package.json`, one `package-lock.json`, one
-`node_modules`) whose members are `mobile/` and `packages/core` (task-493). Install from the
+`node_modules`) whose members are `mobile/`, `packages/core` (task-493) and `web/` (the web app,
+task-475; `web/README.md`). Install from the
 root: `npm ci` there, never inside `mobile/`. `packages/core` is TypeScript source with no build
 step; an app imports a module by its path, e.g. `@media-summarizer/core/types/media`,
 `@media-summarizer/core/i18n/runtime`, `@media-summarizer/core/chat/sse`.

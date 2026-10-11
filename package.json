@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "mobile",
-    "packages/core"
+    "packages/core",
+    "web"
   ],
   "scripts": {
     "postinstall": "patch-package --patch-dir mobile/patches"

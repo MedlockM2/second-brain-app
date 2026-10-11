@@ -1,0 +1,17 @@
+import type { WebCatalog } from "./types";
+
+export const ar: WebCatalog = {
+  "nav.mainA11y": "التنقل الرئيسي",
+  "nav.library": "المكتبة",
+  "nav.unsorted": "غير مصنّف · {count}",
+  "nav.unsortedNoCount": "غير مصنّف",
+  "nav.searchPlaceholder": "ابحث في نص مصادرك",
+  "nav.add": "إضافة",
+  "nav.themeToDark": "التبديل إلى المظهر الداكن",
+  "nav.themeToLight": "التبديل إلى المظهر الفاتح",
+  "nav.account": "حسابي",
+  "install.lead": "على الهاتف، Deepn تطبيق: ثبّته لحفظ مصادرك وقراءتها ومراجعتها.",
+  "install.appStore": "تنزيل من App Store",
+  "install.googlePlay": "احصل عليه من Google Play",
+  "session.unreachable": "يتعذّر الوصول إلى Deepn حاليًا. تحقّق من اتصالك وحاول مرة أخرى.",
+};

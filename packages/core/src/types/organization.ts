@@ -25,3 +25,8 @@ export interface Folder {
   created_at: string;
   updated_at: string;
 }
+
+/** GET /api/folders/unsorted-count: the items waiting in the default folder. */
+export interface UnsortedCountResponse {
+  media_count: number;
+}

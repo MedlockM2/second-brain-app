@@ -1,0 +1,17 @@
+import type { WebCatalog } from "./types";
+
+export const it: WebCatalog = {
+  "nav.mainA11y": "Navigazione principale",
+  "nav.library": "Libreria",
+  "nav.unsorted": "Non ordinati · {count}",
+  "nav.unsortedNoCount": "Non ordinati",
+  "nav.searchPlaceholder": "Cerca nel testo delle tue fonti",
+  "nav.add": "Aggiungi",
+  "nav.themeToDark": "Passa al tema scuro",
+  "nav.themeToLight": "Passa al tema chiaro",
+  "nav.account": "Il mio account",
+  "install.lead": "Sul telefono Deepn è un'app: installala per salvare, leggere e ripassare le tue fonti.",
+  "install.appStore": "Scarica su App Store",
+  "install.googlePlay": "Disponibile su Google Play",
+  "session.unreachable": "Al momento Deepn non è raggiungibile. Controlla la connessione e riprova.",
+};
