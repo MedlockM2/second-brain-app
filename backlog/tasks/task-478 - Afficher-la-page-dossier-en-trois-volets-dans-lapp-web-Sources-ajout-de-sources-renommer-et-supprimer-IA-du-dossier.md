@@ -3,9 +3,10 @@ id: TASK-478
 title: >-
   Afficher la page dossier en trois volets dans l'app web : Sources, ajout de
   sources, renommer et supprimer, IA du dossier
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:56'
+updated_date: '2026-10-11 17:23'
 labels:
   - web
   - feature
@@ -24,7 +25,6 @@ references:
 priority: medium
 type: feature
 ordinal: 85000
-dispatchable: true
 ---
 
 ## Description
@@ -59,10 +59,26 @@ Vérification visuelle contre les captures 12 à 14 sur un navigateur de bureau,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La page dossier rend trois volets Sources, Discussion (emplacement à la portée Ce dossier · N sources laissé à task-480) et IA
-- [ ] #2 Le volet Sources rend le chemin, le menu … limité à Renommer et Supprimer, le bouton + Ajouter des sources qui range directement dans ce dossier, et la liste des sources
-- [ ] #3 Le volet IA génère sur tout le dossier, liste l'historique avec le nombre de sources et ouvre un artefact
-- [ ] #4 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #5 Les libellés sont présents dans les 11 langues
-- [ ] #6 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 La page dossier rend trois volets Sources, Discussion (emplacement à la portée Ce dossier · N sources laissé à task-480) et IA
+- [x] #2 Le volet Sources rend le chemin, le menu … limité à Renommer et Supprimer, le bouton + Ajouter des sources qui range directement dans ce dossier, et la liste des sources
+- [x] #3 Le volet IA génère sur tout le dossier, liste l'historique avec le nombre de sources et ouvre un artefact
+- [x] #4 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #5 Les libellés sont présents dans les 11 langues
+- [x] #6 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit c5285cd.
+
+- **Page dossier** `web/src/pages/FolderPage.tsx` (route `/folders/:folderId`), sur le gabarit `Panes` de task-477.
+- **Sources** : chemin « Bibliothèque », menu `…` limité à Renommer (`PUT /api/folders/:id`) et Supprimer (`DELETE`, les sources passent dans Non classés, dialogue avec la phrase `folderActions.deleteBody`) ; aucun `…` sur Non classés. Titre, « N sources », bouton « + Ajouter des sources », liste des sources (`GET /api/media?folder_id=…`, relue pendant un traitement) avec le menu `…` de chaque média. Pas de section Dossiers, aucune création de sous-dossier.
+- **Ajout** `web/src/components/AddSourceDialog.tsx` + `web/src/media/ingest.ts` : lien collé (`POST /api/media/ingest-url` avec `folder_id`) ou un fichier choisi/déposé (`upload-url` → PUT présigné depuis le navigateur → `upload` / `upload-audio` avec `folder_id`), refus de format/taille avant envoi, refus de quota formulés. Réutilisable par task-479 (sans dossier → Non classés).
+- **Terraform** : CORS `PUT` des buckets `documents` et `audio` pour `var.web_app_origin` (aucune règle si vide) — sans lui, un navigateur ne peut pas envoyer le fichier. `terraform validate` OK sur dev, staging, prod.
+- **Discussion** : emplacement à la portée « Ce dossier · N sources » pour task-480.
+- **IA** : génération sur tout le dossier ; `useAiPane` compare désormais les sources actuelles du dossier à l'instantané de la dernière entrée de chaque type (`GET /api/artifacts/:id`) pour ne proposer une nouvelle génération que si elles diffèrent, avec un bandeau ; historique avec le nombre de sources ; artefact ouvert (quiz compris).
+- `packages/core` : copie neutre de l'extraction d'URL mobile. 15 libellés web en 11 langues. Build, typecheck, lint propres ; rendu vérifié en Chrome headless (page, ajout, quiz, menu).
+
+Note owner : l'import de fichier depuis le web attend l'`apply` de `web_app_origin` (CORS S3) ; un lien fonctionne dès le CORS de l'API.
+<!-- SECTION:FINAL_SUMMARY:END -->
