@@ -1,13 +1,20 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: ok   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : contrôle du débit de tokens par minute partagé entre le chat et les artefacts
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture — texte libre décrivant la décision finale : accept recommandation X, reject parce que Y, accept with modifications Z, OU, si redo, les consignes précises de correction à intégrer au prochain passage)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: Recommandation M2 (fenêtres partagées en DynamoDB) **non retenue** pour la bêta. Retenu à la place : **M1, la concurrence existante plus le 429 réactif**, au palier actuel du compte (Build).
+
+1. **Palier actuel, pas d'achat anticipé.** Le compte reste au palier Build (2 000 000 TPM). Il passera à Launch (10 000 000 TPM, 100 $ d'achats cumulés, §2.1) au fil des recharges, à mesure que l'app gagnera des utilisateurs. À l'échelle de la bêta, le §3 juge un dépassement improbable. Le pire scénario du §3 (152 % au palier Build) suppose 20 appels simultanés sur des dossiers au plafond, ce qu'une douzaine de testeurs ne produit pas. Si un pic arrive quand même, M1 le transforme en attente ou en échec remboursé, pas en perte de données. La croissance qui ferait monter la charge fait aussi monter le palier : au palier Launch, le même pire scénario pèse environ 30 % du TPM.
+2. **Plafond de sortie inchangé** : `LLM_MAX_COMPLETION_TOKENS = 32 000`, commun à tous les appels (décision task-439). Le guide de raisonnement d'OpenAI demande au moins 25 000 tokens pour le raisonnement et la sortie, donc aucun plafond par type d'appel.
+3. **Aucun compteur partagé** : pas de table, pas de réservation avant l'appel, pas de `LLM_TPM_LIMIT`, pas de classes de priorité. Ce choix écarte, pour la bêta, le point 8 du Decision de task-430 (« des files séparées et un plafond de concurrence ne suffisent pas »). Le volume de la bêta le rend acceptable, et le palier monte avec l'usage.
+4. **Ce qui reste à faire (task-466)** : appliquer M1 selon la pratique standard. Le worker de chat attend au moins `Retry-After`, avec une petite gigue, sur ses réessais courts avant émission de texte. Au-delà d'une attente compatible avec un tour interactif, le tour est scellé en échec `rate_limit` et remboursé, au lieu de réessayer trop tôt (un appel refusé compte aussi dans la limite, §2.2). Le worker d'artefacts garde la redélivrance SQS, dont le délai dépasse déjà tout `Retry-After` de cadence. Une alarme sur les 429 `rate_limit` signale le moment où ce choix ne suffit plus.
+5. **À rouvrir si** l'alarme des 429 se déclenche hors incident, si le plafond de corpus monte, ou à l'ouverture au public si le compte est encore au palier Build. M2 (avec un seau à jetons plutôt que des fenêtres fixes) et M5 restent alors les options documentées ici.
+
+**Validated at**: 2026-10-11
 
 ---
 
