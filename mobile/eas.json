@@ -70,7 +70,6 @@
       },
       "env": {
         "EXPO_PUBLIC_API_BASE_URL": "https://api.mediasummarizer.com",
-        "EXPO_PUBLIC_CHAT_STREAM_URL": "",
         "EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS": "285796240127-ljujk2ubnq4bgav0s97vgcg19plaldgd.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "285796240127-pbq954l1010v0fce5o0smklvvju6o7de.apps.googleusercontent.com"
       }

@@ -174,13 +174,22 @@ jobs:
         working-directory: mobile
         run: |
           set -euo pipefail
-          HASH=$(eas fingerprint:generate \
-            --json \
-            --non-interactive \
-            --platform ${{ matrix.platform }} \
-            -e internal | jq -r '.hash')
-          if [[ -z "${HASH}" || "${HASH}" == "null" ]]; then
-            echo "::error::eas fingerprint:generate returned no hash for ${{ matrix.platform }}."
+          # EAS can print a plain-text config error to stdout before enabling
+          # JSON output. Preserve that diagnostic and its exit code before jq.
+          if FINGERPRINT_JSON=$(eas fingerprint:generate \
+              --json \
+              --non-interactive \
+              --platform ${{ matrix.platform }} \
+              -e internal); then
+            :
+          else
+            EAS_STATUS=$?
+            printf '%s\n' "${FINGERPRINT_JSON}" >&2
+            echo "::error::eas fingerprint:generate failed for ${{ matrix.platform }} (exit ${EAS_STATUS})." >&2
+            exit "${EAS_STATUS}"
+          fi
+          if ! HASH=$(printf '%s\n' "${FINGERPRINT_JSON}" | jq -er '.hash | select(type == "string" and length > 0)'); then
+            echo "::error::eas fingerprint:generate returned invalid JSON or no hash for ${{ matrix.platform }}."
             exit 1
           fi
           echo "hash=${HASH}" >> "$GITHUB_OUTPUT"

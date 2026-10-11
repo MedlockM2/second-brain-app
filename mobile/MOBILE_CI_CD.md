@@ -821,6 +821,21 @@ submission still happens. That is also why the workflow does not wait: the Free
 plan's low-priority queue served jobs after 3 h+ on 2026-09-02, and EAS keeps a
 queued job for 30 days.
 
+**Configuration guard (2026-10-11).** EAS validates every profile in `eas.json`,
+including profiles other than the one selected. An empty string in any `env`
+block is invalid: the empty production `EXPO_PUBLIC_CHAT_STREAM_URL` stopped
+both internal fingerprint jobs before they started. Unconfigured variables must
+be omitted. The `internal`, `preview` and development profiles keep their deployed
+dev streaming endpoint; production must get its own deployed endpoint when prod
+is provisioned (task-445/446).
+
+Run `bash scripts/mobile_release_check.sh <profile>` before a delivery. The
+workflow already invokes it: it rejects empty env strings across all profiles
+and requires an HTTP(S) streaming URL for the selected profile, following
+`extends`. Production therefore remains blocked until its URL is configured.
+The fingerprint step captures EAS output before parsing JSON, so an EAS failure
+retains its diagnostic and exit code instead of becoming a misleading jq error.
+
 The trigger excludes `**/*.md` and `mobile/.maestro/**`. Without those
 exclusions, editing this very file would publish an update whose bundle is
 byte-identical to the previous one. The workflow also declares a `concurrency`

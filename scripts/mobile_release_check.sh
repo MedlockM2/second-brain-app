@@ -8,12 +8,14 @@
 #
 # With a build profile (`preview`, `internal`, `production`, …) the script acts
 # as a gate on that profile: the host of its EXPO_PUBLIC_API_BASE_URL must
-# resolve, otherwise the run fails. That is the form CI uses, because the value
-# is frozen into the artifact at build time — a host with no DNS ships a binary
-# that installs fine and fails every network call.
+# resolve and EXPO_PUBLIC_CHAT_STREAM_URL must be an HTTP(S) URL. CI uses this
+# form because the values are frozen into the artifact at build time — a host
+# with no DNS ships a binary that installs fine and fails every network call.
 #
-# This gate is about DNS only. What the *published update* ends up serving to
-# devices is a different question, checked after the fact by
+# Empty env strings in any profile are also rejected: EAS validates the whole
+# file even when another profile is selected. Omit unconfigured variables;
+# a delivery profile still needs its own chat streaming URL to pass this gate.
+# What the *published update* ends up serving to devices is checked by
 # scripts/mobile_ota_manifest_check.sh.
 #
 # Without an argument nothing is gated on DNS: a non-resolving host is reported
@@ -58,7 +60,8 @@ Usage: bash scripts/mobile_release_check.sh [<build-profile>]
 
   <build-profile>  A build profile of mobile/eas.json (preview, internal,
                    production, development, development-simulator). When given,
-                   the API host of that profile must resolve or the script fails.
+                   the API host must resolve and the chat streaming URL must
+                   be configured as an HTTP(S) URL or the script fails.
 EOF
 }
 
@@ -89,7 +92,7 @@ ERRORS=0
 
 echo "=== Mobile Release Pre-flight Check ==="
 if [ -n "${PROFILE}" ]; then
-  echo "Target build profile: ${PROFILE} (API host DNS is a hard gate)"
+  echo "Target build profile: ${PROFILE} (API host DNS and chat streaming URL are required)"
 else
   echo "No build profile given: DNS problems are reported, not gated."
 fi
@@ -99,6 +102,7 @@ echo ""
 # 1. eas.json valid JSON
 # ------------------------------------------------------------------
 EAS_JSON="${MOBILE_DIR}/eas.json"
+EAS_JSON_VALID=false
 
 if ! command -v jq &>/dev/null; then
   fail "jq is not installed (required to validate eas.json)"
@@ -107,7 +111,19 @@ elif [ ! -f "${EAS_JSON}" ]; then
   fail "mobile/eas.json not found"
   ERRORS=$((ERRORS + 1))
 elif jq . "${EAS_JSON}" >/dev/null 2>&1; then
+  EAS_JSON_VALID=true
   pass "mobile/eas.json is valid JSON"
+  EMPTY_ENV_PATHS="$(jq -r '.build | paths(strings) as $path
+    | select($path[-2] == "env" and getpath($path) == "")
+    | (["build"] + $path | join("."))' "${EAS_JSON}")"
+  if [ -n "${EMPTY_ENV_PATHS}" ]; then
+    while IFS= read -r env_path; do
+      fail "${env_path} is empty — set its value or omit the unconfigured variable"
+      ERRORS=$((ERRORS + 1))
+    done <<< "${EMPTY_ENV_PATHS}"
+  else
+    pass "No empty env strings in any EAS build profile"
+  fi
 else
   fail "mobile/eas.json is not valid JSON"
   ERRORS=$((ERRORS + 1))
@@ -249,24 +265,29 @@ fi
 # covers A and AAAA, and uses the system resolver.
 # ------------------------------------------------------------------
 
-# Shared jq helper: a profile's EXPO_PUBLIC_API_BASE_URL, following `extends`
+# Shared jq helper: a profile's URL variable, following `extends`
 # (development-simulator carries no env block of its own).
-JQ_API_URL_DEF='def api_url($root; $name):
+JQ_PROFILE_URL_DEF='def profile_url($root; $name; $key):
   $root.build[$name] as $p
   | if $p == null then "__NO_SUCH_PROFILE__"
-    elif ($p.env.EXPO_PUBLIC_API_BASE_URL // null) != null then $p.env.EXPO_PUBLIC_API_BASE_URL
-    elif ($p.extends // null) != null then api_url($root; $p.extends)
+    elif ($p.env[$key] // null) != null then $p.env[$key]
+    elif ($p.extends // null) != null then profile_url($root; $p.extends; $key)
     else "__NO_URL__"
     end;'
 
 profile_api_url() {
-  jq -r --arg name "$1" "${JQ_API_URL_DEF}"' api_url(.; $name)' "${EAS_JSON}"
+  profile_url "$1" EXPO_PUBLIC_API_BASE_URL
+}
+
+profile_url() {
+  jq -r --arg name "$1" --arg key "$2" \
+    "${JQ_PROFILE_URL_DEF}"' profile_url(.; $name; $key)' "${EAS_JSON}"
 }
 
 # One TSV line per distinct API URL: "<url>\t<profiles using it>".
 all_api_urls() {
-  jq -r "${JQ_API_URL_DEF}"' . as $root
-    | [ $root.build | keys[] | { profile: ., url: api_url($root; .) } ]
+  jq -r "${JQ_PROFILE_URL_DEF}"' . as $root
+    | [ $root.build | keys[] | { profile: ., url: profile_url($root; .; "EXPO_PUBLIC_API_BASE_URL") } ]
     | map(select(.url | startswith("__") | not))
     | group_by(.url)
     | map([ .[0].url, (map(.profile) | join(", ")) ] | @tsv)
@@ -293,7 +314,7 @@ host_resolves() {
   return 1
 }
 
-if ! command -v jq &>/dev/null || [ ! -f "${EAS_JSON}" ]; then
+if [ "${EAS_JSON_VALID}" != true ]; then
   # Already counted as a failure by check 1; nothing left to read the URL from.
   warn "API host check skipped — needs jq and mobile/eas.json"
 elif [ -n "${PROFILE}" ]; then
@@ -327,6 +348,19 @@ elif [ -n "${PROFILE}" ]; then
       fi
       ;;
   esac
+
+  if [ "${API_URL}" != "__NO_SUCH_PROFILE__" ]; then
+    STREAM_URL="$(profile_url "${PROFILE}" EXPO_PUBLIC_CHAT_STREAM_URL)"
+    STREAM_URL_PATTERN='^https?://[^/?#[:space:]@]+(/[^?#[:space:]]*)?$'
+    if [[ "${STREAM_URL}" =~ ${STREAM_URL_PATTERN} ]]; then
+      pass "Chat streaming URL of profile '${PROFILE}' is configured as HTTP(S)"
+    else
+      fail "Build profile '${PROFILE}' needs an HTTP(S) EXPO_PUBLIC_CHAT_STREAM_URL in mobile/eas.json"
+      printf "       Configure the deployed chat streaming endpoint before delivering this profile.\n"
+      printf "       An absent production URL must stay omitted, never stored as an empty env string.\n"
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
 else
   # No profile: report, never gate. Keeps a bare run usable as a pre-flight.
   DNS_OK=true

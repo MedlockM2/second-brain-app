@@ -194,14 +194,12 @@ case "${EXPECTED_URL}" in
     ;;
 esac
 
-# The chat's streaming door (task-467). Declared in every profile, possibly empty
-# until the stream API is deployed: an empty value makes the chat read answers
-# back instead of streaming them, which is degraded but not broken. What must not
-# happen is an update carrying another value than its profile -- a stale or
-# missing URL there breaks streaming silently on every device that takes it.
-if [ "${EXPECTED_STREAM_URL}" = "__ABSENT__" ]; then
-  fail "Build profile '${PROFILE}' sets no EXPO_PUBLIC_CHAT_STREAM_URL in mobile/eas.json"
-  printf "       Every profile declares it, empty if the chat stream is not deployed yet.\n"
+# A delivery profile needs its deployed streaming endpoint. Production leaves
+# this variable absent until provisioned: EAS rejects empty env strings even in
+# an unselected profile. The pre-flight gate also refuses delivery without it.
+if [ "${EXPECTED_STREAM_URL}" = "__ABSENT__" ] || [ -z "${EXPECTED_STREAM_URL}" ]; then
+  fail "Build profile '${PROFILE}' needs a configured EXPO_PUBLIC_CHAT_STREAM_URL in mobile/eas.json"
+  printf "       Configure the deployed streaming endpoint before delivering this profile.\n"
   exit 1
 fi
 
