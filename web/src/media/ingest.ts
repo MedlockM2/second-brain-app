@@ -3,6 +3,10 @@ import { getQuotaErrorCode, getQuotaErrorMessage } from "@media-summarizer/core/
 import { getActiveLocale, t } from "@media-summarizer/core/i18n/runtime";
 import type { IngestUrlResponse } from "@media-summarizer/core/types/media";
 import {
+  validateSharedNoteText,
+  type IngestSharedContentResponse,
+} from "@media-summarizer/core/types/sharedContent";
+import {
   prepareLocalUploadFile,
   type UploadAudioResponse,
   type UploadDocumentResponse,
@@ -13,6 +17,9 @@ import { apiRequest } from "../api";
  * Adding a source from the web, on the endpoints the mobile app uses.
  *
  * - A link: `POST /api/media/ingest-url`.
+ * - A text with no link in it: a note, `POST /api/media/ingest-shared-content`
+ *   (`share_type: "text"`, `source_platform: "notes"`), as the mobile app files
+ *   a shared note.
  * - A file: `POST /api/media/upload-url` signs a PUT, the browser sends the
  *   bytes straight to S3 (the bucket answers the web app's origin, task-478),
  *   then `POST /api/media/upload` or `/upload-audio` hands over the key. The
@@ -28,6 +35,28 @@ export async function addLink(url: string, folderId: string | null): Promise<str
     const response = await apiRequest<IngestUrlResponse>("/api/media/ingest-url", {
       method: "POST",
       body: { url, source_app: SOURCE_APP, locale: getActiveLocale(), folder_id: folderId },
+    });
+    return response.media_item_id;
+  } catch (error) {
+    throw new Error(describeRefusal(error));
+  }
+}
+
+export async function addNote(text: string, folderId: string | null): Promise<string> {
+  const validated = validateSharedNoteText(text);
+  if ("rejection" in validated) throw new Error(validated.rejection.message);
+  try {
+    const response = await apiRequest<IngestSharedContentResponse>("/api/media/ingest-shared-content", {
+      method: "POST",
+      body: {
+        share_type: "text",
+        source_platform: "notes",
+        source_app: SOURCE_APP,
+        idempotency_key: `note-text-${crypto.randomUUID()}`,
+        text: validated.text,
+        locale: getActiveLocale(),
+        folder_id: folderId,
+      },
     });
     return response.media_item_id;
   } catch (error) {

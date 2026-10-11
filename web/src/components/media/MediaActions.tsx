@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../api";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Dialog } from "../Dialog";
+import { FolderPickerDialog } from "../FolderPicker";
 import { Icon } from "../Icon";
 import { NewFolderDialog } from "../NewFolderDialog";
 
@@ -91,7 +92,13 @@ export function MediaActions({
         </div>
       )}
       {open === "move" && (
-        <MoveDialog roots={roots} currentId={folderId} onPick={moveTo} onClose={() => setOpen(null)} />
+        <FolderPickerDialog
+          roots={roots}
+          currentId={folderId}
+          onPick={moveTo}
+          onCreated={onFolderCreated}
+          onClose={() => setOpen(null)}
+        />
       )}
       {open === "new-folder" && (
         <NewFolderDialog
@@ -125,70 +132,6 @@ export function MediaActions({
         />
       )}
     </div>
-  );
-}
-
-/** File the media in one of the root folders. */
-function MoveDialog({
-  roots,
-  currentId,
-  onPick,
-  onClose,
-}: {
-  roots: Folder[];
-  currentId: string | null;
-  onPick: (folder: Folder) => Promise<void>;
-  onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const pick = async (folder: Folder) => {
-    setBusy(true);
-    setFailed(false);
-    try {
-      await onPick(folder);
-    } catch {
-      setFailed(true);
-      setBusy(false);
-    }
-  };
-  return (
-    <Dialog
-      title={t("mediaActions.move.label")}
-      onClose={onClose}
-      footer={
-        <button type="button" className="btn ghost" onClick={onClose}>
-          {t("common.cancel")}
-        </button>
-      }
-    >
-      <div className="list" role="listbox" aria-label={t("folderPicker.title")}>
-        {roots.map((folder) => {
-          const current = folder.id === currentId || (folder.is_default && !currentId);
-          return (
-            <button
-              key={folder.id}
-              type="button"
-              role="option"
-              aria-selected={current}
-              className={current ? "frow on" : "frow"}
-              disabled={busy || current}
-              onClick={() => void pick(folder)}
-            >
-              <Icon name={folder.is_default ? "file-tray-outline" : "folder-outline"} size={18} />
-              <span className="grow ell">{folder.is_default ? t("folderPicker.unsorted") : folder.name}</span>
-              {current && <Icon name="checkmark" size={18} />}
-            </button>
-          );
-        })}
-      </div>
-      {failed && (
-        <div className="banner-err" role="alert">
-          {t("folderPicker.saveFailed")}
-        </div>
-      )}
-    </Dialog>
   );
 }
 

@@ -16,6 +16,7 @@ import { PaneEmpty, Panes } from "../components/panes/Panes";
 import { useToast } from "../components/Toast";
 import { useI18n } from "../i18n/I18nProvider";
 import { useFolders } from "../media/useFolders";
+import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { mediaPath } from "../routes";
 
@@ -57,6 +58,7 @@ function FolderView({ folderId }: { folderId: string }) {
   }, [folderId]);
 
   useEffect(() => loadSources(), [loadSources]);
+  useOnMediaSaved(loadSources);
   useProcessingRefresh(
     (sources ?? []).some((item) => mediaStatusMarker(item.status) === "processing"),
     loadSources,

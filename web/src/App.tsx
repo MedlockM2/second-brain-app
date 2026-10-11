@@ -56,7 +56,6 @@ function AppRoutes() {
               <Route path="digest" element={<Titled page="digest" />} />
               <Route path="unsorted" element={<Titled page="unsorted" />} />
               <Route path="search" element={<Titled page="search" />} />
-              <Route path="add" element={<Titled page="add" />} />
               <Route path="account" element={<AccountPage />} />
             </Route>
           </Route>
@@ -67,13 +66,12 @@ function AppRoutes() {
   );
 }
 
-function Titled({ page }: { page: "digest" | "unsorted" | "search" | "add" }) {
+function Titled({ page }: { page: "digest" | "unsorted" | "search" }) {
   const { t, tw } = useI18n();
   const titles = {
     digest: t("tabs.digest"),
     unsorted: tw("nav.unsortedNoCount"),
     search: t("tabs.search"),
-    add: tw("nav.add"),
   };
   return <EmptyPage title={titles[page]} />;
 }

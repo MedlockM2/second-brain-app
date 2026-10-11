@@ -14,6 +14,7 @@ import { MediaCover } from "../components/Covers";
 import { Icon } from "../components/Icon";
 import { NewFolderDialog } from "../components/NewFolderDialog";
 import { useI18n } from "../i18n/I18nProvider";
+import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
 
@@ -82,6 +83,12 @@ export function LibraryPage() {
     loadFolders();
     loadMedia();
   }, [loadFolders, loadMedia]);
+
+  const reloadAll = useCallback(() => {
+    loadFolders();
+    loadMedia();
+  }, [loadFolders, loadMedia]);
+  useOnMediaSaved(reloadAll);
 
   // Only while the first page is all there is: re-reading it would drop the
   // pages loaded after it.

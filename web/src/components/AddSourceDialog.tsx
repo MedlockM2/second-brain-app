@@ -1,27 +1,34 @@
 import { extractUrlFromText } from "@media-summarizer/core/media/urlValidation";
 import { useRef, useState, type DragEvent } from "react";
 import { useI18n } from "../i18n/I18nProvider";
-import { addFile, addLink } from "../media/ingest";
+import { addFile, addLink, addNote } from "../media/ingest";
 import { Icon } from "./Icon";
 
 /**
- * Add one source: a pasted link, or one file chosen or dropped here (capture
- * 14). With a `folder`, the source is filed there on arrival; without one it
- * lands in Unsorted. The import starts on "Add" and the dialog closes: the
- * page re-reads itself and shows the source being processed.
+ * Add one source: a pasted link, a pasted text (saved as a note), or one file
+ * chosen or dropped here (captures 14 and the mockup's add dialog). With a
+ * `folder`, the source is filed there on arrival; without one it lands in
+ * Unsorted. The import starts on "Add" and the dialog closes.
+ *
+ * `initialFile` / `initialText` open it already filled: a file dropped anywhere
+ * in the app, a link pasted outside a text field.
  */
 export function AddSourceDialog({
   folder,
+  initialFile = null,
+  initialText = "",
   onAdded,
   onClose,
 }: {
   folder: { id: string; name: string } | null;
+  initialFile?: File | null;
+  initialText?: string;
   onAdded: (mediaItemId: string) => void;
   onClose: () => void;
 }) {
   const { t, tw } = useI18n();
-  const [link, setLink] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [link, setLink] = useState(initialText);
+  const [file, setFile] = useState<File | null>(initialFile);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +44,7 @@ export function AddSourceDialog({
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
+    event.stopPropagation();
     setOver(false);
     take(event.dataTransfer.files);
   };
@@ -44,17 +52,15 @@ export function AddSourceDialog({
   const submit = async () => {
     if (busy) return;
     setError(null);
-    let url: string | null = null;
-    if (!file) {
-      url = extractUrlFromText(link);
-      if (!url) {
-        setError(t("addUrl.error.invalid"));
-        return;
-      }
-    }
+    const url = file ? null : extractUrlFromText(link);
+    const folderId = folder?.id ?? null;
     setBusy(true);
     try {
-      const id = file ? await addFile(file, folder?.id ?? null) : await addLink(url!, folder?.id ?? null);
+      const id = file
+        ? await addFile(file, folderId)
+        : url
+          ? await addLink(url, folderId)
+          : await addNote(link, folderId);
       onAdded(id);
       onClose();
     } catch (caught) {
@@ -98,20 +104,26 @@ export function AddSourceDialog({
           </div>
         ) : (
           <>
-            <label className="field" style={{ borderRadius: "var(--r-md)" }}>
+            <label className="field note-field" style={{ borderRadius: "var(--r-md)" }}>
               <Icon name="link-outline" size={18} />
-              <input
+              <textarea
                 autoFocus
-                type="url"
-                inputMode="url"
+                rows={link.includes("\n") || link.length > 80 ? 4 : 1}
                 placeholder={tw("add.linkPlaceholder")}
-                aria-label={t("addSource.enterUrl.label")}
+                aria-label={tw("add.linkPlaceholder")}
                 value={link}
                 onChange={(event) => setLink(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter adds a link; a note takes its line breaks with Shift+Enter.
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void submit();
+                  }
+                }}
               />
             </label>
             <p className="small muted" style={{ margin: "-6px 4px 0" }}>
-              {tw(folder ? "add.hintFolder" : "add.hintLibrary")}
+              {link.trim() && !extractUrlFromText(link) ? tw("add.noteHint") : tw(folder ? "add.hintFolder" : "add.hintLibrary")}
             </p>
             <div
               className={over ? "dropzone over" : "dropzone"}
@@ -132,6 +144,7 @@ export function AddSourceDialog({
               <div className="small muted">{tw("add.formats")}</div>
               <input ref={picker} type="file" hidden onChange={(event) => take(event.target.files)} />
             </div>
+            {!folder && <p className="small muted" style={{ margin: "0 4px" }}>{tw("add.tip")}</p>}
           </>
         )}
 

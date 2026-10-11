@@ -6,10 +6,12 @@ import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/ty
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { apiRequest } from "../api";
+import { useOpenAdd } from "../components/AddFlow";
 import { FolderMosaic, MediaCover } from "../components/Covers";
 import { Icon } from "../components/Icon";
 import { TileRow } from "../components/TileRow";
 import { useI18n } from "../i18n/I18nProvider";
+import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
 
@@ -31,6 +33,7 @@ type Source<T> = { items: T[] | null; failed: boolean };
 
 export function HomePage() {
   const { t, tw } = useI18n();
+  const openAdd = useOpenAdd();
   const [recent, setRecent] = useState<Source<MediaListItem>>({ items: null, failed: false });
   const [continuing, setContinuing] = useState<Source<RecentEngagement>>({ items: null, failed: false });
 
@@ -51,6 +54,12 @@ export function HomePage() {
     loadRecent();
     loadContinuing();
   }, [loadRecent, loadContinuing]);
+
+  const reloadAll = useCallback(() => {
+    loadRecent();
+    loadContinuing();
+  }, [loadRecent, loadContinuing]);
+  useOnMediaSaved(reloadAll);
 
   const processing = (recent.items ?? []).some((item) => mediaStatusMarker(item.status) === "processing");
   useProcessingRefresh(processing, loadRecent);
@@ -88,10 +97,14 @@ export function HomePage() {
           <Icon name="sparkles" size={24} />
           <h1 className="headline">{t("home.empty")}</h1>
           <p className="subtle">{tw("home.emptyHint")}</p>
-          <Link to="/add" className="btn primary">
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => openAdd()}
+          >
             <Icon name="add" size={18} />
             {tw("nav.add")}
-          </Link>
+          </button>
         </div>
       </main>
     );

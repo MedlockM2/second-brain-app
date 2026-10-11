@@ -1,7 +1,9 @@
 import type { UnsortedCountResponse } from "@media-summarizer/core/types/organization";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../api";
+import { notifyMediaSaved, useOnMediaSaved } from "../lib/mediaSaved";
+import { AddFlowContext, useAddFlow } from "./AddFlow";
 import { useI18n } from "../i18n/I18nProvider";
 import { useTheme } from "../theme";
 import { Icon } from "./Icon";
@@ -17,6 +19,8 @@ export function AppShell() {
   const { scheme, toggle } = useTheme();
   const location = useLocation();
   const unsorted = useUnsortedCount(location.pathname);
+  const add = useAddFlow(notifyMediaSaved);
+  useDropAndPaste(add.open);
 
   const tab = (to: string, label: string, end = false) => (
     <NavLink to={to} end={end} className={({ isActive }) => (isActive ? "tab active" : "tab")}>
@@ -42,10 +46,10 @@ export function AppShell() {
         </nav>
         <span className="grow" />
         <SearchField />
-        <NavLink to="/add" className="btn primary">
+        <button type="button" className="btn primary" onClick={() => add.open()}>
           <Icon name="add" size={18} />
           <span>{tw("nav.add")}</span>
-        </NavLink>
+        </button>
         <button
           type="button"
           className="icon-btn"
@@ -64,15 +68,58 @@ export function AppShell() {
         </NavLink>
       </header>
       <div className="shell-body">
-        <Outlet />
+        <AddFlowContext.Provider value={add.open}>
+          <Outlet />
+        </AddFlowContext.Provider>
       </div>
+      {add.node}
     </div>
   );
+}
+
+/**
+ * Anywhere in the app: a dropped file opens the add dialog with it, and a
+ * paste outside a text field opens it with what was pasted (a link, or a text
+ * that becomes a note). Inside a field, a paste stays the field's.
+ */
+function useDropAndPaste(open: (preset: { file?: File | null; text?: string }) => void) {
+  useEffect(() => {
+    const isField = (target: EventTarget | null) =>
+      target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
+    const onDragOver = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    const onDrop = (event: DragEvent) => {
+      const file = event.dataTransfer?.files?.[0];
+      // A drop inside the add dialog's own zone is that dialog's.
+      if (!file || event.defaultPrevented) return;
+      event.preventDefault();
+      open({ file });
+    };
+    const onPaste = (event: ClipboardEvent) => {
+      if (isField(event.target) || document.querySelector(".scrim")) return;
+      const file = event.clipboardData?.files?.[0];
+      const text = event.clipboardData?.getData("text")?.trim();
+      if (!file && !text) return;
+      event.preventDefault();
+      open(file ? { file } : { text });
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    window.addEventListener("paste", onPaste);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+      window.removeEventListener("paste", onPaste);
+    };
+  }, [open]);
 }
 
 /** The figure of the Unsorted tab, re-read on every navigation; null until known. */
 function useUnsortedCount(pathname: string): number | null {
   const [count, setCount] = useState<number | null>(null);
+  const [round, setRound] = useState(0);
+  useOnMediaSaved(useCallback(() => setRound((n) => n + 1), []));
   useEffect(() => {
     let cancelled = false;
     apiRequest<UnsortedCountResponse>("/api/folders/unsorted-count")
@@ -83,7 +130,7 @@ function useUnsortedCount(pathname: string): number | null {
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, round]);
   return count;
 }
 
