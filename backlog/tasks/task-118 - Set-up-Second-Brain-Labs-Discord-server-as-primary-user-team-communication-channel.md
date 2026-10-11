@@ -6,12 +6,13 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-06-08 10:53'
-updated_date: '2026-10-10 14:10'
+updated_date: '2026-10-11 15:06'
 labels:
   - community
   - ops
 dependencies: []
 priority: medium
+dispatchable: false
 ---
 
 ## Description
@@ -154,4 +155,6 @@ L'URL Discord sera ajoutée :
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-10-10 — Nom commercial définitif choisi par l’owner : Deepn (docs/BRAND_IDENTITY.md). Pour le branding communautaire prévu dans la description, la variante <NomApp> Community devient Deepn Community. Le choix du nom ne prouve pas la création du serveur ni les autres livrables : tâche conservée To Do, aucun AC coché.
+
+2026-10-11 — Retirée du dispatch (`exec: humain`). Il faut créer le serveur Discord, ses rôles et son AutoMod, inviter MEE6 ou Carl-bot et générer l'invitation permanente avec le compte Discord de l'owner, auquel un agent n'a pas accès. Le document `docs/community/discord.md` (AC #8) doit porter l'URL réelle du serveur : il ne peut être écrit qu'après cette création. Le nom à utiliser est « Deepn Community » (note du 2026-10-10).
 <!-- SECTION:NOTES:END -->
