@@ -1,13 +1,13 @@
 ---
-owner_decision: pending   # pending | ok | abandoned | redo | more
+owner_decision: abandoned   # pending | ok | abandoned | redo | more
 ---
 
 # Benchmark : enregistrer une page payante ou derrière une connexion, depuis l'extension et depuis le partage Safari sur iPhone
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner après relecture)_
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Decision**: Abandonné (2026-10-11) — option 2 : l'extension garde le comportement de la V1 décidée pour task-424, elle n'envoie que l'adresse de la page et ne lit jamais son contenu. Les pages payantes ou derrière une connexion ne sont pas enregistrées en entier.
+**Validated at**: 2026-10-11
 
 ---
 
