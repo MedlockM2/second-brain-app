@@ -17,7 +17,7 @@
  */
 
 import { formatDate, t } from "../i18n";
-import type { HttpError } from "./httpError";
+import type { HttpError } from "@media-summarizer/core/api/httpError";
 
 export const READING_LANGUAGE_CHANGE_TOO_SOON =
   "reading_language_change_too_soon";

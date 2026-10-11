@@ -16,7 +16,7 @@ import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../.
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { formatDate, t, tCount } from "../../i18n";
 import { ChatService } from "../../services/chatService";
-import type { ChatConversationSummary, ChatScope, ChatTurnStatus } from "../../types/chat";
+import type { ChatConversationSummary, ChatScope, ChatTurnStatus } from "@media-summarizer/core/types/chat";
 
 export interface ChatHistoryListProps {
   scope: ChatScope;

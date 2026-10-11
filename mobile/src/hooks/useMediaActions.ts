@@ -32,8 +32,8 @@ import { OrganizationService } from "../services/organizationService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { t } from "../i18n";
-import type { MediaListItem } from "../types/media";
-import type { Folder } from "../types/organization";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
+import type { Folder } from "@media-summarizer/core/types/organization";
 import type {
   AnchoredContextMenuProps,
   AnchorRect,

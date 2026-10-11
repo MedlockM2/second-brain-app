@@ -5,7 +5,7 @@ import { startHomeSectionSpan } from "../lib/crashReporting";
 import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
 import { EngagementService } from "../services/engagementService";
 import { OrganizationService } from "../services/organizationService";
-import type { RecentEngagement } from "../types/engagements";
+import type { RecentEngagement } from "@media-summarizer/core/types/engagements";
 
 /**
  * The two data sources the Home screen owns beyond its media list.

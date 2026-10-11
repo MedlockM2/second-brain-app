@@ -60,7 +60,7 @@ import {
   type TranslationMetadata,
 } from "../services/mediaService";
 import { ArtifactService } from "../services/artifactService";
-import type { ArtifactSummary } from "../types/artifacts";
+import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
 import { OrganizationService } from "../services/organizationService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { formatDuration } from "../lib/formatDuration";
@@ -96,12 +96,12 @@ import {
 import { Spacing, type Theme } from "../constants/theme";
 import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
 import { LOCALE_ENDONYMS, formatDate, t, tCount } from "../i18n";
-import { isSupportedLocale } from "../i18n/locales";
+import { isSupportedLocale } from "@media-summarizer/core/i18n/locales";
 import type {
   MediaStatusResponse,
   MediaItemContract,
   ArtifactType,
-} from "../types/media";
+} from "@media-summarizer/core/types/media";
 import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { describeArtifactRefusal } from "../lib/artifactRefusal";

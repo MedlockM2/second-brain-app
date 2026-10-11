@@ -64,8 +64,8 @@ import { getMediaTypeIcon } from "../../src/lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../../src/lib/mediaTitle";
 import { MediaService } from "../../src/services/mediaService";
 import { OrganizationService } from "../../src/services/organizationService";
-import type { MediaListItem, MediaType } from "../../src/types/media";
-import type { Folder } from "../../src/types/organization";
+import type { MediaListItem, MediaType } from "@media-summarizer/core/types/media";
+import type { Folder } from "@media-summarizer/core/types/organization";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

@@ -1,5 +1,5 @@
 import { apiRequest } from "./apiClient";
-import type { ArtifactType } from "../types/media";
+import type { ArtifactType } from "@media-summarizer/core/types/media";
 import type {
   ArtifactContentResponse,
   ArtifactCreateResult,
@@ -7,7 +7,7 @@ import type {
   ArtifactListResponse,
   ArtifactScope,
   GenerateArtifactRequest,
-} from "../types/artifacts";
+} from "@media-summarizer/core/types/artifacts";
 
 export type {
   ArtifactContentResponse,
@@ -19,7 +19,7 @@ export type {
   ArtifactSource,
   ArtifactSummary,
   GenerateArtifactRequest,
-} from "../types/artifacts";
+} from "@media-summarizer/core/types/artifacts";
 
 /**
  * Artifact service for the mobile app.

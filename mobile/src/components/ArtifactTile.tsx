@@ -42,7 +42,7 @@ import {
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t, type TranslationKey } from "../i18n";
-import type { ArtifactStatus, ArtifactType } from "../types/media";
+import type { ArtifactStatus, ArtifactType } from "@media-summarizer/core/types/media";
 
 /**
  * What the screen knows about one artifact type: the backend status, or `idle`

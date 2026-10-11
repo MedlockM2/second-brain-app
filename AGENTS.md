@@ -45,6 +45,32 @@ Read `README.md` for project overview and V1 scope. Read `docs/CANONICAL_MEDIA_A
   "`/api/v1/` endpoints" flat, which read as off-limits-by-prefix and made task-288 look like a
   violation for touching the very endpoint its acceptance criteria required it to reshape.
 
+## `packages/core` — code shared by the mobile app and the web app
+
+The repository root is an npm workspace (`package.json`, one `package-lock.json`, one
+`node_modules`) whose members are `mobile/` and `packages/core` (task-493). Install from the
+root: `npm ci` there, never inside `mobile/`. `packages/core` is TypeScript source with no build
+step; an app imports a module by its path, e.g. `@media-summarizer/core/types/media`,
+`@media-summarizer/core/i18n/runtime`, `@media-summarizer/core/chat/sse`.
+
+**What goes there**: code the web app needs too and that runs anywhere — the API types
+(`src/types`), the API client (`src/api`), the chat stream parser (`src/chat`), the
+translation catalogues and their runtime (`src/i18n`), constants that depend on no platform.
+**What stays in the app**: anything tied to a platform — purchases, notifications, secure token
+storage, sharing, local files, Sentry, React components, `Platform.OS`, Expo config.
+
+**The ban**: nothing in `packages/core` imports `expo`, `expo-*`, `react-native`,
+`@react-native/*`, `@sentry/react-native`, or reads `window` or `document`. The ESLint config of
+the package enforces it (`packages/core/.eslintrc.js`) and the mobile CI job runs that lint.
+When a module needs a platform piece (how a request leaves, where the token lives), the app
+**injects** it — see `createApiClient` in `src/api/apiClient.ts` and its binding in
+`mobile/src/services/apiClient.ts`. A mixed module is split: the neutral half moves to
+`packages/core`, the platform half stays in the app.
+
+Any agent working on the web or the mobile app may write in `packages/core` under this rule. A
+change there changes the mobile bundle: the OTA workflow triggers on it, so treat it as a
+mobile change (typecheck and lint both `mobile/` and `packages/core`).
+
 ## Delivery rules
 
 - Pre-production: no backward compatibility required. Remove obsolete code directly. The full rule, and why it is stronger than it looks, is in "Nothing is deployed yet" below.

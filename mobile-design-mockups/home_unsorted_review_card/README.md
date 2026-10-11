@@ -40,7 +40,7 @@ Le libellé affiché est **« Revue des non classés »** (décision owner du
 2026-09-06). Le fait qui la porte : sur onze catalogues, le français était le
 seul à parler de « tri » — EN `Unsorted review`, DE `Unsortiertes durchgehen`,
 NL `Ongesorteerd nalopen`, IT `Revisione dei non ordinati`,
-PT `Revisão dos não organizados`. Le portage dans `mobile/src/i18n/fr.ts`
+PT `Revisão dos não organizados`. Le portage dans `packages/core/src/i18n/fr.ts`
 appartient à la tâche d'implémentation, pas à cette maquette.
 
 ## Ce que la maquette ne rouvre pas
@@ -445,7 +445,7 @@ recentemente »), pour que la largeur restante soit celle du vrai écran.
    comme `Spacing.lg + Spacing.md` (ce que fait la maquette) ou lui donner un
    token.
 3. `home.unsortedReview` doit passer à « Revue des non classés » dans
-   `mobile/src/i18n/fr.ts` ; les dix autres catalogues restent tels quels.
+   `packages/core/src/i18n/fr.ts` ; les dix autres catalogues restent tels quels.
 4. Le libellé d'accessibilité (`home.unsortedReviewA11y` + `common.itemCount`) et
    la cible unique (la carte entière) sont à conserver à l'identique.
 5. Si A est retenue, le libellé passe à `numberOfLines={1}` : c'est un changement

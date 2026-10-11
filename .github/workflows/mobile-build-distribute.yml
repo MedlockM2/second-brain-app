@@ -129,10 +129,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: mobile
+        # From the workspace root (task-493): mobile/ and packages/core are
+        # npm workspaces sharing the root package-lock.json and node_modules.
+        working-directory: .
         run: npm ci
 
       - name: Install EAS CLI ${{ env.EAS_CLI_VERSION }}
@@ -268,10 +270,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: mobile
+        # From the workspace root (task-493): mobile/ and packages/core are
+        # npm workspaces sharing the root package-lock.json and node_modules.
+        working-directory: .
         run: npm ci
 
       - name: Install EAS CLI ${{ env.EAS_CLI_VERSION }}

@@ -40,7 +40,7 @@
 #   1 — it does not, or no manifest could be read
 #   2 — bad usage
 #
-# Prerequisites: jq, curl (fetch mode), npx + mobile/node_modules (only to resolve
+# Prerequisites: jq, curl (fetch mode), npx + the root node_modules (only to resolve
 # the project id, and only when --project-id is not given).
 
 set -euo pipefail

@@ -4,7 +4,7 @@ import type {
   IngestUrlResponse,
   MediaListItem,
   MediaStatusResponse,
-} from "../types/media";
+} from "@media-summarizer/core/types/media";
 
 /**
  * Response shape for GET /api/media (list endpoint).

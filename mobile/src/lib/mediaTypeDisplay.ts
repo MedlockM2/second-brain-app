@@ -11,7 +11,7 @@
 
 import type { Ionicons } from "@expo/vector-icons";
 import { t } from "../i18n";
-import type { MediaType } from "../types/media";
+import type { MediaType } from "@media-summarizer/core/types/media";
 
 export function getMediaTypeIcon(
   type: MediaType,

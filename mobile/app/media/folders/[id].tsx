@@ -66,7 +66,7 @@ import {
   HeaderMenuGlyph,
   SCREEN_HEADER_HEIGHT,
 } from "../../../src/components/ScreenHeader";
-import type { ArtifactType, MediaListItem } from "../../../src/types/media";
+import type { ArtifactType, MediaListItem } from "@media-summarizer/core/types/media";
 
 /**
  * Folders explorer — single folder view, split in two intra-screen tabs

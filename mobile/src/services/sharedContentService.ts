@@ -17,11 +17,11 @@ import { stageUpload } from "./presignedUpload";
 import type {
   IngestSharedContentResponse,
   SharedFileAttachment,
-} from "../types/sharedContent";
+} from "@media-summarizer/core/types/sharedContent";
 import {
   validateSharedAudioFile,
   validateSharedNoteText,
-} from "../types/sharedContent";
+} from "@media-summarizer/core/types/sharedContent";
 
 /**
  * Error thrown when shared content validation fails before API call.

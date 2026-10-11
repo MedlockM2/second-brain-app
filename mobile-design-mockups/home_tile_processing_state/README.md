@@ -38,7 +38,7 @@ référence, elle est laissée ouverte et signalée comme telle, à l'owner.
 |---|---|
 | Géométrie | `TILE_WIDTH` 200, `TILE_COVER_HEIGHT` 113, `TILE_HEIGHT` 203 (réservé, pas mesuré au contenu — commentaire L56-77) |
 | Titre | `tileTitle()` (L294-299) : `item.title?.trim() \|\| t("common.untitled")` — « Sans titre » tant que le titre n'est pas résolu |
-| Statuts possibles | `MediaListItem.status` (`mobile/src/types/media.ts`) : `"ingested" \| "resolving" \| "processing" \| "ready_for_artifacts" \| "failed" \| "cancelled"` |
+| Statuts possibles | `MediaListItem.status` (`packages/core/src/types/media.ts`) : `"ingested" \| "resolving" \| "processing" \| "ready_for_artifacts" \| "failed" \| "cancelled"` |
 | Traitement visuel existant | **Un seul** : `isFailedLibraryStatus(status) === "failed"` affiche `MediaFailureBadge` |
 
 Le commentaire de `isFailedLibraryStatus` (`mobile/src/components/MediaFailureBadge.tsx`,

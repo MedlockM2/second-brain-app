@@ -14,7 +14,7 @@
  * - `item_too_long` — this single item is longer than one import may use on this
  *   plan. Splitting it fixes it; upgrading is not the answer, so no paywall.
  */
-import type { HttpError } from "./httpError";
+import type { HttpError } from "@media-summarizer/core/api/httpError";
 import { formatDate, t, tCount } from "../i18n";
 import { formatMinutes } from "./planCopy";
 

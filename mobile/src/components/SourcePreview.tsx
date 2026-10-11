@@ -38,7 +38,7 @@ import {
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
-import type { MediaItemContract } from "../types/media";
+import type { MediaItemContract } from "@media-summarizer/core/types/media";
 
 /**
  * What the block renders, once content and status have been reconciled.

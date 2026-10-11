@@ -6,7 +6,7 @@ import { subscribeToMediaSaves } from "../lib/mediaSaveNotice";
 import { MediaService } from "../services/mediaService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { t } from "../i18n";
-import type { MediaListItem } from "../types/media";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
 
 export interface UseMediaListResult {
   /** Backend media items */

@@ -1,6 +1,6 @@
 import { apiRequest } from "./apiClient";
-import type { Folder } from "../types/organization";
-import type { MediaListItem, MediaSortDirection } from "../types/media";
+import type { Folder } from "@media-summarizer/core/types/organization";
+import type { MediaListItem, MediaSortDirection } from "@media-summarizer/core/types/media";
 
 interface MediaListResponse {
   status: string;

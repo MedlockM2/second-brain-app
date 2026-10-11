@@ -61,8 +61,8 @@ import {
   useThemeColors,
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
-import type { MediaListItem } from "../../src/types/media";
-import type { Folder } from "../../src/types/organization";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
+import type { Folder } from "@media-summarizer/core/types/organization";
 
 // --- Layout constants ---
 

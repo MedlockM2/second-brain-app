@@ -458,6 +458,36 @@ baked in — no server, no shared network, no cable.
 
 For testers, use `internal`. Never `development`.
 
+## The npm Workspace (`mobile/` + `packages/core`)
+
+Since task-493 the app is one member of an npm workspace declared in the repository's root
+`package.json`; the other member is `packages/core`, the code shared with the web app. There is
+**one** `package-lock.json` and **one** `node_modules`, both at the root, and every workflow runs
+`npm ci` there (`working-directory: .`). Locally, likewise: `npm ci` at the root, then work from
+`mobile/` as before.
+
+What Expo's documentation asks for at SDK 55, checked on 2026-10-11:
+
+- **Metro** — nothing. "Expo configures Metro automatically for monorepos" when the config goes
+  through `expo/metro-config`, which `getSentryExpoConfig` does. No `watchFolders` or
+  `nodeModulesPaths` in `metro.config.js`. From SDK 55, autolinking also resolves native modules
+  from the workspace root by itself.
+- **One React, one React Native** — duplicates in the workspace are not supported. The
+  `react-dom` override therefore lives in the root `package.json`: npm reads `overrides` only
+  there.
+- **EAS** — run every `eas` command from `mobile/`, where `eas.json` stays. `packages/core` is
+  TypeScript source with no build step, so no `postinstall` has to build it.
+- **patch-package** runs from the root (`postinstall` in the root `package.json`, with
+  `--patch-dir mobile/patches`), because the patched packages are now hoisted to the root
+  `node_modules`.
+
+**Fingerprint and OTA.** A change to `packages/core` is a JS change: it lands in the bundle and
+does not move the native fingerprint, exactly like a change under `mobile/src`. That is why
+`mobile-ota-or-build.yml` triggers on `packages/core/**`, `package.json` and `package-lock.json`
+as well as `mobile/**`. Without that, a fix in the shared package would never reach testers. A
+change to the root lockfile that moves a native module does move the fingerprint and routes to a
+build, as it always did.
+
 ## Running Builds From Your Machine
 
 `eas build` compiles **in the cloud** by default, so an iOS build needs no Mac.
@@ -981,8 +1011,8 @@ something unreviewed.
 **None of the three runs from a fresh checkout.** `update:roll-back-to-embedded`
 resolves the installed `expo-updates` to check it is >= 0.19.0, and answers
 `The expo-updates package must have a version >= 0.19.0` — misleadingly — when
-the package is simply absent from `mobile/node_modules`. `package.json` pinning
-`~55.0.30` is not enough. Run `npm install` in `mobile/` **before** you need the
+the package is simply absent from `node_modules` (at the workspace root since task-493). `package.json` pinning
+`~55.0.30` is not enough. Run `npm ci` at the repository root **before** you need the
 rollback, not during the incident. `eas env:list` and `eas update:list`, by
 contrast, work without it.
 

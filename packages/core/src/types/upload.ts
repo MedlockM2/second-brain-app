@@ -15,7 +15,7 @@
  * would only produce a 400 after a pointless upload.
  */
 
-import { t } from "../i18n";
+import { t } from "../i18n/runtime";
 
 /** Which upload endpoint a file belongs to. */
 export type LocalUploadKind = "document" | "audio";

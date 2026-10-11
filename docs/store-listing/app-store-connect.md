@@ -69,7 +69,7 @@ Information — keep it on `English (U.S.)`), so the set you provide *is* the re
 The app declares eleven locales in `mobile/app.config.ts`, so all eleven are here.
 
 **Display Name is the tier name, identical in every locale** — `Reader`, `Mix`,
-`Audio-Heavy`. Product names are never translated (`mobile/src/i18n/fr.ts` header:
+`Audio-Heavy`. Product names are never translated (`packages/core/src/i18n/fr.ts` header:
 "Product names (Reader, Mix, Audio-Heavy)…").
 
 **These strings no longer say "transcription", and neither does the app**

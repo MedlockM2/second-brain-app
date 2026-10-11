@@ -888,7 +888,7 @@ The client then sends the raw bytes with `PUT` to `upload_url`, **without** the 
 header: the signature is the credential, and the session must not travel to a host that is not this
 API. Ceilings are `MAX_UPLOAD_SIZE_BYTES` (50 MB) for `document` and `audio`,
 `MAX_SHARED_AUDIO_SIZE_BYTES` (25 MB) for `shared_audio`; both are mirrored in the mobile client
-(`mobile/src/types/upload.ts`, `mobile/src/types/sharedContent.ts`).
+(`packages/core/src/types/upload.ts`, `packages/core/src/types/sharedContent.ts`).
 
 ### POST /api/media/upload
 

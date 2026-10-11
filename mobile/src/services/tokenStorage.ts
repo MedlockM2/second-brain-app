@@ -1,5 +1,5 @@
 import * as SecureStore from "expo-secure-store";
-import type { AuthUser } from "../types/auth";
+import type { AuthUser } from "@media-summarizer/core/types/auth";
 
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";

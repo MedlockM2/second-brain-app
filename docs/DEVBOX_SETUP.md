@@ -297,8 +297,8 @@ Deux règles qui évitent des heures de débogage :
 ## 7. Mobile
 
 ```bash
+npm ci                                          # à la racine : workspace npm mobile/ + packages/core (task-493) ; postinstall applique patch-package
 cd mobile
-npm ci                                          # postinstall applique patch-package
 eas env:pull development --path .env            # sinon le défaut est .env.local
 npx expo prebuild --platform android --clean    # régénère android/, debug.keystore inclus
 ```

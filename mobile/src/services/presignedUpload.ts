@@ -64,7 +64,7 @@
  */
 
 import { t, type TranslationKey } from "../i18n";
-import { getFileExtension } from "../types/upload";
+import { getFileExtension } from "@media-summarizer/core/types/upload";
 import { apiRequest } from "./apiClient";
 import {
   describeUriShape,

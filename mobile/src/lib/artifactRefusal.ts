@@ -8,7 +8,7 @@
  */
 
 import { getFriendlyErrorMessage } from "./getFriendlyErrorMessage";
-import type { HttpError } from "./httpError";
+import type { HttpError } from "@media-summarizer/core/api/httpError";
 import { getQuotaErrorCode, getQuotaErrorMessage } from "./quotaError";
 import { formatNumber, t } from "../i18n";
 

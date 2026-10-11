@@ -385,7 +385,7 @@ The following must be satisfied before approving release:
 
 ## 8. Canonical Status Reference
 
-For quick reference during testing, these are the statuses defined in `mobile/src/types/media.ts`:
+For quick reference during testing, these are the statuses defined in `packages/core/src/types/media.ts`:
 
 ### MediaItemStatus
 `ingested` | `resolving` | `processing` | `ready_for_artifacts` | `failed` | `cancelled`

@@ -44,7 +44,7 @@ import {
 } from "../lib/folderTree";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { OrganizationService } from "../services/organizationService";
-import type { Folder } from "../types/organization";
+import type { Folder } from "@media-summarizer/core/types/organization";
 
 export interface FolderPickerViewProps {
   /** The user's folders, flat, as the backend returns them. */

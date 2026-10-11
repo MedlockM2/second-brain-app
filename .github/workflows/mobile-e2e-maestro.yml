@@ -103,7 +103,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Validate Android E2E configuration
         env:
@@ -141,7 +141,7 @@ jobs:
         run: |
           app_fingerprint=$(
             {
-              git ls-files -s -- mobile ':!mobile/.maestro'
+              git ls-files -s -- mobile packages/core package.json package-lock.json ':!mobile/.maestro'
               printf 'api=%s\n' "$EXPO_PUBLIC_API_BASE_URL"
               printf 'revenuecat=%s\n' "$EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY"
               printf 'toolchain=%s\n' "$(java -version 2>&1 | tr '\n' ' ')"
@@ -163,7 +163,9 @@ jobs:
       # a cache hit the whole build chain is skipped.
       - name: Install mobile dependencies
         if: steps.apk-cache.outputs.cache-hit != 'true'
-        working-directory: mobile
+        # From the workspace root (task-493): mobile/ and packages/core are
+        # npm workspaces sharing the root package-lock.json and node_modules.
+        working-directory: .
         run: npm ci
 
       # Unconditional: cheap, and the emulator needs the headroom even when the
@@ -212,7 +214,7 @@ jobs:
       # under app/build/outputs/debug, which the run depends on.
       - name: Free Android build space before starting emulator
         run: |
-          rm -rf mobile/node_modules mobile/android/.gradle mobile/android/app/build/intermediates
+          rm -rf node_modules mobile/node_modules mobile/android/.gradle mobile/android/app/build/intermediates
           rm -rf "$HOME/.gradle/caches"
           sudo rm -rf /usr/local/lib/android/sdk/ndk /usr/local/lib/android/sdk/cmake
           df -h /
@@ -314,7 +316,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Validate iOS E2E configuration
         env:
@@ -333,7 +335,9 @@ jobs:
           exit "$missing"
 
       - name: Install mobile dependencies
-        working-directory: mobile
+        # From the workspace root (task-493): mobile/ and packages/core are
+        # npm workspaces sharing the root package-lock.json and node_modules.
+        working-directory: .
         run: npm ci
 
       - name: Install Maestro CLI
@@ -356,7 +360,7 @@ jobs:
         run: |
           app_fingerprint=$(
             {
-              git ls-files -s -- mobile ':!mobile/.maestro'
+              git ls-files -s -- mobile packages/core package.json package-lock.json ':!mobile/.maestro'
               printf 'api=%s\n' "$EXPO_PUBLIC_API_BASE_URL"
               printf 'revenuecat=%s\n' "$EXPO_PUBLIC_REVENUCAT_APPLE_KEY"
               printf 'toolchain=%s\n' "$(xcodebuild -version | tr '\n' ' ')"

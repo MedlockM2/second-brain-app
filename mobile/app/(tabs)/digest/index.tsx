@@ -53,8 +53,8 @@ import {
   useThemedStyles,
 } from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
-import type { DigestPeriod } from "../../../src/types/digest";
-import type { MediaListItem } from "../../../src/types/media";
+import type { DigestPeriod } from "@media-summarizer/core/types/digest";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
 
 /** The periods, in the order the screen stacks them. */
 const PERIODS: readonly DigestPeriod[] = ["daily", "weekly"];

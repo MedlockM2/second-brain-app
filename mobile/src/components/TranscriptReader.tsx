@@ -38,7 +38,7 @@ import { t } from "../i18n";
 import type {
   MediaStatusResponse,
   ProcessingJobLifecycleStatus,
-} from "../types/media";
+} from "@media-summarizer/core/types/media";
 
 /**
  * Lifecycle of the transcript body, as fetched by the owning screen.

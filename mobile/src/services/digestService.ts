@@ -1,5 +1,5 @@
 import { apiRequest } from "./apiClient";
-import type { Digest } from "../types/digest";
+import type { Digest } from "@media-summarizer/core/types/digest";
 
 /**
  * Digest service for the mobile app.

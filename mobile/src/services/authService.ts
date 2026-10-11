@@ -4,9 +4,9 @@ import {
   TokenVerificationResponse,
   NativeAuthResponse,
   AuthUser,
-} from "../types/auth";
+} from "@media-summarizer/core/types/auth";
 import { Config } from "../constants/config";
-import { createHttpError, parseErrorResponse } from "../lib/httpError";
+import { createHttpError, parseErrorResponse } from "@media-summarizer/core/api/httpError";
 import { apiRequest } from "./apiClient";
 import { TokenStorage } from "./tokenStorage";
 import { SessionManager } from "./sessionManager";

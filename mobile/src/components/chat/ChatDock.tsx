@@ -31,7 +31,7 @@ import { useChatSession } from "../../contexts/ChatSessionContext";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import { describeChatRefusal, type ChatRefusal } from "../../lib/chatRefusal";
-import type { ChatScope } from "../../types/chat";
+import type { ChatScope } from "@media-summarizer/core/types/chat";
 import { ChatHistoryList } from "./ChatHistoryList";
 import { ChatSheet } from "./ChatSheet";
 

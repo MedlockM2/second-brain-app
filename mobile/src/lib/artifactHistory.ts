@@ -15,7 +15,7 @@
  * list newest-first the way the API returns it and the way the tiles read it.
  */
 
-import type { ArtifactSummary } from "../types/artifacts";
+import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
 
 export function mergeArtifactIntoHistory(
   history: readonly ArtifactSummary[],

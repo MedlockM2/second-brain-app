@@ -1,6 +1,6 @@
 import { apiRequest } from "./apiClient";
-import { AuthUser } from "../types/auth";
-import { LOCALE_ENDONYMS } from "../i18n/locales";
+import { AuthUser } from "@media-summarizer/core/types/auth";
+import { LOCALE_ENDONYMS } from "@media-summarizer/core/i18n/locales";
 
 /**
  * The reading languages V1 offers, each named in its own script.

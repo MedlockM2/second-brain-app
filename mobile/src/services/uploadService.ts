@@ -21,7 +21,7 @@ import type {
   LocalUploadFile,
   UploadAudioResponse,
   UploadDocumentResponse,
-} from "../types/upload";
+} from "@media-summarizer/core/types/upload";
 
 export interface UploadOrganizationOptions {
   folderId?: string | null;

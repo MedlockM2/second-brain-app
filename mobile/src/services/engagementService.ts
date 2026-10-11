@@ -4,13 +4,13 @@ import type {
   RecentEngagement,
   RecentEngagementsResponse,
   RecordEngagementRequest,
-} from "../types/engagements";
+} from "@media-summarizer/core/types/engagements";
 
 export type {
   EngagementKind,
   RecentEngagement,
   RecentEngagementsResponse,
-} from "../types/engagements";
+} from "@media-summarizer/core/types/engagements";
 
 /**
  * Engagement service for the mobile app (task-303).

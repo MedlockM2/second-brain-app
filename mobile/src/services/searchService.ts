@@ -1,5 +1,5 @@
 import { apiRequest } from "./apiClient";
-import type { MediaType } from "../types/media";
+import type { MediaType } from "@media-summarizer/core/types/media";
 
 /**
  * Highlight snippet from a search hit (mirrors backend SearchHitHighlight).

@@ -14,7 +14,7 @@ import type {
   ChatGeneration,
   ChatScope,
   ChatStreamEvent,
-} from "../types/chat";
+} from "@media-summarizer/core/types/chat";
 import { useAuth } from "./AuthContext";
 
 /**

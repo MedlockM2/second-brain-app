@@ -1,5 +1,5 @@
 import { t } from "../i18n";
-import type { Folder } from "../types/organization";
+import type { Folder } from "@media-summarizer/core/types/organization";
 
 /**
  * Label shown for the backend default folder, whose stored name is

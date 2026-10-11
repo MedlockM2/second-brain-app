@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import type {
   MediaStatusResponse,
   SourcePlatform,
-} from "../types/media";
+} from "@media-summarizer/core/types/media";
 
 const POLL_INTERVAL_MS = 3000;
 const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes

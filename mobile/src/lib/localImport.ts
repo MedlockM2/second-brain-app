@@ -14,7 +14,7 @@ import {
   UPLOAD_PICKER_MIME_TYPES,
   prepareLocalUploadFile,
   type LocalUploadFile,
-} from "../types/upload";
+} from "@media-summarizer/core/types/upload";
 
 /**
  * Outcome of a picking gesture.

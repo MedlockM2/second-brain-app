@@ -14,7 +14,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
-import type { ChatMessage, ChatSource } from "../../types/chat";
+import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];

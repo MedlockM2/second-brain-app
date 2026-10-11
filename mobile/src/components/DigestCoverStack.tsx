@@ -66,7 +66,7 @@ import {
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { getMediaTypeIcon } from "../lib/mediaTypeDisplay";
 import { tCount } from "../i18n";
-import type { MediaListItem, MediaType } from "../types/media";
+import type { MediaListItem, MediaType } from "@media-summarizer/core/types/media";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 

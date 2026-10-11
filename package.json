@@ -1,0 +1,17 @@
+{
+  "name": "media-summarizer-workspace",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "packages/core"
+  ],
+  "scripts": {
+    "postinstall": "patch-package --patch-dir mobile/patches"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1"
+  },
+  "overrides": {
+    "react-dom": "19.2.0"
+  }
+}

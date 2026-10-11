@@ -153,14 +153,16 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # Not optional, even though nothing is built here: `eas build:list` reads
       # mobile/app.config.ts to resolve the project id, and that file imports
       # `expo/config`. Without node_modules the command dies on "Cannot find
       # module 'expo/config'" before it ever reaches the API.
       - name: Install dependencies
-        working-directory: mobile
+        # From the workspace root (task-493): mobile/ and packages/core are
+        # npm workspaces sharing the root package-lock.json and node_modules.
+        working-directory: .
         run: npm ci
 
       - name: Install EAS CLI ${{ env.EAS_CLI_VERSION }}

@@ -38,7 +38,7 @@ import { FolderPickerView } from "./FolderPickerView";
 import { ScreenHeader, HeaderIconButton } from "./ScreenHeader";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { OrganizationService } from "../services/organizationService";
-import type { Folder } from "../types/organization";
+import type { Folder } from "@media-summarizer/core/types/organization";
 
 export interface FolderSaveSheetProps {
   visible: boolean;

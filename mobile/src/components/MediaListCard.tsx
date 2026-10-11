@@ -18,7 +18,7 @@ import {
   type ThemeColors,
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
-import type { MediaType } from "../types/media";
+import type { MediaType } from "@media-summarizer/core/types/media";
 import type { AnchorRect } from "./AnchoredContextMenu";
 import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";

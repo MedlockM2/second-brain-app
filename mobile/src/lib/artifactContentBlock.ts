@@ -13,9 +13,9 @@
  *   the failure state offer one without a second round-trip.
  */
 
-import type { HttpError } from "./httpError";
-import type { ArtifactScope } from "../types/artifacts";
-import type { ArtifactType } from "../types/media";
+import type { HttpError } from "@media-summarizer/core/api/httpError";
+import type { ArtifactScope } from "@media-summarizer/core/types/artifacts";
+import type { ArtifactType } from "@media-summarizer/core/types/media";
 
 /** What a regeneration has to name. Taken from the refusal, not guessed. */
 export interface ArtifactRegenerationTarget {

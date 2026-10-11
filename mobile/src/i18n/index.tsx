@@ -10,13 +10,13 @@ import {
 import { Alert, I18nManager } from "react-native";
 import { getLocales } from "expo-localization";
 import * as SecureStore from "expo-secure-store";
-import { CATALOGS } from "./catalogs";
+import { CATALOGS } from "@media-summarizer/core/i18n/catalogs";
 import {
   FALLBACK_LOCALE,
   isRTLLocale,
   isSupportedLocale,
   type SupportedLocale,
-} from "./locales";
+} from "@media-summarizer/core/i18n/locales";
 import {
   getActiveCatalog,
   getActiveLocale,
@@ -27,13 +27,13 @@ import {
   type PluralKey,
   type TranslationKey,
   type TranslationParams,
-} from "./runtime";
-import { pseudoize } from "./pseudo";
+} from "@media-summarizer/core/i18n/runtime";
+import { pseudoize } from "@media-summarizer/core/i18n/pseudo";
 
-export { SUPPORTED_LOCALES, LOCALE_ENDONYMS, isRTLLocale } from "./locales";
-export type { SupportedLocale } from "./locales";
-export { formatDate, formatNumber, getActiveLocale, t, tCount } from "./runtime";
-export type { TranslationKey, PluralKey } from "./runtime";
+export { SUPPORTED_LOCALES, LOCALE_ENDONYMS, isRTLLocale } from "@media-summarizer/core/i18n/locales";
+export type { SupportedLocale } from "@media-summarizer/core/i18n/locales";
+export { formatDate, formatNumber, getActiveLocale, t, tCount } from "@media-summarizer/core/i18n/runtime";
+export type { TranslationKey, PluralKey } from "@media-summarizer/core/i18n/runtime";
 
 const UI_LOCALE_KEY = "ui_locale";
 const UI_PSEUDO_KEY = "ui_pseudo_locale";

@@ -8,7 +8,7 @@
  * scope refusals are the artifacts' own, worded by `artifactRefusal.ts`.
  */
 
-import type { HttpError } from "./httpError";
+import type { HttpError } from "@media-summarizer/core/api/httpError";
 import { describeArtifactRefusal } from "./artifactRefusal";
 import { getFriendlyErrorMessage } from "./getFriendlyErrorMessage";
 import { getQuotaErrorCode, getQuotaErrorMessage, quotaErrorOffersUpgrade } from "./quotaError";

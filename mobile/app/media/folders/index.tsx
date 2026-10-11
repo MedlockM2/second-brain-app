@@ -32,7 +32,7 @@ import {
 } from "../../../src/contexts/ThemeContext";
 import { t, tCount, useTranslation } from "../../../src/i18n";
 import { ScreenHeader, HeaderIconButton } from "../../../src/components/ScreenHeader";
-import type { MediaListItem } from "../../../src/types/media";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
 
 /**
  * Folders explorer — root view.

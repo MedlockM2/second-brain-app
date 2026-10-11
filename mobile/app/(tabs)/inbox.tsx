@@ -53,8 +53,8 @@ import {
 } from "../../src/contexts/ThemeContext";
 import { HOME_BLOCK_GAP } from "../../src/constants/homeRhythm";
 import { TAB_BAR_CLEARANCE } from "../../src/constants/tabBar";
-import type { MediaListItem, MediaType } from "../../src/types/media";
-import type { RecentEngagement } from "../../src/types/engagements";
+import type { MediaListItem, MediaType } from "@media-summarizer/core/types/media";
+import type { RecentEngagement } from "@media-summarizer/core/types/engagements";
 
 /**
  * Home screen — the unsorted review entry point and two horizontal

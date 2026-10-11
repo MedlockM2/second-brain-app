@@ -32,7 +32,7 @@ import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../.
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import type { ChatRefusal } from "../../lib/chatRefusal";
-import type { ChatMessage, ChatSource } from "../../types/chat";
+import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 

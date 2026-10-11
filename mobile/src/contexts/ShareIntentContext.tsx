@@ -32,15 +32,15 @@ import {
   type QuotaErrorCode,
 } from "../lib/quotaError";
 import { UploadService } from "../services/uploadService";
-import type { SharedFileAttachment } from "../types/sharedContent";
-import { validateSharedNoteText } from "../types/sharedContent";
-import type { LocalUploadFile } from "../types/upload";
+import type { SharedFileAttachment } from "@media-summarizer/core/types/sharedContent";
+import { validateSharedNoteText } from "@media-summarizer/core/types/sharedContent";
+import type { LocalUploadFile } from "@media-summarizer/core/types/upload";
 import {
   classifyUploadFile,
   isImageUpload,
   prepareLocalUploadFile,
   resolveUploadFileName,
-} from "../types/upload";
+} from "@media-summarizer/core/types/upload";
 
 /**
  * The type of content being confirmed before ingestion.

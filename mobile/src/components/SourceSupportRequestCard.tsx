@@ -22,7 +22,7 @@ import {
   getFriendlyErrorMessage,
   isSourceSupportRequestable,
 } from "../lib/getFriendlyErrorMessage";
-import type { MediaFailureCode } from "../types/media";
+import type { MediaFailureCode } from "@media-summarizer/core/types/media";
 import { t } from "../i18n";
 
 /**

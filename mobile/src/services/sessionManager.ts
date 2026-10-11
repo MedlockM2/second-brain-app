@@ -1,7 +1,7 @@
 import { Config } from "../constants/config";
-import { createHttpError, parseErrorResponse, type HttpError } from "../lib/httpError";
+import { createHttpError, parseErrorResponse, type HttpError } from "@media-summarizer/core/api/httpError";
 import { TokenStorage } from "./tokenStorage";
-import type { AuthUser, TokenVerificationResponse } from "../types/auth";
+import type { AuthUser, TokenVerificationResponse } from "@media-summarizer/core/types/auth";
 
 /**
  * The single owner of the mobile session.

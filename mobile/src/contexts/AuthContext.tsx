@@ -11,7 +11,7 @@ import { AuthService } from "../services/authService";
 import { unregisterCurrentDevice } from "../services/pushNotificationService";
 import { SessionManager } from "../services/sessionManager";
 import { TokenStorage } from "../services/tokenStorage";
-import { AuthUser, LoginRequest, RegisterRequest } from "../types/auth";
+import { AuthUser, LoginRequest, RegisterRequest } from "@media-summarizer/core/types/auth";
 
 interface AuthState {
   user: AuthUser | null;

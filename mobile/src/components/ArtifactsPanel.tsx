@@ -39,8 +39,8 @@ import {
   type Theme,
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
-import type { ArtifactSummary } from "../types/artifacts";
-import type { ArtifactType } from "../types/media";
+import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
+import type { ArtifactType } from "@media-summarizer/core/types/media";
 import {
   ARTIFACT_TILES,
   ArtifactTile,

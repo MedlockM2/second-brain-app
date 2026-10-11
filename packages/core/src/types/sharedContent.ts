@@ -15,7 +15,7 @@
  *   stays the source of those.
  */
 
-import { formatNumber, t } from "../i18n";
+import { formatNumber, t } from "../i18n/runtime";
 import { formatUploadSize } from "./upload";
 
 export type SharedContentType = "text" | "audio";

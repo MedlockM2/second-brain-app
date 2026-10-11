@@ -19,7 +19,7 @@ import { flattenFolderPaths } from "../../src/lib/folderTree";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useShareIntake } from "../../src/contexts/ShareIntentContext";
 import { OrganizationService } from "../../src/services/organizationService";
-import type { Folder } from "../../src/types/organization";
+import type { Folder } from "@media-summarizer/core/types/organization";
 
 /**
  * Folder Selection Screen.

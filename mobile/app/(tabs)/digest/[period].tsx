@@ -123,7 +123,7 @@ import {
   useThemedStyles,
 } from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
-import type { Digest, DigestPeriod } from "../../../src/types/digest";
+import type { Digest, DigestPeriod } from "@media-summarizer/core/types/digest";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

@@ -39,8 +39,15 @@ on:
     # must come last. Without them, editing mobile/MOBILE_CI_CD.md would publish
     # an update whose bundle is byte-identical to the previous one, and touching
     # a Maestro flow — which never ships inside the app — would do the same.
+    #
+    # packages/core and the root manifests are in the list because they are part
+    # of the app (task-493): the shared package is bundled into the JS, and the
+    # root package-lock.json pins every native module. Neither is under mobile/.
     paths:
       - "mobile/**"
+      - "packages/core/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/mobile-ota-or-build.yml"
       - "!**/*.md"
       - "!mobile/.maestro/**"
@@ -104,10 +111,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: mobile
+        # From the workspace root (task-493): mobile/ and packages/core are
+        # npm workspaces sharing the root package-lock.json and node_modules.
+        working-directory: .
         run: npm ci
 
       - name: Install EAS CLI ${{ env.EAS_CLI_VERSION }}

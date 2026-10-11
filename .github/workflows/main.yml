@@ -112,13 +112,26 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: package-lock.json
 
+      # From the workspace root (task-493): mobile/ and packages/core are npm
+      # workspaces sharing the root package-lock.json and node_modules.
       - name: Install dependencies
+        working-directory: .
         run: npm ci
 
       - name: Run typecheck
         run: npm run typecheck
 
       - name: Run lint
+        run: npm run lint
+
+      # packages/core is shared with the web app and bundled into the mobile app:
+      # its lint carries the guard against platform imports (packages/core/.eslintrc.js).
+      - name: Run typecheck (packages/core)
+        working-directory: packages/core
+        run: npm run typecheck
+
+      - name: Run lint (packages/core)
+        working-directory: packages/core
         run: npm run lint
