@@ -3,9 +3,10 @@ id: TASK-477
 title: >-
   Afficher la page média en trois volets dans l'app web : Lecture et IA
   (générer, historique, artefact ouvert, média en traitement)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:56'
+updated_date: '2026-10-11 17:17'
 labels:
   - web
   - feature
@@ -27,7 +28,6 @@ references:
 priority: medium
 type: feature
 ordinal: 84000
-dispatchable: true
 ---
 
 ## Description
@@ -63,10 +63,26 @@ Vérification visuelle contre les captures 08 à 11 sur un navigateur de bureau,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La page média rend trois volets Lecture, Discussion et IA, les volets latéraux se réduisent en rail, et le volet Discussion est un emplacement laissé à task-480
-- [ ] #2 Le volet Lecture rend l'emplacement, le menu …, la couverture, les métadonnées, L'essentiel et le texte intégral
-- [ ] #3 Le volet IA génère les 5 types d'artefact, liste l'historique et ouvre un artefact en s'élargissant, et l'état média en traitement est rendu
-- [ ] #4 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #5 Les libellés sont présents dans les 11 langues
-- [ ] #6 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 La page média rend trois volets Lecture, Discussion et IA, les volets latéraux se réduisent en rail, et le volet Discussion est un emplacement laissé à task-480
+- [x] #2 Le volet Lecture rend l'emplacement, le menu …, la couverture, les métadonnées, L'essentiel et le texte intégral
+- [x] #3 Le volet IA génère les 5 types d'artefact, liste l'historique et ouvre un artefact en s'élargissant, et l'état média en traitement est rendu
+- [x] #4 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #5 Les libellés sont présents dans les 11 langues
+- [x] #6 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit ee4e956.
+
+- **Gabarit** `web/src/components/panes/Panes.tsx` : Lecture / Discussion / IA ; volets latéraux réductibles en rail (préférence gardée dans le navigateur), Discussion jamais réduite, volet IA élargi quand un artefact est ouvert, emplacement `band` au-dessus pour le Digest (task-481). La page dossier (task-478) le réutilise avec ses propres volets.
+- **Page média** `web/src/components/media/MediaView.tsx` (route `/media/:mediaId`, lit son média par id seulement, réutilisable par le Digest).
+- **Lecture** : emplacement (dossier ou Non classés, lien vers `/folders/:id`), menu `…` (Déplacer vers un dossier racine, Nouveau dossier + rangement, Renommer, Supprimer — `PATCH`/`DELETE /api/media/:id` ; aucun déplacement de dossier), bandeau de couverture, ligne de faits (source, date, durée, langue(s), paragraphes), « L'essentiel » (review_blurb), texte intégral numéroté § avec bascule original/traduction (`raw-content?variant=original`) et relecture tant que la traduction est en cours. États traitement / délai dépassé / échec, sondage `GET /api/media/:id` toutes les 3 s (5 min max).
+- **Discussion** : emplacement vide pour task-480 ; message « s'ouvre dès que le texte est prêt » ou « pas de discussion possible » selon l'état.
+- **IA** (`web/src/components/ai/useAiPane.tsx`, `ArtifactBody.tsx`) : 5 pastilles Générer (`POST /api/artifacts`), états Généré / En file / Génération… / Échec, refus formulés depuis leur code, Historique (`GET /api/artifacts`, relu toutes les 3 s pendant une génération), artefact ouvert dans le volet élargi (`GET /api/artifacts/:id/content`) avec une mise en page par type (résumé, résumé détaillé, notes, cartes mémo retournables, quiz question par question), entrée en attente ou en échec avec « Générer à nouveau ». Le hook prend la portée en paramètre pour la page dossier.
+- **packages/core** : copies neutres des helpers mobiles (erreurs lisibles, refus quota/artefact, historique et lecture du contenu d'artefact, découpage du texte, aperçu, durées) et types `RawContentResponse`, `PatchMediaResponse`. `mobile/` non modifié.
+- 10 libellés web ajoutés en 11 langues ; build, typecheck et lint de `web/` et `packages/core` propres ; rendu vérifié en Chrome headless contre une API simulée (page prête, cartes mémo, volets réduits, traitement, menu).
+
+À suivre côté mobile (hors périmètre) : pointer les helpers mobiles dupliqués vers `packages/core`.
+<!-- SECTION:FINAL_SUMMARY:END -->
