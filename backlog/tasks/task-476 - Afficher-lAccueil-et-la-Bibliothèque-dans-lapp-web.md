@@ -1,9 +1,10 @@
 ---
 id: TASK-476
 title: Afficher l'Accueil et la Bibliothèque dans l'app web
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:56'
+updated_date: '2026-10-11 17:08'
 labels:
   - web
   - feature
@@ -22,7 +23,6 @@ references:
 priority: medium
 type: feature
 ordinal: 83000
-dispatchable: true
 ---
 
 ## Description
@@ -54,9 +54,25 @@ Vérification visuelle contre les captures 01 et 02 sur un navigateur de bureau,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 L'Accueil rend Ajouts récents, Reprendre l'apprentissage et la mosaïque de dossiers comme la ligne Accueil du README de la maquette, sans carte de revue, sans alerte de minutes ni bouton flottant, avec son état vide
-- [ ] #2 La Bibliothèque rend la section Dossiers repliable avec création d'un dossier de premier niveau et Non classés en premier, puis Tous les médias sur deux colonnes, sans champ de recherche
-- [ ] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
-- [ ] #4 Les libellés sont présents dans les 11 langues
-- [ ] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
+- [x] #1 L'Accueil rend Ajouts récents, Reprendre l'apprentissage et la mosaïque de dossiers comme la ligne Accueil du README de la maquette, sans carte de revue, sans alerte de minutes ni bouton flottant, avec son état vide
+- [x] #2 La Bibliothèque rend la section Dossiers repliable avec création d'un dossier de premier niveau et Non classés en premier, puis Tous les médias sur deux colonnes, sans champ de recherche
+- [x] #3 Les écrans sont câblés sur les endpoints existants, sans nouvelle route, et aucun écran ne crée un dossier dans un dossier ni ne déplace un dossier
+- [x] #4 Les libellés sont présents dans les 11 langues
+- [x] #5 Le build passe, typecheck et lint sont propres, et aucun fichier de mobile/ n'est modifié
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Commit e5b61d0.
+
+- **Accueil** (`web/src/pages/HomePage.tsx`) : « Ajouts récents » (`GET /api/media?limit=12`) et « Reprendre l'apprentissage » (`GET /api/engagements/recent?limit=12`, dossiers en mosaïque 2×2) en rangées de vignettes 16:9 de 200 px avec ‹ › (sens inversé en RTL). Ni carte de revue, ni alerte de minutes, ni bouton flottant. État vide avec « Ajouter ». Les deux sources échouent séparément.
+- **Bibliothèque** (`web/src/pages/LibraryPage.tsx`) : section Dossiers repliable, « N au total », + qui crée un dossier racine (`POST /api/folders`, `parent_folder_id: null`), seuls les dossiers racine affichés, Non classés en premier et teinté ; « Tous les médias » sur deux colonnes (badge de type ou ÉCHEC, date relative, titre, créateur), paginé par le curseur de l'API (« Afficher plus »). Pas de champ de recherche.
+- États traitement / échec sur les vignettes, et relecture de la liste toutes les 5 s tant qu'un import est en cours (budget de 3 min).
+- Les vignettes mènent à `/media/:id` et `/folders/:id`, routes vides pour task-477 et task-478.
+- **packages/core** : `media/mediaTitle.ts`, `media/mediaDisplay.ts`, `i18n/relativeTime.ts` (copies neutres des helpers mobiles), `ListMediaResponse`, `FolderListResponse`. `mobile/` garde ses copies, non modifié.
+- Icônes : `web/scripts/extract_icons.py` génère `icons.generated.ts` depuis la police Ionicons du mobile.
+- 8 libellés web ajoutés dans les 11 langues. Build, typecheck et lint de `web/` et `packages/core` propres. Rendu vérifié en Chrome headless contre une API simulée.
+
+À suivre côté mobile (hors périmètre, aucun fichier mobile modifié) : pointer `mobile/src/lib/{mediaTitle,relativeTime,mediaTypeDisplay}` vers les versions de `packages/core`.
+<!-- SECTION:FINAL_SUMMARY:END -->
