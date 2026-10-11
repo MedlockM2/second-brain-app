@@ -59,4 +59,8 @@ export const zh: WebCatalog = {
   "add.chooseFolder": "选择文件夹",
   "add.tip": "提示：可以把文件拖放到 Deepn 的任意位置，或在输入框之外按 ⌘V / Ctrl+V 粘贴链接。",
   "add.filed": "已归入“{name}”",
+  "digest.read": "阅读",
+  "digest.dailySubtitle": "昨天的媒体",
+  "digest.weeklySubtitle": "上周（周一至周日）",
+  "digest.openA11y": "从第 {index} 项开始阅读{period} Digest",
 };

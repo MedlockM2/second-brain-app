@@ -65,4 +65,8 @@ export const en = {
   "add.chooseFolder": "Choose a folder",
   "add.tip": "Tip: drop a file anywhere in Deepn, or paste a link with ⌘V / Ctrl+V outside a text field.",
   "add.filed": "Filed in “{name}”",
+  "digest.read": "Read",
+  "digest.dailySubtitle": "yesterday's media",
+  "digest.weeklySubtitle": "the past week, Monday to Sunday",
+  "digest.openA11y": "Read the {period} digest from item {index}",
 } as const;

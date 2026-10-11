@@ -59,4 +59,8 @@ export const nl: WebCatalog = {
   "add.chooseFolder": "Een map kiezen",
   "add.tip": "Tip: sleep een bestand ergens in Deepn naartoe, of plak een link met ⌘V / Ctrl+V buiten een tekstveld.",
   "add.filed": "Opgeborgen in ‘{name}’",
+  "digest.read": "Lezen",
+  "digest.dailySubtitle": "de media van gisteren",
+  "digest.weeklySubtitle": "de afgelopen week, maandag tot zondag",
+  "digest.openA11y": "De {period} digest lezen vanaf item {index}",
 };

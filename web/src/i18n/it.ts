@@ -59,4 +59,8 @@ export const it: WebCatalog = {
   "add.chooseFolder": "Scegli una cartella",
   "add.tip": "Suggerimento: trascina un file ovunque in Deepn o incolla un link con ⌘V / Ctrl+V fuori da un campo di testo.",
   "add.filed": "Archiviato in «{name}»",
+  "digest.read": "Leggi",
+  "digest.dailySubtitle": "i media di ieri",
+  "digest.weeklySubtitle": "la settimana scorsa, da lunedì a domenica",
+  "digest.openA11y": "Leggi il digest {period} dall'elemento {index}",
 };

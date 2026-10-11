@@ -4,6 +4,8 @@ import { AppShell } from "./components/AppShell";
 import { useI18n } from "./i18n/I18nProvider";
 import { AccountPage } from "./pages/AccountPage";
 import { AuthPage } from "./pages/AuthPage";
+import { DigestPage } from "./pages/DigestPage";
+import { DigestPeriodPage } from "./pages/DigestPeriodPage";
 import { EmptyPage } from "./pages/EmptyPage";
 import { FolderPage } from "./pages/FolderPage";
 import { HomePage } from "./pages/HomePage";
@@ -53,7 +55,8 @@ function AppRoutes() {
               <Route path="library" element={<LibraryPage />} />
               <Route path="media/:mediaId" element={<MediaPage />} />
               <Route path="folders/:folderId" element={<FolderPage />} />
-              <Route path="digest" element={<Titled page="digest" />} />
+              <Route path="digest" element={<DigestPage />} />
+              <Route path="digest/:period" element={<DigestPeriodPage />} />
               <Route path="unsorted" element={<Titled page="unsorted" />} />
               <Route path="search" element={<Titled page="search" />} />
               <Route path="account" element={<AccountPage />} />
@@ -66,10 +69,9 @@ function AppRoutes() {
   );
 }
 
-function Titled({ page }: { page: "digest" | "unsorted" | "search" }) {
+function Titled({ page }: { page: "unsorted" | "search" }) {
   const { t, tw } = useI18n();
   const titles = {
-    digest: t("tabs.digest"),
     unsorted: tw("nav.unsortedNoCount"),
     search: t("tabs.search"),
   };

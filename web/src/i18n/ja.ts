@@ -59,4 +59,8 @@ export const ja: WebCatalog = {
   "add.chooseFolder": "フォルダを選ぶ",
   "add.tip": "ヒント：Deepn のどこにでもファイルをドロップするか、入力欄の外で ⌘V / Ctrl+V を押してリンクを貼り付けられます。",
   "add.filed": "「{name}」に整理しました",
+  "digest.read": "読む",
+  "digest.dailySubtitle": "昨日のメディア",
+  "digest.weeklySubtitle": "先週（月曜〜日曜）",
+  "digest.openA11y": "{period}の Digest を {index} 件目から読む",
 };

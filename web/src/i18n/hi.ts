@@ -59,4 +59,8 @@ export const hi: WebCatalog = {
   "add.chooseFolder": "फ़ोल्डर चुनें",
   "add.tip": "सुझाव: Deepn में कहीं भी फ़ाइल छोड़ें, या टेक्स्ट फ़ील्ड के बाहर ⌘V / Ctrl+V से लिंक चिपकाएँ।",
   "add.filed": "“{name}” में रखा गया",
+  "digest.read": "पढ़ें",
+  "digest.dailySubtitle": "कल के मीडिया",
+  "digest.weeklySubtitle": "पिछला हफ़्ता, सोमवार से रविवार",
+  "digest.openA11y": "{period} Digest को आइटम {index} से पढ़ें",
 };

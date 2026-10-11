@@ -274,3 +274,30 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .note-field { align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
 .note-field textarea { flex: 1; min-width: 0; background: none; border: 0; outline: 0; font-size: 14px; color: var(--text-main); resize: vertical; font-family: inherit; line-height: 1.45; }
 .note-field textarea::placeholder { color: var(--text-muted); }
+
+/* Digest */
+.dg-wrap { height: 100%; background: var(--surface-container-low); }
+.dg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; height: 100%; max-width: 1280px; margin: 0 auto; }
+.dg-col { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-radius: var(--r-xl); box-shadow: var(--shadow); overflow: hidden; }
+.dg-head { display: flex; align-items: center; gap: 18px; padding: 20px 20px 16px; box-shadow: 0 1px 0 var(--surface-container); }
+.dg-pile { position: relative; width: 104px; height: 72px; flex: none; }
+.dg-card { position: absolute; left: 8px; right: 8px; bottom: 0; height: 56px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: var(--surface-container); color: var(--text-muted); box-shadow: 0 12px 32px rgba(43, 45, 66, 0.12); }
+.dg-card img { width: 100%; height: 100%; object-fit: cover; }
+.dg-card.c2 { transform: translateY(-14px) rotate(-7deg) scale(.9); }
+.dg-card.c1 { transform: translateY(-7px) rotate(5deg) scale(.95); }
+.dg-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 8px 12px 16px; list-style: none; }
+.dg-row { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 8px; border-radius: var(--r-lg); text-align: start; text-decoration: none; color: inherit; }
+.dg-row:hover { background: var(--surface-container-low); }
+.dg-row .wcover { width: 128px; border-radius: 8px; }
+.dg-row .meta { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-muted); min-width: 0; }
+.dg-row .t { display: block; font-size: 15px; font-weight: 600; line-height: 1.35; margin: 2px 0; }
+.dg-n { width: 22px; flex: none; text-align: end; font: 600 13px/1 var(--font-body); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.dg-band { display: flex; align-items: center; gap: 8px; padding: 8px 16px 0; flex: none; min-width: 0; }
+.dg-strip { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.dg-chip { display: flex; align-items: center; gap: 8px; flex: none; max-width: 230px; height: 40px; padding: 0 12px 0 6px; border-radius: var(--r-full); background: var(--surface); font-size: 13px; font-weight: 500; color: var(--text-subtle); }
+.dg-chip .wcover { width: 40px; border-radius: 4px; }
+.dg-chip .wcover > .ico { width: 50%; height: 50%; }
+.dg-chip .dg-n { width: auto; }
+.dg-chip:hover { color: var(--text-main); }
+.dg-chip.on { background: var(--primary); color: var(--on-primary); }
+.dg-chip.on .dg-n { color: var(--on-primary); }
