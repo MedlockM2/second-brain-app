@@ -125,6 +125,13 @@ class UserMediaRecord(BaseModel):
     duration_seconds: Optional[int] = None
     thumbnail_url: Optional[str] = None
     language: Optional[str] = None
+    # The page a shared text was selected on, as the browser extension sent it
+    # (`source_url` of ingest-shared-content). Written once by the create path and
+    # by nothing else: unlike `source_url`, which is the content's locator and is
+    # refreshed from the job on every save of the same content, this address is
+    # what *this* user was reading, so no mirror or duplicate finalisation may
+    # copy it across accounts.
+    origin_url: Optional[str] = None
 
     # --- mirrored generated content (task-323) --------------------------------
     # The triage card of the ``review_blurb`` artifact, copied here when that
@@ -213,6 +220,7 @@ class UserMediaRecord(BaseModel):
             "duration_seconds": self.duration_seconds,
             "thumbnail_url": self.thumbnail_url,
             "language": self.language,
+            "origin_url": self.origin_url,
             "folder_id": self.folder_id,
             "processing_status": (
                 self.processing_status.value if self.processing_status else None

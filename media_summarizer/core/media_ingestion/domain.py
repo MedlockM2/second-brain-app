@@ -109,6 +109,11 @@ class IngestSharedContentRequest:
     # transcribe (task-250 Layer 1); 0 or None means "could not be determined".
     audio_duration_seconds: Optional[int] = None
     folder_id: Optional[str] = None
+    # Page a shared text was selected on (the request's `source_url`). It belongs
+    # to this account's save, never to the content: shared text is keyed by its
+    # own hash, so two accounts sharing the same words share one media, and an
+    # address on the content would show one reader where the other was browsing.
+    origin_url: Optional[str] = None
 
 
 @dataclass(frozen=True)

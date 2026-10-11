@@ -120,6 +120,7 @@ async def save_media_for_user(
     folder_id: Optional[str] = None,
     job_id: Optional[str] = None,
     processing_status: Optional[UserMediaStatus] = UserMediaStatus.PENDING,
+    origin_url: Optional[str] = None,
 ) -> str:
     """Persist the durable library row for a save. Returns its ``media_item_id``.
 
@@ -167,6 +168,7 @@ async def save_media_for_user(
         thumbnail_url=thumbnail_url,
         language=language,
         folder_id=resolved_folder_id,
+        origin_url=origin_url,
         saved_at=now,
         updated_at=now,
         processing_status=processing_status,

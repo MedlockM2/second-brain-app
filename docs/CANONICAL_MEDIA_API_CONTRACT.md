@@ -194,6 +194,9 @@ Response (`MediaStatusResponse`):
 }
 ```
 
+`media_item.origin_url` is the page a note saved from the browser extension was selected on, and
+null for anything else (see "Shared text and the page it came from" below).
+
 `media_item.title` is the `title` attribute of the durable `user_media` row, i.e. the exact value
 `GET /api/media` returns for the same item — the detail header and the list vignette read one field,
 not two. It is nullable: nothing the source exposed survived the derivation rules
@@ -959,6 +962,32 @@ Response (`UploadAudioResponse`, `202 Accepted`):
   `GET /api/media/{media_item_id}` normalizes them to the canonical `article` / `audio_file`.
 - Objects the client uploads and never submits stay under `uploads/` and expire after one day
   through the bucket lifecycle rule (`infrastructure/terraform/modules/platform/s3.tf`).
+
+## Shared text and the page it came from
+
+`POST /api/media/ingest-shared-content` with `share_type=text` turns a text into a note
+(`source_platform` `notes`). Since task-486 it also accepts the address of the page the text was
+selected on — what the browser extension sends with a right-click selection:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `text` | string | yes | The note, at most `MAX_SHARED_TEXT_LENGTH` characters once trimmed. |
+| `source_url` | string \| null | no | Page the text was selected on. **`share_type=text` only.** An absolute `http` or `https` URL with a host, at most 2 048 characters. Omitted, null or blank means no address. |
+
+Refusals, all `400` before anything is written: `source_url` sent with `share_type=audio`, a value
+that is not an absolute `http(s)` URL with a host, a value over 2 048 characters.
+
+The address is **never part of the media identity**. A shared text is keyed by a hash of the text
+alone, with no account in it (`_share_locator` in `media_summarizer/core/media_ingestion/use_cases.py`):
+two accounts that share the same words share one media and its artifacts, whatever page each of
+them was on. The address is therefore kept on the caller's **durable library row** (`user_media`
+attribute `origin_url`), written once by the create path and copied by nothing else — the job
+mirror and the duplicate finalisation refresh `source_url`, the content's locator, on every save of
+the same content, and must not carry one reader's page to another.
+
+It is returned by `GET /api/media/{media_item_id}` as `media_item.origin_url`, null for every item
+saved without one. `media_item.original_url` keeps being the content's locator (`share://…` for a
+note).
 
 ## Domain enums (locked)
 

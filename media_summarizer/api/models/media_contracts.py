@@ -247,6 +247,9 @@ class MediaItemContract(BaseModel):
     creator_name: Optional[str] = None
     original_url: str
     normalized_url: str
+    # The page a shared note was selected on, for a note saved from the browser
+    # extension with its address. Belongs to this save only; null otherwise.
+    origin_url: Optional[str] = None
     media_type: MediaType
     source_platform: SourcePlatform
     status: MediaItemStatus

@@ -25,7 +25,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
@@ -123,6 +124,9 @@ from media_summarizer.utils.env import required_env
 from media_summarizer.utils.language_codes import normalize_language_code
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
 
+if TYPE_CHECKING:
+    from media_summarizer.core.media_ingestion.domain import SharedContentType
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -140,6 +144,9 @@ MAX_UPLOAD_SIZE_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE_BYTES", str(50 * 102
 # Shared content limits (aligned with mobile client constants)
 MAX_SHARED_AUDIO_SIZE_BYTES = int(os.environ.get("MAX_SHARED_AUDIO_SIZE_BYTES", str(25 * 1024 * 1024)))
 MAX_SHARED_TEXT_LENGTH = int(os.environ.get("MAX_SHARED_TEXT_LENGTH", "50000"))
+# The address a shared selection came from. Browsers cap a URL far above this, but
+# an address longer than 2 048 characters is not one a reader will ever follow.
+MAX_SHARED_SOURCE_URL_LENGTH = 2048
 SUPPORTED_SHARED_AUDIO_MIME_TYPES = frozenset([
     "audio/ogg",
     "audio/opus",
@@ -672,6 +679,15 @@ class IngestSharedContentRequest(BaseModel):
     idempotency_key: Optional[str] = None
     locale: Optional[str] = None
     text: Optional[str] = Field(None, description="Shared message, required for share_type=text")
+    source_url: Optional[str] = Field(
+        None,
+        description=(
+            "Address of the page the text was selected on (browser extension). "
+            "share_type=text only; an absolute http(s) URL. Kept on this account's "
+            "library row and returned as media_item.origin_url; never part of the "
+            "media identity."
+        ),
+    )
     content_mime_type: Optional[str] = Field(
         None, description="MIME type of the shared audio, required for share_type=audio"
     )
@@ -1183,6 +1199,7 @@ def _build_media_item_contract(
         creator_name=record.creator_name,
         original_url=record.source_url or "",
         normalized_url=record.source_url or "",
+        origin_url=record.origin_url,
         media_type=_canonical_media_type(record.media_type, record.source_platform),
         source_platform=_canonical_source_platform(record.source_platform),
         status=_canonical_media_item_status(job_status),
@@ -1998,6 +2015,47 @@ async def upload_audio(
         reset_log_context(token)
 
 
+def _validate_shared_source_url(
+    raw: Optional[str], share_type: SharedContentType
+) -> Optional[str]:
+    """The page address a shared selection came from, or ``None`` when absent.
+
+    Only a text share has a page behind it: an audio share is a file, and an
+    address sent with one is refused rather than silently dropped. The value is
+    an absolute ``http(s)`` URL with a host; nothing else is followed or fetched,
+    it is only kept on the caller's library row and shown back to them.
+    """
+    from media_summarizer.core.media_ingestion.domain import (
+        SharedContentType as _SharedContentType,
+    )
+
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value:
+        return None
+    if share_type != _SharedContentType.TEXT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Field 'source_url' is only accepted with share_type=text.",
+        )
+    if len(value) > MAX_SHARED_SOURCE_URL_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Field 'source_url' is too long ({len(value)} characters). "
+                f"Maximum is {MAX_SHARED_SOURCE_URL_LENGTH}."
+            ),
+        )
+    parsed = urlsplit(value)
+    if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Field 'source_url' must be an absolute http(s) URL.",
+        )
+    return value
+
+
 @router.post("/ingest-shared-content", response_model=IngestSharedContentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def ingest_shared_content(
     payload: IngestSharedContentRequest,
@@ -2073,6 +2131,8 @@ async def ingest_shared_content(
         content_hash: Optional[str] = None
         content_size_bytes: Optional[int] = None
         shared_audio_duration_seconds: int = 0
+
+        origin_url = _validate_shared_source_url(payload.source_url, domain_share_type)
 
         if domain_share_type == SharedContentType.TEXT:
             # Validate text field
@@ -2163,6 +2223,7 @@ async def ingest_shared_content(
             staged_audio_s3_key=staged_audio_s3_key,
             audio_duration_seconds=shared_audio_duration_seconds,
             folder_id=resolved_folder_id,
+            origin_url=origin_url,
         )
         command = IngestSharedContentCommand(
             user=UserContext(user_id=current_user.id, user_email=user.email),

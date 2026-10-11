@@ -522,6 +522,11 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             source_platform=resolved.source_platform.value,
             media_type=resolved.media_type.value,
             folder_id=command.request.folder_id,
+            origin_url=(
+                command.request.origin_url
+                if isinstance(command, IngestSharedContentCommand)
+                else None
+            ),
         )
 
         existing = await episode_idempotence.already_processed(media_key=resolved.media_key)
