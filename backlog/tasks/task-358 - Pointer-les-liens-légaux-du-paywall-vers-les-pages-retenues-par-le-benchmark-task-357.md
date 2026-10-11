@@ -15,6 +15,7 @@ dependencies:
   - TASK-357
   - TASK-443
 priority: high
+dispatchable: true
 ---
 
 ## Description
