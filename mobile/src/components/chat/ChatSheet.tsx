@@ -13,7 +13,7 @@
  */
 
 import { Ionicons } from "@expo/vector-icons";
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
@@ -35,6 +35,23 @@ import type { ChatRefusal } from "../../lib/chatRefusal";
 import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread, type ChatThreadProps } from "./ChatThread";
+
+/**
+ * Whether the field asks for the keyboard as it mounts rather than in `onShow`,
+ * so that the keyboard rises with the sheet in one movement. The two platforms
+ * fire the modal's `onShow` at different moments, and that is the whole reason:
+ *
+ * - iOS fires it in the completion of the presentation, once the slide is over.
+ *   A focus there brought the keyboard — and the sheet the avoider lifts on it —
+ *   in a second movement after the sheet. Taken as the field enters the window
+ *   (`autoFocus`), first responder raises the keyboard while the sheet slides in,
+ *   and the avoider lifts the sheet on the keyboard's own curve.
+ * - Android fires it as the dialog is shown, before its enter animation, so a
+ *   focus there already raises the keyboard with the sheet. Taken as the field is
+ *   attached, it would come before the dialog window holds input focus, and the
+ *   input method manager ignores a request to show the keyboard from such a view.
+ */
+const KEYBOARD_ON_MOUNT = Platform.OS === "ios";
 
 export interface ChatSheetProps {
   visible: boolean;
@@ -72,11 +89,21 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
 
+  // Whether the history list has been shown since the sheet rose. The field that
+  // comes back from it does not take the keyboard: the user went there to read.
+  // Re-armed while the sheet is hidden, so every opening on the conversation
+  // starts with the keyboard.
+  const [historyShown, setHistoryShown] = useState(false);
+  if (!props.visible && historyShown) setHistoryShown(false);
+  if (props.visible && props.historyOpen && !historyShown) setHistoryShown(true);
+
   const handleShow = () => {
-    // Focus where the sheet starts: the screen reader on its title, the
-    // keyboard on the field.
+    // The screen reader goes to the title once the sheet is up.
     const node = findNodeHandle(titleRef.current);
     if (node) AccessibilityInfo.setAccessibilityFocus(node);
+    // Android asks for the keyboard here (`KEYBOARD_ON_MOUNT`). On iOS the field
+    // already holds it and this does nothing — unless it could not take it as it
+    // mounted, when the field outlived a close and a quick reopen.
     inputRef.current?.focus();
   };
 
@@ -216,6 +243,7 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
             {props.historyOpen ? null : (
               <ChatComposer
                 ref={inputRef}
+                autoFocus={KEYBOARD_ON_MOUNT && !historyShown}
                 value={props.draft}
                 onChangeText={props.onChangeDraft}
                 placeholder={props.placeholder}

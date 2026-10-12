@@ -31,10 +31,12 @@ export interface ChatComposerProps {
   generating: boolean;
   /** A question is being sent. */
   sending: boolean;
+  /** Takes the keyboard as the field mounts — `ChatSheet` decides when. */
+  autoFocus?: boolean;
 }
 
 export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(function ChatComposer(
-  { value, onChangeText, placeholder, onSend, onStop, generating, sending },
+  { value, onChangeText, placeholder, onSend, onStop, generating, sending, autoFocus = false },
   ref,
 ) {
   const Colors = useThemeColors();
@@ -46,6 +48,7 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(function Ch
       <View style={styles.field}>
         <TextInput
           ref={ref}
+          autoFocus={autoFocus}
           style={styles.input}
           value={value}
           onChangeText={onChangeText}
