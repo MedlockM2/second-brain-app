@@ -81,7 +81,7 @@ from media_summarizer.core.models.media_artifact import (
     content_scope_id_from_scope_key,
 )
 from media_summarizer.core.models.processing_job import JobStatus
-from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaStatus
+from media_summarizer.core.models.user_media import ReviewBlurb, UserMediaRecord, UserMediaStatus
 from media_summarizer.core.services import llm_corpus
 from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.core.services.llm_corpus import estimate_tokens
@@ -1219,45 +1219,47 @@ def _mirror_of_shared_generation(
     )
 
 
-async def latest_internal_artifact_status(
-    *,
-    user_id: str,
-    content_scope_id: str,
-) -> Optional[MediaArtifactStatus]:
-    """Status of the newest internal entry of a media scope, or ``None`` if it has none.
+async def resolve_internal_review_blurb(
+    media: UserMediaRecord,
+) -> Tuple[Optional[ReviewBlurb], Optional[MediaArtifactStatus]]:
+    """Return a preview and its status from the same resolved generation.
 
-    The counterpart of ``list_scope_artifacts`` and the reason its filter can stay
-    exactly as it is: the media detail response needs to know how the internal
-    ``review_blurb`` generation went (task-363), and that question is answered here
-    instead of by widening what the AI tab is served. Nothing about the history
-    listing changes — a row literally labelled "review_blurb" next to the five real
-    ones is still what the filter exists to prevent.
-
-    ``content_scope_id`` is the ``media_key``, not the ``media_item_id``: internal
-    entries are written under the content identity (see
-    ``review_blurb_service.trigger_review_blurb_generation``), so that is the scope
-    key they are indexed by.
-
-    Read without a ``limit`` on purpose: a media scope holds at most one entry per
-    type, so the whole scope is one query, and a page-bounded read could hand back
-    a first page of user artifacts with the internal entry left on the next one.
-
-    It is also where an in-flight entry that stopped moving becomes terminal
-    (task-391), the same way ``list_scope_artifacts`` ends an overdue wait: on read,
-    at the only moment the answer matters.
+    The library copy is a projection, not a readiness gate. If generation finishes
+    after the caller read that row, or its copy failed, read the immutable artifact
+    instead. This also repairs the projection, but a failed repair never hides
+    prose that is already readable. No additional object read on the common path.
     """
+    if media.review_blurb is not None:
+        return media.review_blurb, MediaArtifactStatus.READY
     records, _ = await media_artifacts.list_artifacts_by_scope(
         scope_key=build_scope_key(
-            user_id=user_id,
+            user_id=media.user_id,
             scope=ArtifactScope.MEDIA,
-            scope_id=content_scope_id,
+            scope_id=media.media_key or media.media_item_id,
         ),
     )
-    # Newest first, so the first internal entry seen is the current one.
-    for record in records:
-        if record.artifact_type in INTERNAL_ARTIFACT_TYPES:
-            return await _internal_status(record)
-    return None
+    for listed in records:
+        if listed.artifact_type != MediaArtifactType.REVIEW_BLURB:
+            continue
+        status = await _internal_status(listed)
+        if status != MediaArtifactStatus.READY:
+            return None, status
+
+        record = await media_artifacts.get_media_artifact_by_id(listed.artifact_id)
+        if record is None:
+            return None, MediaArtifactStatus.FAILED
+        record = await resolve_through_shared_generation(record)
+        blurb = await _read_stored_review_blurb(record)
+        if blurb is None:
+            return None, MediaArtifactStatus.FAILED
+        await _mirror_review_blurb_onto_library_row(
+            user_id=media.user_id,
+            media_item_id=media.media_item_id,
+            blurb=blurb,
+            artifact_id=record.artifact_id,
+        )
+        return blurb, MediaArtifactStatus.READY
+    return None, None
 
 
 async def _internal_status(listed: MediaArtifactRecord) -> MediaArtifactStatus:
@@ -2439,38 +2441,40 @@ async def copy_review_blurb_to_library_row(
 
     One S3 read, and only on a row that has no blurb yet.
     """
-    if record.artifact_type != MediaArtifactType.REVIEW_BLURB:
-        return False
-    if record.scope != ArtifactScope.MEDIA:
-        return False
-    if record.status != MediaArtifactStatus.READY or record.storage is None:
-        return False
+    return await _mirror_review_blurb_onto_library_row(
+        user_id=record.user_id,
+        media_item_id=media_item_id,
+        blurb=await _read_stored_review_blurb(record),
+        artifact_id=record.artifact_id,
+    )
 
+
+async def _read_stored_review_blurb(record: MediaArtifactRecord) -> Optional[ReviewBlurb]:
+    """Read the ready preview's immutable body, without depending on a row copy."""
+    if record.artifact_type != MediaArtifactType.REVIEW_BLURB:
+        return None
+    if record.scope != ArtifactScope.MEDIA:
+        return None
+    if record.status != MediaArtifactStatus.READY or record.storage is None:
+        return None
     try:
         raw = await s3.download_file_to_memory(
             bucket=record.storage.bucket,
             key=record.storage.key,
         )
-        content = json.loads(raw.decode("utf-8", errors="ignore"))
+        content = json.loads(raw.decode("utf-8"))
+        return _read_blurb(content if isinstance(content, dict) else {})
     except Exception as exc:
         log_event(
             logger,
             logging.WARNING,
             "artifact.review_blurb_reread_failed",
-            "Could not re-read a stored review_blurb to repair its library row",
+            "Could not read a stored review_blurb",
             artifact_id=record.artifact_id,
-            media_item_id=media_item_id,
             error_type=type(exc).__name__,
             detail=str(exc)[:200],
         )
-        return False
-
-    return await _mirror_review_blurb_onto_library_row(
-        user_id=record.user_id,
-        media_item_id=media_item_id,
-        blurb=_read_blurb(content if isinstance(content, dict) else {}),
-        artifact_id=record.artifact_id,
-    )
+        return None
 
 
 async def fail_artifact_generation(

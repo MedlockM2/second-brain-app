@@ -194,6 +194,26 @@ Response (`MediaStatusResponse`):
 }
 ```
 
+**Readiness is the availability of the content, not the ingestion worker's last write
+(task-498).** A worker may persist its completed job before the completion-event consumer
+publishes the transcript in the global content ledger. Until that publication, the detail
+response stays `processing_job.status: extracting`, `media_item.status: processing` and
+`transcript.status: extracting`, with no `completed_at`. Once the ledger resolves the text,
+the response may announce completion. No transcript location is read from the job as a
+fallback. If neither a transcript nor a surviving job exists for an otherwise finished
+item, it is reported as failed rather than left waiting indefinitely.
+
+The preview is independent: text can be ready while `review_blurb_status` remains `pending`.
+A ready preview always travels with its prose in the same response. If the library copy is
+missing, the detail read resolves the stored ready artifact, serves its body and repairs the
+copy best-effort; a failed copy does not hide readable prose. This handles generation
+finishing during the detail read as well as projection writes that failed. A missing or
+unreadable ready body is reported as failed, never as a ready empty card.
+
+`transcript.language` takes the first real normalized code from the content ledger, detected
+job language, declared job/extraction language and library metadata. Placeholder tags such as
+`unknown` and `und` are skipped; when none names a language, the field is null.
+
 `media_item.origin_url` is the page a note saved from the browser extension was selected on, and
 null for anything else (see "Shared text and the page it came from" below).
 

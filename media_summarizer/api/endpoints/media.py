@@ -93,7 +93,7 @@ from media_summarizer.core.services import (
     quota_enforcer,
 )
 from media_summarizer.core.services.artifact_service import (
-    latest_internal_artifact_status,
+    resolve_internal_review_blurb,
 )
 from media_summarizer.core.services.durable_media_service import (
     media_duration_seconds,
@@ -897,9 +897,9 @@ def _canonical_source_platform(source_platform: Optional[str]) -> CanonicalSourc
 
 # Library status -> job lifecycle, used when the operational job is gone.
 #
-# ``READY -> COMPLETED`` is the load-bearing entry: the mobile detail screen polls
-# until it sees ``completed``, so an item whose job expired must still report a
-# terminal status or the client spins forever on data that will never change.
+# An expired job does not make readable content pending again. The content ledger
+# separately gates success below: without a transcript or a surviving job the
+# item is unavailable, rather than an ingestion that could still finish.
 _LIBRARY_STATUS_TO_JOB_LIFECYCLE = {
     UserMediaStatus.PENDING: CanonicalJobLifecycle.PENDING,
     UserMediaStatus.PROCESSING: CanonicalJobLifecycle.EXTRACTING,
@@ -909,25 +909,33 @@ _LIBRARY_STATUS_TO_JOB_LIFECYCLE = {
 
 
 def _canonical_job_status(
-    record: UserMediaRecord, job: Optional[ProcessingJob]
+    record: UserMediaRecord, job: Optional[ProcessingJob], *, transcript_available: bool
 ) -> CanonicalJobLifecycle:
-    """Lifecycle status of the item, job-first and library-second.
+    """Project processing state only after the content ledger publishes the text.
 
-    A live job is the finest-grained answer, so it wins when it exists. When it
-    does not, the library's own coarse status answers instead -- and an unknown
-    library status resolves to ``COMPLETED`` rather than ``PENDING`` on purpose:
-    with no job in existence nothing is in flight, and claiming otherwise would
-    tell the client to keep waiting for a pipeline that is not running.
+    A completed job precedes its completion-event consumer. Until that consumer
+    publishes the transcript, the reader must keep polling rather than open an
+    empty page. With no surviving job and no transcript, nothing can finish: the
+    content is unavailable, not an ingestion to wait for indefinitely.
     """
     if job is not None:
-        return LEGACY_PROCESSING_JOB_STATUS_MAP.get(
+        lifecycle = LEGACY_PROCESSING_JOB_STATUS_MAP.get(
             job.status.value, CanonicalJobLifecycle.PENDING
         )
-    if record.processing_status is None:
-        return CanonicalJobLifecycle.COMPLETED
-    return _LIBRARY_STATUS_TO_JOB_LIFECYCLE.get(
-        record.processing_status, CanonicalJobLifecycle.COMPLETED
-    )
+    else:
+        lifecycle = _LIBRARY_STATUS_TO_JOB_LIFECYCLE.get(
+            record.processing_status, CanonicalJobLifecycle.COMPLETED
+        )
+    if lifecycle in (
+        CanonicalJobLifecycle.COMPLETED,
+        CanonicalJobLifecycle.READY_FOR_ARTIFACTS,
+    ) and not transcript_available:
+        return (
+            CanonicalJobLifecycle.EXTRACTING
+            if job is not None
+            else CanonicalJobLifecycle.FAILED
+        )
+    return lifecycle
 
 
 def _canonical_media_item_status(job_status: CanonicalJobLifecycle) -> CanonicalMediaItemStatus:
@@ -970,6 +978,7 @@ def _canonical_transcript(
     job_status: CanonicalJobLifecycle,
     record: UserMediaRecord,
     job: Optional[ProcessingJob],
+    source_language: Optional[str] = None,
 ) -> CanonicalTranscriptInfo:
     if job_status in (
         CanonicalJobLifecycle.READY_FOR_ARTIFACTS,
@@ -985,9 +994,8 @@ def _canonical_transcript(
     else:
         status = CanonicalTranscriptStatus.PENDING
 
-    # Everything below is pipeline detail that only ever lived on the job. With no
-    # job left, the transcript block degrades to its status alone -- which is why
-    # the status is derived from the library row and not from this metadata.
+    # Provider details live on the expirable job. The content's source language
+    # survives beside its transcript in the ledger, independently of that job.
     tx_meta = (
         job.transcription_metadata
         if job is not None and isinstance(job.transcription_metadata, dict)
@@ -1011,11 +1019,20 @@ def _canonical_transcript(
     except (TypeError, ValueError):
         segments = None
 
-    language = (
-        tx_meta.get("language") or ext_meta.get("language") or record.language
+    language = next(
+        (
+            normalized
+            for value in (
+                source_language,
+                tx_meta.get("detected_language"),
+                tx_meta.get("language"),
+                ext_meta.get("language"),
+                record.language,
+            )
+            if (normalized := normalize_language_code(value)) is not None
+        ),
+        None,
     )
-    if not isinstance(language, str):
-        language = None
 
     # The media's own length, or nothing: the app hides the figure when it is
     # absent, which is right for a source that has no duration (an article, a
@@ -1124,45 +1141,29 @@ def _within_review_blurb_trigger_grace(
     return age < _REVIEW_BLURB_TRIGGER_GRACE_SECONDS
 
 
-async def _resolve_review_blurb_status(
+async def _resolve_review_blurb(
     record: UserMediaRecord,
     job: Optional[ProcessingJob],
     job_status: CanonicalJobLifecycle,
-) -> CanonicalReviewBlurbStatus:
-    """How the source preview's generation went, read off the artifact entry.
+) -> tuple[Optional[ReviewBlurb], CanonicalReviewBlurbStatus]:
+    """Resolve preview prose and status together, independently of ingestion.
 
-    ``record.review_blurb`` cannot answer this on its own: it is null both while
-    the generation is in flight and forever after a generation that never ran.
-    ``review_blurb_service`` triggers it best-effort at the end of ingestion and
-    swallows every error, so the only honest source is the internal entry of the
-    media scope -- which the artifact history listing deliberately hides.
-
-    No entry at all is read against the pipeline, on both sides of the job's end.
-    Still running means the trigger has not fired yet (``pending``). Over means it
-    should have fired -- but it fires *off* the completion event, not inside the job,
-    so a read that lands within ``_REVIEW_BLURB_TRIGGER_GRACE_SECONDS`` of the end of
-    processing is still ahead of the trigger and stays ``pending``; only past that
-    window is the generation taken to be lost (``failed``, which
-    ``scripts/backfill_review_blurbs.py`` repairs).
-
-    ``pending`` is bounded on the other side too: an entry stuck in flight past
-    ``INTERNAL_GENERATION_STALL_SECONDS`` is ended by the read itself and comes back
-    ``failed`` (task-391). There is no state left in which this answers "being
-    written" for ever.
+    No entry shortly after completion means the completion hook has not run yet.
+    The artifact service bounds stalled generations and reads a ready preview
+    directly when its denormalised library copy has not arrived.
     """
-    artifact_status = await latest_internal_artifact_status(
-        user_id=record.user_id,
-        content_scope_id=record.media_key or record.media_item_id,
-    )
+    blurb, artifact_status = await resolve_internal_review_blurb(record)
     if artifact_status is None:
-        if job_status not in _TERMINAL_JOB_LIFECYCLES:
-            return CanonicalReviewBlurbStatus.PENDING
-        return (
+        pending = (
+            job_status not in _TERMINAL_JOB_LIFECYCLES
+            or _within_review_blurb_trigger_grace(record, job)
+        )
+        return blurb, (
             CanonicalReviewBlurbStatus.PENDING
-            if _within_review_blurb_trigger_grace(record, job)
+            if pending
             else CanonicalReviewBlurbStatus.FAILED
         )
-    return _ARTIFACT_STATUS_TO_REVIEW_BLURB_STATUS.get(
+    return blurb, _ARTIFACT_STATUS_TO_REVIEW_BLURB_STATUS.get(
         artifact_status, CanonicalReviewBlurbStatus.PENDING
     )
 
@@ -1172,6 +1173,7 @@ def _build_media_item_contract(
     job: Optional[ProcessingJob],
     job_status: CanonicalJobLifecycle,
     cover_url: Optional[str] = None,
+    source_language: Optional[str] = None,
     review_blurb_status: CanonicalReviewBlurbStatus = (
         CanonicalReviewBlurbStatus.PENDING
     ),
@@ -1185,7 +1187,7 @@ def _build_media_item_contract(
     the detail header and the inbox vignette cannot disagree.
 
     ``review_blurb_status`` comes in rather than being read here: resolving it
-    costs one indexed query (``_resolve_review_blurb_status``), and the default
+    costs one indexed query (``_resolve_review_blurb``), and the default
     keeps a caller that has nothing to read from paying for it -- the ingestion
     response is built microseconds after the row, when the preview is trivially
     ``pending``.
@@ -1203,7 +1205,7 @@ def _build_media_item_contract(
         media_type=_canonical_media_type(record.media_type, record.source_platform),
         source_platform=_canonical_source_platform(record.source_platform),
         status=_canonical_media_item_status(job_status),
-        transcript=_canonical_transcript(job_status, record, job),
+        transcript=_canonical_transcript(job_status, record, job, source_language),
         review_blurb=record.review_blurb,
         review_blurb_status=review_blurb_status,
         created_at=record.saved_at.isoformat(),
@@ -1250,7 +1252,11 @@ def _build_processing_job_contract(
             created_at=job.created_at.isoformat(),
             updated_at=job.updated_at.isoformat(),
             started_at=job.started_at.isoformat() if job.started_at else None,
-            completed_at=job.completed_at.isoformat() if job.completed_at else None,
+            completed_at=(
+                job.completed_at.isoformat()
+                if job.completed_at and job_status in _TERMINAL_JOB_LIFECYCLES
+                else None
+            ),
             error_code=_media_failure_code(job.error_code),
         )
 
@@ -2324,7 +2330,9 @@ async def get_media_item(
         job = await resolve_pipeline_job(
             record, content_job_id=transcript.job_id if transcript else None
         )
-        job_status = _canonical_job_status(record, job)
+        job_status = _canonical_job_status(
+            record, job, transcript_available=transcript is not None
+        )
 
         log_event(
             logger,
@@ -2346,13 +2354,14 @@ async def get_media_item(
         # (task-302 §5.5). A hotlinked URL passes straight through.
         cover_url = await cover_capture.resolve_cover_url(record.thumbnail_url)
 
-        # The source preview travels with the item (task-363): its content is
-        # already on the row, and its status is the one thing only the artifact
-        # scope knows. This is the single read path that pays for that query --
-        # the reader tab is where the preview is shown.
-        review_blurb_status = await _resolve_review_blurb_status(
+        # Resolve the source preview as one content/status pair. An artifact can
+        # finish after the library read above, before its projection is copied;
+        # the service then reads the ready body instead of announcing an empty
+        # preview. Ingestion readiness never waits for this separate generation.
+        review_blurb, review_blurb_status = await _resolve_review_blurb(
             record, job, job_status
         )
+        record = record.model_copy(update={"review_blurb": review_blurb})
 
         return CanonicalMediaStatusResponse(
             media_item=_build_media_item_contract(
@@ -2360,6 +2369,7 @@ async def get_media_item(
                 job,
                 job_status,
                 cover_url=cover_url,
+                source_language=transcript.source_language if transcript else None,
                 review_blurb_status=review_blurb_status,
             ),
             processing_job=_build_processing_job_contract(record, job, job_status),

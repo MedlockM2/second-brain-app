@@ -1,5 +1,5 @@
 /**
- * One answer of the chat, drawn from its Markdown (see `lib/chatMarkdown`).
+ * One answer of the chat, drawn from its Markdown (see `@media-summarizer/core/chat/markdown`).
  *
  * Laid out for reading: a paragraph's gap between blocks, a smaller one between
  * the items of a list, and the 1.6 line height the design system asks of all
@@ -20,6 +20,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
+  I18nManager,
   Pressable,
   StyleSheet,
   Text,
@@ -37,7 +38,7 @@ import {
   type Block,
   type ListItem,
   type Span,
-} from "../../lib/chatMarkdown";
+} from "@media-summarizer/core/chat/markdown";
 import { resolveMediaTitle } from "../../lib/mediaTitle";
 import type { ChatSource } from "@media-summarizer/core/types/chat";
 
@@ -162,7 +163,7 @@ export function ChatAnswer({
   };
 
   const renderItem = (item: ListItem, key: React.Key) => (
-    <View key={key} style={[styles.item, { paddingLeft: item.depth * Spacing.md }]}>
+    <View key={key} style={[styles.item, { paddingStart: item.depth * Spacing.md }]}>
       {/* A bullet is layout and stays silent; a number is read, since it may be a step. */}
       <Text
         style={[styles.marker, item.ordered ? styles.orderedMarker : styles.bulletMarker]}
@@ -234,7 +235,7 @@ export function ChatAnswer({
                 <Text style={styles.sourceTitle} numberOfLines={2}>
                   {title}
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+                <Ionicons name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"} size={16} color={Colors.textMuted} />
               </Pressable>
             );
           })}
@@ -307,8 +308,8 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     // The callout aside of DESIGN.md: a 4px primary bar on a 5% primary wash.
     quote: {
       gap: Spacing.sm,
-      borderLeftWidth: Spacing.xs,
-      borderLeftColor: Colors.primary,
+      borderStartWidth: Spacing.xs,
+      borderStartColor: Colors.primary,
       backgroundColor: Colors.primaryTint,
       borderRadius: BorderRadius.sm,
       paddingVertical: Spacing.sm,
