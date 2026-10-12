@@ -14,8 +14,8 @@ shared with the artifacts of the same content. Then the history, each turn as a
 retrieval of passages, no summary of the history, no silent truncation: a turn
 that does not fit is refused, never cut.
 
-**Ceilings** are explicit parameters, not limits of the storage model (Decision
-point 8): the question's characters, the turns of a conversation, one turn in
+**Ceilings** are explicit parameters (Decision point 8): the question's
+server-side size guard, the turns of a conversation, one turn in
 flight per account, and the context budget. The output ceiling is not a chat
 parameter: the chat keeps ``LLM_MAX_COMPLETION_TOKENS`` of ``llm_config`` (owner
 decision of 2026-10-10); how long an answer is, is said in the instructions.
@@ -34,11 +34,11 @@ from media_summarizer.core.models.chat import (
 from media_summarizer.core.services import llm_corpus
 from media_summarizer.core.services.llm_client import LlmMessage
 
-#: Characters of one question. The question is the only part of a turn the user
-#: controls and it enters the history of every later turn: at 20 turns, 20 x 1 000
-#: characters is ~5 000 tokens, about 4 % of a corpus at its ceiling (task-430
-#: README §9.4).
-MAX_QUESTION_CHARS = 1_000
+#: Server-only guard against oversized questions, not a composer limit (task-503).
+#: At most 256 000 UTF-8 bytes of text, leaving ample metadata room below
+#: DynamoDB's 400 KiB item limit even for four-byte characters. The independent
+#: context budget below still counts the question and its later history copies.
+MAX_QUESTION_CHARS = 64_000
 
 #: Turns of one conversation. The 21st is refused ``conversation_full`` and the app
 #: offers a new conversation on the same scope (README §9.4).
