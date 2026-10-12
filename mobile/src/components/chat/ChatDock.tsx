@@ -24,7 +24,7 @@ import { useChatSession } from "../../contexts/ChatSessionContext";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import { describeChatRefusal, type ChatRefusal } from "../../lib/chatRefusal";
-import type { ChatScope } from "@media-summarizer/core/types/chat";
+import type { ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { ChatHistoryList } from "./ChatHistoryList";
 import { ChatSheet } from "./ChatSheet";
 
@@ -88,6 +88,12 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
     await chat.stopGeneration();
   };
 
+  // The sheet is left open: it hides with this screen while the media is read
+  // and is back on the conversation when the user returns.
+  const openSource = (source: ChatSource) => {
+    router.push(`/media/${source.media_item_id}`);
+  };
+
   const handleRefusalAction = (action: NonNullable<ChatRefusal["action"]>) => {
     chat.dismissError();
     if (action === "seePlans") {
@@ -135,6 +141,8 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
         messages={conversation?.messages ?? []}
         pendingQuestion={session.pendingQuestion}
         sources={conversation?.sources ?? []}
+        showSources={isFolder}
+        onOpenSource={openSource}
         live={
           session.generation
             ? { turnIndex: session.generation.turn_index, text: session.streamingText }

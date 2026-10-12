@@ -1,11 +1,12 @@
 /**
  * The conversation: each question, then its answer, and the answer being written.
  *
- * Source references are what the prompt makes the model cite (`[S1]`, `[S2]`…,
- * the refs of the conversation's frozen snapshot); they are drawn as small tags
- * and spoken by the screen reader as the source they name. An answer that
- * stopped early says why — stopped by the user, cut by the output ceiling, or
- * interrupted by an error — so a partial answer never passes for a complete one.
+ * An answer is drawn from its Markdown by `ChatAnswer`, which also turns the
+ * source tags the prompt makes the model write (`[S1]`, `[S2]`…, the refs of the
+ * conversation's frozen snapshot) into the titles of the media they name. An
+ * answer that stopped early says why — stopped by the user, cut by the output
+ * ceiling, or interrupted by an error — so a partial answer never passes for a
+ * complete one.
  */
 
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../.
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
+import { ChatAnswer } from "./ChatAnswer";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];
@@ -27,27 +29,13 @@ export interface ChatThreadProps {
   /** Ask a question of an earlier turn again, as a new turn. */
   onRetry: (question: string) => void;
   retryDisabled: boolean;
-}
-
-const REF_PATTERN = /\[S\d+\]/g;
-
-function splitRefs(text: string): { text: string; ref: boolean }[] {
-  const parts: { text: string; ref: boolean }[] = [];
-  let last = 0;
-  for (const match of text.matchAll(REF_PATTERN)) {
-    const index = match.index ?? 0;
-    if (index > last) parts.push({ text: text.slice(last, index), ref: false });
-    parts.push({ text: match[0], ref: true });
-    last = index + match[0].length;
-  }
-  if (last < text.length) parts.push({ text: text.slice(last), ref: false });
-  return parts;
-}
-
-function spokenText(text: string, titles: Map<string, string>): string {
-  return text.replace(REF_PATTERN, (ref) =>
-    t("chat.thread.sourceA11y", { ref: ref.slice(1, -1), title: titles.get(ref) ?? "" }),
-  );
+  /**
+   * Whether answers name the sources they cite. False in a media's conversation,
+   * whose one source is the page it is opened on (see `ChatAnswer`).
+   */
+  showSources: boolean;
+  /** Open a source an answer cites. */
+  onOpenSource: (source: ChatSource) => void;
 }
 
 function statusLine(message: ChatMessage): string | null {
@@ -73,11 +61,13 @@ export function ChatThread({
   waiting,
   onRetry,
   retryDisabled,
+  showSources,
+  onOpenSource,
 }: ChatThreadProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const titles = useMemo(
-    () => new Map(sources.map((source) => [source.ref, source.title ?? ""])),
+  const sourcesByRef = useMemo(
+    () => new Map(sources.map((source) => [source.ref, source])),
     [sources],
   );
   const questions = useMemo(
@@ -88,20 +78,6 @@ export function ChatThread({
           .map((message) => [message.turn_index, message.text ?? ""]),
       ),
     [messages],
-  );
-
-  const renderAnswerText = (text: string) => (
-    <Text style={styles.answerText} accessibilityLabel={spokenText(text, titles)}>
-      {splitRefs(text).map((part, index) =>
-        part.ref ? (
-          <Text key={index} style={styles.ref}>
-            {part.text}
-          </Text>
-        ) : (
-          part.text
-        ),
-      )}
-    </Text>
   );
 
   return (
@@ -128,7 +104,15 @@ export function ChatThread({
             (message.status === "interrupted" && message.interruption_cause === "provider_error"));
         return (
           <View key={`${message.turn_id}-a`} style={styles.answer}>
-            {text ? renderAnswerText(text) : null}
+            {text ? (
+              <ChatAnswer
+                text={text}
+                live={isLive}
+                sources={sourcesByRef}
+                showSources={showSources}
+                onOpenSource={onOpenSource}
+              />
+            ) : null}
             {isLive && waiting && !text ? (
               <View style={styles.pending}>
                 <ActivityIndicator size="small" color={Colors.textSubtle} />
@@ -204,8 +188,9 @@ export function ChatThread({
 
 const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
+    // Room around each question, so a long answer never runs into the next one.
     thread: {
-      gap: Spacing.md,
+      gap: Spacing.lg,
     },
     questionRow: {
       alignItems: "flex-end",
@@ -222,17 +207,6 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     answer: {
       gap: Spacing.sm,
-    },
-    answerText: {
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight,
-      color: Colors.textMain,
-    },
-    ref: {
-      fontSize: Typography.small.fontSize,
-      fontWeight: "600",
-      color: Colors.onHighlight,
-      backgroundColor: Colors.highlight,
     },
     pending: {
       flexDirection: "row",

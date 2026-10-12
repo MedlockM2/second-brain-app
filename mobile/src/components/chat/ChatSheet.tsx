@@ -62,6 +62,8 @@ export interface ChatSheetProps {
   messages: ChatMessage[];
   pendingQuestion: ChatThreadProps["pendingQuestion"];
   sources: ChatSource[];
+  showSources: ChatThreadProps["showSources"];
+  onOpenSource: ChatThreadProps["onOpenSource"];
   live: { turnIndex: number; text: string } | null;
   waiting: boolean;
   generating: boolean;
@@ -216,6 +218,8 @@ export function ChatSheet(props: ChatSheetProps): React.JSX.Element {
                   waiting={props.waiting}
                   onRetry={props.onRetry}
                   retryDisabled={props.generating || props.sending}
+                  showSources={props.showSources}
+                  onOpenSource={props.onOpenSource}
                 />
               )}
             </ScrollView>
