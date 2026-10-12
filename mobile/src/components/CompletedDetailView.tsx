@@ -1166,6 +1166,13 @@ export function CompletedDetailView({
   }, [scrollY, barFadeFrom, barShownAt, bandLeavesStatusBarAt, maxScroll]);
 
   const scrollRef = useRef<ScrollView>(null);
+  const readerScrollOffset = useRef(0);
+  const readerContentTop = useRef(0);
+  const transcriptTop = useRef(0);
+  useEffect(() => {
+    const listener = scrollY.addListener(({ value }) => { readerScrollOffset.current = value; });
+    return () => scrollY.removeListener(listener);
+  }, [scrollY]);
 
   // A tab picked from the collapsed bar — the only segment on screen once it is
   // shown, the page's own having slid under it — opens at its own top, right
@@ -1192,6 +1199,17 @@ export function CompletedDetailView({
   const isFocused = useIsFocused();
   const statusBarStyle =
     (cover && bandUnderStatusBar) || mode === "dark" ? "light" : "dark";
+
+  const transcript = (
+    <TranscriptReader
+      transcript={media_item.transcript}
+      processingStatus={processing_job.status}
+      content={readerContent}
+      onRetry={fetchRawContent}
+      onCheckTranslation={translationRefresh.rearm}
+      translationToggle={translationToggle}
+    />
+  );
 
   return (
     <View style={styles.container}>
@@ -1269,17 +1287,12 @@ export function CompletedDetailView({
             carries the page gutter itself — `ArtifactsPanel` owns the one it
             shares with the folder screen. */}
         {activeTab === "reader" ? (
-          <View style={styles.readerContent}>
+          <View style={styles.readerContent} onLayout={(event) => { readerContentTop.current = event.nativeEvent.layout.y; }}>
             {/* What this source is about, before the source itself. */}
             <SourcePreview state={preview} />
-            <TranscriptReader
-              transcript={media_item.transcript}
-              processingStatus={processing_job.status}
-              content={readerContent}
-              onRetry={fetchRawContent}
-              onCheckTranslation={translationRefresh.rearm}
-              translationToggle={translationToggle}
-            />
+            <View onLayout={(event) => { transcriptTop.current = event.nativeEvent.layout.y; }}>
+              {transcript}
+            </View>
           </View>
         ) : (
           // No "N sources" line: a media item is a single source.
@@ -1308,6 +1321,9 @@ export function CompletedDetailView({
         <ChatDock
           scope="media"
           scopeId={media_item.media_item_id}
+          title={displayTitle}
+          sourceContent={<View style={styles.chatSource}>{transcript}</View>}
+          getSourceOffset={() => Math.max(0, readerScrollOffset.current - readerContentTop.current - transcriptTop.current)}
           bottomInset={underStatusBar ? insets.bottom : 0}
         />
       ) : null}
@@ -1347,6 +1363,9 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     // The Reader tab only. The AI tab is `ArtifactsPanel`, which brings the same
     // gutter and the same bottom inset with it.
+    chatSource: {
+      paddingHorizontal: Spacing.lg,
+    },
     readerContent: {
       paddingHorizontal: Spacing.lg,
       paddingTop: Spacing.sm,

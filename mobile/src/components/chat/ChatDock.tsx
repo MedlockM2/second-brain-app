@@ -1,41 +1,52 @@
-/**
- * The persistent chat composer of a media's Reader tab and a folder's Sources tab
- * (task-468, owner decision of task-434: direction F, a persistent composer, on a
- * media and on a folder, never on the library).
- *
- * Direction F was benchmarked as a native tab-bar accessory. Those two tabs live
- * on root-stack screens with no tab bar, so the composer is a screen component
- * instead, the same on iOS and Android, anchored at the bottom of the tab. At
- * rest it is one field naming its scope; a tap opens the conversation sheet, in
- * which the same field becomes the composer. While an answer is on its way the
- * resting field says so.
- *
- * Everything that must outlive this component — the conversation, the answer
- * being written, its stream — is held by `ChatSessionContext`. Only the draft and
- * the last refusal are local.
- */
+/** Contextual entry point; drafts survive closing/history, sessions live above navigation. */
 
 import { Ionicons } from "@expo/vector-icons";
 import { useIsFocused, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, findNodeHandle, Pressable, StyleSheet, Text, View } from "react-native";
-import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
+import {
+  AccessibilityInfo,
+  findNodeHandle,
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import {
+  BorderRadius,
+  Spacing,
+  TouchTarget,
+  Typography,
+  type Theme,
+} from "../../constants/theme";
 import { useChatSession } from "../../contexts/ChatSessionContext";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import { describeChatRefusal, type ChatRefusal } from "../../lib/chatRefusal";
 import type { ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { ChatHistoryList } from "./ChatHistoryList";
-import { ChatSheet } from "./ChatSheet";
+import { ChatConversationModal } from "./ChatConversationModal";
 
 export interface ChatDockProps {
   scope: ChatScope;
   scopeId: string;
+  title: string;
+  /** Rendered in the same scroll view as the exchanges, with its own page gutters. */
+  sourceContent: React.ReactNode;
+  /** Read at opening, relative to the beginning of the source block. */
+  getSourceOffset: () => number;
   /** Space to keep under the dock: the safe area, when no tab bar covers it. */
   bottomInset?: number;
 }
 
-export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): React.JSX.Element {
+export function ChatDock({
+  scope,
+  scopeId,
+  title,
+  sourceContent,
+  getSourceOffset,
+  bottomInset = 0,
+}: ChatDockProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
@@ -45,16 +56,20 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [initialSourceOffset, setInitialSourceOffset] = useState(0);
+  const [resetKey, setResetKey] = useState(0);
   const dockRef = useRef<View>(null);
 
   const generating = session.generation !== null;
   const sending = session.phase === "sending";
-  const refusal = session.error ? describeChatRefusal(session.error, scope) : null;
+  const refusal = session.error
+    ? describeChatRefusal(session.error, scope)
+    : null;
   const isFolder = scope === "folder";
 
-  // Leaving the screen hides the sheet with it; the answer goes on. The sheet is
-  // a modal, so while it is up the Digest carousel under it cannot change page.
-  const sheetVisible = open && isFocused;
+  // The native modal covers the Digest carousel as well as the current page.
+  // Leaving for a citation hides it; the session and generation go on.
+  const modalVisible = open && isFocused;
 
   // Spoken once when an answer starts and once when it is there — never fragment
   // by fragment, which would drown the screen reader.
@@ -63,16 +78,28 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
     if (generating && !wasGenerating.current) {
       AccessibilityInfo.announceForAccessibility(t("chat.a11y.answerStarted"));
     } else if (!generating && wasGenerating.current) {
-      AccessibilityInfo.announceForAccessibility(t("chat.a11y.answerReady"));
+      const last = session.conversation?.messages.at(-1);
+      AccessibilityInfo.announceForAccessibility(
+        t(
+          last?.status === "failed"
+            ? "chat.thread.failed"
+            : last?.status === "interrupted"
+              ? "chat.a11y.answerInterrupted"
+              : "chat.a11y.answerReady",
+        ),
+      );
     }
     wasGenerating.current = generating;
-  }, [generating]);
+  }, [generating, session.conversation]);
 
   const close = () => {
+    Keyboard.dismiss();
     setOpen(false);
-    // Back on the control that opened the sheet.
+    setHistoryOpen(false);
+    // Back on the control that opened the modal.
     const node = findNodeHandle(dockRef.current);
-    if (node) setTimeout(() => AccessibilityInfo.setAccessibilityFocus(node), 400);
+    if (node)
+      setTimeout(() => AccessibilityInfo.setAccessibilityFocus(node), 400);
   };
 
   const ask = async (question: string) => {
@@ -88,7 +115,7 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
     await chat.stopGeneration();
   };
 
-  // The sheet is left open: it hides with this screen while the media is read
+  // The modal is left open: it hides with this screen while the media is read
   // and is back on the conversation when the user returns.
   const openSource = (source: ChatSource) => {
     router.push(`/media/${source.media_item_id}`);
@@ -98,92 +125,111 @@ export function ChatDock({ scope, scopeId, bottomInset = 0 }: ChatDockProps): Re
     chat.dismissError();
     if (action === "seePlans") {
       setOpen(false);
-      router.push({ pathname: "/paywall", params: { reason: "out_of_minutes" } });
+      router.push({
+        pathname: "/paywall",
+        params: { reason: "out_of_minutes" },
+      });
       return;
     }
     chat.clearActive();
   };
 
   const conversation = session.conversation;
-  const restingLabel = generating
-    ? t("chat.dock.generating")
-    : isFolder
-      ? t("chat.dock.askFolder")
-      : t("chat.dock.askMedia");
+  const restingLabel = isFolder
+    ? t("chat.dock.askFolder")
+    : t("chat.dock.askMedia");
 
   return (
     <View style={[styles.dock, { paddingBottom: Spacing.sm + bottomInset }]}>
       <Pressable
         ref={dockRef}
         style={({ pressed }) => [styles.field, pressed && styles.fieldPressed]}
-        onPress={() => setOpen(true)}
+        onPress={() => {
+          setInitialSourceOffset(getSourceOffset());
+          setHistoryOpen(false);
+          setOpen(true);
+        }}
         accessibilityRole="button"
         accessibilityLabel={restingLabel}
         accessibilityHint={t("chat.dock.openA11y")}
         testID={`chat-dock-${scope}`}
       >
         <Ionicons
-          name={generating ? "ellipsis-horizontal" : "chatbubble-ellipses-outline"}
+          name="chatbubble-ellipses-outline"
           size={20}
           color={generating ? Colors.textMain : Colors.textMuted}
         />
-        <Text style={[styles.fieldText, generating && styles.fieldTextActive]} numberOfLines={1}>
+        <Text
+          style={[styles.fieldText, generating && styles.fieldTextActive]}
+          numberOfLines={1}
+        >
           {draft.trim() && !generating ? draft : restingLabel}
         </Text>
       </Pressable>
 
-      <ChatSheet
-        visible={sheetVisible}
-        onClose={close}
-        title={isFolder ? t("chat.sheet.titleFolder") : t("chat.sheet.titleMedia")}
-        emptyText={isFolder ? t("chat.sheet.emptyFolder") : t("chat.sheet.emptyMedia")}
-        placeholder={isFolder ? t("chat.dock.askFolder") : t("chat.dock.askMedia")}
-        messages={conversation?.messages ?? []}
-        pendingQuestion={session.pendingQuestion}
-        sources={conversation?.sources ?? []}
-        showSources={isFolder}
-        onOpenSource={openSource}
-        live={
-          session.generation
-            ? { turnIndex: session.generation.turn_index, text: session.streamingText }
-            : null
-        }
-        waiting={generating && !session.streamingText}
-        generating={generating}
-        sending={sending}
-        draft={draft}
-        onChangeDraft={setDraft}
-        onSend={() => void ask(draft)}
-        onStop={() => void stop()}
-        onRetry={(question) => void ask(question)}
-        refusal={refusal}
-        onRefusalAction={handleRefusalAction}
-        historyOpen={historyOpen}
-        onToggleHistory={() => setHistoryOpen((value) => !value)}
-        history={
-          historyOpen ? (
-            <ChatHistoryList
-              scope={scope}
-              scopeId={scopeId}
-              currentId={conversation?.conversation_id ?? null}
-              onSelect={(conversationId) => {
-                chat.dismissError();
-                setHistoryOpen(false);
-                void chat.selectConversation(conversationId);
-              }}
-              onDelete={(conversationId) => chat.deleteConversation(conversationId)}
-            />
-          ) : null
-        }
-        onNewConversation={
-          conversation && conversation.turn_count > 0
-            ? () => {
-                chat.dismissError();
-                chat.clearActive();
-              }
-            : null
-        }
-      />
+      {modalVisible ? (
+        <ChatConversationModal
+          visible
+          sourceContent={sourceContent}
+          initialSourceOffset={initialSourceOffset}
+          resetKey={resetKey}
+          onClose={close}
+          title={title}
+          placeholder={
+            isFolder ? t("chat.dock.askFolder") : t("chat.dock.askMedia")
+          }
+          messages={conversation?.messages ?? []}
+          pendingQuestion={session.pendingQuestion}
+          sources={conversation?.sources ?? []}
+          showSources={isFolder}
+          onOpenSource={openSource}
+          live={
+            session.generation
+              ? {
+                  turnIndex: session.generation.turn_index,
+                  text: session.streamingText,
+                }
+              : null
+          }
+          waiting={generating && !session.streamingText}
+          generating={generating}
+          sending={sending}
+          draft={draft}
+          onChangeDraft={setDraft}
+          onSend={() => void ask(draft)}
+          onStop={() => void stop()}
+          onRetry={(question) => void ask(question)}
+          refusal={refusal}
+          onRefusalAction={handleRefusalAction}
+          historyOpen={historyOpen}
+          onToggleHistory={() => setHistoryOpen((value) => !value)}
+          history={
+            historyOpen ? (
+              <ChatHistoryList
+                scope={scope}
+                scopeId={scopeId}
+                currentId={conversation?.conversation_id ?? null}
+                onSelect={(conversationId) => {
+                  chat.dismissError();
+                  setHistoryOpen(false);
+                  setResetKey((value) => value + 1);
+                  void chat.selectConversation(conversationId);
+                }}
+                onDelete={(conversationId) =>
+                  chat.deleteConversation(conversationId)
+                }
+              />
+            ) : null
+          }
+          onNewConversation={() => {
+            chat.dismissError();
+            chat.clearActive();
+            setDraft("");
+            setHistoryOpen(false);
+            setResetKey((value) => value + 1);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

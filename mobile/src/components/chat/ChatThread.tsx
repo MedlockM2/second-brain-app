@@ -116,11 +116,7 @@ export function ChatThread({
             {isLive && waiting && !text ? (
               <View style={styles.pending}>
                 <ActivityIndicator size="small" color={Colors.textSubtle} />
-                <Text style={styles.pendingText}>{t("chat.thread.waiting")}</Text>
               </View>
-            ) : null}
-            {isLive && text ? (
-              <Text style={styles.pendingText}>{t("chat.thread.writing")}</Text>
             ) : null}
             {status ? (
               <View style={styles.statusRow}>

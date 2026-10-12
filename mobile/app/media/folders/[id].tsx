@@ -434,6 +434,39 @@ export default function FolderDetailScreen() {
     ];
   }, [childFolders, media, subtreeMediaByFolder]);
 
+  const sourceOffset = useRef(0);
+  const renderSourceRow = (item: Row, inConversation = false) => {
+  switch (item.kind) {
+    case "caption":
+      return (
+        <Text style={styles.sectionTitle} accessibilityRole="header">
+          {item.key === "folders"
+            ? t("folder.section.folders")
+            : t("folder.section.sources", { count: item.count })}
+        </Text>
+      );
+    case "folder":
+      return (
+        <SubfolderCard
+          node={item.node}
+          subtreeMedia={item.subtreeMedia}
+          onPress={handleOpenFolder}
+          testID={`folder-source-folder-${item.node.id}`}
+        />
+      );
+    case "media":
+      return (
+        <MediaListCard
+          item={item.media}
+          onPress={handleOpenMedia}
+          onLongPress={inConversation ? undefined : mediaActions.open}
+          processingStalled={isProcessingStalled}
+          testID={`folder-source-media-${item.media.media_item_id}`}
+        />
+      );
+  }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <ScreenHeader
@@ -495,37 +528,9 @@ export default function FolderDetailScreen() {
         <FlatList
           data={rows}
           keyExtractor={rowKey}
-          renderItem={({ item }) => {
-            switch (item.kind) {
-              case "caption":
-                return (
-                  <Text style={styles.sectionTitle} accessibilityRole="header">
-                    {item.key === "folders"
-                      ? t("folder.section.folders")
-                      : t("folder.section.sources", { count: item.count })}
-                  </Text>
-                );
-              case "folder":
-                return (
-                  <SubfolderCard
-                    node={item.node}
-                    subtreeMedia={item.subtreeMedia}
-                    onPress={handleOpenFolder}
-                    testID={`folder-source-folder-${item.node.id}`}
-                  />
-                );
-              case "media":
-                return (
-                  <MediaListCard
-                    item={item.media}
-                    onPress={handleOpenMedia}
-                    onLongPress={mediaActions.open}
-                    processingStalled={isProcessingStalled}
-                    testID={`folder-source-media-${item.media.media_item_id}`}
-                  />
-                );
-            }
-          }}
+          renderItem={({ item }) => renderSourceRow(item)}
+          onScroll={(event) => { sourceOffset.current = event.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -547,7 +552,19 @@ export default function FolderDetailScreen() {
           task-434), under the list. The SafeAreaView already keeps the bottom
           inset. */}
       {!isLoading && !error && activeTab === "sources" && folderId ? (
-        <ChatDock scope="folder" scopeId={folderId} />
+        <ChatDock
+          scope="folder"
+          scopeId={folderId}
+          title={title}
+          getSourceOffset={() => sourceOffset.current}
+          sourceContent={
+            <View style={styles.chatSources}>
+              {rows.length ? rows.map((row) => (
+                <View key={rowKey(row)}>{renderSourceRow(row, true)}</View>
+              )) : <EmptyState />}
+            </View>
+          }
+        />
       ) : null}
 
       {/* Screen level, outside the list: the menu belongs to the screen's
@@ -898,6 +915,9 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     // The cards bring their own `Spacing.md` side margin, the Library's gutter;
     // the list adds the difference so they land on this screen's `Spacing.lg`,
     // under the tabs, without either card being told about this page.
+    chatSources: {
+      paddingHorizontal: Spacing.lg - Spacing.md,
+    },
     listContent: {
       paddingHorizontal: Spacing.lg - Spacing.md,
       paddingTop: Spacing.sm,

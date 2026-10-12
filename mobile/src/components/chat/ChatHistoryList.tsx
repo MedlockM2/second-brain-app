@@ -1,7 +1,7 @@
 /**
- * The past conversations of one media or one folder, inside the chat sheet
+ * The past conversations of one media or one folder, inside the conversation modal
  * (task-469). Not a screen and not a tab: the UI decision of task-434 keeps the
- * chat in its sheet, so the history is a view the sheet swaps its thread for.
+ * chat in its modal, so the history is a view the modal swaps its thread for.
  *
  * Latest activity first, a page at a time, each row with what tells two
  * conversations apart: the first question, the date, how many questions, and
@@ -21,7 +21,7 @@ import type { ChatConversationSummary, ChatScope, ChatTurnStatus } from "@media-
 export interface ChatHistoryListProps {
   scope: ChatScope;
   scopeId: string;
-  /** The conversation the sheet shows now, marked in the list. */
+  /** The conversation the modal shows now, marked in the list. */
   currentId: string | null;
   onSelect: (conversationId: string) => void;
   onDelete: (conversationId: string) => Promise<void>;
