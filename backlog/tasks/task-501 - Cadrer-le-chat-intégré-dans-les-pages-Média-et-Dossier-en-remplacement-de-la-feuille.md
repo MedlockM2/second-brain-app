@@ -7,7 +7,7 @@ status: To Do
 assignee:
   - '@codex'
 created_date: '2026-10-12 09:41'
-updated_date: '2026-10-12 11:39'
+updated_date: '2026-10-12 12:35'
 labels:
   - benchmark
   - mobile
@@ -50,10 +50,14 @@ Seconde partie du retour AD9M_CsdhTTaHMyX0_NSuig : afficher le clavier directeme
 Précision owner intégrée : les questions/réponses sont masquées lorsque le composeur est fermé ; son ouverture les affiche sous le contenu, sa fermeture les masque sans arrêter la génération.
 Vérification manuelle Chrome : ouverture/fermeture, envoi fictif, historique/reprise, séparation IA, clair/sombre, 320/390, texte agrandi et contenu long (35 paragraphes/32 sources), sans débordement horizontal ; syntaxe JS et git diff --check propres. Aucun code applicatif ni test automatisé ajouté.
 La recommandation attend la validation owner : owner_decision reste pending. Retour à To Do conformément au cycle des benchmarks ; TASK-502 reste bloquée.
+
+2026-10-12 — Révision demandée par l’owner après revue : modal plein écran conservé, substitué sur place sans mouvement de feuille ; onglets Lecture/IA retirés de ce mode, historique et nouvelle conversation dans l’en-tête, transcript à largeur identique puis première question directement dessous. Retrait du compteur/plafond de saisie et des commandes/libellés supplémentaires autour du composeur.
+mockups.html refait avec huit états interactifs, réponse fictive progressive et historique dans le même modal. README courant réécrit pour remplacer la précédente direction ; la formule historique « sans modal » de TASK-502 n’est plus applicable à la direction demandée.
+Revue manuelle Chrome : largeur du paragraphe 358 avant/après sur cadre 390, modal sans animation ni transform, aucun onglet dans le modal, envoi/historique/reprise/sortie vérifiés, 1 200 caractères acceptés sans maxlength, 320/sombre/contenu long sans débordement horizontal. Syntaxe JS et diff propres. owner_decision reste pending jusqu’à validation des nouvelles maquettes.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Benchmark et huit maquettes interactives produits et vérifiés. Chat intégré dépliable recommandé, fil invisible quand le composeur est fermé. Recherche terminée, décision owner en attente dans le README ; pas de passage à Done avant owner_decision: ok.
+Maquettes et cadrage révisés suivant les retours owner : modal sur place sans glissement, source pleine largeur au début du fil, commandes de conversation en haut, composeur sans compteur ni libellés superflus. Revue manuelle du prototype effectuée ; validation owner en attente.
 <!-- SECTION:FINAL_SUMMARY:END -->

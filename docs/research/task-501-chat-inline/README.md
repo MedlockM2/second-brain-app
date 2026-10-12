@@ -2,42 +2,38 @@
 owner_decision: pending
 ---
 
-# Benchmark : conversation intégrée aux pages Média et Dossier
+# Benchmark : la source comme premier bloc d’une conversation modale
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l'owner : accepter A, retenir une autre option, ou préciser les modifications ; le cadrage proposé n'est pas une décision acquise)_
+**Decision**: _(à remplir par l’owner après revue des maquettes révisées ; les consignes ci-dessous définissent la direction demandée, sans présumer de la validation du livrable)_
 
-**Validated at**: _(date ISO à remplir par l'owner)_
+**Validated at**: _(date ISO à remplir par l’owner)_
 
-## Recommendation
+## Direction révisée — consignes owner du 12 octobre 2026
 
-**A — un chat intégré dépliable : au repos, contenu seul ; composeur ouvert, contenu puis conversation dans un seul défilement vertical.** Le média conserve son transcript intégral ; le dossier conserve ses sous-dossiers et sources. **Les questions/réponses sont masquées tant que le composeur est fermé**, conformément à la précision de l’owner du 12 octobre 2026. Toucher le champ ouvre directement le clavier et déplie la conversation sous le contenu, sans feuille. Refermer le composeur masque de nouveau le fil, sans supprimer son historique ni arrêter une génération. L'historique et « Nouvelle conversation » occupent une seconde ligne d'en-tête, commune aux deux portées. Le bouton textuel de cette ligne permet de rejoindre la discussion ou de retrouver le passage lu.
+**On conserve un modal au-dessus de la page média, mais il se substitue visuellement à elle sur place.** Il ne monte pas du bas, ne réduit pas le transcript à une carte et ne montre pas la page derrière un voile. Le toucher sur « Poser une question sur cette source » fait disparaître les onglets Lecture/IA et les actions de lecture superflues. Un en-tête compact affiche conversations passées et nouvelle conversation ; le clavier apparaît. Le transcript conserve sa largeur et devient le premier bloc du fil. Dès le premier envoi, la question est ajoutée directement après son dernier paragraphe, puis la réponse.
 
-Déplier le composeur ne déplace pas la lecture vers la fin du transcript : on peut rédiger en regardant son passage. **L'envoi accepté** rejoint la nouvelle question ; un bouton « Reprendre lecture » retrouve l'ancre précédente. Pendant une réponse, le suivi automatique reste actif seulement si le lecteur est déjà au bas de la discussion. Un déplacement volontaire vers le transcript le suspend ; « Réponse en cours ↓ » permet de revenir. L'onglet IA garde ses artefacts, sans conversation ni composeur.
+Les corrections owner remplacent la précédente proposition de chat déplié dans la page : **aucun compteur ni plafond de caractères dans les maquettes, aucun bouton pour masquer le clavier ou reprendre la lecture, aucun libellé de fermeture de discussion ou de génération en cours**. La saisie et le bouton envoyer/arrêter suffisent au bas de l’écran. Une icône de fermeture discrète dans l’en-tête permet de quitter le modal. Le clavier peut être fermé par les gestes système ; sa fermeture ne ferme pas la conversation.
 
-La proposition privilégie la demande précise du retour TestFlight : conserver le texte et ajouter la conversation dessous quand le composeur est ouvert, puis la masquer quand il est fermé. Elle a un coût réel : sur un petit téléphone, une discussion sous un long transcript nécessite un raccourci explicite. La seconde ligne d'en-tête consomme aussi de la hauteur. Ces deux coûts sont visibles dans les [maquettes interactives](mockups.html), plutôt que dissimulés par un transcript tronqué.
+Le modal fermé laisse uniquement la page de lecture et son point d’entrée, sans questions/réponses. Son ouverture ne lance aucune requête de génération. La première question, les réponses et les relances appartiennent à une seule surface verticale avec le transcript intégral. Aucun bloc « Discussion » ou état vide ne s’intercale entre le texte et la première question.
 
-**Livrable de recherche uniquement.** Aucun code applicatif, transport, quota, modèle ou contrat API n'est modifié. Les choix ci-dessous deviennent le périmètre de TASK-502 seulement après validation de ce README.
+**Livrable de cette révision : les [maquettes interactives](mockups.html) et ce cadrage, uniquement.** Aucun code applicatif, quota, modèle ou contrat API n’est modifié. TASK-502 attend toujours la validation du livrable.
 
-## 1. Périmètre et état réellement observé
+## 1. Appuis dans l’application et portée
 
-Audit du checkout local du 12 octobre 2026, base `250ea575`. Les descriptions historiques de task-434 précèdent plusieurs livraisons ; elles ne décrivent plus entièrement l'application.
+Audit initial sur la base `250ea575`, révisé ici suivant les consignes owner. La direction produit prime sur les anciennes limites ou descriptions présentes dans ce checkout.
 
-| Fichier examiné | État actuel et conséquence |
+| Surface existante | Conséquence pour la direction révisée |
 | --- | --- |
-| `mobile/src/components/CompletedDetailView.tsx` | Un `Animated.ScrollView` contient héros, onglets Lecture/IA et transcript. Un `ChatDock` est son frère, visible dans Lecture. La barre repliée porte déjà retour, vignette, titre et onglets. |
-| `mobile/app/media/folders/[id].tsx` | Sources utilise une `FlatList` de sous-dossiers, légendes et médias, avec rafraîchissement. IA utilise `ArtifactsPanel`. `ChatDock` est fixé sous Sources. |
-| `mobile/src/components/chat/ChatDock.tsx` | Le « champ » au repos est un `Pressable` qui ouvre `ChatSheet`, et non un champ éditable. Brouillon et état d'historique sont locaux. |
-| `mobile/src/components/chat/ChatSheet.tsx` | `Modal`, clavier, en-tête, liste d'historique ou fil, et composeur. Son changement de taille appelle actuellement `scrollToEnd` sans tenir compte d'une relecture. |
-| `ChatThread.tsx`, `ChatAnswer.tsx`, `ChatComposer.tsx`, `ChatHistoryList.tsx` | Rendu Markdown, citations nommées pour les dossiers, arrêt, états d'échec, reprise de question et historique paginé existent. La saisie est limitée à 1 000 caractères, jusqu'à quatre lignes visibles. |
-| `mobile/src/contexts/ChatSessionContext.tsx` | Session par portée au-dessus de la navigation ; flux, reprise et repli polling sont indépendants de la feuille. Quitter une page ne demande pas l'arrêt serveur. |
-| `mobile/src/components/TranscriptReader.tsx` | Paragraphes `Text selectable`, traduction et états de chargement/erreur ; le backend sépare déjà le texte en paragraphes. |
-| `mobile/app/(tabs)/digest/[period].tsx` | Le même `CompletedDetailView` est monté dans un carrousel horizontal. Un changement de ce composant touche aussi le Digest. |
-| `mobile/src/constants/theme.ts` et `mobile-design-mockups/my_design_system/DESIGN.md` | Deux palettes Amber Clarity, surfaces tonales, corps 16/25,6, titres 20 et 32, espacements 4/8/16/24/32/48, cibles 48 minimum. Le thème prime sur les anciens exemples statiques. |
-| `mobile/package.json` et manifeste Android | Expo 55, React Native 0.83.6 ; `adjustResize` sur Android. Pas de Keyboard Controller ni de Reanimated déclarés dans l'app. |
-
-Le serveur borne une conversation à vingt tours (`chat_prompt.MAX_TURNS_PER_CONVERSATION`). Cela borne le nombre de messages, **pas** la hauteur de vingt réponses Markdown ni celle du transcript. Aucun chiffre de fluidité ou de mémoire n'a été mesuré dans ce travail documentaire.
+| `CompletedDetailView.tsx`, `MediaReaderBar.tsx` | La lecture a un transcript et deux onglets. Ces onglets restent sur la page de lecture, mais sont absents de la conversation modale. |
+| `ChatDock.tsx`, `ChatSheet.tsx` | On conserve un point d’entrée et une présentation modale. Le déplacement vertical et la feuille à hauteur partielle sont remplacés par une surface plein écran sans animation d’entrée. |
+| `TranscriptReader.tsx` | Même prose, même largeur, même taille de texte et même ordre des paragraphes dans le lecteur et dans le modal ; conserver sélection, traduction et états du contenu. |
+| `ChatComposer.tsx`, `ChatThread.tsx`, `ChatAnswer.tsx` | Réutiliser saisie, messages, Markdown, citations et arrêt. La directive owner retire le compteur et le plafond de saisie de cette direction UI ; ne pas recopier une ancienne limite du checkout dans les maquettes. |
+| `ChatHistoryList.tsx`, `ChatSessionContext.tsx` | Réutiliser historique paginé et session par portée. Quitter le modal ne demande jamais l’arrêt serveur. |
+| `mobile/app/media/folders/[id].tsx` | Même transformation sur Sources : sources conservées au début du fil, Sources/IA absents du modal. Aucun transcript agrégé artificiel n’est inventé pour le dossier. |
+| `mobile/app/(tabs)/digest/[period].tsx` | Le modal doit couvrir la page active du Digest, y compris son chrome de navigation ; les pages voisines du pager ne prennent pas le clavier. |
+| `theme.ts`, `DESIGN.md` | Amber Clarity clair/sombre, corps 16/25,6, surfaces tonales et cibles 48 minimum. Les mêmes gouttières sont utilisées avant et après ouverture. |
 
 ## 2. Recherche externe et limites de la comparaison
 
@@ -48,109 +44,96 @@ Sources officielles consultées le 12 octobre 2026. Les règles de parcours prop
 | [React Native 0.83 — ScrollView](https://reactnative.dev/docs/0.83/scrollview) | Tous les enfants sont rendus ; les listes paresseuses sont adaptées aux longs ensembles. La documentation expose le maintien de position et prévient des sauts lors de réordonnancements. | Comparer une extension minimale de la page et une liste par blocs ; ne pas promettre que maintenir une position résout tout. |
 | [React Native 0.83 — FlatList](https://reactnative.dev/docs/0.83/flatlist) | Les lignes ont des clés ; les données externes de rendu doivent être signalées. Les hauteurs connues facilitent les sauts ; une cible hors fenêtre sans mesures pose problème. | Une réponse en flux a une hauteur variable. Un simple `scrollToIndex` vers la fin d'un transcript non mesuré n'est pas une solution complète. |
 | [React Native 0.83 — KeyboardAvoidingView](https://reactnative.dev/docs/0.83/keyboardavoidingview) | Ajustement de taille, position ou padding ; comportement et décalage dépendent du contexte et de la plateforme. | Garder le champ hors du conteneur défilant, avec un seul propriétaire de l'évitement du clavier. |
-| [React Native 0.83 — Keyboard](https://reactnative.dev/docs/0.83/keyboard) | Événements de clavier et synchronisation des changements de layout ; les événements disponibles diffèrent entre plateformes. | Ne pas transposer un délai d'ouverture de modal au champ de la page. |
+| [React Native 0.83 — Keyboard](https://reactnative.dev/docs/0.83/keyboard) | Événements de clavier et synchronisation des changements de layout ; les événements disponibles diffèrent entre plateformes. | Distinguer le montage du modal sans animation et l’ouverture du clavier natif. |
 | [Expo — Keyboard handling](https://docs.expo.dev/guides/keyboard-handling/) | Les primitives natives servent aux cas usuels ; Keyboard Controller couvre des interactions avancées et requiert un build de développement ainsi que Reanimated. | Commencer avec le stack installé ; une nouvelle bibliothèque ajouterait ici deux dépendances et une intégration native. |
 | [Android — IME animations](https://developer.android.com/develop/ui/compose/system/keyboard-animations) | Les mouvements du contenu et de l'IME doivent être coordonnés. Les exemples utilisent Compose. | Principe utile pour la checklist appareil ; ce code Kotlin n'est pas une recette React Native. |
 | [React Native 0.83 — Accessibility](https://reactnative.dev/docs/0.83/accessibility) | Libellés, rôles, états et annonces ont des API dédiées et des différences de plateforme. | Annoncer début/fin/échec, garder l'ordre source-question-réponse et rendre les raccourcis explicites. |
 | [Readwise — Chat with your documents](https://docs.readwise.io/reader/guides/ghostreader/chat) | Conversation contextuelle sur un document, disponible aussi sur mobile ; le contenu et la position de lecture font partie de son contexte. | Confirme la pertinence de l'aller-retour lecture/question, sans décider du placement dans Deepn. Deepn n'envoie pas actuellement la position au modèle. |
-| [Readwise — Default Ghostreader Prompts](https://docs.readwise.io/reader/guides/ghostreader/default-prompts) | L'entrée mobile « Ask anything » ouvre une feuille de chat avec des commandes contextuelles. | Contre-exemple concret : un champ apparent peut cacher une feuille, comme aujourd'hui dans Deepn. Ce mécanisme ne satisfait pas le retour reçu. |
+| [Readwise — Default Ghostreader Prompts](https://docs.readwise.io/reader/guides/ghostreader/default-prompts) | L'entrée mobile « Ask anything » ouvre une feuille de chat avec des commandes contextuelles. | Le point d’entrée contextuel reste pertinent ; Deepn remplace le mouvement de feuille par un modal plein écran sur place avec la source dans le fil. |
 
 Ces références ne démontrent ni la supériorité d'un parcours par mesure d'usage, ni sa fluidité sur nos appareils. Aucun test utilisateur n'a été conduit. Les maquettes sont une simulation HTML autonome : elles permettent de juger hiérarchie, encombrement et transitions, pas les insets natifs, VoiceOver/TalkBack ou la latence du backend.
 
-## 3. Options de navigation comparées
+## 3. Comparaison des parcours après les corrections owner
 
-L'exigence forte est « transcript conservé, puis questions/réponses dessous, clavier sur la page ». On compare aussi les options qui n'y répondent qu'en partie, pour rendre le compromis explicite.
-
-| Option | Média et long transcript | Dossier | Historique | IA | Verdict |
-| --- | --- | --- | --- | --- | --- |
-| **A. Chat intégré dépliable + raccourcis d'en-tête** | Au repos transcript seul ; ouvert, transcript intégral puis fil, rédaction au passage courant et saut à l'envoi | Au repos sources seules ; ouvert, sous-dossiers/sources puis fil | Page empilée, retour au même fil | Séparé et inchangé | **Recommandée** : respecte l'ordre demandé et garde une seule surface verticale |
-| B. Transcript repliable + fil | Lecture initiale complète, mais repli automatique au premier envoi ou au focus | Sources repliées en compteur | Même page empilée | Inchangé | Facilite le chat ; fait disparaître précisément le contexte que le retour demande de conserver. Variante possible seulement si l'owner accepte le repli explicite |
-| C. Troisième onglet Discussion | Bascule vers un chat plein écran ; retour Lecture nécessaire pour relire | Même troisième onglet | Page empilée ou liste dans l'onglet | IA reste distinct | Parcours clair, mais ne place pas les réponses sous le transcript et encombre les segments sur petit écran |
-| D. Chat dans l'onglet IA | Transcript hors de la conversation | Sources hors de la conversation | Mélange avec l'historique des artefacts si mal séparé | Redéfinit `ArtifactsPanel` partagé | Ne répond pas à la demande et transforme deux usages indépendants en destination ambiguë |
-| E. Deux panneaux verticaux indépendants | Transcript au-dessus et chat en dessous, chacun défilant ; clavier réduit les deux fenêtres | Même problème sur les sources | Page empilée | Inchangé | Utile sur tablette large ; trop peu de hauteur et gestes ambigus sur téléphone |
-| F. Feuille actuelle améliorée | Bonne séparation et retour au passage après fermeture ; transcript derrière la feuille | Même fonctionnement actuel | Dans la feuille | Inchangé | Une amélioration du clavier ne satisfait pas « sans modal » ; écartée pour ce retour |
-| G. Route dédiée de chat | Tout l'écran au chat, retour natif au média | Même route par portée | Route adjacente | Inchangé | Coût raisonnable, mais ajoute une navigation à chaque lecture/question et ne garde pas le contenu au-dessus |
-
-La comparaison est qualitative, sans score numérique arbitraire. A paie la gestion d'ancres et de défilement ; C/G paient un changement de lieu ; B paie la disparition du contexte ; E paie la hauteur. Aucun fournisseur, modèle ni moteur de chat n'est rouvert.
-
-## 4. Contenus longs : trois implémentations de A
-
-| Structure | Bénéfice | Coût / limite | Choix proposé |
+| Option | Transcript et échanges | Chrome et transition | Conclusion |
 | --- | --- | --- | --- |
-| `Animated.ScrollView` média actuel + `ChatThread` en dessous ; dossier `FlatList` avec fil en footer | Préserve le lecteur, sa sélection, traduction et héros. Ancres média mesurables dans la page déjà montée | Transcript et réponses montés en entier ; footer dossier non virtualisé. Le coût augmente avec le contenu | **Base KISS de TASK-502** ; aucune prétention à une optimisation de volume |
-| Liste commune de paragraphes/sources/messages | Virtualise le contenu et le chat ; une seule surface verticale | Refonte du lecteur et de sa traduction, suivi des hauteurs variables, retour à une ligne hors fenêtre, héros animé et progression à réécrire | Alternative si l'owner veut financer ce chantier dans TASK-502 ; ne pas le glisser dans une simple extraction de feuille |
-| Deux listes verticales imbriquées | Réutilise deux composants autonomes | Deux positions, gestes concurrents, fenêtre de chat réduite et saut de focus difficile à expliquer | Écartée sur téléphone |
+| **A. Modal plein écran sur place, source au début du fil** | Même largeur ; source complète puis questions/réponses | Onglets retirés ; historique/nouveau en haut ; entrée sans glissement | **Direction demandée**, représentée dans les nouvelles maquettes |
+| B. Chat dépliable dans Lecture, proposition précédente | Source puis fil | Onglets visibles, seconde barre d’actions, raccourci lecture | Remplacée : trop de chrome et commandes inutiles |
+| C. Feuille modale actuelle | Transcript derrière la conversation | La feuille monte et recouvre la page | Remplacée : mouvement explicitement refusé et source séparée du fil |
+| D. Transcript repliable | Source remplacée par un résumé ou compteur au moment de discuter | Libère de la hauteur | Ne conserve pas le transcript comme premier bloc intégral |
+| E. Troisième onglet Discussion | Lecture et conversation séparées | Nouveau segment et navigation entre deux lieux | Ne suit pas la demande de continuité |
+| F. Discussion dans IA | Source hors du fil | Mélange conversation et artefacts | Ne suit pas le parcours demandé |
+| G. Deux panneaux indépendants | Transcript et chat défilent séparément | Deux petites fenêtres avec clavier | Trop peu de hauteur sur téléphone et gestes concurrents |
+| H. Route de chat dédiée | Peut reprendre la source au début | Navigation visible vers un autre écran | Même contenu possible, mais le modal sans déplacement exprime mieux la transformation sur place demandée |
 
-**Pourquoi ne pas imposer une réécriture du lecteur dans ce correctif ?** L'app rend déjà les paragraphes intégralement et aucune mesure locale n'établit un défaut de performance. La tâche demande une révision de parcours. Ajouter une virtualisation complète sans observation chiffrée serait un second chantier. Le fil étant masqué au repos, le moteur actuel n’a aucune réponse supplémentaire à rendre dans cet état. La proposition conserve donc le moteur actuel, documente sa limite et interdit de vendre le résultat comme une solution de performance. Les contenus longs restent intégraux, jamais tronqués ou repliés à l'insu du lecteur.
+La comparaison est qualitative. La direction A n’est pas issue d’un score de performance : elle applique la précision owner sur le placement et la transition. Les références techniques existantes restent utiles pour le clavier et les longs contenus ; aucune nouvelle bibliothèque n’est nécessaire aux maquettes.
 
-Pour le dossier, le footer reste une extension de la `FlatList` existante, et non une `ScrollView` imbriquée. Atteindre un footer éloigné demande une stratégie de saut **bornée et annulable** : exploiter la longueur de contenu mesurée et le nouvel `onContentSizeChange` après remplissage de fenêtre, arrêter dès que l'ancre du fil est visible, annuler au geste utilisateur/changement de portée. Pas de hauteur de source supposée ni de boucle infinie de `scrollToEnd`. Si cette stratégie ne donne pas un saut stable, retenir l'alternative liste par blocs explicitement ; ne pas tronquer la liste pour masquer le problème. Ce point reste une incertitude native à vérifier lors de l'implémentation.
+## 4. Transition et géométrie
 
-## 5. Règles précises du parcours recommandé
+### Au repos
 
-### 5.1 Lecture et rédaction
+La page garde son en-tête de média, Lecture/IA, le transcript et le point d’entrée « Poser une question sur cette source ». Les commandes d’historique/nouvelle conversation sont réservées au mode conversation. Les questions/réponses restent invisibles.
 
-À l'ouverture de la page, Lecture/Sources affiche uniquement le contenu, sans questions/réponses. Le composeur est replié. Il reste un champ directement activable ; ce n’est pas une invitation à ouvrir une modal. Le champ fixe est un vrai `TextInput`, à portée explicite (« Question sur ce média… » / « Question sur ce dossier… »). Il ne prend pas le focus automatiquement au montage. Le toucher donne le focus immédiatement, ouvre le clavier dans la page et rend le fil sous le contenu. Une commande explicite « Fermer la discussion » replie le composeur, ferme le clavier et masque le fil, en restaurant l’ancre de lecture. Elle ne stoppe pas le serveur. Un simple masquage du clavier pendant la lecture d’une réponse ne replie pas la discussion : « ouvert » désigne l’état UI du composeur, distinct du focus clavier. Cette distinction permet de lire une réponse sans clavier ; elle ne permet jamais de laisser les questions/réponses visibles avec le composeur replié. Le brouillon ne crée pas de conversation réseau. Le clavier réduit la fenêtre disponible ; il ne déclenche pas un saut arbitraire à la discussion.
+### Au toucher
 
-Le transcript ou la liste de sources conserve sa position. Le composeur utilise les composants et limites existants : quatre lignes visibles puis défilement interne, compteur sur 1 000 caractères, Retour pour une nouvelle ligne, envoi explicite. Après un envoi accepté, la question apparaît sous le contenu et devient la cible du défilement. Le clavier reste ouvert pour faciliter une relance ; un glissement le ferme suivant les conventions de plateforme. Un échec d'envoi garde le brouillon/question et son identifiant de reprise, conformément au contexte actuel.
+Le modal occupe la même surface que la page, immédiatement : **aucune translation, aucun zoom, aucune feuille qui progresse du bas vers le haut**. Il n’a ni poignée de feuille ni marge latérale, ni rayon autour du transcript, ni backdrop visible. Les arrondis des cadres de téléphone dans le fichier HTML sont uniquement une présentation de revue.
 
-### 5.2 Ancres, lecture et suivi du flux
+L’en-tête de lecture est remplacé par une rangée compacte : fermeture par icône, titre de la source, conversations passées et nouvelle conversation. Les onglets disparaissent. Le transcript garde la même largeur et les mêmes gouttières de texte ; ce n’est pas une bulle utilisateur. Sa position de défilement est reprise à l’ouverture, sans saut automatique vers sa fin. La hauteur utile change avec le retrait des onglets et l’apparition du clavier ; la maquette ne prétend pas figer la position verticale de chaque ligne pendant cette adaptation.
 
-L'ancre de lecture est capturée **avant** un saut volontaire vers la discussion, jamais à chaque fragment. Elle reste propre au média/dossier et à l'onglet. Avec le moteur média conservé, garder l'offset et la version du contenu ; si une traduction ou une taille de texte change le layout, remettre une ancre mesurée valide, sinon revenir au début du lecteur plutôt qu'à un offset sans sens. Le dossier préfère une identité de source plus un décalage ; si elle a disparu, retrouver le voisin disponible. Ces ancres sont une aide locale, pas un nouvel état envoyé au backend.
+Le clavier ouvre directement le champ. Le mouvement natif du clavier reste indépendant de la présentation du modal : l’interdiction de glissement vise la surface de chat, pas l’animation du clavier du système.
 
-Quand une nouvelle question est envoyée, rejoindre le début de son tour, puis suivre le bas tant que l'utilisateur reste dans la zone de suivi. Proposition de seuil : `TouchTarget.comfortable` (56 unités de layout), **paramètre de design**, pas un délai. Un geste vers le haut suspend ce suivi même si la génération continue. Un bouton nommé « Réponse en cours ↓ » ou « Voir la réponse ↓ » réactive le suivi. Ne jamais recopier l'actuel `onContentSizeChange → scrollToEnd` inconditionnel.
+### Au premier envoi
 
-**La progression de lecture ignore la conversation, y compris lorsque le composeur est déplié.** Aujourd'hui `maxScroll = contentHeight - viewportHeight` mélange tout le contenu de la page. TASK-502 devra mesurer le début et la fin du transcript et calculer la progression sur cette plage, en tenant compte du viewport utile. Une nouvelle réponse ne doit ni faire régresser le pourcentage lu ni allonger sa distance. La barre repliée reste liée au passage du segment sous l'en-tête, avec le nouvel encombrement de l'en-tête inclus dans les calculs.
+La question est ajoutée **immédiatement après le dernier paragraphe**. Aucun titre « Discussion », notice vide ou compteur ne la sépare du transcript. La réponse suit, puis les relances. L’envoi rejoint ce premier tour, en gardant un morceau de la fin du transcript visible lorsque la hauteur le permet. Un long transcript n’est ni tronqué ni replié : il reste accessible au-dessus, dans le même défilement.
 
-### 5.3 Commandes d'en-tête sans collision
+Le bouton d’envoi devient le bouton d’arrêt pendant la réponse. Il n’y a pas de ligne supplémentaire annonçant la génération. Un arrêt ou un échec doit rester explicite pour qu’une réponse partielle ne passe pas pour complète ; ce message terminal se place au niveau de la réponse, pas comme chrome permanent.
 
-Ne pas ajouter deux icônes dans la rangée repliée actuelle. À 320 unités, les mesures géométriques de task-434 lui laissent environ 84 unités de titre ; deux cibles de 48 en mangeraient davantage. **Seconde rangée**, sous Lecture/IA ou Sources/IA : cible textuelle flexible « Discussion ↓ » / « Reprendre lecture ↑ », puis Historique et Nouvelle conversation, chacune 48 minimum. Les autres actions du média/dossier restent dans leur menu actuel.
+## 5. Défilement, clavier et contenus longs
 
-Sur une largeur de 320 avec gouttières 16, deux cibles de 48 et deux espaces de 8, il reste 176 unités à la cible textuelle. Elle peut tenir sur deux lignes et faire croître la rangée avec le Dynamic Type ; le titre principal n'est pas comprimé davantage. La commande de fermeture est dans la zone du composeur déplié, pas une troisième icône ajoutée à la rangée. La rangée existe une seule fois à l'écran, y compris lorsque le segment du média se replie ; les commandes ne sont pas dupliquées dans le corps du fil. Les maquettes montrent l'état replié, pas une promesse d'en-tête natif déjà implémenté.
+Une seule surface verticale contient la source et le fil. Le composeur reste fixé au-dessus du clavier. Le lecteur peut remonter au transcript naturellement ; aucun bouton de reprise de lecture n’est ajouté. Le flux suit le bas seulement tant que l’utilisateur n’a pas remonté volontairement. Les changements de taille des réponses ne doivent pas arracher le passage relu.
 
-### 5.4 Historique et nouvelle conversation
+| Structure possible | Avantage | Coût / limite |
+| --- | --- | --- |
+| Lecteur existant puis fil dans un viewport modal unique | Réutilise sélection, traduction et paragraphes ; source et réponses partagent la largeur | Transcript et réponses rendus intégralement ; pas de promesse de performance sur de très gros contenus |
+| Liste commune par paragraphes/sources/messages | Virtualise les contenus longs | Réécriture du lecteur, mesures de hauteurs variables et sauts hors fenêtre à traiter explicitement |
+| Deux listes verticales imbriquées | Réutilise deux surfaces autonomes | Deux défilements concurrents et continuité perdue ; écartée |
 
-Historique ouvre une **page empilée**, liée au même scope, avec titre, retour et liste paginée existante. Le clavier est fermé avant la navigation. Choisir une conversation revient à Lecture/Sources, déplie le composeur et son fil, puis rejoint son dernier tour sans ouvrir le clavier. Retour sans choix conserve aussi l’état ouvert/replié précédent. Retour sans choix retrouve le même offset et le même brouillon. La suppression garde sa confirmation ; supprimer la conversation active revient à un fil vide sans toucher au transcript ni aux sources.
+La base KISS reste un seul viewport avec les rendus existants. Sur dossier, la liste des sources doit appartenir à la surface du fil, sans sous-liste verticale à défilement indépendant. Un saut au premier échange éloigné doit être borné et annulable ; pas de hauteur de ligne supposée ni de boucle de scroll infinie. La virtualisation constitue une alternative de réalisation, pas une modification du parcours décidé.
 
-« Nouvelle conversation » conserve l'historique précédent et vide seulement le fil actif après confirmation si un brouillon serait perdu. Aucun appel de création avant la première question. Comme aujourd'hui, l'action reste indisponible pendant envoi/génération : proposer l'arrêt explicite, sans confondre nouvelle conversation et annulation. L'historique peut être consulté pendant une génération ; reprendre une autre conversation ne stoppe pas implicitement le travail serveur. La maquette représente ces états, avec données fictives et aucun réseau.
+La page de lecture conserve sa progression ; le modal ne dessine pas une seconde barre de progression de lecture. Les échanges ne doivent pas modifier la progression mémorisée du transcript derrière le modal. Fermer le modal retrouve la page à sa position d’origine et cache tous les échanges, sans effacer la conversation.
 
-### 5.5 Onglet IA, dossier et Digest
+Pour l’app native : un seul propriétaire de l’évitement clavier et de la safe area basse. Le modal doit avoir la même largeur réelle que la route, y compris dans le Digest. Pas de double padding IME/safe area. Les gestes système ferment le clavier ; ils ne changent pas de conversation. Les primitives natives déjà installées restent la première option ; le fichier HTML ne permet pas de départager les animations IME iOS et Android.
 
-IA garde `ArtifactsPanel` et son historique d'artefacts. Le composeur et la seconde rangée de chat disparaissent sur IA ; changer d'onglet ferme le clavier et conserve le brouillon et la session. Le retour à Lecture/Sources retrouve sa position et l’état ouvert/replié précédent, sans refocaliser le champ. Un fil replié demeure invisible même si sa génération se termine pendant la visite de l’onglet IA ; le champ au repos peut signaler qu’une réponse est prête.
+## 6. Conversations passées, nouvelle conversation et accessibilité
 
-Un dossier n'a pas de transcript agrégé à fabriquer pour l'UI : sous-dossiers et médias restent visibles au-dessus du chat. Les citations nommées ouvrent leur média puis le retour retrouve la discussion. Le corpus de la conversation demeure son snapshot actuel ; une liste de sources actualisée n'est pas une promesse que l'ancien fil a été recalculé. Garder les refus typés actuels quand aucun contenu n'est exploitable, quand une limite de corpus est atteinte ou quand le quota manque.
+Conversations passées remplace le corps du modal par la liste d’historique, sans mouvement de feuille ni navigation visible vers la page média. Retour retrouve le fil. Sélectionner une conversation remet la source au début, puis les échanges de cette conversation, sans ouvrir le clavier de force.
 
-Dans le Digest, le clavier ne doit appartenir qu'à la page active. Recommandation : bloquer le swipe horizontal du pager pendant la saisie, puis le réactiver à la fermeture du clavier ; ne jamais bloquer le défilement vertical. En quittant volontairement la page par navigation, sauvegarder le brouillon local, fermer le clavier, détacher seulement le suivi UI ; le serveur continue. Les états de transport restent dans `ChatSessionContext`. La barre d'onglets native du Digest et la safe area de la route média ont des propriétaires distincts : ne jamais ajouter les deux insets à la fois.
+Nouvelle conversation conserve le même contenu source, vide le fil actif et focalise le composeur. La création réseau attend la première question. Pendant l’envoi ou la génération, cette commande reste désactivée ; l’arrêt est explicite. Un brouillon qui serait perdu demande confirmation. Quitter le modal n’interrompt pas le serveur et le brouillon doit survivre à l’historique et à la fermeture/réouverture.
 
-### 5.6 Clavier et accessibilité
+Les deux commandes du haut et l’icône de sortie ont des cibles d’au moins 48 et des libellés accessibles, sans texte permanent de fermeture dans le composeur. À 320, le titre peut être ellipsé ; les boutons gardent leur taille. Le modal isole le focus du contenu derrière lui et le rend au point d’entrée à la fermeture. Les annonces début/fin/échec sont accessibles, sans répéter les tokens et sans ajouter de statut visible de génération. Les nouvelles chaînes de l’app utiliseront les onze catalogues V1.
 
-Base proposée : `KeyboardAvoidingView` iOS autour du viewport et du composeur, décalage mesuré de l'en-tête ; Android conserve `adjustResize` sans ajouter un second padding de hauteur IME. Un seul composant possède la safe area basse et la compensation clavier. `keyboardShouldPersistTaps="handled"` permet d'actionner l'envoi au premier toucher ; dismissal interactif iOS, `on-drag` Android. La version exacte devra être ajustée à la hiérarchie route/Digest, jamais avec un délai arbitraire.
+## 7. Maquettes révisées et revue
 
-Keyboard Controller est une option techniquement crédible, documentée par Expo, mais n'est pas proposée par défaut : ajout de Reanimated et intégration native, alors que le besoin initial est un champ fixe et un seul viewport. Si les primitives installées ne donnent pas le mouvement attendu sur appareil, documenter ce constat avant de choisir cette alternative ; les maquettes web ne permettent pas de la départager.
+Ouvrir [mockups.html](mockups.html). Huit cadres couvrent **média et dossier × avant, ouverture/rédaction, premier échange, historique**. Le premier écran de chaque portée permet de jouer la transition sur place. Les autres rendent directement visibles les états attendus.
 
-Ordre accessible : en-tête, contenu, titre Discussion, questions/réponses, champ. Libellés complets pour les icônes, états désactivé/occupé, cibles 48 minimum, texte secondaire `textSubtle` pour la lisibilité. Annonces à début, fin, interruption ou échec, jamais à chaque token. Un saut explicite déplace le focus vers la cible nommée, sans le voler pendant une relecture. Les nouvelles chaînes passent par les onze catalogues V1 de `packages/core/src/i18n`, et les couleurs passent par le thème actif.
+Manipulations disponibles : entrée dans le modal, saisie sans `maxlength`, envoi avec réponse fictive progressive, arrêt, historique, reprise d’une ancienne conversation, nouveau fil et fermeture par icône. Les options de revue changent thème, largeur 390/320, taille du texte et longueur du contenu. Aucun compteur, bouton de masquage clavier, raccourci lecture, libellé de fermeture ou statut visible de génération n’est ajouté. Toucher le texte ou utiliser Échap ferme le clavier schématique ; la conversation reste ouverte.
 
-## 6. Maquettes et mode de revue
+Le transcript occupe le viewport entier, avec les mêmes gouttières de 16 de part et d’autre avant/après. Les questions restent des bulles ; la source et les réponses restent des blocs de lecture pleine largeur. Les glyphes SVG sont des équivalents de revue, remplacés par les Ionicons existants dans l’app. Aucun service externe ni fonte distante n’est chargé. Ces maquettes ne valident pas les insets, le clavier ou l’accessibilité natifs.
 
-Ouvrir [mockups.html](mockups.html). Huit téléphones couvrent **média et dossier × lecture, rédaction, génération, historique**. Chaque téléphone est manipulable : champ, envoi fictif, arrêt, raccourci Discussion/lecture, historique, reprise d'une conversation, nouvelle conversation et onglet IA. La barre de revue change thème clair/sombre, largeur 390/320 et taille du texte. Le scénario « Contenu long » ajoute des paragraphes ou sources ; la discussion reste à leur suite uniquement dans l’état déplié. Lecture masque entièrement questions/réponses. La commande « Fermer la discussion » permet de vérifier ce retour au contenu seul.
+## 8. Conséquences sur task-434 et TASK-502
 
-Les états rédaction montrent un clavier schématique, pas une simulation des événements IME. Les exemples de questions, de sources et de réponses sont inventés. La vue historique représente une destination empilée, pas une modal. Les glyphes SVG sont des équivalents de revue ; l'app utilisera ses Ionicons. Aucune fonte externe n'est téléchargée : pile système de l'app actuelle, avec les tailles du thème. Les dimensions des téléphones et du clavier sont des cadres de présentation ; couleurs, corps, espacements et cibles de l'UI suivent `theme.ts`.
+La portée de la direction F de task-434 demeure : média depuis Lecture, dossier depuis Sources, jamais bibliothèque. La direction révisée **conserve le modal** et remplace son animation de feuille, son gabarit et son contenu. La première version de ce README recommandait de supprimer la destination modale et d’ajouter une seconde barre de commandes : cette recommandation est remplacée, pas conservée comme variante à implémenter.
 
-Points de revue décisifs : la hauteur perdue par la seconde ligne d'en-tête, le maintien du contexte pendant la rédaction, le saut vers le fil après envoi et le retour au passage lu. Une validation peut demander une autre option ou un complément ; elle ne doit pas être déduite de l'existence de ces maquettes.
+La formule « sans modal » de la description historique de TASK-502 est donc dépassée par la présente précision owner. L’implémentation devra suivre la décision finale de ce README : modal plein écran sans animation d’entrée, transcript/source au début du thread, commandes en haut et composeur simple. Réutiliser transport, reprise, arrêt, Markdown, citations et historique ; supprimer l’ancienne présentation de feuille dans la même passe. Aucune coexistence derrière un flag.
 
-## 7. Conséquences sur task-434 et TASK-502
+La directive owner retire la limite de saisie : les maquettes ne reconduisent aucun plafond arbitraire. L’implémentation vérifiera l’alignement effectif des couches mobile et serveur avec cette décision, sans réintroduire une ancienne limite à partir d’un commentaire ou d’un checkout antérieur. Aucun de ces fichiers applicatifs n’est modifié par la présente révision des maquettes.
 
-La décision F validée dans task-434 reste le document historique autoritaire **jusqu'à la décision de ce benchmark**. Si A est acceptée, elle en conserve la portée (média Lecture, dossier Sources, jamais bibliothèque) et le composeur persistant, mais **remplace la feuille comme destination conversationnelle**. Les anciennes réserves de task-434 sur `NativeTabs.BottomAccessory` ne décrivent pas le dock actuel, qui est déjà un composant d'écran commun iOS/Android.
+Contrôles du futur travail : typecheck/lint mobile et core, traductions et relecture du câblage. Pas de nouveaux tests automatisés. Après distribution, les vérifications appareil restent la checklist owner : entrée sans glissement, largeur identique, clavier iOS/Android, première question après un long transcript, défilement pendant le flux, arrêt/reprise, historique, sortie et Digest. Elles ne constituent pas des ACs dépendant d’un déploiement.
 
-TASK-502 devra supprimer `ChatSheet` et le `Pressable` qui l'invoque, déplacer les responsabilités d'orchestration de `ChatDock` vers le chat intégré, et réutiliser `ChatComposer`, `ChatThread`, `ChatAnswer`, `ChatHistoryList` et `ChatSessionContext`. Les commentaires « histoire dans la feuille », clés de traduction devenues inutiles et imports remplacés sont retirés dans la même passe. Pas de flag d'ancienne UI, pas de deux destinations concurrentes. Les composants de quiz et la génération de quiz ne sont pas concernés.
+## 9. État du livrable
 
-La route d'historique peut prendre scope/scopeId sans nouvelle API. Aucun nouveau stockage de conversation ou dépendance serveur n'est nécessaire. Un brouillon doit survivre à la route d'historique, au changement d'onglet et au pager ; sa durée de vie doit être portée au-dessus de ces montages UI, sans installer un système de stockage persistant supplémentaire.
+Révision demandée directement par l’owner le 12 octobre 2026. `owner_decision` reste `pending` jusqu’à validation des nouvelles maquettes ; TASK-501 reste `To Do` et TASK-502 n’est pas lancée. La recherche précédente est remplacée dans ce README courant et reste consultable dans l’historique git.
 
-Contrôles réalisables depuis la branche : typecheck/lint mobile et core, catalogue complet, relecture des call sites, absence de modal de chat et anciennes clés mortes. **Pas de tests automatisés ajoutés.** Les vérifications natives restent la checklist owner après distribution : clavier iOS/Android, 320 unités et Dynamic Type, longs contenus, saisie depuis le milieu du transcript, arrêt/reprise, navigation historique, citation et retour, IA, pager Digest et lecture pendant le flux. Aucune de ces vérifications ne doit devenir une AC exigeant un déploiement.
+### Vérification de la révision
 
-## 8. État du livrable
-
-Benchmark initial ; décision en attente. La production du README et des maquettes remplit le travail de recherche, mais **ne clôt pas TASK-501**. Selon le cycle de `AGENTS.md`, elle reste `To Do`, exclue des prochains dispatchs tant que `owner_decision: pending` ; TASK-502 reste bloquée. L'owner décide ici, puis le dispatcher synchronise `ok` vers `Done`.
-
-### Vérification du livrable, 12 octobre 2026
-
-Revue manuelle dans Chrome du prototype servi uniquement sur loopback : huit états présents, lecture sans fil pour les deux portées ; fermeture pendant génération puis réouverture sans perte du fil média ; envoi fictif sur dossier, fermeture masquant les échanges avec indication de génération conservée ; ouverture d'historique et sélection d'un ancien fil revenant avec composeur déplié et clavier fermé ; passage à IA sans fil ni composeur. La combinaison thème sombre, largeur 320, texte agrandi et contenu long conserve 35 paragraphes ou 32 sources, sans débordement horizontal des huit cadres. Inspection visuelle en clair et en sombre, et contrôle de syntaxe du JavaScript effectués. Ces observations portent uniquement sur les maquettes, sans test automatisé ajouté ni validation native prétendue.
+Revue manuelle Chrome du 12 octobre 2026 : ouverture depuis le premier média, modal sans animation ni transform, aucun onglet dans le modal, largeur de paragraphe identique avant/après (358 sur un cadre de 390), même alignement horizontal, clavier présent. Envoi fictif : source puis fil directement adjacents dans le même viewport, sans titre intermédiaire. Historique et reprise vérifiés ; saisie de 1 200 caractères acceptée sans attribut `maxlength` ; fermeture retrouvant la lecture sans échanges. Thème sombre, 320 et contenu long inspectés : aucun débordement horizontal des huit cadres, 35 paragraphes conservés dans la conversation média. Contrôle de syntaxe JavaScript et `git diff --check` propres. Aucun test automatisé ajouté ; aucune validation native prétendue.
