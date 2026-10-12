@@ -1,10 +1,9 @@
 /**
  * The question field of the chat sheet.
  *
- * Grows with the text up to four lines, then scrolls inside itself; the counter
- * shows where the question stands against the server's ceiling
- * (`MAX_QUESTION_CHARS`, `core/services/chat_prompt.py`), which the field never
- * lets the user pass. Send and stop are two different buttons, never one that
+ * Grows with the text up to four lines, then scrolls inside itself. Drafts are
+ * never cut: the server checks the question and context budgets at send time.
+ * Send and stop are two different buttons, never one that
  * changes meaning under the thumb: send while nothing is in flight, stop while an
  * answer is being written. Return inserts a line; only the button sends.
  */
@@ -14,10 +13,8 @@ import React, { forwardRef } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
-import { formatNumber, t } from "../../i18n";
+import { t } from "../../i18n";
 
-/** Mirrors the server's ceiling on one question. */
-export const MAX_QUESTION_CHARS = 1_000;
 const LINE_HEIGHT = 22;
 const MAX_LINES = 4;
 
@@ -56,17 +53,10 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(function Ch
           placeholderTextColor={Colors.textMuted}
           multiline
           scrollEnabled
-          maxLength={MAX_QUESTION_CHARS}
           accessibilityLabel={placeholder}
           accessibilityHint={t("chat.composer.hint")}
           testID="chat-composer-input"
         />
-        <Text style={styles.counter} accessibilityElementsHidden importantForAccessibility="no">
-          {t("chat.composer.counter", {
-            count: formatNumber(value.length),
-            max: formatNumber(MAX_QUESTION_CHARS),
-          })}
-        </Text>
       </View>
       {generating ? (
         <Pressable
@@ -113,11 +103,12 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     field: {
       flex: 1,
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
       backgroundColor: Colors.surfaceContainerLow,
       borderRadius: BorderRadius.xl,
       paddingHorizontal: Spacing.md,
-      paddingTop: Spacing.sm,
-      paddingBottom: Spacing.xs,
+      paddingVertical: Spacing.sm,
     },
     input: {
       minHeight: LINE_HEIGHT,
@@ -128,11 +119,6 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       paddingTop: 0,
       paddingBottom: 0,
       textAlignVertical: "top",
-    },
-    counter: {
-      alignSelf: "flex-end",
-      fontSize: Typography.small.fontSize,
-      color: Colors.textMuted,
     },
     send: {
       width: TouchTarget.minimum,
