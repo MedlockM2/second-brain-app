@@ -1,7 +1,7 @@
 ---
 id: TASK-502
 title: Intégrer le chat aux pages selon la décision du benchmark task-501
-status: In Progress
+status: Done
 assignee:
   - codex
 created_date: '2026-10-12 09:42'
@@ -50,6 +50,8 @@ Décision appliquée : Owner Validation de TASK-501, validée le 2026-10-12, qui
 Commandes accessibles de 48 minimum : fermeture, historique, nouvelle conversation create-outline, envoyer/arrêter. Un nouveau fil protège le brouillon par confirmation, avec libellés présents dans les 11 catalogues. Aucune limite ni compteur client ; les garde-fous serveur de TASK-503 sont conservés. Les statuts visibles de génération et les anciens libellés de feuille ont été supprimés ; les annonces accessibles et les états terminaux restent explicites.
 
 Vérification locale : npm run typecheck et npm run lint réussis pour mobile et packages/core ; une alerte any préexistante demeure dans purchaseService.ts, fichier non modifié. git diff --check propre, revue des parcours et des lecteurs de traductions effectuée, aucune nouvelle dépendance ni test automatisé. Aucun secret ajouté. Validation native non prétendue : simctl indisponible sur ce poste. Checklist owner après distribution : média et dossier, Digest, clavier iOS/Android et safe areas, ouverture sans glissement, première question après un long transcript, relecture pendant le flux, arrêt/reprise, historique/nouveau fil, conservation du brouillon et retour à la position/progression de lecture.
+
+Implémentation commitée : dc440af1 (feat(chat): integrate source-first full-screen conversations). Passage à Done après le commit, conformément au dispatch séquentiel demandé. Aucun push ni distribution effectué.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
