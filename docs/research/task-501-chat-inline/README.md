@@ -1,14 +1,18 @@
 ---
-owner_decision: pending
+owner_decision: ok
 ---
 
 # Benchmark : la source comme premier bloc d’une conversation modale
 
 ## Owner Validation
 
-**Decision**: _(à remplir par l’owner après revue des maquettes révisées ; les consignes ci-dessous définissent la direction demandée, sans présumer de la validation du livrable)_
+**Decision**: Direction et [maquettes interactives](mockups.html) validées explicitement par l’owner le 12 octobre 2026. Retenir le modal plein écran qui se substitue visuellement à la page média sur place, sans glissement du bas vers le haut. Au toucher sur « Poser une question sur cette source », les onglets Lecture/IA et les commandes de lecture superflues disparaissent ; conversations passées et nouvelle conversation apparaissent en haut, et le clavier s’ouvre. L’icône de nouvelle conversation est le stylo entrant dans un carré (`create-outline`), conformément à la dernière correction validée.
 
-**Validated at**: _(date ISO à remplir par l’owner)_
+Le transcript intégral conserve sa largeur et ses gouttières et constitue le premier bloc du même fil défilant. La première question apparaît immédiatement après son dernier paragraphe, suivie de la réponse et des relances. Modal fermé, aucun échange n’apparaît sur la page de lecture ; sa position et sa progression sont conservées. Appliquer le même parcours au dossier, avec ses sources au début du fil.
+
+Le composeur n’a ni limite ni compteur de caractères, ni boutons « Masquer le clavier » ou « Reprendre la lecture », ni libellés « Fermer la discussion » ou « Génération en cours ». Conserver l’icône de sortie discrète en haut et le bouton envoyer/arrêter. Réutiliser sessions, historique, flux, reprise, Markdown et citations selon le cadrage ci-dessous. Cette validation clôt le benchmark TASK-501 et débloque son implémentation TASK-502.
+
+**Validated at**: 2026-10-12
 
 ## Direction révisée — consignes owner du 12 octobre 2026
 
@@ -18,7 +22,7 @@ Les corrections owner remplacent la précédente proposition de chat déplié da
 
 Le modal fermé laisse uniquement la page de lecture et son point d’entrée, sans questions/réponses. Son ouverture ne lance aucune requête de génération. La première question, les réponses et les relances appartiennent à une seule surface verticale avec le transcript intégral. Aucun bloc « Discussion » ou état vide ne s’intercale entre le texte et la première question.
 
-**Livrable de cette révision : les [maquettes interactives](mockups.html) et ce cadrage, uniquement.** Aucun code applicatif, quota, modèle ou contrat API n’est modifié. TASK-502 attend toujours la validation du livrable.
+**Livrable de cette révision : les [maquettes interactives](mockups.html) et ce cadrage, uniquement.** Aucun code applicatif, quota, modèle ou contrat API n’est modifié. Direction validée par l’owner le 12 octobre 2026 ; TASK-502 peut appliquer cette décision.
 
 ## 1. Appuis dans l’application et portée
 
@@ -108,7 +112,7 @@ Pour l’app native : un seul propriétaire de l’évitement clavier et de la s
 
 Conversations passées remplace le corps du modal par la liste d’historique, sans mouvement de feuille ni navigation visible vers la page média. Retour retrouve le fil. Sélectionner une conversation remet la source au début, puis les échanges de cette conversation, sans ouvrir le clavier de force.
 
-Nouvelle conversation conserve le même contenu source, vide le fil actif et focalise le composeur. La création réseau attend la première question. Pendant l’envoi ou la génération, cette commande reste désactivée ; l’arrêt est explicite. Un brouillon qui serait perdu demande confirmation. Quitter le modal n’interrompt pas le serveur et le brouillon doit survivre à l’historique et à la fermeture/réouverture.
+L’icône de nouvelle conversation est le stylo entrant dans un carré (`create-outline`), et non un « + ». Nouvelle conversation conserve le même contenu source, vide le fil actif et focalise le composeur. La création réseau attend la première question. Pendant l’envoi ou la génération, cette commande reste désactivée ; l’arrêt est explicite. Un brouillon qui serait perdu demande confirmation. Quitter le modal n’interrompt pas le serveur et le brouillon doit survivre à l’historique et à la fermeture/réouverture.
 
 Les deux commandes du haut et l’icône de sortie ont des cibles d’au moins 48 et des libellés accessibles, sans texte permanent de fermeture dans le composeur. À 320, le titre peut être ellipsé ; les boutons gardent leur taille. Le modal isole le focus du contenu derrière lui et le rend au point d’entrée à la fermeture. Les annonces début/fin/échec sont accessibles, sans répéter les tokens et sans ajouter de statut visible de génération. Les nouvelles chaînes de l’app utiliseront les onze catalogues V1.
 
@@ -132,7 +136,7 @@ Contrôles du futur travail : typecheck/lint mobile et core, traductions et rele
 
 ## 9. État du livrable
 
-Révision demandée directement par l’owner le 12 octobre 2026. `owner_decision` reste `pending` jusqu’à validation des nouvelles maquettes ; TASK-501 reste `To Do` et TASK-502 n’est pas lancée. La recherche précédente est remplacée dans ce README courant et reste consultable dans l’historique git.
+Révision et maquettes validées explicitement par l’owner le 12 octobre 2026, après la correction de l’icône de nouvelle conversation. `owner_decision` vaut `ok` ; TASK-501 passe à `Done` et TASK-502 est débloquée. Son implémentation n’est pas lancée dans cette mise à jour du benchmark. La recherche précédente est remplacée dans ce README courant et reste consultable dans l’historique git.
 
 ### Vérification de la révision
 

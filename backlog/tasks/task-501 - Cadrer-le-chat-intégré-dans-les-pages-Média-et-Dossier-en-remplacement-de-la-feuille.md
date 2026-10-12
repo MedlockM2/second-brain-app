@@ -3,11 +3,11 @@ id: TASK-501
 title: >-
   Cadrer le chat intégré dans les pages Média et Dossier en remplacement de la
   feuille
-status: To Do
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-12 09:41'
-updated_date: '2026-10-12 12:35'
+updated_date: '2026-10-12 12:38'
 labels:
   - benchmark
   - mobile
@@ -54,10 +54,12 @@ La recommandation attend la validation owner : owner_decision reste pending. Ret
 2026-10-12 — Révision demandée par l’owner après revue : modal plein écran conservé, substitué sur place sans mouvement de feuille ; onglets Lecture/IA retirés de ce mode, historique et nouvelle conversation dans l’en-tête, transcript à largeur identique puis première question directement dessous. Retrait du compteur/plafond de saisie et des commandes/libellés supplémentaires autour du composeur.
 mockups.html refait avec huit états interactifs, réponse fictive progressive et historique dans le même modal. README courant réécrit pour remplacer la précédente direction ; la formule historique « sans modal » de TASK-502 n’est plus applicable à la direction demandée.
 Revue manuelle Chrome : largeur du paragraphe 358 avant/après sur cadre 390, modal sans animation ni transform, aucun onglet dans le modal, envoi/historique/reprise/sortie vérifiés, 1 200 caractères acceptés sans maxlength, 320/sombre/contenu long sans débordement horizontal. Syntaxe JS et diff propres. owner_decision reste pending jusqu’à validation des nouvelles maquettes.
+
+2026-10-12 — Validation explicite de l’owner après revue des maquettes et correction de l’icône nouvelle conversation (stylo entrant dans un carré / create-outline). Le README faisant autorité consigne la décision finale, owner_decision: ok et la date de validation. Le livrable a été produit en pending avant cette approbation, conformément au cycle benchmark. TASK-501 est clôturée ; sa dépendante TASK-502 est débloquée, sans lancement de son implémentation dans cette mise à jour.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Maquettes et cadrage révisés suivant les retours owner : modal sur place sans glissement, source pleine largeur au début du fil, commandes de conversation en haut, composeur sans compteur ni libellés superflus. Revue manuelle du prototype effectuée ; validation owner en attente.
+Benchmark et maquettes validés par l’owner le 12 octobre 2026 : modal plein écran sur place sans glissement, transcript/source pleine largeur au début du fil, historique et nouvelle conversation en haut avec icône create-outline, composeur sans limite ni commandes ou statuts superflus. Décision et date consignées dans le README ; TASK-501 Done, TASK-502 débloquée.
 <!-- SECTION:FINAL_SUMMARY:END -->
