@@ -22,17 +22,16 @@
  * of the bar (task-350), so a mount-time read would cost three requests on every
  * cold start, including the ones where the Digest is never opened. Coming back
  * from a carousel is a focus too, so the covers follow what was done there: a
- * media deleted from the carousel is gone from the library page, and its card
- * goes bare. The count does not move — it is the length of the digest, whose
- * list is frozen when the period is first read.
+ * media deleted from the carousel leaves the cached composition and library
+ * page together. The pack's count and covers follow those known removals.
  *
  * A read that fails leaves its part as the previous one knew it — unknown on a
  * first read. Neither pack ever waits on anything: both are drawn and pressable
- * while loading and after a failure, and the carousel a tap opens reads its own
- * period and says so if it cannot. Pull to refresh reads all three again.
+ * while loading and after a failure. The carousel reuses the same cached digest
+ * composition and revalidates it on opening. Pull to refresh reads all three again.
  */
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   RefreshControl,
   ScrollView,
@@ -45,6 +44,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import { DigestService } from "../../../src/services/digestService";
 import { MediaService } from "../../../src/services/mediaService";
+import { useResourceSnapshot } from "../../../src/contexts/ResourceCacheContext";
+import { resourceKeys } from "../../../src/services/resourceCache";
 import { DigestCoverStack } from "../../../src/components/DigestCoverStack";
 import { TAB_BAR_CLEARANCE } from "../../../src/constants/tabBar";
 import { Spacing, Typography, type Theme } from "../../../src/constants/theme";
@@ -53,17 +54,14 @@ import {
   useThemedStyles,
 } from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
-import type { DigestPeriod } from "@media-summarizer/core/types/digest";
-import type { MediaListItem } from "@media-summarizer/core/types/media";
+import type { Digest, DigestPeriod } from "@media-summarizer/core/types/digest";
+import type { ListMediaResponse } from "@media-summarizer/core/types/media";
 
 /** The periods, in the order the screen stacks them. */
 const PERIODS: readonly DigestPeriod[] = ["daily", "weekly"];
 
 /** The largest page `GET /api/media` serves (the server clamps to 100). */
 const LIBRARY_PAGE_SIZE = 100;
-
-/** `null` for a period whose digest has not been read yet. */
-type PeriodMedia = Record<DigestPeriod, readonly string[] | null>;
 
 export default function DigestChoiceScreen(): React.JSX.Element {
   const Colors = useThemeColors();
@@ -73,42 +71,34 @@ export default function DigestChoiceScreen(): React.JSX.Element {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
 
-  const [periodMedia, setPeriodMedia] = useState<PeriodMedia>({
-    daily: null,
-    weekly: null,
-  });
-  const [library, setLibrary] = useState<ReadonlyMap<
-    string,
-    MediaListItem
-  > | null>(null);
+  const daily = useResourceSnapshot<Digest>(resourceKeys.digest("daily"));
+  const weekly = useResourceSnapshot<Digest>(resourceKeys.digest("weekly"));
+  const media = useResourceSnapshot<ListMediaResponse>(
+    resourceKeys.mediaPage({ limit: LIBRARY_PAGE_SIZE }),
+  );
+  const periodMedia = {
+    daily: daily.data?.media_item_ids ?? null,
+    weekly: weekly.data?.media_item_ids ?? null,
+  };
+  const library = useMemo(
+    () =>
+      media.data
+        ? new Map(media.data.items.map((item) => [item.media_item_id, item]))
+        : null,
+    [media.data],
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!isAuthenticated) return;
 
-    // Settled one by one: each read feeds its own part of the screen, and one
-    // that fails must not take the other two down with it.
-    const [daily, weekly, media] = await Promise.allSettled([
+    // Each service publishes its response independently; one failing leaves the
+    // other parts and any previously retained response visible.
+    await Promise.allSettled([
       DigestService.getDailyDigest(),
       DigestService.getWeeklyDigest(),
       MediaService.listMedia({ limit: LIBRARY_PAGE_SIZE }),
     ]);
-
-    setPeriodMedia((current) => ({
-      daily:
-        daily.status === "fulfilled"
-          ? daily.value.media_item_ids
-          : current.daily,
-      weekly:
-        weekly.status === "fulfilled"
-          ? weekly.value.media_item_ids
-          : current.weekly,
-    }));
-    if (media.status === "fulfilled") {
-      setLibrary(
-        new Map(media.value.items.map((item) => [item.media_item_id, item])),
-      );
-    }
   }, [isAuthenticated]);
 
   // Deferred by a tick: a `setState` reached synchronously from an effect

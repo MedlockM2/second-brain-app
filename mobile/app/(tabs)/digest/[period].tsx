@@ -68,8 +68,8 @@
  * Only the current page and its two neighbours. Three pages, so three sets of the
  * artifact/translation/preview polls `CompletedDetailView` runs — the reason the
  * window is closed behind the user rather than left to grow: a period can hold
- * dozens of media. The price is that a page left three or more behind refetches
- * when it comes back, which no single swipe can cause.
+ * dozens of media. A page left three or more behind revalidates when it comes
+ * back, while immediately reusing its retained media resources when available.
  *
  * What a refetch does not bring back is a fresh wait for a translation. Its
  * budget is kept by the carousel (`TranslationBudgets`), not by the page, so a
@@ -81,12 +81,17 @@
  *
  * The `…` menu of a page is the page's own, whole: Move, Rename, Delete. A media
  * deleted here leaves the carousel on the spot, and when it was the last one the
- * screen goes back to the choice. The digest itself is a capture frozen by the
- * server, so the deleted id stays in it; it is kept out of this carousel for as
- * long as the carousel lives, including across a retry.
+ * screen goes back to the choice. The server retains its original capture;
+ * known local deletions are excluded in the session cache, including on revalidation.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -100,10 +105,14 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import { DigestService } from "../../../src/services/digestService";
+import { resourceKeys } from "../../../src/services/resourceCache";
+import { useResourceSnapshot } from "../../../src/contexts/ResourceCacheContext";
+import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
+import { ResourceRefreshNotice } from "../../../src/components/ResourceRefreshNotice";
 import { CompletedDetailView } from "../../../src/components/CompletedDetailView";
 import { MediaDetailHeader } from "../../../src/components/MediaDetailHeader";
 import { PaginationDots } from "../../../src/components/PaginationDots";
@@ -169,9 +178,22 @@ function DigestCarousel({
   const { isAuthenticated } = useAuth();
   const router = useRouter();
 
-  const [digest, setDigest] = useState<Digest | null>(null);
+  const latest = useResourceSnapshot<Digest>(resourceKeys.digest(period));
+  const [captured, setCaptured] = useState<Digest | null>(
+    () => latest.data ?? null,
+  );
+  const retained = useResourceSnapshot<Digest>(
+    resourceKeys.digest(period, captured?.period_key),
+  );
+  const digest = isResourceGone(latest.error)
+    ? null
+    : (captured ?? latest.data ?? null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const error = latest.error
+    ? getFriendlyErrorMessage(latest.error, {
+        fallback: t("digest.loadFailed"),
+      })
+    : null;
   const [activeIndex, setActiveIndex] = useState(0);
   const [deletedIds, setDeletedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -181,46 +203,76 @@ function DigestCarousel({
   const [translationBudgets] = useState(() => new TranslationBudgets());
   const pagerRef = useRef<ScrollView>(null);
 
-  const fetchDigest = useCallback(async () => {
-    if (!isAuthenticated) return;
+  const fetchDigest = useCallback(
+    async (replace = false) => {
+      if (!isAuthenticated) return;
 
-    try {
-      setDigest(
-        period === "daily"
-          ? await DigestService.getDailyDigest()
-          : await DigestService.getWeeklyDigest(),
-      );
-      setError(null);
-    } catch (err: unknown) {
-      setError(
-        getFriendlyErrorMessage(err, { fallback: t("digest.loadFailed") }),
-      );
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [isAuthenticated, period]);
+      try {
+        const response =
+          period === "daily"
+            ? await DigestService.getDailyDigest()
+            : await DigestService.getWeeklyDigest();
+        setCaptured((current) => (!current || replace ? response : current));
+      } catch {
+        // The shared snapshot retains a readable composition on transient errors.
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    [isAuthenticated, period],
+  );
 
-  // Read once, on mount. This screen only mounts when it is opened — unlike the
-  // tab root, which `NativeTabs` mounts on every cold start — and the list of a
-  // period is frozen at capture: reading it again on focus could only reshuffle
-  // the pages under the user's finger. Deferred by a tick, because a `setState`
-  // reached synchronously from an effect cascades a render.
-  useEffect(() => {
-    const timer = setTimeout(() => void fetchDigest(), 0);
-    return () => clearTimeout(timer);
-  }, [fetchDigest]);
+  // Revalidate on focus, while retaining the period and order captured on entry.
+  // A new period updates the shared cache for the next opening, not this pager.
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setTimeout(() => void fetchDigest(), 0);
+      return () => clearTimeout(timer);
+    }, [fetchDigest]),
+  );
 
   const handleRetry = useCallback(() => {
     setIsRefreshing(true);
-    setError(null);
-    void fetchDigest();
+    void fetchDigest(true);
   }, [fetchDigest]);
 
-  const ids = useMemo(
-    () =>
-      (digest?.media_item_ids ?? []).filter((id) => !deletedIds.has(id)),
-    [digest, deletedIds],
-  );
+  const ids = useMemo(() => {
+    const remaining =
+      retained.data && retained.data.period_key === digest?.period_key
+        ? new Set(retained.data.media_item_ids)
+        : null;
+    return (digest?.media_item_ids ?? []).filter(
+      (id) => !deletedIds.has(id) && (!remaining || remaining.has(id)),
+    );
+  }, [digest, deletedIds, retained.data]);
+
+  // A deletion from another page also updates the captured resource. Keep the
+  // same visible media where possible, and realign the native page boundaries.
+  const previousIds = useRef(ids);
+  useEffect(() => {
+    if (previousIds.current === ids) return;
+    const previous = previousIds.current;
+    previousIds.current = ids;
+    if (
+      previous.length === ids.length &&
+      previous.every((id, index) => id === ids[index])
+    )
+      return;
+    const currentId = previous[activeIndex];
+    const remainingIndex = currentId ? ids.indexOf(currentId) : -1;
+    const nextIndex =
+      remainingIndex >= 0
+        ? remainingIndex
+        : Math.max(0, Math.min(activeIndex, ids.length - 1));
+    setActiveIndex(nextIndex);
+    const frame = requestAnimationFrame(() =>
+      pagerRef.current?.scrollTo({
+        x: nextIndex * SCREEN_WIDTH,
+        animated: false,
+      }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [ids, activeIndex]);
 
   // Back to the choice, whether it was the screen this one was pushed from or
   // the anchor a notification put under it. Replaces this screen with the choice
@@ -231,7 +283,9 @@ function DigestCarousel({
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+      const index = Math.round(
+        event.nativeEvent.contentOffset.x / SCREEN_WIDTH,
+      );
       // Clamped: a bounce past the last page, or a scroll event arriving in the
       // same frame as a deletion, must not point outside the period.
       setActiveIndex(Math.max(0, Math.min(index, ids.length - 1)));
@@ -293,7 +347,7 @@ function DigestCarousel({
     );
   }
 
-  if (error) {
+  if (error && !digest) {
     return (
       <>
         <MediaDetailHeader onBack={goToChoice} />
@@ -339,6 +393,7 @@ function DigestCarousel({
     return (
       <>
         <MediaDetailHeader onBack={goToChoice} />
+        <ResourceRefreshNotice error={latest.error} onRetry={handleRetry} />
         {/* Nothing was saved in the period, so the backend wrote no digest for
             it and there is nothing to page through — and no notification was
             sent for it either. Sober, and deliberately without a way out to
@@ -383,6 +438,10 @@ function DigestCarousel({
        there would be nothing for it to fetch: the list of a period is frozen at
        capture and cannot change until the next send. */
     <View style={styles.pagerContainer} collapsable={false}>
+      <ResourceRefreshNotice
+        error={latest.error}
+        onRetry={() => void fetchDigest()}
+      />
       <View style={styles.band}>
         {ids.length > 1 ? (
           <PaginationDots
@@ -500,7 +559,9 @@ function DigestPage({
           // Failed, timed out, or unreachable.
           <>
             <Ionicons
-              name={state === "timeout" ? "time-outline" : "alert-circle-outline"}
+              name={
+                state === "timeout" ? "time-outline" : "alert-circle-outline"
+              }
               size={40}
               color={Colors.textMuted}
             />

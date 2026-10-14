@@ -1,4 +1,5 @@
 import type { ArtifactListResponse } from "@media-summarizer/core/types/artifacts";
+import type { Digest, DigestPeriod } from "@media-summarizer/core/types/digest";
 import {
   ResourceCache,
   ResourceSupersededError,
@@ -18,6 +19,10 @@ interface ResourceSession {
   userId: string | null;
   language: string | null;
   cache: ResourceCache;
+}
+/** Local removals must survive re-reading the server's immutable capture. */
+export interface DigestResource extends Digest {
+  excluded_media_item_ids: string[];
 }
 let session: ResourceSession = {
   userId: null,
@@ -40,6 +45,11 @@ export function resourceSession(): ResourceSession {
   return session;
 }
 export const resourceKeys = {
+  digest: (period: DigestPeriod, periodKey = "latest"): ResourceKey => [
+    "digest",
+    period,
+    periodKey,
+  ],
   mediaWindow: ["media-window"] as ResourceKey,
   historyWindow: (scope: string, id: string): ResourceKey => [
     "chat-history-window",
@@ -131,6 +141,14 @@ export function readResource<T>(
   return owner.cache
     .fetch(key, guard(load), revalidate ? guard(revalidate) : undefined)
     .catch((error) => {
+      if (isResourceGone(error) && key[0] === "digest") {
+        owner.cache.remove(
+          (entry) =>
+            entry[0] === "digest" &&
+            entry[1] === key[1] &&
+            resourceId(entry) !== resourceId(key),
+        );
+      }
       if (isResourceGone(error) && key[0] === "media") {
         removeMedia(owner.cache, String(key[1]), key);
         owner.cache.invalidate((entry) =>
@@ -177,6 +195,7 @@ const mediaFamilies = (key: ResourceKey) =>
     "folders",
     "chat-history",
     "chat-history-window",
+    "digest",
   ].includes(String(key[0]));
 export function mediaSaved(cache = session.cache): void {
   cache.invalidate(mediaFamilies);
@@ -238,6 +257,20 @@ function removeMedia(
   id: string,
   keep?: ResourceKey,
 ): void {
+  cache.update(
+    (key) => key[0] === "digest",
+    (data) => {
+      const digest = data as DigestResource;
+      if (!digest.media_item_ids.includes(id)) return digest;
+      return {
+        ...digest,
+        media_item_ids: digest.media_item_ids.filter(
+          (mediaId) => mediaId !== id,
+        ),
+        excluded_media_item_ids: [...digest.excluded_media_item_ids, id],
+      };
+    },
+  );
   cache.update(
     (key) => key[0] === "media-page" || key[0] === "media-window",
     (data) => {

@@ -38,6 +38,7 @@ lisible pendant son utilisation, puis est évincée à sa fermeture. Une ressour
 | Liste d'artefacts | Scope, identifiant, langue, taille, curseur |
 | Page d'historique du chat | Scope, identifiant, taille, curseur |
 | Fenêtre d'historique du chat | Scope, identifiant, pages déjà parcourues |
+| Composition du Digest | Daily/weekly, dernière réponse et période capturée (`period_key`) |
 
 Chaque appel de lecture demande réellement le réseau. Les appels simultanés de
 la même ressource partagent la requête en cours. Les fenêtres paginées sont
@@ -72,7 +73,15 @@ une liste éventuellement retardée conserve les entrées en cours déjà connue
 Le Digest conserve sa fenêtre de montage d'une page de chaque côté et sa
 composition capturée à l'ouverture. Les pages remontées retrouvent le détail,
 les textes et les artefacts dans les mêmes ressources que le lecteur. Le cache
-ne change pas l'ordre du carrousel. Le contrôleur de chat conserve les messages
+ne change pas l'ordre du carrousel. Depuis task-507, sa composition est également
+partagée entre l'onglet et le lecteur : le lecteur démarre sur la réponse déjà
+obtenue par l'onglet, y compris lorsqu'elle est vide. Une nouvelle période reçue
+pendant la lecture est conservée pour l'ouverture suivante. Les suppressions
+connues sont retenues avec chaque composition : le serveur conserve sa capture
+d'origine, mais la revalidation ne doit pas y réintroduire un média supprimé
+localement. Ces informations suivent les mêmes limites LRU que les réponses.
+Un premier détail média jamais consulté conserve son propre chargement ; une
+couverture ne constitue pas un détail complet. Le contrôleur de chat conserve les messages
 et le streaming ; seul l'historique des conversations rejoint le cache commun.
 Le sélecteur de dossiers de la revue « À trier » partage également la liste des
 dossiers, sans modifier l'ordre figé de sa file de tri.
@@ -94,6 +103,10 @@ Validation native à réaliser **après distribution interne** :
 - Parcourir plusieurs pages de bibliothèque et d'historique, fermer puis rouvrir.
 - Éloigner une page Digest au-delà de sa fenêtre de montage puis la retrouver ;
   vérifier son contenu, l'ordre du carrousel et la poursuite d'une traduction.
+- Ouvrir un Digest depuis l'onglet, fermer puis rouvrir : sa composition doit
+  apparaître immédiatement. Refaire hors réseau et avec un Digest vide ; vérifier
+  qu'un changement de période pendant la lecture ne remplace pas le carrousel,
+  et qu'une suppression suivie d'une actualisation ne restaure pas le média.
 - Poursuivre un traitement, une génération ou un flux de chat pendant les
   allers-retours ; le cache ne doit pas annoncer prématurément leur achèvement.
 - Changer de langue pendant une lecture en cours et vérifier l'isolation des
