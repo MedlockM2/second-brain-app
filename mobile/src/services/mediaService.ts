@@ -127,11 +127,13 @@ export class MediaService {
    * 20 when it is left out.
    */
   static async listMedia(
-    options: { limit?: number } = {},
+    options: { limit?: number; cursor?: string | null } = {},
   ): Promise<ListMediaResponse> {
-    const query =
-      options.limit !== undefined ? `?limit=${String(options.limit)}` : "";
-    return apiRequest<ListMediaResponse>(`/api/media${query}`, {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.cursor) params.set("cursor", options.cursor);
+    const query = params.toString();
+    return apiRequest<ListMediaResponse>(`/api/media${query ? `?${query}` : ""}`, {
       method: "GET",
     });
   }

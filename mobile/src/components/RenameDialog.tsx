@@ -2,7 +2,8 @@
  * Where a rename is typed: one field, prefilled with the name the thing has now,
  * and the two answers a naming prompt can get.
  *
- * A centred dialog rather than a full screen. A rename is a one-field edit
+ * A dialog anchored below the safe area, independent of keyboard animation.
+ * A rename is a one-field edit
  * reached from a context menu, and pushing a route for it would take the user
  * away from the list they were filing — the list stays visible behind the scrim,
  * which is what makes the new name land somewhere recognisable.
@@ -20,9 +21,8 @@
 
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
+  ScrollView,
   Pressable,
   StyleSheet,
   Text,
@@ -38,6 +38,7 @@ import {
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export interface RenameDialogProps {
   visible: boolean;
@@ -88,6 +89,7 @@ export function RenameDialog({
 }: RenameDialogProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
   const trimmed = value.trim();
   const canSubmit = trimmed.length > 0 && !isSaving;
 
@@ -100,11 +102,20 @@ export function RenameDialog({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="none"
       statusBarTranslucent
       onRequestClose={isSaving ? undefined : onClose}
     >
       <View style={styles.root}>
+        <ScrollView
+          style={styles.form}
+          contentContainerStyle={[
+            styles.formContent,
+            { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.lg },
+          ]}
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Scrim. The design system has no scrim token, so this is textMain at
             35% — the only literal colour in this file, kept in sync with the
             context menu. */}
@@ -116,11 +127,6 @@ export function RenameDialog({
           accessibilityRole="button"
         />
 
-        <KeyboardAvoidingView
-          style={styles.centering}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          pointerEvents="box-none"
-        >
           <View style={styles.card} testID={`${testIDPrefix}-dialog`}>
             <Text style={styles.title}>{heading}</Text>
 
@@ -182,7 +188,7 @@ export function RenameDialog({
               </Pressable>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -197,11 +203,8 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: Colors.scrim,
     },
-    centering: {
-      flex: 1,
-      justifyContent: "center",
-      paddingHorizontal: Spacing.lg,
-    },
+    form: { flex: 1 },
+    formContent: { flexGrow: 1, paddingHorizontal: Spacing.lg },
     card: {
       backgroundColor: Colors.surface,
       borderRadius: BorderRadius.xl,

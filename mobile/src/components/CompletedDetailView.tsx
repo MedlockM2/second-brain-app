@@ -32,6 +32,7 @@
  * the URL segment.
  */
 
+import { useRecoverableImage } from "../hooks/useRecoverableImage";
 import React, {
   useCallback,
   useEffect,
@@ -1022,26 +1023,20 @@ export function CompletedDetailView({
 
   // --- The cover ---
   //
-  // The one image of the detail contract. A failure is kept per item rather than
-  // as a flag: the route can hand this instance another media, and a picture
-  // that would not load for the previous one must not hide the next one's.
-  const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
+  // A failed URL can recover after a new snapshot, focus or foreground event.
   const coverUrl = media_item.media_image?.trim() ?? "";
+  const coverImage = useRecoverableImage(coverUrl, media_item.media_item_id, media_item);
   const cover = useMemo<MediaCover | null>(
-    () =>
-      coverUrl && failedCoverId !== media_item.media_item_id
-        ? {
-            uri: coverUrl,
-            cacheKey: `${media_item.media_item_id}:${media_item.updated_at}`,
-            recyclingKey: media_item.media_item_id,
-          }
-        : null,
-    [coverUrl, failedCoverId, media_item.media_item_id, media_item.updated_at],
+    () => coverImage.showImage
+      ? {
+          uri: coverUrl,
+          cacheKey: `${media_item.media_item_id}:${media_item.updated_at}`,
+          recyclingKey: `${media_item.media_item_id}:${coverImage.attempt}`,
+        }
+      : null,
+    [coverUrl, coverImage.showImage, coverImage.attempt, media_item.media_item_id, media_item.updated_at],
   );
-  const handleCoverError = useCallback(
-    () => setFailedCoverId(media_item.media_item_id),
-    [media_item.media_item_id],
-  );
+  const handleCoverError = coverImage.onError;
 
   // Over a picture, the eyebrow names who published it; the picture says the
   // rest. Without one, the glyph standing in for it is decorative, so the type
@@ -1318,10 +1313,12 @@ export function CompletedDetailView({
           anchored under the page, so the transcript scrolls above it. On the
           route the safe area is below it; in the Digest the tab bar is. */}
       {activeTab === "reader" ? (
-        <ChatDock
+        <ChatDock key={media_item.media_item_id}
           scope="media"
           scopeId={media_item.media_item_id}
           title={displayTitle}
+          imageUrl={coverUrl}
+          mediaTypeIcon={mediaTypeIcon}
           sourceContent={<View style={styles.chatSource}>{transcript}</View>}
           getSourceOffset={() => Math.max(0, readerScrollOffset.current - readerContentTop.current - transcriptTop.current)}
           bottomInset={underStatusBar ? insets.bottom : 0}

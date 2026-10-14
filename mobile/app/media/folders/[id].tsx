@@ -188,17 +188,21 @@ export default function FolderDetailScreen() {
   // and the `is_default` flag that decides whether the menu exists at all.
   const [folder, setFolder] = useState<FolderNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadedFolderId, setLoadedFolderId] = useState<string | null>(null);
+  const loadRequest = useRef(0);
+  const hasContent = loadedFolderId === folderId;
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!isAuthenticated || !folderId) return;
-    setError(null);
+    const request = ++loadRequest.current;
     try {
       const [folders, folderMedia] = await Promise.all([
         OrganizationService.getUserFolders(),
         OrganizationService.getFolderMedia(folderId),
       ]);
 
+      if (request !== loadRequest.current) return;
       // Direct children = folders whose parent is this folder.
       const { nodeById } = buildFolderTree(folders);
       const current = nodeById.get(folderId);
@@ -217,7 +221,10 @@ export default function FolderDetailScreen() {
       }
 
       setFolderMedia(folderMedia);
+      setLoadedFolderId(folderId);
+      setError(null);
     } catch (err) {
+      if (request !== loadRequest.current) return;
       setError(
         getFriendlyErrorMessage(err, {
           fallback: t("folder.loadFailed"),
@@ -235,6 +242,7 @@ export default function FolderDetailScreen() {
       });
       return () => {
         active = false;
+        loadRequest.current += 1;
       };
     }, [load]),
   );
@@ -292,8 +300,10 @@ export default function FolderDetailScreen() {
    */
   const refreshMedia = useCallback(async () => {
     if (!isAuthenticated || !folderId) return;
+    const request = ++loadRequest.current;
     try {
-      setFolderMedia(await OrganizationService.getFolderMedia(folderId));
+      const media = await OrganizationService.getFolderMedia(folderId);
+      if (request === loadRequest.current) setFolderMedia(media);
     } catch {
       // Deliberately silent, see above.
     }
@@ -331,6 +341,7 @@ export default function FolderDetailScreen() {
   // Removed from the whole response, not only from the list: a deleted media
   // also leaves the scope a generation over this folder would read.
   const handleMediaDeleted = useCallback((mediaItemId: string) => {
+    loadRequest.current += 1;
     setFolderMedia((current) =>
       current.filter((item) => item.media_item_id !== mediaItemId),
     );
@@ -340,6 +351,7 @@ export default function FolderDetailScreen() {
   // stored title, and the card has to carry it before the user leaves the screen.
   const handleMediaRenamed = useCallback(
     (mediaItemId: string, title: string) => {
+      loadRequest.current += 1;
       setFolderMedia((current) =>
         current.map((item) =>
           item.media_item_id === mediaItemId ? { ...item, title } : item,
@@ -500,12 +512,17 @@ export default function FolderDetailScreen() {
         />
       </View>
 
-      {isLoading ? (
+      {error && hasContent ? (
+        <Pressable onPress={handleRetry} accessibilityRole="button" style={styles.tabsContainer}>
+          <Text style={styles.centeredText}>{error} · {t("common.retry")}</Text>
+        </Pressable>
+      ) : null}
+      {isLoading && !hasContent ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
           <Text style={styles.centeredText}>{t("common.loading")}</Text>
         </View>
-      ) : error ? (
+      ) : error && !hasContent ? (
         <View style={styles.centered}>
           <Ionicons
             name="cloud-offline-outline"
@@ -551,8 +568,8 @@ export default function FolderDetailScreen() {
       {/* The chat composer, on the Sources tab only (owner decision of
           task-434), under the list. The SafeAreaView already keeps the bottom
           inset. */}
-      {!isLoading && !error && activeTab === "sources" && folderId ? (
-        <ChatDock
+      {hasContent && activeTab === "sources" && folderId ? (
+        <ChatDock key={folderId}
           scope="folder"
           scopeId={folderId}
           title={title}

@@ -4,6 +4,8 @@
  * conversation scrolling never changes its reading position or progression.
  */
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useRecoverableImage } from "../../hooks/useRecoverableImage";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -65,7 +67,13 @@ export interface ChatConversationModalProps {
   onRefusalAction: (action: NonNullable<ChatRefusal["action"]>) => void;
   onNewConversation: () => void;
   sourceContent: React.ReactNode;
-  initialSourceOffset: number;
+  initialOffset: number;
+  onSaveOffset: (offset: number) => void;
+  scrollTarget: "offset" | "bottom";
+  focusOnOpen: boolean;
+  scope: "media" | "folder";
+  imageUrl?: string | null;
+  mediaTypeIcon?: React.ComponentProps<typeof Ionicons>["name"];
   resetKey: number;
   /** The past conversations of the scope replace the thread while open (task-469). */
   historyOpen: boolean;
@@ -85,12 +93,25 @@ export function ChatConversationModal(
   const scrollRef = useRef<ScrollView>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const focusRequested = useRef(false);
-  const followBottom = useRef(false);
-  const savedOffset = useRef(props.initialSourceOffset);
-  const restoreOffset = useRef<number | null>(props.initialSourceOffset);
+  const followBottom = useRef(props.scrollTarget === "bottom");
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const image = useRecoverableImage(props.imageUrl?.trim() ?? "", props.title);
+  const pendingBottom = useRef(props.scrollTarget === "bottom");
+  const userScrolling = useRef(false);
+  const leavingForSource = useRef(false);
+  const savedOffset = useRef(props.initialOffset);
+  const restoreOffset = useRef<number | null>(props.scrollTarget === "bottom" ? null : props.initialOffset);
   const previousResetKey = useRef(props.resetKey);
   const scrollSize = useRef({ content: 0, viewport: 0 });
   const previousHistory = useRef(props.historyOpen);
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (active) setReduceMotion(value); });
+    const listener = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => { active = false; listener.remove(); };
+  }, []);
 
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () =>
@@ -109,7 +130,9 @@ export function ChatConversationModal(
     // History and conversation use distinct native scroll views. Wait for both
     // fresh dimensions before restoring; the previous view's height can clamp
     // the requested source offset to zero before its content has been laid out.
-    scrollSize.current = { content: 0, viewport: 0 };
+    if (previousHistory.current !== props.historyOpen || previousResetKey.current !== props.resetKey) {
+      scrollSize.current = { content: 0, viewport: 0 };
+    }
     if (props.historyOpen) {
       Keyboard.dismiss();
     }
@@ -119,32 +142,41 @@ export function ChatConversationModal(
     previousHistory.current = props.historyOpen;
     if (previousResetKey.current !== props.resetKey) {
       savedOffset.current = 0;
-      restoreOffset.current = 0;
-      followBottom.current = false;
+      pendingBottom.current = props.scrollTarget === "bottom";
+      restoreOffset.current = pendingBottom.current ? null : props.initialOffset;
+      followBottom.current = pendingBottom.current;
       previousResetKey.current = props.resetKey;
     }
     if (!props.historyOpen && focusRequested.current) {
       focusRequested.current = false;
       inputRef.current?.focus();
     }
-  }, [props.historyOpen, props.resetKey]);
+  }, [props.historyOpen, props.resetKey, props.scrollTarget, props.initialOffset]);
 
   const restoreOrFollow = () => {
     if (
-      props.historyOpen ||
+      props.historyOpen || leavingForSource.current ||
       !scrollSize.current.content ||
       !scrollSize.current.viewport
     )
       return;
-    if (restoreOffset.current !== null) {
-      scrollRef.current?.scrollTo({
-        y: restoreOffset.current,
-        animated: false,
-      });
+    const maxOffset = Math.max(0, scrollSize.current.content - scrollSize.current.viewport);
+    if (pendingBottom.current) {
+      pendingBottom.current = false;
+      restoreOffset.current = null;
+      followBottom.current = true;
+      savedOffset.current = maxOffset;
+      scrollRef.current?.scrollToEnd({ animated: false });
+    } else if (restoreOffset.current !== null) {
+      savedOffset.current = Math.min(maxOffset, Math.max(0, restoreOffset.current));
+      scrollRef.current?.scrollTo({ y: savedOffset.current, animated: false });
       restoreOffset.current = null;
     } else if (followBottom.current) {
+      savedOffset.current = maxOffset;
       scrollRef.current?.scrollToEnd({ animated: false });
     }
+    props.onSaveOffset(savedOffset.current);
+    setAwayFromBottom(maxOffset - savedOffset.current > TouchTarget.minimum);
   };
 
   const startNew = () => {
@@ -195,7 +227,7 @@ export function ChatConversationModal(
       onShow={() => {
         const node = findNodeHandle(titleRef.current);
         if (node) AccessibilityInfo.setAccessibilityFocus(node);
-        inputRef.current?.focus();
+        if (props.focusOnOpen && !props.historyOpen) inputRef.current?.focus();
         restoreOrFollow();
       }}
       onRequestClose={props.onClose}
@@ -224,7 +256,7 @@ export function ChatConversationModal(
             accessibilityLabel={t("chat.conversation.closeA11y")}
             testID="chat-conversation-close"
           >
-            <Ionicons name="close" size={22} color={Colors.textMain} />
+            <Ionicons name="close" size={26} color={Colors.textMain} />
           </Pressable>
           {props.historyOpen ? (
             <Pressable
@@ -237,14 +269,26 @@ export function ChatConversationModal(
               accessibilityLabel={t("chat.history.back")}
               testID="chat-history-back"
             >
-              <Ionicons name="arrow-back" size={22} color={Colors.textMain} />
+              <Ionicons name="arrow-back" size={26} color={Colors.textMain} />
             </Pressable>
+          ) : null}
+          {!props.historyOpen ? (
+            <View style={styles.identity} accessible={false}>
+              {props.scope === "media" && image.showImage ? (
+                <Image key={image.attempt} source={{ uri: props.imageUrl! }}
+                  style={styles.thumbnail} contentFit="cover" cachePolicy="memory-disk"
+                  onError={image.onError} accessible={false} />
+              ) : (
+                <Ionicons name={props.scope === "folder" ? "folder" : props.mediaTypeIcon ?? "document-text-outline"}
+                  size={24} color={Colors.textMain} />
+              )}
+            </View>
           ) : null}
           <Text
             ref={titleRef}
             style={styles.title}
             accessibilityRole="header"
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {props.historyOpen ? t("chat.history.title") : props.title}
           </Text>
@@ -259,7 +303,7 @@ export function ChatConversationModal(
               accessibilityLabel={t("chat.history.open")}
               testID="chat-conversation-history"
             >
-              <Ionicons name="time-outline" size={22} color={Colors.textMain} />
+              <Ionicons name="time-outline" size={26} color={Colors.textMain} />
             </Pressable>
           ) : null}
           <Pressable
@@ -275,10 +319,11 @@ export function ChatConversationModal(
             accessibilityLabel={t("chat.conversation.newConversation")}
             testID="chat-conversation-new"
           >
-            <Ionicons name="create-outline" size={22} color={Colors.textMain} />
+            <Ionicons name="create-outline" size={26} color={Colors.textMain} />
           </Pressable>
         </View>
 
+        <View style={styles.scrollArea}>
         <ScrollView
           key={props.historyOpen ? "history" : `conversation-${props.resetKey}`}
           ref={scrollRef}
@@ -290,17 +335,24 @@ export function ChatConversationModal(
           }
           scrollEventThrottle={16}
           onScrollBeginDrag={() => {
+            userScrolling.current = true;
             followBottom.current = false;
+            pendingBottom.current = false;
             restoreOffset.current = null;
           }}
+          onScrollEndDrag={() => { userScrolling.current = false; }}
+          onMomentumScrollBegin={() => { userScrolling.current = true; }}
+          onMomentumScrollEnd={() => { userScrolling.current = false; }}
           onScroll={(event) => {
-            if (props.historyOpen) return;
+            if (props.historyOpen || leavingForSource.current) return;
             const { contentOffset, contentSize, layoutMeasurement } =
               event.nativeEvent;
-            savedOffset.current = contentOffset.y;
-            followBottom.current =
-              contentSize.height - layoutMeasurement.height - contentOffset.y <=
-              TouchTarget.minimum;
+            if (restoreOffset.current !== null || pendingBottom.current) return;
+            savedOffset.current = Math.max(0, contentOffset.y);
+            props.onSaveOffset(savedOffset.current);
+            const nearBottom = contentSize.height - layoutMeasurement.height - contentOffset.y <= TouchTarget.minimum;
+            setAwayFromBottom(!nearBottom);
+            if (userScrolling.current || nearBottom) followBottom.current = nearBottom;
           }}
           onContentSizeChange={(_width, height) => {
             scrollSize.current.content = height;
@@ -324,18 +376,38 @@ export function ChatConversationModal(
                   live={props.live}
                   waiting={props.waiting}
                   onRetry={(question) => {
+                    userScrolling.current = false;
                     followBottom.current = true;
                     restoreOffset.current = null;
                     props.onRetry(question);
                   }}
                   retryDisabled={props.generating || props.sending}
                   showSources={props.showSources}
-                  onOpenSource={props.onOpenSource}
+                  onOpenSource={(source) => {
+                    leavingForSource.current = true;
+                    followBottom.current = false;
+                    props.onSaveOffset(savedOffset.current);
+                    props.onOpenSource(source);
+                  }}
                 />
               </View>
             </>
           )}
         </ScrollView>
+        {!props.historyOpen && awayFromBottom && (props.messages.length > 0 || props.live) ? (
+          <Pressable style={({ pressed }) => [styles.jumpBottom, pressed && styles.pressed]}
+            accessibilityRole="button" accessibilityLabel={t("chat.conversation.jumpToBottom")}
+            onPress={() => {
+              userScrolling.current = false;
+              pendingBottom.current = false;
+              restoreOffset.current = null;
+              followBottom.current = true;
+              scrollRef.current?.scrollToEnd({ animated: !reduceMotion });
+            }}>
+            <Ionicons name="arrow-down" size={24} color={Colors.textMain} />
+          </Pressable>
+        ) : null}
+        </View>
 
         {!props.historyOpen && props.refusal ? (
           <View
@@ -382,6 +454,7 @@ export function ChatConversationModal(
               onChangeText={props.onChangeDraft}
               placeholder={props.placeholder}
               onSend={() => {
+                userScrolling.current = false;
                 restoreOffset.current = null;
                 followBottom.current = true;
                 props.onSend();
@@ -404,8 +477,11 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
     },
-    title: { flex: 1, ...Typography.label, color: Colors.textMain },
+    title: { flex: 1, fontSize: 18, fontWeight: Typography.headline.fontWeight, color: Colors.textMain },
+    identity: { width: 32, marginEnd: Spacing.sm, alignItems: "center" },
+    thumbnail: { width: 32, height: 32, borderRadius: BorderRadius.sm },
     headerButton: {
       width: TouchTarget.minimum,
       height: TouchTarget.minimum,
@@ -415,7 +491,14 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     pressed: { backgroundColor: Colors.surfaceContainerLow },
     disabled: { opacity: 0.4 },
+    scrollArea: { flex: 1 },
     scroll: { flex: 1 },
+    jumpBottom: {
+      position: "absolute", bottom: Spacing.sm, alignSelf: "center",
+      width: TouchTarget.minimum, height: TouchTarget.minimum,
+      borderRadius: BorderRadius.full, alignItems: "center", justifyContent: "center",
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
     scrollContent: { paddingTop: Spacing.sm, paddingBottom: Spacing.lg },
     gutter: { paddingHorizontal: Spacing.lg },
     exchanges: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },

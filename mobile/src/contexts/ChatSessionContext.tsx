@@ -48,7 +48,7 @@ export interface ChatSession {
 
 interface ChatSessionContextValue {
   sessions: ReadonlyMap<string, ChatSession>;
-  selectConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<void>;
+  selectConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<boolean>;
   /** Resolves at acceptance, never waits for generation; false on failure or a superseded send. */
   sendQuestion: (scope: ChatScope, scopeId: string, question: string) => Promise<boolean>;
   stopGeneration: (scope: ChatScope, scopeId: string) => Promise<void>;
@@ -342,15 +342,17 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       update(scope, scopeId, { phase: "sending" });
       try {
         const detail = await ChatService.getConversation(conversationId);
-        if (!isCurrent(key, entry, epoch)) return;
+        if (!isCurrent(key, entry, epoch)) return false;
         update(scope, scopeId, {
           conversation: detail,
           generation: detail.active_generation ?? null,
           phase: detail.active_generation ? "streaming" : "idle",
         });
         if (detail.active_generation) void followRef.current(scope, scopeId);
+        return true;
       } catch (error) {
         if (isCurrent(key, entry, epoch)) update(scope, scopeId, { phase: "idle", error });
+        return false;
       }
     },
     [isCurrent, reset, update],

@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from "react";
+import { useRecoverableImage } from "../hooks/useRecoverableImage";
+import React, { useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -216,7 +217,7 @@ export function MediaListCard<T extends MediaCardItem>({
   // Keyed by media id rather than a bare boolean: a `FlatList` cell can be
   // handed a different item, and a failure recorded for the previous one must
   // not hide the new one's cover.
-  const [failedCoverId, setFailedCoverId] = useState<string | null>(null);
+
 
   const sourceUrl = item.source_url ?? "";
 
@@ -242,10 +243,11 @@ export function MediaListCard<T extends MediaCardItem>({
   const creator = item.creator_name?.trim() ?? "";
 
   const coverUrl = item.media_image?.trim() ?? "";
-  const showCover = coverUrl.length > 0 && failedCoverId !== item.media_item_id;
+  const image = useRecoverableImage(coverUrl, item.media_item_id, item);
+  const showCover = image.showImage;
 
   // Which end of the import lifecycle the row is at, if either. `failed` here is
-  // the *import* — not to be confused with `failedCoverId` above, which is one
+  // the *import* — not to be confused with the cover request above, which is one
   // picture that would not load on an otherwise healthy item.
   const marker = mediaStatusMarker(item.status);
   const importFailed = marker === "failed";
@@ -333,7 +335,8 @@ export function MediaListCard<T extends MediaCardItem>({
               transition={150}
               priority="low"
               style={styles.cover}
-              onError={() => setFailedCoverId(item.media_item_id)}
+              onError={image.onError}
+              key={image.attempt}
               accessible={false}
             />
           ) : (

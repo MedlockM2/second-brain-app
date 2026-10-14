@@ -45,6 +45,7 @@
  * (large Dynamic Type) makes the screen scroll rather than clip.
  */
 
+import { useRecoverableImage } from "../hooks/useRecoverableImage";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   I18nManager,
@@ -114,7 +115,7 @@ const POSES: readonly {
 ];
 
 type CardFace =
-  | { kind: "cover"; mediaItemId: string; cover: MediaCover }
+  | { kind: "cover"; mediaItemId: string; cover: MediaCover; icon: IoniconName }
   | { kind: "glyph"; icon: IoniconName }
   | { kind: "blank" };
 
@@ -150,17 +151,6 @@ export function DigestCoverStack({
   testID,
 }: DigestCoverStackProps): React.JSX.Element {
   const styles = useThemedStyles(makeStyles);
-  // Kept per media, not as one flag: a refetch can reorder the covers, and a
-  // picture that would not load must not take another media's with it.
-  const [failedCoverIds, setFailedCoverIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const handleCoverError = useCallback((mediaItemId: string) => {
-    setFailedCoverIds((current) =>
-      current.has(mediaItemId) ? current : new Set(current).add(mediaItemId),
-    );
-  }, []);
-
   const faces = useMemo<CardFace[]>(
     () =>
       Array.from({ length: PACK_SIZE }, (_, index): CardFace => {
@@ -169,10 +159,11 @@ export function DigestCoverStack({
         if (!mediaItemId || !item) return { kind: "blank" };
 
         const uri = item.media_image?.trim() ?? "";
-        if (uri && !failedCoverIds.has(mediaItemId)) {
+        if (uri) {
           return {
             kind: "cover",
             mediaItemId,
+            icon: getMediaTypeIcon((item.media_type ?? "unknown") as MediaType),
             cover: {
               uri,
               cacheKey: `${mediaItemId}:${item.updated_at}`,
@@ -185,7 +176,7 @@ export function DigestCoverStack({
           icon: getMediaTypeIcon((item.media_type ?? "unknown") as MediaType),
         };
       }),
-    [mediaItemIds, library, failedCoverIds],
+    [mediaItemIds, library],
   );
 
   const [packSize, setPackSize] = useState<{
@@ -258,7 +249,6 @@ export function DigestCoverStack({
               <CardFaceView
                 face={faces[index]}
                 isFront={index === 0}
-                onCoverError={handleCoverError}
               />
               {index === 0 ? (
                 <GlassSurface style={styles.caption}>
@@ -287,28 +277,32 @@ export function DigestCoverStack({
 function CardFaceView({
   face,
   isFront,
-  onCoverError,
 }: {
   face: CardFace;
   isFront: boolean;
-  onCoverError: (mediaItemId: string) => void;
 }): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  if (face.kind === "cover") {
+  const image = useRecoverableImage(
+    face.kind === "cover" ? face.cover.uri : "",
+    face.kind === "cover" ? face.mediaItemId : "",
+    face,
+  );
+  if (face.kind === "cover" && image.showImage) {
     // The tone is what a loading picture shows: the frame, bare.
     return (
       <View style={[styles.face, styles.faceTonal]}>
         <MediaCoverImage
           cover={face.cover}
-          onError={() => onCoverError(face.mediaItemId)}
+          key={image.attempt}
+          onError={image.onError}
           style={StyleSheet.absoluteFill}
         />
       </View>
     );
   }
 
-  if (face.kind === "glyph") {
+  if (face.kind === "glyph" || face.kind === "cover") {
     return (
       <View style={[styles.face, styles.faceTonal]}>
         <Ionicons name={face.icon} size={GLYPH_SIZE} color={Colors.textMuted} />

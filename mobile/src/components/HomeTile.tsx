@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useRecoverableImage } from "../hooks/useRecoverableImage";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -203,23 +204,21 @@ function TileCover({
 }): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  // Keyed by tile id rather than a bare boolean: a horizontal `FlatList` cell is
-  // recycled, and a failure recorded for the previous tile must not hide the
-  // next one's cover.
-  const [failedId, setFailedId] = useState<string | null>(null);
+  const uri = item.kind === "media" ? item.imageUrl?.trim() ?? "" : "";
+  const image = useRecoverableImage(uri, item.id, item);
 
   if (item.kind === "folder") {
     return <FolderMosaic item={item} />;
   }
 
-  const uri = item.imageUrl?.trim() ?? "";
-  const showCover = uri.length > 0 && failedId !== item.id;
+  const showCover = image.showImage;
   const marker = tileStatusMarker(item);
 
   return (
     <View style={styles.cover}>
       {showCover ? (
         <Image
+          key={image.attempt}
           source={{ uri, cacheKey: item.cacheKey }}
           recyclingKey={item.id}
           cachePolicy="memory-disk"
@@ -227,7 +226,7 @@ function TileCover({
           transition={150}
           priority="low"
           style={styles.coverImage}
-          onError={() => setFailedId(item.id)}
+          onError={image.onError}
           accessible={false}
         />
       ) : (

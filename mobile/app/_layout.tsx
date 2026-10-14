@@ -249,12 +249,6 @@ function AppNavigator() {
           }}
         />
         <Stack.Screen
-          name="media/folders/index"
-          options={{
-            animation: "slide_from_right",
-          }}
-        />
-        <Stack.Screen
           name="media/folders/[id]"
           options={{
             animation: "slide_from_right",

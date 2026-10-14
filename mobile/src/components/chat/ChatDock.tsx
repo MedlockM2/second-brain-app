@@ -1,10 +1,11 @@
 /** Contextual entry point; drafts survive closing/history, sessions live above navigation. */
 
 import { Ionicons } from "@expo/vector-icons";
-import { useIsFocused, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
+  Alert,
   findNodeHandle,
   Keyboard,
   Pressable,
@@ -24,6 +25,7 @@ import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import { describeChatRefusal, type ChatRefusal } from "../../lib/chatRefusal";
 import type { ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
+import { useChatHistory } from "../../hooks/useChatHistory";
 import { ChatHistoryList } from "./ChatHistoryList";
 import { ChatConversationModal } from "./ChatConversationModal";
 
@@ -31,6 +33,8 @@ export interface ChatDockProps {
   scope: ChatScope;
   scopeId: string;
   title: string;
+  imageUrl?: string | null;
+  mediaTypeIcon?: React.ComponentProps<typeof Ionicons>["name"];
   /** Rendered in the same scroll view as the exchanges, with its own page gutters. */
   sourceContent: React.ReactNode;
   /** Read at opening, relative to the beginning of the source block. */
@@ -43,6 +47,8 @@ export function ChatDock({
   scope,
   scopeId,
   title,
+  imageUrl,
+  mediaTypeIcon,
   sourceContent,
   getSourceOffset,
   bottomInset = 0,
@@ -56,7 +62,12 @@ export function ChatDock({
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [initialSourceOffset, setInitialSourceOffset] = useState(0);
+  const savedOffset = useRef(0);
+  const [focusOnOpen, setFocusOnOpen] = useState(true);
+  const [initialOffset, setInitialOffset] = useState(0);
+  const [scrollTarget, setScrollTarget] = useState<"offset" | "bottom">("offset");
+  const selectionRequest = useRef(0);
+  const history = useChatHistory(scope, scopeId, open && isFocused && historyOpen);
   const [resetKey, setResetKey] = useState(0);
   const dockRef = useRef<View>(null);
 
@@ -70,6 +81,13 @@ export function ChatDock({
   // The native modal covers the Digest carousel as well as the current page.
   // Leaving for a citation hides it; the session and generation go on.
   const modalVisible = open && isFocused;
+
+  useFocusEffect(useCallback(() => () => {
+    selectionRequest.current += 1;
+    setInitialOffset(savedOffset.current);
+    setFocusOnOpen(false);
+    setScrollTarget("offset");
+  }, []));
 
   // Spoken once when an answer starts and once when it is there — never fragment
   // by fragment, which would drown the screen reader.
@@ -93,6 +111,7 @@ export function ChatDock({
   }, [generating, session.conversation]);
 
   const close = () => {
+    selectionRequest.current += 1;
     Keyboard.dismiss();
     setOpen(false);
     setHistoryOpen(false);
@@ -118,6 +137,10 @@ export function ChatDock({
   // The modal is left open: it hides with this screen while the media is read
   // and is back on the conversation when the user returns.
   const openSource = (source: ChatSource) => {
+    Keyboard.dismiss();
+    setFocusOnOpen(false);
+    setInitialOffset(savedOffset.current);
+    setScrollTarget("offset");
     router.push(`/media/${source.media_item_id}`);
   };
 
@@ -145,7 +168,10 @@ export function ChatDock({
         ref={dockRef}
         style={({ pressed }) => [styles.field, pressed && styles.fieldPressed]}
         onPress={() => {
-          setInitialSourceOffset(getSourceOffset());
+          savedOffset.current = getSourceOffset();
+          setInitialOffset(savedOffset.current);
+          setFocusOnOpen(true);
+          setScrollTarget("offset");
           setHistoryOpen(false);
           setOpen(true);
         }}
@@ -171,7 +197,13 @@ export function ChatDock({
         <ChatConversationModal
           visible
           sourceContent={sourceContent}
-          initialSourceOffset={initialSourceOffset}
+          initialOffset={initialOffset}
+          onSaveOffset={(offset) => { savedOffset.current = offset; }}
+          scrollTarget={scrollTarget}
+          focusOnOpen={focusOnOpen}
+          scope={scope}
+          imageUrl={imageUrl}
+          mediaTypeIcon={mediaTypeIcon}
           resetKey={resetKey}
           onClose={close}
           title={title}
@@ -202,18 +234,31 @@ export function ChatDock({
           refusal={refusal}
           onRefusalAction={handleRefusalAction}
           historyOpen={historyOpen}
-          onToggleHistory={() => setHistoryOpen((value) => !value)}
+          onToggleHistory={() => {
+            selectionRequest.current += 1;
+            setHistoryOpen((value) => !value);
+          }}
           history={
             historyOpen ? (
               <ChatHistoryList
-                scope={scope}
-                scopeId={scopeId}
+                history={history}
                 currentId={conversation?.conversation_id ?? null}
                 onSelect={(conversationId) => {
+                  const request = ++selectionRequest.current;
                   chat.dismissError();
-                  setHistoryOpen(false);
-                  setResetKey((value) => value + 1);
-                  void chat.selectConversation(conversationId);
+                  void chat.selectConversation(conversationId).then((selected) => {
+                    if (request !== selectionRequest.current) return;
+                    if (!selected) {
+                      Alert.alert(t("chat.history.error"));
+                      return;
+                    }
+                    savedOffset.current = 0;
+                    setInitialOffset(0);
+                    setFocusOnOpen(false);
+                    setScrollTarget("bottom");
+                    setHistoryOpen(false);
+                    setResetKey((value) => value + 1);
+                  });
                 }}
                 onDelete={(conversationId) =>
                   chat.deleteConversation(conversationId)
@@ -222,6 +267,11 @@ export function ChatDock({
             ) : null
           }
           onNewConversation={() => {
+            selectionRequest.current += 1;
+            savedOffset.current = 0;
+            setInitialOffset(0);
+            setFocusOnOpen(true);
+            setScrollTarget("offset");
             chat.dismissError();
             chat.clearActive();
             setDraft("");

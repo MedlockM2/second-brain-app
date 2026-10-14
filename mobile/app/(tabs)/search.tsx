@@ -188,6 +188,13 @@ export default function SearchScreen() {
   const [media, setMedia] = useState<MediaListItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(true);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [mediaTotal, setMediaTotal] = useState(0);
+  const [mediaCursor, setMediaCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const mediaRequest = useRef(0);
+  const mediaBusy = useRef(false);
+  const loadedPages = useRef(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // One fold for both bodies: they draw the same `Folders` heading, so a section
@@ -251,24 +258,67 @@ export default function SearchScreen() {
     }
   }, [isAuthenticated]);
 
+  // Refresh the already-loaded window atomically. Never replace five pages
+  // with page one on focus or while polling an import's status.
   const loadMedia = useCallback(async () => {
     if (!isAuthenticated) return;
-
+    const request = ++mediaRequest.current;
+    mediaBusy.current = true;
+    setLoadingMore(false);
     try {
-      const response = await MediaService.listMedia();
-      // Rendered in the order the endpoint returns: `GET /api/media` already
-      // sorts the whole library `saved_at` DESC server-side, so a client-side
-      // re-sort could only disagree with it.
-      setMedia(response.items);
+      const items = new Map<string, MediaListItem>();
+      let cursor: string | null = null;
+      let total = 0;
+      let pages = 0;
+      do {
+        const response = await MediaService.listMedia({ cursor });
+        if (request !== mediaRequest.current) return;
+        response.items.forEach((item) => items.set(item.media_item_id, item));
+        total = response.total;
+        cursor = response.has_more ? response.next_cursor ?? null : null;
+        pages += 1;
+      } while (cursor && pages < loadedPages.current);
+      loadedPages.current = pages;
+      setMedia([...items.values()]);
+      setMediaTotal(total);
+      setMediaCursor(cursor);
       setMediaError(null);
+      setPageError(null);
     } catch (err) {
-      setMediaError(
-        getFriendlyErrorMessage(err, {
-          fallback: t("search.libraryLoadFailed"),
-        }),
-      );
+      if (request === mediaRequest.current) {
+        setMediaError(getFriendlyErrorMessage(err, { fallback: t("search.libraryLoadFailed") }));
+      }
+    } finally {
+      if (request === mediaRequest.current) mediaBusy.current = false;
     }
   }, [isAuthenticated]);
+
+  const loadMoreMedia = useCallback(async () => {
+    if (!isAuthenticated || !mediaCursor || mediaBusy.current) return;
+    const request = ++mediaRequest.current;
+    mediaBusy.current = true;
+    setLoadingMore(true);
+    setPageError(null);
+    try {
+      const response = await MediaService.listMedia({ cursor: mediaCursor });
+      if (request !== mediaRequest.current) return;
+      setMedia((current) => [...new Map(
+        [...current, ...response.items].map((item) => [item.media_item_id, item]),
+      ).values()]);
+      loadedPages.current += 1;
+      setMediaTotal(response.total);
+      setMediaCursor(response.has_more ? response.next_cursor ?? null : null);
+    } catch (err) {
+      if (request === mediaRequest.current) {
+        setPageError(getFriendlyErrorMessage(err, { fallback: t("search.libraryLoadFailed") }));
+      }
+    } finally {
+      if (request === mediaRequest.current) {
+        mediaBusy.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [isAuthenticated, mediaCursor]);
 
   // Refetch on every focus, so a media saved from the share sheet or the inbox
   // is here on the way back. The two loading flags are only ever cleared: they
@@ -285,6 +335,8 @@ export default function SearchScreen() {
       });
       return () => {
         active = false;
+        mediaRequest.current += 1;
+        mediaBusy.current = false;
       };
     }, [loadFolders, loadMedia]),
   );
@@ -353,6 +405,10 @@ export default function SearchScreen() {
   // query. Only ever called once the backend has answered — a network failure
   // leaves the media where it is, in both lists.
   const handleMediaDeleted = useCallback((mediaItemId: string) => {
+    mediaRequest.current += 1;
+    mediaBusy.current = false;
+    setLoadingMore(false);
+    setMediaTotal((total) => Math.max(0, total - 1));
     setMedia((current) =>
       current.filter((item) => item.media_item_id !== mediaItemId),
     );
@@ -367,6 +423,9 @@ export default function SearchScreen() {
   // same reason as above.
   const handleMediaRenamed = useCallback(
     (mediaItemId: string, title: string) => {
+      mediaRequest.current += 1;
+      mediaBusy.current = false;
+      setLoadingMore(false);
       setMedia((current) =>
         current.map((item) =>
           item.media_item_id === mediaItemId ? { ...item, title } : item,
@@ -396,6 +455,9 @@ export default function SearchScreen() {
   // and the folder it left holds one fewer.
   const handleMediaMovedToFolder = useCallback(
     (mediaItemId: string, folder: Folder) => {
+      mediaRequest.current += 1;
+      mediaBusy.current = false;
+      setLoadingMore(false);
       setMedia((current) =>
         current.map((item) =>
           item.media_item_id === mediaItemId
@@ -644,6 +706,11 @@ export default function SearchScreen() {
             onLongPressFolder={folderActions.open}
             onCreateFolder={handleOpenNewFolder}
             media={media}
+            mediaTotal={mediaTotal}
+            loadingMore={loadingMore}
+            pageError={pageError}
+            onLoadMore={() => { if (!pageError) void loadMoreMedia(); }}
+            onRetryPage={() => void loadMoreMedia()}
             mediaLoading={mediaLoading}
             mediaError={mediaError}
             onRetryMedia={handleRetryMedia}
@@ -789,6 +856,11 @@ interface LibraryStateProps {
   /** Opens the prompt that names a new, empty root folder. */
   onCreateFolder: () => void;
   media: MediaRow[];
+  mediaTotal: number;
+  loadingMore: boolean;
+  pageError: string | null;
+  onLoadMore: () => void;
+  onRetryPage: () => void;
   mediaLoading: boolean;
   mediaError: string | null;
   onRetryMedia: () => void;
@@ -829,6 +901,11 @@ function LibraryState({
   onLongPressFolder,
   onCreateFolder,
   media,
+  mediaTotal,
+  loadingMore,
+  pageError,
+  onLoadMore,
+  onRetryPage,
   mediaLoading,
   mediaError,
   onRetryMedia,
@@ -859,6 +936,8 @@ function LibraryState({
   return (
     <FlatList
       testID="library-media-list"
+      onEndReached={onLoadMore}
+      onEndReachedThreshold={0.5}
       data={media}
       keyExtractor={(item) => item.media_item_id}
       keyboardShouldPersistTaps="handled"
@@ -896,7 +975,7 @@ function LibraryState({
           onOpenFolder={onOpenFolder}
           onLongPressFolder={onLongPressFolder}
           onCreateFolder={onCreateFolder}
-          mediaCount={media.length}
+          mediaCount={Math.max(mediaTotal, media.length)}
         />
       }
       ListEmptyComponent={mediaPlaceholder}
@@ -904,7 +983,12 @@ function LibraryState({
       // fails says so at the end of the list instead of silently keeping stale
       // rows.
       ListFooterComponent={
-        mediaError && media.length > 0 ? (
+        pageError ? (
+          <InlineErrorCard message={pageError} onRetry={onRetryPage}
+            retryAccessibilityLabel={t("search.retryLibraryA11y")} />
+        ) : loadingMore ? (
+          <View style={styles.sectionLoadingRow}><ActivityIndicator color={Colors.primary} /></View>
+        ) : mediaError && media.length > 0 ? (
           <InlineErrorCard
             message={mediaError}
             onRetry={onRetryMedia}

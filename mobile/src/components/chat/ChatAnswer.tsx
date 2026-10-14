@@ -5,34 +5,26 @@
  * the items of a list, and the 1.6 line height the design system asks of all
  * body text.
  *
- * A citation names its source. The tags the model writes (`[S5]`) say nothing
- * to a reader, so each is drawn as a small tag carrying the short title of the
- * media it designates, and the media an answer cites are listed under it once
- * it is written, each one a row that opens the media. Inline tags are not
- * touchable on purpose: inside a line of text they cannot reach the 48px a
- * touch target needs, the rows below can.
+ * Inline citations open their sources. Paragraph accessibility actions also
+ * expose each link when a screen reader groups nested text as one element.
  *
  * `showSources` is false in a media's own conversation: its one source is the
  * page the conversation is opened on, so every tag would name what is already on
  * screen. Its tags are then left out altogether.
  */
 
-import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
-  I18nManager,
-  Pressable,
   StyleSheet,
   Text,
   View,
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
-import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
+import { BorderRadius, Spacing, Typography, type Theme } from "../../constants/theme";
+import { useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import {
-  citedRefs,
   keepCitations,
   parseChatMarkdown,
   type Block,
@@ -52,7 +44,7 @@ export interface ChatAnswerProps {
   onOpenSource: (source: ChatSource) => void;
 }
 
-/** Characters of a title an inline citation keeps; the list under the answer shows it whole. */
+/** Characters of a title an inline citation keeps; the accessible link names it whole. */
 const SHORT_TITLE_LENGTH = 28;
 
 /** Bullet, white bullet, small square: one per nesting level. */
@@ -81,19 +73,8 @@ export function ChatAnswer({
   showSources,
   onOpenSource,
 }: ChatAnswerProps): React.JSX.Element {
-  const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const blocks = useMemo(() => parseChatMarkdown(text, { live }), [text, live]);
-  const cited = useMemo(
-    () =>
-      showSources
-        ? citedRefs(blocks)
-            .map((ref) => sources.get(ref))
-            .filter((source): source is ChatSource => source !== undefined)
-        : [],
-    [blocks, showSources, sources],
-  );
-
   const keep = (ref: string) => showSources && sources.has(ref);
 
   const spoken = (spans: readonly Span[]): string | undefined => {
@@ -139,7 +120,13 @@ export function ChatAnswer({
             return (
               <Text key={ref}>
                 {position > 0 ? " " : ""}
-                <Text style={styles.citation}>
+                <Text
+                  style={styles.citation}
+                  onPress={() => onOpenSource(source)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t("chat.thread.openSourceA11y", { title: sourceTitle(source) })}
+                  suppressHighlighting={false}
+                >
                   {`${NO_BREAK_SPACE}${shortTitle(sourceTitle(source))}${NO_BREAK_SPACE}`}
                 </Text>
               </Text>
@@ -149,6 +136,18 @@ export function ChatAnswer({
       );
     });
 
+  const citationActions = (spans: readonly Span[]) =>
+    [...new Set(spans.flatMap((span) => span.kind === "citation" ? span.refs : []))]
+      .flatMap((ref) => {
+        const source = sources.get(ref);
+        return source ? [{ name: ref, label: t("chat.thread.openSourceA11y", { title: sourceTitle(source) }) }] : [];
+      });
+
+  const openAccessibleSource = (ref: string) => {
+    const source = sources.get(ref);
+    if (source) onOpenSource(source);
+  };
+
   const renderParagraph = (
     spans: readonly Span[],
     key: React.Key,
@@ -156,7 +155,10 @@ export function ChatAnswer({
   ) => {
     const shown = keepCitations(spans, keep);
     return (
-      <Text key={key} style={style} accessibilityLabel={spoken(shown)}>
+      <Text key={key} style={style} accessibilityLabel={spoken(shown)}
+        accessibilityActions={citationActions(shown)}
+        onAccessibilityAction={(event) => openAccessibleSource(event.nativeEvent.actionName)}
+      >
         {renderSpans(shown)}
       </Text>
     );
@@ -186,6 +188,8 @@ export function ChatAnswer({
             key={key}
             style={block.level === 3 ? styles.subheading : styles.heading}
             accessibilityRole="header"
+            accessibilityActions={citationActions(keepCitations(block.spans, keep))}
+            onAccessibilityAction={(event) => openAccessibleSource(event.nativeEvent.actionName)}
           >
             {renderSpans(keepCitations(block.spans, keep))}
           </Text>
@@ -216,31 +220,6 @@ export function ChatAnswer({
   return (
     <View style={styles.answer}>
       {blocks.map((block, index) => renderBlock(block, index))}
-      {!live && cited.length > 0 ? (
-        <View style={styles.sources}>
-          <Text style={styles.sourcesLabel} accessibilityRole="header">
-            {t("chat.thread.sources")}
-          </Text>
-          {cited.map((source) => {
-            const title = sourceTitle(source);
-            return (
-              <Pressable
-                key={source.ref}
-                style={({ pressed }) => [styles.sourceRow, pressed && styles.sourceRowPressed]}
-                onPress={() => onOpenSource(source)}
-                accessibilityRole="button"
-                accessibilityLabel={t("chat.thread.openSourceA11y", { title })}
-              >
-                <Ionicons name="document-text-outline" size={18} color={Colors.textSubtle} />
-                <Text style={styles.sourceTitle} numberOfLines={2}>
-                  {title}
-                </Text>
-                <Ionicons name={I18nManager.isRTL ? "chevron-back" : "chevron-forward"} size={16} color={Colors.textMuted} />
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -329,32 +308,5 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       height: Spacing.xs,
       borderRadius: BorderRadius.full,
       backgroundColor: Colors.surfaceContainer,
-    },
-    sources: {
-      gap: Spacing.xs,
-    },
-    sourcesLabel: {
-      fontSize: Typography.small.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      color: Colors.textSubtle,
-    },
-    sourceRow: {
-      minHeight: TouchTarget.minimum,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.xs,
-      borderRadius: BorderRadius.lg,
-      backgroundColor: Colors.surfaceContainerLow,
-    },
-    sourceRowPressed: {
-      backgroundColor: Colors.surfaceContainer,
-    },
-    sourceTitle: {
-      flex: 1,
-      fontSize: Typography.label.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      color: Colors.textMain,
     },
   });
