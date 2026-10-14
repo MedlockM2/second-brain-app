@@ -1,3 +1,4 @@
+import { mediaSaved } from "../services/resourceCache";
 /**
  * The one moment the app knows a media exists that none of its lists has seen.
  *
@@ -37,6 +38,7 @@ const listeners = new Set<MediaSaveListener>();
  * a failure.
  */
 export function announceMediaSave(): void {
+  mediaSaved();
   for (const listener of [...listeners]) {
     try {
       listener();

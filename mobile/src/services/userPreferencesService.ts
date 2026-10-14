@@ -1,3 +1,4 @@
+import { setResourceLanguage, resourceSession } from "./resourceCache";
 import { apiRequest } from "./apiClient";
 import { AuthUser } from "@media-summarizer/core/types/auth";
 import { LOCALE_ENDONYMS } from "@media-summarizer/core/i18n/locales";
@@ -43,10 +44,12 @@ export class UserPreferencesService {
   static async updateReadingLanguage(
     language: ReadingLanguageCode,
   ): Promise<AuthUser> {
-    return apiRequest<AuthUser>("/api/auth/me", {
-      method: "PATCH",
-      body: { reading_language: language },
+    const owner = resourceSession();
+    const user = await apiRequest<AuthUser>("/api/auth/me", {
+      method: "PATCH", body: { reading_language: language },
     });
+    if (resourceSession() === owner) setResourceLanguage(user.reading_language ?? language);
+    return user;
   }
 
   /**

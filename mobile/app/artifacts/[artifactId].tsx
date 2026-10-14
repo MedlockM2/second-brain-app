@@ -1,3 +1,7 @@
+import { useResourceSnapshot } from "../../src/contexts/ResourceCacheContext";
+import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
+import { resourceKeys } from "../../src/services/resourceCache";
+import type { ArtifactContentResponse } from "@media-summarizer/core/types/artifacts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -20,6 +24,7 @@ import {
   readArtifactContentBlock,
   type ArtifactRegenerationTarget,
 } from "../../src/lib/artifactContentBlock";
+import { ResourceRefreshNotice } from "../../src/components/ResourceRefreshNotice";
 import { Bullets } from "../../src/components/Bullets";
 import {
   BorderRadius,
@@ -134,7 +139,31 @@ export default function ArtifactDetailScreen() {
   // the user already got their engagement recorded on the first successful render.
   const engagementReportedRef = useRef(false);
 
-  const [state, setState] = useState<LoadState>({ status: "loading" });
+  const { readingLanguage } = useUserPreferences();
+  const snapshot = useResourceSnapshot<ArtifactContentResponse>(
+    resourceKeys.artifactBody(artifactId),
+  );
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const block = readArtifactContentBlock(snapshot.error);
+  const state: LoadState = snapshot.data
+    ? {
+        status: "ready",
+        type: normalizeArtifactKind(snapshot.data.artifact_type),
+        payload: snapshot.data.content as ArtifactPayload,
+        sourceTitle: pickSourceTitle(snapshot.data.content as ArtifactPayload),
+      }
+    : block?.kind === "failed"
+      ? { status: "failed", regeneration: block.regeneration, refusal }
+      : block?.kind === "pending"
+        ? { status: "pending", message: t("artifact.pendingBody") }
+        : snapshot.error
+          ? {
+              status: "error",
+              message: getFriendlyErrorMessage(snapshot.error, {
+                fallback: t("artifact.loadFailed"),
+              }),
+            }
+          : { status: "loading" };
   // A regeneration POST in flight. Held in a ref as well as in state: the ref is
   // what makes a second tap a no-op on the frame it happens, before React has
   // re-rendered the button as busy.
@@ -150,61 +179,26 @@ export default function ArtifactDetailScreen() {
   const fetchContent = useCallback(async () => {
     if (!isAuthenticated || !artifactId) return;
     try {
-      const response = await ArtifactService.getArtifactContent(artifactId);
-      if (!mountedRef.current) return;
-      const kind = normalizeArtifactKind(response.artifact_type);
-      const payload = response.content as ArtifactPayload;
-      const sourceTitle = pickSourceTitle(payload);
-      setState({
-        status: "ready",
-        type: kind,
-        payload,
-        sourceTitle,
-      });
-      if (!engagementReportedRef.current) {
-        engagementReportedRef.current = true;
-        // Not awaited: the row this feeds is somewhere else entirely, and
-        // `reportEngagement` never rejects.
-        // `ArtifactScope` and `EngagementKind` are the same two words now that
-        // both sides of the wire say `folder`, so the scope is the kind.
-        void EngagementService.reportEngagement(
-          response.scope,
-          response.scope_id,
-        );
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      // Read off the refusal's error code, never off its message: the endpoint
-      // types the two cases precisely so the client does not have to guess.
-      const block = readArtifactContentBlock(err);
-      if (block?.kind === "failed") {
-        setState({
-          status: "failed",
-          regeneration: block.regeneration,
-          refusal: null,
-        });
-        return;
-      }
-      if (block?.kind === "pending") {
-        setState({ status: "pending", message: t("artifact.pendingBody") });
-        return;
-      }
-      setState({
-        status: "error",
-        message: getFriendlyErrorMessage(err, {
-          fallback: t("artifact.loadFailed"),
-        }),
-      });
+      await ArtifactService.getArtifactContent(artifactId, readingLanguage);
+    } catch {
+      /* Cache errors describe pending/failed and retain ready bodies offline. */
     }
-  }, [isAuthenticated, artifactId]);
-
+  }, [isAuthenticated, artifactId, readingLanguage]);
+  useFocusEffect(
+    useCallback(() => {
+      void fetchContent();
+    }, [fetchContent]),
+  );
   useEffect(() => {
-    const timer = setTimeout(() => void fetchContent(), 0);
-    return () => clearTimeout(timer);
-  }, [fetchContent]);
-
+    if (snapshot.data && !engagementReportedRef.current) {
+      engagementReportedRef.current = true;
+      void EngagementService.reportEngagement(
+        snapshot.data.scope,
+        snapshot.data.scope_id,
+      );
+    }
+  }, [snapshot.data]);
   const handleReload = useCallback(() => {
-    setState({ status: "loading" });
     void fetchContent();
   }, [fetchContent]);
 
@@ -229,25 +223,19 @@ export default function ArtifactDetailScreen() {
           target.artifactType,
         );
         if (!mountedRef.current) return;
-        setState({ status: "pending", message: t("artifact.regenerationQueued") });
+        setRefusal(null);
+        void fetchContent();
       } catch (err) {
         if (!mountedRef.current) return;
         // A refusal is typed and carries its reason (a quota reached, a source
         // that is not ready): saying it beats leaving the button unanswered.
-        setState((current) =>
-          current.status === "failed"
-            ? {
-                ...current,
-                refusal: describeArtifactRefusal(err, { scope: target.scope }),
-              }
-            : current,
-        );
+        setRefusal(describeArtifactRefusal(err, { scope: target.scope }));
       } finally {
         regeneratingRef.current = false;
         if (mountedRef.current) setRegenerating(false);
       }
     },
-    [isAuthenticated],
+    [isAuthenticated, fetchContent],
   );
 
   const handleBack = useCallback(() => {
@@ -373,7 +361,10 @@ export default function ArtifactDetailScreen() {
             </Pressable>
           ) : null}
           {state.refusal ? (
-            <View style={styles.refusalBanner} testID="artifact-regenerate-refusal">
+            <View
+              style={styles.refusalBanner}
+              testID="artifact-regenerate-refusal"
+            >
               <Ionicons
                 name="information-circle-outline"
                 size={18}
@@ -390,6 +381,10 @@ export default function ArtifactDetailScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          <ResourceRefreshNotice
+            error={snapshot.error}
+            onRetry={handleReload}
+          />
           <View style={styles.heroSection}>
             <View style={styles.kindChip}>
               <Ionicons
@@ -471,9 +466,7 @@ function SummaryShortBody({ content }: { content: Record<string, unknown> }) {
 
   return (
     <View>
-      {headline ? (
-        <Text style={styles.summaryHeadline}>{headline}</Text>
-      ) : null}
+      {headline ? <Text style={styles.summaryHeadline}>{headline}</Text> : null}
       {keyPoints && keyPoints.length > 0 ? (
         <Section title={t("artifact.section.keyPoints")}>
           <Bullets items={keyPoints} />
@@ -653,9 +646,7 @@ function FlashcardsBody({ content }: { content: Record<string, unknown> }) {
   }
 
   return (
-    <Section
-      title={tCount("artifact.cardCount", cards.length)}
-    >
+    <Section title={tCount("artifact.cardCount", cards.length)}>
       {cards.map((card, i) => (
         <FlashcardCard key={`card-${i}`} index={i + 1} card={card} />
       ))}
@@ -663,13 +654,7 @@ function FlashcardsBody({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function FlashcardCard({
-  index,
-  card,
-}: {
-  index: number;
-  card: Flashcard;
-}) {
+function FlashcardCard({ index, card }: { index: number; card: Flashcard }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const [revealed, setRevealed] = useState(false);
@@ -742,7 +727,8 @@ function QuizBody({
   const currentQuestion = questions[currentIndex];
   const answered = picked !== null;
   const isLastQuestion = currentIndex === questions.length - 1;
-  const progressWidth = `${((currentIndex + 1) / questions.length) * 100}%` as const;
+  const progressWidth =
+    `${((currentIndex + 1) / questions.length) * 100}%` as const;
 
   const handleContinue = () => {
     // No terminal "complete" state on this screen: a filled pill that cannot be
@@ -957,7 +943,10 @@ function pickSourceTitle(payload: ArtifactPayload | undefined): string | null {
   return null;
 }
 
-function pickString(obj: Record<string, unknown>, keys: string[]): string | null {
+function pickString(
+  obj: Record<string, unknown>,
+  keys: string[],
+): string | null {
   for (const key of keys) {
     const v = obj[key];
     if (typeof v === "string" && v.trim().length > 0) return v.trim();
@@ -1064,9 +1053,7 @@ function pickGlossaryArray(
   return out.length > 0 ? out : null;
 }
 
-function pickFlashcardArray(
-  obj: Record<string, unknown>,
-): Flashcard[] | null {
+function pickFlashcardArray(obj: Record<string, unknown>): Flashcard[] | null {
   const v = obj["cards"];
   if (!Array.isArray(v)) return null;
   const out: Flashcard[] = [];
@@ -1287,7 +1274,6 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       color: Colors.textMain,
       lineHeight: 24,
     },
-
 
     // Notes — concepts & glossary
     conceptCard: {

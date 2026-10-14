@@ -1,7 +1,17 @@
+import {
+  readResource,
+  resourceKeys,
+  mutationOwner,
+  historyChanged,
+  resourceSession,
+} from "./resourceCache";
 import { fetch as expoFetch } from "expo/fetch";
 import * as Crypto from "expo-crypto";
 import { Config } from "../constants/config";
-import { createHttpError, parseErrorResponse } from "@media-summarizer/core/api/httpError";
+import {
+  createHttpError,
+  parseErrorResponse,
+} from "@media-summarizer/core/api/httpError";
 import { parseSseBlock } from "@media-summarizer/core/chat/sse";
 import { apiRequest, sendAuthenticated } from "./apiClient";
 import type {
@@ -12,6 +22,10 @@ import type {
   ChatStreamEvent,
   ChatTurnAccepted,
 } from "@media-summarizer/core/types/chat";
+
+export interface ChatHistoryWindow extends ChatConversationList {
+  pages: number;
+}
 
 /** What opening the stream answered before any event. */
 export type ChatStreamOpening =
@@ -46,10 +60,16 @@ export class ChatService {
     scope: ChatScope,
     scopeId: string,
   ): Promise<ChatConversationDetail> {
-    return apiRequest<ChatConversationDetail>("/api/chat/conversations", {
-      method: "POST",
-      body: { scope, scope_id: scopeId },
-    });
+    const owner = mutationOwner();
+    const result = await apiRequest<ChatConversationDetail>(
+      "/api/chat/conversations",
+      {
+        method: "POST",
+        body: { scope, scope_id: scopeId },
+      },
+    );
+    historyChanged(owner);
+    return result;
   }
 
   /** GET /api/chat/conversations?scope=&scope_id= — latest activity first. */
@@ -58,12 +78,57 @@ export class ChatService {
     scopeId: string,
     options: { limit?: number; cursor?: string | null } = {},
   ): Promise<ChatConversationList> {
-    const params = new URLSearchParams({ scope, scope_id: scopeId });
-    if (options.limit) params.set("limit", String(options.limit));
-    if (options.cursor) params.set("cursor", options.cursor);
-    return apiRequest<ChatConversationList>(
-      `/api/chat/conversations?${params.toString()}`,
+    return readResource(
+      resourceKeys.history(scope, scopeId, options.limit, options.cursor),
+      async () => {
+        const params = new URLSearchParams({ scope, scope_id: scopeId });
+        if (options.limit) params.set("limit", String(options.limit));
+        if (options.cursor) params.set("cursor", options.cursor);
+        return apiRequest<ChatConversationList>(
+          `/api/chat/conversations?${params.toString()}`,
+        );
+      },
     );
+  }
+
+  /** Retain the visited pagination window independently of a dock's lifetime. */
+  static async historyWindow(
+    scope: ChatScope,
+    scopeId: string,
+    after: string | null = null,
+  ): Promise<ChatHistoryWindow> {
+    const owner = resourceSession().cache;
+    const key = resourceKeys.historyWindow(scope, scopeId);
+    const load = (after: string | null) => async () => {
+      const previous = owner.snapshot<ChatHistoryWindow>(key).data;
+      const items = new Map(
+        (after ? (previous?.conversations ?? []) : []).map((item) => [
+          item.conversation_id,
+          item,
+        ]),
+      );
+      let cursor = after;
+      let count = 0;
+      do {
+        const page = await this.listConversations(scope, scopeId, {
+          limit: 20,
+          cursor,
+        });
+        page.conversations.forEach((item) =>
+          items.set(item.conversation_id, item),
+        );
+        cursor = page.next_cursor ?? null;
+        count += 1;
+      } while (!after && cursor && count < (previous?.pages ?? 1));
+      return {
+        scope,
+        scope_id: scopeId,
+        conversations: [...items.values()],
+        next_cursor: cursor,
+        pages: after ? (previous?.pages ?? 1) + 1 : count,
+      };
+    };
+    return readResource(key, load(after), false, load(null));
   }
 
   /** GET /api/chat/conversations/{id} — messages in order, live generation. */
@@ -77,10 +142,12 @@ export class ChatService {
 
   /** DELETE /api/chat/conversations/{id}. */
   static async deleteConversation(conversationId: string): Promise<void> {
+    const owner = mutationOwner();
     await apiRequest<void>(
       `/api/chat/conversations/${encodeURIComponent(conversationId)}`,
       { method: "DELETE" },
     );
+    historyChanged(owner, conversationId);
   }
 
   /**
@@ -97,13 +164,16 @@ export class ChatService {
     question: string,
     clientRequestId: string,
   ): Promise<ChatTurnAccepted> {
-    return apiRequest<ChatTurnAccepted>(
+    const owner = mutationOwner();
+    const result = await apiRequest<ChatTurnAccepted>(
       `/api/chat/conversations/${encodeURIComponent(conversationId)}/turns`,
       {
         method: "POST",
         body: { question, client_request_id: clientRequestId },
       },
     );
+    historyChanged(owner);
+    return result;
   }
 
   /**
@@ -116,10 +186,12 @@ export class ChatService {
     conversationId: string,
     generation: ChatGeneration,
   ): Promise<void> {
+    const owner = mutationOwner();
     await apiRequest<void>(
       `/api/chat/conversations/${encodeURIComponent(conversationId)}/turns/${encodeURIComponent(generation.turn_id)}/stop`,
       { method: "POST", body: { attempt_id: generation.attempt_id } },
     );
+    historyChanged(owner);
   }
 
   /** Whether this build knows where the streaming door is. */
@@ -177,7 +249,11 @@ export class ChatService {
         detail?: Partial<ChatGeneration> & { error_code?: string };
       } | null;
       const live = body?.detail;
-      if (live?.turn_id && live.attempt_id && typeof live.turn_index === "number") {
+      if (
+        live?.turn_id &&
+        live.attempt_id &&
+        typeof live.turn_index === "number"
+      ) {
         return {
           kind: "stale",
           live: {
@@ -195,7 +271,13 @@ export class ChatService {
       );
       return {
         kind: "unavailable",
-        error: createHttpError(message, response.status, code, undefined, details),
+        error: createHttpError(
+          message,
+          response.status,
+          code,
+          undefined,
+          details,
+        ),
       };
     }
 

@@ -46,6 +46,7 @@ import {
   ArtifactTile,
   type ArtifactTileState,
 } from "./ArtifactTile";
+import { ResourceRefreshNotice } from "./ResourceRefreshNotice";
 import { ArtifactHistoryRow } from "./ArtifactHistoryRow";
 import { t } from "../i18n";
 
@@ -128,12 +129,18 @@ export function ArtifactsPanel({
       <Text style={[styles.heading, styles.historyHeading]}>
         {t("artifacts.panel.generatedHeading")}
       </Text>
+      {history.length > 0 && historyError ? (
+        <ResourceRefreshNotice
+          message={historyError}
+          onRetry={onRetryHistory}
+        />
+      ) : null}
       {historyLoading ? (
         <View style={styles.inlineState}>
           <ActivityIndicator size="small" color={Colors.primary} />
           <Text style={styles.inlineStateText}>{t("common.loading")}</Text>
         </View>
-      ) : historyError ? (
+      ) : historyError && history.length === 0 ? (
         <View style={styles.inlineState}>
           <Text style={styles.inlineStateText}>{historyError}</Text>
           <Pressable

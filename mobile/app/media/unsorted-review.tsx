@@ -1,3 +1,5 @@
+import { useResourceState } from "../../src/contexts/ResourceCacheContext";
+import { resourceKeys } from "../../src/services/resourceCache";
 /**
  * Unsorted review — the triage pass over the default folder.
  *
@@ -51,10 +53,7 @@ import {
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
-import {
-  COVER_HEIGHT,
-  COVER_WIDTH,
-} from "../../src/components/MediaListCard";
+import { COVER_HEIGHT, COVER_WIDTH } from "../../src/components/MediaListCard";
 import { Bullets } from "../../src/components/Bullets";
 import { PaginationDots } from "../../src/components/PaginationDots";
 import { FolderSaveSheet } from "../../src/components/FolderSaveSheet";
@@ -64,7 +63,10 @@ import { getMediaTypeIcon } from "../../src/lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../../src/lib/mediaTitle";
 import { MediaService } from "../../src/services/mediaService";
 import { OrganizationService } from "../../src/services/organizationService";
-import type { MediaListItem, MediaType } from "@media-summarizer/core/types/media";
+import type {
+  MediaListItem,
+  MediaType,
+} from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -109,7 +111,10 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   );
 
   const [items, setItems] = useState<MediaListItem[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useResourceState<Folder[]>(
+    resourceKeys.folders,
+    [],
+  );
   const [activeIndex, setActiveIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +200,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     } finally {
       if (isMountedRef.current) setIsLoading(false);
     }
-  }, [commitQueue]);
+  }, [commitQueue, setFolders]);
 
   /**
    * Loaded once, at mount, and never on focus.
@@ -353,9 +358,14 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     setSaveTargetId(current.media_item_id);
   }, [current]);
 
-  const handleFolderCreated = useCallback((folder: Folder) => {
-    setFolders((prev) => [...prev, folder]);
-  }, []);
+  const handleFolderCreated = useCallback(
+    (folder: Folder) => {
+      setFolders((prev) =>
+        prev.some((entry) => entry.id === folder.id) ? prev : [...prev, folder],
+      );
+    },
+    [setFolders],
+  );
 
   const handleSaved = useCallback(
     (mediaItemId: string) => {
@@ -862,7 +872,9 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
                before the artifact existed. A quiet line, and the three actions
                stay live: a decision does not need the summary. No spinner and no
                polling either; the blurb is not what the user is waiting for. */
-            <Text style={styles.blurbMissing}>{t("unsortedReview.noBlurb")}</Text>
+            <Text style={styles.blurbMissing}>
+              {t("unsortedReview.noBlurb")}
+            </Text>
           )}
         </View>
       </View>

@@ -1,3 +1,4 @@
+import { ResourceCacheProvider } from "../src/contexts/ResourceCacheContext";
 import { useEffect } from "react";
 import { Stack, useNavigationContainerRef, type ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -186,13 +187,15 @@ function AppProviders() {
             <SplashGate />
             <PushNotificationGate />
             <UserPreferencesProvider>
-              <PurchasesProvider>
-                <ChatSessionProvider>
-                  <ShareIntentProvider>
-                    <AppNavigator />
-                  </ShareIntentProvider>
-                </ChatSessionProvider>
-              </PurchasesProvider>
+              <ResourceCacheProvider>
+                <PurchasesProvider>
+                  <ChatSessionProvider>
+                    <ShareIntentProvider>
+                      <AppNavigator />
+                    </ShareIntentProvider>
+                  </ChatSessionProvider>
+                </PurchasesProvider>
+              </ResourceCacheProvider>
             </UserPreferencesProvider>
           </AuthProvider>
         </I18nProvider>

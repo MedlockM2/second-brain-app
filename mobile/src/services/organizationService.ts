@@ -1,6 +1,18 @@
+import {
+  readResource,
+  resourceKeys,
+  mutationOwner,
+  mediaPatched,
+  folderChanged,
+  folderDeleted,
+} from "./resourceCache";
 import { apiRequest } from "./apiClient";
 import type { Folder } from "@media-summarizer/core/types/organization";
-import type { MediaListItem, MediaSortDirection } from "@media-summarizer/core/types/media";
+import type {
+  MediaListItem,
+  MediaSortDirection,
+  PatchMediaResponse,
+} from "@media-summarizer/core/types/media";
 
 interface MediaListResponse {
   status: string;
@@ -38,18 +50,17 @@ export interface FolderDeletion {
  * is no mapper here either.
  */
 export class OrganizationService {
-
-
-
   /**
    * Fetch all folders for the authenticated user.
    * GET /api/folders
    */
   static async getUserFolders(): Promise<Folder[]> {
-    const response = await apiRequest<FolderListResponse>("/api/folders", {
-      method: "GET",
+    return readResource(resourceKeys.folders, async () => {
+      const response = await apiRequest<FolderListResponse>("/api/folders", {
+        method: "GET",
+      });
+      return response.folders;
     });
-    return response.folders;
   }
 
   /**
@@ -100,9 +111,16 @@ export class OrganizationService {
     if (options.sort) {
       params.set("sort", options.sort);
     }
-    const response = await apiRequest<MediaListResponse>(
-      `/api/media?${params.toString()}`,
-      { method: "GET" },
+    const response = await readResource(
+      resourceKeys.mediaPage({
+        folderId,
+        limit: options.limit ?? 100,
+        sort: options.sort,
+      }),
+      () =>
+        apiRequest<MediaListResponse>(`/api/media?${params.toString()}`, {
+          method: "GET",
+        }),
     );
     return response.items;
   }
@@ -115,13 +133,15 @@ export class OrganizationService {
     mediaItemId: string,
     folderId: string | null,
   ): Promise<void> {
-    return apiRequest<void>(
+    const owner = mutationOwner();
+    const result = await apiRequest<PatchMediaResponse>(
       `/api/media/${encodeURIComponent(mediaItemId)}`,
       {
         method: "PATCH",
         body: { folder_id: folderId },
       },
     );
+    mediaPatched(owner, mediaItemId, { folder_id: result.folder_id });
   }
 
   /**
@@ -132,10 +152,13 @@ export class OrganizationService {
     name: string,
     parentId?: string | null,
   ): Promise<Folder> {
-    return apiRequest<Folder>("/api/folders", {
+    const owner = mutationOwner();
+    const result = await apiRequest<Folder>("/api/folders", {
       method: "POST",
       body: { name, parent_folder_id: parentId ?? null },
     });
+    folderChanged(owner, result);
+    return result;
   }
 
   /**
@@ -149,13 +172,16 @@ export class OrganizationService {
    * PUT /api/folders/:id
    */
   static async renameFolder(folderId: string, name: string): Promise<Folder> {
-    return apiRequest<Folder>(
+    const owner = mutationOwner();
+    const result = await apiRequest<Folder>(
       `/api/folders/${encodeURIComponent(folderId)}`,
       {
         method: "PUT",
         body: { name },
       },
     );
+    folderChanged(owner, result);
+    return result;
   }
 
   /**
@@ -168,9 +194,12 @@ export class OrganizationService {
    * DELETE /api/folders/:id
    */
   static async deleteFolder(folderId: string): Promise<FolderDeletion> {
-    return apiRequest<FolderDeletion>(
+    const owner = mutationOwner();
+    const result = await apiRequest<FolderDeletion>(
       `/api/folders/${encodeURIComponent(folderId)}`,
       { method: "DELETE" },
     );
+    folderDeleted(owner, folderId, result.default_folder_id);
+    return result;
   }
 }

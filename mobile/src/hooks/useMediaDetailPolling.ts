@@ -1,6 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useUserPreferences } from "../contexts/UserPreferencesContext";
 import { useAuth } from "../contexts/AuthContext";
+import { useResourceSnapshot } from "../contexts/ResourceCacheContext";
 import { MediaService } from "../services/mediaService";
+import { resourceKeys } from "../services/resourceCache";
+import { isResourceSuperseded } from "@media-summarizer/core/cache/resourceCache";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { t } from "../i18n";
 import type {
@@ -9,13 +14,9 @@ import type {
 } from "@media-summarizer/core/types/media";
 
 const POLL_INTERVAL_MS = 3000;
-const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Returns a contextual processing message based on the source platform.
- */
-function getProcessingMessage(sourcePlatform?: SourcePlatform): string {
-  switch (sourcePlatform) {
+const TIMEOUT_MS = 5 * 60 * 1000;
+function getProcessingMessage(source?: SourcePlatform): string {
+  switch (source) {
     case "spotify":
     case "apple_podcasts":
     case "deezer":
@@ -32,7 +33,6 @@ function getProcessingMessage(sourcePlatform?: SourcePlatform): string {
       return t("media.processing.generating");
   }
 }
-
 export type MediaDetailPollingState =
   | "loading"
   | "processing"
@@ -40,196 +40,97 @@ export type MediaDetailPollingState =
   | "failed"
   | "timeout"
   | "error";
-
 export interface UseMediaDetailPollingResult {
-  /** Current state of the polling lifecycle */
   state: MediaDetailPollingState;
-  /** The media status response once available */
   mediaData: MediaStatusResponse | null;
-  /** User-friendly error message for network/fetch failures */
   fetchError: string | null;
-  /** Error message from the backend processing job (when state is 'failed') */
   processingError: string | null;
-  /** Contextual processing message (varies by source platform) */
   processingMessage: string;
-  /** Whether the 5-minute timeout has been reached */
   timedOut: boolean;
-  /** Manual refresh function (e.g., for pull-to-refresh after timeout) */
   refresh: () => Promise<void>;
 }
-
-/**
- * Hook that manages polling for a single media item's detail screen.
- *
- * Behavior:
- * - On mount, fetches the media status via GET /api/media/:id
- * - If the processing job is in a non-terminal state, polls every 3s
- * - Stops polling when status becomes terminal (completed/failed/cancelled)
- * - Stops polling after 5 minutes and shows a timeout message
- * - Cleans up on unmount (no leaked intervals)
- */
 export function useMediaDetailPolling(
   mediaId: string | undefined,
 ): UseMediaDetailPollingResult {
   const { isAuthenticated } = useAuth();
-
-  const [mediaData, setMediaData] = useState<MediaStatusResponse | null>(null);
-  const [state, setState] = useState<MediaDetailPollingState>("loading");
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const [processingError, setProcessingError] = useState<string | null>(null);
-  const [processingMessage, setProcessingMessage] =
-    useState<string>("Generating text...");
-  const [timedOut, setTimedOut] = useState(false);
-
-  const mountedRef = useRef(true);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-
-  const stopPolling = useCallback(() => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-    if (timeoutTimerRef.current) {
-      clearTimeout(timeoutTimerRef.current);
-      timeoutTimerRef.current = null;
-    }
-  }, []);
-
-  const handleResponse = useCallback(
-    (response: MediaStatusResponse) => {
-      if (!mountedRef.current) return;
-
-      setMediaData(response);
-      setProcessingMessage(
-        getProcessingMessage(response.media_item.source_platform),
-      );
-
-      const jobStatus = response.processing_job.status;
-
-      if (jobStatus === "completed") {
-        setState("completed");
-        stopPolling();
-      } else if (jobStatus === "failed" || jobStatus === "cancelled") {
-        setState("failed");
-        // The job carries a code, not a sentence (task-359): the wording is built
-        // here, in the reader's language, and an unmapped code degrades to the
-        // generic line instead of printing whatever the server said.
-        setProcessingError(
-          getFriendlyErrorMessage(
-            { code: response.processing_job.error_code },
-            { fallback: t("media.failedFallback") },
-          ),
-        );
-        stopPolling();
-      } else {
-        setState("processing");
-      }
-    },
-    [stopPolling],
+  const { readingLanguage } = useUserPreferences();
+  const snapshot = useResourceSnapshot<MediaStatusResponse>(
+    resourceKeys.media(mediaId ?? ""),
   );
-
+  const [timeoutFor, setTimeoutFor] = useState<string | null>(null);
+  const startedAt = useRef(0);
+  const processingKey = `${mediaId ?? ""}:${readingLanguage ?? ""}`;
+  const budgetKey = useRef<string | null>(null);
+  const mediaData = snapshot.data ?? null;
+  const jobStatus = mediaData?.processing_job.status;
+  const baseState: MediaDetailPollingState = !mediaData
+    ? snapshot.error
+      ? "error"
+      : "loading"
+    : jobStatus === "completed" || jobStatus === "ready_for_artifacts"
+      ? "completed"
+      : jobStatus === "failed" || jobStatus === "cancelled"
+        ? "failed"
+        : "processing";
+  const timedOut = timeoutFor === mediaId;
+  const state = baseState === "processing" && timedOut ? "timeout" : baseState;
   const fetchMediaStatus = useCallback(async () => {
     if (!isAuthenticated || !mediaId) return;
-
     try {
-      const response = await MediaService.getMediaStatus(mediaId);
-      if (!mountedRef.current) return;
-      setFetchError(null);
-      handleResponse(response);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setFetchError(
-        getFriendlyErrorMessage(err, { fallback: t("media.loadFailed") }),
-      );
-      setState("error");
-      stopPolling();
+      await MediaService.getMediaStatus(mediaId, readingLanguage);
+    } catch (error) {
+      if (isResourceSuperseded(error)) return;
+      // The cache publishes the error; cached content stays readable on network failure.
     }
-  }, [isAuthenticated, mediaId, handleResponse, stopPolling]);
-
-  const startPolling = useCallback(() => {
-    if (pollTimerRef.current) return; // Already polling
-    if (startTimeRef.current === null) {
-      startTimeRef.current = Date.now();
-    }
-
-    pollTimerRef.current = setInterval(async () => {
-      if (!isAuthenticated || !mediaId || !mountedRef.current) return;
-
-      // Check timeout before making the request
-      const startedAt = startTimeRef.current ?? Date.now();
-      const elapsed = Date.now() - startedAt;
-      if (elapsed >= TIMEOUT_MS) {
-        setTimedOut(true);
-        setState("timeout");
-        stopPolling();
-        return;
+  }, [isAuthenticated, mediaId, readingLanguage]);
+  useFocusEffect(
+    useCallback(() => {
+      if (budgetKey.current !== processingKey) {
+        budgetKey.current = processingKey;
+        startedAt.current = Date.now();
+        setTimeoutFor(null);
       }
-
-      try {
-        const response = await MediaService.getMediaStatus(mediaId);
-        if (!mountedRef.current) return;
-        handleResponse(response);
-      } catch {
-        // Silent fail during polling - don't disrupt the user
-      }
-    }, POLL_INTERVAL_MS);
-
-    // Set a hard timeout to stop polling after 5 minutes
-    if (!timeoutTimerRef.current) {
-      const startedAt = startTimeRef.current ?? Date.now();
-      const remainingMs = TIMEOUT_MS - (Date.now() - startedAt);
-      timeoutTimerRef.current = setTimeout(() => {
-        if (!mountedRef.current) return;
-        setTimedOut(true);
-        setState("timeout");
-        stopPolling();
-      }, Math.max(0, remainingMs));
-    }
-  }, [isAuthenticated, mediaId, handleResponse, stopPolling]);
-
-  // Initial fetch and polling setup
+      void fetchMediaStatus();
+    }, [fetchMediaStatus, processingKey]),
+  );
   useEffect(() => {
-    mountedRef.current = true;
-    startTimeRef.current = Date.now();
-
-    let initialFetchTimer: ReturnType<typeof setTimeout> | null = null;
-    if (isAuthenticated && mediaId) {
-      initialFetchTimer = setTimeout(() => void fetchMediaStatus(), 0);
-    }
-
+    if (!isAuthenticated || state !== "processing" || !mediaId) return;
+    if (!startedAt.current) startedAt.current = Date.now();
+    const remaining = Math.max(
+      0,
+      TIMEOUT_MS - (Date.now() - startedAt.current),
+    );
+    const timeout = setTimeout(() => setTimeoutFor(mediaId), remaining);
+    const poll = setInterval(() => void fetchMediaStatus(), POLL_INTERVAL_MS);
     return () => {
-      if (initialFetchTimer) clearTimeout(initialFetchTimer);
-      mountedRef.current = false;
-      stopPolling();
+      clearInterval(poll);
+      clearTimeout(timeout);
     };
-  }, [isAuthenticated, mediaId, fetchMediaStatus, stopPolling]);
-
-  // Start or stop polling when state changes
-  useEffect(() => {
-    if (state === "processing") {
-      startPolling();
-    } else {
-      stopPolling();
-    }
-  }, [state, startPolling, stopPolling]);
-
-  // Manual refresh (e.g., after timeout or pull-to-refresh)
+  }, [isAuthenticated, mediaId, state, fetchMediaStatus]);
   const refresh = useCallback(async () => {
-    setTimedOut(false);
-    startTimeRef.current = Date.now(); // Reset timeout
-    setState("loading");
+    startedAt.current = Date.now();
+    setTimeoutFor(null);
     await fetchMediaStatus();
   }, [fetchMediaStatus]);
-
   return {
     state,
     mediaData,
-    fetchError,
-    processingError,
-    processingMessage,
     timedOut,
+    fetchError: snapshot.error
+      ? getFriendlyErrorMessage(snapshot.error, {
+          fallback: t("media.loadFailed"),
+        })
+      : null,
+    processingError:
+      state === "failed"
+        ? getFriendlyErrorMessage(
+            { code: mediaData?.processing_job.error_code },
+            { fallback: t("media.failedFallback") },
+          )
+        : null,
+    processingMessage: getProcessingMessage(
+      mediaData?.media_item.source_platform,
+    ),
     refresh,
   };
 }

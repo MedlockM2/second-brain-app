@@ -1,3 +1,4 @@
+import { activateResourceAccount } from "./resourceCache";
 import { Config } from "../constants/config";
 import { createHttpError, parseErrorResponse, type HttpError } from "@media-summarizer/core/api/httpError";
 import { TokenStorage } from "./tokenStorage";
@@ -262,10 +263,12 @@ async function persistSession(response: {
   await TokenStorage.saveAccessToken(response.access_token, response.expires_in);
   await TokenStorage.saveRefreshToken(response.refresh_token);
   await TokenStorage.saveUser(response.user);
+  activateResourceAccount(response.user.id, response.user.reading_language ?? null);
 }
 
 /** Drop everything the session was made of. */
 async function clearSession(): Promise<void> {
+  activateResourceAccount(null);
   refreshInFlight = null;
   await TokenStorage.clearAll();
 }

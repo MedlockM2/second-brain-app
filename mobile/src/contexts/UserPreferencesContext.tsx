@@ -24,15 +24,23 @@ interface UserPreferencesContextValue {
   isUpdating: boolean;
 }
 
-const UserPreferencesContext = createContext<UserPreferencesContextValue | null>(
-  null,
-);
+const UserPreferencesContext =
+  createContext<UserPreferencesContextValue | null>(null);
 
 export function UserPreferencesProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user } = useAuth();
+  return (
+    <AccountPreferences key={user?.id ?? "signed-out"}>
+      {children}
+    </AccountPreferences>
+  );
+}
+
+function AccountPreferences({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
   const [localReadingLanguage, setLocalReadingLanguage] = useState<
@@ -47,7 +55,8 @@ export function UserPreferencesProvider({
 
   // reading_language comes from the user object (populated by AuthContext from /me response)
   // or from local state after a successful update
-  const readingLanguage = localReadingLanguage ?? user?.reading_language ?? null;
+  const readingLanguage =
+    localReadingLanguage ?? user?.reading_language ?? null;
   const needsLanguageOnboarding = !readingLanguage;
   const readingLanguageChangeAvailableAt =
     localChangeAvailableAt ??

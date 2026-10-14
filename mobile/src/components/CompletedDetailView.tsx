@@ -1,3 +1,9 @@
+import { ResourceRefreshNotice } from "./ResourceRefreshNotice";
+import { useUserPreferences } from "../contexts/UserPreferencesContext";
+import type { ArtifactListResponse } from "@media-summarizer/core/types/artifacts";
+import { useResourceSnapshot } from "../contexts/ResourceCacheContext";
+import { resourceKeys } from "../services/resourceCache";
+import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
 /**
  * A media item that has finished processing, as a page.
  *
@@ -58,7 +64,6 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   MediaService,
   type RawContentResponse,
-  type TranslationMetadata,
 } from "../services/mediaService";
 import { ArtifactService } from "../services/artifactService";
 import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
@@ -106,7 +111,6 @@ import type {
 import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { describeArtifactRefusal } from "../lib/artifactRefusal";
-import { mergeArtifactIntoHistory } from "../lib/artifactHistory";
 
 /**
  * The two intra-screen tabs of a media item: what it says, and what the models
@@ -166,13 +170,10 @@ function resolveTranscriptContent(
  * Where the Reader stands on showing the source text of a translated media
  * (task-419).
  *
- * `content` outlives `shown`: the text is read once and kept, so the switch back
- * and every switch after it costs no network. `loading` is only ever true for the
- * one read that fetches it.
+ * The body lives in the session cache; this state only owns the visible switch
+ * and the first read's indicator. Revalidation keeps an available body visible.
  */
 type OriginalTextState = {
-  /** The source text once read, or `null` while it has never been asked for. */
-  content: string | null;
   /** Whether the source text is the body on screen. */
   shown: boolean;
   /** A read of `?variant=original` is in flight. */
@@ -180,7 +181,6 @@ type OriginalTextState = {
 };
 
 const NO_ORIGINAL_TEXT: OriginalTextState = {
-  content: null,
   shown: false,
   loading: false,
 };
@@ -305,6 +305,8 @@ export interface CompletedDetailViewProps {
   translationBudgets?: TranslationBudgets;
 }
 
+const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
+
 export function CompletedDetailView({
   mediaData,
   onBack,
@@ -403,8 +405,7 @@ export function CompletedDetailView({
             if (newFolderId) {
               // Fetch folder name for the toast
               try {
-                const folders =
-                  await OrganizationService.getUserFolders();
+                const folders = await OrganizationService.getUserFolders();
                 const found = folders.find((c) => c.id === newFolderId);
                 showToast(
                   found
@@ -473,30 +474,56 @@ export function CompletedDetailView({
   // carries no artifact projection any more. This screen holds the history and
   // derives its tiles from it — the newest entry per type — so there is one
   // source of truth behind both the tiles and the list under them.
-  const [artifactHistory, setArtifactHistory] = useState<ArtifactSummary[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [generationRefusal, setGenerationRefusal] = useState<string | null>(null);
+  const { readingLanguage } = useUserPreferences();
+  const [generationRefusal, setGenerationRefusal] = useState<string | null>(
+    null,
+  );
   // The types whose POST is in flight. The history cannot know about them yet —
   // the entry only exists once the request answers, and that request reads every
   // source's transcript from S3 before it does. Without this, the tap stays
   // visually unanswered for the whole round-trip and reads as ignored.
-  const [requestsInFlight, setRequestsInFlight] = useState<readonly ArtifactType[]>(
-    [],
-  );
+  const [requestsInFlight, setRequestsInFlight] = useState<
+    readonly ArtifactType[]
+  >([]);
 
   const mountedRef = useRef(true);
   const artifactPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [rawContent, setRawContent] = useState<TranscriptContentState>({
-    status: "idle",
-  });
+  const cachedDetail = useResourceSnapshot<MediaStatusResponse>(
+    resourceKeys.media(media_item.media_item_id),
+  );
+  const cachedText = useResourceSnapshot<RawContentResponse>(
+    resourceKeys.text(media_item.media_item_id),
+  );
+  const cachedOriginal = useResourceSnapshot<RawContentResponse>(
+    resourceKeys.text(media_item.media_item_id, "original"),
+  );
+  const cachedArtifacts = useResourceSnapshot<ArtifactListResponse>(
+    resourceKeys.artifacts("media", media_item.media_item_id),
+  );
+  const displayedRawContent = useMemo<TranscriptContentState>(
+    () =>
+      cachedText.data
+        ? resolveTranscriptContent(cachedText.data)
+        : cachedText.error
+          ? isResourceGone(cachedText.error)
+            ? { status: "not_available" }
+            : {
+                status: "error",
+                message: getFriendlyErrorMessage(cachedText.error, {
+                  fallback: t("media.transcriptLoadFailed"),
+                }),
+              }
+          : media_item.transcript?.status === "failed"
+            ? { status: "not_available" }
+            : { status: "loading" },
+    [cachedText.data, cachedText.error, media_item.transcript?.status],
+  );
+  const artifactHistory = cachedArtifacts.data?.artifacts ?? EMPTY_ARTIFACTS;
   // What the last read of `/raw-content` said about translation. Kept beside the
   // text rather than folded into it: it answers two questions the text does not
   // — whether the body on screen is a translation (so whether the switch exists
   // at all) and which language to announce for it.
-  const [translation, setTranslation] = useState<TranslationMetadata | null>(
-    null,
-  );
+  const translation = cachedText.data?.translation ?? null;
   // The source text of a media served translated, once the reader has asked for
   // it. Held next to the translation rather than replacing it, so going back is a
   // re-render and not a second request — and so is every switch after that.
@@ -529,36 +556,21 @@ export function CompletedDetailView({
   const refreshArtifacts = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const response = await ArtifactService.listArtifacts(
+      await ArtifactService.listArtifacts(
         "media",
         media_item.media_item_id,
+        undefined,
+        readingLanguage,
       );
-      if (!mountedRef.current) return;
-      setArtifactHistory(response.artifacts);
-      setHistoryError(null);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setHistoryError(
-        getFriendlyErrorMessage(err, {
-          fallback: t("folder.artifactsLoadFailed"),
-        }),
-      );
+    } catch {
+      /* The resource snapshot retains readable data and exposes the failure. */
     }
-  }, [isAuthenticated, media_item.media_item_id]);
-
-  // `historyLoading` starts true and is only ever cleared: the spinner belongs
-  // to the first fetch of a given scope, and `refreshArtifacts` is stable for as
-  // long as the scope is.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      await refreshArtifacts();
-      if (!cancelled) setHistoryLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshArtifacts]);
+  }, [isAuthenticated, media_item.media_item_id, readingLanguage]);
+  useFocusEffect(
+    useCallback(() => {
+      void refreshArtifacts();
+    }, [refreshArtifacts]),
+  );
 
   // The list itself says whether anything is in flight, so the poll starts and
   // stops from its own content rather than from a separate flag.
@@ -633,19 +645,12 @@ export function CompletedDetailView({
       );
 
       try {
-        const created = await ArtifactService.generateArtifact(
+        await ArtifactService.generateArtifact(
           "media",
           media_item.media_item_id,
           artifactType,
         );
         if (!mountedRef.current) return;
-        // The POST answers the entry itself, so it goes straight into the
-        // history: no list call, hence no eventually-consistent GSI read that
-        // could come back without it and hide a running generation. It also
-        // arms the poll immediately, from the returned status.
-        setArtifactHistory((current) =>
-          mergeArtifactIntoHistory(current, created),
-        );
       } catch (err) {
         if (!mountedRef.current) return;
         // A refusal is typed and carries its reason (a quota reached, a
@@ -710,62 +715,40 @@ export function CompletedDetailView({
 
   const transcriptStatus = media_item.transcript?.status;
 
-  // Every read of the text is numbered, and an answer older than the last one
-  // applied is dropped. The poll does not wait for a read before sending the
-  // next, so on a slow network two can be in flight — and a `pending` coming back
-  // after a `ready` must not put the translation back on its way.
-  const rawReadCountRef = useRef(0);
-  const rawReadAppliedRef = useRef(0);
-  const adoptRawRead = useCallback(
-    (
-      read: number,
-      next: TranscriptContentState,
-      meta: TranslationMetadata | null,
-    ) => {
-      if (!mountedRef.current || read < rawReadAppliedRef.current) return;
-      rawReadAppliedRef.current = read;
-      setRawContent(next);
-      setTranslation(meta);
-    },
-    [],
-  );
-
-  // The read behind the translation poll: silent, so a tick leaves the text on
-  // screen where it is, and a failure changes nothing — the line above the text
-  // still says the translation is on its way, which is true.
+  // Transport deduplication and invalidation are owned by the shared resource.
   const refreshRawContent = useCallback(async () => {
     if (!isAuthenticated) return;
-    const read = ++rawReadCountRef.current;
     try {
-      const response = await MediaService.getRawContent(
+      await MediaService.getRawContent(
         media_item.media_item_id,
-      );
-      adoptRawRead(
-        read,
-        resolveTranscriptContent(response),
-        response.translation ?? null,
+        {},
+        readingLanguage,
       );
     } catch {
-      // The next tick retries.
+      /* The snapshot distinguishes transient failures from unavailable content. */
     }
-  }, [isAuthenticated, media_item.media_item_id, adoptRawRead]);
+  }, [isAuthenticated, media_item.media_item_id, readingLanguage]);
 
   // The wait for a translation still being produced: a bounded, re-armable poll
   // whose budget outlives a remount (task-415). Its end is `translation_stalled`
   // below, never `ready`.
   const translationRefresh = useTranslationRefresh({
     mediaItemId: media_item.media_item_id,
-    isPending: rawContent.status === "translation_pending",
+    isPending: displayedRawContent.status === "translation_pending",
     refetch: refreshRawContent,
     budgets: translationBudgets,
   });
 
   const transcriptContent = useMemo<TranscriptContentState>(
     () =>
-      rawContent.status === "translation_pending" && translationRefresh.isStalled
-        ? { status: "translation_stalled", content: rawContent.content }
-        : rawContent,
-    [rawContent, translationRefresh.isStalled],
+      displayedRawContent.status === "translation_pending" &&
+      translationRefresh.isStalled
+        ? {
+            status: "translation_stalled",
+            content: displayedRawContent.content,
+          }
+        : displayedRawContent,
+    [displayedRawContent, translationRefresh.isStalled],
   );
 
   // --- The translation, and the way back to what was actually said (task-419) ---
@@ -790,15 +773,16 @@ export function CompletedDetailView({
 
   // The text on screen, which is the translation unless the reader has asked for
   // the source and it has arrived.
-  const showingOriginal = isTranslationOnScreen && original.shown;
+  const showingOriginal =
+    isTranslationOnScreen && original.shown && Boolean(cachedOriginal.data);
   const readerContent = useMemo<TranscriptContentState>(
     () =>
       transcriptContent.status === "ready" &&
       original.shown &&
-      original.content !== null
-        ? { status: "ready", content: original.content }
+      cachedOriginal.data
+        ? { status: "ready", content: cachedOriginal.data.content }
         : transcriptContent,
-    [transcriptContent, original.shown, original.content],
+    [transcriptContent, original.shown, cachedOriginal.data],
   );
 
   /**
@@ -815,8 +799,11 @@ export function CompletedDetailView({
       setOriginal((current) => ({ ...current, shown: false }));
       return;
     }
-    if (original.content !== null) {
-      setOriginal((current) => ({ ...current, shown: true }));
+    if (cachedOriginal.data) {
+      setOriginal({ shown: true, loading: false });
+      void MediaService.getRawContent(media_item.media_item_id, {
+        variant: "original",
+      }).catch(() => {});
       return;
     }
     if (original.loading || !isAuthenticated) return;
@@ -835,7 +822,7 @@ export function CompletedDetailView({
           showToast(t("transcript.originalLoadFailed"), "error");
           return;
         }
-        setOriginal({ content, shown: true, loading: false });
+        setOriginal({ shown: true, loading: false });
       } catch (err) {
         if (!mountedRef.current) return;
         setOriginal((current) => ({ ...current, loading: false }));
@@ -849,7 +836,7 @@ export function CompletedDetailView({
     })();
   }, [
     original.shown,
-    original.content,
+    cachedOriginal.data,
     original.loading,
     isAuthenticated,
     media_item.media_item_id,
@@ -897,71 +884,19 @@ export function CompletedDetailView({
         : sourceLanguage,
     ),
     media_item.transcript?.segments_count
-      ? tCount("transcript.paragraphCount", media_item.transcript.segments_count)
+      ? tCount(
+          "transcript.paragraphCount",
+          media_item.transcript.segments_count,
+        )
       : null,
   ].filter((detail): detail is string => !!detail);
 
-  // The first load, and the Retry of its error state: the one read that shows
-  // the loading line.
-  const fetchRawContent = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setRawContent({ status: "loading" });
-    const read = ++rawReadCountRef.current;
-
-    try {
-      const response = await MediaService.getRawContent(
-        media_item.media_item_id,
-      );
-      adoptRawRead(
-        read,
-        resolveTranscriptContent(response),
-        response.translation ?? null,
-      );
-    } catch (err) {
-      const httpStatus = (err as { status?: number } | undefined)?.status;
-      adoptRawRead(
-        read,
-        httpStatus === 404
-          ? { status: "not_available" }
-          : {
-              status: "error",
-              message: getFriendlyErrorMessage(err, {
-                fallback: t("media.transcriptLoadFailed"),
-              }),
-            },
-        null,
-      );
-    }
-  }, [isAuthenticated, media_item.media_item_id, adoptRawRead]);
-
-  // Whether the transcript fetch has already been kicked off for the media as it
-  // currently stands. A flag rather than a read of `rawContent`: deciding from
-  // the state would put the state in the dependencies and re-run the effect on
-  // every transition it causes.
-  const rawFetchStartedRef = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (!mediaReady) {
-        // Reset whenever processing rewinds (e.g. user retries an item).
-        rawFetchStartedRef.current = false;
-        if (!cancelled) setRawContent({ status: "idle" });
-        return;
-      }
-      if (transcriptStatus === "failed") {
-        if (!cancelled) setRawContent({ status: "not_available" });
-        return;
-      }
-      if (rawFetchStartedRef.current) return;
-      rawFetchStartedRef.current = true;
-      if (!cancelled) setRawContent({ status: "loading" });
-      await fetchRawContent();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [mediaReady, transcriptStatus, fetchRawContent]);
+  const fetchRawContent = refreshRawContent;
+  useFocusEffect(
+    useCallback(() => {
+      if (mediaReady && transcriptStatus !== "failed") void refreshRawContent();
+    }, [mediaReady, transcriptStatus, refreshRawContent]),
+  );
 
   /**
    * The poll behind the waiting line — armed by that line, and by nothing else.
@@ -1025,16 +960,27 @@ export function CompletedDetailView({
   //
   // A failed URL can recover after a new snapshot, focus or foreground event.
   const coverUrl = media_item.media_image?.trim() ?? "";
-  const coverImage = useRecoverableImage(coverUrl, media_item.media_item_id, media_item);
+  const coverImage = useRecoverableImage(
+    coverUrl,
+    media_item.media_item_id,
+    media_item,
+  );
   const cover = useMemo<MediaCover | null>(
-    () => coverImage.showImage
-      ? {
-          uri: coverUrl,
-          cacheKey: `${media_item.media_item_id}:${media_item.updated_at}`,
-          recyclingKey: `${media_item.media_item_id}:${coverImage.attempt}`,
-        }
-      : null,
-    [coverUrl, coverImage.showImage, coverImage.attempt, media_item.media_item_id, media_item.updated_at],
+    () =>
+      coverImage.showImage
+        ? {
+            uri: coverUrl,
+            cacheKey: `${media_item.media_item_id}:${media_item.updated_at}`,
+            recyclingKey: `${media_item.media_item_id}:${coverImage.attempt}`,
+          }
+        : null,
+    [
+      coverUrl,
+      coverImage.showImage,
+      coverImage.attempt,
+      media_item.media_item_id,
+      media_item.updated_at,
+    ],
   );
   const handleCoverError = coverImage.onError;
 
@@ -1165,7 +1111,9 @@ export function CompletedDetailView({
   const readerContentTop = useRef(0);
   const transcriptTop = useRef(0);
   useEffect(() => {
-    const listener = scrollY.addListener(({ value }) => { readerScrollOffset.current = value; });
+    const listener = scrollY.addListener(({ value }) => {
+      readerScrollOffset.current = value;
+    });
     return () => scrollY.removeListener(listener);
   }, [scrollY]);
 
@@ -1196,14 +1144,33 @@ export function CompletedDetailView({
     (cover && bandUnderStatusBar) || mode === "dark" ? "light" : "dark";
 
   const transcript = (
-    <TranscriptReader
-      transcript={media_item.transcript}
-      processingStatus={processing_job.status}
-      content={readerContent}
-      onRetry={fetchRawContent}
-      onCheckTranslation={translationRefresh.rearm}
-      translationToggle={translationToggle}
-    />
+    <>
+      <ResourceRefreshNotice
+        error={
+          cachedDetail.error ??
+          cachedText.error ??
+          (original.shown ? cachedOriginal.error : null)
+        }
+        onRetry={() => {
+          void MediaService.getMediaStatus(media_item.media_item_id).catch(
+            () => {},
+          );
+          void refreshRawContent();
+          if (original.shown)
+            void MediaService.getRawContent(media_item.media_item_id, {
+              variant: "original",
+            }).catch(() => {});
+        }}
+      />
+      <TranscriptReader
+        transcript={media_item.transcript}
+        processingStatus={processing_job.status}
+        content={readerContent}
+        onRetry={fetchRawContent}
+        onCheckTranslation={translationRefresh.rearm}
+        translationToggle={translationToggle}
+      />
+    </>
   );
 
   return (
@@ -1282,10 +1249,19 @@ export function CompletedDetailView({
             carries the page gutter itself — `ArtifactsPanel` owns the one it
             shares with the folder screen. */}
         {activeTab === "reader" ? (
-          <View style={styles.readerContent} onLayout={(event) => { readerContentTop.current = event.nativeEvent.layout.y; }}>
+          <View
+            style={styles.readerContent}
+            onLayout={(event) => {
+              readerContentTop.current = event.nativeEvent.layout.y;
+            }}
+          >
             {/* What this source is about, before the source itself. */}
             <SourcePreview state={preview} />
-            <View onLayout={(event) => { transcriptTop.current = event.nativeEvent.layout.y; }}>
+            <View
+              onLayout={(event) => {
+                transcriptTop.current = event.nativeEvent.layout.y;
+              }}
+            >
               {transcript}
             </View>
           </View>
@@ -1297,8 +1273,14 @@ export function CompletedDetailView({
             refusal={generationRefusal}
             refusalTestID="media-ai-refusal"
             history={artifactHistory}
-            historyLoading={historyLoading}
-            historyError={historyError}
+            historyLoading={!cachedArtifacts.data && !cachedArtifacts.error}
+            historyError={
+              cachedArtifacts.error
+                ? getFriendlyErrorMessage(cachedArtifacts.error, {
+                    fallback: t("folder.artifactsLoadFailed"),
+                  })
+                : null
+            }
             onRetryHistory={() => void refreshArtifacts()}
             historyEmptyTestID="media-ai-history-empty"
             onOpenArtifact={(artifact) =>
@@ -1313,14 +1295,22 @@ export function CompletedDetailView({
           anchored under the page, so the transcript scrolls above it. On the
           route the safe area is below it; in the Digest the tab bar is. */}
       {activeTab === "reader" ? (
-        <ChatDock key={media_item.media_item_id}
+        <ChatDock
+          key={media_item.media_item_id}
           scope="media"
           scopeId={media_item.media_item_id}
           title={displayTitle}
           imageUrl={coverUrl}
           mediaTypeIcon={mediaTypeIcon}
           sourceContent={<View style={styles.chatSource}>{transcript}</View>}
-          getSourceOffset={() => Math.max(0, readerScrollOffset.current - readerContentTop.current - transcriptTop.current)}
+          getSourceOffset={() =>
+            Math.max(
+              0,
+              readerScrollOffset.current -
+                readerContentTop.current -
+                transcriptTop.current,
+            )
+          }
           bottomInset={underStatusBar ? insets.bottom : 0}
         />
       ) : null}

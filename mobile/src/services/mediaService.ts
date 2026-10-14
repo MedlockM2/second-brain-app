@@ -1,3 +1,12 @@
+import {
+  readResource,
+  resourceKeys,
+  mutationOwner,
+  mediaPatched,
+  mediaDeleted,
+  mediaSaved,
+  resourceSession,
+} from "./resourceCache";
 import { apiRequest } from "./apiClient";
 import type {
   IngestUrlRequest,
@@ -16,6 +25,10 @@ export interface ListMediaResponse {
   total: number;
   next_cursor?: string | null;
   has_more: boolean;
+}
+
+export interface MediaLibraryWindow extends ListMediaResponse {
+  pages: number;
 }
 
 /**
@@ -129,13 +142,55 @@ export class MediaService {
   static async listMedia(
     options: { limit?: number; cursor?: string | null } = {},
   ): Promise<ListMediaResponse> {
-    const params = new URLSearchParams();
-    if (options.limit !== undefined) params.set("limit", String(options.limit));
-    if (options.cursor) params.set("cursor", options.cursor);
-    const query = params.toString();
-    return apiRequest<ListMediaResponse>(`/api/media${query ? `?${query}` : ""}`, {
-      method: "GET",
+    return readResource(resourceKeys.mediaPage(options), async () => {
+      const params = new URLSearchParams();
+      if (options.limit !== undefined)
+        params.set("limit", String(options.limit));
+      if (options.cursor) params.set("cursor", options.cursor);
+      const query = params.toString();
+      return apiRequest<ListMediaResponse>(
+        `/api/media${query ? `?${query}` : ""}`,
+        {
+          method: "GET",
+        },
+      );
     });
+  }
+
+  /** Keep the visited library pages together across navigation. */
+  static async libraryWindow(
+    after: string | null = null,
+  ): Promise<MediaLibraryWindow> {
+    const owner = resourceSession().cache;
+    const key = resourceKeys.mediaWindow;
+    const load = (after: string | null) => async () => {
+      const previous = owner.snapshot<MediaLibraryWindow>(key).data;
+      const items = new Map(
+        (after ? (previous?.items ?? []) : []).map((item) => [
+          item.media_item_id,
+          item,
+        ]),
+      );
+      let cursor = after;
+      let total = previous?.total ?? 0;
+      let count = 0;
+      do {
+        const page = await this.listMedia({ cursor });
+        page.items.forEach((item) => items.set(item.media_item_id, item));
+        total = page.total;
+        cursor = page.has_more ? (page.next_cursor ?? null) : null;
+        count += 1;
+      } while (!after && cursor && count < (previous?.pages ?? 1));
+      return {
+        status: "success",
+        items: [...items.values()],
+        total,
+        next_cursor: cursor,
+        has_more: cursor !== null,
+        pages: after ? (previous?.pages ?? 1) + 1 : count,
+      };
+    };
+    return readResource(key, load(after), false, load(null));
   }
 
   /**
@@ -145,10 +200,16 @@ export class MediaService {
   static async ingestUrl(
     payload: IngestUrlRequest,
   ): Promise<IngestUrlResponse> {
-    return apiRequest<IngestUrlResponse>("/api/media/ingest-url", {
-      method: "POST",
-      body: payload,
-    });
+    const owner = mutationOwner();
+    const result = await apiRequest<IngestUrlResponse>(
+      "/api/media/ingest-url",
+      {
+        method: "POST",
+        body: payload,
+      },
+    );
+    mediaSaved(owner);
+    return result;
   }
 
   /**
@@ -157,10 +218,17 @@ export class MediaService {
    */
   static async getMediaStatus(
     mediaItemId: string,
+    language = resourceSession().language,
   ): Promise<MediaStatusResponse> {
-    return apiRequest<MediaStatusResponse>(
-      `/api/media/${encodeURIComponent(mediaItemId)}`,
-      { method: "GET" },
+    return readResource(
+      resourceKeys.media(mediaItemId, language),
+      async () => {
+        return apiRequest<MediaStatusResponse>(
+          `/api/media/${encodeURIComponent(mediaItemId)}`,
+          { method: "GET" },
+        );
+      },
+      true,
     );
   }
 
@@ -179,11 +247,18 @@ export class MediaService {
   static async getRawContent(
     mediaItemId: string,
     options: { variant?: RawContentVariant } = {},
+    language = resourceSession().language,
   ): Promise<RawContentResponse> {
-    const query = options.variant ? `?variant=${options.variant}` : "";
-    return apiRequest<RawContentResponse>(
-      `/api/media/${encodeURIComponent(mediaItemId)}/raw-content${query}`,
-      { method: "GET" },
+    return readResource(
+      resourceKeys.text(mediaItemId, options.variant, language),
+      async () => {
+        const query = options.variant ? `?variant=${options.variant}` : "";
+        return apiRequest<RawContentResponse>(
+          `/api/media/${encodeURIComponent(mediaItemId)}/raw-content${query}`,
+          { method: "GET" },
+        );
+      },
+      options.variant !== "original",
     );
   }
 
@@ -197,10 +272,13 @@ export class MediaService {
    * DELETE /api/media/:mediaItemId
    */
   static async deleteMedia(mediaItemId: string): Promise<DeleteMediaResponse> {
-    return apiRequest<DeleteMediaResponse>(
+    const owner = mutationOwner();
+    const result = await apiRequest<DeleteMediaResponse>(
       `/api/media/${encodeURIComponent(mediaItemId)}`,
       { method: "DELETE" },
     );
+    mediaDeleted(owner, mediaItemId);
+    return result;
   }
 
   /**
@@ -220,9 +298,12 @@ export class MediaService {
     mediaItemId: string,
     title: string,
   ): Promise<PatchMediaResponse> {
-    return apiRequest<PatchMediaResponse>(
+    const owner = mutationOwner();
+    const result = await apiRequest<PatchMediaResponse>(
       `/api/media/${encodeURIComponent(mediaItemId)}`,
       { method: "PATCH", body: { title } },
     );
+    mediaPatched(owner, mediaItemId, { title: result.title });
+    return result;
   }
 }

@@ -1,7 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
-import { Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import {
+  useResourceState,
+  useResourceSnapshot,
+} from "../../src/contexts/ResourceCacheContext";
+import { resourceKeys } from "../../src/services/resourceCache";
+import { useState, useCallback } from "react";
+import {
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import {
   Typography,
   Spacing,
@@ -13,7 +23,10 @@ import {
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
-import { ScreenHeader, HeaderIconButton } from "../../src/components/ScreenHeader";
+import {
+  ScreenHeader,
+  HeaderIconButton,
+} from "../../src/components/ScreenHeader";
 import { FolderPickerView } from "../../src/components/FolderPickerView";
 import { flattenFolderPaths } from "../../src/lib/folderTree";
 import { useAuth } from "../../src/contexts/AuthContext";
@@ -52,32 +65,40 @@ export default function FolderScreen() {
   const { selectedFolder, setSelectedFolder } = useShareIntake();
   const isShareMode = params.mode === "share";
 
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    isShareMode ? selectedFolder?.id ?? null : params.currentFolderId ?? null,
+  const [folders, setFolders] = useResourceState<Folder[]>(
+    resourceKeys.folders,
+    [],
   );
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedFolders = useResourceSnapshot<Folder[]>(resourceKeys.folders);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    isShareMode
+      ? (selectedFolder?.id ?? null)
+      : (params.currentFolderId ?? null),
+  );
+  const [isLoading, setIsLoading] = useState(cachedFolders.data === undefined);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch folders
-  useEffect(() => {
-    if (!isAuthenticated) return;
+  useFocusEffect(
+    useCallback(() => {
+      if (!isAuthenticated) return;
 
-    const fetchFolders = async () => {
-      try {
-        setIsLoading(true);
-        const data = await OrganizationService.getUserFolders();
-        setFolders(data);
-      } catch {
-        setError(t("folderPicker.loadFailed"));
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      const fetchFolders = async () => {
+        try {
+          const data = await OrganizationService.getUserFolders();
+          setFolders(data);
+          setError(null);
+        } catch {
+          // The resource snapshot publishes load errors separately from mutation errors.
+        } finally {
+          setIsLoading(false);
+        }
+      };
 
-    fetchFolders();
-  }, [isAuthenticated]);
+      fetchFolders();
+    }, [isAuthenticated, setFolders]),
+  );
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -107,14 +128,18 @@ export default function FolderScreen() {
 
   const handleFolderCreated = useCallback(
     (created: Folder) => {
-      setFolders((prev) => [...prev, created]);
+      setFolders((prev) =>
+        prev.some((folder) => folder.id === created.id)
+          ? prev
+          : [...prev, created],
+      );
       setSelectedId(created.id);
       if (isShareMode) {
         setSelectedFolder({ id: created.id, path: created.name });
         router.back();
       }
     },
-    [isShareMode, router, setSelectedFolder],
+    [isShareMode, router, setSelectedFolder, setFolders],
   );
 
   const handleSave = useCallback(async () => {
@@ -125,10 +150,7 @@ export default function FolderScreen() {
 
     try {
       setIsSaving(true);
-      await OrganizationService.setMediaFolder(
-        params.mediaItemId,
-        selectedId,
-      );
+      await OrganizationService.setMediaFolder(params.mediaItemId, selectedId);
       handleBack();
     } catch {
       setError(t("folderPicker.saveFailed"));
@@ -173,9 +195,11 @@ export default function FolderScreen() {
       <FolderPickerView
         folders={folders}
         selectedId={selectedId}
-        isLoading={isLoading}
+        isLoading={isLoading && !cachedFolders.data}
         busy={isSaving}
-        error={error}
+        error={
+          error ?? (cachedFolders.error ? t("folderPicker.loadFailed") : null)
+        }
         onSelect={handleSelect}
         onFolderCreated={handleFolderCreated}
         onCreateFailed={setError}

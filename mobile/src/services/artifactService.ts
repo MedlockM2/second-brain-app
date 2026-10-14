@@ -1,3 +1,10 @@
+import { mergeArtifactIntoHistory } from "../lib/artifactHistory";
+import {
+  readResource,
+  resourceKeys,
+  mutationOwner,
+  resourceSession,
+} from "./resourceCache";
 import { apiRequest } from "./apiClient";
 import type { ArtifactType } from "@media-summarizer/core/types/media";
 import type {
@@ -47,7 +54,9 @@ export class ArtifactService {
     scopeId: string,
     artifactType: ArtifactType,
   ): Promise<ArtifactCreateResult> {
-    return apiRequest<ArtifactCreateResult>(`/api/artifacts`, {
+    const owner = mutationOwner();
+    const language = resourceSession().language;
+    const result = await apiRequest<ArtifactCreateResult>(`/api/artifacts`, {
       method: "POST",
       body: {
         scope,
@@ -55,6 +64,32 @@ export class ArtifactService {
         artifact_type: artifactType,
       } satisfies GenerateArtifactRequest,
     });
+    if (
+      resourceSession().cache !== owner ||
+      resourceSession().language !== language
+    )
+      return result;
+    if (result.status !== "ready")
+      owner.remove(
+        (key) => key[0] === "artifact-body" && key[1] === result.artifact_id,
+      );
+    const key = resourceKeys.artifacts(scope, scopeId, 50, null, language);
+    const page = owner.snapshot<ArtifactListResponse>(key).data;
+    owner.set(key, {
+      scope,
+      scope_id: scopeId,
+      ...page,
+      artifacts: mergeArtifactIntoHistory(page?.artifacts ?? [], result),
+    });
+    owner.set(resourceKeys.artifact(result.artifact_id, language), result);
+    owner.invalidate(
+      (key) =>
+        (key[0] === "artifact-list" &&
+          key[1] === scope &&
+          key[2] === scopeId) ||
+        (key[0] === "artifact" && key[1] === result.artifact_id),
+    );
+    return result;
   }
 
   /**
@@ -65,13 +100,50 @@ export class ArtifactService {
     scope: ArtifactScope,
     scopeId: string,
     options?: { limit?: number; cursor?: string },
+    language = resourceSession().language,
   ): Promise<ArtifactListResponse> {
-    const params = new URLSearchParams({ scope, scope_id: scopeId });
-    if (options?.limit) params.set("limit", String(options.limit));
-    if (options?.cursor) params.set("cursor", options.cursor);
-    return apiRequest<ArtifactListResponse>(
-      `/api/artifacts?${params.toString()}`,
-      { method: "GET" },
+    return readResource(
+      resourceKeys.artifacts(
+        scope,
+        scopeId,
+        options?.limit,
+        options?.cursor,
+        language,
+      ),
+      async () => {
+        const params = new URLSearchParams({ scope, scope_id: scopeId });
+        if (options?.limit) params.set("limit", String(options.limit));
+        if (options?.cursor) params.set("cursor", options.cursor);
+        const owner = resourceSession().cache;
+        const response = await apiRequest<ArtifactListResponse>(
+          `/api/artifacts?${params.toString()}`,
+          { method: "GET" },
+        );
+        if (!options?.cursor) {
+          const previous = owner.snapshot<ArtifactListResponse>(
+            resourceKeys.artifacts(
+              scope,
+              scopeId,
+              options?.limit,
+              null,
+              language,
+            ),
+          ).data;
+          const active = (previous?.artifacts ?? []).filter(
+            (entry) =>
+              (entry.status === "queued" || entry.status === "generating") &&
+              !response.artifacts.some(
+                (item) => item.artifact_id === entry.artifact_id,
+              ),
+          );
+          if (active.length)
+            response.artifacts = [...active, ...response.artifacts].sort(
+              (a, b) => b.created_at.localeCompare(a.created_at),
+            );
+        }
+        return response;
+      },
+      true,
     );
   }
 
@@ -79,10 +151,19 @@ export class ArtifactService {
    * One entry with its full source snapshot.
    * GET /api/artifacts/:artifactId
    */
-  static async getArtifact(artifactId: string): Promise<ArtifactDetail> {
-    return apiRequest<ArtifactDetail>(
-      `/api/artifacts/${encodeURIComponent(artifactId)}`,
-      { method: "GET" },
+  static async getArtifact(
+    artifactId: string,
+    language = resourceSession().language,
+  ): Promise<ArtifactDetail> {
+    return readResource(
+      resourceKeys.artifact(artifactId, language),
+      async () => {
+        return apiRequest<ArtifactDetail>(
+          `/api/artifacts/${encodeURIComponent(artifactId)}`,
+          { method: "GET" },
+        );
+      },
+      true,
     );
   }
 
@@ -92,10 +173,17 @@ export class ArtifactService {
    */
   static async getArtifactContent(
     artifactId: string,
+    language = resourceSession().language,
   ): Promise<ArtifactContentResponse> {
-    return apiRequest<ArtifactContentResponse>(
-      `/api/artifacts/${encodeURIComponent(artifactId)}/content`,
-      { method: "GET" },
+    return readResource(
+      resourceKeys.artifactBody(artifactId, language),
+      async () => {
+        return apiRequest<ArtifactContentResponse>(
+          `/api/artifacts/${encodeURIComponent(artifactId)}/content`,
+          { method: "GET" },
+        );
+      },
+      true,
     );
   }
 }

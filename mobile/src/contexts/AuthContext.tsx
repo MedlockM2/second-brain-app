@@ -1,3 +1,4 @@
+import { activateResourceAccount } from "../services/resourceCache";
 import React, {
   createContext,
   useContext,
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const applyExpiredSession = useCallback(() => {
     clearRefreshTimer();
+    activateResourceAccount(null);
     setState((previous) =>
       previous.isAuthenticated
         ? {
@@ -200,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
+      activateResourceAccount(user.id, user.reading_language ?? null);
       setState({
         user,
         isLoading: false,
@@ -261,6 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      activateResourceAccount(user.id, user.reading_language ?? null);
       setState({
         user,
         isLoading: false,
@@ -361,6 +365,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    activateResourceAccount(null);
     clearRefreshTimer();
     // Before the session is torn down, because unregistering needs it. Without
     // this the device stays registered under the account that just signed out,

@@ -1,3 +1,9 @@
+import type { MediaLibraryWindow } from "../../src/services/mediaService";
+import {
+  useResourceState,
+  useResourceSnapshot,
+} from "../../src/contexts/ResourceCacheContext";
+import { resourceKeys } from "../../src/services/resourceCache";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
@@ -149,6 +155,8 @@ function hitToRow(hit: SearchHit): MediaRow {
  * The tab bar item itself carries no test id any more: task-350 handed the bar to
  * the system, and `NativeTabs` has no equivalent of `tabBarButtonTestID`.
  */
+const EMPTY_MEDIA: MediaListItem[] = [];
+
 export default function SearchScreen() {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -182,19 +190,33 @@ export default function SearchScreen() {
   // three pieces of a built tree: a rename then patches one string in one array
   // and the grid, the filter and the subfolder counts all follow from it,
   // where three states would have to be kept in agreement by hand.
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useResourceState<Folder[]>(
+    resourceKeys.folders,
+    [],
+  );
   const [foldersLoading, setFoldersLoading] = useState(true);
-  const [foldersError, setFoldersError] = useState<string | null>(null);
-  const [media, setMedia] = useState<MediaListItem[]>([]);
+  const mediaWindow = useResourceSnapshot<MediaLibraryWindow>(
+    resourceKeys.mediaWindow,
+  );
+  const folderSnapshot = useResourceSnapshot<Folder[]>(resourceKeys.folders);
+  const foldersError = folderSnapshot.error
+    ? getFriendlyErrorMessage(folderSnapshot.error, {
+        fallback: t("search.foldersLoadFailed"),
+      })
+    : null;
+  const mediaError = mediaWindow.error
+    ? getFriendlyErrorMessage(mediaWindow.error, {
+        fallback: t("search.libraryLoadFailed"),
+      })
+    : null;
+  const media = mediaWindow.data?.items ?? EMPTY_MEDIA;
+  const mediaTotal = mediaWindow.data?.total ?? 0;
+  const mediaCursor = mediaWindow.data?.next_cursor ?? null;
   const [mediaLoading, setMediaLoading] = useState(true);
-  const [mediaError, setMediaError] = useState<string | null>(null);
-  const [mediaTotal, setMediaTotal] = useState(0);
-  const [mediaCursor, setMediaCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const mediaRequest = useRef(0);
   const mediaBusy = useRef(false);
-  const loadedPages = useRef(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // One fold for both bodies: they draw the same `Folders` heading, so a section
@@ -229,7 +251,9 @@ export default function SearchScreen() {
         // `err.message` here is whatever the search API put in its `detail`, in
         // English and written for us. The reader gets a sentence from the
         // catalogue instead.
-        setError(getFriendlyErrorMessage(err, { fallback: t("search.failed") }));
+        setError(
+          getFriendlyErrorMessage(err, { fallback: t("search.failed") }),
+        );
         setResults([]);
         setTotalResults(0);
       } finally {
@@ -248,15 +272,10 @@ export default function SearchScreen() {
 
     try {
       setFolders(await OrganizationService.getUserFolders());
-      setFoldersError(null);
-    } catch (err) {
-      setFoldersError(
-        getFriendlyErrorMessage(err, {
-          fallback: t("search.foldersLoadFailed"),
-        }),
-      );
+    } catch {
+      /* Shared snapshot publishes the read failure. */
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, setFolders]);
 
   // Refresh the already-loaded window atomically. Never replace five pages
   // with page one on focus or while polling an import's status.
@@ -266,28 +285,11 @@ export default function SearchScreen() {
     mediaBusy.current = true;
     setLoadingMore(false);
     try {
-      const items = new Map<string, MediaListItem>();
-      let cursor: string | null = null;
-      let total = 0;
-      let pages = 0;
-      do {
-        const response = await MediaService.listMedia({ cursor });
-        if (request !== mediaRequest.current) return;
-        response.items.forEach((item) => items.set(item.media_item_id, item));
-        total = response.total;
-        cursor = response.has_more ? response.next_cursor ?? null : null;
-        pages += 1;
-      } while (cursor && pages < loadedPages.current);
-      loadedPages.current = pages;
-      setMedia([...items.values()]);
-      setMediaTotal(total);
-      setMediaCursor(cursor);
-      setMediaError(null);
+      await MediaService.libraryWindow();
+      if (request !== mediaRequest.current) return;
       setPageError(null);
-    } catch (err) {
-      if (request === mediaRequest.current) {
-        setMediaError(getFriendlyErrorMessage(err, { fallback: t("search.libraryLoadFailed") }));
-      }
+    } catch {
+      /* Cached rows and the shared error remain available. */
     } finally {
       if (request === mediaRequest.current) mediaBusy.current = false;
     }
@@ -300,17 +302,14 @@ export default function SearchScreen() {
     setLoadingMore(true);
     setPageError(null);
     try {
-      const response = await MediaService.listMedia({ cursor: mediaCursor });
-      if (request !== mediaRequest.current) return;
-      setMedia((current) => [...new Map(
-        [...current, ...response.items].map((item) => [item.media_item_id, item]),
-      ).values()]);
-      loadedPages.current += 1;
-      setMediaTotal(response.total);
-      setMediaCursor(response.has_more ? response.next_cursor ?? null : null);
+      await MediaService.libraryWindow(mediaCursor);
     } catch (err) {
       if (request === mediaRequest.current) {
-        setPageError(getFriendlyErrorMessage(err, { fallback: t("search.libraryLoadFailed") }));
+        setPageError(
+          getFriendlyErrorMessage(err, {
+            fallback: t("search.libraryLoadFailed"),
+          }),
+        );
       }
     } finally {
       if (request === mediaRequest.current) {
@@ -352,7 +351,8 @@ export default function SearchScreen() {
    * for a grid that cannot change.
    */
   const hasProcessingMedia =
-    !query.trim() && media.some((item) => isProcessingLibraryStatus(item.status));
+    !query.trim() &&
+    media.some((item) => isProcessingLibraryStatus(item.status));
 
   const { isStalled: isProcessingStalled, rearm: rearmProcessingRefresh } =
     useProcessingRefresh({
@@ -408,10 +408,6 @@ export default function SearchScreen() {
     mediaRequest.current += 1;
     mediaBusy.current = false;
     setLoadingMore(false);
-    setMediaTotal((total) => Math.max(0, total - 1));
-    setMedia((current) =>
-      current.filter((item) => item.media_item_id !== mediaItemId),
-    );
     setResults((current) =>
       current.filter((row) => row.media_item_id !== mediaItemId),
     );
@@ -426,11 +422,6 @@ export default function SearchScreen() {
       mediaRequest.current += 1;
       mediaBusy.current = false;
       setLoadingMore(false);
-      setMedia((current) =>
-        current.map((item) =>
-          item.media_item_id === mediaItemId ? { ...item, title } : item,
-        ),
-      );
       setResults((current) =>
         current.map((row) =>
           row.media_item_id === mediaItemId ? { ...row, title } : row,
@@ -444,10 +435,14 @@ export default function SearchScreen() {
   // one made with the `+` does, and a folded grid is unfolded so it is on screen.
   const handleMenuFolderCreated = useCallback(
     (created: Folder) => {
-      setFolders((current) => [...current, created]);
+      setFolders((current) =>
+        current.some((folder) => folder.id === created.id)
+          ? current
+          : [...current, created],
+      );
       if (!foldersSection.expanded) foldersSection.toggle();
     },
-    [foldersSection],
+    [foldersSection, setFolders],
   );
 
   // The row learns its folder in place, so the next "Move" opens on it. The
@@ -458,13 +453,6 @@ export default function SearchScreen() {
       mediaRequest.current += 1;
       mediaBusy.current = false;
       setLoadingMore(false);
-      setMedia((current) =>
-        current.map((item) =>
-          item.media_item_id === mediaItemId
-            ? { ...item, folder_id: folder.id }
-            : item,
-        ),
-      );
       setResults((current) =>
         current.map((row) =>
           row.media_item_id === mediaItemId
@@ -524,7 +512,7 @@ export default function SearchScreen() {
         ),
       );
     },
-    [],
+    [setFolders],
   );
 
   // A delete cannot be patched the same way: the backend took the whole subtree
@@ -550,7 +538,7 @@ export default function SearchScreen() {
       );
       void Promise.all([loadFolders(), loadMedia()]);
     },
-    [folderTree, loadFolders, loadMedia],
+    [folderTree, loadFolders, loadMedia, setFolders],
   );
 
   // The long-press menu of a folder tile. Two rows, no Move: reparenting a
@@ -594,7 +582,11 @@ export default function SearchScreen() {
       void (async () => {
         try {
           const created = await OrganizationService.createFolder(name);
-          setFolders((current) => [...current, created]);
+          setFolders((current) =>
+            current.some((folder) => folder.id === created.id)
+              ? current
+              : [...current, created],
+          );
           setIsNewFolderVisible(false);
           if (!foldersExpanded) toggleFoldersSection();
         } catch (err) {
@@ -610,7 +602,7 @@ export default function SearchScreen() {
         }
       })();
     },
-    [isCreatingFolder, foldersExpanded, toggleFoldersSection],
+    [isCreatingFolder, foldersExpanded, toggleFoldersSection, setFolders],
   );
 
   // The copy of the pressed tile the menu lifts above its blur. Same component
@@ -647,8 +639,7 @@ export default function SearchScreen() {
   // alike: a nested folder matches like any other, which a roots-only list
   // cannot do.
   const matchingFolders = useMemo(
-    () =>
-      filterFoldersByName(folderTree.nodeById.values(), query),
+    () => filterFoldersByName(folderTree.nodeById.values(), query),
     [folderTree, query],
   );
 
@@ -697,7 +688,7 @@ export default function SearchScreen() {
         {!query.trim() ? (
           <LibraryState
             folders={sortedFolders}
-            foldersLoading={foldersLoading}
+            foldersLoading={foldersLoading && !folderSnapshot.data}
             foldersError={foldersError}
             foldersExpanded={foldersSection.expanded}
             onToggleFolders={foldersSection.toggle}
@@ -708,10 +699,12 @@ export default function SearchScreen() {
             media={media}
             mediaTotal={mediaTotal}
             loadingMore={loadingMore}
-            pageError={pageError}
-            onLoadMore={() => { if (!pageError) void loadMoreMedia(); }}
+            pageError={mediaWindow.error ? pageError : null}
+            onLoadMore={() => {
+              if (!pageError) void loadMoreMedia();
+            }}
             onRetryPage={() => void loadMoreMedia()}
-            mediaLoading={mediaLoading}
+            mediaLoading={mediaLoading && !mediaWindow.data}
             mediaError={mediaError}
             onRetryMedia={handleRetryMedia}
             onOpenMedia={handleOpenMedia}
@@ -723,7 +716,7 @@ export default function SearchScreen() {
         ) : (
           <SearchResultsState
             folders={matchingFolders}
-            foldersLoading={foldersLoading}
+            foldersLoading={foldersLoading && !folderSnapshot.data}
             foldersError={foldersError}
             foldersExpanded={foldersSection.expanded}
             onToggleFolders={foldersSection.toggle}
@@ -793,10 +786,7 @@ export default function SearchScreen() {
       />
       <RenameDialog {...mediaActions.renameProps} />
       <RenameDialog {...mediaActions.newFolderProps} />
-      <Toast
-        {...toastProps}
-        top={insets.top + CONTENT_TOP_INSET}
-      />
+      <Toast {...toastProps} top={insets.top + CONTENT_TOP_INSET} />
       <AnchoredContextMenu
         {...folderActions.menuProps}
         renderPreview={renderFolderPreview}
@@ -849,10 +839,7 @@ interface LibraryStateProps {
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
   /** Opens the tile's actions menu. Ignored on the default folder's tile. */
-  onLongPressFolder: (
-    folder: FolderNode,
-    anchor: AnchorRect,
-  ) => void;
+  onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
   /** Opens the prompt that names a new, empty root folder. */
   onCreateFolder: () => void;
   media: MediaRow[];
@@ -984,10 +971,15 @@ function LibraryState({
       // rows.
       ListFooterComponent={
         pageError ? (
-          <InlineErrorCard message={pageError} onRetry={onRetryPage}
-            retryAccessibilityLabel={t("search.retryLibraryA11y")} />
+          <InlineErrorCard
+            message={pageError}
+            onRetry={onRetryPage}
+            retryAccessibilityLabel={t("search.retryLibraryA11y")}
+          />
         ) : loadingMore ? (
-          <View style={styles.sectionLoadingRow}><ActivityIndicator color={Colors.primary} /></View>
+          <View style={styles.sectionLoadingRow}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
         ) : mediaError && media.length > 0 ? (
           <InlineErrorCard
             message={mediaError}
@@ -1019,10 +1011,7 @@ function LibraryHeader({
   onToggleFolders: () => void;
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
-  onLongPressFolder: (
-    folder: FolderNode,
-    anchor: AnchorRect,
-  ) => void;
+  onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
   onCreateFolder: () => void;
   mediaCount: number;
 }) {
@@ -1057,11 +1046,18 @@ function LibraryHeader({
       {/* Folded, everything the heading stands over leaves with the grid — the
           spinner, the error card and the empty hint alike: they are all the
           folders section, and folding it is asking not to see it. */}
+      {foldersExpanded && foldersError && folders.length > 0 ? (
+        <InlineErrorCard
+          message={foldersError}
+          onRetry={onRetryFolders}
+          retryAccessibilityLabel={t("search.retryFoldersA11y")}
+        />
+      ) : null}
       {!foldersExpanded ? null : foldersLoading ? (
         <View style={styles.sectionLoadingRow}>
           <ActivityIndicator color={Colors.primary} />
         </View>
-      ) : foldersError ? (
+      ) : foldersError && folders.length === 0 ? (
         <InlineErrorCard
           message={foldersError}
           onRetry={onRetryFolders}
@@ -1108,10 +1104,7 @@ interface SearchResultsStateProps {
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
   /** Opens the tile's actions menu. Ignored on the default folder's tile. */
-  onLongPressFolder: (
-    folder: FolderNode,
-    anchor: AnchorRect,
-  ) => void;
+  onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
   results: MediaRow[];
   totalResults: number;
   /** The hits on screen do not answer what is typed yet. */
@@ -1252,10 +1245,7 @@ function SearchResultsHeader({
   onToggleFolders: () => void;
   onRetryFolders: () => void;
   onOpenFolder: (folder: FolderNode) => void;
-  onLongPressFolder: (
-    folder: FolderNode,
-    anchor: AnchorRect,
-  ) => void;
+  onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
   showFolders: boolean;
   /** `null` while the count would not describe what is on screen. */
   resultCount: number | null;
@@ -1274,11 +1264,18 @@ function SearchResultsHeader({
             onToggle={onToggleFolders}
           />
 
+          {foldersExpanded && foldersError && folders.length > 0 ? (
+            <InlineErrorCard
+              message={foldersError}
+              onRetry={onRetryFolders}
+              retryAccessibilityLabel={t("search.retryFoldersA11y")}
+            />
+          ) : null}
           {!foldersExpanded ? null : foldersLoading ? (
             <View style={styles.sectionLoadingRow}>
               <ActivityIndicator color={Colors.primary} />
             </View>
-          ) : foldersError ? (
+          ) : foldersError && folders.length === 0 ? (
             <InlineErrorCard
               message={foldersError}
               onRetry={onRetryFolders}

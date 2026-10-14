@@ -1,3 +1,12 @@
+import {
+  useResourceSnapshot,
+  useResourceState,
+  useFolderMediaState,
+  useResourceSnapshots,
+} from "../../../src/contexts/ResourceCacheContext";
+import { resourceKeys } from "../../../src/services/resourceCache";
+import type { ListMediaResponse } from "@media-summarizer/core/types/media";
+import type { Folder } from "@media-summarizer/core/types/organization";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
@@ -38,7 +47,11 @@ import { useMediaActions } from "../../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../../src/hooks/useFolderActions";
 import { useProcessingRefresh } from "../../../src/hooks/useProcessingRefresh";
 import { describeArtifactRefusal } from "../../../src/lib/artifactRefusal";
-import { mergeArtifactIntoHistory } from "../../../src/lib/artifactHistory";
+import { useUserPreferences } from "../../../src/contexts/UserPreferencesContext";
+import type {
+  ArtifactListResponse,
+  ArtifactDetail,
+} from "@media-summarizer/core/types/artifacts";
 import { sameSourceSet } from "../../../src/lib/artifactSources";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
 import {
@@ -66,7 +79,10 @@ import {
   HeaderMenuGlyph,
   SCREEN_HEADER_HEIGHT,
 } from "../../../src/components/ScreenHeader";
-import type { ArtifactType, MediaListItem } from "@media-summarizer/core/types/media";
+import type {
+  ArtifactType,
+  MediaListItem,
+} from "@media-summarizer/core/types/media";
 
 /**
  * Folders explorer — single folder view, split in two intra-screen tabs
@@ -175,63 +191,60 @@ export default function FolderDetailScreen() {
   const folderId = params.id;
 
   const [activeTab, setActiveTab] = useState<FolderTabKey>("sources");
-  const [childFolders, setChildFolders] = useState<FolderNode[]>([]);
+  const [cachedFolders] = useResourceState<Folder[]>(resourceKeys.folders, []);
+  const cachedFolderPage = useResourceSnapshot<ListMediaResponse>(
+    resourceKeys.mediaPage({ folderId, limit: 100 }),
+  );
+  const cachedFolderList = useResourceSnapshot<Folder[]>(resourceKeys.folders);
+  const currentFolder = useMemo(
+    () => buildFolderTree(cachedFolders).nodeById.get(folderId) ?? null,
+    [cachedFolders, folderId],
+  );
+  const childFolders = useMemo(
+    () =>
+      [...(currentFolder?.children ?? [])].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    [currentFolder],
+  );
   // The folder's `getFolderMedia` response as it came: descendants included,
   // newest first. Held whole because three things read it — the sources stored
   // directly here, which the Sources list shows; the subtree of each subfolder,
   // which its collage is drawn from; and every media id, which is exactly the
   // scope a generation over this folder reads.
-  const [folderMedia, setFolderMedia] = useState<MediaListItem[]>([]);
-  const [title, setTitle] = useState<string>(params.name ?? "Folder");
+  const [folderMedia, setFolderMedia] = useFolderMediaState(folderId);
+  const title = currentFolder?.is_default
+    ? getDefaultFolderLabel()
+    : (currentFolder?.name ?? params.name ?? t("search.folders"));
   // The folder itself, as the tree knows it. Held because the header menu
   // needs more than a name: the subfolders a deletion would take with it,
   // and the `is_default` flag that decides whether the menu exists at all.
-  const [folder, setFolder] = useState<FolderNode | null>(null);
+  const folder = currentFolder;
   const [isLoading, setIsLoading] = useState(true);
-  const [loadedFolderId, setLoadedFolderId] = useState<string | null>(null);
   const loadRequest = useRef(0);
-  const hasContent = loadedFolderId === folderId;
-  const [error, setError] = useState<string | null>(null);
+  const hasContent =
+    cachedFolderPage.data !== undefined && cachedFolderList.data !== undefined;
+  const readError = cachedFolderPage.error ?? cachedFolderList.error;
+  const error = readError
+    ? getFriendlyErrorMessage(readError, { fallback: t("folder.loadFailed") })
+    : null;
 
   const load = useCallback(async () => {
     if (!isAuthenticated || !folderId) return;
     const request = ++loadRequest.current;
     try {
-      const [folders, folderMedia] = await Promise.all([
+      const [, folderMedia] = await Promise.all([
         OrganizationService.getUserFolders(),
         OrganizationService.getFolderMedia(folderId),
       ]);
 
       if (request !== loadRequest.current) return;
-      // Direct children = folders whose parent is this folder.
-      const { nodeById } = buildFolderTree(folders);
-      const current = nodeById.get(folderId);
-      setFolder(current ?? null);
-      if (current) {
-        // The default folder is titled the way every other surface names it:
-        // its stored name is `Uncategorized`, which is not a label to show.
-        setTitle(
-          current.is_default === true ? getDefaultFolderLabel() : current.name,
-        );
-        setChildFolders(
-          [...current.children].sort((a, b) => a.name.localeCompare(b.name)),
-        );
-      } else {
-        setChildFolders([]);
-      }
-
+      // Both services publish into the shared resources before resolving.
       setFolderMedia(folderMedia);
-      setLoadedFolderId(folderId);
-      setError(null);
-    } catch (err) {
-      if (request !== loadRequest.current) return;
-      setError(
-        getFriendlyErrorMessage(err, {
-          fallback: t("folder.loadFailed"),
-        }),
-      );
+    } catch {
+      /* Shared snapshots publish failures without hiding saved responses. */
     }
-  }, [isAuthenticated, folderId]);
+  }, [isAuthenticated, folderId, setFolderMedia]);
 
   useFocusEffect(
     useCallback(() => {
@@ -307,7 +320,7 @@ export default function FolderDetailScreen() {
     } catch {
       // Deliberately silent, see above.
     }
-  }, [isAuthenticated, folderId]);
+  }, [isAuthenticated, folderId, setFolderMedia]);
 
   /**
    * Whether a source card on screen is still being processed. Read off the
@@ -340,12 +353,15 @@ export default function FolderDetailScreen() {
 
   // Removed from the whole response, not only from the list: a deleted media
   // also leaves the scope a generation over this folder would read.
-  const handleMediaDeleted = useCallback((mediaItemId: string) => {
-    loadRequest.current += 1;
-    setFolderMedia((current) =>
-      current.filter((item) => item.media_item_id !== mediaItemId),
-    );
-  }, []);
+  const handleMediaDeleted = useCallback(
+    (mediaItemId: string) => {
+      loadRequest.current += 1;
+      setFolderMedia((current) =>
+        current.filter((item) => item.media_item_id !== mediaItemId),
+      );
+    },
+    [setFolderMedia],
+  );
 
   // Patched in place rather than refetched: the rename already returned the
   // stored title, and the card has to carry it before the user leaves the screen.
@@ -358,7 +374,7 @@ export default function FolderDetailScreen() {
         ),
       );
     },
-    [],
+    [setFolderMedia],
   );
 
   // Says where "New folder" put a source, just under the header.
@@ -395,13 +411,9 @@ export default function FolderDetailScreen() {
 
   // Patched in place rather than refetched: the rename already returned the
   // stored name, and it has to reach the header before the user leaves.
-  const handleFolderRenamed = useCallback(
-    (_folderId: string, name: string) => {
-      setTitle(name);
-      setFolder((current) => (current ? { ...current, name } : current));
-    },
-    [],
-  );
+  const handleFolderRenamed = useCallback(() => {
+    void load();
+  }, [load]);
 
   // The header `…`: rename or delete the folder being looked at, without
   // going back to the grid to long-press its tile.
@@ -423,8 +435,7 @@ export default function FolderDetailScreen() {
   // `delete_folder` both raise on `is_default`), and a menu whose two rows would
   // both fail is worse than no menu. Same answer before the first load answers,
   // when nothing is known about the folder yet.
-  const managedFolder =
-    folder && folder.is_default !== true ? folder : null;
+  const managedFolder = folder && folder.is_default !== true ? folder : null;
 
   // Subfolders first, then the sources. The captions only exist to set the two
   // groups apart, so a folder without subfolders is one caption-less list.
@@ -448,35 +459,35 @@ export default function FolderDetailScreen() {
 
   const sourceOffset = useRef(0);
   const renderSourceRow = (item: Row, inConversation = false) => {
-  switch (item.kind) {
-    case "caption":
-      return (
-        <Text style={styles.sectionTitle} accessibilityRole="header">
-          {item.key === "folders"
-            ? t("folder.section.folders")
-            : t("folder.section.sources", { count: item.count })}
-        </Text>
-      );
-    case "folder":
-      return (
-        <SubfolderCard
-          node={item.node}
-          subtreeMedia={item.subtreeMedia}
-          onPress={handleOpenFolder}
-          testID={`folder-source-folder-${item.node.id}`}
-        />
-      );
-    case "media":
-      return (
-        <MediaListCard
-          item={item.media}
-          onPress={handleOpenMedia}
-          onLongPress={inConversation ? undefined : mediaActions.open}
-          processingStalled={isProcessingStalled}
-          testID={`folder-source-media-${item.media.media_item_id}`}
-        />
-      );
-  }
+    switch (item.kind) {
+      case "caption":
+        return (
+          <Text style={styles.sectionTitle} accessibilityRole="header">
+            {item.key === "folders"
+              ? t("folder.section.folders")
+              : t("folder.section.sources", { count: item.count })}
+          </Text>
+        );
+      case "folder":
+        return (
+          <SubfolderCard
+            node={item.node}
+            subtreeMedia={item.subtreeMedia}
+            onPress={handleOpenFolder}
+            testID={`folder-source-folder-${item.node.id}`}
+          />
+        );
+      case "media":
+        return (
+          <MediaListCard
+            item={item.media}
+            onPress={handleOpenMedia}
+            onLongPress={inConversation ? undefined : mediaActions.open}
+            processingStalled={isProcessingStalled}
+            testID={`folder-source-media-${item.media.media_item_id}`}
+          />
+        );
+    }
   };
 
   return (
@@ -493,9 +504,7 @@ export default function FolderDetailScreen() {
         trailing={
           managedFolder ? (
             <HeaderMenuButton
-              onPress={(anchor) =>
-                folderActions.open(managedFolder, anchor)
-              }
+              onPress={(anchor) => folderActions.open(managedFolder, anchor)}
               accessibilityLabel={t("folderActions.moreA11y")}
               testID="folder-header-actions"
             />
@@ -513,8 +522,14 @@ export default function FolderDetailScreen() {
       </View>
 
       {error && hasContent ? (
-        <Pressable onPress={handleRetry} accessibilityRole="button" style={styles.tabsContainer}>
-          <Text style={styles.centeredText}>{error} · {t("common.retry")}</Text>
+        <Pressable
+          onPress={handleRetry}
+          accessibilityRole="button"
+          style={styles.tabsContainer}
+        >
+          <Text style={styles.centeredText}>
+            {error} · {t("common.retry")}
+          </Text>
         </Pressable>
       ) : null}
       {isLoading && !hasContent ? (
@@ -546,7 +561,9 @@ export default function FolderDetailScreen() {
           data={rows}
           keyExtractor={rowKey}
           renderItem={({ item }) => renderSourceRow(item)}
-          onScroll={(event) => { sourceOffset.current = event.nativeEvent.contentOffset.y; }}
+          onScroll={(event) => {
+            sourceOffset.current = event.nativeEvent.contentOffset.y;
+          }}
           scrollEventThrottle={16}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -569,16 +586,21 @@ export default function FolderDetailScreen() {
           task-434), under the list. The SafeAreaView already keeps the bottom
           inset. */}
       {hasContent && activeTab === "sources" && folderId ? (
-        <ChatDock key={folderId}
+        <ChatDock
+          key={folderId}
           scope="folder"
           scopeId={folderId}
           title={title}
           getSourceOffset={() => sourceOffset.current}
           sourceContent={
             <View style={styles.chatSources}>
-              {rows.length ? rows.map((row) => (
-                <View key={rowKey(row)}>{renderSourceRow(row, true)}</View>
-              )) : <EmptyState />}
+              {rows.length ? (
+                rows.map((row) => (
+                  <View key={rowKey(row)}>{renderSourceRow(row, true)}</View>
+                ))
+              ) : (
+                <EmptyState />
+              )}
             </View>
           }
         />
@@ -632,34 +654,33 @@ interface AiTabProps {
  * from the detail route and kept: an entry is immutable, so one read per artifact
  * is all this ever costs.
  */
+const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
+
 function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
 
-  const [history, setHistory] = useState<ArtifactSummary[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
+  const { readingLanguage } = useUserPreferences();
+  const cachedHistory = useResourceSnapshot<ArtifactListResponse>(
+    resourceKeys.artifacts("folder", folderId),
+  );
+  const history = cachedHistory.data?.artifacts ?? EMPTY_ARTIFACTS;
+  const isLoading = !cachedHistory.data && !cachedHistory.error;
+  const listError = cachedHistory.error
+    ? getFriendlyErrorMessage(cachedHistory.error, {
+        fallback: t("folder.artifactsLoadFailed"),
+      })
+    : null;
   const [refusal, setRefusal] = useState<string | null>(null);
   // The types whose POST is in flight. The history cannot know about them yet —
   // the entry only exists once the request answers, and over a folder that
   // request reads every descendant source's transcript from S3 first. Without
   // this, the tap stays visually unanswered for the whole round-trip.
-  const [requestsInFlight, setRequestsInFlight] = useState<readonly ArtifactType[]>(
-    [],
-  );
-  // The sources an entry was generated over, by `artifact_id`. `null` records a
-  // read that failed: it is not retried, and an unknown snapshot leaves the
-  // generation offered — the backend is the authority and answers the stored
-  // artifact anyway, so the worst case is a request that changes nothing.
-  const [sourceSnapshots, setSourceSnapshots] = useState<
-    Record<string, readonly string[] | null>
-  >({});
+  const [requestsInFlight, setRequestsInFlight] = useState<
+    readonly ArtifactType[]
+  >([]);
   const mountedRef = useRef(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Snapshot reads already in flight, so the poll cannot fire a second read of
-  // the same entry while the first is still travelling.
-  const snapshotsInFlightRef = useRef<Set<string>>(new Set());
-
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -668,41 +689,24 @@ function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
     };
   }, []);
 
-  const fetchHistory = useCallback(async (): Promise<ArtifactSummary[]> => {
-    if (!isAuthenticated) return [];
-    const response = await ArtifactService.listArtifacts("folder", folderId);
-    return response.artifacts;
-  }, [isAuthenticated, folderId]);
-
   const refresh = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
-      const artifacts = await fetchHistory();
-      if (!mountedRef.current) return;
-      setHistory(artifacts);
-      setListError(null);
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setListError(
-        getFriendlyErrorMessage(err, {
-          fallback: t("folder.artifactsLoadFailed"),
-        }),
+      await ArtifactService.listArtifacts(
+        "folder",
+        folderId,
+        undefined,
+        readingLanguage,
       );
+    } catch {
+      /* The shared snapshot keeps data and publishes the error. */
     }
-  }, [fetchHistory]);
-
-  // `isLoading` starts true and is only ever cleared, from inside the async
-  // body: the spinner belongs to the first fetch of a given scope, and `refresh`
-  // is stable for as long as the scope is.
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      await refresh();
-      if (!cancelled) setIsLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refresh]);
+  }, [isAuthenticated, folderId, readingLanguage]);
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
 
   // The list itself says whether anything is in flight, so the poll starts and
   // stops from its own content instead of from a separate flag.
@@ -741,48 +745,31 @@ function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
     return newest;
   }, [history]);
 
-  // One detail read per entry the tiles depend on, and only for entries whose
-  // snapshot is still unknown: an artifact is immutable, so a snapshot read once
-  // stays valid for as long as the screen lives.
-  useEffect(() => {
-    const missing = [...newestByType.values()].filter(
-      (artifact) =>
-        !(artifact.artifact_id in sourceSnapshots) &&
-        !snapshotsInFlightRef.current.has(artifact.artifact_id),
-    );
-    if (missing.length === 0) return;
-    for (const artifact of missing) {
-      snapshotsInFlightRef.current.add(artifact.artifact_id);
-    }
-    void (async () => {
-      const read = await Promise.all(
-        missing.map(async (artifact) => {
-          try {
-            const detail = await ArtifactService.getArtifact(
-              artifact.artifact_id,
-            );
-            return [
-              artifact.artifact_id,
-              detail.sources.map((source) => source.media_item_id),
-            ] as const;
-          } catch {
-            // Recorded as unknown rather than retried: the tile then keeps
-            // offering the generation, which is the harmless direction.
-            return [artifact.artifact_id, null] as const;
-          }
-        }),
-      );
-      for (const [artifactId] of read) {
-        snapshotsInFlightRef.current.delete(artifactId);
-      }
-      if (!mountedRef.current) return;
-      setSourceSnapshots((current) => {
-        const next = { ...current };
-        for (const [artifactId, sources] of read) next[artifactId] = sources;
-        return next;
-      });
-    })();
-  }, [newestByType, sourceSnapshots]);
+  const newestIds = useMemo(
+    () => [...newestByType.values()].map((artifact) => artifact.artifact_id),
+    [newestByType],
+  );
+  const details = useResourceSnapshots<ArtifactDetail>(
+    newestIds.map((id) => resourceKeys.artifact(id)),
+  );
+  const sourceSnapshots = useMemo(
+    () =>
+      Object.fromEntries(
+        newestIds.map((id, index) => [
+          id,
+          details[index]?.data?.sources.map((source) => source.media_item_id) ??
+            null,
+        ]),
+      ),
+    [newestIds, details],
+  );
+  useFocusEffect(
+    useCallback(() => {
+      if (isAuthenticated)
+        for (const id of newestIds)
+          void ArtifactService.getArtifact(id, readingLanguage).catch(() => {});
+    }, [isAuthenticated, newestIds, readingLanguage]),
+  );
 
   // The tiles show the newest entry per type, and whether generating that type
   // again would produce anything.
@@ -830,26 +817,12 @@ function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
       );
 
       try {
-        const created = await ArtifactService.generateArtifact(
+        await ArtifactService.generateArtifact(
           "folder",
           folderId,
           artifactType,
         );
         if (!mountedRef.current) return;
-        // The POST answers the entry itself, so it goes straight into the
-        // history: no list call, hence no eventually-consistent GSI read that
-        // could come back without it and hide a running generation. It also
-        // arms the poll immediately, from the returned status.
-        setHistory((current) => mergeArtifactIntoHistory(current, created));
-        // The answer carries its own source snapshot, so the tile settles
-        // without a detail read — the reuse path included, where the entry
-        // handed back is precisely the one covering these sources.
-        setSourceSnapshots((current) => ({
-          ...current,
-          [created.artifact_id]: created.sources.map(
-            (source) => source.media_item_id,
-          ),
-        }));
       } catch (err) {
         if (!mountedRef.current) return;
         setRefusal(describeArtifactRefusal(err, { scope: "folder" }));
