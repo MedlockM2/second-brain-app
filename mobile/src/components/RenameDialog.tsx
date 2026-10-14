@@ -2,7 +2,7 @@
  * Where a rename is typed: one field, prefilled with the name the thing has now,
  * and the two answers a naming prompt can get.
  *
- * A dialog anchored below the safe area, independent of keyboard animation.
+ * A dialog anchored just above the keyboard, at the bottom of the available area.
  * A rename is a one-field edit
  * reached from a context menu, and pushing a route for it would take the user
  * away from the list they were filing — the list stays visible behind the scrim,
@@ -19,9 +19,13 @@
  * owns the call.
  */
 
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -89,7 +93,6 @@ export function RenameDialog({
 }: RenameDialogProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const insets = useSafeAreaInsets();
   const trimmed = value.trim();
   const canSubmit = trimmed.length > 0 && !isSaving;
 
@@ -107,90 +110,134 @@ export function RenameDialog({
       onRequestClose={isSaving ? undefined : onClose}
     >
       <View style={styles.root}>
-        <ScrollView
-          style={styles.form}
-          contentContainerStyle={[
-            styles.formContent,
-            { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.lg },
-          ]}
-          automaticallyAdjustKeyboardInsets
-          keyboardShouldPersistTaps="handled"
-        >
-        {/* Scrim. The design system has no scrim token, so this is textMain at
-            35% — the only literal colour in this file, kept in sync with the
-            context menu. */}
-        <Pressable
-          style={styles.backdrop}
-          onPress={onClose}
-          disabled={isSaving}
-          accessibilityLabel={t("common.dismiss")}
-          accessibilityRole="button"
-        />
-
-          <View style={styles.card} testID={`${testIDPrefix}-dialog`}>
-            <Text style={styles.title}>{heading}</Text>
-
-            <TextInput
-              style={styles.input}
-              value={value}
-              onChangeText={onChangeText}
-              placeholder={placeholder}
-              placeholderTextColor={Colors.textMuted}
-              autoFocus
-              selectTextOnFocus
-              editable={!isSaving}
-              maxLength={maxLength}
-              returnKeyType="done"
-              onSubmitEditing={handleSubmit}
-              accessibilityLabel={heading}
-              testID={`${testIDPrefix}-input`}
+        {visible ? (
+          <KeyboardForm>
+            {/* The root paints the scrim; this transparent target closes the
+                dialog from the space around the card without covering it. */}
+            <Pressable
+              style={styles.backdrop}
+              onPress={onClose}
+              disabled={isSaving}
+              accessibilityLabel={t("common.dismiss")}
+              accessibilityRole="button"
             />
 
-            {errorMessage ? (
-              <Text style={styles.error} testID={`${testIDPrefix}-error`}>
-                {errorMessage}
-              </Text>
-            ) : null}
+            <View style={styles.card} testID={`${testIDPrefix}-dialog`}>
+              <Text style={styles.title}>{heading}</Text>
 
-            <View style={styles.actions}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
-                ]}
-                onPress={onClose}
-                disabled={isSaving}
-                accessibilityLabel={t("common.cancel")}
-                accessibilityRole="button"
-                testID={`${testIDPrefix}-cancel`}
-              >
-                <Text style={styles.secondaryLabel}>{t("common.cancel")}</Text>
-              </Pressable>
+              <TextInput
+                style={styles.input}
+                value={value}
+                onChangeText={onChangeText}
+                placeholder={placeholder}
+                placeholderTextColor={Colors.textMuted}
+                autoFocus
+                selectTextOnFocus
+                editable={!isSaving}
+                maxLength={maxLength}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+                accessibilityLabel={heading}
+                testID={`${testIDPrefix}-input`}
+              />
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                  !canSubmit && styles.primaryButtonDisabled,
-                ]}
-                onPress={handleSubmit}
-                disabled={!canSubmit}
-                accessibilityLabel={submitLabel}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSubmit }}
-                testID={`${testIDPrefix}-save`}
-              >
-                {isSaving ? (
-                  <ActivityIndicator size="small" color={Colors.onPrimary} />
-                ) : (
-                  <Text style={styles.primaryLabel}>{submitLabel}</Text>
-                )}
-              </Pressable>
+              {errorMessage ? (
+                <Text style={styles.error} testID={`${testIDPrefix}-error`}>
+                  {errorMessage}
+                </Text>
+              ) : null}
+
+              <View style={styles.actions}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.secondaryButton,
+                    pressed && styles.secondaryButtonPressed,
+                  ]}
+                  onPress={onClose}
+                  disabled={isSaving}
+                  accessibilityLabel={t("common.cancel")}
+                  accessibilityRole="button"
+                  testID={`${testIDPrefix}-cancel`}
+                >
+                  <Text style={styles.secondaryLabel}>
+                    {t("common.cancel")}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed && styles.primaryButtonPressed,
+                    !canSubmit && styles.primaryButtonDisabled,
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={!canSubmit}
+                  accessibilityLabel={submitLabel}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !canSubmit }}
+                  testID={`${testIDPrefix}-save`}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color={Colors.onPrimary} />
+                  ) : (
+                    <Text style={styles.primaryLabel}>{submitLabel}</Text>
+                  )}
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </ScrollView>
+          </KeyboardForm>
+        ) : null}
       </View>
     </Modal>
+  );
+}
+
+/** One owner of keyboard avoidance: iOS padding, Android's resized modal window. */
+function KeyboardForm({
+  children,
+}: {
+  children: ReactNode;
+}): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(() =>
+    Keyboard.isVisible(),
+  );
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return (
+    <KeyboardAvoidingView
+      style={styles.form}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      pointerEvents="box-none"
+    >
+      <ScrollView
+        style={styles.form}
+        contentContainerStyle={[
+          styles.formContent,
+          {
+            paddingTop: insets.top + Spacing.lg,
+            paddingBottom: Spacing.md + (keyboardVisible ? 0 : insets.bottom),
+          },
+        ]}
+        automaticallyAdjustKeyboardInsets={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {children}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -198,13 +245,17 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
   StyleSheet.create({
     root: {
       flex: 1,
+      backgroundColor: Colors.scrim,
     },
     backdrop: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: Colors.scrim,
     },
     form: { flex: 1 },
-    formContent: { flexGrow: 1, paddingHorizontal: Spacing.lg },
+    formContent: {
+      flexGrow: 1,
+      justifyContent: "flex-end",
+      paddingHorizontal: Spacing.lg,
+    },
     card: {
       backgroundColor: Colors.surface,
       borderRadius: BorderRadius.xl,
