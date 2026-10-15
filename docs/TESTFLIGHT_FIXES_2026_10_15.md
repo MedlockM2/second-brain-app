@@ -42,4 +42,4 @@ Après intégration, déploiement backend et distribution interne, valider sur a
 - Titres longs, couverture claire/sombre, thèmes clair/sombre et Réduire la transparence ; lien depuis titre principal et rétracté, absence de lien sur fichiers sans origine.
 - Tableau signalé dans l’original et la traduction, défilement horizontal des cellules, sélection du texte, navigation dans le Digest, transcriptions ordinaires avec locuteurs.
 
-Aucun merge, push, déploiement ou publication OTA effectué par l’implémentation.
+Implémentation livrée sur branche isolée, puis intégrée sur main le 15 octobre 2026 à la demande de l’owner. Le push lance les workflows existants ; leur réussite et la validation appareil doivent être rapportées séparément.
