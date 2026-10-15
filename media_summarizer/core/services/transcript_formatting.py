@@ -38,7 +38,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 # paragraph segmentation produces, so the punctuated and the fallback paths
 # yield visually consistent blocks.
 PARAGRAPH_TARGET_WORDS = 110
-# Hard ceiling on a produced block. Any block above it is re-split, which is
+# Hard ceiling on a prose block. Structured Markdown is kept verbatim. This is
 # also the idempotence invariant: a normalized text contains no block longer
 # than this (except the degenerate single-word case).
 PARAGRAPH_MAX_CHARS = 900
@@ -61,6 +61,17 @@ _SENTENCE_END_RE = re.compile(r"[.!?…][\"'”’)\]]*$")
 _INLINE_SPACE_RE = re.compile(r"[^\S\n]+")
 
 
+# Extraction output carries Markdown in-band even when its S3 suffix is .txt.
+# A block marker or an actual table delimiter identifies structure; a lone pipe
+# in prose does not. Preserve this document's line boundaries before cleaning.
+_MARKDOWN_BLOCK_RE = re.compile(r"^ {0,3}(?:#{1,6}\s|`{3,}|~{3,}|>\s|[-*+]\s|\d+[.)]\s)", re.MULTILINE)
+_TABLE_DELIMITER_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)+\|?\s*$", re.MULTILINE)
+
+
+def _has_markdown_structure(text: str) -> bool:
+    return bool(_MARKDOWN_BLOCK_RE.search(text) or _TABLE_DELIMITER_RE.search(text))
+
+
 def normalize_transcript_text(text: Optional[str], *, source: Optional[str] = None) -> str:
     """Turn any transcript shape into paragraph-delimited plain text.
 
@@ -73,6 +84,8 @@ def normalize_transcript_text(text: Optional[str], *, source: Optional[str] = No
     Returns:
         Plain text whose paragraphs are separated by a single blank line.
     """
+    if text and _has_markdown_structure(text):
+        return text.replace("\r\n", "\n").replace("\r", "\n").strip()
     cleaned = _clean_whitespace(text)
     if not cleaned:
         return ""

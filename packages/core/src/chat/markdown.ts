@@ -11,8 +11,7 @@
  *
  * - The subset is small and known — what a chat model writes, not arbitrary
  *   documents: paragraphs, headings, lists (nested), quotes, code, rules; bold,
- *   italic, inline code and links inline. Tables are not read: an answer kept to
- *   "a few short paragraphs" (`chat_prompt.chat_instructions`) has none.
+ *   italic, inline code, links and GFM tables. The media reader shares this subset.
  * - A citation is a first-class inline token here, not text a renderer has to
  *   find again after the fact.
  * - An answer is read while it is being written. `live` mode treats what has not
@@ -57,7 +56,8 @@ export type Block =
   | { kind: "list"; items: ListItem[] }
   | { kind: "quote"; blocks: Block[] }
   | { kind: "code"; text: string }
-  | { kind: "rule" };
+  | { kind: "rule" }
+  | { kind: "table"; header: Span[][]; align: ("left" | "center" | "right")[]; rows: Span[][][] };
 
 export interface ChatMarkdownOptions {
   /** The answer is still being written: what is unfinished is held back, not printed. */
@@ -113,6 +113,9 @@ export function citedRefs(blocks: readonly Block[]): string[] {
         case "heading":
           visitSpans(block.spans);
           break;
+        case "table":
+          [...block.header, ...block.rows.flat()].forEach(visitSpans);
+          break;
         case "list":
           block.items.forEach((item) => visitSpans(item.spans));
           break;
@@ -161,6 +164,34 @@ export function keepCitations(spans: readonly Span[], keep: (ref: string) => boo
 }
 
 // --- Blocks -----------------------------------------------------------------
+
+/** Split GFM cells without treating an escaped pipe as a separator. */
+function tableCells(line: string): string[] {
+  const cells: string[] = [];
+  let cell = "";
+  let escaped = false;
+  for (const char of line.trim()) {
+    if (char === "|" && !escaped) { cells.push(cell.trim()); cell = ""; }
+    else if (char === "|" && escaped) cell = cell.slice(0, -1) + char;
+    else cell += char;
+    escaped = char === "\\" && !escaped;
+  }
+  cells.push(cell.trim());
+  if (line.trim().startsWith("|")) cells.shift();
+  if (line.trim().endsWith("|") && cells.at(-1) === "") cells.pop();
+  return cells;
+}
+function tableAlignment(line: string): ("left" | "center" | "right")[] | null {
+  const cells = tableCells(line);
+  if (!line.includes("|") || !cells.length || cells.some((cell) => !/^:?-+:?$/.test(cell))) return null;
+  return cells.map((cell) => cell.startsWith(":") && cell.endsWith(":") ? "center" : cell.endsWith(":") ? "right" : "left");
+}
+/** Choose structured rendering without guessing from an isolated pipe in prose. */
+export function hasStructuredMarkdown(source: string): boolean {
+  const lines = source.replace(/\r\n?/g, "\n").split("\n");
+  return lines.some((line, index) => HEADING.test(line) || FENCE.test(line) || QUOTE.test(line) || ITEM.test(line) ||
+    (index > 0 && tableAlignment(line) !== null && tableCells(lines[index - 1]).length === tableCells(line).length));
+}
 
 function indentWidth(indent: string): number {
   return indent.replace(/\t/g, "    ").length;
@@ -222,6 +253,22 @@ function parseBlocks(lines: readonly string[], live: boolean): Block[] {
       }
       // An unclosed fence runs to the end: a code block still being written.
       if (body.length > 0) blocks.push({ kind: "code", text: body.join("\n") });
+      continue;
+    }
+
+    const align = index + 1 < lines.length ? tableAlignment(lines[index + 1]) : null;
+    const header = tableCells(line);
+    if (align && header.length === align.length) {
+      flushAll();
+      const rows: Span[][][] = [];
+      index += 2;
+      while (index < lines.length && lines[index].trim() && lines[index].includes("|")) {
+        const cells = tableCells(lines[index]);
+        rows.push(align.map((_, column) => parseInline(cells[column] ?? "", live && index === lines.length - 1)));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push({ kind: "table", header: header.map((cell) => parseInline(cell, false)), align, rows });
       continue;
     }
 
@@ -380,6 +427,12 @@ function walk(source: string, style: InlineStyle, live: boolean, out: Span[]): v
   let index = 0;
   while (index < source.length) {
     const char = source[index];
+    const lineBreak = /^<br\s*\/?>/i.exec(source.slice(index));
+    if (lineBreak) {
+      text += "\n";
+      index += lineBreak[0].length;
+      continue;
+    }
 
     if (char === "\\" && index + 1 < source.length && ESCAPABLE.includes(source[index + 1])) {
       text += source[index + 1];

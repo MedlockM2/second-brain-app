@@ -1,4 +1,4 @@
-import { useResourceState } from "../../src/contexts/ResourceCacheContext";
+import { useResourceCache, useResourceState } from "../../src/contexts/ResourceCacheContext";
 import { resourceKeys } from "../../src/services/resourceCache";
 /**
  * Unsorted review — the triage pass over the default folder.
@@ -56,6 +56,7 @@ import { t, useTranslation } from "../../src/i18n";
 import { COVER_HEIGHT, COVER_WIDTH } from "../../src/components/MediaListCard";
 import { Bullets } from "../../src/components/Bullets";
 import { PaginationDots } from "../../src/components/PaginationDots";
+import { ResourceRefreshNotice } from "../../src/components/ResourceRefreshNotice";
 import { FolderSaveSheet } from "../../src/components/FolderSaveSheet";
 import { buildFolderTree } from "../../src/lib/folderTree";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
@@ -65,6 +66,7 @@ import { MediaService } from "../../src/services/mediaService";
 import { OrganizationService } from "../../src/services/organizationService";
 import type {
   MediaListItem,
+  ListMediaResponse,
   MediaType,
 } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
@@ -110,13 +112,27 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     initialWindowMetrics?.insets.bottom ?? 0,
   );
 
-  const [items, setItems] = useState<MediaListItem[]>([]);
+  const cache = useResourceCache();
+  const [initialQueue] = useState(() => {
+    const folders = cache.snapshot<Folder[]>(resourceKeys.folders).data;
+    const defaultFolder = folders && buildFolderTree(folders).defaultFolder;
+    const page = defaultFolder ? cache.snapshot<ListMediaResponse>(
+      resourceKeys.mediaPage({ folderId: defaultFolder.id, limit: QUEUE_LIMIT, sort: "asc" }),
+    ).data : undefined;
+    return {
+      folderId: defaultFolder?.id,
+      items: page?.items.filter((item) => item.folder_id === defaultFolder?.id),
+    };
+  });
+  const [items, setItems] = useState<MediaListItem[]>(initialQueue.items ?? []);
+  const hasQueue = useRef(initialQueue.items !== undefined);
+  const [queueReady, setQueueReady] = useState(initialQueue.items !== undefined);
   const [folders, setFolders] = useResourceState<Folder[]>(
     resourceKeys.folders,
     [],
   );
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(initialQueue.items === undefined);
   const [error, setError] = useState<string | null>(null);
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
 
@@ -133,7 +149,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    * last mutation, `items` is the queue on screen, and between the two they are
    * never a tap apart.
    */
-  const itemsRef = useRef<MediaListItem[]>([]);
+  const itemsRef = useRef<MediaListItem[]>(initialQueue.items ?? []);
 
   /**
    * Replace the queue and put the pager back on a page boundary.
@@ -165,31 +181,25 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   );
 
   const load = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoading(!hasQueue.current);
     setError(null);
     try {
-      // The folder list is what gives the default folder's id, and the save
-      // sheet needs the same list to offer destinations — one read serves both.
-      const folders = await OrganizationService.getUserFolders();
-      // `is_default`, never the label: the stored name is `Uncategorized`, the UI
-      // says "Unsorted", and matching on either is what task-297 forbade.
-      const { defaultFolder } = buildFolderTree(folders);
-
-      let queue: MediaListItem[] = [];
-      if (defaultFolder) {
-        const page = await OrganizationService.getFolderMedia(
-          defaultFolder.id,
-          { limit: QUEUE_LIMIT, sort: "asc" },
-        );
-        // The backend `folder_id` filter is inclusive of sub-folders, so the
-        // exact id is re-checked here: a triage of "unsorted" must not hand out
-        // media the user has already filed somewhere below it.
-        queue = page.filter((item) => item.folder_id === defaultFolder.id);
-      }
-
+      const foldersRequest = OrganizationService.getUserFolders();
+      // A known default id lets the page revalidate while folders revalidate.
+      const defaultId = initialQueue.folderId ??
+        buildFolderTree(await foldersRequest).defaultFolder?.id;
+      const queueRequest = defaultId
+        ? OrganizationService.getFolderMedia(defaultId, { limit: QUEUE_LIMIT, sort: "asc" })
+        : Promise.resolve([]);
+      const [, page] = await Promise.all([foldersRequest, queueRequest]);
       if (!isMountedRef.current) return;
-      setFolders(folders);
-      commitQueue(queue, 0);
+      // Revalidation prepares the next visit. Never reshuffle a visible triage
+      // session, including a known empty one, under the user's next tap.
+      if (!hasQueue.current) {
+        commitQueue(page.filter((item) => item.folder_id === defaultId), 0);
+        hasQueue.current = true;
+        setQueueReady(true);
+      }
     } catch (err) {
       if (!isMountedRef.current) return;
       setError(
@@ -200,7 +210,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     } finally {
       if (isMountedRef.current) setIsLoading(false);
     }
-  }, [commitQueue, setFolders]);
+  }, [commitQueue, initialQueue.folderId]);
 
   /**
    * Loaded once, at mount, and never on focus.
@@ -437,11 +447,14 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
         <View style={styles.headerSpacer} />
       </View>
 
+      {error && queueReady ? (
+        <ResourceRefreshNotice message={error} onRetry={() => void load()} />
+      ) : null}
       {isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
-      ) : error ? (
+      ) : error && !queueReady ? (
         <View style={styles.centered}>
           <Ionicons
             name="cloud-offline-outline"

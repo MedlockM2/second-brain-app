@@ -220,6 +220,8 @@ export interface MediaItemContract {
   /** Publisher of the media: a channel, a show, a site, an account. */
   creator_name?: string | null;
   original_url: string;
+  /** Original page of a browser selection; synthetic share URLs are not destinations. */
+  origin_url?: string | null;
   normalized_url: string;
   media_type: MediaType;
   source_platform: SourcePlatform;

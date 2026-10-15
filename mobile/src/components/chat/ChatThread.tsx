@@ -16,7 +16,7 @@ import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../.
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
-import { ChatAnswer } from "./ChatAnswer";
+import { MarkdownBody as ChatAnswer } from "../MarkdownBody";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];

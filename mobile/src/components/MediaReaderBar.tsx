@@ -61,6 +61,8 @@ interface MediaReaderBarProps<K extends string> {
   visible: boolean;
   onBack: () => void;
   title: string;
+  sourceHost: string | null;
+  onOpenSource: () => void;
   cover: MediaCover | null;
   onCoverError: () => void;
   mediaTypeIcon: keyof typeof Ionicons.glyphMap;
@@ -80,6 +82,8 @@ export function MediaReaderBar<K extends string>({
   visible,
   onBack,
   title,
+  sourceHost,
+  onOpenSource,
   cover,
   onCoverError,
   mediaTypeIcon,
@@ -128,9 +132,22 @@ export function MediaReaderBar<K extends string>({
             )}
           </View>
 
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
+          <Pressable
+            style={styles.titleTarget}
+            onPress={sourceHost ? onOpenSource : undefined}
+            disabled={!sourceHost}
+            accessible={!!sourceHost}
+            accessibilityRole={sourceHost ? "link" : undefined}
+            accessibilityLabel={sourceHost ? `${title}. ${t("media.openSourceA11y", { host: sourceHost })}` : undefined}
+          >
+            <Text
+              style={[styles.title, sourceHost && styles.linkTitle]}
+              numberOfLines={1}
+              accessibilityRole={sourceHost ? undefined : "header"}
+            >
+              {title}{sourceHost ? <> <Ionicons name="open-outline" size={16} color={Colors.textMain} /></> : null}
+            </Text>
+          </Pressable>
 
           <ScreenTabs
             tabs={tabs}
@@ -206,8 +223,9 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     // The only element of the row allowed to shrink: a long title costs an
     // ellipsis here, never a collision with the segment. The whole title is one
     // scroll away, at the top of the page.
+    titleTarget: { flex: 1, minHeight: TouchTarget.minimum, justifyContent: "center" },
+    linkTitle: { textDecorationLine: "underline" },
     title: {
-      flex: 1,
       fontSize: Typography.label.fontSize,
       fontWeight: Typography.headline.fontWeight,
       color: Colors.textMain,

@@ -129,6 +129,8 @@ const lightColors = {
    * line drawn on the page.
    */
   coverTitleVeil: "rgba(252, 249, 246, 0.72)",
+  // Media header only: more picture through the veil; textMain remains >= 4.5:1.
+  mediaTitleVeil: "rgba(252, 249, 246, 0.64)",
 
   /**
    * The solid ink of the gradient scrim drawn over a *photograph* — the strips
@@ -316,6 +318,7 @@ const darkColors: ThemeColors = {
   // light palette's ceiling: `textSubtle` reaches 4.5:1 through this veil at
   // worst, where through the light one it bottomed out at 2.7:1.
   coverTitleVeil: "rgba(23, 21, 17, 0.72)",
+  mediaTitleVeil: "rgba(23, 21, 17, 0.64)",
 
   // Unchanged, like `onPrimary`: what darkens a photograph cannot depend on the
   // mode, because the photograph does not.

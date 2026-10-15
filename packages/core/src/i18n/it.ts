@@ -381,6 +381,7 @@ export const it: Catalog = {
   "onboarding.language.title": "Scegli la tua lingua di lettura",
   "onboarding.language.subtitle": "I contenuti verranno tradotti in questa lingua quando serve.",
   "onboarding.language.continueA11y": "Continua con la lingua scelta",
+  "search.backToTop": "Torna in alto",
   "search.placeholder": "Cerca nella tua libreria…",
   "search.clearA11y": "Cancella la ricerca",
   "search.folders": "Cartelle",

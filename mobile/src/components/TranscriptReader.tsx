@@ -7,13 +7,6 @@
  * lets the screen keep loading (and keep a translation poll alive) while the
  * user is looking at another tab.
  *
- * It carries no metadata line of its own any more: language, duration and
- * length sit once, under the page title, next to the date (task-411). The line
- * that used to open this section repeated the duration the title already showed.
- * That is also where the language of the body shown here is announced, which is
- * why the switch below hands its state to the screen rather than keeping it: the
- * two have to agree.
- *
  * The title row can carry one control, `translationToggle`: on a media served
  * translated, the way back to what was actually said (task-419).
  *
@@ -23,6 +16,8 @@
  * have nothing to redraw when a bar fades in above them.
  */
 
+import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
+import { MarkdownBody } from "./MarkdownBody";
 import React, { memo, useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -268,7 +263,8 @@ function TranslationToggle({
 }
 
 /**
- * Renders the transcript body as discrete paragraphs.
+ * Prose keeps its paragraph and speaker rendering; structured extractions share
+ * the Markdown reader used by chat answers.
  *
  * The backend stores and serves transcripts as plain text whose paragraphs are
  * separated by a blank line (task-232, benchmark task-231 option B), so the
@@ -281,6 +277,8 @@ function TranslationToggle({
 function TranscriptBody({ content }: { content: string }) {
   const styles = useThemedStyles(makeStyles);
   const paragraphs = useMemo(() => splitTranscriptParagraphs(content), [content]);
+  const structured = useMemo(() => hasStructuredMarkdown(content), [content]);
+  if (structured) return <MarkdownBody text={content} transcript />;
 
   if (paragraphs.length === 0) {
     return null;

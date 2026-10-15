@@ -376,6 +376,7 @@ export const ar: Catalog = {
   "onboarding.language.title": "اختر لغة القراءة",
   "onboarding.language.subtitle": "سيُترجم المحتوى إلى هذه اللغة عند الحاجة.",
   "onboarding.language.continueA11y": "المتابعة باللغة المختارة",
+  "search.backToTop": "العودة إلى الأعلى",
   "search.placeholder": "ابحث في مكتبتك…",
   "search.clearA11y": "مسح نص البحث",
   "search.folders": "المجلدات",

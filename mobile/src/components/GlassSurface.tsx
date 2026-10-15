@@ -1,9 +1,8 @@
 /**
  * The translucent backdrop of the surfaces in the app that ask for one: the
  * floating search pill of the library screen, the card of the media context menu,
- * the round back and `…` buttons over a media's cover, and the two strips of text
- * laid over a cover (`MediaDetailHero`'s title band, `DigestCoverStack`'s
- * caption).
+ * the round back and `…` buttons over a media's cover, and
+ * `DigestCoverStack`'s caption. The media title has its own local blur.
  *
  * Two things this component does not give its caller, and both have already cost
  * a bug:
@@ -134,7 +133,7 @@ export function GlassSurface({
  * device with the setting on renders one frame of glass before swapping to the
  * tint.
  */
-function useReduceTransparency(): boolean {
+export function useReduceTransparency(): boolean {
   const [reduceTransparency, setReduceTransparency] = useState(false);
 
   useEffect(() => {
