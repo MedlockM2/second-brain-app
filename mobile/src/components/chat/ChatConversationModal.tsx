@@ -13,7 +13,6 @@ import {
   Alert,
   findNodeHandle,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -42,6 +41,7 @@ import type {
   ChatMessage,
   ChatSource,
 } from "@media-summarizer/core/types/chat";
+import { useChatKeyboardLayout } from "../../hooks/useChatKeyboardLayout";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread, type ChatThreadProps } from "./ChatThread";
 export interface ChatConversationModalProps {
@@ -91,7 +91,8 @@ export function ChatConversationModal(
   const titleRef = useRef<Text>(null);
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardViewport = useRef<View>(null);
+  const keyboard = useChatKeyboardLayout(keyboardViewport, props.focusOnOpen && !props.historyOpen);
   const focusRequested = useRef(false);
   const followBottom = useRef(props.scrollTarget === "bottom");
   const [awayFromBottom, setAwayFromBottom] = useState(false);
@@ -113,18 +114,6 @@ export function ChatConversationModal(
     return () => { active = false; listener.remove(); };
   }, []);
 
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", () =>
-      setKeyboardVisible(true),
-    );
-    const hide = Keyboard.addListener("keyboardDidHide", () =>
-      setKeyboardVisible(false),
-    );
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
 
   useLayoutEffect(() => {
     // History and conversation use distinct native scroll views. Wait for both
@@ -233,15 +222,17 @@ export function ChatConversationModal(
       onRequestClose={props.onClose}
     >
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
-      <KeyboardAvoidingView
+      <View ref={keyboardViewport} style={styles.root} onLayout={keyboard.measure} collapsable={false}>
+      <View
+        onLayout={(event) => keyboard.onContentLayout(event.nativeEvent.layout.height)}
         style={[
           styles.root,
+          keyboard.height !== null && { flex: 0, height: keyboard.height },
           {
             paddingTop: insets.top,
             paddingBottom: props.historyOpen ? insets.bottom : 0,
           },
         ]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
         accessibilityViewIsModal
         testID="chat-conversation-modal"
       >
@@ -329,6 +320,9 @@ export function ChatConversationModal(
           ref={scrollRef}
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
+          automaticallyAdjustKeyboardInsets={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={
             Platform.OS === "ios" ? "interactive" : "on-drag"
@@ -441,15 +435,20 @@ export function ChatConversationModal(
           <View
             style={[
               styles.composer,
+              !keyboard.ready && styles.pendingComposer,
               {
-                paddingBottom: keyboardVisible
+                paddingBottom: keyboard.keyboardVisible
                   ? Spacing.sm
                   : Math.max(insets.bottom, Spacing.sm),
               },
             ]}
+            pointerEvents={keyboard.ready ? "auto" : "box-none"}
+            accessibilityElementsHidden={!keyboard.ready}
+            importantForAccessibility={keyboard.ready ? "auto" : "no-hide-descendants"}
           >
             <ChatComposer
               ref={inputRef}
+              onFocus={keyboard.onInputFocus}
               value={props.draft}
               onChangeText={props.onChangeDraft}
               placeholder={props.placeholder}
@@ -465,7 +464,8 @@ export function ChatConversationModal(
             />
           </View>
         ) : null}
-      </KeyboardAvoidingView>
+      </View>
+      </View>
     </Modal>
   );
 }
@@ -502,6 +502,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     scrollContent: { paddingTop: Spacing.sm, paddingBottom: Spacing.lg },
     gutter: { paddingHorizontal: Spacing.lg },
     exchanges: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+    pendingComposer: { opacity: 0 },
     composer: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
     refusal: {
       marginHorizontal: Spacing.md,
