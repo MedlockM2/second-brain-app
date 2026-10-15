@@ -1,16 +1,16 @@
 ---
 id: TASK-474
 title: Ajouter le CORS de la façade de streaming du chat pour l'origine de l'app web
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:55'
+updated_date: '2026-10-15 22:25'
 labels:
   - backend
   - infrastructure
   - chat
   - feature
-dependencies:
-  - TASK-443
+dependencies: []
 references:
   - docs/research/task-424-website-and-browser-extension/README.md
   - >-
@@ -21,7 +21,6 @@ references:
 priority: medium
 type: feature
 ordinal: 81000
-dispatchable: true
 ---
 
 ## Description
@@ -55,9 +54,25 @@ Après `apply` et déploiement : relancer le pré-vol du complément §6 avec l'
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La ressource /chat/conversations/{conversation_id}/stream de l'API REST a une méthode OPTIONS en intégration mock qui répond Access-Control-Allow-Origin (origine de l'app web, jamais *), Access-Control-Allow-Headers: authorization et Access-Control-Allow-Methods: GET, OPTIONS
-- [ ] #2 Les gateway responses 4xx et 5xx de cette API portent le même Access-Control-Allow-Origin, et l'origine est une variable Terraform vide par défaut
-- [ ] #3 chat_stream_app.py émet Access-Control-Allow-Origin sur ses réponses 200, 204, 401, 404 et 409 pour l'origine configurée et pour elle seule
-- [ ] #4 docs/CANONICAL_MEDIA_API_CONTRACT.md décrit le CORS de la façade de flux
-- [ ] #5 terraform validate, ruff check et mypy passent
+- [x] #1 La ressource /chat/conversations/{conversation_id}/stream de l'API REST a une méthode OPTIONS en intégration mock qui répond Access-Control-Allow-Origin (origine de l'app web, jamais *), Access-Control-Allow-Headers: authorization et Access-Control-Allow-Methods: GET, OPTIONS
+- [x] #2 Les gateway responses 4xx et 5xx de cette API portent le même Access-Control-Allow-Origin, et l'origine est une variable Terraform vide par défaut
+- [x] #3 chat_stream_app.py émet Access-Control-Allow-Origin sur ses réponses 200, 204, 401, 404 et 409 pour l'origine configurée et pour elle seule
+- [x] #4 docs/CANONICAL_MEDIA_API_CONTRACT.md décrit le CORS de la façade de flux
+- [x] #5 terraform validate, ruff check et mypy passent
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Dépendance à task-443 retirée le 2026-10-16 (décision de l'owner) : l'origine est celle de chaque environnement, `web_app_origin` déjà défini par environnement pour l'API HTTP (`http://localhost:5173` en dev, vide en staging et prod tant que `app.<domaine>` n'existe pas). Pas de nouvelle variable : la façade de flux réutilise la même.
+
+- `chat_stream.tf` : méthode `OPTIONS` en intégration mock dans le corps OpenAPI (Allow-Origin = l'origine, Allow-Headers `authorization`, Allow-Methods `GET,OPTIONS`, Max-Age 3600, Vary Origin) et `x-amazon-apigateway-gateway-responses` DEFAULT_4XX / DEFAULT_5XX avec le même Allow-Origin ; les deux n'existent que si l'origine est non vide. `WEB_APP_ORIGIN` est passé à la Lambda de diffusion.
+- `chat_stream_app.py` : middleware ASGI pur (le flux n'est pas mis en tampon) qui ajoute Allow-Origin et `Vary: Origin` à toute réponse d'une requête portant exactement cette origine (200, 204, 401, 404, 409), rien pour une autre origine.
+- `variables.tf` : nouvelle validation, une origine `http://` ou `localhost`/`127.0.0.1` n'est acceptée qu'en dev ; staging et prod prennent `https://app.<domaine>` ou rien. Expression vérifiée sur cinq cas.
+- `docs/CANONICAL_MEDIA_API_CONTRACT.md` : section CORS de la façade.
+- `.env.example` : `WEB_APP_ORIGIN`, et `CHAT_LEASE_SECONDS` / `CHAT_STREAM_MAX_SECONDS` qui manquaient au garde-fou.
+
+Contrôles : `terraform validate` dev, staging, prod ; ruff et mypy sur `chat_stream_app.py` ; `check_env_example_complete.py` OK. Un appel en processus sur `/health` a confirmé l'en-tête pour l'origine configurée et son absence pour une autre.
+
+Note owner : après le push, `terraform-dev.yml` applique dev et `deploy-lambda.yml` redéploie la Lambda ; relancer le pré-vol de la note.
+<!-- SECTION:NOTES:END -->

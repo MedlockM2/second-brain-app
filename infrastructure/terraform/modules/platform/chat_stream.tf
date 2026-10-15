@@ -63,14 +63,63 @@ locals {
   # The integration, shared by the method of the OpenAPI body below.
   chat_stream_integration_uri = "arn:aws:apigateway:${var.aws_region}:lambda:path/2021-11-15/functions/${aws_lambda_function.chat_stream.arn}/response-streaming-invocations"
 
-  chat_stream_openapi = {
+  # CORS for the web app (task-474). The stream authenticates with an
+  # Authorization header, never a cookie, so a browser preflights every opening:
+  # OPTIONS is answered here by a mock integration, without reaching the Lambda.
+  # The Lambda adds the same origin to its own answers (chat_stream_app.py), and
+  # the gateway responses carry it too, or the browser hides a 401/403/5xx from
+  # the app behind an opaque CORS error. Same origin as the HTTP API's
+  # (var.web_app_origin, one per environment); empty means no CORS at all.
+  chat_stream_cors_origin = "'${var.web_app_origin}'"
+
+  chat_stream_preflight = {
+    responses = {
+      "200" = {
+        description = "CORS preflight"
+        headers = {
+          "Access-Control-Allow-Origin"  = { schema = { type = "string" } }
+          "Access-Control-Allow-Headers" = { schema = { type = "string" } }
+          "Access-Control-Allow-Methods" = { schema = { type = "string" } }
+          "Access-Control-Max-Age"       = { schema = { type = "string" } }
+          "Vary"                         = { schema = { type = "string" } }
+        }
+      }
+    }
+    "x-amazon-apigateway-integration" = {
+      type             = "mock"
+      requestTemplates = { "application/json" = "{\"statusCode\": 200}" }
+      responses = {
+        default = {
+          statusCode = "200"
+          responseParameters = {
+            "method.response.header.Access-Control-Allow-Origin"  = local.chat_stream_cors_origin
+            "method.response.header.Access-Control-Allow-Headers" = "'authorization'"
+            "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+            "method.response.header.Access-Control-Max-Age"       = "'3600'"
+            "method.response.header.Vary"                         = "'Origin'"
+          }
+        }
+      }
+    }
+  }
+
+  chat_stream_gateway_responses = {
+    for kind in ["DEFAULT_4XX", "DEFAULT_5XX"] : kind => {
+      responseParameters = {
+        "gatewayresponse.header.Access-Control-Allow-Origin" = local.chat_stream_cors_origin
+        "gatewayresponse.header.Vary"                        = "'Origin'"
+      }
+    }
+  }
+
+  chat_stream_openapi = merge({
     openapi = "3.0.1"
     info = {
       title   = "${var.project_name}-chat-stream${local.suffix}"
       version = "1"
     }
     paths = {
-      "/chat/conversations/{conversation_id}/stream" = {
+      "/chat/conversations/{conversation_id}/stream" = merge(var.web_app_origin == "" ? {} : { options = local.chat_stream_preflight }, {
         get = {
           parameters = [
             { name = "conversation_id", "in" = "path", required = true, schema = { type = "string" } },
@@ -88,9 +137,9 @@ locals {
             timeoutInMillis = 900000
           }
         }
-      }
+      })
     }
-  }
+  }, var.web_app_origin == "" ? {} : { "x-amazon-apigateway-gateway-responses" = local.chat_stream_gateway_responses })
 }
 
 # -----------------------------------------------------------------------------
@@ -172,8 +221,10 @@ resource "aws_lambda_function" "chat_stream" {
   reserved_concurrent_executions = var.chat_stream_reserved_concurrency
 
   # The entrypoint (uvicorn) and the adapter's settings are in the image.
+  # WEB_APP_ORIGIN: the one browser origin whose requests get CORS headers back
+  # from the app (task-474). Empty: none.
   environment {
-    variables = local.lambda_environment
+    variables = merge(local.lambda_environment, { WEB_APP_ORIGIN = var.web_app_origin })
   }
 
   depends_on = [aws_cloudwatch_log_group.chat_stream]

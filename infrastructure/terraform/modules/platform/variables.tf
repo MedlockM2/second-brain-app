@@ -37,6 +37,14 @@ variable "web_app_origin" {
     condition     = var.web_app_origin == "" || can(regex("^https?://[a-z0-9.-]+(:[0-9]+)?$", var.web_app_origin))
     error_message = "web_app_origin must be empty or a bare origin (scheme://host[:port], no path, no trailing slash, never \"*\")."
   }
+
+  # A local dev server is a development origin only. Outside dev it would let any
+  # page served on that port of a user's machine read the API's answers, and in
+  # plain http: staging and prod name their https app origin or nothing.
+  validation {
+    condition     = var.environment == "dev" || !can(regex("^http://|://(localhost|127\\.0\\.0\\.1)(:|$)", var.web_app_origin))
+    error_message = "web_app_origin may be http:// or localhost only in dev; staging and prod take https://app.<domain> or nothing."
+  }
 }
 
 variable "enable_alarms" {

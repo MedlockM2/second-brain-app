@@ -57,6 +57,8 @@ from typing import AsyncIterator, Dict, Optional  # noqa: E402
 
 from fastapi import Depends, FastAPI, Query, Response, status  # noqa: E402
 from fastapi.responses import JSONResponse, StreamingResponse  # noqa: E402
+from starlette.datastructures import MutableHeaders  # noqa: E402
+from starlette.types import ASGIApp, Message, Receive, Scope, Send  # noqa: E402
 
 from media_summarizer.api.dependencies.auth import get_current_user  # noqa: E402
 from media_summarizer.core.models.auth import AuthUser  # noqa: E402
@@ -80,7 +82,39 @@ KEEPALIVE_SECONDS = 15.0
 #: cursor; nothing is lost, fragments live a day.
 MAX_STREAM_SECONDS = int(os.environ.get("CHAT_STREAM_MAX_SECONDS", "840"))
 
+#: The web app's origin (task-474, var.web_app_origin in chat_stream.tf). Its
+#: requests get Access-Control-Allow-Origin back; any other origin gets nothing.
+#: The preflight never reaches this app: API Gateway answers it (mock).
+WEB_APP_ORIGIN = os.environ.get("WEB_APP_ORIGIN", "")
+
 app = FastAPI(title="Chat stream", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+class _WebOriginCors:
+    """Name the web app's origin on every answer to it, the 401 of the auth
+    dependency and the event stream included. Pure ASGI, so the stream is not
+    buffered on its way through."""
+
+    def __init__(self, inner: ASGIApp) -> None:
+        self.inner = inner
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        origin = dict(scope.get("headers") or []).get(b"origin", b"").decode("latin-1")
+        if scope["type"] != "http" or not WEB_APP_ORIGIN or origin != WEB_APP_ORIGIN:
+            await self.inner(scope, receive, send)
+            return
+
+        async def send_with_origin(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["Access-Control-Allow-Origin"] = WEB_APP_ORIGIN
+                headers.add_vary_header("Origin")
+            await send(message)
+
+        await self.inner(scope, receive, send_with_origin)
+
+
+app.add_middleware(_WebOriginCors)
 
 
 def _event(name: str, data: Dict[str, object], *, event_id: Optional[int] = None) -> str:

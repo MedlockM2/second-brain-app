@@ -874,6 +874,14 @@ If the generation is lost while the stream is open, the stream closes **without*
 
 A comment line `: keepalive` is sent every 15 s of silence, below the 5-minute idle timeout of a regional streaming endpoint. A dropped connection is resumed the same way as `reconnect`: same identity, `after_seq` = the last sequence received. Closing the stream never stops the generation; only the stop route does.
 
+**CORS (task-474), for the web app.** The browser sends `Authorization`, so every opening is preflighted. Only the environment's web app origin (Terraform `web_app_origin`: `http://localhost:5173` in dev, `https://app.<domain>` once it exists, empty elsewhere) is allowed, never `*`, and no cookie is involved:
+
+- `OPTIONS` on the stream path is answered by API Gateway itself (mock integration): `200`, `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Headers: authorization`, `Access-Control-Allow-Methods: GET,OPTIONS`, `Access-Control-Max-Age: 3600`.
+- The Lambda adds `Access-Control-Allow-Origin: <origin>` (and `Vary: Origin`) to every answer to a request carrying that `Origin` — `200` stream, `204`, `401`, `404`, `409` — and nothing for any other origin (`WEB_APP_ORIGIN`).
+- The gateway responses `DEFAULT_4XX` and `DEFAULT_5XX` (throttling `429`, a missing route's `403`, integration errors) carry the same header, so the app reads their status instead of an opaque CORS error.
+
+With `web_app_origin` empty the stream has no CORS at all: no `OPTIONS` method, no header. The mobile app is not a browser and is unaffected.
+
 ## File upload entrypoints (non-canonical, same organization contract)
 
 Three ingestion entrypoints work from a file instead of a URL: `POST /api/media/upload`,
