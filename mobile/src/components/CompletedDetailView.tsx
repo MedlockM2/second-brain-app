@@ -20,7 +20,6 @@ import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
  * task-411, with the preview block of its direction A:
  *
  *     cover band (under the status bar; creator and title on glass; back and …)
- *     source link · date · duration · language · length
  *     Reader | AI
  *     "L'essentiel" (Callout Aside)      ← `SourcePreview`
  *     Full text                          ← `TranscriptReader`
@@ -69,7 +68,6 @@ import { ArtifactService } from "../services/artifactService";
 import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
 import { OrganizationService } from "../services/organizationService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
-import { formatDuration } from "../lib/formatDuration";
 import type { ArtifactTileState } from "./ArtifactTile";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ScreenTabs, type ScreenTab } from "./ScreenTabs";
@@ -101,7 +99,7 @@ import {
 } from "./SourcePreview";
 import { Spacing, type Theme } from "../constants/theme";
 import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
-import { LOCALE_ENDONYMS, formatDate, t, tCount } from "../i18n";
+import { LOCALE_ENDONYMS, t } from "../i18n";
 import { isSupportedLocale } from "@media-summarizer/core/i18n/locales";
 import type {
   MediaStatusResponse,
@@ -207,7 +205,7 @@ const PREVIEW_POLL_MAX_ATTEMPTS = 20;
 const PROGRESS_ANNOUNCE_STEP = 10;
 
 /**
- * The language of the text, as the metadata line names it.
+ * The language of the text, as the translation switch names it.
  *
  * One of the app's eleven languages is named in its own script — "Français",
  * "日本語" — which is how the text under it is written, and the same name the
@@ -254,7 +252,7 @@ type SourceLink = {
  * `user_media-dev` on 2026-08-17: uploads carry no `source_url` attribute at all
  * (the API defaults it to `""`), and shared audio and text carry a synthetic
  * `share://<platform>/...` marker. Both return `null` here, which is what keeps
- * the metadata line free of a link that goes nowhere.
+ * the title from linking to a synthetic marker.
  */
 function resolveSourceLink(rawUrl: string): SourceLink | null {
   const trimmed = rawUrl.trim();
@@ -674,10 +672,10 @@ export function CompletedDetailView({
   );
 
   // The way back to the thing itself. `null` for anything we cannot open, in
-  // which case the metadata line carries no link at all.
+  // which case the title stays inert.
   const sourceLink = useMemo(
-    () => resolveSourceLink(media_item.original_url),
-    [media_item.original_url],
+    () => resolveSourceLink(media_item.origin_url ?? "") ?? resolveSourceLink(media_item.original_url),
+    [media_item.origin_url, media_item.original_url],
   );
 
   const handleOpenSource = useCallback(async () => {
@@ -690,23 +688,6 @@ export function CompletedDetailView({
       showToast(t("media.openFailed", { host: sourceLink.host }), "error");
     }
   }, [sourceLink, showToast]);
-
-  const formattedDate = (() => {
-    try {
-      // The active UI locale, never a hardcoded language tag.
-      return formatDate(new Date(media_item.created_at), {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return "";
-    }
-  })();
-
-  const durationLabel = media_item.transcript?.duration_seconds
-    ? formatDuration(media_item.transcript.duration_seconds)
-    : null;
 
   const mediaReady =
     media_item.status === "ready_for_artifacts" ||
@@ -867,29 +848,6 @@ export function CompletedDetailView({
     original.loading,
     handleToggleOriginal,
   ]);
-
-  // Everything known about the source, on the one line under the title. The
-  // duration used to be printed twice — in the hero and again above the text.
-  //
-  // The language named there is the one the text on screen is written in, which
-  // is the reading language while a translation is what the section shows, and
-  // the source language the rest of the time — the switch above moves it. It used
-  // to always name the source language, even under a translated body.
-  const details = [
-    formattedDate,
-    durationLabel,
-    describeLanguage(
-      isTranslationOnScreen && !showingOriginal
-        ? (targetLanguage ?? sourceLanguage)
-        : sourceLanguage,
-    ),
-    media_item.transcript?.segments_count
-      ? tCount(
-          "transcript.paragraphCount",
-          media_item.transcript.segments_count,
-        )
-      : null,
-  ].filter((detail): detail is string => !!detail);
 
   const fetchRawContent = refreshRawContent;
   useFocusEffect(
@@ -1187,6 +1145,8 @@ export function CompletedDetailView({
         visible={barVisible}
         onBack={onBack}
         title={displayTitle}
+        sourceHost={sourceLink?.host ?? null}
+        onOpenSource={handleOpenSource}
         cover={cover}
         onCoverError={handleCoverError}
         mediaTypeIcon={mediaTypeIcon}
@@ -1228,7 +1188,6 @@ export function CompletedDetailView({
           title={displayTitle}
           sourceHost={sourceLink?.host ?? null}
           onOpenSource={handleOpenSource}
-          details={details}
           onBack={onBack}
           onActionsPress={(anchor) => mediaActions.open(menuTarget, anchor)}
         />
@@ -1343,7 +1302,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       flex: 1,
     },
 
-    // Intra-screen tabs, under the metadata line.
+    // Intra-screen tabs under the cover.
     tabsBar: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.md,

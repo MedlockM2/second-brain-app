@@ -1,76 +1,7 @@
-/**
- * The top of a media page: the cover, edge to edge, and what names the source.
- *
- * Direction C of the task-410 benchmark ("Bandeau rétractable"), the one the
- * owner picked for task-411. The band runs under the status bar; the creator and
- * the title sit at the bottom of the picture on a strip of `Colors.coverTitleVeil`
- * over the `GlassSurface` material; back and `…` float over its top on the same
- * material, bare. Under the band,
- * one line carries the way back to the original and everything else worth
- * knowing about the source — date, duration, language, length — which the page
- * used to split between a chip, the hero and a second line above the transcript.
- * Once the Reader / AI segment has scrolled away, `MediaReaderBar` takes over
- * at the top.
- *
- * ## The picture
- *
- * The one image of the detail contract, `media_item.media_image` — no favicon, no
- * creator avatar, no second field (task-410 §2.3). It is cropped `cover`,
- * centred, and loaded under the key the lists use, so a page opened from a list
- * finds it already on disk.
- *
- * The band is 4:3 on a screen at least twice as tall as it is wide — every
- * current phone — and 16:9 on the shorter 16:9-class screens (iPhone SE, and the
- * 320pt width in Display Zoom), where a 4:3 band would take close to half the
- * screen. On a 16:9 band the title no longer fits on the picture and moves under
- * it, onto the page background. On a 4:3 band it always stays on the picture,
- * whatever its length: past two lines it is cut with an ellipsis, never moved.
- *
- * With no picture — none in the contract, or one that failed to load — the band
- * shrinks to 96pt of `surfaceContainerLow` carrying the type glyph, and the title
- * sits under it. The glyph is decorative (2.6:1 on its tone), so the eyebrow
- * writes the type out in that case. While a picture is loading the band keeps
- * its full size as a bare tonal frame: no spinner, no placeholder.
- *
- * ## The title strip, and why it does not trust the material
- *
- * The strip is `Colors.coverTitleVeil` — the mockup's 72 % wash — painted over
- * the `GlassSurface` material, not under it: that is the order CSS gives a
- * `background` over a `backdrop-filter`, and the only order that bounds the
- * contrast. `GlassSurface` was written for two surfaces over *scrolling content*;
- * a strip over an arbitrary photograph is a third site, and the material cannot
- * carry it alone. Liquid Glass adapts to what it covers, so over a bright busy
- * picture it can draw close to nothing and leave dark text on dark leaves — the
- * degradation the benchmark predicted for this direction, and the one two beta
- * reports arrived on. With the wash on top, `textMain` never drops below 6.5:1
- * whatever the material resolves to; `textSubtle` would only reach 2.7:1 through
- * it, so the small-caps line switches to `textMain` while it is on the cover and
- * keeps `textSubtle` when it is drawn on the page instead.
- *
- * The strip never carries an `opacity` below 1, and there is nothing left in this
- * file that would want to give it one. An `opacity` under 1 on a glass view, or on
- * any of its ancestors, stops its material rendering at all — the constraint
- * `GlassSurface` states for every one of its callers — and `expo-glass-effect`
- * installs the effect on the view's first layout pass only, so a band laid out
- * while invisible stayed an untinted empty box for the rest of the page's life. That is what made the same media come up two different ways: the
- * strip used to be hidden at `opacity: 0` until the title's line count came back,
- * and which rendering the user got depended on whether that measure landed before
- * the first layout pass. Truncating instead of relocating removed the measure, and
- * with it the hidden pass and the race — the placement is known from the band's
- * shape before the first frame.
- *
- * ## The status bar
- *
- * A picture under the status bar needs protecting, and the benchmark named the
- * only two ways to draw a gradient in React Native: `expo-linear-gradient`, a
- * native module and therefore a new binary, or `experimental_backgroundImage`,
- * which React Native marks as not for production. Neither is used. The scrim is
- * a stack of `textMain` strips whose opacity falls from 50% to 0 — the ramp the
- * mockup specifies — which keeps the page shippable over the air and every colour
- * a token. The host switches the status bar to light while the picture is under
- * it.
+/** Cover and title of the media. The underlined title opens the original.
+ * A local blur and contrast veil keep the picture visible behind the title;
+ * controls retain their shared GlassSurface material.
  */
-
 import React, { useRef } from "react";
 import {
   Pressable,
@@ -79,9 +10,10 @@ import {
   View,
   type StyleProp,
 } from "react-native";
+import { BlurTargetView, BlurView } from "expo-blur";
 import { Image, type ImageStyle } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { GlassSurface } from "./GlassSurface";
+import { GlassSurface, useReduceTransparency } from "./GlassSurface";
 import { MENU_GLYPH } from "./ScreenHeader";
 import {
   MEDIA_HEADER_BUTTON_HIT_SLOP,
@@ -95,7 +27,7 @@ import {
   Typography,
   type Theme,
 } from "../constants/theme";
-import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
+import { useTheme, useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
@@ -243,8 +175,6 @@ interface MediaDetailHeroProps {
   /** Host of an original the OS can open; `null` when there is none. */
   sourceHost: string | null;
   onOpenSource: () => void;
-  /** Date, duration, language, length — whichever are known, in that order. */
-  details: readonly string[];
   onBack: () => void;
   onActionsPress: (anchor: AnchorRect) => void;
 }
@@ -259,11 +189,13 @@ export function MediaDetailHero({
   title,
   sourceHost,
   onOpenSource,
-  details,
   onBack,
   onActionsPress,
 }: MediaDetailHeroProps): React.JSX.Element {
   const Colors = useThemeColors();
+  const { mode } = useTheme();
+  const reduceTransparency = useReduceTransparency();
+  const blurTarget = useRef<View>(null);
   const styles = useThemedStyles(makeStyles);
   // Known before the first frame, from the band's shape and whether there is a
   // picture at all — never from how long the title turns out to be. So there is
@@ -271,15 +203,8 @@ export function MediaDetailHero({
   // the first frame in its final placement.
   const titleOnCover = layout.shape === "tall" && cover !== null;
 
-  // `onCover` carries the two things that differ between the placements. The
-  // colour of the small-caps line: the wash the strip is drawn on leaves
-  // `textSubtle` at 2.7:1 over a dark picture, while on the page it is the 5.3:1
-  // that token exists for. And the clamp: on the picture the title is cut at
-  // `MAX_TITLE_LINES_ON_COVER` so it never swallows the cover, whereas on the page
-  // it has the room to run as long as it needs and is given no limit.
-  //
-  // `accessibilityLabel` restates the title because of that clamp — the tail is
-  // cut for the eye, never for a screen reader.
+  // Use textMain over the veil for both sizes; the title's accessible name
+  // remains whole when its visible copy is clamped to two lines.
   const renderTitleBlock = (onCover: boolean) => (
     <>
       {eyebrow ? (
@@ -290,18 +215,24 @@ export function MediaDetailHero({
           {eyebrow}
         </Text>
       ) : null}
-      <Text
-        style={styles.title}
-        accessibilityRole="header"
-        accessibilityLabel={title}
-        numberOfLines={onCover ? MAX_TITLE_LINES_ON_COVER : undefined}
-        // `tail` is React Native's default, written out because it is the only
-        // mode that behaves correctly on Android above one line (task-231 §11.5):
-        // leaving it implicit invites someone to try `middle` or `head` here.
-        ellipsizeMode="tail"
+      <Pressable
+        onPress={sourceHost ? onOpenSource : undefined}
+        disabled={!sourceHost}
+        accessible={!!sourceHost}
+        accessibilityRole={sourceHost ? "link" : undefined}
+        accessibilityLabel={sourceHost ? `${title}. ${t("media.openSourceA11y", { host: sourceHost })}` : undefined}
+        style={({ pressed }) => [styles.titleTarget, pressed && styles.titlePressed]}
       >
-        {title}
-      </Text>
+        <Text
+          style={[styles.title, sourceHost && styles.linkTitle]}
+          accessibilityRole={sourceHost ? undefined : "header"}
+          accessibilityLabel={sourceHost ? undefined : title}
+          numberOfLines={onCover ? MAX_TITLE_LINES_ON_COVER : undefined}
+          ellipsizeMode="tail"
+        >
+          {title}{sourceHost ? <> <Ionicons name="open-outline" size={20} color={Colors.textMain} /></> : null}
+        </Text>
+      </Pressable>
     </>
   );
 
@@ -309,11 +240,13 @@ export function MediaDetailHero({
     <View>
       <View style={[styles.band, { height: layout.height }]}>
         {cover && layout.shape !== "fallback" ? (
+          <BlurTargetView ref={blurTarget} style={StyleSheet.absoluteFill} pointerEvents="none">
           <MediaCoverImage
             cover={cover}
             onError={onCoverError}
             style={StyleSheet.absoluteFill}
           />
+          </BlurTargetView>
         ) : (
           <View
             style={[styles.fallback, { paddingTop: topInset }]}
@@ -350,12 +283,22 @@ export function MediaDetailHero({
         </View>
 
         {titleOnCover ? (
-          <GlassSurface style={styles.titleBand}>
-            {/* Over the material, under the text: the floor the material
-                cannot promise on a picture it has no say over. */}
+          <View style={styles.titleBand}>
+            {reduceTransparency ? (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: Colors.background }]} pointerEvents="none" />
+            ) : (
+              <BlurView
+                style={StyleSheet.absoluteFill}
+                blurTarget={blurTarget}
+                blurMethod="dimezisBlurViewSdk31Plus"
+                intensity={60}
+                tint={mode}
+                pointerEvents="none"
+              />
+            )}
             <View style={styles.titleVeil} pointerEvents="none" />
             {renderTitleBlock(true)}
-          </GlassSurface>
+          </View>
         ) : null}
       </View>
 
@@ -363,46 +306,6 @@ export function MediaDetailHero({
         <View style={styles.titleBelow}>{renderTitleBlock(false)}</View>
       )}
 
-      {sourceHost || details.length > 0 ? (
-        <View style={styles.metaLine}>
-          {sourceHost ? (
-            <Pressable
-              style={({ pressed }) => [
-                styles.sourceLink,
-                pressed && styles.sourceLinkPressed,
-              ]}
-              onPress={onOpenSource}
-              accessibilityRole="link"
-              accessibilityLabel={t("media.openSourceA11y", {
-                host: sourceHost,
-              })}
-              // The line is ~18pt tall by design; the slop takes the touch area
-              // past the 48pt floor without making the line taller.
-              hitSlop={{
-                top: Spacing.md,
-                bottom: Spacing.md,
-                left: Spacing.sm,
-                right: Spacing.sm,
-              }}
-            >
-              <Text style={styles.sourceLinkText}>{sourceHost}</Text>
-              <Ionicons name="open-outline" size={14} color={Colors.textSubtle} />
-            </Pressable>
-          ) : null}
-          {sourceHost && details.length > 0 ? (
-            <Text
-              style={styles.metaText}
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            >
-              {"·"}
-            </Text>
-          ) : null}
-          {details.length > 0 ? (
-            <Text style={styles.metaText}>{details.join(" · ")}</Text>
-          ) : null}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -543,7 +446,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     // layout, and first in the tree so the text is drawn over it.
     titleVeil: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: Colors.coverTitleVeil,
+      backgroundColor: Colors.mediaTitleVeil,
     },
     titleBelow: {
       paddingHorizontal: Spacing.lg,
@@ -568,6 +471,9 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     // The display title, at `TITLE_FONT_SIZE` rather than the 32pt of
     // `Typography.display`: the weight and the letter spacing of the display style,
     // four points smaller. Leading follows at the 1.19 ratio the 32/38 pair had.
+    titleTarget: { minHeight: TouchTarget.minimum, justifyContent: "center" },
+    titlePressed: { opacity: 0.8 },
+    linkTitle: { textDecorationLine: "underline" },
     title: {
       fontSize: TITLE_FONT_SIZE,
       fontWeight: Typography.display.fontWeight,
@@ -595,32 +501,5 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       overflow: "hidden",
       alignItems: "center",
       justifyContent: "center",
-    },
-    metaLine: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      alignItems: "center",
-      columnGap: Spacing.xs,
-      rowGap: Spacing.xs,
-      paddingHorizontal: Spacing.lg,
-      paddingTop: Spacing.md,
-    },
-    sourceLink: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.xs,
-      borderRadius: BorderRadius.sm,
-    },
-    sourceLinkPressed: {
-      backgroundColor: Colors.surfaceContainerHigh,
-    },
-    sourceLinkText: {
-      fontSize: Typography.small.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      color: Colors.textSubtle,
-    },
-    metaText: {
-      fontSize: Typography.small.fontSize,
-      color: Colors.textSubtle,
     },
   });
