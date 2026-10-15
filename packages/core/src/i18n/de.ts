@@ -708,7 +708,6 @@ export const de: Catalog = {
   "artifact.noQuestions": "Keine Fragen in diesem Inhalt.",
   "artifact.quizProgress": "Quiz-Fortschritt",
   "artifact.questionPosition": "Frage {index} von {total}",
-  "artifact.quizComplete": "Quiz abgeschlossen",
   "artifact.explanation": "ERKLÄRUNG",
   "artifact.optionA11y": "Option {label}: {text}{state}",
   "share.inProgress.body": "Dein Inhalt wird in deinem zweiten Gehirn gespeichert.",

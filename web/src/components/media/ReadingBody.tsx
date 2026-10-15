@@ -1,3 +1,4 @@
+import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
 import { formatDuration } from "@media-summarizer/core/i18n/duration";
 import { LOCALE_ENDONYMS, isSupportedLocale } from "@media-summarizer/core/i18n/locales";
 import { formatDate, tCount } from "@media-summarizer/core/i18n/runtime";
@@ -11,6 +12,7 @@ import type { MediaDetailState } from "../../media/useMediaDetail";
 import { useTranscript } from "../../media/useTranscript";
 import { Icon, type IconName } from "../Icon";
 import { ICON_PATHS } from "../icons.generated";
+import { MarkdownView } from "../MarkdownView";
 
 /** A language by its own name ("English"), or its tag when the app does not ship it. */
 function describeLanguage(code: string | null | undefined): string | null {
@@ -81,14 +83,8 @@ export function ReadingBody({
 
   return (
     <>
-      <Hero item={item} title={title} />
+      <Hero item={item} title={title} link={link} />
       <div className="meta-line">
-        {link && (
-          <a href={link.url} target="_blank" rel="noopener noreferrer">
-            <Icon name="open-outline" size={14} />
-            {link.host}
-          </a>
-        )}
         {facts.map((fact) => (
           <span key={fact}>{fact}</span>
         ))}
@@ -158,7 +154,13 @@ export function ReadingBody({
   );
 }
 
-function Hero({ item, title }: { item: MediaItemContract; title: string }) {
+/**
+ * The cover with its band. The title opens the original when the media has one
+ * a browser can open (task-512), and says so with its icon; no false link
+ * otherwise. The band lets more of the image through than it used to.
+ */
+function Hero({ item, title, link }: { item: MediaItemContract; title: string; link: { url: string; host: string } | null }) {
+  const { t } = useI18n();
   const [broken, setBroken] = useState(false);
   const glyph = mediaTypeIconName(item.media_type);
   return (
@@ -172,7 +174,23 @@ function Hero({ item, title }: { item: MediaItemContract; title: string }) {
       )}
       <div className="veil">
         {item.creator_name && <div className="small subtle ell">{item.creator_name}</div>}
-        <h1 className="headline clamp2">{title}</h1>
+        {link ? (
+          <h1 className="headline">
+            <a
+              className="hero-link"
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={link.host}
+              aria-label={`${title}. ${t("media.openSourceA11y", { host: link.host })}`}
+            >
+              <span className="clamp2">{title}</span>
+              <Icon name="open-outline" size={18} />
+            </a>
+          </h1>
+        ) : (
+          <h1 className="headline clamp2">{title}</h1>
+        )}
       </div>
     </div>
   );
@@ -262,7 +280,11 @@ function TranscriptText({
         : state.status === "translation_failed"
           ? t("transcript.translationFailed")
           : null;
-  const paragraphs = splitTranscriptParagraphs(originalText ?? state.content);
+  const content = originalText ?? state.content;
+  // Prose keeps its numbered paragraphs and speakers; a structured extraction
+  // (tables, headings, lists) is drawn by the shared Markdown reader (task-513).
+  const structured = hasStructuredMarkdown(content);
+  const paragraphs = structured ? [] : splitTranscriptParagraphs(content);
   return (
     <>
       {notice && (
@@ -270,6 +292,7 @@ function TranscriptText({
           {notice}
         </p>
       )}
+      {structured && <MarkdownView text={content} transcript />}
       {paragraphs.map((paragraph, i) => (
         <p key={i}>
           <span className="pn">§{i + 1}</span>

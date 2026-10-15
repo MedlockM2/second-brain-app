@@ -50,6 +50,8 @@ export const en = {
   "add.uploading": "Uploading…",
   "add.added": "Added. Processing has started.",
   "pane.scopeFolder": "This folder",
+  "chat.emptyMedia": "Ask a question about this source. The answer draws only on its text.",
+  "chat.emptyFolder": "Ask a question about this folder. The answer draws on its sources and names the ones it cites.",
   "ai.wholeFolder": "on the whole folder",
   "ai.sourcesChanged": "The sources have changed since some of these were generated. A new generation adds an entry; the old one stays.",
   "folder.addSources": "Add sources",

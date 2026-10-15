@@ -110,6 +110,7 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
   PURCHASE_FAILED: "purchaseError.failed",
 
   // --- Bug report attachment ---
+  FOLDER_NAME_CONFLICT: "folders.duplicateMessage",
   ATTACHMENT_UPLOAD_FAILED: "bugReport.attachmentFailed",
 };
 

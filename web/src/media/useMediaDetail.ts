@@ -3,6 +3,7 @@ import { t } from "@media-summarizer/core/i18n/runtime";
 import type { MediaStatusResponse } from "@media-summarizer/core/types/media";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "../api";
+import { cachedData, storeCached } from "../lib/resourceCache";
 
 /**
  * A media and the job behind it, re-read every 3 s until the job ends — the
@@ -15,16 +16,22 @@ export type MediaDetailState = "loading" | "processing" | "completed" | "failed"
 const POLL_MS = 3_000;
 const TIMEOUT_MS = 5 * 60 * 1000;
 
+const detailPath = (mediaId: string) => `/api/media/${encodeURIComponent(mediaId)}`;
+
 export function useMediaDetail(mediaId: string) {
-  const [data, setData] = useState<MediaStatusResponse | null>(null);
-  const [state, setState] = useState<MediaDetailState>("loading");
+  // A media opened before is drawn at once from the reading cache, then re-read.
+  const [data, setData] = useState<MediaStatusResponse | null>(() => cachedData<MediaStatusResponse>(detailPath(mediaId)) ?? null);
+  const [state, setState] = useState<MediaDetailState>(() =>
+    cachedData<MediaStatusResponse>(detailPath(mediaId))?.processing_job.status === "completed" ? "completed" : "loading",
+  );
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState(0);
   const startedAt = useRef(0);
 
   const read = useCallback(async (): Promise<MediaDetailState> => {
     try {
-      const response = await apiRequest<MediaStatusResponse>(`/api/media/${encodeURIComponent(mediaId)}`);
+      const response = await apiRequest<MediaStatusResponse>(detailPath(mediaId));
+      storeCached(detailPath(mediaId), response);
       setData(response);
       setError(null);
       const job = response.processing_job.status;

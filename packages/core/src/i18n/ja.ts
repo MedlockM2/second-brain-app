@@ -592,7 +592,6 @@ export const ja: Catalog = {
   "artifact.noQuestions": "このコンテンツに問題はありません。",
   "artifact.quizProgress": "クイズの進捗",
   "artifact.questionPosition": "問題 {index} / {total}",
-  "artifact.quizComplete": "クイズ終了",
   "artifact.explanation": "解説",
   "artifact.optionA11y": "選択肢 {label}：{text}{state}",
   "share.inProgress.body": "コンテンツをセカンドブレインに保存しています。",

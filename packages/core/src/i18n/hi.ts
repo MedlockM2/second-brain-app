@@ -610,7 +610,6 @@ export const hi: Catalog = {
   "artifact.noQuestions": "इस सामग्री में कोई प्रश्न नहीं है।",
   "artifact.quizProgress": "क्विज़ की प्रगति",
   "artifact.questionPosition": "प्रश्न {index} / {total}",
-  "artifact.quizComplete": "क्विज़ पूरा हुआ",
   "artifact.explanation": "व्याख्या",
   "artifact.optionA11y": "विकल्प {label}: {text}{state}",
   "share.inProgress.body": "आपकी सामग्री आपके दूसरे दिमाग़ में सहेजी जा रही है।",

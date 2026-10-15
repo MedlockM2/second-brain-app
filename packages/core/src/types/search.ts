@@ -34,5 +34,7 @@ export interface SearchTranscriptsResponse {
   found: number;
   page: number;
   per_page: number;
+  /** Another page of matching media exists (task-523): `found` counts matching chunks, not media. */
+  has_more: boolean;
   hits: SearchHit[];
 }

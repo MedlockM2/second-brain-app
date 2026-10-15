@@ -1,22 +1,20 @@
 import { formatNumber, tCount } from "@media-summarizer/core/i18n/runtime";
 import { getRelativeTime } from "@media-summarizer/core/i18n/relativeTime";
-import {
-  mediaStatusMarker,
-  mediaTypeLabelKey,
-} from "@media-summarizer/core/media/mediaDisplay";
+import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
 import type { Folder, FolderListResponse } from "@media-summarizer/core/types/organization";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { apiRequest } from "../api";
-import { MediaCover } from "../components/Covers";
+import { MediaCover, TypeBadge } from "../components/Covers";
 import { Icon } from "../components/Icon";
 import { NewFolderDialog } from "../components/NewFolderDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
+import { BackToTop } from "../components/BackToTop";
 
 /**
  * Bibliothèque = the mobile Library (`app/(tabs)/search.tsx`), per the owner's
@@ -208,6 +206,7 @@ export function LibraryPage() {
           }}
         />
       )}
+      <BackToTop />
     </main>
   );
 }
@@ -231,7 +230,7 @@ function MediaCard({ item }: { item: MediaListItem }) {
           {marker === "failed" ? (
             <span className="badge err">{t("mediaStatus.failedBadge")}</span>
           ) : (
-            <span className="badge">{t(mediaTypeLabelKey(item.media_type))}</span>
+            <TypeBadge type={item.media_type} />
           )}
           <span>{getRelativeTime(item.created_at)}</span>
         </div>

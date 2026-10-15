@@ -10,6 +10,10 @@ import { Dialog } from "./Dialog";
  * always names no parent, and no screen offers to create one inside another.
  * `onCreated` may be async (filing a media into the new folder): the dialog
  * stays busy until it settles, and stays open with the name if it throws.
+ *
+ * One `creation_id` per dialog (task-517): a retry after an uncertain network
+ * failure sends it again, and the API answers the folder it already created
+ * instead of a second one or a duplicate-name refusal.
  */
 export function NewFolderDialog({
   onCreated,
@@ -23,6 +27,7 @@ export function NewFolderDialog({
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const [nameConflict, setNameConflict] = useState(false);
+  const [creationId] = useState(() => crypto.randomUUID());
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -32,7 +37,7 @@ export function NewFolderDialog({
     try {
       const folder = await apiRequest<Folder>("/api/folders", {
         method: "POST",
-        body: { name: trimmed, parent_folder_id: null },
+        body: { name: trimmed, parent_folder_id: null, creation_id: creationId },
       });
       await onCreated(folder);
     } catch (error) {

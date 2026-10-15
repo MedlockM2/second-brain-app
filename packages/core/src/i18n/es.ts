@@ -701,7 +701,6 @@ export const es: Catalog = {
   "artifact.noQuestions": "No hay preguntas en este contenido.",
   "artifact.quizProgress": "Progreso del cuestionario",
   "artifact.questionPosition": "Pregunta {index} de {total}",
-  "artifact.quizComplete": "Cuestionario completado",
   "artifact.explanation": "EXPLICACIÓN",
   "artifact.optionA11y": "Opción {label}: {text}{state}",
   "share.inProgress.body": "Tu contenido se está guardando en tu segundo cerebro.",

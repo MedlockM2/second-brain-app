@@ -581,7 +581,6 @@ export const zh: Catalog = {
   "artifact.noQuestions": "此内容中没有题目。",
   "artifact.quizProgress": "测验进度",
   "artifact.questionPosition": "第 {index} 题，共 {total} 题",
-  "artifact.quizComplete": "测验完成",
   "artifact.explanation": "解析",
   "artifact.optionA11y": "选项 {label}：{text}{state}",
   "share.inProgress.body": "正在把内容保存到你的第二大脑。",

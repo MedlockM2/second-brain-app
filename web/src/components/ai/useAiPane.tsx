@@ -211,6 +211,7 @@ export function useAiPane({
             key={open.artifact_id}
             artifact={open}
             showSourceCount={showSourceCount}
+            onClose={() => setOpenId(null)}
             onRegenerate={async () => {
               const created = await generate(pill.type);
               if (created) setOpenId(created.artifact_id);
@@ -408,10 +409,13 @@ function HistoryRow({
 function OpenArtifact({
   artifact,
   showSourceCount,
+  onClose,
   onRegenerate,
 }: {
   artifact: ArtifactSummary;
   showSourceCount: boolean;
+  /** Back to the history: a finished quiz hands the reader back to it. */
+  onClose: () => void;
   onRegenerate: () => Promise<void>;
 }) {
   const { t } = useI18n();
@@ -508,7 +512,7 @@ function OpenArtifact({
       <h2 className="headline" style={{ fontSize: 24, margin: "4px 0 16px" }}>
         {title}
       </h2>
-      <ArtifactBody type={content.artifact_type} payload={content.content} />
+      <ArtifactBody type={content.artifact_type} payload={content.content} onFinish={onClose} />
     </article>
   );
 }

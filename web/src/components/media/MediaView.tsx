@@ -6,15 +6,16 @@ import { useFolders } from "../../media/useFolders";
 import { useMediaDetail } from "../../media/useMediaDetail";
 import { folderPath } from "../../routes";
 import { useAiPane } from "../ai/useAiPane";
-import { PaneEmpty, Panes } from "../panes/Panes";
+import { useChatPane } from "../chat/useChatPane";
+import { Panes } from "../panes/Panes";
 import { useToast } from "../Toast";
 import { MediaActions } from "./MediaActions";
 import { ReadingBody } from "./ReadingBody";
 
 /**
  * A media as a page of three panes (owner's mockup, captures 08 to 11):
- * Reading on the left, the discussion in the middle — a slot task-480 fills —
- * and the AI pane on the right. It reads its media by id and nothing else from
+ * Reading on the left, the discussion in the middle (task-480) and the AI pane
+ * on the right. It reads its media by id and nothing else from
  * the route, so the Digest renders the same view under its period strip
  * (`band`).
  */
@@ -43,6 +44,14 @@ export function MediaView({
     showSourceCount: false,
     lockedMessage:
       lockedReason === "unavailable" ? tw("pane.aiUnavailable") : lockedReason === "pending" || !item ? tw("pane.aiLocked") : null,
+  });
+  // A question may be asked while the text is being extracted: it waits for it
+  // (task-519). Only a failed import leaves nothing to discuss.
+  const chat = useChatPane({
+    scope: "media",
+    scopeId: mediaId,
+    sourceReady: ready,
+    lockedMessage: lockedReason === "unavailable" ? tw("pane.discussionUnavailable") : null,
   });
 
   if (!item) {
@@ -101,17 +110,7 @@ export function MediaView({
           ),
           body: <ReadingBody item={item} title={title} state={detail.state} error={detail.error} onRefresh={detail.refresh} />,
         }}
-        mid={{
-          title: tw("pane.discussion"),
-          icon: "chatbubbles-outline",
-          // The conversation itself is task-480's; until the text is ready, the
-          // pane says why there is none.
-          body: lockedReason ? (
-            <PaneEmpty icon="chatbubbles-outline">
-              <p>{tw(lockedReason === "unavailable" ? "pane.discussionUnavailable" : "pane.discussionLocked")}</p>
-            </PaneEmpty>
-          ) : null,
-        }}
+        mid={chat}
         right={ai.spec}
       />
       {toast.node}

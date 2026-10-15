@@ -818,7 +818,6 @@ export const en = {
   "artifact.noQuestions": "No questions in this artifact.",
   "artifact.quizProgress": "Quiz progress",
   "artifact.questionPosition": "Question {index} of {total}",
-  "artifact.quizComplete": "Quiz complete",
   "artifact.explanation": "EXPLANATION",
   "artifact.optionA11y": "Option {label}: {text}{state}",
   // --- Share confirmation ---

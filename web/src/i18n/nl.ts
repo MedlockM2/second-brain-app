@@ -44,6 +44,8 @@ export const nl: WebCatalog = {
   "add.uploading": "Uploaden…",
   "add.added": "Toegevoegd. De verwerking is begonnen.",
   "pane.scopeFolder": "Deze map",
+  "chat.emptyMedia": "Stel een vraag over deze bron. Het antwoord steunt alleen op de tekst ervan.",
+  "chat.emptyFolder": "Stel een vraag over deze map. Het antwoord steunt op de bronnen en noemt de bronnen die het citeert.",
   "ai.wholeFolder": "over de hele map",
   "ai.sourcesChanged": "De bronnen zijn veranderd sinds sommige van deze generaties. Een nieuwe generatie voegt een item toe; het oude blijft.",
   "folder.addSources": "Bronnen toevoegen",

@@ -1,12 +1,11 @@
 import { getRelativeTime } from "@media-summarizer/core/i18n/relativeTime";
-import { mediaTypeLabelKey } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../api";
-import { MediaCover } from "../components/Covers";
+import { MediaCover, TypeBadge } from "../components/Covers";
 import { FolderPickerList, recentFolders, rememberFolder } from "../components/FolderPicker";
 import { Icon } from "../components/Icon";
 import { useToast } from "../components/Toast";
@@ -26,6 +25,9 @@ import { mediaPath } from "../routes";
  * oldest first, one page of 100, frozen when the review opens — a source saved
  * meanwhile waits for the next pass. A discard leaves the queue at once and the
  * DELETE follows; a failure puts the source back where it was.
+ *
+ * Deepen opens the media page and Back returns to the same card (task-521):
+ * the card is remembered in the review's own URL (`?at=`) before leaving.
  */
 const QUEUE_LIMIT = 100;
 
@@ -34,6 +36,7 @@ export function UnsortedPage() {
   const navigate = useNavigate();
   const folders = useFolders();
   const toast = useToast();
+  const [searchParams, setParams] = useSearchParams();
   const [queue, setQueue] = useState<MediaListItem[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [index, setIndex] = useState(0);
@@ -48,10 +51,16 @@ export function UnsortedPage() {
     const params = new URLSearchParams({ folder_id: unsortedId, limit: String(QUEUE_LIMIT), sort: "asc" });
     apiRequest<ListMediaResponse>(`/api/media?${params.toString()}`)
       .then((response) => {
-        setQueue(response.items.filter((item) => !item.folder_id || item.folder_id === unsortedId));
+        const items = response.items.filter((item) => !item.folder_id || item.folder_id === unsortedId);
+        setQueue(items);
+        // Back from Deepen: resume on the card that was open.
+        const at = items.findIndex((item) => item.media_item_id === searchParams.get("at"));
+        if (at >= 0) setIndex(at);
         setFailed(false);
       })
       .catch(() => setFailed(true));
+    // The queue is read once per review; `at` only matters on that read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unsortedId, round]);
 
   const current = queue && queue.length > 0 ? queue[Math.min(index, queue.length - 1)] : null;
@@ -77,8 +86,10 @@ export function UnsortedPage() {
   }, [current, queue, leave, toast, t]);
 
   const deepen = useCallback(() => {
-    if (current) navigate(mediaPath(current.media_item_id));
-  }, [current, navigate]);
+    if (!current) return;
+    setParams({ at: current.media_item_id }, { replace: true });
+    navigate(mediaPath(current.media_item_id));
+  }, [current, navigate, setParams]);
 
   const file = useCallback(
     async (folder: Folder) => {
@@ -192,7 +203,7 @@ export function UnsortedPage() {
             <MediaCover imageUrl={current.media_image} mediaType={current.media_type} status={current.status} />
             <div className="grow">
               <div className="row small muted">
-                <span className="badge">{t(mediaTypeLabelKey(current.media_type))}</span>
+                <TypeBadge type={current.media_type} />
                 <span>{getRelativeTime(current.created_at)}</span>
               </div>
               <h2 className="headline" style={{ fontSize: 24, margin: "6px 0 4px" }}>

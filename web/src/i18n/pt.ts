@@ -44,6 +44,8 @@ export const pt: WebCatalog = {
   "add.uploading": "A enviar…",
   "add.added": "Adicionado. O processamento começou.",
   "pane.scopeFolder": "Esta pasta",
+  "chat.emptyMedia": "Faça uma pergunta sobre esta fonte. A resposta baseia-se apenas no seu texto.",
+  "chat.emptyFolder": "Faça uma pergunta sobre esta pasta. A resposta baseia-se nas suas fontes e nomeia as que cita.",
   "ai.wholeFolder": "sobre toda a pasta",
   "ai.sourcesChanged": "As fontes mudaram desde algumas destas gerações. Uma nova geração acrescenta uma entrada; a anterior mantém-se.",
   "folder.addSources": "Adicionar fontes",

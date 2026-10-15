@@ -1,5 +1,5 @@
 import { tCount } from "@media-summarizer/core/i18n/runtime";
-import { mediaStatusMarker, mediaTypeLabelKey } from "@media-summarizer/core/media/mediaDisplay";
+import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
@@ -8,7 +8,8 @@ import { Link, useNavigate, useParams } from "react-router";
 import { apiRequest } from "../api";
 import { AddSourceDialog } from "../components/AddSourceDialog";
 import { useAiPane } from "../components/ai/useAiPane";
-import { MediaCover } from "../components/Covers";
+import { useChatPane } from "../components/chat/useChatPane";
+import { MediaCover, TypeBadge } from "../components/Covers";
 import { FolderActions } from "../components/FolderActions";
 import { Icon } from "../components/Icon";
 import { MediaActions } from "../components/media/MediaActions";
@@ -23,7 +24,7 @@ import { mediaPath } from "../routes";
 /**
  * /folders/:folderId — a folder in three panes (owner's mockup, captures 12 to
  * 14), on the media page's layout: its Sources on the left, the discussion over
- * "this folder · N sources" in the middle (a slot task-480 fills), the AI pane
+ * "this folder · N sources" in the middle (task-480), the AI pane
  * generating over the whole folder on the right.
  *
  * Folders have one level: no subfolder section, no folder created in a folder,
@@ -69,6 +70,13 @@ function FolderView({ folderId }: { folderId: string }) {
 
   const found = folders.folders?.find((candidate) => candidate.id === folderId) ?? null;
   const folder = renamed ?? found;
+  const count = sources?.length ?? folder?.media_count ?? 0;
+  const chat = useChatPane({
+    scope: "folder",
+    scopeId: folderId,
+    sourceReady: true,
+    scopeLabel: `${tw("pane.scopeFolder")} · ${tCount("artifacts.sourceCount", count)}`,
+  });
 
   if (!folder) {
     return (
@@ -88,7 +96,6 @@ function FolderView({ folderId }: { folderId: string }) {
   }
 
   const name = folder.is_default ? tw("nav.unsortedNoCount") : folder.name;
-  const count = sources?.length ?? folder.media_count;
   const drop = (mediaId: string) =>
     setSources((current) => (current ?? []).filter((item) => item.media_item_id !== mediaId));
 
@@ -167,20 +174,7 @@ function FolderView({ folderId }: { folderId: string }) {
           ),
           body: sourcesBody,
         }}
-        mid={{
-          title: tw("pane.discussion"),
-          icon: "chatbubbles-outline",
-          head: (
-            <>
-              <span className="ell">{tw("pane.discussion")}</span>
-              <span className="small muted" style={{ fontWeight: 400 }}>
-                {tw("pane.scopeFolder")} · {tCount("artifacts.sourceCount", count)}
-              </span>
-            </>
-          ),
-          // The conversation over the folder is task-480's.
-          body: null,
-        }}
+        mid={chat}
         right={ai.spec}
       />
       {adding && (
@@ -219,7 +213,7 @@ function SourceRow({ item, actions }: { item: MediaListItem; actions: ReactNode 
             {marker === "failed" ? (
               <span className="badge err">{t("mediaStatus.failedBadge")}</span>
             ) : (
-              <span className="badge">{t(mediaTypeLabelKey(item.media_type))}</span>
+              <TypeBadge type={item.media_type} />
             )}
             <span className="ell">{subtitle}</span>
           </span>

@@ -3,10 +3,10 @@ id: TASK-480
 title: >-
   Remplir le volet Discussion du média et du dossier dans l'app web avec le chat
   en flux
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-11 15:57'
-updated_date: '2026-10-15 22:02'
+updated_date: '2026-10-15 22:25'
 labels:
   - web
   - chat
@@ -80,12 +80,31 @@ Après déploiement de task-474 et de l'app : poser une question sur un média e
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le volet Discussion du média et du dossier rend le composeur à sa portée, le fil, l'historique, la nouvelle conversation, l'arrêt et la relance
-- [ ] #2 Les refus de contexte et de minutes et l'échec partiel sont rendus avec les états de la maquette, et un tour en échec generation_lost ou dispatch_failed se relance comme une nouvelle question, sans événement replaced
-- [ ] #3 Le flux est lu par fetch et ReadableStream avec Authorization: Bearer, reprend par after_seq et retombe sur la relecture de la conversation en cas d'échec
-- [ ] #4 Le client de chat web ne dépend d'aucune API ni d'aucun paquet Expo, et aucun fichier de mobile/ n'est modifié
-- [ ] #5 Les libellés sont présents dans les 11 langues
-- [ ] #6 Le build passe, typecheck et lint sont propres
-- [ ] #7 Les réponses sont rendues en Markdown par packages/core/src/chat/markdown.ts ; dans un dossier, les balises [Sn] portent le titre court du média cité et une liste Sources ouvre chaque média cité ; dans un média, elles sont omises (task-500)
-- [ ] #8 Le composeur n'a ni limite ni compteur de caractères, la nouvelle conversation utilise l'icône create-outline, et une question peut être envoyée pendant l'extraction du média (task-501, task-503, task-519)
+- [x] #1 Le volet Discussion du média et du dossier rend le composeur à sa portée, le fil, l'historique, la nouvelle conversation, l'arrêt et la relance
+- [x] #2 Les refus de contexte et de minutes et l'échec partiel sont rendus avec les états de la maquette, et un tour en échec generation_lost ou dispatch_failed se relance comme une nouvelle question, sans événement replaced
+- [x] #3 Le flux est lu par fetch et ReadableStream avec Authorization: Bearer, reprend par after_seq et retombe sur la relecture de la conversation en cas d'échec
+- [x] #4 Le client de chat web ne dépend d'aucune API ni d'aucun paquet Expo, et aucun fichier de mobile/ n'est modifié
+- [x] #5 Les libellés sont présents dans les 11 langues
+- [x] #6 Le build passe, typecheck et lint sont propres
+- [x] #7 Le composeur n'a ni limite ni compteur de caractères, la nouvelle conversation utilise l'icône create-outline, et une question peut être envoyée pendant l'extraction du média (task-501, task-503, task-519)
+- [x] #8 Les réponses sont rendues en Markdown par packages/core/src/chat/markdown.ts ; dans un dossier, les balises [Sn] deviennent le titre court du média cité, un lien qui l'ouvre ; dans un média, elles sont omises (task-500, état actuel du mobile)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Fait le 2026-10-16.
+
+- `web/src/chat/chatClient.ts` : routes REST `/api/chat` et lecture du flux par `fetch` + `ReadableStream` avec `Authorization: Bearer` (via `sendAuthenticated`), blocs lus par `parseSseBlock` de `packages/core`.
+- `web/src/chat/useChat.ts` : contrôleur d'une portée, portage du `ChatSessionContext` mobile : reprise par `after_seq`, `reconnect`, 409 qui adopte la génération vivante, repli sur la relecture toutes les 2 s si le flux est indisponible ; quitter la page ne fait que déconnecter, seul « Arrêter » appelle `/stop`. Un tour `failed` (dont `generation_lost`, `dispatch_failed`) se relance comme nouvelle question avec un nouveau `client_request_id`. Question pendant l'extraction : gardée localement (« En attente de l'extraction… »), envoyée quand le texte est prêt, annulable (task-519). À l'ouverture, le volet reprend la dernière conversation de la portée, flux compris (rechargement pendant un flux).
+- `web/src/components/chat/useChatPane.tsx` : fil, composeur (Entrée envoie, Maj+Entrée va à la ligne, pas de limite ni de compteur, un seul bouton envoyer/arrêter), historique paginé avec suppression confirmée, nouvelle conversation (`create-outline`), refus traduits avec leur action (nouvelle conversation, formules).
+- `web/src/components/MarkdownView.tsx` : rendu web du Markdown partagé, citations en liens vers le média.
+- `packages/core/src/chat/refusal.ts` : `describeChatRefusal` mis en commun (copie mobile laissée telle quelle, aucun fichier `mobile/` touché par cette tâche).
+- Config : `VITE_CHAT_STREAM_URL` (`web/.env.example`, `config.ts`). Libellés : réutilisation des clés `chat.*` partagées, plus `chat.emptyMedia` et `chat.emptyFolder` dans les 11 catalogues web.
+
+Écarts assumés :
+- La liste « Sources » sous une réponse (task-500) n'existe plus dans le mobile actuel : les citations en ligne ouvrent les médias. L'AC a été corrigé en conséquence.
+- Le surlignage des paragraphes cités dans le volet Lecture n'est pas faisable : une citation désigne un média (`[S1]`), jamais un paragraphe, et dans une conversation de média les balises sont omises.
+
+Contrôles : `tsc`, ESLint et `vite build` du web OK ; core typecheck et lint OK. Note owner : après déploiement de task-474, poser une question sur un média et un dossier, l'arrêter, recharger pendant un flux, provoquer un refus de contexte sur un gros dossier.
+<!-- SECTION:NOTES:END -->

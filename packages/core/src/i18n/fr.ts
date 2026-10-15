@@ -725,7 +725,6 @@ export const fr: Catalog = {
   "artifact.noQuestions": "Aucune question dans ce contenu.",
   "artifact.quizProgress": "Progression du quiz",
   "artifact.questionPosition": "Question {index} sur {total}",
-  "artifact.quizComplete": "Quiz terminé",
   "artifact.explanation": "EXPLICATION",
   "artifact.optionA11y": "Option {label} : {text}{state}",
   "share.inProgress.body":

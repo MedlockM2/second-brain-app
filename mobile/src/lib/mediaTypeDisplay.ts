@@ -13,6 +13,7 @@
 import type { Ionicons } from "@expo/vector-icons";
 import { t } from "../i18n";
 import type { MediaType } from "@media-summarizer/core/types/media";
+import { mediaTypeBadgeTone } from "@media-summarizer/core/media/mediaDisplay";
 import type { ThemeColors } from "../constants/theme";
 
 export function getMediaTypeIcon(
@@ -86,45 +87,23 @@ export function getMediaTypeBadgeTones(
   type: MediaType,
   Colors: ThemeColors,
 ): { fill: string; ink: string } {
-  switch (type) {
-    case "podcast_episode":
+  switch (mediaTypeBadgeTone(type)) {
+    case "primary":
       return { fill: Colors.primary, ink: Colors.onPrimary };
-    case "youtube_video":
+    case "video":
       return { fill: Colors.errorContainer, ink: Colors.textMain };
-    // A short is its own family, not a shade of the video red (task-435). It
-    // used to take that exact red with that exact glyph, so only the word
-    // separated SHORT from VIDÉO — too little to find one while scrolling.
-    //
-    // `shortVideoContainer` is the blue-grey of the palette's *ink* family
-    // (`textMuted`, `textSubtle`), which is the only hue Amber Clarity already
-    // owns and has not yet spent as a fill, so this adds a family without
-    // importing a foreign accent. It competes with neither neighbour, for two
-    // different reasons:
-    //
-    // - **Not the video red.** Same Lab lightness and chroma as
-    //   `errorContainer` (L* 90.3/90.0 light, 30.1/30.0 dark) but 242° away in
-    //   hue, so the pills read as peers of equal weight rather than as two
-    //   strengths of one colour — ΔE 23.6 light, 87.0 dark.
-    // - **Not the podcast amber.** The amber is a saturated accent the system
-    //   reserves for "high-value interactions… and meaningful accents" (C* 84.7)
-    //   and it carries `onPrimary`; this is a quiet container six times less
-    //   chromatic, ΔE 98.6 light and 115.3 dark away from it. No eye confuses a
-    //   lit amber chip with a pale slate one.
-    //
-    // Its ink is `textMain`, measured on the fill in both modes: **10.52:1**
-    // light (`#2b2d42` on `#d6e4fd`) and **7.86:1** dark (`#f1ebe1` on
-    // `#1a4975`), against the 4.5:1 WCAG AA asks of the badge's 13px label.
-    case "short_video":
+    // A short is its own family, not a shade of the video red (task-435): the
+    // blue-grey of the palette's ink family, same Lab lightness and chroma as
+    // `errorContainer` but 242° away in hue, and six times less chromatic than
+    // the podcast amber. `textMain` on it: 10.52:1 light, 7.86:1 dark.
+    case "short":
       return { fill: Colors.shortVideoContainer, ink: Colors.textMain };
     // Every family that has one gets its own hue, on the short's recipe (see
     // `audioContainer` in the theme): green for what is listened to without a
-    // picture, orchid for a photo post, sea-green for an article. Text, documents
-    // and links keep the tonal surface — they are the catch-all, and a tint of
-    // their own would leave no type looking ordinary.
-    case "audio_file":
+    // picture, orchid for a photo post, sea-green for an article.
     case "audio":
       return { fill: Colors.audioContainer, ink: Colors.textMain };
-    case "image_post":
+    case "imagePost":
       return { fill: Colors.imagePostContainer, ink: Colors.textMain };
     case "article":
       return { fill: Colors.articleContainer, ink: Colors.textMain };

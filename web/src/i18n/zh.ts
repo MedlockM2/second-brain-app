@@ -44,6 +44,8 @@ export const zh: WebCatalog = {
   "add.uploading": "正在上传…",
   "add.added": "已添加，处理已开始。",
   "pane.scopeFolder": "此文件夹",
+  "chat.emptyMedia": "就此来源提问。回答仅依据其文本。",
+  "chat.emptyFolder": "就此文件夹提问。回答依据其中的来源，并注明所引用的来源。",
   "ai.wholeFolder": "基于整个文件夹",
   "ai.sourcesChanged": "自部分内容生成以来，来源已有变化。重新生成会新增一条记录，旧的会保留。",
   "folder.addSources": "添加来源",

@@ -6,6 +6,7 @@ import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/ty
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { apiRequest } from "../api";
+import { cachedData, readCached } from "../lib/resourceCache";
 import { useOpenAdd } from "../components/AddFlow";
 import { FolderMosaic, MediaCover } from "../components/Covers";
 import { Icon } from "../components/Icon";
@@ -28,24 +29,33 @@ import { folderPath, mediaPath } from "../routes";
  */
 const RECENTLY_ADDED_LIMIT = 12;
 const CONTINUE_LEARNING_LIMIT = 12;
+const RECENT_PATH = `/api/media?limit=${RECENTLY_ADDED_LIMIT}`;
+const CONTINUE_PATH = `/api/engagements/recent?limit=${CONTINUE_LEARNING_LIMIT}`;
 
 type Source<T> = { items: T[] | null; failed: boolean };
 
 export function HomePage() {
   const { t, tw } = useI18n();
   const openAdd = useOpenAdd();
-  const [recent, setRecent] = useState<Source<MediaListItem>>({ items: null, failed: false });
-  const [continuing, setContinuing] = useState<Source<RecentEngagement>>({ items: null, failed: false });
+  // Drawn at once from what the last visit read, then re-read (task-518).
+  const [recent, setRecent] = useState<Source<MediaListItem>>(() => ({
+    items: cachedData<ListMediaResponse>(RECENT_PATH)?.items ?? null,
+    failed: false,
+  }));
+  const [continuing, setContinuing] = useState<Source<RecentEngagement>>(() => ({
+    items: cachedData<RecentEngagementsResponse>(CONTINUE_PATH)?.items ?? null,
+    failed: false,
+  }));
 
   const loadRecent = useCallback(() => {
-    apiRequest<ListMediaResponse>(`/api/media?limit=${RECENTLY_ADDED_LIMIT}`)
+    readCached(RECENT_PATH, () => apiRequest<ListMediaResponse>(RECENT_PATH))
       .then((response) => setRecent({ items: response.items, failed: false }))
       // A failed re-read keeps what is on screen.
       .catch(() => setRecent((current) => ({ items: current.items, failed: current.items === null })));
   }, []);
 
   const loadContinuing = useCallback(() => {
-    apiRequest<RecentEngagementsResponse>(`/api/engagements/recent?limit=${CONTINUE_LEARNING_LIMIT}`)
+    readCached(CONTINUE_PATH, () => apiRequest<RecentEngagementsResponse>(CONTINUE_PATH))
       .then((response) => setContinuing({ items: response.items, failed: false }))
       .catch(() => setContinuing((current) => ({ items: current.items, failed: current.items === null })));
   }, []);
@@ -94,7 +104,7 @@ export function HomePage() {
     return (
       <main className="page">
         <div className="empty">
-          <Icon name="sparkles" size={24} />
+          <Icon name="download" size={24} />
           <h1 className="headline">{t("home.empty")}</h1>
           <p className="subtle">{tw("home.emptyHint")}</p>
           <button
@@ -114,7 +124,7 @@ export function HomePage() {
     <main className="page home">
       <h1 className="visually-hidden">{t("tabs.home")}</h1>
       {recentItems.length > 0 && (
-        <TileRow icon="sparkles" title={t("home.recentlyAdded")}>
+        <TileRow icon="download" title={t("home.recentlyAdded")}>
           {recentItems.map((item) => (
             <MediaTile
               key={item.media_item_id}

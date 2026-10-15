@@ -610,7 +610,6 @@ export const nl: Catalog = {
   "artifact.noQuestions": "Geen vragen in deze inhoud.",
   "artifact.quizProgress": "Voortgang van de quiz",
   "artifact.questionPosition": "Vraag {index} van {total}",
-  "artifact.quizComplete": "Quiz voltooid",
   "artifact.explanation": "UITLEG",
   "artifact.optionA11y": "Optie {label}: {text}{state}",
   "share.inProgress.body": "Je inhoud wordt opgeslagen in je tweede brein.",

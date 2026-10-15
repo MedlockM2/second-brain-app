@@ -22,6 +22,7 @@ book-outline card-outline checkmark checkmark-circle chatbubbles-outline close e
 folder-outline add-circle-outline pencil-outline trash-outline sync-outline open-outline language-outline
 bulb-outline help-circle-outline close-circle refresh-outline sparkles-outline arrow-forward
 information-circle-outline eye-outline eye-off-outline reader-outline time-outline cloud-upload-outline
+create-outline arrow-up arrow-down stop download newspaper remove-circle-outline
 """.split()))
 
 ROOT = pathlib.Path.cwd()

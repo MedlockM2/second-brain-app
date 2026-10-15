@@ -22,7 +22,7 @@ import { Icon } from "../Icon";
  * the widened AI pane. `payload` is the envelope `GET /api/artifacts/:id/content`
  * returns; anything the model wrote that does not fit is dropped, not shown raw.
  */
-export function ArtifactBody({ type, payload }: { type: string; payload: unknown }) {
+export function ArtifactBody({ type, payload, onFinish }: { type: string; payload: unknown; onFinish: () => void }) {
   const content = artifactContent(payload);
   switch (normalizeArtifactKind(type)) {
     case "summary_short":
@@ -35,7 +35,7 @@ export function ArtifactBody({ type, payload }: { type: string; payload: unknown
     case "flashcards":
       return <Flashcards cards={pickFlashcardArray(content)} />;
     default:
-      return <Quiz questions={pickQuizQuestions(content)} />;
+      return <Quiz questions={pickQuizQuestions(content)} onFinish={onFinish} />;
   }
 }
 
@@ -234,11 +234,15 @@ function FlashcardCard({ card }: { card: Flashcard }) {
   );
 }
 
-function Quiz({ questions }: { questions: QuizQuestion[] | null }) {
+/**
+ * One question at a time. The quiz records nothing on completion, so the last
+ * "Done" closes it and hands the reader back to the history (the mobile does the
+ * same since 8c3bdfee): no terminal state that reads like a button.
+ */
+function Quiz({ questions, onFinish }: { questions: QuizQuestion[] | null; onFinish: () => void }) {
   const { t } = useI18n();
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
   if (!questions) return <p className="subtle">{t("artifact.noQuestions")}</p>;
 
   const question = questions[index];
@@ -246,7 +250,7 @@ function Quiz({ questions }: { questions: QuizQuestion[] | null }) {
   const answered = picked !== null;
   const next = () => {
     if (last) {
-      setCompleted(true);
+      onFinish();
       return;
     }
     setIndex((i) => i + 1);
@@ -296,7 +300,7 @@ function Quiz({ questions }: { questions: QuizQuestion[] | null }) {
           </div>
         )}
       </div>
-      {answered && !completed && (
+      {answered && (
         <button type="button" className="btn primary" onClick={next}>
           {last ? t("common.done") : t("common.continue")}
           {!last && (
@@ -305,12 +309,6 @@ function Quiz({ questions }: { questions: QuizQuestion[] | null }) {
             </span>
           )}
         </button>
-      )}
-      {completed && (
-        <div className="row" role="status" style={{ fontWeight: 600 }}>
-          <Icon name="checkmark-circle" size={18} />
-          {t("artifact.quizComplete")}
-        </div>
       )}
     </div>
   );

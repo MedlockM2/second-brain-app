@@ -73,3 +73,34 @@ export function mediaStatusMarker(status?: string | null): MediaStatusMarker {
   if (status === "pending" || status === "processing") return "processing";
   return null;
 }
+
+/**
+ * The colour family of a media type's badge, named by role so each app maps it
+ * onto its own palette: the mobile `getMediaTypeBadgeTones` (theme colours, and
+ * why each family has its hue) and the web `.badge.tone-*` classes. One mapping,
+ * so a media shows the same pill on every surface of both apps.
+ *
+ * Text, documents and links keep the neutral tonal surface: they are the
+ * catch-all, and a tint of their own would leave no type looking ordinary.
+ */
+export type MediaTypeBadgeTone = "primary" | "video" | "short" | "audio" | "imagePost" | "article" | "neutral";
+
+export function mediaTypeBadgeTone(type: MediaType | string | null | undefined): MediaTypeBadgeTone {
+  switch (type) {
+    case "podcast_episode":
+      return "primary";
+    case "youtube_video":
+      return "video";
+    case "short_video":
+      return "short";
+    case "audio_file":
+    case "audio":
+      return "audio";
+    case "image_post":
+      return "imagePost";
+    case "article":
+      return "article";
+    default:
+      return "neutral";
+  }
+}

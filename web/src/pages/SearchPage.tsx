@@ -1,13 +1,13 @@
 import { tCount } from "@media-summarizer/core/i18n/runtime";
 import { getRelativeTime } from "@media-summarizer/core/i18n/relativeTime";
 import { focusHighlightSegments, parseHighlightSnippet } from "@media-summarizer/core/media/highlightSnippet";
-import { mediaTypeLabelKey } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import type { SearchHit, SearchTranscriptsResponse } from "@media-summarizer/core/types/search";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { apiRequest } from "../api";
-import { MediaCover } from "../components/Covers";
+import { MediaCover, TypeBadge } from "../components/Covers";
+import { BackToTop } from "../components/BackToTop";
 import { Icon } from "../components/Icon";
 import { MediaActions } from "../components/media/MediaActions";
 import { useI18n } from "../i18n/I18nProvider";
@@ -19,7 +19,8 @@ import { folderPath, mediaPath } from "../routes";
  * folders whose name matches, then the sources whose text matches, each with
  * its `<mark>`ed excerpt, on `GET /api/search/transcripts` — the endpoint the
  * mobile Library searches with. A result opens its media page, a folder its
- * folder page. Pages of 20, "Show more" for the next.
+ * folder page. Pages of 20 media, "Show more" while the API says another page
+ * exists (`has_more`, task-523), and a way back to the top.
  */
 const PER_PAGE = 20;
 
@@ -44,6 +45,7 @@ function Results({ query }: { query: string }) {
   const folders = useFolders();
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [found, setFound] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -57,6 +59,7 @@ function Results({ query }: { query: string }) {
         if (cancelled) return;
         setHits(response.hits);
         setFound(response.found);
+        setHasMore(response.has_more);
         setPage(1);
         setFailed(false);
       })
@@ -73,7 +76,12 @@ function Results({ query }: { query: string }) {
     try {
       const search = new URLSearchParams({ q: query, per_page: String(PER_PAGE), page: String(page + 1) });
       const response = await apiRequest<SearchTranscriptsResponse>(`/api/search/transcripts?${search.toString()}`);
-      setHits((current) => [...(current ?? []), ...response.hits]);
+      // A media already shown is not shown twice, whatever the page boundaries.
+      setHits((current) => {
+        const seen = new Set((current ?? []).map((hit) => hit.media_item_id));
+        return [...(current ?? []), ...response.hits.filter((hit) => !seen.has(hit.media_item_id))];
+      });
+      setHasMore(response.has_more);
       setPage(page + 1);
     } catch {
       setFailed(true);
@@ -162,7 +170,7 @@ function Results({ query }: { query: string }) {
               </div>
             ))}
           </div>
-          {hits.length < found ? (
+          {hasMore ? (
             <div className="list-end">
               <button type="button" className="btn tonal" disabled={loadingMore} onClick={() => void more()}>
                 {tw("library.loadMore")}
@@ -173,13 +181,13 @@ function Results({ query }: { query: string }) {
           )}
         </>
       ) : null}
+      <BackToTop />
     </main>
   );
 }
 
 /** A hit read as its library row, with the matched excerpt under it. */
 function HitCard({ hit }: { hit: SearchHit }) {
-  const { t } = useI18n();
   const title = resolveMediaTitle(hit);
   const snippet = hit.highlights[0]?.snippet;
   const segments = snippet ? focusHighlightSegments(parseHighlightSnippet(snippet), { leadChars: 60, maxChars: 280 }) : [];
@@ -188,7 +196,7 @@ function HitCard({ hit }: { hit: SearchHit }) {
       <MediaCover imageUrl={hit.media_image} mediaType={hit.media_type} />
       <div className="grow">
         <div className="meta">
-          <span className="badge">{t(mediaTypeLabelKey(hit.media_type))}</span>
+          <TypeBadge type={hit.media_type} />
           <span>{getRelativeTime(hit.created_at)}</span>
         </div>
         <div className="t clamp2">{title}</div>

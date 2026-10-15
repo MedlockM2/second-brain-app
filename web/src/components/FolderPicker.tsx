@@ -1,5 +1,5 @@
 import type { Folder } from "@media-summarizer/core/types/organization";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import { Icon } from "./Icon";
@@ -71,6 +71,7 @@ export function FolderPickerList({
 }: FolderPickerProps) {
   const { t, tw } = useI18n();
   const [query, setQuery] = useState("");
+  const creationId = useRef(crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +106,13 @@ export function FolderPickerList({
     setError(null);
     let folder: Folder;
     try {
-      folder = await apiRequest<Folder>("/api/folders", { method: "POST", body: { name, parent_folder_id: null } });
+      // The same creation_id until it succeeds: a retry after an uncertain
+      // failure gets the folder already made, not a second one (task-517).
+      folder = await apiRequest<Folder>("/api/folders", {
+        method: "POST",
+        body: { name, parent_folder_id: null, creation_id: creationId.current },
+      });
+      creationId.current = crypto.randomUUID();
     } catch {
       setError(t("folderPicker.createFailed"));
       setBusy(false);

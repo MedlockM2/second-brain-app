@@ -602,7 +602,6 @@ export const ar: Catalog = {
   "artifact.noQuestions": "لا توجد أسئلة في هذا المحتوى.",
   "artifact.quizProgress": "تقدّم الاختبار",
   "artifact.questionPosition": "السؤال {index} من {total}",
-  "artifact.quizComplete": "اكتمل الاختبار",
   "artifact.explanation": "الشرح",
   "artifact.optionA11y": "الخيار {label}: {text}{state}",
   "share.inProgress.body": "يجري حفظ المحتوى في عقلك الثاني.",

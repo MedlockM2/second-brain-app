@@ -1,9 +1,10 @@
 ---
 id: TASK-525
 title: Reporter dans l'app web les évolutions mobile du 11 au 15 octobre (hors chat)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-15 22:02'
+updated_date: '2026-10-15 22:25'
 labels:
   - web
   - parity
@@ -73,11 +74,35 @@ Après le merge : `npm run dev` dans `web/` contre l'API dev, et parcourir Accue
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Les points 1 à 13 de la description sont chacun repris dans web/, ou notés sans objet sur ordinateur dans les Implementation Notes avec leur raison
-- [ ] #2 Les tableaux Markdown du texte extrait sont rendus en cellules dans le volet Lecture via packages/core/src/chat/markdown.ts
-- [ ] #3 Le titre d'un média ouvre son original_url
-- [ ] #4 Les teintes des pastilles de type sont dans packages/core et utilisées par le web et le mobile
-- [ ] #5 Ajouts récents utilise l'icône download et le Digest l'icône newspaper dans le web
-- [ ] #6 Les libellés ajoutés sont présents dans les 11 langues
-- [ ] #7 Le build web passe ; typecheck et lint propres pour web/, et pour mobile/ et packages/core si packages/core a changé
+- [x] #1 Les points 1 à 13 de la description sont chacun repris dans web/, ou notés sans objet sur ordinateur dans les Implementation Notes avec leur raison
+- [x] #2 Les tableaux Markdown du texte extrait sont rendus en cellules dans le volet Lecture via packages/core/src/chat/markdown.ts
+- [x] #3 Le titre d'un média ouvre son original_url
+- [x] #4 Les teintes des pastilles de type sont dans packages/core et utilisées par le web et le mobile
+- [x] #5 Ajouts récents utilise l'icône download et le Digest l'icône newspaper dans le web
+- [x] #6 Les libellés ajoutés sont présents dans les 11 langues
+- [x] #7 Le build web passe ; typecheck et lint propres pour web/, et pour mobile/ et packages/core si packages/core a changé
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Fait le 2026-10-16. Point par point :
+
+1. task-512 : le titre du bandeau ouvre l'original (`resolveSourceLink`, icône, libellé accessible `media.openSourceA11y`) ; l'hôte n'est plus répété dans la ligne de faits ; bandeau plus transparent (0,55, flou 16 px), opaque sous `prefers-reduced-transparency`. Les autres faits (date, durée, langue, paragraphes) restent : la direction web les place dans le volet Lecture.
+2. task-513 : un texte structuré (`hasStructuredMarkdown`) est rendu par `MarkdownView` en mode transcript (tableaux en cellules) ; la prose garde ses paragraphes numérotés.
+3. task-523 : la recherche suit `has_more` (ajouté au type partagé), et non plus `hits.length < found` (found compte des passages) ; dédoublonnage par média à l'ajout d'une page.
+4. task-511 : `BackToTop` flottant dans la Bibliothèque et la recherche.
+5. task-504 : une couverture en échec est retentée deux fois après 2 s (URL inchangée, signature intacte), mosaïques comprises. Bibliothèque déjà paginée ; dialogue au clavier sans objet sur ordinateur.
+6. task-517 : `creation_id` stable par dialogue et par sélecteur, renouvelé après succès.
+7. task-520 : sans objet, déjà présent (« + Ajouter des sources » range dans le dossier).
+8. task-521 : « Approfondir » mémorise la carte dans `?at=` ; le retour reprend sur la même carte.
+9. task-522 : sans objet côté web, le filtrage est serveur ; le Digest web lit déjà les lignes manquantes une à une.
+10. db64b68a : la carte web avait déjà ce contenu ; teintes de pastille mises en commun (`mediaTypeBadgeTone` dans `packages/core`, utilisé par `getMediaTypeBadgeTones` du mobile et `TypeBadge` du web, couleurs du thème mobile en clair et sombre).
+11. a2a8cf97 : « Ajouts récents » prend `download`. Le Digest n'a pas d'icône dans la barre web : sans objet.
+12. 8c3bdfee : le dernier « Terminé » d'un quiz referme l'artefact vers l'historique ; clé `artifact.quizComplete` devenue inutilisée, supprimée des 11 catalogues.
+13. task-506/507/518 : `web/src/lib/resourceCache.ts` sur le `ResourceCache` partagé, un par compte, invalidé à chaque écriture ; Accueil, dossiers, page média et Digest s'affichent depuis le cache puis se relisent. Non fait pour la file des non classés (task-510) : la file est figée à l'ouverture et sa lecture unique précède toute action, l'amorcer depuis le cache aurait laissé une action s'appliquer à une file remplacée juste après.
+
+Aussi : règle `FOLDER_NAME_CONFLICT` ajoutée au `friendlyError` partagé (elle n'existait que dans la copie mobile).
+
+Contrôles : web `tsc`, ESLint, `vite build` ; core typecheck et lint ; mobile typecheck et lint (un avertissement déjà présent dans purchaseService.ts).
+<!-- SECTION:NOTES:END -->

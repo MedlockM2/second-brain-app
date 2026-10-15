@@ -1,10 +1,10 @@
 import { tCount } from "@media-summarizer/core/i18n/runtime";
-import { mediaTypeIconName, mediaTypeLabelKey } from "@media-summarizer/core/media/mediaDisplay";
+import { mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import type { DigestPeriod } from "@media-summarizer/core/types/digest";
 import { useState } from "react";
 import { Link } from "react-router";
-import { MediaCover } from "../components/Covers";
+import { MediaCover, TypeBadge } from "../components/Covers";
 import { Icon, type IconName } from "../components/Icon";
 import { ICON_PATHS } from "../components/icons.generated";
 import { useI18n } from "../i18n/I18nProvider";
@@ -118,7 +118,6 @@ function CoverOrGlyph({ row }: { row: DigestRow }) {
 
 /** One line of a period's table of contents: n°, cover, type, creator, title, start of "L'essentiel". */
 function DigestLine({ row, index, to, a11y }: { row: DigestRow | undefined; index: number; to: string; a11y: string }) {
-  const { t } = useI18n();
   return (
     <Link to={to} className="dg-row" aria-label={a11y}>
       <span className="dg-n">{index + 1}</span>
@@ -127,7 +126,7 @@ function DigestLine({ row, index, to, a11y }: { row: DigestRow | undefined; inde
         {row && (
           <>
             <span className="meta">
-              <span className="badge">{t(mediaTypeLabelKey(row.media_type))}</span>
+              <TypeBadge type={row.media_type} />
               {row.creator_name && <span className="ell">{row.creator_name}</span>}
             </span>
             <span className="t clamp2">{resolveMediaTitle(row)}</span>

@@ -13,6 +13,12 @@ function trimSlash(value: string): string {
 
 export const Config = {
   API_BASE_URL: trimSlash(env.VITE_API_BASE_URL ?? ""),
+  /**
+   * The chat's streaming door (Terraform output `chat_stream_url`, `…/v1`): a
+   * separate API from the main one. Empty: answers are followed by re-reading the
+   * conversation instead.
+   */
+  CHAT_STREAM_URL: trimSlash(env.VITE_CHAT_STREAM_URL ?? ""),
   GOOGLE_CLIENT_ID: env.VITE_GOOGLE_CLIENT_ID ?? "",
   APPLE_SERVICES_ID: env.VITE_APPLE_SERVICES_ID ?? "",
   APPLE_REDIRECT_URI: env.VITE_APPLE_REDIRECT_URI ?? "",

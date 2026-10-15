@@ -44,6 +44,8 @@ export const ja: WebCatalog = {
   "add.uploading": "アップロード中…",
   "add.added": "追加しました。処理が始まりました。",
   "pane.scopeFolder": "このフォルダ",
+  "chat.emptyMedia": "このソースについて質問してください。回答はその本文だけに基づきます。",
+  "chat.emptyFolder": "このフォルダについて質問してください。回答はソースに基づき、引用したソースを示します。",
   "ai.wholeFolder": "フォルダ全体",
   "ai.sourcesChanged": "一部の生成以降にソースが変わりました。新しく生成すると項目が追加され、以前のものは残ります。",
   "folder.addSources": "ソースを追加",
