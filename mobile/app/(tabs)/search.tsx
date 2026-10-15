@@ -1172,7 +1172,12 @@ function LibraryHeader({
           accessibilityRole="button"
           accessibilityLabel={t("search.newFolder.a11y")}
         >
-          <Ionicons name="add" size={26} color={Colors.primary} />
+          <GlassSurface
+            style={styles.newFolderSurface}
+            tintStyle={styles.headingGlassTint}
+          >
+            <Ionicons name="add" size={22} color={Colors.textMain} />
+          </GlassSurface>
         </Pressable>
       </View>
 
@@ -1454,6 +1459,9 @@ function SearchResultsHeader({
  * reads it: the flag only changes on a bundle reload.
  */
 const FOLDED_CHEVRON = I18nManager.isRTL ? "chevron-back" : "chevron-forward";
+/** The glass circles of the `Folders` heading: the chevron's, and the `+`'s. */
+const HEADING_CHEVRON_SIZE = 32;
+const NEW_FOLDER_BUTTON_SIZE = 40;
 
 /**
  * The `Folders` heading, and the switch that folds the grid under it.
@@ -1500,15 +1508,18 @@ function FoldersSectionToggle({
       <Text style={[styles.sectionTitle, styles.foldersToggleTitle]}>
         {t("search.folders")}
       </Text>
-      {/* `textSubtle`, not the `textMuted` of the row chevrons elsewhere: those
-          decorate a row whose text already says where it leads, this one is the
-          only thing on screen that shows the state, and `textMuted` falls under
-          the 3:1 a state indicator needs on `background`. */}
-      <Ionicons
-        name={expanded ? "chevron-down" : FOLDED_CHEVRON}
-        size={20}
-        color={Colors.textSubtle}
-      />
+      {/* `textMain` on the glass, which adapts to what it covers: the only thing
+          on screen that shows the state keeps its contrast on every material. */}
+      <GlassSurface
+        style={styles.foldersChevronSurface}
+        tintStyle={styles.headingGlassTint}
+      >
+        <Ionicons
+          name={expanded ? "chevron-down" : FOLDED_CHEVRON}
+          size={18}
+          color={Colors.textMain}
+        />
+      </GlassSurface>
     </Pressable>
   );
 }
@@ -1842,7 +1853,7 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       flexDirection: "row",
       alignItems: "center",
       alignSelf: "flex-start",
-      gap: Spacing.xs,
+      gap: Spacing.sm,
       minHeight: TouchTarget.minimum,
       marginBottom: Spacing.xs,
     },
@@ -1852,11 +1863,29 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     foldersToggleFolded: {
       marginBottom: Spacing.md,
     },
+    // Larger than the other section titles: it heads the whole library body.
     foldersToggleTitle: {
+      fontSize: 28,
+      letterSpacing: -0.4,
       marginBottom: 0,
     },
+    // A scale, not an opacity: an alpha below 1 on an ancestor stops the glass
+    // of the chevron and the `+` rendering at all (see `GlassSurface`).
     foldersTogglePressed: {
-      opacity: 0.75,
+      transform: [{ scale: 0.94 }],
+    },
+    foldersChevronSurface: {
+      width: HEADING_CHEVRON_SIZE,
+      height: HEADING_CHEVRON_SIZE,
+      borderRadius: BorderRadius.full,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // On the bare page the tint is the page's own tone: the hairline is its edge.
+    headingGlassTint: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
     },
     // The heading and the `+` on one line. Aligned at the top rather than
     // centred: both are a touch target tall, and the toggle's bottom margin —
@@ -1871,9 +1900,17 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       height: TouchTarget.minimum,
       alignItems: "center",
       justifyContent: "center",
-      // Pulled into the gutter so the glyph, not its invisible target, lines up
+      // Pulled into the gutter so the circle, not its invisible target, lines up
       // with the end of the grid's last column.
-      marginEnd: -Spacing.sm,
+      marginEnd: -(TouchTarget.minimum - NEW_FOLDER_BUTTON_SIZE) / 2,
+    },
+    newFolderSurface: {
+      width: NEW_FOLDER_BUTTON_SIZE,
+      height: NEW_FOLDER_BUTTON_SIZE,
+      borderRadius: BorderRadius.full,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
     },
     sectionHint: {
       fontSize: Typography.body.fontSize,

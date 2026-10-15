@@ -58,7 +58,9 @@
  *
  * The caller owns the shape: the radius, the height and the padding all come
  * from the `style` it passes, and that style has to keep `overflow: "hidden"` so
- * the radius clips whichever material renders.
+ * the radius clips whichever material renders. `tintStyle` goes on the third
+ * branch only, for a caller whose surface sits on the bare page: there the tint
+ * is the page's own tone, and only an edge of its own tells it apart.
  */
 
 import { useEffect, useState, type ReactNode } from "react";
@@ -83,11 +85,13 @@ const BLUR_INTENSITY = 60;
 interface GlassSurfaceProps {
   children: ReactNode;
   style: StyleProp<ViewStyle>;
+  tintStyle?: StyleProp<ViewStyle>;
 }
 
 export function GlassSurface({
   children,
   style,
+  tintStyle,
 }: GlassSurfaceProps): React.JSX.Element {
   const reduceTransparency = useReduceTransparency();
   // The one thing all three branches need from the theme, and none of them can
@@ -115,7 +119,7 @@ export function GlassSurface({
   }
 
   return (
-    <View style={[style, { backgroundColor: colors.glassFallback }]}>
+    <View style={[style, { backgroundColor: colors.glassFallback }, tintStyle]}>
       {children}
     </View>
   );
