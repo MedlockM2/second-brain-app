@@ -20,7 +20,7 @@ import { MarkdownBody as ChatAnswer } from "../MarkdownBody";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];
-  pendingQuestion: { question: string; status: "sending" | "failed" } | null;
+  pendingQuestion: { question: string; status: "waiting_for_source" | "sending" | "failed" } | null;
   sources: ChatSource[];
   /** The answer being written for the live turn, with its turn index. */
   live: { turnIndex: number; text: string } | null;
@@ -28,6 +28,7 @@ export interface ChatThreadProps {
   waiting: boolean;
   /** Ask a question of an earlier turn again, as a new turn. */
   onRetry: (question: string) => void;
+  onCancelPending: () => void;
   retryDisabled: boolean;
   /**
    * Whether answers name the sources they cite. False in a media's conversation,
@@ -60,6 +61,7 @@ export function ChatThread({
   live,
   waiting,
   onRetry,
+  onCancelPending,
   retryDisabled,
   showSources,
   onOpenSource,
@@ -158,7 +160,15 @@ export function ChatThread({
               {pendingQuestion.question}
             </Text>
           </View>
-          {pendingQuestion.status === "sending" ? (
+          {pendingQuestion.status === "waiting_for_source" ? (
+            <View style={styles.pending} accessibilityLiveRegion="polite">
+              <Text style={styles.pendingText}>{t("chat.thread.waitingForSource")}</Text>
+              <Pressable style={styles.retry} onPress={onCancelPending} accessibilityRole="button"
+                accessibilityLabel={t("common.cancel")}>
+                <Text style={styles.retryLabel}>{t("common.cancel")}</Text>
+              </Pressable>
+            </View>
+          ) : pendingQuestion.status === "sending" ? (
             <View style={styles.pending} accessibilityLiveRegion="polite">
               <ActivityIndicator size="small" color={Colors.textSubtle} />
               <Text style={styles.pendingText}>{t("chat.thread.sending")}</Text>

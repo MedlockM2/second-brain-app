@@ -1,318 +1,44 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { useMediaDetailPolling } from "../../src/hooks/useMediaDetailPolling";
 import { CompletedDetailView } from "../../src/components/CompletedDetailView";
 import { MediaDetailHeader } from "../../src/components/MediaDetailHeader";
-import { SourceSupportRequestCard } from "../../src/components/SourceSupportRequestCard";
-import {
-  Typography,
-  Spacing,
-  BorderRadius,
-  TouchTarget,
-  type Theme,
-} from "../../src/constants/theme";
-import {
-  useThemeColors,
-  useThemedStyles,
-} from "../../src/contexts/ThemeContext";
+import { Spacing, TouchTarget, type Theme } from "../../src/constants/theme";
+import { useThemedStyles } from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
 
-/**
- * Media Detail Screen.
- *
- * Lifecycle:
- * 1. On mount, uses `useMediaDetailPolling` hook to fetch media status.
- * 2. If the processing job is non-terminal, shows a "Generating text..." placeholder
- *    with a spinner. Polls every 3s until status becomes terminal.
- * 3. On "completed": hands the item to `CompletedDetailView`, the shared page the
- *    Digest carousel renders too — here straight under the status bar: the page
- *    draws its cover under it, with back and `…` over it, in place of the
- *    `MediaDetailHeader` the states below carry. A deletion from its `…` menu
- *    leaves the route: the list it was opened from refetches on focus and comes
- *    back without the item.
- * 4. On "failed": shows a failure banner with the error message, plus — when the
- *    failure is one of the seven that mean the source itself is not handled yet —
- *    a card offering to request support for it (`SourceSupportRequestCard`).
- * 5. On 5-minute timeout: stops polling and shows a "taking longer" message.
- *
- * Everything below belongs to the route: the id it reads, the fetch it drives,
- * and the states the item goes through on its way to being readable. The
- * readable item itself lives in `src/components/CompletedDetailView.tsx`.
- *
- * Features:
- * - Contextual processing message based on source_platform
- * - Retry/refresh for failed states
- * - All interactive elements meet 48px minimum touch target
- */
+/** A stable page from its first metadata snapshot through extraction and reading. */
 export default function MediaDetailScreen() {
-  const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-
-  const {
-    state: pollingState,
-    mediaData,
-    fetchError,
-    processingError,
-    processingMessage,
-    refresh,
-  } = useMediaDetailPolling(id);
-
-  // --- Loading state (initial fetch) ---
-  if (pollingState === "loading") {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <MediaDetailHeader onBack={() => router.back()} />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
+  const { state, mediaData, fetchError, processingError, processingMessage, refresh } = useMediaDetailPolling(id);
+  if (mediaData) {
+    return <CompletedDetailView key={id} mediaData={mediaData}
+      onBack={() => router.back()} onDeleted={() => router.back()}
+      processingNotice={state === "completed" ? undefined : {
+        message: state === "failed" ? (processingError ?? t("media.failedFallback"))
+          : state === "timeout" ? t("media.timeoutHint") : processingMessage,
+        failed: state === "failed", retry: refresh,
+      }} />;
   }
-
-  // --- Fetch error state (network/auth error) ---
-  if (pollingState === "error") {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <MediaDetailHeader onBack={() => router.back()} />
-        <View style={styles.centered}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={48}
-            color={Colors.error}
-          />
-          <Text style={styles.errorText}>
-            {fetchError || t("media.loadFailed")}
-          </Text>
-          <Pressable
-            style={styles.retryButton}
-            onPress={refresh}
-            accessibilityLabel={t("media.retryA11y")}
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // --- Processing state (non-terminal, showing placeholder) ---
-  if (pollingState === "processing") {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <MediaDetailHeader onBack={() => router.back()} />
-        <View style={styles.centered}>
-          <View style={styles.processingIconContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-          <Text style={styles.processingTitle}>{processingMessage}</Text>
-          <Text style={styles.processingSubtitle}>
-            {t("media.processingHint")}
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // --- Timeout state (5 minutes elapsed without completion) ---
-  if (pollingState === "timeout") {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <MediaDetailHeader onBack={() => router.back()} />
-        <View style={styles.centered}>
-          <Ionicons
-            name="time-outline"
-            size={48}
-            color={Colors.textMuted}
-          />
-          <Text style={styles.timeoutTitle}>{t("media.timeoutTitle")}</Text>
-          <Text style={styles.timeoutSubtitle}>{t("media.timeoutHint")}</Text>
-          <Pressable
-            style={styles.refreshButton}
-            onPress={refresh}
-            accessibilityLabel={t("media.refreshA11y")}
-            accessibilityRole="button"
-          >
-            <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
-            <Text style={styles.refreshButtonText}>{t("media.refresh")}</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // --- Failed state (processing failed) ---
-  if (pollingState === "failed") {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <MediaDetailHeader onBack={() => router.back()} />
-        <View style={styles.centered}>
-          <Ionicons
-            name="alert-circle"
-            size={48}
-            color={Colors.error}
-          />
-          <Text style={styles.failedTitle}>{t("media.failedTitle")}</Text>
-          <Text style={styles.failedMessage}>
-            {processingError || t("media.failedFallback")}
-          </Text>
-          <Pressable
-            style={styles.refreshButton}
-            onPress={refresh}
-            accessibilityLabel={t("media.refreshA11y")}
-            accessibilityRole="button"
-          >
-            <Ionicons name="refresh" size={18} color={Colors.onPrimary} />
-            <Text style={styles.refreshButtonText}>{t("media.refresh")}</Text>
-          </Pressable>
-          {/* Only for the seven codes that actually mean "we don't handle this
-              source yet", and identical on iOS and Android. It draws nothing at
-              all otherwise, which is why it is unconditional here. */}
-          <SourceSupportRequestCard
-            mediaItemId={id}
-            errorCode={mediaData?.processing_job.error_code}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // --- Completed state (full detail view) ---
-  if (!mediaData) {
-    // Safety check: should not happen after the hook resolves
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <MediaDetailHeader onBack={() => router.back()} />
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{t("media.loadFailed")}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <CompletedDetailView
-      mediaData={mediaData}
-      onBack={() => router.back()}
-      onDeleted={() => router.back()}
-    />
-  );
+  return <SafeAreaView style={styles.container} edges={["top"]}>
+    <MediaDetailHeader onBack={() => router.back()} />
+    <View style={styles.centered}>
+      {state === "loading" ? <ActivityIndicator /> : <>
+        <Text style={styles.text}>{fetchError ?? t("media.loadFailed")}</Text>
+        <Pressable onPress={refresh} style={styles.retry} accessibilityRole="button">
+          <Text style={styles.text}>{t("common.retry")}</Text>
+        </Pressable>
+      </>}
+    </View>
+  </SafeAreaView>;
 }
-
-// --- Styles ---
-
-const makeStyles = ({ colors: Colors }: Theme) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: Colors.background,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingHorizontal: Spacing.xl,
-      gap: Spacing.md,
-    },
-
-    // Processing placeholder
-    processingIconContainer: {
-      marginBottom: Spacing.md,
-    },
-    processingTitle: {
-      fontSize: Typography.headline.fontSize,
-      fontWeight: Typography.headline.fontWeight,
-      color: Colors.textMain,
-      textAlign: "center",
-    },
-    processingSubtitle: {
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMuted,
-      textAlign: "center",
-      marginTop: Spacing.xs,
-    },
-
-    // Timeout state
-    timeoutTitle: {
-      fontSize: Typography.headline.fontSize,
-      fontWeight: Typography.headline.fontWeight,
-      color: Colors.textMain,
-      textAlign: "center",
-    },
-    timeoutSubtitle: {
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMuted,
-      textAlign: "center",
-      marginTop: Spacing.xs,
-    },
-
-    // Failed state
-    failedTitle: {
-      fontSize: Typography.headline.fontSize,
-      fontWeight: Typography.headline.fontWeight,
-      color: Colors.error,
-      textAlign: "center",
-    },
-    failedMessage: {
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMain,
-      textAlign: "center",
-      lineHeight: Typography.body.lineHeight,
-      marginTop: Spacing.xs,
-    },
-
-    // Refresh/Retry button
-    refreshButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-      backgroundColor: Colors.primary,
-      paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.sm + 4,
-      borderRadius: BorderRadius.lg,
-      minHeight: TouchTarget.minimum,
-      marginTop: Spacing.md,
-    },
-    refreshButtonText: {
-      fontSize: Typography.label.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      color: Colors.onPrimary,
-    },
-
-    // Error state
-    errorText: {
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMain,
-      textAlign: "center",
-    },
-    retryButton: {
-      paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.sm,
-      backgroundColor: Colors.primary,
-      borderRadius: BorderRadius.md,
-      marginTop: Spacing.sm,
-      minHeight: TouchTarget.minimum,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    // `onPrimary`, not `textMain`: this label sits on the amber fill above, and
-    // `textMain` only contrasts with amber in the light palette (8.9:1 there,
-    // 1.5:1 on the dark amber, which is no contrast at all).
-    retryButtonText: {
-      fontSize: Typography.label.fontSize,
-      fontWeight: "600",
-      color: Colors.onPrimary,
-    },
-  });
+const makeStyles = ({ colors }: Theme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  centered: { flex: 1, justifyContent: "center", alignItems: "center", gap: Spacing.md, padding: Spacing.lg },
+  text: { color: colors.textMain },
+  retry: { minHeight: TouchTarget.minimum, justifyContent: "center", paddingHorizontal: Spacing.lg },
+});

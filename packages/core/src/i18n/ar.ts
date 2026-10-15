@@ -764,6 +764,7 @@ export const ar: Catalog = {
   "chat.thread.questionA11y": "سؤالك: {text}",
   "chat.thread.sourceA11y": "المصدر: {title}",
   "chat.thread.openSourceA11y": "فتح المصدر {title}",
+  "chat.thread.waitingForSource": "بانتظار الاستخراج — السؤال محفوظ في هذه الجلسة.",
   "chat.thread.sending": "جارٍ إرسال السؤال…",
   "chat.thread.retrySend": "إعادة محاولة الإرسال",
   "chat.thread.interruptedCancelled": "تم الإيقاف. الإجابة أعلاه غير مكتملة.",

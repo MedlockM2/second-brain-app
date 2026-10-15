@@ -966,6 +966,7 @@ export const en = {
   "chat.thread.questionA11y": "Your question: {text}",
   "chat.thread.sourceA11y": "source: {title}",
   "chat.thread.openSourceA11y": "Open the source {title}",
+  "chat.thread.waitingForSource": "Waiting for extraction — question kept in this session.",
   "chat.thread.sending": "Sending your question…",
   "chat.thread.retrySend": "Retry sending",
   "chat.thread.interruptedCancelled": "Stopped. The answer above is incomplete.",

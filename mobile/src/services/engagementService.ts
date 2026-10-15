@@ -1,3 +1,4 @@
+import { readResource, resourceKeys, mutationOwner, homeChanged } from "./resourceCache";
 import { apiRequest } from "./apiClient";
 import type {
   EngagementKind,
@@ -41,11 +42,13 @@ export class EngagementService {
     if (!id) {
       return;
     }
+    const owner = mutationOwner();
     try {
       await apiRequest<void>("/api/engagements", {
         method: "POST",
         body: { kind, id } satisfies RecordEngagementRequest,
       });
+      homeChanged(owner);
     } catch {
       // Swallowed on purpose. There is nothing the user could do about it and
       // nothing on screen depends on it.
@@ -62,11 +65,12 @@ export class EngagementService {
    * hides the section rather than showing a placeholder.
    */
   static async listRecent(limit?: number): Promise<RecentEngagement[]> {
-    const query = limit ? `?limit=${encodeURIComponent(String(limit))}` : "";
-    const response = await apiRequest<RecentEngagementsResponse>(
-      `/api/engagements/recent${query}`,
-      { method: "GET" },
-    );
-    return response?.items ?? [];
+    return readResource(resourceKeys.recentEngagements(limit), async () => {
+      const query = limit ? `?limit=${encodeURIComponent(String(limit))}` : "";
+      const response = await apiRequest<RecentEngagementsResponse>(
+        `/api/engagements/recent${query}`, { method: "GET" },
+      );
+      return response.items;
+    });
   }
 }

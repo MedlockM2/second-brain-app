@@ -40,16 +40,17 @@ export interface ChatComposerProps {
   generating: boolean;
   /** A question is being sent. */
   sending: boolean;
+  blocked?: boolean;
 }
 
 export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
   function ChatComposer(
-    { value, onChangeText, placeholder, onSend, onStop, generating, sending },
+    { value, onChangeText, placeholder, onSend, onStop, generating, sending, blocked = false },
     ref,
   ) {
     const Colors = useThemeColors();
     const styles = useThemedStyles(makeStyles);
-    const canSend = value.trim().length > 0 && !generating && !sending;
+    const canSend = value.trim().length > 0 && !generating && !sending && !blocked;
 
     return (
       <View style={styles.composer}>

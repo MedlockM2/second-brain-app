@@ -1,3 +1,4 @@
+import { SourceSupportRequestCard } from "./SourceSupportRequestCard";
 import { ResourceRefreshNotice } from "./ResourceRefreshNotice";
 import { useUserPreferences } from "../contexts/UserPreferencesContext";
 import type { ArtifactListResponse } from "@media-summarizer/core/types/artifacts";
@@ -47,6 +48,9 @@ import React, {
 } from "react";
 import {
   Animated,
+  ActivityIndicator,
+  Pressable,
+  Text,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -293,6 +297,7 @@ export interface CompletedDetailViewProps {
    * else differs between the two: both carry the back and `…` buttons.
    */
   underStatusBar?: boolean;
+  processingNotice?: { message: string; failed: boolean; retry: () => void };
   /**
    * Where the budget of the translation poll is kept, for a host that mounts
    * and unmounts this page while its screen stays open — the Digest carousel,
@@ -311,10 +316,11 @@ export function CompletedDetailView({
   onDeleted,
   underStatusBar = true,
   translationBudgets,
+  processingNotice,
 }: CompletedDetailViewProps): React.JSX.Element {
   // `mode` for the status bar glyphs below, which are a prop rather than a
   // style and so cannot come from the sheet.
-  const { mode } = useTheme();
+  const { mode, colors: Colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   const router = useRouter();
@@ -339,44 +345,15 @@ export function CompletedDetailView({
   // Declared before the focus refresh below, which is one of the two doors data
   // reaches it through.
 
-  // Seeded from the item this screen was opened with, then owned here: the
-  // detail poll stops the moment processing completes, and the preview is
-  // generated *after* that — so nothing else would ever bring it in.
-  const [preview, setPreview] = useState<SourcePreviewState>(() =>
-    resolveSourcePreviewState(media_item),
-  );
-
-  // How many reads the current wait has already cost. A budget, not a lifetime
-  // counter: the ceiling is what turns waiting into an answer, so every path that
-  // brings in a fresh read hands back a full one.
+  // The shared detail snapshot owns the prose; only the bounded wait budget
+  // stays local. Extraction updates enrich the same mounted reader.
+  const [previewStalled, setPreviewStalled] = useState(false);
   const previewPollCountRef = useRef(0);
-
-  /**
-   * Adopt what a fresh read of the item says about its preview.
-   *
-   * The one door for server data — the focus refresh, and the item the props
-   * carry — and it refills the budget on the way in. Re-entering the wait on a
-   * spent budget would end it again on the very next tick, which would make
-   * coming back to the screen a no-op.
-   */
-  const adoptPreview = useCallback(
-    (item: Pick<MediaItemContract, "review_blurb" | "review_blurb_status">) => {
-      previewPollCountRef.current = 0;
-      setPreview(resolveSourcePreviewState(item));
-    },
-    [],
-  );
-
-  // The preview belongs to an item, not to a mount. `/media/[id]` keeps this
-  // instance across a change of route parameter; without this the second item
-  // would inherit the first one's preview *and* its spent budget.
   const previewItemId = media_item.media_item_id;
-  const previewItemIdRef = useRef(previewItemId);
-  useEffect(() => {
-    if (previewItemIdRef.current === previewItemId) return;
-    previewItemIdRef.current = previewItemId;
-    adoptPreview(media_item);
-  }, [previewItemId, media_item, adoptPreview]);
+  const adoptPreview = useCallback(() => {
+    previewPollCountRef.current = 0;
+    setPreviewStalled(false);
+  }, []);
 
   // One read on every return to the screen, and everything on it is used.
   //
@@ -394,7 +371,7 @@ export function CompletedDetailView({
           const response = await MediaService.getMediaStatus(
             media_item.media_item_id,
           );
-          adoptPreview(response.media_item);
+          adoptPreview();
           const newFolderId = response.media_item.folder_id ?? null;
           setCurrentFolderId(newFolderId);
 
@@ -498,6 +475,9 @@ export function CompletedDetailView({
   const cachedArtifacts = useResourceSnapshot<ArtifactListResponse>(
     resourceKeys.artifacts("media", media_item.media_item_id),
   );
+  const resolvedPreview = resolveSourcePreviewState(cachedDetail.data?.media_item ?? media_item);
+  const preview: SourcePreviewState = resolvedPreview.status === "pending" && previewStalled
+    ? { status: "unavailable" } : resolvedPreview;
   const displayedRawContent = useMemo<TranscriptContentState>(
     () =>
       cachedText.data
@@ -870,7 +850,7 @@ export function CompletedDetailView({
    * and a terminal state is exactly what disarms this effect.
    */
   useEffect(() => {
-    if (!isAuthenticated || preview.status !== "pending") return undefined;
+    if (!isAuthenticated || !mediaReady || preview.status !== "pending") return undefined;
 
     // Torn down by the cleanup: an item swapped underneath us, or the screen
     // gone. A read that comes back after that belongs to nobody.
@@ -892,17 +872,13 @@ export function CompletedDetailView({
           const response = await MediaService.getMediaStatus(previewItemId);
           if (!armed) return;
           const next = resolveSourcePreviewState(response.media_item);
-          setPreview(
-            next.status === "pending" && budgetSpent()
-              ? { status: "unavailable" }
-              : next,
-          );
+          if (next.status === "pending" && budgetSpent()) setPreviewStalled(true);
         } catch {
           // A failed read is not news the reader needs — except on the last
           // attempt, where staying quiet would leave the spinner standing in
           // front of a poll that has stopped.
           if (armed && budgetSpent()) {
-            setPreview({ status: "unavailable" });
+            setPreviewStalled(true);
           }
         }
       })();
@@ -912,7 +888,7 @@ export function CompletedDetailView({
       armed = false;
       clearInterval(interval);
     };
-  }, [isAuthenticated, preview.status, previewItemId]);
+  }, [isAuthenticated, mediaReady, preview.status, previewItemId]);
 
   // --- The cover ---
   //
@@ -1215,7 +1191,16 @@ export function CompletedDetailView({
             }}
           >
             {/* What this source is about, before the source itself. */}
-            <SourcePreview state={preview} />
+            {processingNotice ? <View style={{ gap: Spacing.md, paddingVertical: Spacing.md }}>
+              {!processingNotice.failed ? <ActivityIndicator color={Colors.primary} /> : null}
+              <Text style={{ color: Colors.textMain }}>{processingNotice.message}</Text>
+              {processingNotice.failed ? <SourceSupportRequestCard mediaItemId={media_item.media_item_id}
+                errorCode={processing_job.error_code} /> : null}
+              <Pressable onPress={processingNotice.retry} accessibilityRole="button">
+                <Text style={{ color: Colors.textMain }}>{t("media.refresh")}</Text>
+              </Pressable>
+            </View> : null}
+            <SourcePreview state={mediaReady ? preview : { status: processingNotice?.failed ? "unavailable" : "pending" }} />
             <View
               onLayout={(event) => {
                 transcriptTop.current = event.nativeEvent.layout.y;
@@ -1261,6 +1246,7 @@ export function CompletedDetailView({
           title={displayTitle}
           imageUrl={coverUrl}
           mediaTypeIcon={mediaTypeIcon}
+          sourceReady={mediaReady}
           sourceContent={<View style={styles.chatSource}>{transcript}</View>}
           getSourceOffset={() =>
             Math.max(

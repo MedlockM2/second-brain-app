@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   FlatList,
   ScrollView,
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
 } from "react-native";
@@ -14,15 +13,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router";
-import { useShareIntake } from "../../src/contexts/ShareIntentContext";
 import { usePurchases } from "../../src/contexts/PurchasesContext";
 import { useMediaList } from "../../src/hooks/useMediaList";
 import { useHomeSections } from "../../src/hooks/useHomeSections";
 import { useProcessingRefresh } from "../../src/hooks/useProcessingRefresh";
 import { isProcessingLibraryStatus } from "../../src/components/MediaProcessingSweep";
 import { t, tCount, useTranslation } from "../../src/i18n";
-import { AddSourceSheet } from "../../src/components/AddSourceSheet";
-import { UrlEntryDialog } from "../../src/components/UrlEntryDialog";
+import { SourceActions } from "../../src/components/SourceActions";
 import { MinutesWarningBanner } from "../../src/components/MinutesWarningBanner";
 import { FreeTrialNotice } from "../../src/components/FreeTrialNotice";
 import {
@@ -33,13 +30,6 @@ import {
   TILE_WIDTH,
   type HomeTileItem,
 } from "../../src/components/HomeTile";
-import {
-  capturePhotoToImport,
-  pickFileToImport,
-  pickPhotoFromLibrary,
-  type LocalImportResult,
-} from "../../src/lib/localImport";
-import { validateShareIntentPayload } from "../../src/lib/urlValidation";
 import {
   Typography,
   Spacing,
@@ -115,22 +105,7 @@ export default function InboxScreen() {
   // The screen's copy is resolved on render, so it redraws with the language.
   useTranslation();
   const router = useRouter();
-  const { startLocalUpload, startUrlEntry } = useShareIntake();
   const { refreshEntitlements } = usePurchases();
-  const [isSourceSheetVisible, setSourceSheetVisible] = useState(false);
-  const [isUrlDialogVisible, setUrlDialogVisible] = useState(false);
-  const [urlDraft, setUrlDraft] = useState("");
-  const [urlError, setUrlError] = useState<string | null>(null);
-  /**
-   * Whether the address currently in the field has already been handed over.
-   *
-   * A tap on Add starts an ingestion, so a second tap landing in the same frame
-   * as the first — before the dialog has closed — would start a second one, on
-   * the same URL, and the server has no idempotency key to fold them back
-   * together. Reset when the dialog is opened, so a new deliberate entry is a new
-   * ingestion.
-   */
-  const urlHandedOver = useRef(false);
   const {
     items,
     isLoading,
@@ -196,7 +171,7 @@ export default function InboxScreen() {
   }, [refresh, refreshSections, rearmProcessingRefresh]);
 
   const handleUnsortedReviewPress = useCallback(() => {
-    router.push("/media/unsorted-review");
+    router.push("/review");
   }, [router]);
 
   const handleTilePress = useCallback(
@@ -208,82 +183,6 @@ export default function InboxScreen() {
       }
     },
     [router],
-  );
-
-  /**
-   * Route a picking outcome: a refusal (unsupported format, oversized file,
-   * camera permission denied) is stated plainly and the screen stays as it was;
-   * an accepted file opens the confirmation screen.
-   */
-  const handleImportResult = useCallback(
-    (result: LocalImportResult, contentType: "file" | "photo") => {
-      if (result.status === "cancelled") return;
-      if (result.status === "error") {
-        Alert.alert(result.title, result.message);
-        return;
-      }
-      startLocalUpload(result.file, contentType);
-    },
-    [startLocalUpload],
-  );
-
-  // Both are fired by the sheet once it has finished closing, so the system
-  // picker never has to present itself over a modal on its way out.
-  const handleImportFile = useCallback(async () => {
-    handleImportResult(await pickFileToImport(), "file");
-  }, [handleImportResult]);
-
-  const handleImportPhoto = useCallback(async () => {
-    handleImportResult(await pickPhotoFromLibrary(), "photo");
-  }, [handleImportResult]);
-
-  const handleTakePhoto = useCallback(async () => {
-    handleImportResult(await capturePhotoToImport(), "photo");
-  }, [handleImportResult]);
-
-  /**
-   * Fired by the sheet once it has closed, for the same reason the two pickers
-   * are: the dialog is a modal presented on the controller the sheet is leaving.
-   */
-  const handleEnterUrl = useCallback(() => {
-    setUrlDraft("");
-    setUrlError(null);
-    urlHandedOver.current = false;
-    setUrlDialogVisible(true);
-  }, []);
-
-  const handleCloseUrlDialog = useCallback(() => {
-    setUrlDialogVisible(false);
-    setUrlDraft("");
-    setUrlError(null);
-  }, []);
-
-  /**
-   * The one gate before an ingestion starts: the same extraction the share intent
-   * goes through, so a link pasted with the sentence around it or typed without
-   * its scheme is accepted here exactly as it is when it arrives from another app.
-   *
-   * A refusal stays in the dialog — no save is created, and the confirmation
-   * screen is not opened — and leaves the field as it was, so a missing character
-   * costs a correction rather than a retype.
-   */
-  const handleSubmitUrl = useCallback(
-    (text: string) => {
-      if (urlHandedOver.current) return;
-
-      const validation = validateShareIntentPayload(text);
-      if (!validation.valid) {
-        setUrlError(t("addUrl.error.invalid"));
-        return;
-      }
-
-      urlHandedOver.current = true;
-      setUrlDialogVisible(false);
-      setUrlDraft("");
-      setUrlError(null);
-      startUrlEntry(validation.url);
-    },
-    [startUrlEntry],
   );
 
   const continueTiles = useMemo(
@@ -419,47 +318,7 @@ export default function InboxScreen() {
 
       {/* box-none: the row now spans the full width, so without this it would
           swallow taps on the content sitting behind it. */}
-      <View style={styles.fabStack} pointerEvents="box-none">
-        <Pressable
-          testID="inbox-camera-button"
-          style={({ pressed }) => [
-            styles.cameraButton,
-            pressed && styles.addButtonPressed,
-          ]}
-          onPress={handleTakePhoto}
-          accessibilityLabel={t("home.takePhotoA11y")}
-          accessibilityRole="button"
-        >
-          <Ionicons name="camera" size={24} color={Colors.surface} />
-        </Pressable>
-
-        <Pressable
-          testID="inbox-add-button"
-          style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
-          onPress={() => setSourceSheetVisible(true)}
-          accessibilityLabel={t("addSource.title")}
-          accessibilityRole="button"
-        >
-          <Ionicons name="add" size={28} color={Colors.onPrimary} />
-        </Pressable>
-      </View>
-
-      <AddSourceSheet
-        visible={isSourceSheetVisible}
-        onClose={() => setSourceSheetVisible(false)}
-        onEnterUrl={handleEnterUrl}
-        onImportFile={handleImportFile}
-        onImportPhoto={handleImportPhoto}
-      />
-
-      <UrlEntryDialog
-        visible={isUrlDialogVisible}
-        value={urlDraft}
-        onChangeText={setUrlDraft}
-        errorMessage={urlError}
-        onClose={handleCloseUrlDialog}
-        onSubmit={handleSubmitUrl}
-      />
+      <SourceActions floating />
     </SafeAreaView>
   );
 }
@@ -803,7 +662,7 @@ function toTimestamp(value?: string | null): number {
 
 // --- Styles ---
 
-const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
+const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1029,40 +888,6 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     },
 
     // Floating ingestion controls (task-264)
-    fabStack: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      // Absolutely positioned, so nothing insets it for the bar: this row is the
-      // reason `TAB_BAR_CLEARANCE` exists.
-      bottom: TAB_BAR_CLEARANCE,
-      flexDirection: "row",
-      justifyContent: "center",
-      alignItems: "center",
-      gap: Spacing.md,
-    },
-    addButton: {
-      width: TouchTarget.large,
-      height: TouchTarget.large,
-      borderRadius: BorderRadius.full,
-      backgroundColor: Colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      ...Shadows.soft,
-    },
-    cameraButton: {
-      width: TouchTarget.large,
-      height: TouchTarget.large,
-      borderRadius: BorderRadius.full,
-      backgroundColor: Colors.textMain,
-      alignItems: "center",
-      justifyContent: "center",
-      ...Shadows.soft,
-    },
-    addButtonPressed: {
-      transform: [{ scale: 0.96 }],
-      opacity: 0.9,
-    },
 
     // Empty state
     emptyContainer: {

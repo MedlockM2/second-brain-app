@@ -522,7 +522,7 @@ function DigestPage({
 }): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const { state, mediaData, fetchError, processingError, processingMessage } =
+  const { state, mediaData, fetchError, processingError, processingMessage, refresh } =
     useMediaDetailPolling(mediaItemId);
 
   const handleDeleted = useCallback(
@@ -530,7 +530,7 @@ function DigestPage({
     [onDeleted, mediaItemId],
   );
 
-  if (state === "completed" && mediaData) {
+  if (mediaData) {
     return (
       <View style={styles.page}>
         <CompletedDetailView
@@ -539,6 +539,11 @@ function DigestPage({
           onDeleted={handleDeleted}
           underStatusBar={false}
           translationBudgets={translationBudgets}
+          processingNotice={state === "completed" ? undefined : {
+            message: state === "failed" ? (processingError ?? t("media.failedFallback"))
+              : state === "timeout" ? t("media.timeoutHint") : processingMessage,
+            failed: state === "failed", retry: refresh,
+          }}
         />
       </View>
     );
@@ -548,37 +553,12 @@ function DigestPage({
     <View style={styles.page}>
       <MediaDetailHeader onBack={onBack} />
       <View style={styles.pageCentered}>
-        {state === "loading" || state === "processing" ? (
-          <>
-            <ActivityIndicator size="large" color={Colors.primary} />
-            {state === "processing" ? (
-              <Text style={styles.pageStateTitle}>{processingMessage}</Text>
-            ) : null}
-          </>
-        ) : (
-          // Failed, timed out, or unreachable.
-          <>
-            <Ionicons
-              name={
-                state === "timeout" ? "time-outline" : "alert-circle-outline"
-              }
-              size={40}
-              color={Colors.textMuted}
-            />
-            <Text style={styles.pageStateTitle}>
-              {state === "timeout"
-                ? t("media.timeoutTitle")
-                : state === "failed"
-                  ? t("media.failedTitle")
-                  : t("media.loadFailed")}
-            </Text>
-            <Text style={styles.pageStateBody}>
-              {state === "timeout"
-                ? t("media.timeoutHint")
-                : (processingError ?? fetchError ?? t("media.failedFallback"))}
-            </Text>
-          </>
-        )}
+        {state === "loading" ? <ActivityIndicator size="large" color={Colors.primary} /> : <>
+          <Text style={styles.pageStateBody}>{fetchError ?? t("media.loadFailed")}</Text>
+          <Pressable onPress={refresh} style={styles.retryButton} accessibilityRole="button">
+            <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
+          </Pressable>
+        </>}
       </View>
     </View>
   );
@@ -671,12 +651,6 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       justifyContent: "center",
       paddingHorizontal: Spacing.xl,
       gap: Spacing.md,
-    },
-    pageStateTitle: {
-      fontSize: Typography.headline.fontSize,
-      fontWeight: Typography.headline.fontWeight,
-      color: Colors.textMain,
-      textAlign: "center",
     },
     pageStateBody: {
       fontSize: Typography.body.fontSize,

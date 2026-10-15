@@ -11,12 +11,9 @@
  *
  * ## What is read, and when
  *
- * Three requests, and only these: the two digests and one page of the library.
- * A pack's covers are the `media_image` of the library rows whose id is in its
- * digest — no detail read per cover, and nothing new on the server. The library
- * page is the largest the list endpoint serves, newest first: the weekly pack
- * opens on the *oldest* media of a week that is already over, and a page of
- * twenty would miss them as soon as the user saves a few media a day.
+ * Two compositions, then at most six cached media details for their cover faces.
+ * Covers are resolved by id, not joined to a partial library page. Deleted
+ * entries are filtered by the API; older visible entries remain addressable.
  *
  * Read on focus, not on mount: `NativeTabs` mounts every tab on the first render
  * of the bar (task-350), so a mount-time read would cost three requests on every
@@ -28,7 +25,7 @@
  * A read that fails leaves its part as the previous one knew it — unknown on a
  * first read. Neither pack ever waits on anything: both are drawn and pressable
  * while loading and after a failure. The carousel reuses the same cached digest
- * composition and revalidates it on opening. Pull to refresh reads all three again.
+ * composition and revalidates it on opening. Pull to refresh revalidates both periods and their covers.
  */
 
 import React, { useCallback, useMemo, useState } from "react";
@@ -44,7 +41,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import { DigestService } from "../../../src/services/digestService";
 import { MediaService } from "../../../src/services/mediaService";
-import { useResourceSnapshot } from "../../../src/contexts/ResourceCacheContext";
+import { useResourceSnapshot, useResourceSnapshots } from "../../../src/contexts/ResourceCacheContext";
 import { resourceKeys } from "../../../src/services/resourceCache";
 import { DigestCoverStack } from "../../../src/components/DigestCoverStack";
 import { TAB_BAR_CLEARANCE } from "../../../src/constants/tabBar";
@@ -55,13 +52,10 @@ import {
 } from "../../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../../src/i18n";
 import type { Digest, DigestPeriod } from "@media-summarizer/core/types/digest";
-import type { ListMediaResponse } from "@media-summarizer/core/types/media";
+import type { MediaStatusResponse } from "@media-summarizer/core/types/media";
 
 /** The periods, in the order the screen stacks them. */
 const PERIODS: readonly DigestPeriod[] = ["daily", "weekly"];
-
-/** The largest page `GET /api/media` serves (the server clamps to 100). */
-const LIBRARY_PAGE_SIZE = 100;
 
 export default function DigestChoiceScreen(): React.JSX.Element {
   const Colors = useThemeColors();
@@ -73,20 +67,21 @@ export default function DigestChoiceScreen(): React.JSX.Element {
 
   const daily = useResourceSnapshot<Digest>(resourceKeys.digest("daily"));
   const weekly = useResourceSnapshot<Digest>(resourceKeys.digest("weekly"));
-  const media = useResourceSnapshot<ListMediaResponse>(
-    resourceKeys.mediaPage({ limit: LIBRARY_PAGE_SIZE }),
-  );
   const periodMedia = {
     daily: daily.data?.media_item_ids ?? null,
     weekly: weekly.data?.media_item_ids ?? null,
   };
-  const library = useMemo(
-    () =>
-      media.data
-        ? new Map(media.data.items.map((item) => [item.media_item_id, item]))
-        : null,
-    [media.data],
-  );
+  const coverIds = JSON.stringify([...new Set([
+    ...(periodMedia.daily ?? []).slice(0, 3),
+    ...(periodMedia.weekly ?? []).slice(0, 3),
+  ])]);
+  const ids = useMemo(() => JSON.parse(coverIds) as string[], [coverIds]);
+  const covers = useResourceSnapshots<MediaStatusResponse>(ids.map((id) => resourceKeys.media(id)));
+  const library = useMemo(() => new Map(covers.flatMap((snapshot, index) => snapshot.data
+    ? [[ids[index], snapshot.data.media_item] as const] : [])), [covers, ids]);
+  useFocusEffect(useCallback(() => {
+    void Promise.allSettled(ids.map((id) => MediaService.getMediaStatus(id)));
+  }, [ids]));
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -97,7 +92,6 @@ export default function DigestChoiceScreen(): React.JSX.Element {
     await Promise.allSettled([
       DigestService.getDailyDigest(),
       DigestService.getWeeklyDigest(),
-      MediaService.listMedia({ limit: LIBRARY_PAGE_SIZE }),
     ]);
   }, [isAuthenticated]);
 
@@ -112,9 +106,9 @@ export default function DigestChoiceScreen(): React.JSX.Element {
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await load();
+    await Promise.allSettled([load(), ...ids.map((id) => MediaService.getMediaStatus(id))]);
     setIsRefreshing(false);
-  }, [load]);
+  }, [load, ids]);
 
   const openPeriod = useCallback(
     (period: DigestPeriod) => {

@@ -174,6 +174,12 @@ async def record_engagement(*, user_id: str, kind: str, subject_id: str) -> bool
 
 
 async def list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> List[RecentEngagement]:
+    # The sparse query, folder read and selected-folder hydration share one TLS pool.
+    async with database_async.dynamodb_resource():
+        return await _list_recent(user_id, limit=limit)
+
+
+async def _list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> List[RecentEngagement]:
     """The row itself: one merged, sorted, capped list of media *and* folders.
 
     Two DynamoDB calls, issued concurrently — the sparse ``engaged-index`` query on
@@ -185,10 +191,19 @@ async def list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> Lis
     limit = max(1, min(limit, MAX_RECENT_LIMIT))
     window_start = datetime.now(timezone.utc) - timedelta(days=RECENT_WINDOW_DAYS)
 
-    engaged_media, folders = await asyncio.gather(
-        user_media_store.list_recently_engaged(user_id, limit=limit, since=window_start),
-        database_async.get_folders_by_user_id(user_id),
+    media_task = asyncio.create_task(
+        user_media_store.list_recently_engaged(user_id, limit=limit, since=window_start)
     )
+    folder_task = asyncio.create_task(database_async.get_folders_by_user_id(user_id))
+    try:
+        engaged_media, folders = await asyncio.gather(media_task, folder_task)
+    finally:
+        # A shared client must outlive both children, including cancellation.
+        for task in (media_task, folder_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(media_task, folder_task, return_exceptions=True)
+
 
     entries: List[RecentEngagement] = []
 

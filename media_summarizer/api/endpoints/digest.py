@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
 from media_summarizer.core.services import digest_service
+from media_summarizer.utils import user_media
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
 
 router = APIRouter()
@@ -89,6 +90,11 @@ async def get_daily_digest(
             current_user.id, iana_timezone=current_user.iana_timezone
         )
 
+        visible = await user_media.visible_media_ids(
+            current_user.id, [item.media_item_id for item in digest.media_items]
+        )
+        media_ids = [item.media_item_id for item in digest.media_items if item.media_item_id in visible]
+
         log_event(
             logger,
             logging.INFO,
@@ -96,13 +102,13 @@ async def get_daily_digest(
             "Daily digest retrieved",
             user_id=current_user.id,
             period_key=digest.period_key,
-            item_count=len(digest.media_items),
+            item_count=len(media_ids),
         )
 
         return DigestResponse(
             digest_type=digest.digest_type.value,
             period_key=digest.period_key,
-            media_item_ids=[mi.media_item_id for mi in digest.media_items],
+            media_item_ids=media_ids,
         )
 
     except HTTPException:
@@ -149,6 +155,11 @@ async def get_weekly_digest(
             current_user.id, iana_timezone=current_user.iana_timezone
         )
 
+        visible = await user_media.visible_media_ids(
+            current_user.id, [item.media_item_id for item in digest.media_items]
+        )
+        media_ids = [item.media_item_id for item in digest.media_items if item.media_item_id in visible]
+
         log_event(
             logger,
             logging.INFO,
@@ -156,13 +167,13 @@ async def get_weekly_digest(
             "Weekly digest retrieved",
             user_id=current_user.id,
             period_key=digest.period_key,
-            item_count=len(digest.media_items),
+            item_count=len(media_ids),
         )
 
         return DigestResponse(
             digest_type=digest.digest_type.value,
             period_key=digest.period_key,
-            media_item_ids=[mi.media_item_id for mi in digest.media_items],
+            media_item_ids=media_ids,
         )
 
     except HTTPException:

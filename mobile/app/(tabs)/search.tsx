@@ -1,11 +1,14 @@
-import { acknowledgeFolderNameError } from "../../src/lib/folderNameError";
+import * as Crypto from "expo-crypto";
+import { nextFolderName } from "@media-summarizer/core/organization/folderNames";
+import { useLibraryTarget } from "../../src/hooks/useLibraryTarget";
+import { acknowledgeFolderNameError, isFolderNameConflict } from "../../src/lib/folderNameError";
 import { TAB_BAR_CLEARANCE } from "../../src/constants/tabBar";
 import type { MediaLibraryWindow } from "../../src/services/mediaService";
 import {
   useResourceState,
   useResourceSnapshot,
 } from "../../src/contexts/ResourceCacheContext";
-import { resourceKeys } from "../../src/services/resourceCache";
+import { resourceKeys, mutationOwner } from "../../src/services/resourceCache";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
@@ -552,7 +555,9 @@ export default function SearchScreen() {
     onRenamed: handleFolderRenamed,
   });
 
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const creation = useRef<{ identity: string; promise: Promise<Folder> | null; names: Pick<Folder, "name">[]; owner: ReturnType<typeof mutationOwner> } | null>(null);
+  const [pendingFolder, setPendingFolder] = useState<Folder | null>(null);
+  const [revealFolderId, setRevealFolderId] = useState<string | null>(null);
   const creatingFolder = useRef(false);
   const savingFolder = useRef(false);
   const [inlineFolder, setInlineFolder] = useState<InlineFolderDraft | null>(null);
@@ -568,16 +573,37 @@ export default function SearchScreen() {
     savingFolder.current = true;
     setInlineFolder((current) => current && { ...current, saving: true });
     try {
-      const name = draft.value.trim().replace(/\s+/gu, " ");
+      let stored = { id: draft.id, name: draft.storedName };
+      const operation = creation.current;
+      if (operation && operation.identity === draft.creationId) {
+        const promise = operation.promise ?? OrganizationService.createNumberedFolder(operation.identity, operation.names);
+        operation.promise = promise;
+        try { stored = await promise; }
+        finally { if (creation.current === operation) operation.promise = null; }
+        if (!mounted.current || mutationOwner() !== operation.owner) return false;
+        const current = inlineFolderRef.current;
+        if (!current || current.creationId !== draft.creationId) return false;
+        const reconciled = { ...current, id: stored.id, storedName: stored.name,
+          value: current.value === draft.storedName ? stored.name : current.value };
+        inlineFolderRef.current = reconciled;
+        setInlineFolder(reconciled);
+        setPendingFolder(null);
+        if (creation.current === operation) creation.current = null;
+      }
+      const latest = inlineFolderRef.current;
+      if (!latest || latest.creationId !== draft.creationId) return false;
+      const name = latest.value.trim().replace(/\s+/gu, " ");
       if (!name) {
         await acknowledgeFolderNameError(t("folders.emptyName"), t("common.error"));
         return false;
       }
-      if (name !== draft.storedName) {
-        const updated = await OrganizationService.renameFolder(draft.id, name);
+      if (name !== stored.name) {
+        const updated = await OrganizationService.renameFolder(stored.id, name);
         if (mounted.current) handleFolderRenamed(updated.id, updated.name);
       }
       if (mounted.current) {
+        setRevealFolderId(stored.id);
+        creation.current = null;
         inlineFolderRef.current = null;
         setInlineFolder(null);
         Keyboard.dismiss();
@@ -585,7 +611,7 @@ export default function SearchScreen() {
       return true;
     } catch (error) {
       if (mounted.current) setInlineFolder((current) => current && {
-        ...current, error: getFriendlyErrorMessage(error, { fallback: t("folderActions.renameFailed") }),
+        ...current, error: isFolderNameConflict(error) ? null : getFriendlyErrorMessage(error, { fallback: t("folderActions.renameFailed") }),
       });
       return false;
     } finally {
@@ -601,31 +627,41 @@ export default function SearchScreen() {
   useFocusEffect(useCallback(() => () => { void finishOnLeave.current(); }, []));
 
   const handleOpenNewFolder = useCallback(() => {
-    if (creatingFolder.current) return;
+    if (creatingFolder.current || inlineFolderRef.current) return;
     creatingFolder.current = true;
-    setIsCreatingFolder(true);
-    void (async () => {
-      try {
-        if (!(await finishInlineFolder())) return;
-        const created = await OrganizationService.createNumberedFolder();
-        if (!mounted.current) return;
-        setFolders((current) => current.some((folder) => folder.id === created.id)
-          ? current : [...current, created]);
-        if (!foldersSection.expanded) foldersSection.toggle();
-        const draft = { id: created.id, value: created.name, storedName: created.name,
-          saving: false, error: null, focusRevision: 0 };
-        inlineFolderRef.current = draft;
-        setInlineFolder(draft);
-      } catch (error) {
-        if (mounted.current) showToast(getFriendlyErrorMessage(error, {
-          fallback: t("folderPicker.createFailed"),
-        }), "error");
-      } finally {
-        creatingFolder.current = false;
-        if (mounted.current) setIsCreatingFolder(false);
+    const identity = Crypto.randomUUID();
+    const owner = mutationOwner();
+    const names = folders.filter((folder) => !folder.parent_folder_id).map(({ name }) => ({ name }));
+    const name = nextFolderName(t("folders.untitled"), names);
+    const now = new Date().toISOString();
+    setPendingFolder({ id: identity, name, is_default: false,
+      media_count: 0, parent_folder_id: null, created_at: now, updated_at: now });
+    if (!foldersSection.expanded) foldersSection.toggle();
+    const draft: InlineFolderDraft = { id: identity, creationId: identity, value: name, storedName: name,
+      saving: false, error: null, focusRevision: 0 };
+    inlineFolderRef.current = draft;
+    setInlineFolder(draft);
+    const promise = OrganizationService.createNumberedFolder(identity, names);
+    const operation = { identity, owner, names, promise: promise as Promise<Folder> | null };
+    creation.current = operation;
+    void promise.then((created) => {
+      if (!mounted.current || mutationOwner() !== owner) return;
+      setPendingFolder(null);
+      const current = inlineFolderRef.current;
+      if (current?.creationId === identity) {
+        const next = { ...current, id: created.id, storedName: created.name,
+          value: current.value === name ? created.name : current.value };
+        inlineFolderRef.current = next;
+        setInlineFolder(next);
       }
-    })();
-  }, [finishInlineFolder, foldersSection, setFolders, showToast]);
+      if (creation.current === operation) creation.current = null;
+    }).catch((error: unknown) => {
+      if (!mounted.current || mutationOwner() !== owner) return;
+      if (creation.current === operation) operation.promise = null;
+      setInlineFolder((current) => current?.creationId === identity ? { ...current,
+        error: getFriendlyErrorMessage(error, { fallback: t("folderPicker.createFailed") }) } : current);
+    }).finally(() => { creatingFolder.current = false; });
+  }, [folders, foldersSection]);
 
   const inlineEditor: InlineFolderEditor | null = inlineFolder && {
     ...inlineFolder,
@@ -662,10 +698,10 @@ export default function SearchScreen() {
   // the interface language then has to relabel the pinned row.
   const defaultFolderLabel = getDefaultFolderLabel();
   const sortedFolders = useMemo(() => {
-    const { roots, defaultFolder } = folderTree;
+    const { roots, defaultFolder } = buildFolderTree(pendingFolder ? [...folders, pendingFolder] : folders);
     if (!defaultFolder) return roots;
     return [{ ...defaultFolder, name: defaultFolderLabel }, ...roots];
-  }, [folderTree, defaultFolderLabel]);
+  }, [folders, pendingFolder, defaultFolderLabel]);
 
   // Matched against what is typed, not against the debounced query: the filter
   // is a pass over a list already in memory, so it has no reason to wait on the
@@ -722,7 +758,7 @@ export default function SearchScreen() {
         {!query.trim() ? (
           <LibraryState
             folders={sortedFolders}
-            foldersLoading={foldersLoading && !folderSnapshot.data}
+            foldersLoading={foldersLoading && !folderSnapshot.data && !pendingFolder}
             foldersError={foldersError}
             foldersExpanded={foldersSection.expanded}
             onToggleFolders={() => {
@@ -732,7 +768,8 @@ export default function SearchScreen() {
             onOpenFolder={handleOpenFolder}
             onLongPressFolder={folderActions.open}
             onCreateFolder={handleOpenNewFolder}
-            creatingFolder={isCreatingFolder}
+            revealFolderId={revealFolderId}
+            onRevealed={() => setRevealFolderId(null)}
             editor={inlineEditor}
             media={media}
             mediaTotal={mediaTotal}
@@ -858,6 +895,7 @@ const KEYBOARD_DISMISS_MODE = "on-drag" as const;
 
 interface InlineFolderDraft {
   id: string;
+  creationId: string;
   value: string;
   storedName: string;
   saving: boolean;
@@ -880,7 +918,8 @@ interface LibraryStateProps {
   onOpenFolder: (folder: FolderNode) => void;
   /** Opens the tile's actions menu. Ignored on the default folder's tile. */
   onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
-  creatingFolder: boolean;
+  revealFolderId: string | null;
+  onRevealed: () => void;
   editor: InlineFolderEditor | null;
   /** Creates a root folder and opens its name in the grid. */
   onCreateFolder: () => void;
@@ -929,7 +968,8 @@ function LibraryState({
   onOpenFolder,
   onLongPressFolder,
   onCreateFolder,
-  creatingFolder,
+  revealFolderId,
+  onRevealed,
   editor,
   media,
   mediaTotal,
@@ -951,37 +991,8 @@ function LibraryState({
   const listRef = useRef<FlatList<MediaRow>>(null);
   const viewportRef = useRef<View>(null);
   const scrollOffset = useRef(0);
-  const activeTile = useRef<View | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(() => Keyboard.metrics()?.height ?? 0);
-  const revealEditor = useCallback((node: View) => {
-    activeTile.current = node;
-    requestAnimationFrame(() => {
-      viewportRef.current?.measureInWindow((_x, top, _width, height) => {
-        node.measureInWindow((_tileX, tileTop, _tileWidth, tileHeight) => {
-          const frame = Keyboard.metrics();
-          const visibleBottom = Math.min(top + height - TAB_BAR_CLEARANCE,
-            frame?.screenY ?? top + height) - Spacing.md;
-          const visibleTop = top + CONTENT_TOP_INSET;
-          const delta = tileTop + tileHeight > visibleBottom
-            ? tileTop + tileHeight - visibleBottom
-            : tileTop < visibleTop ? tileTop - visibleTop : 0;
-          if (Math.abs(delta) > 1) listRef.current?.scrollToOffset({
-            offset: Math.max(0, scrollOffset.current + delta), animated: false,
-          });
-        });
-      });
-    });
-  }, []);
-  const editingId = editor?.id;
-  useEffect(() => {
-    if (!editingId) { activeTile.current = null; return; }
-    const show = Keyboard.addListener("keyboardDidShow", (event) => {
-      setKeyboardHeight(event.endCoordinates.height);
-      if (activeTile.current) revealEditor(activeTile.current);
-    });
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0));
-    return () => { show.remove(); hide.remove(); };
-  }, [editingId, revealEditor]);
+  const target = useLibraryTarget(viewportRef, listRef, scrollOffset,
+    editor?.id ?? null, revealFolderId, onRevealed, CONTENT_TOP_INSET);
 
   const [showTop, setShowTop] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(() => Keyboard.isVisible());
@@ -1011,12 +1022,13 @@ function LibraryState({
   );
 
   return (
-    <View ref={viewportRef} style={styles.libraryBody} collapsable={false}>
+    <View ref={viewportRef} style={styles.libraryBody} collapsable={false} onLayout={target.request}>
     <FlatList
       ref={listRef}
       scrollEventThrottle={32}
       onScroll={(event) => {
         scrollOffset.current = event.nativeEvent.contentOffset.y;
+        if (revealFolderId) target.request();
         setShowTop(event.nativeEvent.contentOffset.y > event.nativeEvent.layoutMeasurement.height);
       }}
       testID="library-media-list"
@@ -1036,8 +1048,8 @@ function LibraryState({
           testID="library-media-card"
         />
       )}
-      contentContainerStyle={[styles.listContent, editor && { paddingBottom: TAB_BAR_CLEARANCE + keyboardHeight }]}
-      onContentSizeChange={() => { if (editor && activeTile.current) revealEditor(activeTile.current); }}
+      contentContainerStyle={[styles.listContent, (editor || revealFolderId) && { paddingBottom: TAB_BAR_CLEARANCE + target.bottomSpace + Spacing.md }]}
+      onContentSizeChange={target.request}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -1061,9 +1073,9 @@ function LibraryState({
           onOpenFolder={onOpenFolder}
           onLongPressFolder={onLongPressFolder}
           onCreateFolder={onCreateFolder}
-          creatingFolder={creatingFolder}
           editor={editor}
-          revealEditor={revealEditor}
+          revealEditor={target.revealField}
+          registerTile={target.register}
           mediaCount={Math.max(mediaTotal, media.length)}
         />
       }
@@ -1116,9 +1128,9 @@ function LibraryHeader({
   onOpenFolder,
   onLongPressFolder,
   onCreateFolder,
-  creatingFolder,
   editor,
   revealEditor,
+  registerTile,
   mediaCount,
 }: {
   folders: FolderNode[];
@@ -1130,9 +1142,9 @@ function LibraryHeader({
   onOpenFolder: (folder: FolderNode) => void;
   onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
   onCreateFolder: () => void;
-  creatingFolder: boolean;
   editor: InlineFolderEditor | null;
-  revealEditor: (node: View) => void;
+  revealEditor: (id: string, node: View) => void;
+  registerTile: (id: string, node: View | null) => void;
   mediaCount: number;
 }) {
   const Colors = useThemeColors();
@@ -1155,15 +1167,12 @@ function LibraryHeader({
             pressed && styles.foldersTogglePressed,
           ]}
           onPress={onCreateFolder}
-          disabled={creatingFolder || editor?.saving}
-          accessibilityState={{ busy: creatingFolder }}
+          disabled={editor?.saving}
           hitSlop={4}
           accessibilityRole="button"
           accessibilityLabel={t("search.newFolder.a11y")}
         >
-          {creatingFolder ? <ActivityIndicator color={Colors.primary} /> : (
-            <Ionicons name="add" size={26} color={Colors.primary} />
-          )}
+          <Ionicons name="add" size={26} color={Colors.primary} />
         </Pressable>
       </View>
 
@@ -1196,13 +1205,14 @@ function LibraryHeader({
         <View style={styles.foldersGrid}>
           {folders.map((folder) => (
             <FolderTile
-              key={folder.id}
+              key={editor?.id === folder.id ? editor.creationId : folder.id}
               folder={folder}
               isDefault={folder.is_default === true}
               onPress={(node) => { if (editor) void editor.onFinish(); else onOpenFolder(node); }}
               onLongPress={editor ? undefined : onLongPressFolder}
               editor={editor?.id === folder.id ? editor : null}
               onReveal={revealEditor}
+              registerTile={registerTile}
             />
           ))}
         </View>
@@ -1569,6 +1579,7 @@ function FolderTile({
   style,
   editor,
   onReveal,
+  registerTile,
 }: {
   folder: FolderNode;
   /** The system default folder, tinted apart from the user's own folders. */
@@ -1590,12 +1601,14 @@ function FolderTile({
    */
   style?: StyleProp<ViewStyle>;
   editor?: InlineFolderEditor | null;
-  onReveal?: (node: View) => void;
+  onReveal?: (id: string, node: View) => void;
+  registerTile?: (id: string, node: View | null) => void;
 }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const slotRef = useRef<View>(null);
   const inputRef = useRef<TextInput>(null);
+  const editorBoxRef = useRef<View>(null);
   const screenFocused = useIsFocused();
   const editingId = editor?.id;
   const editingBusy = editor?.saving;
@@ -1603,7 +1616,7 @@ function FolderTile({
   useEffect(() => {
     if (!editingId || editingBusy || !screenFocused) return;
     inputRef.current?.focus();
-    if (slotRef.current) onReveal?.(slotRef.current);
+    if (editorBoxRef.current && editingId) onReveal?.(editingId, editorBoxRef.current);
   }, [editingId, focusRevision, editingBusy, screenFocused, onReveal]);
 
   const longPress = isDefault ? undefined : onLongPress;
@@ -1623,7 +1636,11 @@ function FolderTile({
        and Android flattens such a view out of the hierarchy — where
        `measureInWindow` then has nothing to measure. */
     <View
-      ref={slotRef}
+      ref={(node) => { slotRef.current = node; registerTile?.(folder.id, node); }}
+      onLayout={() => {
+        registerTile?.(folder.id, slotRef.current);
+        if (editor && editorBoxRef.current) onReveal?.(folder.id, editorBoxRef.current);
+      }}
       style={[styles.folderTileSlot, style]}
       collapsable={false}
     >
@@ -1654,7 +1671,9 @@ function FolderTile({
           />
         </View>
         {editor ? (
-          <>
+          <View ref={editorBoxRef} collapsable={false} onLayout={() => {
+            if (editorBoxRef.current) onReveal?.(folder.id, editorBoxRef.current);
+          }}>
             <TextInput
               ref={inputRef}
               style={[styles.folderName, { borderWidth: 1, borderColor: Colors.primary,
@@ -1679,7 +1698,7 @@ function FolderTile({
             />
             {editor.saving ? <ActivityIndicator color={Colors.primary} /> : null}
             {editor.error ? <Text style={{ color: Colors.error }}>{editor.error}</Text> : null}
-          </>
+          </View>
         ) : (
           <Text style={styles.folderName} numberOfLines={2}>{folder.name}</Text>
         )}

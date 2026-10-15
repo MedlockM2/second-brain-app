@@ -8,6 +8,9 @@ import React, {
   useState,
 } from "react";
 import { AppState, type AppStateStatus } from "react-native";
+import { resourceSession } from "../services/resourceCache";
+import { MediaService } from "../services/mediaService";
+import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
 import { ChatService, type ChatStreamOpening } from "../services/chatService";
 import type {
   ChatConversationDetail,
@@ -30,7 +33,7 @@ export interface PendingChatQuestion {
   question: string;
   clientRequestId: string;
   createdAt: string;
-  status: "sending" | "failed";
+  status: "waiting_for_source" | "sending" | "failed";
 }
 
 export interface ChatSession {
@@ -50,7 +53,8 @@ interface ChatSessionContextValue {
   sessions: ReadonlyMap<string, ChatSession>;
   selectConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<boolean>;
   /** Resolves at acceptance, never waits for generation; false on failure or a superseded send. */
-  sendQuestion: (scope: ChatScope, scopeId: string, question: string) => Promise<boolean>;
+  sendQuestion: (scope: ChatScope, scopeId: string, question: string, waitForSource?: boolean) => Promise<boolean>;
+  cancelPending: (scope: ChatScope, scopeId: string) => void;
   stopGeneration: (scope: ChatScope, scopeId: string) => Promise<void>;
   deleteConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<void>;
   refresh: (scope: ChatScope, scopeId: string) => Promise<void>;
@@ -81,6 +85,8 @@ const emptySession = (scope: ChatScope, scopeId: string): ChatSession => ({
 interface Follower {
   abort: AbortController | null;
   pollTimer: ReturnType<typeof setTimeout> | null;
+  sourceTimer: ReturnType<typeof setTimeout> | null;
+  owner: ReturnType<typeof resourceSession>["cache"];
   lastStreamAttempt: number;
   /** Invalidates operations when the active conversation changes. */
   epoch: number;
@@ -123,6 +129,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       entry = {
         abort: null,
         pollTimer: null,
+        sourceTimer: null,
+        owner: resourceSession().cache,
         lastStreamAttempt: 0,
         epoch: 0,
         readVersion: 0,
@@ -135,7 +143,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
 
   const isCurrent = useCallback(
     (key: string, entry: Follower, epoch: number) =>
-      followersRef.current.get(key) === entry && entry.epoch === epoch,
+      followersRef.current.get(key) === entry && entry.epoch === epoch && entry.owner === resourceSession().cache,
     [],
   );
 
@@ -147,6 +155,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
     entry.abort = null;
     if (entry.pollTimer) clearTimeout(entry.pollTimer);
     entry.pollTimer = null;
+    if (entry.sourceTimer) clearTimeout(entry.sourceTimer);
+    entry.sourceTimer = null;
   }, []);
 
   const reset = useCallback(
@@ -358,13 +368,52 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
     [isCurrent, reset, update],
   );
 
+  const sendRef = useRef<ChatSessionContextValue["sendQuestion"]>(async () => false);
+  const awaitSourceRef = useRef<(scope: ChatScope, id: string) => void>(() => {});
+  const awaitSource = useCallback((scope: ChatScope, scopeId: string) => {
+    const key = scopeKey(scope, scopeId);
+    const entry = follower(key);
+    if (appStateRef.current !== "active" || entry.sourceTimer) return;
+    const epoch = entry.epoch;
+    entry.sourceTimer = setTimeout(() => {
+      entry.sourceTimer = null;
+      void (async () => {
+        const pending = getSession(scope, scopeId).pendingQuestion;
+        if (!isCurrent(key, entry, epoch) || pending?.status !== "waiting_for_source") return;
+        try {
+          const detail = await MediaService.getMediaStatus(scopeId);
+          if (!isCurrent(key, entry, epoch) || appStateRef.current !== "active") return;
+          if (detail.processing_job.status === "failed") {
+            update(scope, scopeId, { pendingQuestion: { ...pending, status: "failed" },
+              error: { code: detail.processing_job.error_code } });
+            return;
+          }
+          if (detail.media_item.transcript.status === "ready") {
+            await sendRef.current(scope, scopeId, pending.question);
+            return;
+          }
+        } catch (error) {
+          if (!isCurrent(key, entry, epoch)) return;
+          if (isResourceGone(error)) {
+            update(scope, scopeId, { pendingQuestion: { ...pending, status: "failed" }, error });
+            return;
+          }
+          // Offline is still a local wait, not a server-accepted question.
+        }
+        if (isCurrent(key, entry, epoch)) awaitSourceRef.current(scope, scopeId);
+      })();
+    }, 3000);
+  }, [follower, getSession, isCurrent, update]);
+  useEffect(() => { awaitSourceRef.current = awaitSource; }, [awaitSource]);
+
   const sendQuestion = useCallback(
-    async (scope: ChatScope, scopeId: string, question: string) => {
+    async (scope: ChatScope, scopeId: string, question: string, waitForSource = false) => {
       question = question.trim();
       const key = scopeKey(scope, scopeId);
       const entry = follower(key);
       const session = getSession(scope, scopeId);
-      if (!question || entry.sending || session.generation || session.phase === "sending")
+      if (!question || entry.sending || session.generation || session.phase === "sending" ||
+        (session.pendingQuestion?.status === "waiting_for_source" && session.pendingQuestion.question !== question))
         return false;
       // Close the same-tick double-tap window before the first await, including
       // when opening the first conversation. Invalidate older reads as well.
@@ -378,6 +427,11 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
               createdAt: new Date().toISOString(),
               status: "sending",
             };
+      if (scope === "media" && waitForSource) {
+        update(scope, scopeId, { pendingQuestion: { ...pending, status: "waiting_for_source" }, error: null });
+        awaitSource(scope, scopeId);
+        return true;
+      }
       entry.sending = true;
       entry.readVersion += 1;
       update(scope, scopeId, { phase: "sending", pendingQuestion: pending, error: null });
@@ -446,17 +500,32 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
         if (isCurrent(key, entry, epoch)) {
           update(scope, scopeId, {
             phase: "idle",
-            pendingQuestion: { ...pending, status: "failed" },
-            error,
+            pendingQuestion: { ...pending, status: scope === "media" &&
+              (error as { code?: string })?.code === "scope_preparing" ? "waiting_for_source" : "failed" },
+            error: scope === "media" && (error as { code?: string })?.code === "scope_preparing" ? null : error,
           });
         }
-        return false;
+        return scope === "media" && (error as { code?: string })?.code === "scope_preparing";
       } finally {
-        if (isCurrent(key, entry, epoch)) entry.sending = false;
+        if (isCurrent(key, entry, epoch)) {
+          entry.sending = false;
+          if (getSession(scope, scopeId).pendingQuestion?.status === "waiting_for_source") awaitSource(scope, scopeId);
+        }
       }
     },
-    [follower, getSession, isCurrent, update],
+    [follower, getSession, isCurrent, update, awaitSource],
   );
+  useEffect(() => { sendRef.current = sendQuestion; }, [sendQuestion]);
+
+  const cancelPending = useCallback((scope: ChatScope, scopeId: string) => {
+    const session = getSession(scope, scopeId);
+    if (!session.pendingQuestion || session.phase === "sending") return;
+    const key = scopeKey(scope, scopeId);
+    const entry = follower(key);
+    entry.epoch += 1;
+    disconnect(key);
+    update(scope, scopeId, { pendingQuestion: null, error: null });
+  }, [disconnect, follower, getSession, update]);
 
   const stopGeneration = useCallback(
     async (scope: ChatScope, scopeId: string) => {
@@ -520,7 +589,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
         }
       } else if (state === "active") {
         for (const session of sessionsRef.current.values()) {
-          if (session.conversation) void syncRef.current(session.scope, session.scopeId);
+          if (session.pendingQuestion?.status === "waiting_for_source") awaitSourceRef.current(session.scope, session.scopeId);
+          else if (session.conversation) void syncRef.current(session.scope, session.scopeId);
         }
       }
     };
@@ -545,6 +615,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       sessions: snapshot.accountId === accountId ? snapshot.sessions : EMPTY_SESSIONS,
       selectConversation,
       sendQuestion,
+      cancelPending,
       stopGeneration,
       deleteConversation,
       refresh: sync,
@@ -556,6 +627,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       snapshot,
       selectConversation,
       sendQuestion,
+      cancelPending,
       stopGeneration,
       deleteConversation,
       sync,
@@ -575,7 +647,8 @@ export function useChatSession(scope: ChatScope, scopeId: string) {
     session,
     selectConversation: (conversationId: string) =>
       context.selectConversation(scope, scopeId, conversationId),
-    sendQuestion: (question: string) => context.sendQuestion(scope, scopeId, question),
+    sendQuestion: (question: string, waitForSource = false) => context.sendQuestion(scope, scopeId, question, waitForSource),
+    cancelPending: () => context.cancelPending(scope, scopeId),
     stopGeneration: () => context.stopGeneration(scope, scopeId),
     deleteConversation: (conversationId: string) =>
       context.deleteConversation(scope, scopeId, conversationId),

@@ -677,6 +677,7 @@ export const zh: Catalog = {
   "chat.thread.questionA11y": "你的问题：{text}",
   "chat.thread.sourceA11y": "来源：{title}",
   "chat.thread.openSourceA11y": "打开来源“{title}”",
+  "chat.thread.waitingForSource": "等待提取 — 问题保留在当前会话中。",
   "chat.thread.sending": "正在发送问题…",
   "chat.thread.retrySend": "重新发送",
   "chat.thread.interruptedCancelled": "已停止。上面的回答不完整。",

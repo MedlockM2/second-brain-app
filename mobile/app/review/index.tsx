@@ -33,7 +33,6 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import {
-  initialWindowMetrics,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -121,23 +120,10 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   const router = useRouter();
   const { width: windowWidth } = useWindowDimensions();
 
-  /**
-   * Safe area applied by hand, with the launch metrics as a floor.
-   *
-   * This screen is a `fullScreenModal`: it covers the status bar and the home
-   * indicator, so it owns its insets — but it reads them from the provider that
-   * measures the view it was presented *over*, and iOS zeroes that view's
-   * `safeAreaInsets` while a full-screen modal is up. A plain `SafeAreaView`
-   * therefore lays the header out at y = 0, under the clock. `initialWindowMetrics`
-   * is captured natively at launch and never collapses, so it is the floor here
-   * rather than the value.
-   */
+  // This presentation owns its provider; insets are relative to its full-screen surface.
   const insets = useSafeAreaInsets();
-  const topInset = Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0);
-  const bottomInset = Math.max(
-    insets.bottom,
-    initialWindowMetrics?.insets.bottom ?? 0,
-  );
+  const topInset = insets.top;
+  const bottomInset = insets.bottom;
 
   const cache = useResourceCache();
   const [initialQueue] = useState(() => {
@@ -388,7 +374,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    */
   const handleDeepen = useCallback(() => {
     if (!current) return;
-    router.push(`/media/${current.media_item_id}`);
+    router.push(`/review/media/${current.media_item_id}`);
   }, [current, router]);
 
   const handleSavePress = useCallback(() => {

@@ -62,6 +62,7 @@ export interface ChatConversationModalProps {
   onChangeDraft: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
+  onCancelPending: () => void;
   onRetry: (question: string) => void;
   refusal: ChatRefusal | null;
   onRefusalAction: (action: NonNullable<ChatRefusal["action"]>) => void;
@@ -370,6 +371,7 @@ export function ChatConversationModal(
                 <ChatThread
                   messages={props.messages}
                   pendingQuestion={props.pendingQuestion}
+                  onCancelPending={props.onCancelPending}
                   sources={props.sources}
                   live={props.live}
                   waiting={props.waiting}
@@ -379,7 +381,7 @@ export function ChatConversationModal(
                     restoreOffset.current = null;
                     props.onRetry(question);
                   }}
-                  retryDisabled={props.generating || props.sending}
+                  retryDisabled={props.generating || props.sending || props.pendingQuestion?.status === "waiting_for_source"}
                   showSources={props.showSources}
                   onOpenSource={(source) => {
                     leavingForSource.current = true;
@@ -460,6 +462,7 @@ export function ChatConversationModal(
               onStop={props.onStop}
               generating={props.generating}
               sending={props.sending}
+              blocked={props.pendingQuestion?.status === "waiting_for_source"}
             />
           </View>
         ) : null}

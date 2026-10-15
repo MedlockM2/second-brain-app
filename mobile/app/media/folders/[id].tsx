@@ -1,3 +1,4 @@
+import { SourceActions } from "../../../src/components/SourceActions";
 import {
   useResourceSnapshot,
   useResourceState,
@@ -511,6 +512,8 @@ export default function FolderDetailScreen() {
           ) : undefined
         }
       />
+
+      {folderId ? <SourceActions folder={{ id: folderId, path: title }} /> : null}
 
       <View style={styles.tabsContainer}>
         <ScreenTabs

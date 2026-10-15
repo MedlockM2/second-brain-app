@@ -1,7 +1,7 @@
 /** Contextual entry point; drafts survive closing/history, sessions live above navigation. */
 
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { useFocusEffect, useIsFocused, useRouter, usePathname } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -37,6 +37,7 @@ export interface ChatDockProps {
   mediaTypeIcon?: React.ComponentProps<typeof Ionicons>["name"];
   /** Rendered in the same scroll view as the exchanges, with its own page gutters. */
   sourceContent: React.ReactNode;
+  sourceReady?: boolean;
   /** Read at opening, relative to the beginning of the source block. */
   getSourceOffset: () => number;
   /** Space to keep under the dock: the safe area, when no tab bar covers it. */
@@ -50,12 +51,14 @@ export function ChatDock({
   imageUrl,
   mediaTypeIcon,
   sourceContent,
+  sourceReady = true,
   getSourceOffset,
   bottomInset = 0,
 }: ChatDockProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
+  const pathname = usePathname();
   const isFocused = useIsFocused();
   const chat = useChatSession(scope, scopeId);
   const { session } = chat;
@@ -124,7 +127,7 @@ export function ChatDock({
   const ask = async (question: string) => {
     const text = question.trim();
     if (!text) return;
-    if (await chat.sendQuestion(text)) {
+    if (await chat.sendQuestion(text, scope === "media" && !sourceReady)) {
       setDraft((current) => (current.trim() === text ? "" : current));
     }
   };
@@ -141,7 +144,7 @@ export function ChatDock({
     setFocusOnOpen(false);
     setInitialOffset(savedOffset.current);
     setScrollTarget("offset");
-    router.push(`/media/${source.media_item_id}`);
+    router.push(pathname.startsWith("/review") ? `/review/media/${source.media_item_id}` : `/media/${source.media_item_id}`);
   };
 
   const handleRefusalAction = (action: NonNullable<ChatRefusal["action"]>) => {
@@ -230,6 +233,7 @@ export function ChatDock({
           onChangeDraft={setDraft}
           onSend={() => void ask(draft)}
           onStop={() => void stop()}
+          onCancelPending={chat.cancelPending}
           onRetry={(question) => void ask(question)}
           refusal={refusal}
           onRefusalAction={handleRefusalAction}

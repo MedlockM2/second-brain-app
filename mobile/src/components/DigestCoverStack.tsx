@@ -23,14 +23,14 @@
  *
  * A card always shows something, and never a spinner:
  *
- * - the cover, `media_image` of the library row, cropped like the media page's
+ * - the cover, `media_image` of the shared media detail, cropped like the media page's
  *   band (`MediaCoverImage`, same cache key as every list);
  * - the glyph of the media type when the row has no cover or the cover failed to
  *   load — the fallback `MediaDetailHero` applies to the page itself;
  * - a bare tonal face when there is no media for that card (a period with fewer
  *   than three, or none: "paquet sans couverture") or when nothing is known about
  *   it yet — the digest or the library still loading, a read that failed, or a
- *   media older than the page of the library that was read.
+ *   detail not yet resolved.
  *
  * So the pack is drawn, and pressable, before any cover — and whether or not any
  * read succeeded. The covers are an enrichment; they never gate the choice.
@@ -135,10 +135,9 @@ interface DigestCoverStackProps {
    */
   mediaItemIds: readonly string[] | null;
   /**
-   * The page of the library the covers are read from, by media id. `null`
-   * while it is not known.
+   * Cover fields resolved through the shared detail cache, by media id.
    */
-  library: ReadonlyMap<string, MediaListItem> | null;
+  library: ReadonlyMap<string, Pick<MediaListItem, "media_image" | "media_type" | "updated_at">> | null;
   onPress: () => void;
   testID?: string;
 }

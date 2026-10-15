@@ -119,6 +119,38 @@ async def create(record: UserMediaRecord) -> UserMediaRecord:
         return record
 
 
+async def visible_media_ids(user_id: str, media_ids: Sequence[str]) -> set[str]:
+    """Resolve capture membership against current ownership and deletion state.
+
+    Batch reads are strongly consistent. A throttled/unreadable batch must fail
+    the read, never masquerade as a batch of deleted sources.
+    """
+    table_name = user_media_table_name()
+    ids = list(dict.fromkeys(media_ids))
+    if not ids:
+        return set()
+    visible: set[str] = set()
+    session = database_async.get_session()
+    async with session.resource("dynamodb", region_name=database_async.AWS_REGION) as dynamodb:
+        for start in range(0, len(ids), 100):
+            pending = {table_name: {
+                "Keys": [{"user_id": user_id, "media_item_id": mid} for mid in ids[start:start + 100]],
+                "ProjectionExpression": "media_item_id, deleted_at",
+                "ConsistentRead": True,
+            }}
+            for attempt in range(5):
+                response = await dynamodb.batch_get_item(RequestItems=pending)
+                visible.update(item["media_item_id"] for item in response.get("Responses", {}).get(table_name, [])
+                               if not item.get("deleted_at"))
+                pending = response.get("UnprocessedKeys", {})
+                if not pending:
+                    break
+                await asyncio.sleep(0.05 * 2 ** attempt)
+            if pending:
+                raise RuntimeError("Digest membership could not be fully resolved")
+    return visible
+
+
 async def get_user_media(
     user_id: str,
     media_item_id: str,
@@ -372,12 +404,8 @@ async def count_for_folder(user_id: str, folder_id: Optional[str]) -> int:
     """
     table_name = user_media_table_name()
     prefix = f"{folder_id or NO_FOLDER_SEGMENT}#"
-    session = database_async.get_session()
     total = 0
-    async with session.resource(
-        "dynamodb",
-        region_name=database_async.AWS_REGION,
-    ) as dynamodb:
+    async with database_async.dynamodb_resource() as dynamodb:
         table = await dynamodb.Table(table_name)
         kwargs: Dict[str, Any] = {
             "IndexName": "folder-index",
@@ -409,10 +437,7 @@ async def folder_overviews(
     """
     if not folder_ids:
         return {}
-    session = database_async.get_session()
-    async with session.resource(
-        "dynamodb", region_name=database_async.AWS_REGION
-    ) as dynamodb:
+    async with database_async.dynamodb_resource() as dynamodb:
         table = await dynamodb.Table(user_media_table_name())
 
         async def overview(folder_id: str) -> Tuple[int, List[str]]:
@@ -584,12 +609,8 @@ async def list_recently_engaged(
         return []
 
     table_name = user_media_table_name()
-    session = database_async.get_session()
     items: List[Dict[str, Any]] = []
-    async with session.resource(
-        "dynamodb",
-        region_name=database_async.AWS_REGION,
-    ) as dynamodb:
+    async with database_async.dynamodb_resource() as dynamodb:
         table = await dynamodb.Table(table_name)
         kwargs: Dict[str, Any] = {
             "IndexName": ENGAGED_INDEX,

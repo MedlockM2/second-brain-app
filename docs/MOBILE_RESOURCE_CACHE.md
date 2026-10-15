@@ -121,3 +121,22 @@ Validation native à réaliser **après distribution interne** :
 Les exports locaux valident les bundles, pas l'exécution sur appareil. La
 publication interne utilise le workflow existant `Mobile OTA or Build` au push
 sur `main` ; la validation native doit être rapportée séparément.
+
+## Compléments Accueil et Digest (TASK-518 / TASK-522)
+
+Reprendre (par limite de liste) et le compteur des non-classés ont des ressources
+propres au compte. Les trois hooks de l’Accueil lisent les snapshots et conservent
+les données pendant revalidation. Engagements et générations invalident Reprendre ;
+les mutations de bibliothèque et de dossiers invalident aussi ces sections.
+
+Les lectures Digest filtrent désormais côté API les références devenues invisibles,
+sans modifier la capture stockée. Les exclusions locales restent utiles pour un
+retrait immédiat avant revalidation. Les faces des piles lisent au plus six détails
+médias dans les ressources partagées ; une entrée ancienne reste résolue même si elle
+n’appartient pas à la première page de bibliothèque.
+
+L’attente d’une question avant extraction vit dans ChatSessionContext, séparément du
+cache de consultation : elle n’est pas un tour accepté par le serveur, ne déclenche
+pas de génération et n’est conservée que dans la session de l’application.
+
+Détails de livraison et mesures : [correctifs TestFlight du 15 octobre](TESTFLIGHT_2026_10_15_FIXES.md).

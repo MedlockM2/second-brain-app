@@ -57,6 +57,8 @@ export const resourceKeys = {
     id,
   ],
   folders: ["folders"] as ResourceKey,
+  recentEngagements: (limit = 12): ResourceKey => ["recent-engagements", limit],
+  unsortedCount: ["unsorted-count"] as ResourceKey,
   mediaPage: (
     options: {
       folderId?: string | null;
@@ -196,6 +198,8 @@ const mediaFamilies = (key: ResourceKey) =>
     "chat-history",
     "chat-history-window",
     "digest",
+    "recent-engagements",
+    "unsorted-count",
   ].includes(String(key[0]));
 export function mediaSaved(cache = session.cache): void {
   cache.invalidate(mediaFamilies);
@@ -376,6 +380,9 @@ export function folderDeleted(
         ids.has(String(key[2]))),
   );
   cache.invalidate(mediaFamilies);
+}
+export function homeChanged(cache = session.cache): void {
+  cache.invalidate((key) => key[0] === "recent-engagements" || key[0] === "unsorted-count");
 }
 export function historyChanged(cache: ResourceCache, id?: string): void {
   if (id)

@@ -90,11 +90,12 @@ export class OrganizationService {
    * by its name (task-297).
    */
   static async getUnsortedCount(): Promise<number> {
-    const response = await apiRequest<UnsortedCountResponse>(
-      "/api/folders/unsorted-count",
-      { method: "GET" },
-    );
-    return response.media_count;
+    return readResource(resourceKeys.unsortedCount, async () => {
+      const response = await apiRequest<UnsortedCountResponse>(
+        "/api/folders/unsorted-count", { method: "GET" },
+      );
+      return response.media_count;
+    });
   }
 
   /**
@@ -172,25 +173,26 @@ export class OrganizationService {
     return result;
   }
 
-  /** Create the real folder before opening its inline editor. */
-  static async createNumberedFolder(parentId: string | null = null): Promise<Folder> {
+  /** Creation starts behind the inline editor; replay keeps the same server identity. */
+  static async createNumberedFolder(
+    creationId: string,
+    siblings: Pick<Folder, "name">[],
+    parentId: string | null = null,
+  ): Promise<Folder> {
     const owner = mutationOwner();
-    const siblings = (await this.getUserFolders()).filter(
-      (folder) => (folder.parent_folder_id ?? null) === parentId,
-    ).map((folder) => ({ name: folder.name }));
+    const names = [...siblings];
     const base = t("folders.untitled");
-    // Each conflict reserves another candidate; transport failures are never retried.
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      const name = nextFolderName(base, siblings);
+      const name = nextFolderName(base, names);
       try {
         const result = await apiRequest<Folder>("/api/folders", {
-          method: "POST", body: { name, parent_folder_id: parentId },
+          method: "POST", body: { name, parent_folder_id: parentId, creation_id: creationId },
         });
         folderChanged(owner, result);
         return result;
       } catch (error) {
         if (!isFolderNameConflict(error)) throw error;
-        siblings.push({ name });
+        names.push({ name });
       }
     }
     throw new Error(t("folderPicker.createFailed"));

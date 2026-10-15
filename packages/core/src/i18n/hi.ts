@@ -717,6 +717,7 @@ export const hi: Catalog = {
   "chat.thread.questionA11y": "आपका सवाल: {text}",
   "chat.thread.sourceA11y": "स्रोत: {title}",
   "chat.thread.openSourceA11y": "स्रोत {title} खोलें",
+  "chat.thread.waitingForSource": "निष्कर्षण की प्रतीक्षा — प्रश्न इस सत्र में सुरक्षित है।",
   "chat.thread.sending": "सवाल भेजा जा रहा है…",
   "chat.thread.retrySend": "फिर से भेजें",
   "chat.thread.interruptedCancelled": "रोका गया। ऊपर का जवाब अधूरा है।",

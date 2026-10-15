@@ -6,6 +6,7 @@ Provides CRUD operations on user folders and media-to-folder assignment.
 
 import logging
 from typing import Any, List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
@@ -45,6 +46,7 @@ _NAME_DESCRIPTION = (
 
 
 class CreateFolderRequest(BaseModel):
+    creation_id: Optional[UUID] = Field(None, description="Stable identity of a client creation attempt")
     name: str = Field(
         ...,
         min_length=1,
@@ -156,6 +158,7 @@ async def create_folder(
             user_id=current_user.id,
             name=payload.name,
             parent_folder_id=payload.parent_folder_id,
+            creation_id=str(payload.creation_id) if payload.creation_id else None,
         )
         return FolderResponse(
             id=folder.id,

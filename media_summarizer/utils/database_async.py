@@ -11,6 +11,8 @@ import hashlib
 import json
 import logging
 import os
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -118,6 +120,27 @@ def get_session():
                 kwargs["aws_session_token"] = session_token
         _session = aioboto3.Session(**kwargs)
     return _session
+
+
+_scoped_dynamodb: ContextVar[Any] = ContextVar("home_dynamodb", default=None)
+
+
+@asynccontextmanager
+async def dynamodb_resource():
+    """Reuse the connection within one read, including its concurrent child tasks.
+
+    No client survives the scope, and no account data is cached on the server.
+    """
+    current = _scoped_dynamodb.get()
+    if current is not None:
+        yield current
+        return
+    async with get_session().resource("dynamodb", **_dynamodb_client_kwargs()) as resource:
+        token = _scoped_dynamodb.set(resource)
+        try:
+            yield resource
+        finally:
+            _scoped_dynamodb.reset(token)
 
 
 def reset_session():
@@ -1037,8 +1060,7 @@ async def get_folder_by_id(folder_id: str) -> Optional[Folder]:
 async def get_default_folder_by_user_id(user_id: str) -> Optional[Folder]:
     """Resolve the unsorted folder without transferring the whole folder tree."""
     try:
-        session = get_session()
-        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        async with dynamodb_resource() as dynamodb:
             table = await dynamodb.Table(USER_FOLDERS_TABLE)
             kwargs: Dict[str, Any] = {
                 "IndexName": "user-index",
@@ -1064,8 +1086,7 @@ async def get_default_folder_by_user_id(user_id: str) -> Optional[Folder]:
 async def get_folders_by_user_id(user_id: str) -> List[Folder]:
     """Get all folders for a user."""
     try:
-        session = get_session()
-        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        async with dynamodb_resource() as dynamodb:
             table = await dynamodb.Table(USER_FOLDERS_TABLE)
             kwargs: Dict[str, Any] = {
                 "IndexName": "user-index",

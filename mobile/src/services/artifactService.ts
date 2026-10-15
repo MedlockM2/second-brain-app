@@ -3,6 +3,7 @@ import {
   readResource,
   resourceKeys,
   mutationOwner,
+  homeChanged,
   resourceSession,
 } from "./resourceCache";
 import { apiRequest } from "./apiClient";
@@ -82,6 +83,7 @@ export class ArtifactService {
       artifacts: mergeArtifactIntoHistory(page?.artifacts ?? [], result),
     });
     owner.set(resourceKeys.artifact(result.artifact_id, language), result);
+    homeChanged(owner);
     owner.invalidate(
       (key) =>
         (key[0] === "artifact-list" &&

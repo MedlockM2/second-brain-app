@@ -692,6 +692,7 @@ export const ja: Catalog = {
   "chat.thread.questionA11y": "あなたの質問：{text}",
   "chat.thread.sourceA11y": "ソース：{title}",
   "chat.thread.openSourceA11y": "ソース「{title}」を開く",
+  "chat.thread.waitingForSource": "抽出待ち — 質問はこのセッションに保存されています。",
   "chat.thread.sending": "質問を送信中…",
   "chat.thread.retrySend": "再送信",
   "chat.thread.interruptedCancelled": "停止しました。上の回答は途中までです。",

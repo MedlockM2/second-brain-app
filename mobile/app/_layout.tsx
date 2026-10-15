@@ -282,7 +282,7 @@ function AppNavigator() {
             accidental exit mid-triage. The close button in the header is
             the way out. */}
         <Stack.Screen
-          name="media/unsorted-review"
+          name="review"
           options={{
             presentation: "fullScreenModal",
             animation: "slide_from_bottom",

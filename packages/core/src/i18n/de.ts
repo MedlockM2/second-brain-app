@@ -827,6 +827,7 @@ export const de: Catalog = {
   "chat.thread.questionA11y": "Deine Frage: {text}",
   "chat.thread.sourceA11y": "Quelle: {title}",
   "chat.thread.openSourceA11y": "Quelle {title} öffnen",
+  "chat.thread.waitingForSource": "Warten auf die Extraktion — die Frage bleibt in dieser Sitzung gespeichert.",
   "chat.thread.sending": "Frage wird gesendet…",
   "chat.thread.retrySend": "Erneut senden",
   "chat.thread.interruptedCancelled": "Gestoppt. Die Antwort oben ist unvollständig.",

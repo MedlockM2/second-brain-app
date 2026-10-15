@@ -719,6 +719,7 @@ export const pt: Catalog = {
   "chat.thread.questionA11y": "Sua pergunta: {text}",
   "chat.thread.sourceA11y": "fonte: {title}",
   "chat.thread.openSourceA11y": "Abrir a fonte {title}",
+  "chat.thread.waitingForSource": "A aguardar a extração — pergunta guardada nesta sessão.",
   "chat.thread.sending": "Enviando a pergunta…",
   "chat.thread.retrySend": "Tentar enviar novamente",
   "chat.thread.interruptedCancelled": "Interrompida. A resposta acima está incompleta.",

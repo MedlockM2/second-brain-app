@@ -719,6 +719,7 @@ export const nl: Catalog = {
   "chat.thread.questionA11y": "Je vraag: {text}",
   "chat.thread.sourceA11y": "bron: {title}",
   "chat.thread.openSourceA11y": "Bron {title} openen",
+  "chat.thread.waitingForSource": "Wachten op extractie — vraag bewaard in deze sessie.",
   "chat.thread.sending": "Vraag verzenden…",
   "chat.thread.retrySend": "Opnieuw verzenden",
   "chat.thread.interruptedCancelled": "Gestopt. Het antwoord hierboven is onvolledig.",

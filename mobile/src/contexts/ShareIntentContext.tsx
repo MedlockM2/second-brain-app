@@ -138,13 +138,14 @@ interface ShareIntentContextValue {
   startLocalUpload: (
     file: LocalUploadFile,
     contentType: Extract<ShareContentType, "file" | "photo">,
+    folder?: ShareSelectedFolder | null,
   ) => void;
   /**
    * Send a URL the user typed or pasted in the app (task-379). The caller has
    * already extracted it with `urlValidation`, so this only has the session left
    * to check before the ingestion starts on its own.
    */
-  startUrlEntry: (url: string) => void;
+  startUrlEntry: (url: string, folder?: ShareSelectedFolder | null) => void;
   /** Preserve the open confirmation state while authentication is restored. */
   parkCurrentIntakeForAuth: () => void;
   /**
@@ -158,9 +159,10 @@ interface ShareIntentContextValue {
 
 type PendingIntake =
   | { kind: "share"; intent: ShareIntent }
-  | { kind: "url"; url: string }
+  | { kind: "url"; url: string; folder: ShareSelectedFolder | null }
   | {
       kind: "local";
+      folder: ShareSelectedFolder | null;
       file: LocalUploadFile;
       contentType: Extract<ShareContentType, "file" | "photo">;
     }
@@ -426,9 +428,10 @@ export function ShareIntentProvider({
    * than cancelled: its content was accepted and its save is legitimate — the
    * user simply shared something else before answering for it.
    */
-  const beginReception = useCallback(() => {
+  const beginReception = useCallback((folder: ShareSelectedFolder | null = null) => {
     trackingRef.current = freshTracking(trackingRef.current.receptionId + 1);
-    setSelectedFolder(null);
+    trackingRef.current.desiredFolderId = folder?.id ?? null;
+    setSelectedFolder(folder);
   }, []);
 
   const applyLocalUpload = useCallback(
@@ -436,8 +439,9 @@ export function ShareIntentProvider({
       file: LocalUploadFile,
       contentType: Extract<ShareContentType, "file" | "photo">,
       origin: ShareIntakeOrigin,
+      folder: ShareSelectedFolder | null = null,
     ) => {
-      beginReception();
+      beginReception(folder);
       setIntake({
         status: "ready",
         origin,
@@ -461,8 +465,8 @@ export function ShareIntentProvider({
    * automatic submission below fire on the frame the modal opens.
    */
   const applyUrlEntry = useCallback(
-    (url: string) => {
-      beginReception();
+    (url: string, folder: ShareSelectedFolder | null) => {
+      beginReception(folder);
       setIntake({
         status: "ready",
         origin: "url-entry",
@@ -757,11 +761,11 @@ export function ShareIntentProvider({
       if (pending.kind === "share") {
         processShareIntent(pending.intent);
       } else if (pending.kind === "url") {
-        applyUrlEntry(pending.url);
+        applyUrlEntry(pending.url, pending.folder);
       } else if (pending.kind === "local") {
         // Only the inbox "add" gesture parks a file, so this replay is always a
         // local import — a shared file is mapped by processShareIntent above.
-        applyLocalUpload(pending.file, pending.contentType, "local");
+        applyLocalUpload(pending.file, pending.contentType, "local", pending.folder);
       } else {
         navigateToConfirmation();
       }
@@ -1184,8 +1188,9 @@ export function ShareIntentProvider({
     (
       file: LocalUploadFile,
       contentType: Extract<ShareContentType, "file" | "photo">,
+      folder: ShareSelectedFolder | null = null,
     ) => {
-      pendingIntakeRef.current = { kind: "local", file, contentType };
+      pendingIntakeRef.current = { kind: "local", file, contentType, folder };
       void resumePendingIntake();
     },
     [resumePendingIntake],
@@ -1201,8 +1206,8 @@ export function ShareIntentProvider({
    * second save.
    */
   const startUrlEntry = useCallback(
-    (url: string) => {
-      pendingIntakeRef.current = { kind: "url", url };
+    (url: string, folder: ShareSelectedFolder | null = null) => {
+      pendingIntakeRef.current = { kind: "url", url, folder };
       void resumePendingIntake();
     },
     [resumePendingIntake],

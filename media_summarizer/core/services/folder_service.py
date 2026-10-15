@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple
+from uuid import NAMESPACE_URL, uuid5
+
+from botocore.exceptions import ClientError
 
 from media_summarizer.core.models.folder import (
     MAX_FOLDER_DEPTH,
@@ -132,7 +135,7 @@ def _get_descendant_ids(
 # ---- Use cases ----
 
 async def create_folder(
-    user_id: str, name: str, parent_folder_id: Optional[str] = None
+    user_id: str, name: str, parent_folder_id: Optional[str] = None, creation_id: Optional[str] = None
 ) -> Folder:
     """Create a new folder for a user.
 
@@ -140,6 +143,11 @@ async def create_folder(
     - parent exists and belongs to user (if specified)
     - depth does not exceed MAX_FOLDER_DEPTH
     """
+    folder_id = str(uuid5(NAMESPACE_URL, f"{user_id}:folder:{creation_id}")) if creation_id else None
+    if folder_id:
+        existing = await database_async.get_folder_by_id(folder_id)
+        if existing is not None:
+            return existing
     # One read of the folder partition, shared by the default-folder guarantee and
     # by the depth validation below.
     _default, all_folders = await _resolve_default_folder(
@@ -163,12 +171,20 @@ async def create_folder(
         )
 
     folder = Folder(
+        **({"id": folder_id} if folder_id else {}),
         user_id=user_id,
         name=normalize_folder_name(name),
         parent_folder_id=parent_folder_id,
     )
     _assert_unique_name(folder, all_folders)
-    await database_async.create_folder(folder)
+    try:
+        await database_async.create_folder(folder)
+    except (FolderNameConflictError, ClientError):
+        # A concurrent replay may have committed after the strongly consistent read.
+        existing = await database_async.get_folder_by_id(folder_id) if folder_id else None
+        if existing is not None:
+            return existing
+        raise
     logger.info(f"Created folder '{name}' ({folder.id}) for user {user_id}")
     return folder
 
@@ -241,13 +257,14 @@ async def count_unsorted(user_id: str) -> Dict[str, Any]:
     is ``Uncategorized`` and the UI says "Unsorted", so matching on either is what
     task-297 ruled out.
     """
-    default = await database_async.get_default_folder_by_user_id(user_id)
-    if default is None:
-        default, _ = await _resolve_default_folder(user_id, [])
-    return {
-        "folder_id": default.id,
-        "media_count": await user_media_store.count_for_folder(user_id, default.id),
-    }
+    async with database_async.dynamodb_resource():
+        default = await database_async.get_default_folder_by_user_id(user_id)
+        if default is None:
+            default, _ = await _resolve_default_folder(user_id, [])
+        return {
+            "folder_id": default.id,
+            "media_count": await user_media_store.count_for_folder(user_id, default.id),
+        }
 
 
 async def update_folder(
