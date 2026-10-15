@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Italian catalogue. See `en` for the reference wording and the key layout. */
 export const it: Catalog = {
+  "folders.untitled": "Cartella senza titolo",
+  "folders.duplicateTitle": "Nome già utilizzato",
+  "folders.duplicateMessage": "Qui esiste già una cartella con questo nome. Scegli un altro nome.",
+  "folders.emptyName": "Inserisci un nome per la cartella.",
   "common.ok": "OK",
   "common.yes": "Sì",
   "common.no": "No",

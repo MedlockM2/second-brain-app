@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
-from media_summarizer.core.models.folder import MAX_FOLDER_NAME_LENGTH
+from media_summarizer.core.models.folder import MAX_FOLDER_NAME_LENGTH, FolderNameConflictError
 from media_summarizer.core.services import folder_service
 
 logger = logging.getLogger(__name__)
@@ -165,6 +165,11 @@ async def create_folder(
             created_at=folder.created_at.isoformat(),
             updated_at=folder.updated_at.isoformat(),
         )
+    except FolderNameConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error_code": "FOLDER_NAME_CONFLICT", "message": "A sibling folder already has this name"},
+        ) from exc
     except ValueError as e:
         logger.warning(f"Rejected folder creation: {e}")
         raise HTTPException(
@@ -261,6 +266,11 @@ async def update_folder(
             created_at=folder.created_at.isoformat(),
             updated_at=folder.updated_at.isoformat(),
         )
+    except FolderNameConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"error_code": "FOLDER_NAME_CONFLICT", "message": "A sibling folder already has this name"},
+        ) from exc
     except ValueError as e:
         logger.warning(f"Rejected folder update {folder_id}: {e}")
         raise HTTPException(

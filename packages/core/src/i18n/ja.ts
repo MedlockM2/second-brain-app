@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Japanese catalogue. See `en` for the reference wording and the key layout. */
 export const ja: Catalog = {
+  "folders.untitled": "名称未設定フォルダ",
+  "folders.duplicateTitle": "使用済みの名前",
+  "folders.duplicateMessage": "ここには同じ名前のフォルダがあります。別の名前を入力してください。",
+  "folders.emptyName": "フォルダ名を入力してください。",
   "common.ok": "OK",
   "common.yes": "はい",
   "common.no": "いいえ",

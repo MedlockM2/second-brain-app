@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Arabic catalogue. See `en` for the reference wording and the key layout. */
 export const ar: Catalog = {
+  "folders.untitled": "مجلد بلا عنوان",
+  "folders.duplicateTitle": "الاسم مستخدم بالفعل",
+  "folders.duplicateMessage": "يوجد مجلد بهذا الاسم هنا. اختر اسمًا آخر.",
+  "folders.emptyName": "أدخل اسمًا للمجلد.",
   "common.ok": "حسنًا",
   "common.yes": "نعم",
   "common.no": "لا",

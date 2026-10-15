@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Hindi catalogue. See `en` for the reference wording and the key layout. */
 export const hi: Catalog = {
+  "folders.untitled": "बिना शीर्षक वाला फ़ोल्डर",
+  "folders.duplicateTitle": "नाम पहले से उपयोग में है",
+  "folders.duplicateMessage": "यहाँ इस नाम का फ़ोल्डर पहले से मौजूद है। दूसरा नाम चुनें।",
+  "folders.emptyName": "फ़ोल्डर का नाम दर्ज करें।",
   "common.ok": "ठीक है",
   "common.yes": "हाँ",
   "common.no": "नहीं",

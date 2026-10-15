@@ -1,3 +1,6 @@
+import { nextFolderName } from "@media-summarizer/core/organization/folderNames";
+import { acknowledgeFolderNameError, isFolderNameConflict } from "../lib/folderNameError";
+import { t } from "../i18n";
 import {
   readResource,
   resourceKeys,
@@ -40,6 +43,14 @@ export interface FolderDeletion {
   /** Items reassigned to the default folder. None were deleted. */
   moved_media_count: number;
   default_folder_id: string;
+}
+
+async function folderWrite<T>(write: () => Promise<T>): Promise<T> {
+  try { return await write(); }
+  catch (error) {
+    if (isFolderNameConflict(error)) await acknowledgeFolderNameError();
+    throw error;
+  }
 }
 
 /**
@@ -153,12 +164,36 @@ export class OrganizationService {
     parentId?: string | null,
   ): Promise<Folder> {
     const owner = mutationOwner();
-    const result = await apiRequest<Folder>("/api/folders", {
+    const result = await folderWrite(() => apiRequest<Folder>("/api/folders", {
       method: "POST",
       body: { name, parent_folder_id: parentId ?? null },
-    });
+    }));
     folderChanged(owner, result);
     return result;
+  }
+
+  /** Create the real folder before opening its inline editor. */
+  static async createNumberedFolder(parentId: string | null = null): Promise<Folder> {
+    const owner = mutationOwner();
+    const siblings = (await this.getUserFolders()).filter(
+      (folder) => (folder.parent_folder_id ?? null) === parentId,
+    ).map((folder) => ({ name: folder.name }));
+    const base = t("folders.untitled");
+    // Each conflict reserves another candidate; transport failures are never retried.
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const name = nextFolderName(base, siblings);
+      try {
+        const result = await apiRequest<Folder>("/api/folders", {
+          method: "POST", body: { name, parent_folder_id: parentId },
+        });
+        folderChanged(owner, result);
+        return result;
+      } catch (error) {
+        if (!isFolderNameConflict(error)) throw error;
+        siblings.push({ name });
+      }
+    }
+    throw new Error(t("folderPicker.createFailed"));
   }
 
   /**
@@ -173,13 +208,13 @@ export class OrganizationService {
    */
   static async renameFolder(folderId: string, name: string): Promise<Folder> {
     const owner = mutationOwner();
-    const result = await apiRequest<Folder>(
+    const result = await folderWrite(() => apiRequest<Folder>(
       `/api/folders/${encodeURIComponent(folderId)}`,
       {
         method: "PUT",
         body: { name },
       },
-    );
+    ));
     folderChanged(owner, result);
     return result;
   }

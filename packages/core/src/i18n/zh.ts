@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Chinese catalogue. See `en` for the reference wording and the key layout. */
 export const zh: Catalog = {
+  "folders.untitled": "未命名文件夹",
+  "folders.duplicateTitle": "名称已被使用",
+  "folders.duplicateMessage": "此处已有同名文件夹。请选择其他名称。",
+  "folders.emptyName": "请输入文件夹名称。",
   "common.ok": "好",
   "common.yes": "是",
   "common.no": "否",

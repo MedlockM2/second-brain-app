@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** German catalogue. See `en` for the reference wording and the key layout. */
 export const de: Catalog = {
+  "folders.untitled": "Unbenannter Ordner",
+  "folders.duplicateTitle": "Name bereits vergeben",
+  "folders.duplicateMessage": "Hier gibt es bereits einen Ordner mit diesem Namen. Wähle einen anderen Namen.",
+  "folders.emptyName": "Gib einen Ordnernamen ein.",
   "common.ok": "OK",
   "common.yes": "Ja",
   "common.no": "Nein",

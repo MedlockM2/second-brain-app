@@ -13,6 +13,10 @@
  * categories (Arabic has six) simply declares them alongside.
  */
 export const en = {
+  "folders.untitled": "Untitled folder",
+  "folders.duplicateTitle": "Name already used",
+  "folders.duplicateMessage": "A folder already has this name here. Choose another name.",
+  "folders.emptyName": "Enter a folder name.",
   // --- Words that belong to no single screen ---
   "common.ok": "OK",
   "common.yes": "Yes",

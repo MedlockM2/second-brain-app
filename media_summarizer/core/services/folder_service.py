@@ -14,6 +14,8 @@ from media_summarizer.core.models.folder import (
     MAX_FOLDER_DEPTH,
     MAX_FOLDER_NAME_LENGTH,
     Folder,
+    FolderNameConflictError,
+    folder_name_key,
 )
 from media_summarizer.utils import database_async
 from media_summarizer.utils import user_media as user_media_store
@@ -45,6 +47,12 @@ def normalize_folder_name(raw: Optional[str]) -> str:
             f"A folder name cannot exceed {MAX_FOLDER_NAME_LENGTH} characters"
         )
     return trimmed
+
+
+def _assert_unique_name(folder: Folder, siblings: List[Folder]) -> None:
+    if any(other.id != folder.id and other.parent_folder_id == folder.parent_folder_id
+           and folder_name_key(other.name) == folder_name_key(folder.name) for other in siblings):
+        raise FolderNameConflictError("A sibling folder already has this name")
 
 
 # ---- Helper: ensure the default folder exists ----
@@ -159,6 +167,7 @@ async def create_folder(
         name=normalize_folder_name(name),
         parent_folder_id=parent_folder_id,
     )
+    _assert_unique_name(folder, all_folders)
     await database_async.create_folder(folder)
     logger.info(f"Created folder '{name}' ({folder.id}) for user {user_id}")
     return folder
@@ -266,6 +275,7 @@ async def update_folder(
     all_folders = await database_async.get_folders_by_user_id(user_id)
     folders_by_id = {f.id: f for f in all_folders}
 
+    previous = folder.model_copy(deep=True)
     if name is not None:
         folder.name = normalize_folder_name(name)
 
@@ -303,8 +313,9 @@ async def update_folder(
 
         folder.parent_folder_id = parent_folder_id
 
+    _assert_unique_name(folder, all_folders)
     folder.touch()
-    await database_async.update_folder(folder)
+    await database_async.update_folder(folder, previous=previous)
     logger.info(f"Updated folder {folder_id} for user {user_id}")
     return folder
 

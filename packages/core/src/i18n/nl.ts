@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Dutch catalogue. See `en` for the reference wording and the key layout. */
 export const nl: Catalog = {
+  "folders.untitled": "Naamloze map",
+  "folders.duplicateTitle": "Naam al in gebruik",
+  "folders.duplicateMessage": "Hier bestaat al een map met deze naam. Kies een andere naam.",
+  "folders.emptyName": "Voer een mapnaam in.",
   "common.ok": "OK",
   "common.yes": "Ja",
   "common.no": "Nee",

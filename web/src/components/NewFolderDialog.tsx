@@ -1,3 +1,4 @@
+import { isFolderNameConflict } from "@media-summarizer/core/organization/folderNames";
 import type { Folder } from "@media-summarizer/core/types/organization";
 import { useState } from "react";
 import { apiRequest } from "../api";
@@ -21,6 +22,7 @@ export function NewFolderDialog({
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [nameConflict, setNameConflict] = useState(false);
 
   const submit = async () => {
     const trimmed = name.trim();
@@ -33,12 +35,21 @@ export function NewFolderDialog({
         body: { name: trimmed, parent_folder_id: null },
       });
       await onCreated(folder);
-    } catch {
+    } catch (error) {
+      if (isFolderNameConflict(error)) setNameConflict(true);
       // The dialog stays open with the typed name, so a retry is one click.
       setFailed(true);
       setBusy(false);
     }
   };
+
+  if (nameConflict) return (
+    <Dialog title={t("folders.duplicateTitle")} onClose={() => {}}
+      footer={<button type="button" className="btn primary" autoFocus
+        onClick={() => setNameConflict(false)}>{t("common.ok")}</button>}>
+      <p role="alert">{t("folders.duplicateMessage")}</p>
+    </Dialog>
+  );
 
   return (
     <Dialog

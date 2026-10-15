@@ -15,6 +15,10 @@ import type { Catalog } from "./runtime";
  * `media.tab.reader` is the reading mode of a source, not the Reader tier.
  */
 export const fr: Catalog = {
+  "folders.untitled": "Dossier sans titre",
+  "folders.duplicateTitle": "Nom déjà utilisé",
+  "folders.duplicateMessage": "Un dossier porte déjà ce nom ici. Choisissez un autre nom.",
+  "folders.emptyName": "Saisissez un nom de dossier.",
   "common.ok": "OK",
   "common.yes": "Oui",
   "common.no": "Non",

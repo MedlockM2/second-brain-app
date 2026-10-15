@@ -7,17 +7,22 @@ with DynamoDB tables in the Media Summarizer application using async operations.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 import aioboto3
 from boto3.dynamodb.conditions import Attr, Key
+from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 from media_summarizer.core.models import Folder, JobStatus, MediaFailureCode, ProcessingJob, User, UserRssFeed
 from media_summarizer.core.models.auth import AuthToken, TokenType
+from media_summarizer.core.models.folder import FolderNameConflictError, folder_name_key
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
@@ -945,33 +950,68 @@ async def cleanup_expired_tokens() -> int:
 # ---------- Folder operations ----------
 
 
-async def create_folder(folder: Folder) -> Folder:
-    """Create a new folder in DynamoDB."""
+def _folder_name_claim(folder: Folder) -> str:
+    namespace = json.dumps(
+        [folder.user_id, folder.parent_folder_id, folder_name_key(folder.name)],
+        ensure_ascii=False,
+    )
+    return "folder-name:" + hashlib.sha256(namespace.encode()).hexdigest()
+
+
+def _folder_claim_put(folder: Folder) -> Dict[str, Any]:
+    # user_id lets the account purge remove reservations through user-index.
+    # No name attribute: these are excluded from folder listings.
+    return {"Put": {
+        "TableName": USER_FOLDERS_TABLE,
+        "Item": {"id": _folder_name_claim(folder), "user_id": folder.user_id,
+                 "folder_id": folder.id},
+        "ConditionExpression": "attribute_not_exists(id) OR folder_id = :folder",
+        "ExpressionAttributeValues": {":folder": folder.id},
+    }}
+
+
+def _folder_claim_delete(folder: Folder) -> Dict[str, Any]:
+    return {"Delete": {
+        "TableName": USER_FOLDERS_TABLE,
+        "Key": {"id": _folder_name_claim(folder)},
+        "ConditionExpression": "attribute_not_exists(id) OR folder_id = :folder",
+        "ExpressionAttributeValues": {":folder": folder.id},
+    }}
+
+
+async def _write_folder_transaction(actions: List[Dict[str, Any]]) -> None:
+    serializer = TypeSerializer()
+    encoded = []
+    for action in actions:
+        kind, values = next(iter(action.items()))
+        operation = dict(values)
+        for key in ("Item", "Key", "ExpressionAttributeValues"):
+            if key in operation:
+                operation[key] = {k: serializer.serialize(v) for k, v in operation[key].items()}
+        encoded.append({kind: operation})
     session = get_session()
-    async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
-        table = await dynamodb.Table(USER_FOLDERS_TABLE)
+    async with session.client("dynamodb", **_dynamodb_client_kwargs()) as client:
         try:
-            await table.put_item(
-                Item=folder.to_dynamodb_item(),
-                ConditionExpression="attribute_not_exists(id)",
-            )
-            _log_dynamodb_success(
-                "create_folder",
-                table=USER_FOLDERS_TABLE,
-                folder_id=folder.id,
-                user_id=folder.user_id,
-            )
-            return folder
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
-                raise ValueError(f"Folder with ID {folder.id} already exists")
-            _log_dynamodb_error(
-                "create_folder",
-                e,
-                table=USER_FOLDERS_TABLE,
-                folder_id=folder.id,
-            )
+            await client.transact_write_items(TransactItems=encoded, ClientRequestToken=str(uuid4()))
+        except ClientError as exc:
+            reasons = exc.response.get("CancellationReasons", [])
+            if (exc.response["Error"]["Code"] == "TransactionCanceledException"
+                    and reasons and reasons[0].get("Code") == "ConditionalCheckFailed"):
+                raise FolderNameConflictError("A sibling folder already has this name") from exc
+            _log_dynamodb_error("folder_transaction", exc, table=USER_FOLDERS_TABLE)
             raise
+
+
+async def create_folder(folder: Folder) -> Folder:
+    """Reserve the sibling name and create the folder atomically."""
+    await _write_folder_transaction([
+        _folder_claim_put(folder),
+        {"Put": {"TableName": USER_FOLDERS_TABLE, "Item": folder.to_dynamodb_item(),
+                 "ConditionExpression": "attribute_not_exists(id)"}},
+    ])
+    _log_dynamodb_success("create_folder", table=USER_FOLDERS_TABLE,
+                         folder_id=folder.id, user_id=folder.user_id)
+    return folder
 
 
 async def get_folder_by_id(folder_id: str) -> Optional[Folder]:
@@ -980,8 +1020,8 @@ async def get_folder_by_id(folder_id: str) -> Optional[Folder]:
         session = get_session()
         async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
             table = await dynamodb.Table(USER_FOLDERS_TABLE)
-            response = await table.get_item(Key={"id": folder_id})
-            if "Item" in response:
+            response = await table.get_item(Key={"id": folder_id}, ConsistentRead=True)
+            if "name" in response.get("Item", {}):
                 return Folder.from_dynamodb_item(response["Item"])
             return None
     except ClientError as e:
@@ -1027,12 +1067,19 @@ async def get_folders_by_user_id(user_id: str) -> List[Folder]:
         session = get_session()
         async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
             table = await dynamodb.Table(USER_FOLDERS_TABLE)
-            response = await table.query(
-                IndexName="user-index",
-                KeyConditionExpression=Key("user_id").eq(user_id),
-            )
-            items = response.get("Items", [])
-            return [Folder.from_dynamodb_item(item) for item in items]
+            kwargs: Dict[str, Any] = {
+                "IndexName": "user-index",
+                "KeyConditionExpression": Key("user_id").eq(user_id),
+                "FilterExpression": Attr("name").exists(),
+            }
+            folders: List[Folder] = []
+            while True:
+                response = await table.query(**kwargs)
+                folders.extend(Folder.from_dynamodb_item(item) for item in response.get("Items", []))
+                if not response.get("LastEvaluatedKey"):
+                    return folders
+                kwargs["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+
     except ClientError as e:
         _log_dynamodb_error(
             "get_folders_by_user_id",
@@ -1052,9 +1099,8 @@ async def stamp_folder_engagement(
 ) -> bool:
     """Record that the user just engaged with one folder (task-303).
 
-    A targeted ``UpdateItem`` on the single attribute, never a model ``put_item``:
-    :func:`update_folder` rewrites the whole item, so stamping through it would race
-    a concurrent rename over the rest of the row.
+    A targeted ``UpdateItem`` on the single attribute. Renaming updates only
+    name, parent and timestamp, so neither operation overwrites the other.
 
     Ownership travels in the condition rather than in a preceding read, so a folder
     id belonging to somebody else simply writes nothing. The dampener is the same
@@ -1100,56 +1146,51 @@ async def stamp_folder_engagement(
             raise
 
 
-async def update_folder(folder: Folder) -> Folder:
-    """Update a folder in DynamoDB.
-
-    A full ``put_item`` of the model, which is why every attribute stored on a
-    folder row has to round-trip through ``Folder`` -- ``last_engaged_at`` included.
-    An attribute the model does not know about is erased here, silently, the next
-    time the folder is renamed.
-    """
-    try:
-        session = get_session()
-        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
-            table = await dynamodb.Table(USER_FOLDERS_TABLE)
-            await table.put_item(Item=folder.to_dynamodb_item())
-            _log_dynamodb_success(
-                "update_folder",
-                table=USER_FOLDERS_TABLE,
-                folder_id=folder.id,
-            )
-            return folder
-    except ClientError as e:
-        _log_dynamodb_error(
-            "update_folder",
-            e,
-            table=USER_FOLDERS_TABLE,
-            folder_id=folder.id,
-        )
-        raise
+async def update_folder(folder: Folder, *, previous: Folder) -> Folder:
+    """Change the name/parent and its reservation together, preserving engagement."""
+    values: Dict[str, Any] = {
+        ":owner": folder.user_id, ":old_name": previous.name, ":name": folder.name,
+        ":updated": folder.updated_at.isoformat(),
+    }
+    condition = "user_id = :owner AND #name = :old_name"
+    if previous.parent_folder_id is None:
+        condition += " AND attribute_not_exists(parent_folder_id)"
+    else:
+        condition += " AND parent_folder_id = :old_parent"
+        values[":old_parent"] = previous.parent_folder_id
+    expression = "SET #name = :name, updated_at = :updated"
+    if folder.parent_folder_id is None:
+        expression += " REMOVE parent_folder_id"
+    else:
+        expression += ", parent_folder_id = :parent"
+        values[":parent"] = folder.parent_folder_id
+    actions = [_folder_claim_put(folder), {"Update": {
+        "TableName": USER_FOLDERS_TABLE, "Key": {"id": folder.id},
+        "UpdateExpression": expression, "ConditionExpression": condition,
+        "ExpressionAttributeNames": {"#name": "name"}, "ExpressionAttributeValues": values,
+    }}]
+    if _folder_name_claim(previous) != _folder_name_claim(folder):
+        actions.append(_folder_claim_delete(previous))
+    await _write_folder_transaction(actions)
+    _log_dynamodb_success("update_folder", table=USER_FOLDERS_TABLE, folder_id=folder.id)
+    return folder
 
 
 async def delete_folder(folder_id: str) -> bool:
-    """Delete a folder from DynamoDB."""
-    try:
-        session = get_session()
-        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
-            table = await dynamodb.Table(USER_FOLDERS_TABLE)
-            await table.delete_item(Key={"id": folder_id})
-            _log_dynamodb_success(
-                "delete_folder",
-                table=USER_FOLDERS_TABLE,
-                folder_id=folder_id,
-            )
-            return True
-    except ClientError as e:
-        _log_dynamodb_error(
-            "delete_folder",
-            e,
-            table=USER_FOLDERS_TABLE,
-            folder_id=folder_id,
-        )
-        raise
+    """Release the sibling name in the same transaction as the deletion."""
+    folder = await get_folder_by_id(folder_id)
+    if folder is None:
+        return False
+    await _write_folder_transaction([
+        _folder_claim_delete(folder),
+        {"Delete": {"TableName": USER_FOLDERS_TABLE, "Key": {"id": folder_id},
+                    "ConditionExpression": "#name = :name AND updated_at = :updated",
+                    "ExpressionAttributeNames": {"#name": "name"},
+                    "ExpressionAttributeValues": {":name": folder.name,
+                                                  ":updated": folder.updated_at.isoformat()}}},
+    ])
+    _log_dynamodb_success("delete_folder", table=USER_FOLDERS_TABLE, folder_id=folder_id)
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────

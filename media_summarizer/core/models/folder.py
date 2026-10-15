@@ -5,6 +5,7 @@ Each user has a private folder tree. Every media item belongs to exactly one fol
 A special "Uncategorized" folder is auto-created per user and cannot be deleted.
 """
 
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -23,6 +24,15 @@ MAX_FOLDER_DEPTH = 5
 MAX_FOLDER_NAME_LENGTH = 255
 
 
+class FolderNameConflictError(ValueError):
+    """A sibling already owns the normalized name."""
+
+
+def folder_name_key(name: str) -> str:
+    """Match names without case, compatibility forms or redundant whitespace."""
+    return " ".join(unicodedata.normalize("NFKC", name).split()).lower()
+
+
 class Folder(BaseModel):
     """User folder for organizing media items."""
 
@@ -39,11 +49,8 @@ class Folder(BaseModel):
     # a generation launched on it, or one of its artifacts opened (task-303). None
     # until the first engagement.
     #
-    # THIS FIELD MUST STAY ROUND-TRIPPED in both serializers below.
-    # ``database_async.update_folder`` writes a full ``put_item`` of
-    # ``to_dynamodb_item()``, so any folder attribute the model does not know about
-    # is silently erased the next time the folder is renamed. That is the
-    # asymmetry with ``user_media``, which is immune by invariant I1.
+    # The serializer round-trips this field; renaming updates only name/parent
+    # and timestamp, so a concurrent engagement stamp is never overwritten.
     last_engaged_at: Optional[datetime] = None
 
     @field_validator("user_id")

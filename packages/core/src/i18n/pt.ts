@@ -2,6 +2,10 @@ import type { Catalog } from "./runtime";
 
 /** Portuguese catalogue. See `en` for the reference wording and the key layout. */
 export const pt: Catalog = {
+  "folders.untitled": "Pasta sem título",
+  "folders.duplicateTitle": "Nome já utilizado",
+  "folders.duplicateMessage": "Já existe uma pasta com este nome aqui. Escolhe outro nome.",
+  "folders.emptyName": "Introduz um nome para a pasta.",
   "common.ok": "OK",
   "common.yes": "Sim",
   "common.no": "Não",
