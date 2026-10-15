@@ -83,8 +83,12 @@ localement. Ces informations suivent les mêmes limites LRU que les réponses.
 Un premier détail média jamais consulté conserve son propre chargement ; une
 couverture ne constitue pas un détail complet. Le contrôleur de chat conserve les messages
 et le streaming ; seul l'historique des conversations rejoint le cache commun.
-Le sélecteur de dossiers de la revue « À trier » partage également la liste des
-dossiers, sans modifier l'ordre figé de sa file de tri.
+La revue « À trier » initialise sa séance depuis la page conservée du dossier
+par défaut (tri ascendant, 100 médias), y compris une page connue vide. Ses
+lectures actualisent le cache pour la prochaine ouverture sans remplacer la file
+déjà présentée : une séance reste figée. Le sélecteur partage la liste des
+dossiers. Une première page absente conserve son chargement initial ; une erreur
+de revalidation laisse la séance lisible et propose une reprise discrète.
 
 ## Vérification
 
