@@ -2,8 +2,8 @@
  * Where a rename is typed: one field, prefilled with the name the thing has now,
  * and the two answers a naming prompt can get.
  *
- * The field is focused after presentation. The card's first visible frame is
- * already above the keyboard, after its destination has been laid out.
+ * The field is focused after presentation. The card stays visible and usable
+ * while native keyboard frames determine its position, without layout animation.
  * A rename is a one-field edit
  * reached from a context menu, and pushing a route for it would take the user
  * away from the list they were filing — the list stays visible behind the scrim,
@@ -108,7 +108,7 @@ interface ModalViewport {
   height: number;
 }
 
-/** Resolve the keyboard destination, lay it out, then reveal. No layout animation. */
+/** Follow native keyboard destinations without gating visibility or interaction. */
 function NamingForm({
   heading,
   placeholder,
@@ -130,23 +130,16 @@ function NamingForm({
   const trimmed = value.trim();
   const canSubmit = trimmed.length > 0 && !isSaving;
   const handleSubmit = () => {
-    if (positioned && canSubmit) onSubmit(trimmed);
+    if (canSubmit) onSubmit(trimmed);
   };
   const insets = useSafeAreaInsets();
   const viewportRef = useRef<View>(null);
-  const scrollRef = useRef<ScrollView>(null);
   const mounted = useRef(true);
   const measurement = useRef(0);
-  const revealed = useRef(false);
-  const noKeyboardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [viewport, setViewport] = useState<ModalViewport | null>(null);
-  const [keyboard, setKeyboard] = useState(() => {
-    const frame = Keyboard.metrics();
-    return { resolved: !!frame?.height, frame: frame ?? null };
-  });
-  const resolved = useRef(keyboard.resolved);
-  const [inputFocused, setInputFocused] = useState(false);
-  const [laidOutHeight, setLaidOutHeight] = useState<number | null>(null);
+  const [frame, setFrame] = useState<KeyboardMetrics | null>(
+    () => Keyboard.metrics() ?? null,
+  );
 
   const measure = useCallback(() => {
     const revision = ++measurement.current;
@@ -169,16 +162,9 @@ function NamingForm({
     });
   }, []);
   const acceptFrame = useCallback(
-    (frame: KeyboardMetrics | null, allowNoKeyboard = false) => {
-      // Hiding a keyboard from the underlying screen must not reveal the card
-      // before this input's keyboard has announced its destination.
-      const ready = !!frame?.height || revealed.current || allowNoKeyboard;
-      resolved.current = ready;
-      if (ready && noKeyboardTimer.current) {
-        clearTimeout(noKeyboardTimer.current);
-        noKeyboardTimer.current = null;
-      }
-      setKeyboard({ resolved: ready, frame });
+    (next: KeyboardMetrics | null) => {
+      if (!mounted.current) return;
+      setFrame(next);
       measure();
     },
     [measure],
@@ -197,33 +183,16 @@ function NamingForm({
     if (Platform.OS === "ios")
       subscriptions.push(
         Keyboard.addListener("keyboardWillShow", show),
-        Keyboard.addListener("keyboardWillChangeFrame", (event) => {
-          if (revealed.current) show(event);
-        }),
+        Keyboard.addListener("keyboardWillChangeFrame", show),
         Keyboard.addListener("keyboardWillHide", () => acceptFrame(null)),
       );
     return () => {
       mounted.current = false;
       measurement.current += 1;
       subscriptions.forEach((subscription) => subscription.remove());
-      if (noKeyboardTimer.current) clearTimeout(noKeyboardTimer.current);
     };
   }, [acceptFrame]);
 
-  const onInputFocus = useCallback(() => {
-    setInputFocused(true);
-    measure();
-    if (resolved.current) return;
-    if (noKeyboardTimer.current) clearTimeout(noKeyboardTimer.current);
-    // A hardware keyboard or an IME that emits no frame must not leave the
-    // form hidden indefinitely. Normal placement is driven by native events.
-    noKeyboardTimer.current = setTimeout(
-      () => acceptFrame(Keyboard.metrics() ?? null, true),
-      1000,
-    );
-  }, [measure, acceptFrame]);
-
-  const frame = keyboard.frame;
   const touchesBottom =
     viewport &&
     frame &&
@@ -235,19 +204,11 @@ function NamingForm({
   // Clip to the keyboard's final top, rather than subtracting its height again
   // from an Android modal that the OS may already have resized.
   const targetHeight =
-    viewport && keyboard.resolved
+    viewport
       ? touchesBottom
         ? Math.max(0, Math.min(viewport.height, frame.screenY - viewport.top))
         : viewport.height
       : null;
-  const positioned =
-    inputFocused &&
-    targetHeight !== null &&
-    laidOutHeight !== null &&
-    Math.abs(laidOutHeight - targetHeight) < 1;
-  useLayoutEffect(() => {
-    if (positioned) revealed.current = true;
-  }, [positioned]);
 
   return (
     <View
@@ -258,14 +219,8 @@ function NamingForm({
     >
       <View
         style={targetHeight === null ? styles.form : { height: targetHeight }}
-        onLayout={(event) => {
-          if (!revealed.current)
-            scrollRef.current?.scrollTo({ y: 0, animated: false });
-          setLaidOutHeight(event.nativeEvent.layout.height);
-        }}
       >
         <ScrollView
-          ref={scrollRef}
           style={styles.form}
           contentContainerStyle={[
             styles.formContent,
@@ -290,12 +245,7 @@ function NamingForm({
           />
 
           <View
-            style={[styles.card, !positioned && styles.pendingCard]}
-            pointerEvents={positioned ? "auto" : "box-none"}
-            accessibilityElementsHidden={!positioned}
-            importantForAccessibility={
-              positioned ? "auto" : "no-hide-descendants"
-            }
+            style={styles.card}
             testID={`${testIDPrefix}-dialog`}
           >
             <Text style={styles.title}>{heading}</Text>
@@ -307,7 +257,6 @@ function NamingForm({
               onChangeText={onChangeText}
               placeholder={placeholder}
               placeholderTextColor={Colors.textMuted}
-              onFocus={onInputFocus}
               selectTextOnFocus
               editable={!isSaving}
               maxLength={maxLength}
@@ -330,7 +279,7 @@ function NamingForm({
                   pressed && styles.secondaryButtonPressed,
                 ]}
                 onPress={onClose}
-                disabled={isSaving || !positioned}
+                disabled={isSaving}
                 accessibilityLabel={t("common.cancel")}
                 accessibilityRole="button"
                 testID={`${testIDPrefix}-cancel`}
@@ -345,7 +294,7 @@ function NamingForm({
                   !canSubmit && styles.primaryButtonDisabled,
                 ]}
                 onPress={handleSubmit}
-                disabled={!canSubmit || !positioned}
+                disabled={!canSubmit}
                 accessibilityLabel={submitLabel}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !canSubmit }}
@@ -387,7 +336,6 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       gap: Spacing.md,
       ...Shadows.soft,
     },
-    pendingCard: { opacity: 0 },
     title: {
       fontSize: Typography.headline.fontSize,
       fontWeight: Typography.headline.fontWeight,
