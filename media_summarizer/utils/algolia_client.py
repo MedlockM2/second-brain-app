@@ -82,15 +82,17 @@ def configure_shared_index_settings() -> None:
       filterOnly(source_platform)
     - unretrievableAttributes: user_id (never returned to clients)
     - attributesToRetrieve: all fields except user_id
+    - attributeForDistinct: media_item_id (one result per saved media)
 
     This is idempotent - Algolia will no-op if settings are already correct.
     """
     client = get_client()
     index_name = get_shared_index_name()
     try:
-        client.set_settings(
+        update = client.set_settings(
             index_name=index_name,
             index_settings={
+                "attributeForDistinct": "media_item_id",
                 # Ordered on purpose: a match in an earlier attribute
                 # outranks a later one. The creator sits above the transcript
                 # because "everything I saved from this show" is a real query
@@ -131,6 +133,7 @@ def configure_shared_index_settings() -> None:
                 ],
             },
         )
+        client.wait_for_task(index_name=index_name, task_id=update.task_id)
         logger.info(f"Algolia shared index settings configured for '{index_name}'")
     except Exception as e:
         logger.error(f"Failed to configure Algolia shared index settings: {e}")

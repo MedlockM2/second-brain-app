@@ -133,6 +133,7 @@ class SearchResponse(BaseModel):
     found: int = Field(..., description="Total number of matching documents")
     page: int = Field(..., description="Current page number")
     per_page: int = Field(..., description="Results per page")
+    has_more: bool = Field(..., description="Another matching media page is available")
     hits: List[SearchHit] = Field(default_factory=list, description="Search results")
 
 
@@ -248,6 +249,7 @@ async def search_transcripts(
             found=result.get("found", 0),
             page=page,
             per_page=per_page,
+            has_more=result["has_more"],
             hits=hits,
         )
 

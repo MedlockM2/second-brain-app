@@ -12,8 +12,8 @@ import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 
 /** The same imports everywhere; destination is captured before a picker/auth flow. */
-export function SourceActions({ folder = null, floating = false }: {
-  folder?: ShareSelectedFolder | null; floating?: boolean;
+export function SourceActions({ folder = null, bottomOffset = TAB_BAR_CLEARANCE }: {
+  folder?: ShareSelectedFolder | null; bottomOffset?: number;
 }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -95,7 +95,7 @@ export function SourceActions({ folder = null, floating = false }: {
   );
 
   return (<>
-      <View style={[styles.actions, floating && { position: "absolute", left: 0, right: 0, bottom: TAB_BAR_CLEARANCE }]} pointerEvents="box-none">
+      <View style={[styles.actions, { bottom: bottomOffset }]} pointerEvents="box-none">
         <Pressable
           testID={`${folder ? "folder" : "inbox"}-camera-button`}
           style={({ pressed }) => [
@@ -140,7 +140,9 @@ export function SourceActions({ folder = null, floating = false }: {
 }
 const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) => StyleSheet.create({
     actions: {
-
+      position: "absolute",
+      left: 0,
+      right: 0,
       // Absolutely positioned, so nothing insets it for the bar: this row is the
       // reason `TAB_BAR_CLEARANCE` exists.
       padding: Spacing.sm,

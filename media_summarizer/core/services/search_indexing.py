@@ -101,12 +101,8 @@ def _ensure_settings_once() -> None:
     global _settings_configured
     if _settings_configured:
         return
-    try:
-        configure_shared_index_settings()
-        _settings_configured = True
-    except Exception as e:
-        # Non-fatal: settings may already be configured from a previous deploy
-        logger.warning(f"Failed to configure shared index settings (non-fatal): {e}")
+    configure_shared_index_settings()
+    _settings_configured = True
 
 
 def index_transcript(
@@ -346,7 +342,7 @@ def search_transcripts(
 
     Returns:
         Dict containing:
-        - found: total number of unique matching documents (approximate)
+        - found: matching media count reported by Algolia after distinct
         - hits: list of deduplicated results with highlights
         - page: current page number
     """
@@ -360,10 +356,6 @@ def search_transcripts(
     filters = f"user_id:{user_id}"
     if filter_by_platform:
         filters += f" AND source_platform:{filter_by_platform}"
-
-    # Request more results than needed to account for deduplication
-    # (multiple chunks from same document may match)
-    fetch_count = per_page * 4
 
     search_params = {
         "query": query,
@@ -380,12 +372,16 @@ def search_transcripts(
         "attributesToSnippet": ["transcript:30"],
         "highlightPreTag": "<mark>",
         "highlightPostTag": "</mark>",
-        "hitsPerPage": fetch_count,
-        "page": 0,  # Algolia is 0-indexed; we handle pagination after dedup
+        "distinct": 1,
+        "hitsPerPage": per_page,
+        "page": page - 1,  # Public API is 1-indexed; Algolia is 0-indexed.
         "typoTolerance": True,
     }
 
     try:
+        # Wait for the grouping setting before searching, even when no import
+        # has run in this process. Counts and page boundaries must group media.
+        _ensure_settings_once()
         response = client.search_single_index(
             index_name=index_name,
             search_params=search_params,
@@ -399,37 +395,20 @@ def search_transcripts(
                 f"Search returned empty: shared index not yet created "
                 f"(user_id={user_id}, query='{query}')"
             )
-            return {"found": 0, "hits": [], "page": page}
+            return {"found": 0, "hits": [], "page": page, "has_more": False}
         logger.error(f"Search failed for user_id={user_id}, query='{query}': {e}")
         raise
 
     try:
-        # Deduplicate by media_item_id, keeping the best hit per document
-        seen_media: Dict[str, Dict[str, Any]] = {}
+        # Algolia groups before counting and paginating, keeping the best chunk.
         hits_list = response.hits if hasattr(response, "hits") else []
-
-        for hit in hits_list:
-            # Access hit data - Hit model with extra='allow'
-            hit_data = _extract_hit_data(hit)
-            media_id = hit_data.get("media_item_id", "")
-
-            if not media_id:
-                continue
-
-            # Keep only the first (best-scored) hit per media_item_id
-            if media_id not in seen_media:
-                seen_media[media_id] = hit_data
-
-        # Apply pagination on deduplicated results
-        all_results = list(seen_media.values())
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        paginated = all_results[start_idx:end_idx]
+        hits = [_extract_hit_data(hit) for hit in hits_list]
 
         result = {
-            "found": len(all_results),
-            "hits": paginated,
+            "found": response.nb_hits or 0,
+            "hits": hits,
             "page": page,
+            "has_more": page < (response.nb_pages or 0),
         }
 
         logger.debug(

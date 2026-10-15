@@ -167,7 +167,7 @@ const EMPTY_MEDIA: MediaListItem[] = [];
 export default function SearchScreen() {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   // Subscribes the screen to the interface language: the copy below is resolved
   // at render time, so the tree has to redraw when the language changes.
   useTranslation();
@@ -188,6 +188,14 @@ export default function SearchScreen() {
   const [settledQuery, setSettledQuery] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchAttempt, setSearchAttempt] = useState(0);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchLoadingMore, setSearchLoadingMore] = useState(false);
+  const [searchPageError, setSearchPageError] = useState<string | null>(null);
+  const searchRequest = useRef(0);
+  const searchBusy = useRef(false);
+  const searchPage = useRef(0);
+  const publishedSearchKey = useRef<string | null>(null);
+  const deletedSearchIds = useRef(new Set<string>());
 
   // Library state. The two halves are fetched by two independent requests and
   // carry their own loading and error flags: one failing must leave the other
@@ -237,40 +245,114 @@ export default function SearchScreen() {
   // `All media` slot asks for: bumping the attempt replays the effect on the
   // query already typed, which is the only thing a retry has to do.
   useEffect(() => {
-    if (!isAuthenticated) return;
-
-    // Algolia requires a non-empty query (min_length=1).
+    const request = ++searchRequest.current;
+    const owner = mutationOwner();
+    let active = true;
     const searchQuery = debouncedQuery.trim();
-    if (!searchQuery) {
-      return;
+    const searchKey = `${user?.id}:${searchQuery}`;
+    const preserveWindow = isAuthenticated && searchQuery === query.trim() &&
+      publishedSearchKey.current === searchKey;
+    const pagesToLoad = preserveWindow ? Math.max(1, searchPage.current) : 1;
+    searchBusy.current = false;
+    setSearchLoadingMore(false);
+    setSearchPageError(null);
+    setSearchHasMore(false);
+    if (!preserveWindow) {
+      searchPage.current = 0;
+      publishedSearchKey.current = null;
+      deletedSearchIds.current.clear();
+      setResults([]);
+      setTotalResults(0);
+      setSettledQuery(null);
+    }
+    if (!isAuthenticated || !searchQuery || searchQuery !== query.trim()) {
+      setIsLoading(false);
+      return () => { active = false; };
     }
 
     const performSearch = async () => {
-      setIsLoading(true);
+      searchBusy.current = true;
+      setIsLoading(!preserveWindow);
       setError(null);
 
       try {
-        const response = await SearchService.searchTranscripts(searchQuery);
-
-        setResults(response.hits.map(hitToRow));
-        setTotalResults(response.found);
+        // Re-read the loaded window after a deletion: offset pagination would
+        // otherwise skip the media that moved to the end of the previous page.
+        const rows = new Map<string, MediaRow>();
+        const removed = new Set<string>();
+        for (let page = 1; page <= pagesToLoad; page += 1) {
+          const response = await SearchService.searchTranscripts(searchQuery, { page });
+          if (!active || request !== searchRequest.current || owner !== mutationOwner()) return;
+          for (const hit of response.hits) {
+            if (deletedSearchIds.current.has(hit.media_item_id)) removed.add(hit.media_item_id);
+            else rows.set(hit.media_item_id, hitToRow(hit));
+          }
+          if (!response.has_more || page === pagesToLoad) {
+            setResults([...rows.values()]);
+            setTotalResults(Math.max(0, response.found - removed.size));
+            searchPage.current = response.page;
+            publishedSearchKey.current = searchKey;
+            setSearchHasMore(response.has_more);
+            break;
+          }
+        }
       } catch (err: unknown) {
+        if (!active || request !== searchRequest.current || owner !== mutationOwner()) return;
         // `err.message` here is whatever the search API put in its `detail`, in
         // English and written for us. The reader gets a sentence from the
         // catalogue instead.
         setError(
           getFriendlyErrorMessage(err, { fallback: t("search.failed") }),
         );
-        setResults([]);
-        setTotalResults(0);
+        if (!preserveWindow) {
+          setResults([]);
+          setTotalResults(0);
+        }
       } finally {
-        setSettledQuery(searchQuery);
-        setIsLoading(false);
+        if (active && request === searchRequest.current && owner === mutationOwner()) {
+          searchBusy.current = false;
+          setSettledQuery(searchQuery);
+          setIsLoading(false);
+        }
       }
     };
 
-    performSearch();
-  }, [debouncedQuery, isAuthenticated, searchAttempt]);
+    void performSearch();
+    return () => { active = false; searchRequest.current += 1; };
+  }, [debouncedQuery, query, isAuthenticated, user?.id, searchAttempt]);
+
+  const loadMoreSearch = useCallback(async () => {
+    if (!isAuthenticated || !searchHasMore || searchBusy.current ||
+        settledQuery !== query.trim() || settledQuery !== debouncedQuery.trim()) return;
+    const request = searchRequest.current;
+    const owner = mutationOwner();
+    searchBusy.current = true;
+    setSearchLoadingMore(true);
+    setSearchPageError(null);
+    try {
+      const response = await SearchService.searchTranscripts(settledQuery, {
+        page: searchPage.current + 1,
+      });
+      if (request !== searchRequest.current || owner !== mutationOwner()) return;
+      setResults((current) => {
+        const seen = new Set(current.map((row) => row.media_item_id));
+        return [...current, ...response.hits
+          .filter((hit) => !seen.has(hit.media_item_id) && !deletedSearchIds.current.has(hit.media_item_id))
+          .map(hitToRow)];
+      });
+      searchPage.current = response.page;
+      setSearchHasMore(response.has_more);
+    } catch (err) {
+      if (request === searchRequest.current && owner === mutationOwner()) {
+        setSearchPageError(getFriendlyErrorMessage(err, { fallback: t("search.failed") }));
+      }
+    } finally {
+      if (request === searchRequest.current && owner === mutationOwner()) {
+        searchBusy.current = false;
+        setSearchLoadingMore(false);
+      }
+    }
+  }, [isAuthenticated, searchHasMore, settledQuery, query, debouncedQuery]);
 
   // Neither loader throws: each one owns its error state, so the caller can
   // always await both and only has its own spinner to clear.
@@ -415,6 +497,11 @@ export default function SearchScreen() {
     mediaRequest.current += 1;
     mediaBusy.current = false;
     setLoadingMore(false);
+    if (!deletedSearchIds.current.has(mediaItemId)) {
+      deletedSearchIds.current.add(mediaItemId);
+      setTotalResults((current) => Math.max(0, current - 1));
+      setSearchAttempt((current) => current + 1);
+    }
     setResults((current) =>
       current.filter((row) => row.media_item_id !== mediaItemId),
     );
@@ -790,6 +877,7 @@ export default function SearchScreen() {
           />
         ) : (
           <SearchResultsState
+            key={query.trim()}
             folders={matchingFolders}
             foldersLoading={foldersLoading && !folderSnapshot.data}
             foldersError={foldersError}
@@ -800,6 +888,11 @@ export default function SearchScreen() {
             onLongPressFolder={folderActions.open}
             results={results}
             totalResults={totalResults}
+            hasMore={searchHasMore}
+            loadingMore={searchLoadingMore}
+            pageError={searchPageError}
+            onLoadMore={() => { if (!searchPageError) void loadMoreSearch(); }}
+            onRetryPage={() => void loadMoreSearch()}
             isPending={isLoading || settledQuery !== query.trim()}
             error={error}
             onRetrySearch={handleRetrySearch}
@@ -995,16 +1088,6 @@ function LibraryState({
     editor?.id ?? null, revealFolderId, onRevealed, CONTENT_TOP_INSET);
 
   const [showTop, setShowTop] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(() => Keyboard.isVisible());
-  const [reduceMotion, setReduceMotion] = useState(true);
-  useEffect(() => {
-    let active = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (active) setReduceMotion(value); });
-    const motion = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
-    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
-    return () => { active = false; motion.remove(); show.remove(); hide.remove(); };
-  }, []);
   // What stands in for the media rows while there are none: its own spinner on
   // the first load, its own error card with a retry, or the empty library.
   const mediaPlaceholder = mediaLoading ? (
@@ -1103,17 +1186,8 @@ function LibraryState({
         ) : null
       }
     />
-    {showTop && !keyboardOpen ? (
-      <Pressable
-        style={({ pressed }) => [styles.jumpTop, pressed && styles.jumpTopPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={t("search.backToTop")}
-        testID="library-back-to-top"
-        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: !reduceMotion })}
-      >
-        <Ionicons name="arrow-up" size={24} color={Colors.onPrimary} />
-      </Pressable>
-    ) : null}
+    <BackToTopButton visible={showTop} testID="library-back-to-top"
+      onPress={(animated) => listRef.current?.scrollToOffset({ offset: 0, animated })} />
     </View>
   );
 }
@@ -1248,6 +1322,11 @@ interface SearchResultsStateProps {
   onLongPressFolder: (folder: FolderNode, anchor: AnchorRect) => void;
   results: MediaRow[];
   totalResults: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  pageError: string | null;
+  onLoadMore: () => void;
+  onRetryPage: () => void;
   /** The hits on screen do not answer what is typed yet. */
   isPending: boolean;
   error: string | null;
@@ -1287,6 +1366,11 @@ function SearchResultsState({
   onLongPressFolder,
   results,
   totalResults,
+  hasMore,
+  loadingMore,
+  pageError,
+  onLoadMore,
+  onRetryPage,
   isPending,
   error,
   onRetrySearch,
@@ -1296,14 +1380,19 @@ function SearchResultsState({
 }: SearchResultsStateProps) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const listRef = useRef<FlatList<MediaRow>>(null);
+  const [showTop, setShowTop] = useState(false);
   // A folder list still loading, or one that failed, is not "zero matches": it
   // keeps its heading and states its own situation, exactly as in the library.
   const showFolders =
     foldersLoading || foldersError !== null || folders.length > 0;
 
   if (!showFolders && !isPending) {
-    if (error) return <ErrorState message={error} />;
-    if (results.length === 0) return <NoResultsState query={query} />;
+    if (error && results.length === 0) return <InlineErrorCard message={error} onRetry={onRetrySearch}
+      retryAccessibilityLabel={t("search.retrySearchA11y")} />;
+    if (results.length === 0 && !hasMore && !loadingMore && !pageError && !error) {
+      return <NoResultsState query={query} />;
+    }
   }
 
   // What stands in for the hits while there are none: the spinner of the
@@ -1324,7 +1413,13 @@ function SearchResultsState({
   );
 
   return (
+    <View style={styles.libraryBody} collapsable={false}>
     <FlatList
+      ref={listRef}
+      scrollEventThrottle={32}
+      onScroll={(event) => setShowTop(event.nativeEvent.contentOffset.y > event.nativeEvent.layoutMeasurement.height)}
+      onEndReached={() => { if (!isPending && hasMore) onLoadMore(); }}
+      onEndReachedThreshold={0.5}
       testID="search-results-list"
       data={isPending ? [] : results}
       keyExtractor={(item) => item.media_item_id}
@@ -1359,11 +1454,47 @@ function SearchResultsState({
       }
       ListEmptyComponent={resultsPlaceholder}
       ListFooterComponent={
-        !isPending && !error && results.length > 0 ? (
+        !isPending && error ? (
+          <InlineErrorCard message={error} onRetry={onRetrySearch}
+            retryAccessibilityLabel={t("search.retrySearchA11y")} />
+        ) : !isPending && pageError ? (
+          <InlineErrorCard message={pageError} onRetry={onRetryPage}
+            retryAccessibilityLabel={t("search.retrySearchA11y")} />
+        ) : !isPending && loadingMore ? (
+          <View style={styles.sectionLoadingRow}><ActivityIndicator color={Colors.primary} /></View>
+        ) : !isPending && !error && !hasMore && results.length > 0 ? (
           <Text style={styles.endOfResults}>{t("search.endOfResults")}</Text>
         ) : null
       }
     />
+    <BackToTopButton visible={showTop && !isPending} testID="search-back-to-top"
+      onPress={(animated) => listRef.current?.scrollToOffset({ offset: 0, animated })} />
+    </View>
+  );
+}
+
+function BackToTopButton({ visible, onPress, testID }: {
+  visible: boolean; onPress: (animated: boolean) => void; testID: string;
+}) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+  const [keyboardOpen, setKeyboardOpen] = useState(() => Keyboard.isVisible());
+  const [reduceMotion, setReduceMotion] = useState(true);
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (active) setReduceMotion(value); });
+    const motion = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+    return () => { active = false; motion.remove(); show.remove(); hide.remove(); };
+  }, []);
+  if (!visible || keyboardOpen) return null;
+  return (
+    <Pressable style={({ pressed }) => [styles.jumpTop, pressed && styles.jumpTopPressed]}
+      accessibilityRole="button" accessibilityLabel={t("search.backToTop")} testID={testID}
+      onPress={() => onPress(!reduceMotion)}>
+      <Ionicons name="arrow-up" size={24} color={Colors.onPrimary} />
+    </Pressable>
   );
 }
 
@@ -1732,24 +1863,6 @@ function NoResultsState({ query }: { query: string }) {
       />
       <Text style={styles.emptyTitle}>{t("search.noResultsTitle")}</Text>
       <Text style={styles.emptyHint}>{t("search.noMatches", { query })}</Text>
-    </View>
-  );
-}
-
-function ErrorState({ message }: { message: string }) {
-  const Colors = useThemeColors();
-  const styles = useThemedStyles(makeStyles);
-
-  return (
-    <View style={styles.emptyContainer}>
-      <Ionicons
-        name="alert-circle-outline"
-        size={48}
-        color={Colors.error}
-        style={styles.emptyIcon}
-      />
-      <Text style={styles.emptyTitle}>{t("common.somethingWentWrong")}</Text>
-      <Text style={styles.emptyHint}>{message}</Text>
     </View>
   );
 }

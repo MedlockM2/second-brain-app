@@ -513,8 +513,6 @@ export default function FolderDetailScreen() {
         }
       />
 
-      {folderId ? <SourceActions folder={{ id: folderId, path: title }} /> : null}
-
       <View style={styles.tabsContainer}>
         <ScreenTabs
           tabs={FOLDER_TABS}
@@ -560,6 +558,7 @@ export default function FolderDetailScreen() {
           </Pressable>
         </View>
       ) : activeTab === "sources" ? (
+        <View style={styles.sourcesBody} collapsable={false}>
         <FlatList
           data={rows}
           keyExtractor={rowKey}
@@ -581,6 +580,8 @@ export default function FolderDetailScreen() {
           ListEmptyComponent={<EmptyState />}
           testID="folder-sources-list"
         />
+        {folderId ? <SourceActions folder={{ id: folderId, path: title }} bottomOffset={0} /> : null}
+        </View>
       ) : (
         <AiTab folderId={folderId} scopeMediaIds={scopeMediaIds} />
       )}
@@ -911,10 +912,13 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     chatSources: {
       paddingHorizontal: Spacing.lg - Spacing.md,
     },
+    sourcesBody: { flex: 1 },
     listContent: {
       paddingHorizontal: Spacing.lg - Spacing.md,
       paddingTop: Spacing.sm,
-      paddingBottom: Spacing.xxl,
+      // The overlay sits above the chat dock; the SafeAreaView owns the bottom
+      // inset. Leave enough scroll room to reveal the last card above it.
+      paddingBottom: TouchTarget.large + Spacing.sm * 2 + Spacing.md,
     },
     // A group caption of the Sources list. The uppercase muted caption stays
     // confined to it — the AI tab's headings are section openers and use

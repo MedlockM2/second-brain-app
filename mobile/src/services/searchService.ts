@@ -67,6 +67,7 @@ export interface SearchTranscriptsResponse {
   found: number;
   page: number;
   per_page: number;
+  has_more: boolean;
   hits: SearchHit[];
 }
 

@@ -318,7 +318,7 @@ export default function InboxScreen() {
 
       {/* box-none: the row now spans the full width, so without this it would
           swallow taps on the content sitting behind it. */}
-      <SourceActions floating />
+      <SourceActions />
     </SafeAreaView>
   );
 }
