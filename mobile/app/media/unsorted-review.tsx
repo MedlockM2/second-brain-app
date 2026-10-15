@@ -3,36 +3,33 @@ import { resourceKeys } from "../../src/services/resourceCache";
 /**
  * Unsorted review — the triage pass over the default folder.
  *
- * One media per page, oldest first, with three ways out: throw it away, open it
- * to have a proper look, or file it. Swipe left and right to move through the
- * queue the way an image carousel works. What this screen is fighting is the
- * default folder filling up at every ingestion with nothing ever pushing the
- * user to empty it.
+ * One media at a time, oldest first, with three ways out: throw it away, open it
+ * to have a proper look, or file it. What this screen is fighting is the default
+ * folder filling up at every ingestion with nothing ever pushing the user to
+ * empty it.
  *
- * The pager is a `ScrollView horizontal pagingEnabled` from the core, one page per
- * screen width, active index derived from the scroll offset — the shape the
- * Digest carousel (`app/(tabs)/digest/[period].tsx`) uses too. No gesture or
- * animation library is involved, and none is wanted: paging is a native
- * behaviour of the scroll view.
+ * Moving through the queue works the way stories do: a tap on the left third of
+ * the card goes back one, a tap anywhere else goes forward. Only the current card
+ * is mounted — there is no horizontal pager, so nothing can be left parked
+ * between two pages, and a removal is a state change and nothing more. Screen
+ * readers get the same two moves as the card's increment and decrement actions.
  *
- * Two things about this screen are unusual enough to be spelled out where they
- * happen: the queue is frozen at mount (see `load`), and every mutation of it
- * re-anchors the pager by hand (see `commitQueue`).
+ * One thing about this screen is unusual enough to be spelled out where it
+ * happens: the queue is frozen at mount (see `load`).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
+  type AccessibilityActionEvent,
+  type GestureResponderEvent,
   type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from "react-native";
 import { Image } from "expo-image";
 import {
@@ -53,14 +50,17 @@ import {
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
 import { t, useTranslation } from "../../src/i18n";
-import { COVER_HEIGHT, COVER_WIDTH } from "../../src/components/MediaListCard";
 import { Bullets } from "../../src/components/Bullets";
-import { PaginationDots } from "../../src/components/PaginationDots";
 import { ResourceRefreshNotice } from "../../src/components/ResourceRefreshNotice";
 import { FolderSaveSheet } from "../../src/components/FolderSaveSheet";
 import { buildFolderTree } from "../../src/lib/folderTree";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
-import { getMediaTypeIcon } from "../../src/lib/mediaTypeDisplay";
+import {
+  getMediaTypeBadgeTones,
+  getMediaTypeIcon,
+  getMediaTypeLabel,
+} from "../../src/lib/mediaTypeDisplay";
+import { getRelativeTime } from "../../src/lib/relativeTime";
 import { resolveMediaTitle } from "../../src/lib/mediaTitle";
 import { MediaService } from "../../src/services/mediaService";
 import { OrganizationService } from "../../src/services/organizationService";
@@ -70,8 +70,6 @@ import type {
   MediaType,
 } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 /**
  * How deep a single triage pass goes. The list endpoint caps a page at 100 and
@@ -87,12 +85,41 @@ const QUEUE_LIMIT = 100;
  */
 const MAX_BULLET_LINES = 3;
 
+/**
+ * The longest queue the progress bar draws one segment per card for. Past it a
+ * segment would be a few points wide — 100 cards on a 350 pt bar is 0.5 pt each,
+ * with the gaps eating the rest — so the bar turns continuous instead.
+ */
+const MAX_PROGRESS_SEGMENTS = 20;
+
+/** Side of the square cover on the card. */
+const CARD_COVER_SIZE = 104;
+
+/**
+ * Height of one drawn edge of the cards below, and how many at most. They say
+ * "there are more after this one", so a card with one left behind it shows one
+ * edge and the last card shows none.
+ */
+const STACK_EDGE_HEIGHT = 10;
+const MAX_STACK_EDGES = 2;
+
+/**
+ * The share of the screen width, from the left edge, that a tap reads as "back".
+ * A third, as in stories: going forward is what a triage pass mostly does, so it
+ * gets the larger target.
+ */
+const BACK_TAP_ZONE = 1 / 3;
+
+/** Card padding: 20 pt, a step above the 16 pt the vignettes use. */
+const CARD_PADDING = Spacing.md + Spacing.xs;
+
 export default function UnsortedReviewScreen(): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   // Copy resolved on render: the screen redraws with the interface language.
   useTranslation();
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
 
   /**
    * Safe area applied by hand, with the launch metrics as a floor.
@@ -136,7 +163,6 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
 
-  const pagerRef = useRef<ScrollView>(null);
   const isMountedRef = useRef(true);
 
   /**
@@ -151,31 +177,12 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    */
   const itemsRef = useRef<MediaListItem[]>(initialQueue.items ?? []);
 
-  /**
-   * Replace the queue and put the pager back on a page boundary.
-   *
-   * This second half is not optional. The content width of a paging `ScrollView`
-   * is the number of pages times the screen width; removing one shrinks it while
-   * React Native keeps the `contentOffset` it had, which leaves the pager parked
-   * between two pages with a slice of each visible. So every mutation ends with an
-   * explicit, *non-animated* `scrollTo` on the index that is now current —
-   * non-animated because the following card slid into the vacated slot on its own,
-   * and animating a jump the layout already made would be a second motion for one
-   * event. `requestAnimationFrame` puts it after the frame the new list is laid out
-   * in; called straight after `setItems` it would still be measuring the old
-   * content.
-   */
+  /** Replace the queue and say which card of it is now on screen. */
   const commitQueue = useCallback(
     (next: MediaListItem[], nextIndex: number) => {
       itemsRef.current = next;
       setItems(next);
       setActiveIndex(nextIndex);
-      requestAnimationFrame(() => {
-        pagerRef.current?.scrollTo({
-          x: nextIndex * SCREEN_WIDTH,
-          animated: false,
-        });
-      });
     },
     [],
   );
@@ -219,7 +226,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    * refetches in a `useFocusEffect` so several devices stay in step. Here the
    * user comes back from Deepen with a finger already on the card: a refetch
    * would reshuffle the queue and renumber every index under it, and the next
-   * swipe would land somewhere else. The queue this screen shows is the queue it
+   * tap would land somewhere else. The queue this screen shows is the queue it
    * opened with; what the server has meanwhile is next pass's business.
    *
    * Deferred by a tick — a `setState` reached synchronously from an effect
@@ -242,15 +249,36 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     router.replace("/(tabs)/inbox");
   }, [router]);
 
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offsetX = event.nativeEvent.contentOffset.x;
-      const index = Math.round(offsetX / SCREEN_WIDTH);
-      // Clamped: a bounce past the last page, or a scroll event arriving in the
-      // same frame as a removal, must not point past the queue.
-      setActiveIndex(Math.max(0, Math.min(index, items.length - 1)));
+  /**
+   * Move one card back or forward, clamped to the queue: a tap past either end
+   * stays where it is rather than wrapping round, since the first card is the
+   * oldest and the last is the newest and nothing lies beyond either.
+   */
+  const step = useCallback((delta: number) => {
+    setActiveIndex((index) =>
+      Math.max(0, Math.min(index + delta, itemsRef.current.length - 1)),
+    );
+  }, []);
+
+  /**
+   * The stories tap. Read from `pageX`, the position on the screen, and not from
+   * `locationX`, which is relative to whichever child of the card the finger
+   * landed on — the cover, a bullet — and would put the zone in a different
+   * place on every element.
+   */
+  const handleCardPress = useCallback(
+    (event: GestureResponderEvent) => {
+      step(event.nativeEvent.pageX < windowWidth * BACK_TAP_ZONE ? -1 : 1);
     },
-    [items.length],
+    [step, windowWidth],
+  );
+
+  const handleCardAccessibilityAction = useCallback(
+    (event: AccessibilityActionEvent) => {
+      if (event.nativeEvent.actionName === "increment") step(1);
+      if (event.nativeEvent.actionName === "decrement") step(-1);
+    },
+    [step],
   );
 
   /**
@@ -281,12 +309,12 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   );
 
   /**
-   * Put a media back where it was and bring the pager to it.
+   * Put a media back where it was and bring it back on screen.
    *
    * The undo half of an optimistic discard. The index is the one the card held
    * when it left, clamped to what the queue has become — the user may have
    * discarded or filed other cards while the failing request was in flight — and
-   * the pager lands on it so the error message and the card it is about are the
+   * the screen shows it so the error message and the card it is about are the
    * same thing on screen.
    */
   const restoreAt = useCallback(
@@ -326,7 +354,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    * So the queue advances first and the request follows. A discard is a good fit
    * for that: the media is the user's, the endpoint is idempotent enough for a
    * queue this screen will not reload anyway, and the failure path has somewhere
-   * to put the card back — `restoreAt`, which re-anchors the pager on it under the
+   * to put the card back — `restoreAt`, which brings it back on screen under the
    * alert that says the deletion did not go through. Nothing is lost by being
    * optimistic; a triage pass stopping dead on every item is.
    */
@@ -425,27 +453,25 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
           <Ionicons name="close" size={22} color={Colors.textMain} />
         </Pressable>
 
-        <View style={styles.headerTextSection}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {t("unsortedReview.title")}
-          </Text>
-          {/* The dots cap at seven and therefore cannot state where in the queue
-              the user is. This is where that information lives, for the eye and
-              for a screen reader alike. */}
-          {items.length > 0 ? (
-            <Text
-              style={styles.headerPosition}
-              accessibilityLabel={positionA11yLabel}
-              numberOfLines={1}
-            >
-              {positionLabel}
-            </Text>
-          ) : null}
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {t("unsortedReview.title")}
+        </Text>
 
-        {/* Balances the close button so the title block stays where it is. */}
-        <View style={styles.headerSpacer} />
+        {/* The one place the position is written out, for the eye and for a
+            screen reader alike: the bar below draws it, it does not state it.
+            The width matches the close button's, so the title stays centred. */}
+        <Text
+          style={styles.headerPosition}
+          accessibilityLabel={positionA11yLabel}
+          numberOfLines={1}
+        >
+          {items.length > 0 ? positionLabel : ""}
+        </Text>
       </View>
+
+      {items.length > 0 ? (
+        <QueueProgress count={items.length} activeIndex={activeIndex} />
+      ) : null}
 
       {error && queueReady ? (
         <ResourceRefreshNotice message={error} onRetry={() => void load()} />
@@ -504,108 +530,114 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
         </View>
       ) : (
         <>
-          <ScrollView
-            ref={pagerRef}
-            style={styles.pager}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            decelerationRate="fast"
-          >
-            {items.map((item) => (
-              <ReviewCard key={item.media_item_id} item={item} />
-            ))}
-          </ScrollView>
+          {current ? (
+            <Pressable
+              style={styles.stage}
+              onPress={handleCardPress}
+              testID="unsorted-review-card"
+              accessibilityRole="adjustable"
+              accessibilityLabel={currentTitle}
+              accessibilityValue={{ text: positionA11yLabel }}
+              accessibilityActions={[
+                { name: "increment" },
+                { name: "decrement" },
+              ]}
+              onAccessibilityAction={handleCardAccessibilityAction}
+            >
+              {/* Keyed on the media, so each card starts its own bullet fit
+                  and its own cover state instead of inheriting the last one's. */}
+              <ReviewCard
+                key={current.media_item_id}
+                item={current}
+                cardsBehind={items.length - 1 - activeIndex}
+              />
+            </Pressable>
+          ) : null}
 
-          <View style={styles.footer}>
-            <PaginationDots
-              count={items.length}
-              activeIndex={activeIndex}
-              testID="unsorted-review-dots"
-            />
+          {/* Deepen is centred on the *screen*, whatever the widths of the two
+              controls beside it, which is why it sits between two `flex: 1`
+              gutters instead of in a `space-between` row — that would only
+              spread the three, putting Deepen off centre as soon as Discard
+              and Save differ in width.
 
-            {/* Deepen is centred on the *screen*, whatever the widths of the two
-                controls beside it, which is why it sits between two `flex: 1`
-                gutters instead of in a `space-between` row — that would only
-                spread the three, putting Deepen off centre as soon as Discard
-                and Save differ in width. */}
-            <View style={styles.actionBar}>
-              <View style={styles.gutterStart}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.plainAction,
-                    pressed && styles.plainActionPressed,
-                  ]}
-                  onPress={handleDiscard}
-                  testID="unsorted-review-discard"
-                  accessibilityLabel={t("unsortedReview.discardA11y", {
-                    title: currentTitle,
-                  })}
-                  accessibilityRole="button"
-                >
-                  {/* The error tint is the only warning there is: the deletion
-                      leaves on this tap with no dialog behind it. */}
-                  <Ionicons name="close" size={26} color={Colors.error} />
-                  <Text
-                    style={[styles.plainActionLabel, styles.discardLabel]}
-                    numberOfLines={1}
-                  >
-                    {t("unsortedReview.discard")}
-                  </Text>
-                </Pressable>
-              </View>
-
+              Size and fill carry the hierarchy, from the action that loses
+              something to the one the screen exists for: a tonal red disc, a
+              neutral one, then a larger amber one. */}
+          <View style={styles.actionBar}>
+            <View style={styles.gutterStart}>
               <Pressable
                 style={({ pressed }) => [
-                  styles.plainAction,
-                  pressed && styles.plainActionPressed,
+                  styles.action,
+                  pressed && styles.actionPressed,
                 ]}
-                onPress={handleDeepen}
-                testID="unsorted-review-deepen"
-                accessibilityLabel={t("unsortedReview.deepenA11y", {
+                onPress={handleDiscard}
+                testID="unsorted-review-discard"
+                accessibilityLabel={t("unsortedReview.discardA11y", {
                   title: currentTitle,
                 })}
                 accessibilityRole="button"
               >
-                <Ionicons
-                  name="book-outline"
-                  size={26}
-                  color={Colors.textMain}
-                />
-                <Text style={styles.plainActionLabel} numberOfLines={1}>
-                  {t("unsortedReview.deepen")}
+                {/* A bin, not the cross: the cross is the close button's, and
+                    this one deletes on the tap with no dialog behind it. */}
+                <View style={[styles.actionDisc, styles.discardDisc]}>
+                  <Ionicons name="trash-outline" size={24} color={Colors.error} />
+                </View>
+                <Text
+                  style={[styles.actionLabel, styles.discardLabel]}
+                  numberOfLines={1}
+                >
+                  {t("unsortedReview.discard")}
                 </Text>
               </Pressable>
+            </View>
 
-              <View style={styles.gutterEnd}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.plainAction,
-                    pressed && styles.plainActionPressed,
-                  ]}
-                  onPress={handleSavePress}
-                  testID="unsorted-review-save"
-                  accessibilityLabel={t("unsortedReview.saveA11y", {
-                    title: currentTitle,
-                  })}
-                  accessibilityRole="button"
-                >
-                  {/* The brand amber, carried by the glyph alone: the three
-                      actions share one shape, and this is the one the screen
-                      exists for. The label stays `textMain` — amber on the
-                      background is nowhere near readable at 13px. */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.action,
+                pressed && styles.actionPressed,
+              ]}
+              onPress={handleDeepen}
+              testID="unsorted-review-deepen"
+              accessibilityLabel={t("unsortedReview.deepenA11y", {
+                title: currentTitle,
+              })}
+              accessibilityRole="button"
+            >
+              <View style={[styles.actionDisc, styles.deepenDisc]}>
+                <Ionicons name="book-outline" size={24} color={Colors.textMain} />
+              </View>
+              <Text style={styles.actionLabel} numberOfLines={1}>
+                {t("unsortedReview.deepen")}
+              </Text>
+            </Pressable>
+
+            <View style={styles.gutterEnd}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.action,
+                  pressed && styles.actionPressed,
+                ]}
+                onPress={handleSavePress}
+                testID="unsorted-review-save"
+                accessibilityLabel={t("unsortedReview.saveA11y", {
+                  title: currentTitle,
+                })}
+                accessibilityRole="button"
+              >
+                <View style={styles.saveDisc}>
                   <Ionicons
                     name="folder-open"
                     size={26}
-                    color={Colors.primary}
+                    color={Colors.onPrimary}
                   />
-                  <Text style={styles.plainActionLabel} numberOfLines={1}>
-                    {t("unsortedReview.save")}
-                  </Text>
-                </Pressable>
-              </View>
+                </View>
+                <Text
+                  style={[styles.actionLabel, styles.saveLabel]}
+                  numberOfLines={1}
+                >
+                  {t("unsortedReview.save")}
+                </Text>
+              </Pressable>
             </View>
           </View>
         </>
@@ -626,53 +658,105 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
 // --- Sub-components ---
 
 /**
- * One page of the pager: the cover small and top-left, the title beside it, the
- * creator under the title, then the triage card below the whole block.
+ * Where the user is in the queue, drawn under the header the way a stories
+ * viewer draws it: one segment per card, the ones behind in ink, the current one
+ * in amber, the ones ahead on the tonal track.
  *
- * The card never scrolls. Its first shape wrapped a prose paragraph in a nested
- * vertical `ScrollView`, which failed at the one job of this screen: a summary you
- * have to scroll is not a summary you can decide on, and the nested scroller stole
- * swipes meant for the pager. The blurb is now a hook and a few bullets, and the
- * card gives each bullet as many lines as it can actually spare, so it fits
- * whatever the model wrote and the action bar stays put.
+ * Only the queue as it is now. A card that is discarded or filed leaves the
+ * queue (`removeById`) and takes its segment with it, so the bar and the
+ * "3 / 12" beside the title always count the same thing.
  *
- * That last part is measured, not assumed, and it took a TestFlight report to get
- * there. A fixed `numberOfLines={3}` is not a fit: three lines a bullet is what the
- * prompt's lengths need on a 390 pt-wide screen, where the blurb box has room for
- * about twelve. Narrow the screen — an iPhone 13 in Display Zoom is 320 pt — and
- * the same 65-character bullet wraps onto three lines while the box loses height,
- * so a three-line hook and four bullets want ~327 pt of a 295 pt box. Nothing
- * clamped them: both the card and the box were `flex: 1`, so the box stood at the
- * page's height whatever it held, and `flexShrink` is 0 by default in React
- * Native, so the list ran past the padding and the last line came to rest on the
- * frame with its descenders outside it — "collé à l'encadrement sans espacement",
- * in the tester's words.
+ * Past `MAX_PROGRESS_SEGMENTS` the segments would be too thin to see, so the bar
+ * becomes one continuous track filled up to the current card. Purely visual:
+ * the count in the header is what a screen reader hears.
+ */
+function QueueProgress({
+  count,
+  activeIndex,
+}: {
+  count: number;
+  activeIndex: number;
+}): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+
+  if (count > MAX_PROGRESS_SEGMENTS) {
+    return (
+      <View
+        style={styles.progress}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${((activeIndex + 1) / count) * 100}%` },
+            ]}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[styles.progress, styles.progressSegments]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.progressSegment,
+            i < activeIndex && styles.progressSegmentPast,
+            i === activeIndex && styles.progressSegmentCurrent,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * The card on screen: centred on the stage, resting on the
+ * edges of the cards still behind it.
  *
- * Those two `flex: 1` are gone now — see `styles.card` — because they were the
- * other half of that same mistake. A box the screen sizes is too small on a 320 pt
- * phone and far too large on an 896 pt one, where it drew a frame around a third
- * of a screen of nothing. The two surfaces hug their content and give ground only
- * when the page runs out of room, and `fitBullets` budgets from the page rather
- * than from a box whose height is now its own content. The arithmetic it compares
- * against is the one it always used, so the narrow screen lands on the same cap it
- * landed on before; the tall one finds a room the text fits in and leaves it alone.
+ * The card holds the cover (a square, top-left), then beside it the same lines
+ * as the Search and Library vignette — the type pill in its colour and the age,
+ * the title, the creator — then a rule, the hook and the bullets. One surface:
+ * the grey box the summary used to sit in is gone, and with it 32 pt of padding
+ * the text column paid for on every line.
  *
- * So `fitBullets` lowers the per-bullet cap by one and lets the layout re-measure,
- * until the list fits the room the box has left with its bottom padding intact.
- * The text that no longer fits is paid for with an ellipsis, spread evenly over the
- * bullets rather than taken out of any one of them. Two alternatives are worse for
- * a triage pass: dropping the bullets that do not fit loses whole topics where
- * clipping only loses the tail of a fragment whose head still names one
- * ("Limites : …"), and tightening the type or the line height would write a
- * per-screen exception into a design system that fixes body text at 16/1.6. A
- * second scroll axis inside the pager is not on the table at all — see above.
+ * Sized by its content and centred, not stretched. A content-sized card on a
+ * tall phone used to leave a third of a screen of background between it and the
+ * actions; centred, the same room is air around an object, above and below, and
+ * the edges under it say that the queue goes on.
+ *
+ * The card never scrolls. A summary you have to scroll is not a summary you can
+ * decide on, and a nested vertical scroller would fight the taps that move
+ * through the queue. So `fitBullets` gives each bullet as many lines as the page can
+ * actually spare, measured, not assumed: a fixed three lines a bullet is what the
+ * prompt's lengths need on a 390 pt screen, and a 320 pt one (an iPhone 13 in
+ * Display Zoom) wraps the same text onto more lines in less height. It lowers the
+ * per-bullet cap by one and lets the layout re-measure until the list fits, so
+ * the text that does not fit is paid for with an ellipsis spread over the
+ * bullets rather than taken out of one of them — dropping bullets loses whole
+ * topics, and tightening the type writes a per-screen exception into a design
+ * system that fixes body text at 16/1.6.
  *
  * The caps stay a backstop and not a layout mechanism: the prompt asks for lengths
  * the card can render, so an ellipsis on a roomy screen still means the model
  * overran. Raising `MAX_BULLET_LINES` instead of shortening the text is the wrong
  * fix — a clipped bullet carries less than a shorter one.
  */
-function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
+function ReviewCard({
+  item,
+  cardsBehind,
+}: {
+  item: MediaListItem;
+  cardsBehind: number;
+}): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   // Kept per card rather than per screen: a cover that failed on one media says
@@ -680,6 +764,8 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
   const [coverFailed, setCoverFailed] = useState(false);
 
   const [bulletLines, setBulletLines] = useState(MAX_BULLET_LINES);
+
+  const edges = Math.min(MAX_STACK_EDGES, Math.max(0, cardsBehind));
 
   /**
    * The measurements `fitBullets` works from, in refs and not in state.
@@ -691,7 +777,7 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
    * layout event is exactly where a layout-driven `setState` belongs.
    */
   /**
-   * The page, which the pager stretches to its own height: the one height on this
+   * The page, which the stage stretches to its own height: the one height on this
    * card that no amount of text can move, and therefore the one to budget from.
    */
   const pageHeight = useRef<number | null>(null);
@@ -729,28 +815,22 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
 
     /**
      * What the page has left for the bullets, spelled out rather than measured off
-     * the blurb box.
-     *
-     * The box used to report it: it was `flex: 1`, so its height was the room and
-     * nothing else. It is content-sized now (see `styles.card`), which means its
-     * height *is* its padding plus the hook plus the list — comparing the list
-     * against it would be comparing the list against itself, and a shrink would
-     * take the box down with it and read as an overrun all over again, one line at
-     * a time to the floor. The page cannot do that: the pager fixes its height,
-     * and the header block above the box does not care how many lines a bullet
-     * gets. What is left of it after the paddings, the card's gap, the hook and the
-     * box's gap is a budget the list either fits or does not — the same number the
-     * box reported when it was the one being stretched.
+     * the card: the card is content-sized, so its height *is* the list plus the
+     * rest, and comparing the list against it would compare the list against
+     * itself. The page cannot do that — the stage fixes its height — and neither
+     * the header block nor the stack edges care how many lines a bullet gets.
      */
     const room =
       page -
       2 * Spacing.sm - // the page's padding
-      2 * Spacing.md - // the card's padding
+      edges * STACK_EDGE_HEIGHT - // the cards behind
+      2 * CARD_PADDING -
       header -
-      Spacing.md - // the header block, and the card's gap under it
-      2 * Spacing.md - // the box's padding
+      Spacing.md - // the card's gap under the header
+      StyleSheet.hairlineWidth - // the rule
+      Spacing.md - // the card's gap under the rule
       hook -
-      Spacing.sm; // the hook, and the box's gap under it
+      Spacing.md; // the card's gap under the hook
 
     if (fittedRoom.current !== null && room > fittedRoom.current + 1) {
       fittedRoom.current = room;
@@ -760,7 +840,7 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
     fittedRoom.current = room;
 
     if (list > room) setBulletLines((prev) => Math.max(1, prev - 1));
-  }, []);
+  }, [edges]);
 
   const handlePageLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -797,6 +877,7 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
   const mediaType = (item.media_type ?? "unknown") as MediaType;
   const coverUrl = item.media_image?.trim() ?? "";
   const showCover = coverUrl.length > 0 && !coverFailed;
+  const badge = getMediaTypeBadgeTones(mediaType, Colors);
 
   const creator = item.creator_name?.trim() ?? "";
   // Same subtitle policy as `MediaListCard`: five sources can never have a
@@ -818,49 +899,63 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
 
   return (
     <View style={styles.page} onLayout={handlePageLayout}>
-      <View style={styles.card}>
-        <View style={styles.cardHeader} onLayout={handleHeaderLayout}>
-          <View style={styles.coverContainer}>
-            {showCover ? (
-              <Image
-                source={{
-                  uri: coverUrl,
-                  // The signature of a re-hosted cover rotates; keying the cache
-                  // on the item and its last change is what stops a re-download
-                  // on every read (task-302 §6.2).
-                  cacheKey: `${item.media_item_id}:${item.updated_at}`,
-                }}
-                recyclingKey={item.media_item_id}
-                cachePolicy="memory-disk"
-                contentFit="cover"
-                transition={150}
-                priority="low"
-                style={styles.cover}
-                onError={() => setCoverFailed(true)}
-                accessible={false}
-              />
-            ) : (
-              <Ionicons
-                name={getMediaTypeIcon(mediaType)}
-                size={28}
-                color={Colors.textMuted}
-              />
-            )}
-          </View>
+      <View style={styles.deck}>
+        <View style={styles.card}>
+          <View style={styles.cardHeader} onLayout={handleHeaderLayout}>
+            <View style={styles.coverContainer}>
+              {showCover ? (
+                <Image
+                  source={{
+                    uri: coverUrl,
+                    // The signature of a re-hosted cover rotates; keying the cache
+                    // on the item and its last change is what stops a re-download
+                    // on every read (task-302 §6.2).
+                    cacheKey: `${item.media_item_id}:${item.updated_at}`,
+                  }}
+                  recyclingKey={item.media_item_id}
+                  cachePolicy="memory-disk"
+                  contentFit="cover"
+                  transition={150}
+                  priority="low"
+                  style={styles.cover}
+                  onError={() => setCoverFailed(true)}
+                  accessible={false}
+                />
+              ) : (
+                <Ionicons
+                  name={getMediaTypeIcon(mediaType)}
+                  size={32}
+                  color={Colors.textMuted}
+                />
+              )}
+            </View>
 
-          <View style={styles.cardHeading}>
-            <Text style={styles.cardTitle} numberOfLines={3}>
-              {resolveMediaTitle(item)}
-            </Text>
-            {subtitle ? (
-              <Text style={styles.cardCreator} numberOfLines={1}>
-                {subtitle}
+            <View style={styles.cardHeading}>
+              {/* The vignette's own meta row, so a media wears the same pill
+                  here as in Search and Library. */}
+              <View style={styles.cardMeta}>
+                <View style={[styles.typeBadge, { backgroundColor: badge.fill }]}>
+                  <Text style={[styles.typeBadgeText, { color: badge.ink }]}>
+                    {getMediaTypeLabel(mediaType)}
+                  </Text>
+                </View>
+                <Text style={styles.cardAge} numberOfLines={1}>
+                  {getRelativeTime(item.created_at)}
+                </Text>
+              </View>
+              <Text style={styles.cardTitle} numberOfLines={3}>
+                {resolveMediaTitle(item)}
               </Text>
-            ) : null}
+              {subtitle ? (
+                <Text style={styles.cardCreator} numberOfLines={1}>
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
 
-        <View style={styles.blurbCard}>
+          <View style={styles.rule} />
+
           {hook ? (
             <>
               <Text
@@ -890,6 +985,9 @@ function ReviewCard({ item }: { item: MediaListItem }): React.JSX.Element {
             </Text>
           )}
         </View>
+
+        {edges >= 1 ? <View style={[styles.stackEdge, styles.stackEdgeNear]} /> : null}
+        {edges >= 2 ? <View style={[styles.stackEdge, styles.stackEdgeFar]} /> : null}
       </View>
     </View>
   );
@@ -926,23 +1024,56 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     closeButtonPressed: {
       opacity: 0.7,
     },
-    headerTextSection: {
-      flex: 1,
-      alignItems: "center",
-    },
+    // 16/700 rather than the 20 pt headline: in French the 20 pt title ran past
+    // the room two 48 pt controls leave it on a 375 pt phone, and the card below
+    // has a title of its own that should not compete with the screen's.
     headerTitle: {
-      fontSize: Typography.headline.fontSize,
-      fontWeight: Typography.headline.fontWeight,
+      flex: 1,
+      textAlign: "center",
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
       color: Colors.textMain,
     },
     headerPosition: {
-      fontSize: Typography.small.fontSize,
-      color: Colors.textSubtle,
-      marginTop: 2,
-    },
-    headerSpacer: {
       width: TouchTarget.minimum,
-      height: TouchTarget.minimum,
+      textAlign: "right",
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.textSubtle,
+      fontVariant: ["tabular-nums"],
+    },
+
+    // Progress
+    progress: {
+      paddingHorizontal: Spacing.md,
+      paddingBottom: Spacing.xs,
+    },
+    progressSegments: {
+      flexDirection: "row",
+      gap: 3,
+    },
+    progressSegment: {
+      flex: 1,
+      height: 3,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    progressSegmentPast: {
+      backgroundColor: Colors.textMain,
+    },
+    progressSegmentCurrent: {
+      backgroundColor: Colors.primary,
+    },
+    progressTrack: {
+      height: 3,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.surfaceContainerHigh,
+      overflow: "hidden",
+    },
+    progressFill: {
+      height: "100%",
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.textMain,
     },
 
     // Loading / error / completion
@@ -984,49 +1115,45 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       color: Colors.onPrimary,
     },
 
-    // Pager
-    pager: {
+    // Stage: the tap target between the header and the actions.
+    stage: {
       flex: 1,
     },
+    // Centres the deck on the page's height, which the stage fixes: the card is
+    // content-sized, so whatever room it does not use is shared above and below.
     page: {
-      width: SCREEN_WIDTH,
+      flex: 1,
       paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm,
+      justifyContent: "center",
     },
-    /**
-     * Sized by what it holds, not by the screen it is on — `flexShrink` and not
-     * `flex: 1`.
-     *
-     * With `flex: 1` the card took the whole page whatever was in it, and since the
-     * blurb box did the same inside it, a two-line hook and three bullets were
-     * framed by a box five hundred points tall. On the 896 pt iPhone that came to
-     * some 280 pt of empty grey under the last bullet — a third of the screen,
-     * reported as "un gros espace vide en dessous". Emptiness inside a drawn frame
-     * reads as missing content; the same emptiness as background reads as air.
-     *
-     * `flexShrink: 1` keeps the other half of the deal. The page's height is fixed
-     * (the pager stretches it), so a card whose content overruns it gives ground
-     * instead of spilling past the pager and getting clipped — which is what hands
-     * `blurbCard` the bounded box `fitBullets` measures against.
-     */
+    // Gives ground with the card when the content overruns the page, instead of
+    // spilling past the stage and getting clipped — which is what hands the card
+    // the bounded height `fitBullets` budgets against.
+    deck: {
+      flexShrink: 1,
+    },
     card: {
       flexShrink: 1,
       backgroundColor: Colors.surface,
       borderRadius: BorderRadius.xl,
-      padding: Spacing.md,
+      padding: CARD_PADDING,
       gap: Spacing.md,
+      // The floor under `fitBullets`: at one line a bullet it stops shrinking, and
+      // on a page too small even for that the spill is cut by the card's edge.
+      overflow: "hidden",
       ...Shadows.soft,
     },
     cardHeader: {
       flexDirection: "row",
       alignItems: "flex-start",
-      gap: Spacing.md,
+      gap: Spacing.md - 2,
     },
     // The container is both the frame of the cover and the fallback surface, so a
     // card with a picture and one without keep the same silhouette.
     coverContainer: {
-      width: COVER_WIDTH,
-      height: COVER_HEIGHT,
+      width: CARD_COVER_SIZE,
+      height: CARD_COVER_SIZE,
       borderRadius: BorderRadius.lg,
       backgroundColor: Colors.surfaceContainerLow,
       alignItems: "center",
@@ -1039,10 +1166,34 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     },
     cardHeading: {
       flex: 1,
-      gap: Spacing.xs,
+      gap: Spacing.xs + 2,
+    },
+    // Same row, pill and age as `MediaListCard`'s `cardMeta`.
+    cardMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    typeBadge: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.md,
+    },
+    // No `color` here: the ink comes from `getMediaTypeBadgeTones` with the
+    // fill it has to sit on.
+    typeBadgeText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "700",
+      letterSpacing: 0.5,
+    },
+    cardAge: {
+      flexShrink: 1,
+      fontSize: Typography.small.fontSize,
+      color: Colors.textMuted,
     },
     cardTitle: {
-      fontSize: Typography.headline.fontSize,
+      fontSize: 18,
+      lineHeight: 23,
       fontWeight: "700",
       color: Colors.textMain,
     },
@@ -1050,25 +1201,17 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       fontSize: Typography.small.fontSize,
       color: Colors.textSubtle,
     },
-    // Content-sized like the card around it, and shrinking with it: when the card
-    // has given all the ground the page allows, this is the box that takes the
-    // rest, which is the one case `fitBullets` clamps the bullets for.
-    blurbCard: {
-      flexShrink: 1,
-      backgroundColor: Colors.surfaceContainerLow,
-      borderRadius: BorderRadius.lg,
-      padding: Spacing.md,
-      gap: Spacing.sm,
-      // The floor under `fitBullets`: at one line a bullet it stops shrinking, and on
-      // a box too small even for that the spill is cut by the frame instead of being
-      // drawn over the white card behind it.
-      overflow: "hidden",
+    rule: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.outlineVariant,
     },
+    // A step above the bullets, so the two read as headline and detail rather
+    // than as one list at one size.
     blurbHook: {
-      fontSize: Typography.body.fontSize,
+      fontSize: 18,
       fontWeight: "600",
       color: Colors.textMain,
-      lineHeight: Typography.body.lineHeight,
+      lineHeight: 26,
     },
     blurbMissing: {
       fontSize: Typography.body.fontSize,
@@ -1076,17 +1219,31 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       lineHeight: Typography.body.lineHeight,
       fontStyle: "italic",
     },
-
-    // Footer: dots, then the three actions
-    footer: {
-      paddingTop: Spacing.sm,
-      paddingBottom: Spacing.sm,
-      gap: Spacing.sm,
+    // The cards behind: two bare strips of the card's surface, narrower and
+    // fainter the further back, tucked under its bottom edge.
+    stackEdge: {
+      height: STACK_EDGE_HEIGHT,
+      backgroundColor: Colors.surface,
+      borderBottomLeftRadius: BorderRadius.xl,
+      borderBottomRightRadius: BorderRadius.xl,
+      ...Shadows.soft,
     },
+    stackEdgeNear: {
+      marginHorizontal: Spacing.md - 4,
+      opacity: 0.75,
+    },
+    stackEdgeFar: {
+      marginHorizontal: Spacing.lg + 2,
+      opacity: 0.45,
+    },
+
+    // Footer: the three actions
     actionBar: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-end",
       paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.sm,
     },
     gutterStart: {
       flex: 1,
@@ -1096,31 +1253,52 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       flex: 1,
       alignItems: "flex-end",
     },
-    plainAction: {
-      minWidth: TouchTarget.minimum,
-      minHeight: TouchTarget.minimum,
-      paddingHorizontal: Spacing.sm,
+    // The disc and its label are one target, so the hit area is the whole
+    // column and never less than the 72 pt the labels need side by side.
+    action: {
+      minWidth: 72,
       alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.xs,
+      gap: Spacing.xs + 2,
     },
     // Opacity *and* a scale, the same pair every pressable in the app uses, at the
-    // 0.96 the small round controls take. One finger on a 48 pt target covers most
-    // of what dims, so the shrink is the part that is actually seen — and these three
-    // are the only controls on the screen whose whole job is to be tapped in a row.
-    plainActionPressed: {
+    // 0.96 the round controls take. One finger on the disc covers most of what
+    // dims, so the shrink is the part that is actually seen.
+    actionPressed: {
       opacity: 0.6,
       transform: [{ scale: 0.96 }],
     },
-    plainActionLabel: {
-      // Three labels share one row: each one has to give ground rather than wrap
-      // and drag the whole bar out of alignment.
-      flexShrink: 1,
+    actionDisc: {
+      width: TouchTarget.comfortable,
+      height: TouchTarget.comfortable,
+      borderRadius: BorderRadius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    discardDisc: {
+      backgroundColor: Colors.errorContainer,
+    },
+    deepenDisc: {
+      backgroundColor: Colors.surfaceContainerHigh,
+    },
+    // The one the screen exists for: larger, and the only filled one.
+    saveDisc: {
+      width: TouchTarget.large,
+      height: TouchTarget.large,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      ...Shadows.soft,
+    },
+    actionLabel: {
       fontSize: Typography.small.fontSize,
       fontWeight: "600",
       color: Colors.textMain,
     },
     discardLabel: {
       color: Colors.error,
+    },
+    saveLabel: {
+      fontWeight: "700",
     },
   });

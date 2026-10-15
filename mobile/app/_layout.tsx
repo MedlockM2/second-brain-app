@@ -274,13 +274,13 @@ function AppNavigator() {
         {/* Unsorted review — two deliberate departures from every other
             modal in this file.
             `fullScreenModal` rather than `modal`: the iOS card modal
-            insets its content and rounds its corners, which cuts a
-            full-width horizontal pager in half at both ends and makes
-            the page boundaries impossible to feel.
-            `gestureEnabled: false`: this screen's whole business is
-            swiping, and a vertical dismiss gesture layered on top of it
-            turns a slightly-off swipe into an accidental exit mid-triage.
-            The close button in the header is the way out. */}
+            insets its content and rounds its corners, and the stories-style
+            tap zones are measured against the full screen width.
+            `gestureEnabled: false`: this screen's whole business is a run
+            of quick taps across the card, and a vertical dismiss gesture
+            under them turns a finger that drifts on a tap into an
+            accidental exit mid-triage. The close button in the header is
+            the way out. */}
         <Stack.Screen
           name="media/unsorted-review"
           options={{

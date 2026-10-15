@@ -196,6 +196,28 @@ const lightColors = {
    */
   shortVideoContainer: "#d6e4fd",
 
+  /**
+   * The fills of the AUDIO, PHOTOS and ARTICLE badges: three more families on
+   * the recipe `shortVideoContainer` set, so a scrolling list tells them apart
+   * by colour and not only by word.
+   *
+   * Same recipe as the short: `errorContainer`'s lightness and chroma (L\* 90.2,
+   * C\* 14.0), so every tinted pill weighs the same and only the hue moves —
+   * green for audio (142°), sea-green for an article (200°), orchid for a photo
+   * post (325°). Around the circle with the three that existed — red 29°, amber
+   * 85°, the short's blue-grey 271° — no two neighbours are closer than 54°, and
+   * no two pills closer than ΔE 12.8 (photo against short, light mode). A violet
+   * at 305° was tried first and sat at ΔE 7.8 from the short: too close to tell
+   * apart while scrolling.
+   *
+   * All three pair with `textMain`: **10.53:1**, **10.51:1** and **10.49:1**,
+   * the same as the video (10.44) and the short (10.52). The figures are in
+   * `mobile/docs/DARK_THEME_CONTRAST.md`.
+   */
+  audioContainer: "#d4e9d2",
+  imagePostContainer: "#f3dcf2",
+  articleContainer: "#c1ebec",
+
   error: "#ba1a1a",
   onError: "#ffffff",
   errorContainer: "#ffdad6",
@@ -342,6 +364,14 @@ const darkColors: ThemeColors = {
   // slate blue reads as ink in an archive. sRGB could reach past 50 here; the
   // restraint is deliberate, not a gamut limit.
   shortVideoContainer: "#1a4975",
+
+  // Same recipe as the short at night: L* 30.1 and C* 29.8, the dark
+  // `shortVideoContainer`'s, so the four tinted pills weigh the same. The
+  // sea-green is the exception: C* 20, because at this lightness sRGB cannot
+  // reach 29.8 at 200°. `textMain` measures 7.82:1, 7.87:1 and 7.84:1.
+  audioContainer: "#275029",
+  imagePostContainer: "#603962",
+  articleContainer: "#0b4f51",
 
   // `#ba1a1a` measures 1.8:1 on `background` — unreadable, not merely weak — so
   // the error family inverts wholesale: a light red carrying dark text (7.7:1),

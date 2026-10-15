@@ -77,6 +77,9 @@ reproduced here:
 | `onError` `#690005` on `error` `#ffb4ab` | 7.72 ✅ | 6.46 | 4.5:1 |
 | `textMain` on `errorContainer` `#93000a` | 7.89 ✅ | 10.44 | 4.5:1 |
 | `textMain` on `shortVideoContainer` `#1a4975` | 7.86 ✅ | 10.52 | 4.5:1 |
+| `textMain` on `audioContainer` `#275029` | 7.82 ✅ | 10.53 | 4.5:1 |
+| `textMain` on `imagePostContainer` `#603962` | 7.84 ✅ | 10.49 | 4.5:1 |
+| `textMain` on `articleContainer` `#0b4f51` | 7.87 ✅ | 10.51 | 4.5:1 |
 
 The highlight pair inverts polarity between the modes: a pale `#fff0b3` band
 carrying dark text by day, a deep amber block carrying bright text by night.
@@ -126,6 +129,43 @@ which two surfaces are told apart at a glance:
 | `shortVideoContainer` vs `errorContainer` (VIDEO) | 87.0 | 23.6 |
 | `shortVideoContainer` vs `primary` (PODCAST) | 115.3 | 98.6 |
 | `shortVideoContainer` vs `surfaceContainerHigh` (every other type) | 35.9 | 15.2 |
+
+### `audioContainer`, `imagePostContainer`, `articleContainer`: three more families
+
+AUDIO, PHOTOS and ARTICLE used to share the neutral `surfaceContainerHigh` with
+every other type. They each get a fill on the recipe `shortVideoContainer` set —
+`errorContainer`'s weight, a new hue:
+
+| Token | Mode | `L*` | `C*` | `h` |
+| --- | --- | --- | --- | --- |
+| `audioContainer` `#d4e9d2` | light | 90.3 | 14.2 | 141.6° |
+| `audioContainer` `#275029` | dark | 30.2 | 30.2 | 142.0° |
+| `imagePostContainer` `#f3dcf2` | light | 90.2 | 14.1 | 326.1° |
+| `imagePostContainer` `#603962` | dark | 30.1 | 30.0 | 325.1° |
+| `articleContainer` `#c1ebec` | light | 90.2 | 14.2 | 200.6° |
+| `articleContainer` `#0b4f51` | dark | 30.1 | 20.0 | 200.3° |
+
+- **Hues placed in the gaps** of the circle the first three left: red 29°, amber
+  85°, green 142°, sea-green 200°, blue-grey 271°, orchid 325°. No two
+  neighbours are closer than 54°.
+- **The dark sea-green is the one chroma below 29.8**: sRGB stops at about 20 at
+  `L*` 30 and 200°, so it is held there rather than clipped into another hue.
+- **A violet at 305° was rejected** for PHOTOS: ΔE 7.8 from the light SHORT
+  fill, under the ~10 needed to tell two pills apart at a glance. The orchid
+  moved it to 12.8.
+
+Closest pairs as ΔE (CIE76), dark then light — the tightest light-mode pair of
+each new fill:
+
+| Pair | Dark ΔE | Light ΔE |
+| --- | --- | --- |
+| `audioContainer` vs `articleContainer` | 26.1 | 14.0 |
+| `audioContainer` vs `surfaceContainerHigh` | 29.0 | 14.3 |
+| `imagePostContainer` vs `shortVideoContainer` (SHORT) | 27.0 | 12.8 |
+| `imagePostContainer` vs `errorContainer` (VIDEO) | 63.5 | 14.6 |
+| `imagePostContainer` vs `surfaceContainerHigh` | 34.1 | 14.3 |
+| `articleContainer` vs `surfaceContainerHigh` | 24.1 | 15.7 |
+| `articleContainer` vs `shortVideoContainer` (SHORT) | 29.9 | 16.1 |
 
 ## Text over a photograph, through a veil
 
