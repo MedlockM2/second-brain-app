@@ -2,7 +2,8 @@
  * Where a rename is typed: one field, prefilled with the name the thing has now,
  * and the two answers a naming prompt can get.
  *
- * A dialog anchored just above the keyboard, at the bottom of the available area.
+ * The field is focused after presentation. The card's first visible frame is
+ * already above the keyboard, after its destination has been laid out.
  * A rename is a one-field edit
  * reached from a context menu, and pushing a route for it would take the user
  * away from the list they were filing — the list stays visible behind the scrim,
@@ -19,11 +20,16 @@
  * owns the call.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -32,6 +38,8 @@ import {
   Text,
   TextInput,
   View,
+  type KeyboardEvent,
+  type KeyboardMetrics,
 } from "react-native";
 import {
   BorderRadius,
@@ -77,8 +85,31 @@ export interface RenameDialogProps {
   testIDPrefix: string;
 }
 
-export function RenameDialog({
-  visible,
+export function RenameDialog(props: RenameDialogProps): React.JSX.Element {
+  const inputRef = useRef<TextInput>(null);
+  return (
+    <Modal
+      visible={props.visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onShow={() => inputRef.current?.focus()}
+      onRequestClose={props.isSaving ? undefined : props.onClose}
+    >
+      {props.visible ? <NamingForm {...props} inputRef={inputRef} /> : null}
+    </Modal>
+  );
+}
+
+interface ModalViewport {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+/** Resolve the keyboard destination, lay it out, then reveal. No layout animation. */
+function NamingForm({
   heading,
   placeholder,
   maxLength,
@@ -90,154 +121,247 @@ export function RenameDialog({
   onSubmit,
   submitLabel = t("common.save"),
   testIDPrefix,
-}: RenameDialogProps): React.JSX.Element {
+  inputRef,
+}: RenameDialogProps & {
+  inputRef: RefObject<TextInput | null>;
+}): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const trimmed = value.trim();
   const canSubmit = trimmed.length > 0 && !isSaving;
-
   const handleSubmit = () => {
-    if (!canSubmit) return;
-    onSubmit(trimmed);
+    if (positioned && canSubmit) onSubmit(trimmed);
   };
+  const insets = useSafeAreaInsets();
+  const viewportRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const mounted = useRef(true);
+  const measurement = useRef(0);
+  const revealed = useRef(false);
+  const noKeyboardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [viewport, setViewport] = useState<ModalViewport | null>(null);
+  const [keyboard, setKeyboard] = useState(() => {
+    const frame = Keyboard.metrics();
+    return { resolved: !!frame?.height, frame: frame ?? null };
+  });
+  const resolved = useRef(keyboard.resolved);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [laidOutHeight, setLaidOutHeight] = useState<number | null>(null);
+
+  const measure = useCallback(() => {
+    const revision = ++measurement.current;
+    viewportRef.current?.measureInWindow((left, top, width, height) => {
+      if (
+        !mounted.current ||
+        revision !== measurement.current ||
+        !width ||
+        !height
+      )
+        return;
+      setViewport((previous) =>
+        previous?.top === top &&
+        previous.left === left &&
+        previous.width === width &&
+        previous.height === height
+          ? previous
+          : { top, left, width, height },
+      );
+    });
+  }, []);
+  const acceptFrame = useCallback(
+    (frame: KeyboardMetrics | null, allowNoKeyboard = false) => {
+      // Hiding a keyboard from the underlying screen must not reveal the card
+      // before this input's keyboard has announced its destination.
+      const ready = !!frame?.height || revealed.current || allowNoKeyboard;
+      resolved.current = ready;
+      if (ready && noKeyboardTimer.current) {
+        clearTimeout(noKeyboardTimer.current);
+        noKeyboardTimer.current = null;
+      }
+      setKeyboard({ resolved: ready, frame });
+      measure();
+    },
+    [measure],
+  );
+
+  // Register before Modal.onShow requests focus, including when a keyboard was
+  // already open in the underlying search field. iOS supplies its destination
+  // before the animation; Android supplies it after native window resizing.
+  useLayoutEffect(() => {
+    mounted.current = true;
+    const show = (event: KeyboardEvent) => acceptFrame(event.endCoordinates);
+    const subscriptions = [
+      Keyboard.addListener("keyboardDidShow", show),
+      Keyboard.addListener("keyboardDidHide", () => acceptFrame(null)),
+    ];
+    if (Platform.OS === "ios")
+      subscriptions.push(
+        Keyboard.addListener("keyboardWillShow", show),
+        Keyboard.addListener("keyboardWillChangeFrame", (event) => {
+          if (revealed.current) show(event);
+        }),
+        Keyboard.addListener("keyboardWillHide", () => acceptFrame(null)),
+      );
+    return () => {
+      mounted.current = false;
+      measurement.current += 1;
+      subscriptions.forEach((subscription) => subscription.remove());
+      if (noKeyboardTimer.current) clearTimeout(noKeyboardTimer.current);
+    };
+  }, [acceptFrame]);
+
+  const onInputFocus = useCallback(() => {
+    setInputFocused(true);
+    measure();
+    if (resolved.current) return;
+    if (noKeyboardTimer.current) clearTimeout(noKeyboardTimer.current);
+    // A hardware keyboard or an IME that emits no frame must not leave the
+    // form hidden indefinitely. Normal placement is driven by native events.
+    noKeyboardTimer.current = setTimeout(
+      () => acceptFrame(Keyboard.metrics() ?? null, true),
+      1000,
+    );
+  }, [measure, acceptFrame]);
+
+  const frame = keyboard.frame;
+  const touchesBottom =
+    viewport &&
+    frame &&
+    frame.height > 0 &&
+    frame.screenY <= viewport.top + viewport.height + 1 &&
+    frame.screenY + frame.height >= viewport.top + viewport.height - 1 &&
+    frame.screenX < viewport.left + viewport.width &&
+    frame.screenX + frame.width > viewport.left;
+  // Clip to the keyboard's final top, rather than subtracting its height again
+  // from an Android modal that the OS may already have resized.
+  const targetHeight =
+    viewport && keyboard.resolved
+      ? touchesBottom
+        ? Math.max(0, Math.min(viewport.height, frame.screenY - viewport.top))
+        : viewport.height
+      : null;
+  const positioned =
+    inputFocused &&
+    targetHeight !== null &&
+    laidOutHeight !== null &&
+    Math.abs(laidOutHeight - targetHeight) < 1;
+  useLayoutEffect(() => {
+    if (positioned) revealed.current = true;
+  }, [positioned]);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={isSaving ? undefined : onClose}
+    <View
+      ref={viewportRef}
+      style={styles.root}
+      onLayout={measure}
+      collapsable={false}
     >
-      <View style={styles.root}>
-        {visible ? (
-          <KeyboardForm>
-            {/* The root paints the scrim; this transparent target closes the
+      <View
+        style={targetHeight === null ? styles.form : { height: targetHeight }}
+        onLayout={(event) => {
+          if (!revealed.current)
+            scrollRef.current?.scrollTo({ y: 0, animated: false });
+          setLaidOutHeight(event.nativeEvent.layout.height);
+        }}
+      >
+        <ScrollView
+          ref={scrollRef}
+          style={styles.form}
+          contentContainerStyle={[
+            styles.formContent,
+            {
+              paddingTop: insets.top + Spacing.lg,
+              paddingBottom: Spacing.md + (touchesBottom ? 0 : insets.bottom),
+            },
+          ]}
+          automaticallyAdjustKeyboardInsets={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* The root paints the scrim; this transparent target closes the
                 dialog from the space around the card without covering it. */}
-            <Pressable
-              style={styles.backdrop}
-              onPress={onClose}
-              disabled={isSaving}
-              accessibilityLabel={t("common.dismiss")}
-              accessibilityRole="button"
+          <Pressable
+            style={styles.backdrop}
+            onPress={onClose}
+            disabled={isSaving}
+            accessibilityLabel={t("common.dismiss")}
+            accessibilityRole="button"
+          />
+
+          <View
+            style={[styles.card, !positioned && styles.pendingCard]}
+            pointerEvents={positioned ? "auto" : "box-none"}
+            accessibilityElementsHidden={!positioned}
+            importantForAccessibility={
+              positioned ? "auto" : "no-hide-descendants"
+            }
+            testID={`${testIDPrefix}-dialog`}
+          >
+            <Text style={styles.title}>{heading}</Text>
+
+            <TextInput
+              ref={inputRef}
+              style={styles.input}
+              value={value}
+              onChangeText={onChangeText}
+              placeholder={placeholder}
+              placeholderTextColor={Colors.textMuted}
+              onFocus={onInputFocus}
+              selectTextOnFocus
+              editable={!isSaving}
+              maxLength={maxLength}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+              accessibilityLabel={heading}
+              testID={`${testIDPrefix}-input`}
             />
 
-            <View style={styles.card} testID={`${testIDPrefix}-dialog`}>
-              <Text style={styles.title}>{heading}</Text>
+            {errorMessage ? (
+              <Text style={styles.error} testID={`${testIDPrefix}-error`}>
+                {errorMessage}
+              </Text>
+            ) : null}
 
-              <TextInput
-                style={styles.input}
-                value={value}
-                onChangeText={onChangeText}
-                placeholder={placeholder}
-                placeholderTextColor={Colors.textMuted}
-                autoFocus
-                selectTextOnFocus
-                editable={!isSaving}
-                maxLength={maxLength}
-                returnKeyType="done"
-                onSubmitEditing={handleSubmit}
-                accessibilityLabel={heading}
-                testID={`${testIDPrefix}-input`}
-              />
+            <View style={styles.actions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.secondaryButton,
+                  pressed && styles.secondaryButtonPressed,
+                ]}
+                onPress={onClose}
+                disabled={isSaving || !positioned}
+                accessibilityLabel={t("common.cancel")}
+                accessibilityRole="button"
+                testID={`${testIDPrefix}-cancel`}
+              >
+                <Text style={styles.secondaryLabel}>{t("common.cancel")}</Text>
+              </Pressable>
 
-              {errorMessage ? (
-                <Text style={styles.error} testID={`${testIDPrefix}-error`}>
-                  {errorMessage}
-                </Text>
-              ) : null}
-
-              <View style={styles.actions}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.secondaryButton,
-                    pressed && styles.secondaryButtonPressed,
-                  ]}
-                  onPress={onClose}
-                  disabled={isSaving}
-                  accessibilityLabel={t("common.cancel")}
-                  accessibilityRole="button"
-                  testID={`${testIDPrefix}-cancel`}
-                >
-                  <Text style={styles.secondaryLabel}>
-                    {t("common.cancel")}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.primaryButtonPressed,
-                    !canSubmit && styles.primaryButtonDisabled,
-                  ]}
-                  onPress={handleSubmit}
-                  disabled={!canSubmit}
-                  accessibilityLabel={submitLabel}
-                  accessibilityRole="button"
-                  accessibilityState={{ disabled: !canSubmit }}
-                  testID={`${testIDPrefix}-save`}
-                >
-                  {isSaving ? (
-                    <ActivityIndicator size="small" color={Colors.onPrimary} />
-                  ) : (
-                    <Text style={styles.primaryLabel}>{submitLabel}</Text>
-                  )}
-                </Pressable>
-              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.primaryButtonPressed,
+                  !canSubmit && styles.primaryButtonDisabled,
+                ]}
+                onPress={handleSubmit}
+                disabled={!canSubmit || !positioned}
+                accessibilityLabel={submitLabel}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canSubmit }}
+                testID={`${testIDPrefix}-save`}
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color={Colors.onPrimary} />
+                ) : (
+                  <Text style={styles.primaryLabel}>{submitLabel}</Text>
+                )}
+              </Pressable>
             </View>
-          </KeyboardForm>
-        ) : null}
+          </View>
+        </ScrollView>
       </View>
-    </Modal>
-  );
-}
-
-/** One owner of keyboard avoidance: iOS padding, Android's resized modal window. */
-function KeyboardForm({
-  children,
-}: {
-  children: ReactNode;
-}): React.JSX.Element {
-  const styles = useThemedStyles(makeStyles);
-  const insets = useSafeAreaInsets();
-  const [keyboardVisible, setKeyboardVisible] = useState(() =>
-    Keyboard.isVisible(),
-  );
-  useEffect(() => {
-    const show = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      () => setKeyboardVisible(true),
-    );
-    const hide = Keyboard.addListener(
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKeyboardVisible(false),
-    );
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
-  return (
-    <KeyboardAvoidingView
-      style={styles.form}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      pointerEvents="box-none"
-    >
-      <ScrollView
-        style={styles.form}
-        contentContainerStyle={[
-          styles.formContent,
-          {
-            paddingTop: insets.top + Spacing.lg,
-            paddingBottom: Spacing.md + (keyboardVisible ? 0 : insets.bottom),
-          },
-        ]}
-        automaticallyAdjustKeyboardInsets={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {children}
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -263,6 +387,7 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       gap: Spacing.md,
       ...Shadows.soft,
     },
+    pendingCard: { opacity: 0 },
     title: {
       fontSize: Typography.headline.fontSize,
       fontWeight: Typography.headline.fontWeight,
