@@ -382,6 +382,7 @@ export const pt: Catalog = {
   "onboarding.language.title": "Escolha a sua língua de leitura",
   "onboarding.language.subtitle": "Os conteúdos serão traduzidos para esta língua quando necessário.",
   "onboarding.language.continueA11y": "Continuar com a língua escolhida",
+  "search.backToTop": "Voltar ao topo",
   "search.placeholder": "Procure na sua biblioteca…",
   "search.clearA11y": "Limpar a pesquisa",
   "search.folders": "Pastas",

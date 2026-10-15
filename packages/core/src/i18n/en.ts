@@ -555,6 +555,7 @@ export const en = {
     "Content will be translated to this language when needed.",
   "onboarding.language.continueA11y": "Continue with selected language",
   // --- Library / search tab ---
+  "search.backToTop": "Back to top",
   "search.placeholder": "Search your library...",
   "search.clearA11y": "Clear search query",
   "search.folders": "Folders",

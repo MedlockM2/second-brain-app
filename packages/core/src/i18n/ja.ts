@@ -374,6 +374,7 @@ export const ja: Catalog = {
   "onboarding.language.title": "読書言語を選んでください",
   "onboarding.language.subtitle": "必要に応じてコンテンツがこの言語に翻訳されます。",
   "onboarding.language.continueA11y": "選んだ言語で続ける",
+  "search.backToTop": "先頭に戻る",
   "search.placeholder": "ライブラリを検索…",
   "search.clearA11y": "検索キーワードを消去",
   "search.folders": "フォルダ",

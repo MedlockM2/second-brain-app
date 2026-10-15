@@ -1,3 +1,4 @@
+import { TAB_BAR_CLEARANCE } from "../../src/constants/tabBar";
 import type { MediaLibraryWindow } from "../../src/services/mediaService";
 import {
   useResourceState,
@@ -12,6 +13,8 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
+  AccessibilityInfo,
+  Keyboard,
   I18nManager,
   Pressable,
   RefreshControl,
@@ -904,6 +907,18 @@ function LibraryState({
 }: LibraryStateProps) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const listRef = useRef<FlatList<MediaRow>>(null);
+  const [showTop, setShowTop] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(() => Keyboard.isVisible());
+  const [reduceMotion, setReduceMotion] = useState(true);
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (active) setReduceMotion(value); });
+    const motion = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    const show = Keyboard.addListener("keyboardDidShow", () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardOpen(false));
+    return () => { active = false; motion.remove(); show.remove(); hide.remove(); };
+  }, []);
   // What stands in for the media rows while there are none: its own spinner on
   // the first load, its own error card with a retry, or the empty library.
   const mediaPlaceholder = mediaLoading ? (
@@ -921,7 +936,11 @@ function LibraryState({
   );
 
   return (
+    <View style={styles.libraryBody} collapsable={false}>
     <FlatList
+      ref={listRef}
+      scrollEventThrottle={32}
+      onScroll={(event) => setShowTop(event.nativeEvent.contentOffset.y > event.nativeEvent.layoutMeasurement.height)}
       testID="library-media-list"
       onEndReached={onLoadMore}
       onEndReachedThreshold={0.5}
@@ -989,6 +1008,18 @@ function LibraryState({
         ) : null
       }
     />
+    {showTop && !keyboardOpen ? (
+      <Pressable
+        style={({ pressed }) => [styles.jumpTop, pressed && styles.jumpTopPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={t("search.backToTop")}
+        testID="library-back-to-top"
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: !reduceMotion })}
+      >
+        <Ionicons name="arrow-up" size={24} color={Colors.onPrimary} />
+      </Pressable>
+    ) : null}
+    </View>
   );
 }
 
@@ -1559,6 +1590,14 @@ function ErrorState({ message }: { message: string }) {
 
 const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
   StyleSheet.create({
+    libraryBody: { flex: 1 },
+    jumpTop: {
+      position: "absolute", right: Spacing.lg, bottom: TAB_BAR_CLEARANCE,
+      width: TouchTarget.minimum, height: TouchTarget.minimum,
+      borderRadius: BorderRadius.full, backgroundColor: Colors.primary,
+      alignItems: "center", justifyContent: "center", ...Shadows.soft,
+    },
+    jumpTopPressed: { opacity: 0.8 },
     container: {
       flex: 1,
       backgroundColor: Colors.background,

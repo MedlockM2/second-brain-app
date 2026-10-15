@@ -365,6 +365,7 @@ export const zh: Catalog = {
   "onboarding.language.title": "选择你的阅读语言",
   "onboarding.language.subtitle": "需要时，内容会被翻译成这种语言。",
   "onboarding.language.continueA11y": "使用所选语言继续",
+  "search.backToTop": "返回顶部",
   "search.placeholder": "搜索你的资料库…",
   "search.clearA11y": "清除搜索内容",
   "search.folders": "文件夹",

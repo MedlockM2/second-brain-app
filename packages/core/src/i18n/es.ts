@@ -451,6 +451,7 @@ export const es: Catalog = {
   "onboarding.language.subtitle":
     "El contenido se traducirá a este idioma cuando haga falta.",
   "onboarding.language.continueA11y": "Continuar con el idioma elegido",
+  "search.backToTop": "Volver arriba",
   "search.placeholder": "Busca en tu biblioteca…",
   "search.clearA11y": "Borrar la búsqueda",
   "search.folders": "Carpetas",

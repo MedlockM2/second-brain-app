@@ -459,6 +459,7 @@ export const de: Catalog = {
   "onboarding.language.subtitle":
     "Inhalte werden bei Bedarf in diese Sprache übersetzt.",
   "onboarding.language.continueA11y": "Mit der gewählten Sprache fortfahren",
+  "search.backToTop": "Nach oben",
   "search.placeholder": "Durchsuche deine Bibliothek …",
   "search.clearA11y": "Suche löschen",
   "search.folders": "Ordner",

@@ -382,6 +382,7 @@ export const nl: Catalog = {
   "onboarding.language.title": "Kies je leestaal",
   "onboarding.language.subtitle": "Inhoud wordt naar deze taal vertaald wanneer dat nodig is.",
   "onboarding.language.continueA11y": "Doorgaan met de gekozen taal",
+  "search.backToTop": "Terug naar boven",
   "search.placeholder": "Zoek in je bibliotheek…",
   "search.clearA11y": "Zoekopdracht wissen",
   "search.folders": "Mappen",

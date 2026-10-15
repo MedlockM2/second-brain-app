@@ -474,6 +474,7 @@ export const fr: Catalog = {
   "onboarding.language.subtitle":
     "Les contenus seront traduits dans cette langue si nécessaire.",
   "onboarding.language.continueA11y": "Continuer avec la langue sélectionnée",
+  "search.backToTop": "Revenir en haut",
   "search.placeholder": "Rechercher dans votre bibliothèque…",
   "search.clearA11y": "Effacer la recherche",
   "search.folders": "Dossiers",

@@ -381,6 +381,7 @@ export const hi: Catalog = {
   "onboarding.language.title": "अपनी पढ़ने की भाषा चुनें",
   "onboarding.language.subtitle": "ज़रूरत पड़ने पर सामग्री इसी भाषा में अनूदित की जाएगी।",
   "onboarding.language.continueA11y": "चुनी हुई भाषा के साथ जारी रखें",
+  "search.backToTop": "ऊपर जाएँ",
   "search.placeholder": "अपनी लाइब्रेरी में खोजें…",
   "search.clearA11y": "खोज मिटाएँ",
   "search.folders": "फ़ोल्डर",
