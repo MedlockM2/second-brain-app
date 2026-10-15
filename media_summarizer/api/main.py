@@ -4,7 +4,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 
@@ -86,7 +86,16 @@ app = FastAPI(
 # CORS is answered by API Gateway (cors_configuration in
 # infrastructure/terraform/modules/platform/lambda_api.tf): once an HTTP API has a CORS
 # configuration, API Gateway ignores the CORS headers of its integration, so a
-# middleware here would never be seen by a browser.
+# middleware here would never be seen by a browser. The `$default` route still forwards
+# the preflight OPTIONS to this app, and a browser rejects a preflight whose status is not
+# 2xx: answer it 204 here and let API Gateway add the CORS headers.
+
+
+@app.middleware("http")
+async def cors_preflight_middleware(request: Request, call_next):
+    if request.method == "OPTIONS" and "access-control-request-method" in request.headers:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return await call_next(request)
 
 
 @app.middleware("http")
