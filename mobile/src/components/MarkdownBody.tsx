@@ -1,5 +1,5 @@
 /**
- * One answer of the chat, drawn from its Markdown (see `@media-summarizer/core/chat/markdown`).
+ * A source body or chat answer, drawn from its Markdown (see `@media-summarizer/core/chat/markdown`).
  *
  * Laid out for reading: a paragraph's gap between blocks, a smaller one between
  * the items of a list, and the 1.6 line height the design system asks of all
@@ -15,15 +15,17 @@
 
 import React, { useMemo } from "react";
 import {
+  ScrollView,
+  useWindowDimensions,
   StyleSheet,
   Text,
   View,
   type StyleProp,
   type TextStyle,
 } from "react-native";
-import { BorderRadius, Spacing, Typography, type Theme } from "../../constants/theme";
-import { useThemedStyles } from "../../contexts/ThemeContext";
-import { t } from "../../i18n";
+import { BorderRadius, Spacing, Typography, type Theme } from "../constants/theme";
+import { useThemedStyles } from "../contexts/ThemeContext";
+import { t } from "../i18n";
 import {
   keepCitations,
   parseChatMarkdown,
@@ -31,18 +33,23 @@ import {
   type ListItem,
   type Span,
 } from "@media-summarizer/core/chat/markdown";
-import { resolveMediaTitle } from "../../lib/mediaTitle";
+import { resolveMediaTitle } from "../lib/mediaTitle";
 import type { ChatSource } from "@media-summarizer/core/types/chat";
 
-export interface ChatAnswerProps {
+export interface MarkdownBodyProps {
   text: string;
   /** The answer is still being written. */
-  live: boolean;
+  live?: boolean;
   /** The conversation's sources, by tag. A tag absent from it is not drawn. */
-  sources: ReadonlyMap<string, ChatSource>;
-  showSources: boolean;
-  onOpenSource: (source: ChatSource) => void;
+  sources?: ReadonlyMap<string, ChatSource>;
+  showSources?: boolean;
+  /** Source text preserves literal citation tags and permits text selection. */
+  transcript?: boolean;
+  onOpenSource?: (source: ChatSource) => void;
 }
+
+const EMPTY_SOURCES: ReadonlyMap<string, ChatSource> = new Map();
+const ignoreSource = () => {};
 
 /** Characters of a title an inline citation keeps; the accessible link names it whole. */
 const SHORT_TITLE_LENGTH = 28;
@@ -66,18 +73,21 @@ function sourceTitle(source: ChatSource): string {
   return resolveMediaTitle({ title: source.title });
 }
 
-export function ChatAnswer({
+export function MarkdownBody({
   text,
-  live,
-  sources,
-  showSources,
-  onOpenSource,
-}: ChatAnswerProps): React.JSX.Element {
+  live = false,
+  sources = EMPTY_SOURCES,
+  showSources = false,
+  transcript = false,
+  onOpenSource = ignoreSource,
+}: MarkdownBodyProps): React.JSX.Element {
   const styles = useThemedStyles(makeStyles);
+  const { width: windowWidth } = useWindowDimensions();
   const blocks = useMemo(() => parseChatMarkdown(text, { live }), [text, live]);
-  const keep = (ref: string) => showSources && sources.has(ref);
+  const keep = (ref: string) => transcript || (showSources && sources.has(ref));
 
   const spoken = (spans: readonly Span[]): string | undefined => {
+    if (transcript) return undefined;
     if (!spans.some((span) => span.kind === "citation")) return undefined;
     return spans
       .map((span) =>
@@ -96,6 +106,7 @@ export function ChatAnswer({
   const renderSpans = (spans: readonly Span[]) =>
     spans.map((span, index) => {
       if (span.kind === "text") {
+        const speaker = transcript && index === 0 ? /^(Speaker\s+\d+)\s*:\s*/i.exec(span.text) : null;
         return (
           <Text
             key={index}
@@ -105,10 +116,11 @@ export function ChatAnswer({
               span.code && styles.inlineCode,
             ]}
           >
-            {span.text}
+            {speaker ? <><Text style={styles.bold}>{speaker[1]}: </Text>{span.text.slice(speaker[0].length)}</> : span.text}
           </Text>
         );
       }
+      if (transcript) return <Text key={index}>{span.refs.join(" ")}</Text>;
       const previous = spans[index - 1];
       const spaced = previous?.kind === "text" && !/\s$/.test(previous.text);
       return (
@@ -155,7 +167,7 @@ export function ChatAnswer({
   ) => {
     const shown = keepCitations(spans, keep);
     return (
-      <Text key={key} style={style} accessibilityLabel={spoken(shown)}
+      <Text key={key} selectable={transcript} style={style} accessibilityLabel={spoken(shown)}
         accessibilityActions={citationActions(shown)}
         onAccessibilityAction={(event) => openAccessibleSource(event.nativeEvent.actionName)}
       >
@@ -186,6 +198,7 @@ export function ChatAnswer({
         return (
           <Text
             key={key}
+            selectable={transcript}
             style={block.level === 3 ? styles.subheading : styles.heading}
             accessibilityRole="header"
             accessibilityActions={citationActions(keepCitations(block.spans, keep))}
@@ -206,10 +219,35 @@ export function ChatAnswer({
             {block.blocks.map((inner, index) => renderBlock(inner, index))}
           </View>
         );
+      case "table": {
+        const width = Math.max(160, (windowWidth - Spacing.lg * 2) / Math.min(2, block.header.length));
+        const row = (cells: Span[][], header: boolean, index: React.Key) => (
+          <View key={index} style={[styles.tableRow, header && styles.tableHeader]}>
+            {cells.map((cell, column) => (
+              <View key={column} style={[styles.cell, { width }]}>
+                <Text selectable={transcript} accessibilityRole={header ? "header" : undefined}
+                  style={[styles.paragraph, header && styles.bold, { textAlign: block.align[column] }]}>
+                  {renderSpans(keepCitations(cell, keep))}
+                </Text>
+              </View>
+            ))}
+          </View>
+        );
+        return (
+          <ScrollView key={key} horizontal nestedScrollEnabled directionalLockEnabled
+            style={styles.table} contentContainerStyle={styles.tableContent}
+            showsHorizontalScrollIndicator keyboardShouldPersistTaps="handled">
+            <View>
+              {row(block.header, true, "header")}
+              {block.rows.map((cells, index) => row(cells, false, index))}
+            </View>
+          </ScrollView>
+        );
+      }
       case "code":
         return (
           <View key={key} style={styles.codeBlock}>
-            <Text style={styles.codeText}>{block.text}</Text>
+            <Text selectable={transcript} style={styles.codeText}>{block.text}</Text>
           </View>
         );
       case "rule":
@@ -226,6 +264,11 @@ export function ChatAnswer({
 
 const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
+    table: { maxWidth: "100%", borderRadius: BorderRadius.md },
+    tableContent: { paddingBottom: Spacing.sm },
+    tableRow: { flexDirection: "row", backgroundColor: Colors.surfaceContainerLow },
+    tableHeader: { backgroundColor: Colors.surfaceContainerHigh },
+    cell: { padding: Spacing.sm },
     answer: {
       gap: Spacing.md,
     },
