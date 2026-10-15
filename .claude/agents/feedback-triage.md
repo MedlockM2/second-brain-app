@@ -124,6 +124,7 @@ Donne à chaque sous-agent, dans son prompt :
 - l'appareil, la version iOS, le build d'origine et le build courant ;
 - la liste des `Feedback-Id` du groupe, et la consigne de terminer par un commit dont le message
   porte une ligne `Feedback-Id: <id>` par feedback couvert ;
+- la consigne de terminer ce même message par une ligne `Web:` (`AGENTS.md`, « Web parity ») : un retour sur un comportement que l'app web a aussi (dossiers, lecture, recherche, Digest, chat, non classés) se corrige aussi dans `web/` (`Web: done`) ou devient une tâche web (`Web: task-NNN`) ; seul un défaut propre au natif (clavier, rendu, geste) vaut `Web: n/a (<raison>)`. Reporte cette ligne dans le rapport de go/no-go pour que l'owner la voie ;
 - la consigne de ne pas écrire de test (règle d'`AGENTS.md`) et de retirer toute instrumentation de
   debug dans la même session ;
 - la consigne de **rapporter le nom de sa branche** de worktree en fin de run.

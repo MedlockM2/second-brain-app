@@ -72,6 +72,28 @@ Any agent working on the web or the mobile app may write in `packages/core` unde
 change there changes the mobile bundle: the OTA workflow triggers on it, so treat it as a
 mobile change (typecheck and lint both `mobile/` and `packages/core`).
 
+## Web parity — every mobile change says what happens on the web
+
+The web app (`web/`) offers the same functions as the mobile app, laid out for a desktop
+(`mobile-design-mockups/web_app_owner_direction/README.md` is authoritative for the layout). It was
+built on 2026-10-11; four days of mobile fixes later it had drifted, because no step ever asked
+whether the web needed the same change (task-525 catches up).
+
+**Every non-merge commit touching `mobile/app/` or `mobile/src/` ends with one `Web:` line**,
+checked by `scripts/check_web_parity.py` in both `main.yml` and `pr.yml`:
+
+| Line | When |
+|---|---|
+| `Web: done` | the same commit makes the change in `web/` too |
+| `Web: task-NNN` | a backlog task (existing, or created in the same run) carries the web side |
+| `Web: n/a (<reason>)` | nothing to do on the web: iOS keyboard, native rendering, touch-only gesture, store or build config |
+
+Decide on **behaviour, not pixels**: a fix to what the app shows or does (a bug, a missing state,
+a rule on folders, the chat, search, the Digest) applies to the web; a fix to how a native control
+lays out or reacts does not. When unsure, create the task rather than write `n/a`. The cheapest
+parity is shared code: logic that runs anywhere goes to `packages/core` (section above), and then
+the web only has to call it.
+
 ## Delivery rules
 
 - Pre-production: no backward compatibility required. Remove obsolete code directly. The full rule, and why it is stronger than it looks, is in "Nothing is deployed yet" below.

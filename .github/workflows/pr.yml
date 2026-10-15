@@ -10,6 +10,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every commit touching mobile/app or mobile/src says what happens on the web
+  # (AGENTS.md, "Web parity"). Same job in main.yml: keep the two in sync.
+  web-parity:
+    name: Web parity (Web trailer on mobile commits)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard — mobile commits carry a Web line
+        run: python3 scripts/check_web_parity.py "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
   backend:
     name: Backend (lint + typecheck)
     runs-on: ubuntu-latest

@@ -20,6 +20,7 @@ Séquence obligatoire :
 5. Formule un plan d'exécution concret (affiche-le)
 6. Implémente le plan
 7. `git add` des fichiers modifiés + `git commit` avec un message descriptif en anglais. Si la tâche est Mode Release engineering, **ajoute dans le message de commit une checklist `Owner follow-up:` listant les commandes manuelles à exécuter après merge** (voir Mode Release engineering pour les détails).
+   Termine **toujours** le message par une ligne `Web:` (règle « Web parity » d'`AGENTS.md`, vérifiée en CI) : `Web: done` si tu as fait la même modification dans `web/`, `Web: task-NNN` si une tâche porte le côté web (crée-la si elle n'existe pas, avec une description et des AC conformes à `CLAUDE.md`), ou `Web: n/a (<raison>)` si le changement est propre au natif (clavier iOS, rendu Liquid Glass, geste tactile, configuration de build). Tranche sur le **comportement**, pas sur le rendu ; dans le doute, crée la tâche.
 
 ---
 
