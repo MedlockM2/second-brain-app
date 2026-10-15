@@ -92,7 +92,7 @@ export function ChatConversationModal(
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
   const keyboardViewport = useRef<View>(null);
-  const keyboard = useChatKeyboardLayout(keyboardViewport, props.focusOnOpen && !props.historyOpen);
+  const keyboard = useChatKeyboardLayout(keyboardViewport);
   const focusRequested = useRef(false);
   const followBottom = useRef(props.scrollTarget === "bottom");
   const [awayFromBottom, setAwayFromBottom] = useState(false);
@@ -214,9 +214,14 @@ export function ChatConversationModal(
       statusBarTranslucent
       navigationBarTranslucent
       onShow={() => {
-        const node = findNodeHandle(titleRef.current);
-        if (node) AccessibilityInfo.setAccessibilityFocus(node);
-        if (props.focusOnOpen && !props.historyOpen) inputRef.current?.focus();
+        // A single focus destination: do not compete with the input's native
+        // first responder while its keyboard is opening.
+        if (props.focusOnOpen && !props.historyOpen) {
+          inputRef.current?.focus();
+        } else {
+          const node = findNodeHandle(titleRef.current);
+          if (node) AccessibilityInfo.setAccessibilityFocus(node);
+        }
         restoreOrFollow();
       }}
       onRequestClose={props.onClose}
@@ -224,7 +229,6 @@ export function ChatConversationModal(
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
       <View ref={keyboardViewport} style={styles.root} onLayout={keyboard.measure} collapsable={false}>
       <View
-        onLayout={(event) => keyboard.onContentLayout(event.nativeEvent.layout.height)}
         style={[
           styles.root,
           keyboard.height !== null && { flex: 0, height: keyboard.height },
@@ -435,20 +439,15 @@ export function ChatConversationModal(
           <View
             style={[
               styles.composer,
-              !keyboard.ready && styles.pendingComposer,
               {
                 paddingBottom: keyboard.keyboardVisible
                   ? Spacing.sm
                   : Math.max(insets.bottom, Spacing.sm),
               },
             ]}
-            pointerEvents={keyboard.ready ? "auto" : "box-none"}
-            accessibilityElementsHidden={!keyboard.ready}
-            importantForAccessibility={keyboard.ready ? "auto" : "no-hide-descendants"}
           >
             <ChatComposer
               ref={inputRef}
-              onFocus={keyboard.onInputFocus}
               value={props.draft}
               onChangeText={props.onChangeDraft}
               placeholder={props.placeholder}
@@ -502,7 +501,6 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     scrollContent: { paddingTop: Spacing.sm, paddingBottom: Spacing.lg },
     gutter: { paddingHorizontal: Spacing.lg },
     exchanges: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
-    pendingComposer: { opacity: 0 },
     composer: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
     refusal: {
       marginHorizontal: Spacing.md,

@@ -31,7 +31,6 @@ const LINE_HEIGHT = Typography.body.lineHeight;
 const MAX_LINES = 4;
 
 export interface ChatComposerProps {
-  onFocus?: () => void;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -45,7 +44,7 @@ export interface ChatComposerProps {
 
 export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
   function ChatComposer(
-    { value, onChangeText, placeholder, onSend, onStop, generating, sending, onFocus },
+    { value, onChangeText, placeholder, onSend, onStop, generating, sending },
     ref,
   ) {
     const Colors = useThemeColors();
@@ -57,7 +56,6 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
         <View style={styles.field}>
           <TextInput
             ref={ref}
-            onFocus={onFocus}
             style={styles.input}
             value={value}
             onChangeText={onChangeText}
