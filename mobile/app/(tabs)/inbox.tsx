@@ -282,7 +282,7 @@ export default function InboxScreen() {
         {recentTiles.length > 0 && (
           <TileRow
             testID="home-recently-added-row"
-            icon="sparkles"
+            icon="download"
             title={t("home.recentlyAdded")}
             tiles={recentTiles}
             onTilePress={handleTilePress}

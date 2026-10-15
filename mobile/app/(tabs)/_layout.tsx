@@ -133,11 +133,11 @@ export default function TabsLayout() {
 
       <NativeTabs.Trigger name="digest">
         <NativeTabs.Trigger.Icon
-          sf="sparkles"
+          sf="newspaper"
           src={
             <NativeTabs.Trigger.VectorIcon
               family={Ionicons}
-              name="sparkles-outline"
+              name="newspaper-outline"
             />
           }
         />
