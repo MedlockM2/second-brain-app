@@ -1,9 +1,4 @@
-"""
-Authentication dependencies for the API.
-
-This module provides functions for user authentication and authorization
-using JWT access tokens (issued after local or social login).
-"""
+"""Cognito user authentication and independently scoped extension authorization."""
 
 import logging
 from typing import Optional
@@ -11,34 +6,13 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 
-from media_summarizer.core.models.auth import AuthUser
+from media_summarizer.core.models.auth import AuthUser, TokenType
+from media_summarizer.core.services import cognito_auth
 from media_summarizer.utils import database_async
-from media_summarizer.utils.auth_utils import (
-    ACCESS_SCOPE_EXTENSION,
-    get_user_id_from_token,
-    verify_token,
-)
 from media_summarizer.utils.database_async import DynamoDBConnection, get_db
 
-# Configure logging
 logger = logging.getLogger(__name__)
-
-# OAuth2 scheme for token authentication
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/auth/login",
-    auto_error=False,  # Allow optional authentication
-)
-
-
-# The only routes an access token of a browser extension lineage may call
-# (task-485): save the page, save a selection, list the folders to pick the
-# destination, and sign the extension out. Its refresh needs no access token.
-# Everything else answers 403, so a leaked extension token is never a key to the
-# whole account.
-#
-# Matched on the request path, not on the route template: all four are static,
-# and the template of an included route lost its prefix in FastAPI 0.13x (see
-# `_mounted_routes` in api/main.py). A mismatch can only refuse, never allow.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 EXTENSION_ROUTES = frozenset(
     {
         ("POST", "/api/media/ingest-url"),
@@ -49,140 +23,41 @@ EXTENSION_ROUTES = frozenset(
 )
 
 
-def _enforce_scope(payload: dict, request: Request) -> None:
-    """Refuse a reduced-scope token outside the routes its scope names."""
-    scope = payload.get("scope")
-    if scope is None:
-        return
-    path = request.url.path.rstrip("/") or "/"
-    if scope == ACCESS_SCOPE_EXTENSION and (request.method, path) in EXTENSION_ROUTES:
-        return
-    logger.warning("Reduced-scope token refused on %s %s", request.method, path)
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="This token cannot be used here",
-    )
-
-
 async def get_current_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: DynamoDBConnection = Depends(get_db),
+    request: Request, token: Optional[str] = Depends(oauth2_scheme), db: DynamoDBConnection = Depends(get_db)
 ) -> AuthUser:
-    """
-    Get the current authenticated user based on the provided JWT token.
-
-    Args:
-        token: The JWT authentication token
-        db: Database connection
-
-    Returns:
-        AuthUser object containing user information
-
-    Raises:
-        HTTPException: If authentication fails or token is invalid
-    """
     if not token:
-        logger.warning("No authentication token provided")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        # Verify the JWT token
-        payload = verify_token(token)
-        if not payload:
-            logger.warning("Invalid JWT token provided")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        _enforce_scope(payload, request)
-
-        # Extract user ID from token
-        user_id = payload.get("sub")
-        if not user_id:
-            logger.warning("JWT token missing user ID (sub field)")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token format",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Get user from database
-        user = await database_async.get_user_by_id(user_id)
-        if not user:
-            logger.warning(f"User not found for ID: {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        # Verify email matches token
-        token_email = payload.get("email")
-        if token_email and token_email != user.email:
-            logger.warning(f"Email mismatch in token for user {user_id}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        logger.debug(f"Successfully authenticated user: {user.id}")
-
-        # Return AuthUser object
-        return AuthUser.from_user(user)
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during authentication: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise cognito_auth.refuse("INVALID_CREDENTIALS", 401)
+    if token.startswith("ext_a_"):
+        grant = await database_async.get_auth_token_by_token(token)
+        if grant is None or grant.token_type != TokenType.ACCESS_TOKEN or not grant.is_valid():
+            raise cognito_auth.refuse("INVALID_CREDENTIALS", 401)
+        parent = await database_async.get_auth_token_by_id(grant.lineage_id)
+        if parent is None or parent.token_type != TokenType.REFRESH_TOKEN or not parent.is_valid() or parent.user_id != grant.user_id:
+            raise cognito_auth.refuse("INVALID_CREDENTIALS", 401)
+        if (request.method, request.url.path.rstrip("/")) not in EXTENSION_ROUTES:
+            raise HTTPException(status_code=403, detail="This token cannot be used here")
+        user = await database_async.get_user_by_id(grant.user_id)
+        if user is None or not user.cognito_sub:
+            raise cognito_auth.refuse("INVALID_CREDENTIALS", 401)
+    else:
+        user = await cognito_auth.profile(token)
+    request.state.user_id = user.id
+    return AuthUser.from_user(user)
 
 
 async def get_optional_user(
-    request: Request,
-    token: Optional[str] = Depends(oauth2_scheme),
-    db: DynamoDBConnection = Depends(get_db),
+    request: Request, token: Optional[str] = Depends(oauth2_scheme), db: DynamoDBConnection = Depends(get_db)
 ) -> Optional[AuthUser]:
-    """
-    Get the current user if authenticated, or None if not.
-
-    This is useful for endpoints that work both with and without authentication.
-
-    Args:
-        token: The authentication token (optional)
-        db: Database connection
-
-    Returns:
-        AuthUser object containing user information or None if not authenticated
-    """
     if not token:
         return None
-
     try:
         return await get_current_user(request, token, db)
     except HTTPException:
-        # If authentication fails, return None instead of raising exception
-        return None
-    except Exception as e:
-        logger.error(f"Unexpected error in optional authentication: {str(e)}")
         return None
 
 
-async def require_user_access(
-    resource_user_id: str, current_user: AuthUser = Depends(get_current_user)
-) -> AuthUser:
+async def require_user_access(resource_user_id: str, current_user: AuthUser = Depends(get_current_user)) -> AuthUser:
     """
     Require that the current user has access to a specific user's resources.
 
@@ -199,9 +74,7 @@ async def require_user_access(
         HTTPException: If the user doesn't have access to the resource
     """
     if current_user.id != resource_user_id:
-        logger.warning(
-            f"User {current_user.id} attempted to access resources for user {resource_user_id}"
-        )
+        logger.warning(f"User {current_user.id} attempted to access resources for user {resource_user_id}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: You can only access your own resources",
@@ -210,72 +83,9 @@ async def require_user_access(
     return current_user
 
 
-# require_sufficient_credits removed: legacy credits system deprecated (minutes-based billing in effect).
+# Every Cognito profile requires a verified email before it is provisioned.
+require_verified_email = get_current_user
 
 
-async def require_verified_email(
-    current_user: AuthUser = Depends(get_current_user),
-    db: DynamoDBConnection = Depends(get_db),
-) -> AuthUser:
-    """
-    Legacy compatibility dependency.
-    Email verification by mail has been removed; authenticated users are accepted.
-    """
-    return current_user
-
-
-def get_user_id_from_request(request: Request) -> Optional[str]:
-    """
-    Extract user ID from JWT token in request headers without full authentication.
-
-    This is useful for logging or optional user context without requiring authentication.
-
-    Args:
-        request: The FastAPI request object
-
-    Returns:
-        User ID if token is valid, None otherwise
-    """
-    try:
-        # Extract token from Authorization header
-        authorization = request.headers.get("Authorization")
-        if not authorization or not authorization.startswith("Bearer "):
-            return None
-
-        token = authorization.split(" ")[1]
-        return get_user_id_from_token(token)
-
-    except Exception as e:
-        logger.debug(f"Could not extract user ID from request: {str(e)}")
-        return None
-
-
-async def validate_token_fresh(
-    current_user: AuthUser = Depends(get_current_user), max_age_hours: int = 24
-) -> AuthUser:
-    """
-    Validate that the current user's token is not too old.
-
-    This is useful for sensitive operations that require recent authentication.
-
-    Args:
-        current_user: The current authenticated user
-        max_age_hours: Maximum age of token in hours
-
-    Returns:
-        The current user if token is fresh enough
-
-    Raises:
-        HTTPException: If token is too old
-    """
-    # Note: This would require storing token issued time in the JWT payload
-    # For now, we'll implement a basic version that always passes
-    # In a full implementation, you would check the 'iat' (issued at) claim
-
-    logger.debug(f"Token freshness validation passed for user: {current_user.id}")
-    return current_user
-
-
-# Convenience aliases for common authentication patterns
 RequireAuth = Depends(get_current_user)
 OptionalAuth = Depends(get_optional_user)

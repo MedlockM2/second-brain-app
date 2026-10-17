@@ -86,7 +86,7 @@ async function refuse(response: Response, fallback: string): Promise<never> {
 }
 
 /** The routes that open a session: they answer with the user and set the cookie. */
-export type SignInRoute = "/login" | "/register" | "/google/native" | "/apple/native";
+export type SignInRoute = "/login" | "/oauth/token";
 
 export async function openSession(route: SignInRoute, body: unknown): Promise<AuthUser> {
   const response = await authPost(route, { body });
@@ -140,7 +140,7 @@ export async function closeSession(): Promise<void> {
   const bearer = await getAccessToken().catch(() => null);
   forget();
   try {
-    if (bearer) await authPost("/logout", { bearer });
+    await authPost("/logout", { bearer: bearer ?? undefined });
   } finally {
     // Signed out here whatever the network said: the lineage expires on its own.
     emit({ type: "closed" });

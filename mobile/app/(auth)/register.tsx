@@ -19,7 +19,7 @@ import {
 } from "../../src/lib/validation";
 import { SocialAuthButtons } from "../../src/components/SocialAuthButtons";
 import { t } from "../../src/i18n";
-import { POST_AUTH_ENTRY_POINT } from "../../src/constants/routes";
+
 import {
   Typography,
   Spacing,
@@ -49,7 +49,7 @@ export default function RegisterScreen() {
       setError(emailError);
       return;
     }
-    const passwordError = getPasswordValidationError(password);
+    const passwordError = getPasswordValidationError(password, 12);
     if (passwordError) {
       setError(passwordError);
       return;
@@ -58,7 +58,7 @@ export default function RegisterScreen() {
     setIsSubmitting(true);
     try {
       await register({ email: email.trim(), password });
-      router.replace(POST_AUTH_ENTRY_POINT);
+      router.replace({ pathname: "/(auth)/verify-email", params: { email: email.trim() } });
     } catch (err) {
       setError(getFriendlyErrorMessage(err, { fallback: t("register.failed") }));
     } finally {
@@ -134,6 +134,7 @@ export default function RegisterScreen() {
             />
           </View>
 
+          <Text style={styles.subtitle}>{t("auth.passwordPolicy")}</Text>
           <TouchableOpacity
             testID="register-submit-button"
             style={[styles.button, isSubmitting && styles.buttonDisabled]}

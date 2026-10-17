@@ -65,6 +65,8 @@ provider "aws" {
 module "platform" {
   source = "../../modules/platform"
 
+  cognito_google     = var.cognito_google
+  cognito_apple      = var.cognito_apple
   environment        = "prod" # literal #2
   ecr_repository_url = var.shared_ecr_repository_url
 
@@ -147,3 +149,15 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "cognito_google" {
+  type      = object({ client_id = string, client_secret = string })
+  sensitive = true
+  default   = null
+}
+variable "cognito_apple" {
+  type      = object({ client_id = string, team_id = string, key_id = string, private_key = string })
+  sensitive = true
+  default   = null
+}
+output "cognito_configuration" { value = module.platform.cognito_configuration }

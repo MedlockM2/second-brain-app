@@ -1,3 +1,4 @@
+import type { SocialProvider } from "@media-summarizer/core/auth/cognito";
 import { activateResourceAccount } from "../services/resourceCache";
 import React, {
   createContext,
@@ -31,8 +32,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (data: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
-  loginWithGoogle: (idToken: string) => Promise<void>;
-  loginWithApple: (identityToken: string, user?: { email?: string; fullName?: { givenName?: string; familyName?: string } }) => Promise<void>;
+  loginWithSocial: (provider: SocialProvider) => Promise<boolean>;
   logout: () => Promise<void>;
   /**
    * Re-read the keychain and rotate the access token when needed.
@@ -316,53 +316,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [scheduleRefresh],
   );
 
-  const register = useCallback(
-    async (data: RegisterRequest) => {
-      const response = await AuthService.register(data);
-      setState({
-        user: response.user,
-        isLoading: false,
-        isAuthenticated: true,
-        isOffline: false,
-        sessionError: null,
-      });
-      await scheduleRefresh();
-    },
-    [scheduleRefresh],
-  );
+  const register = useCallback(async (data: RegisterRequest) => {
+    await AuthService.register(data);
+  }, []);
 
-  const loginWithGoogle = useCallback(
-    async (idToken: string) => {
-      const response = await AuthService.loginWithGoogleNative(idToken);
-      setState({
-        user: response.user,
-        isLoading: false,
-        isAuthenticated: true,
-        isOffline: false,
-        sessionError: null,
-      });
-      await scheduleRefresh();
-    },
-    [scheduleRefresh],
-  );
-
-  const loginWithApple = useCallback(
-    async (
-      identityToken: string,
-      user?: { email?: string; fullName?: { givenName?: string; familyName?: string } },
-    ) => {
-      const response = await AuthService.loginWithAppleNative(identityToken, user);
-      setState({
-        user: response.user,
-        isLoading: false,
-        isAuthenticated: true,
-        isOffline: false,
-        sessionError: null,
-      });
-      await scheduleRefresh();
-    },
-    [scheduleRefresh],
-  );
+  const loginWithSocial = useCallback(async (provider: SocialProvider) => {
+    const response = await AuthService.loginWithSocial(provider);
+    if (!response) return false;
+    activateResourceAccount(response.user.id, response.user.reading_language ?? null);
+    setState({ user: response.user, isLoading: false, isAuthenticated: true, isOffline: false, sessionError: null });
+    await scheduleRefresh();
+    return true;
+  }, [scheduleRefresh]);
 
   const logout = useCallback(async () => {
     activateResourceAccount(null);
@@ -393,8 +358,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ...state,
     login,
     register,
-    loginWithGoogle,
-    loginWithApple,
+    loginWithSocial,
     logout,
     revalidateSession,
     clearSessionError,

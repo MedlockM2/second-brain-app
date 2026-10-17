@@ -19,9 +19,6 @@ export const Config = {
    * conversation instead.
    */
   CHAT_STREAM_URL: trimSlash(env.VITE_CHAT_STREAM_URL ?? ""),
-  GOOGLE_CLIENT_ID: env.VITE_GOOGLE_CLIENT_ID ?? "",
-  APPLE_SERVICES_ID: env.VITE_APPLE_SERVICES_ID ?? "",
-  APPLE_REDIRECT_URI: env.VITE_APPLE_REDIRECT_URI ?? "",
   APP_STORE_URL: env.VITE_APP_STORE_URL ?? "",
   PLAY_STORE_URL: env.VITE_PLAY_STORE_URL ?? "",
   /** The public site (`https://www.<domain>`), home of the extension's install page. */

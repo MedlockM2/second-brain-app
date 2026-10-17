@@ -46,7 +46,7 @@ c'est le coffre qui a changé, pas Apple.
 
 | Clé Apple | Où elle est sauvegardée |
 |---|---|
-| *Sign in with Apple* | `APPLE_PRIVATE_KEY` du secret runtime ; le `.env` reconstruit la récupère (§6) |
+| *Sign in with Apple* | coffre privé, entrée de fédération Cognito `cognito_apple.private_key` ; voir `AUTHENTICATION_SETUP.md` |
 | *App Store Connect API* | `ASC_PRIVATE_KEY` du secret `media-summarizer-devbox` (§7) |
 | *In-App Purchase* | `APPLE_IAP_PRIVATE_KEY` du même secret (§7) |
 
@@ -471,9 +471,11 @@ Ce qui reste manuel ou fragile, à connaître avant le prochain déménagement :
   passer par la console AWS.
 - **Historique des dispatches** (`.claude/dispatch-runs/`) : gitignoré, perdu avec
   le disque. C'est de la trace d'exécution, sans valeur pour reprendre.
-- **`EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID`** n'existe plus (task-325) : Android
-  signe via Credential Manager, qui prend le client **Web** comme `serverClientId`.
-  Une ligne restée dans un `mobile/.env` local est simplement ignorée.
+- **Authentification mobile** : task-526 remplace tous les clients Google natifs et
+  le SDK Apple par Cognito avec PKCE. Les anciennes variables `EXPO_PUBLIC_GOOGLE_*`
+  sont supprimées ; les paramètres publics viennent de l’API. La fédération Google
+  et Apple se configure dans Terraform, avec les secrets du coffre, pas dans `.env`.
+  Voir `AUTHENTICATION_SETUP.md` pour reconstituer ce parcours.
 - **`EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY`** est renseignée dans `mobile/.env` depuis
   le 2026-08-20 (vraie clé publique `goog_`, l'app Play Store existant désormais
   dans le projet RevenueCat). Le SDK Android est donc configuré pour de vrai,

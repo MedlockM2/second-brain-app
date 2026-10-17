@@ -162,3 +162,20 @@ to a log and the answer carries a code or a neutral sentence.
   extra keys legitimately: its plural categories (`.zero`, `.two`, `.few`,
   `.many`).
 - A new API refusal sends a code, not a sentence to display.
+
+
+## Authentification Cognito (task-526)
+
+Les routes d’authentification répondent avec un `detail.error_code`. Le module
+partagé `packages/core/src/auth/cognito.ts` associe `AUTH_CODE_INVALID`,
+`AUTH_CODE_EXPIRED`, `AUTH_PASSWORD_POLICY`, `AUTH_RATE_LIMITED`,
+`AUTH_RESET_REQUIRED`, `EMAIL_NOT_VERIFIED` et `INVALID_CREDENTIALS` aux catalogues
+des onze langues. Tout échec non reconnu utilise `auth.unavailable` ; le texte
+brut du fournisseur n’est jamais affiché. Les formulaires distinguent code
+incorrect, code expiré, renvoi, confirmation d’adresse et mot de passe modifié.
+
+La demande de récupération affiche `auth.codeSent`, formulé au conditionnel sur
+l’existence d’un compte éligible. La même réponse 202 couvre les comptes inconnus,
+les comptes exclusivement sociaux et les échecs de livraison. Un compte Google
+ou Apple continue via son fournisseur et ne reçoit pas de mot de passe local.
+Voir [AUTHENTICATION_SETUP.md](AUTHENTICATION_SETUP.md) pour le quota des messages.

@@ -13,7 +13,6 @@ from media_summarizer.api.endpoints import (
     apify_webhook,
     artifacts,
     auth,
-    auth_social,
     bug_reports,
     chat,
     digest,
@@ -147,7 +146,6 @@ app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(media.router, prefix="/api/media", tags=["media"])
 app.include_router(artifacts.router, prefix="/api", tags=["artifacts"])
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-app.include_router(auth_social.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(extension_tokens.router, prefix="/api/auth/extension-tokens", tags=["authentication"])
 app.include_router(podcast_search.router, prefix="/api/podcast-search", tags=["podcast-search"])
 app.include_router(account.router, prefix="/api/account", tags=["account"])

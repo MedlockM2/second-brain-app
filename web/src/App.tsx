@@ -1,3 +1,5 @@
+import { AuthCodePage } from "./pages/AuthCodePage";
+import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { useSyncExternalStore } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { AppShell } from "./components/AppShell";
@@ -44,7 +46,10 @@ function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route element={<SignedOutOnly />}>
+          <Route path="/forgot-password" element={<AuthCodePage recovery />} />
+          <Route path="/verify-email" element={<AuthCodePage recovery={false} />} />
           <Route path="/login" element={<AuthPage mode="login" />} />
           <Route path="/register" element={<AuthPage mode="register" />} />
         </Route>

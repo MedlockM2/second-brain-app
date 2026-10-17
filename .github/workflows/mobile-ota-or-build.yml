@@ -166,9 +166,8 @@ jobs:
 
       # The whole decision, first half. This command needs no Expo login (it
       # hashes the local project), but it does need `-e internal` so the config
-      # it hashes is the one the internal profile produces —
-      # EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS decides `ios.scheme` in app.config.ts
-      # and therefore changes the iOS fingerprint.
+      # it hashes is the one the internal profile produces, including its native
+      # plugins, callback scheme and share-extension configuration.
       - name: Compute the native fingerprint for ${{ matrix.platform }}
         id: fingerprint
         working-directory: mobile

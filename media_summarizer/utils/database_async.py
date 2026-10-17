@@ -215,7 +215,7 @@ async def get_user_by_id(user_id: str) -> Optional[User]:
         async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
             table = await dynamodb.Table(USERS_TABLE)
 
-            response = await table.get_item(Key={"id": user_id})
+            response = await table.get_item(Key={"id": user_id}, ConsistentRead=True)
             if "Item" in response:
                 return User.from_dynamodb_item(response["Item"])
             return None
@@ -771,11 +771,11 @@ async def get_auth_token_by_token(token_string: str) -> Optional[AuthToken]:
 
             response = await table.query(
                 IndexName="token-index",
-                KeyConditionExpression=Key("token").eq(token_string),
+                KeyConditionExpression=Key("token").eq(hashlib.sha256(token_string.encode()).hexdigest()),
             )
             items = response.get("Items", [])
             if items:
-                return AuthToken.from_dynamodb_item(items[0])
+                return await get_auth_token_by_id(items[0]["id"])
             return None
     except ClientError as e:
         _log_dynamodb_error(
@@ -793,7 +793,7 @@ async def get_auth_token_by_id(token_id: str) -> Optional[AuthToken]:
         async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
             table = await dynamodb.Table(AUTH_TOKENS_TABLE)
 
-            response = await table.get_item(Key={"id": token_id})
+            response = await table.get_item(Key={"id": token_id}, ConsistentRead=True)
             if "Item" in response:
                 return AuthToken.from_dynamodb_item(response["Item"])
             return None
@@ -913,7 +913,7 @@ async def revoke_refresh_token_lineage(user_id: str, lineage_id: str) -> int:
     of the account keeps its own lineage, hence its session.
     """
     try:
-        tokens = await get_auth_tokens_by_user_id(user_id, TokenType.REFRESH_TOKEN)
+        tokens = await get_auth_tokens_by_user_id(user_id)
         revoked_count = 0
 
         for token in tokens:
@@ -1370,3 +1370,30 @@ async def delete_rss_feed(feed_id: str) -> bool:
             feed_id=feed_id,
         )
         raise
+
+
+async def bind_cognito_profile(user_id: str, subject: str, username: str) -> None:
+    """An admin-selected fixture can be bound once; concurrent claims cannot overwrite it."""
+    async with get_session().resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        table = await dynamodb.Table(USERS_TABLE)
+        try:
+            await table.update_item(Key={"id": user_id},
+                UpdateExpression=("SET cognito_sub = :sub, cognito_username = :username "
+                                  "REMOVE password_hash, auth_provider, provider_id"),
+                ConditionExpression="attribute_exists(id) AND (attribute_not_exists(cognito_sub) OR cognito_sub = :sub)",
+                ExpressionAttributeValues={":sub": subject, ":username": username})
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                raise
+
+
+async def renew_extension_grant(token: AuthToken) -> None:
+    """Do not resurrect a grant revoked while refresh was in flight."""
+    async with get_session().resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        table = await dynamodb.Table(AUTH_TOKENS_TABLE)
+        await table.update_item(Key={"id": token.id},
+            UpdateExpression="SET expires_at = :expiry, expire_at = :ttl, last_used_at = :now",
+            ConditionExpression="is_active = :active AND expires_at > :now",
+            ExpressionAttributeValues={":expiry": token.expires_at.isoformat(),
+                ":ttl": int(token.expires_at.timestamp()) + 604800,
+                ":active": True, ":now": datetime.now(timezone.utc).isoformat()})
