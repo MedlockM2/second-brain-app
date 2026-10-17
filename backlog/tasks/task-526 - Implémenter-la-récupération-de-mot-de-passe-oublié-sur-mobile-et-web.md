@@ -3,11 +3,11 @@ id: TASK-526
 title: >-
   Confier l’authentification de Deepn à Amazon Cognito et intégrer la
   récupération de mot de passe
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-17 15:49'
+updated_date: '2026-10-17 15:50'
 labels:
   - auth
   - mobile
@@ -89,6 +89,8 @@ Bascule de code réalisée : Cognito possède les justificatifs et sessions util
 Vérifications exécutées sans tests automatisés : ruff backend, mypy (205 fichiers), uv lock --check ; typecheck/lint mobile, web et packages/core ; build web ; terraform fmt -check et validate sur module platform et racines dev/staging/prod. Succès. Avertissement lint préexistant dans purchaseService.ts, hors périmètre ; build web signale un chunk > 1000 kB. Aucun apply ni déploiement effectué.
 
 Quota Cognito_DEFAULT revérifié dans la documentation AWS le 2026-10-17 : 50 e-mails/jour/compte, non augmentable, remise à zéro 09:00 UTC. Le runbook décrit les secrets et retours Google/Apple, le rattachement de Commonplace book sans suppression de bibliothèque, le nettoyage des seules anciennes sessions et la validation propriétaire après déploiement. Les fichiers .env.example racine/mobile/web ont été alignés ; aucun .env réel n’a été lu ni modifié.
+
+Livraison commitée dans 73c3a653 (Web: done). Le workflow Terraform Dev reçoit désormais les deux configurations de fédération par secrets GitHub Actions et refuse l’apply si elles manquent. Syntaxe YAML des workflows vérifiée. Mise à Done après le commit de résolution ; aucune validation déployée déclarée comme exécutée.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
