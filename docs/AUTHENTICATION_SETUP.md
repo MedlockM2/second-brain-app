@@ -37,8 +37,9 @@ AWS_PROFILE=second-brain-app python3 scripts/terraform_with_cognito.py dev apply
 ```
 
 Pour prod, employer le profil `prod` et l’argument `prod` uniquement lors d’une
-activation explicite de cet environnement. Le wrapper désactive le debug Terraform
-pour que les providers ne puissent pas journaliser les clés. Le plan sauvegardé
+activation explicite de cet environnement. Le wrapper impose des fichiers privés
+(umask 077) et désactive le debug Terraform pour que les providers ne puissent pas
+journaliser les clés. Le plan sauvegardé
 contient des données sensibles : garder le fichier ignoré, privé, et le supprimer
 après application. Ne pas retirer les six paramètres du coffre après bascule : ils
 constituent désormais la source permanente de configuration des fournisseurs.
@@ -230,3 +231,31 @@ La déconnexion web ne délie pas l’extension. Supprimer le compte révoque le
 Ces opérations après fusion/déploiement sont le contrôle propriétaire. Aucun
 apply, déploiement, build EAS ni test automatisé n’est requis pour terminer le
 travail de code de cette tâche. Le backend local n’est pas un substitut au dev AWS.
+
+## Raccordement dev du 2026-10-17
+
+Le pool `eu-west-3_kvjrhVwnV` et le domaine
+`deepn-125313707865-dev.auth.eu-west-3.amazoncognito.com` ont été créés par le plan
+Terraform : 7 créations, 19 mises à jour de configuration, aucune suppression.
+Les deux fournisseurs reprennent les identifiants du secret runtime dev, sans
+rotation ni création de credentials. Les lectures Cognito ont confirmé les deux
+clients, les retours exacts, la rotation, la révocation et l’interdiction d’écrire
+l’attribut de rattachement des fixtures depuis les apps.
+
+Le client Google Web existant a été enregistré avec l’origine du domaine Cognito
+et son retour `/oauth2/idpresponse`, en remplacement de l’ancien callback API.
+Les endpoints d’autorisation Cognito redirigent vers Google et Apple avec le retour
+Cognito attendu. Cela vérifie le raccordement, sans créer de compte utilisateur
+ni prétendre qu’une connexion de bout en bout a été exécutée.
+
+Terraform conserve explicitement le mapping `username = sub` ajouté par Cognito
+et ignore uniquement les URL/métadonnées de découverte produites par AWS. La clé
+privée Apple est en écriture seule : AWS ne la renvoie pas à la lecture. Avec le
+provider actuel, un plan ultérieur propose donc sa réapplication sur le fournisseur
+Apple, même sans rotation ; ne pas ignorer ce champ, sinon changer la clé dans le
+coffre ne la mettrait plus à jour dans Cognito. Le problème des métadonnées calculées
+est documenté dans [l’issue du provider AWS](https://github.com/hashicorp/terraform-provider-aws/issues/4831).
+
+Le retour dans Apple Developer attend encore la connexion du propriétaire à la
+console. Aucun changement n’a été appliqué à prod. Les images applicatives, le web
+et les binaires mobiles n’ont pas été déployés pendant ce raccordement.

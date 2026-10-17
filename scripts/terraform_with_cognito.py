@@ -70,6 +70,7 @@ def main() -> int:
     except (ConfigurationError, OSError) as exc:
         print(f"Cognito configuration unavailable: {exc}", file=sys.stderr)
         return 1
+    os.umask(0o077)
     child_environment = os.environ.copy()
     # Terraform debug logging can expose provider configuration, including keys.
     child_environment.pop("TF_LOG", None)

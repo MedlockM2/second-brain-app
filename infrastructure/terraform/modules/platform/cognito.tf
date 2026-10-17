@@ -70,7 +70,19 @@ resource "aws_cognito_identity_provider" "google" {
     client_secret    = var.cognito_google.client_secret
     authorize_scopes = "openid email profile"
   }
-  attribute_mapping = { email = "email", email_verified = "email_verified" }
+  attribute_mapping = { email = "email", email_verified = "email_verified", username = "sub" }
+  # Cognito supplies these endpoints for social providers. Keep credentials and
+  # scopes managed while leaving service-owned discovery metadata alone.
+  lifecycle {
+    ignore_changes = [
+      provider_details["attributes_url"],
+      provider_details["attributes_url_add_attributes"],
+      provider_details["authorize_url"],
+      provider_details["oidc_issuer"],
+      provider_details["token_request_method"],
+      provider_details["token_url"],
+    ]
+  }
 }
 resource "aws_cognito_identity_provider" "apple" {
   count         = nonsensitive(var.cognito_apple != null) ? 1 : 0
@@ -84,7 +96,18 @@ resource "aws_cognito_identity_provider" "apple" {
     private_key      = var.cognito_apple.private_key
     authorize_scopes = "email name"
   }
-  attribute_mapping = { email = "email", email_verified = "email_verified" }
+  attribute_mapping = { email = "email", email_verified = "email_verified", username = "sub" }
+  lifecycle {
+    ignore_changes = [
+      provider_details["attributes_url_add_attributes"],
+      provider_details["authorize_url"],
+      provider_details["oidc_issuer"],
+      provider_details["token_request_method"],
+      provider_details["token_url"],
+    ]
+  }
+  # AWS never returns private_key. Reapplying that write-only field is expected;
+  # do not ignore it, or a key rotation in Secrets Manager would be discarded.
 }
 locals {
   cognito_domain          = "https://${aws_cognito_user_pool_domain.users.domain}.auth.${var.aws_region}.amazoncognito.com"
