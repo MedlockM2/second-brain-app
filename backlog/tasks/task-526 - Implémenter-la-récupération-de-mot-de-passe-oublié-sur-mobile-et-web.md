@@ -3,11 +3,11 @@ id: TASK-526
 title: >-
   Confier l’authentification de Deepn à Amazon Cognito et intégrer la
   récupération de mot de passe
-status: Done
+status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-17 15:53'
+updated_date: '2026-10-17 16:39'
 labels:
   - auth
   - mobile
@@ -81,6 +81,8 @@ CLARIFICATION PROPRIÉTAIRE (2026-10-17) : conserver les connexions Google et Ap
 5. Exécuter les vérifications statiques backend/mobile/web/core et Terraform sans tests automatisés, vérifier le diff et les secrets, committer avec Web: done puis mettre à jour le backlog.
 
 6. Lors de l’intégration finale, corriger la réclamation du code de secours pour les profils distincts partageant un e-mail : rechercher le code parmi les profils concernés sans les fusionner, conserver la limite de tentatives et consommer le code atomiquement.
+
+7. Suite autorisée par le propriétaire : réutiliser directement les six valeurs d’authentification existantes dans AWS Secrets Manager, retirer le prérequis de secrets GitHub dupliqués, appliquer la configuration Cognito nécessaire et adapter les retours Google/Apple avec les accès disponibles. Préserver les fixtures et documenter précisément les vérifications et tout blocage externe.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -99,10 +101,16 @@ Revue finale : le secours d’appairage choisissait le premier profil de l’ind
 Correction finale AC6 : le code de secours recherche tous les profils concernés par l’adresse, retient uniquement le code qui désigne son propriétaire et refuse une collision plutôt que de choisir arbitrairement. Consommation et compteur d’échecs atomiques DynamoDB, sans recréer un code déjà consommé. ruff/mypy backend et diff --check passent après cette correction ; aucun test automatisé ajouté ni exécuté.
 
 Correction d’intégration commitée dans 5c734a3d ; ruff et mypy repassés avec succès (205 fichiers). Les vérifications TypeScript et de parité web ont également passé sur main après la première fusion. Aucun changement de configuration externe ni de données AWS n’a été effectué.
+
+Les six valeurs Google/Apple nécessaires sont présentes dans les secrets runtime de dev et prod ; présence et format vérifiés sans en afficher les valeurs. Le propriétaire demande de réaliser le raccordement et les adaptations des retours fournisseurs. Aucun identifiant ni secret n’est recopié dans le backlog.
+
+Suite de raccordement livrée dans b4f029f7 et 159fda7a, intégrée localement à main. Les secrets GitHub de fédération dupliqués ne sont plus nécessaires : scripts/terraform_with_cognito.py charge en mémoire les six champs existants du secret runtime AWS, les transmet comme variables Terraform sensibles, neutralise le debug et impose umask 077. Les variables racines dev/prod exigent désormais les fournisseurs pour éviter une suppression involontaire ; le workflow utilise le wrapper et se déclenche aussi sur ses modifications.
+
+Apply réel dev exécuté avec le profil existant : 7 créations, 19 mises à jour, aucune suppression. Pool Cognito, domaine, fournisseurs Google/Apple et clients mobile/web créés. Lectures AWS : paramètres fournisseurs comparés en mémoire à la source, retours exacts et mécanismes de rotation/révocation confirmés, attribut de rattachement des fixtures non inscriptible par les apps. Aucun secret affiché ni recopié ; aucune donnée utilisateur ni fixture modifiée. Aucune image applicative, aucun web ni binaire mobile déployé ; prod inchangé.
+
+Client Google Web existant enregistré dans la console avec le domaine Cognito dev comme origine et /oauth2/idpresponse comme retour, en remplacement de l’ancien callback API ; succès confirmé par la console. Les deux autorisations Cognito renvoient HTTP 302 vers les fournisseurs avec le retour attendu. Ce contrôle de raccordement ne constitue pas une connexion utilisateur de bout en bout.
+
+Validation de cette suite : ruff du wrapper, syntaxe YAML et déclencheur du workflow, terraform fmt -check et validate dev réussis, diff --check et contrôle des ajouts sensibles réussis. Plan réel final : aucune création/suppression ; seule la clé privée Apple, en écriture seule et jamais renvoyée par AWS, est réappliquée. Seules les métadonnées de découverte AWS sont ignorées ; une rotation de clé reste appliquée. Plans sauvegardés privés puis supprimés. Aucun test automatisé ajouté ni exécuté.
+
+Reste à réaliser dans Apple Developer : enregistrer le domaine et le retour Cognito sur le Services ID existant. La console attend la validation de connexion par clé d’accès du propriétaire ; demande de reprise envoyée dans cette session, onglet conservé ouvert. La tâche reste In Progress jusqu’à ce réglage autorisé ; les AC de livraison de code restent satisfaits. Les mentions historiques de secrets GitHub requis et d’absence d’apply sont remplacées par le présent résultat.
 <!-- SECTION:NOTES:END -->
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Authentification des utilisateurs remplacée par Amazon Cognito sur API, mobile et web : inscription avec vérification d’adresse, récupération par code, Google/Apple avec PKCE, refresh rotatif, révocation et suppression de l’identité. Profils rattachés au sub, sans fusion par e-mail ; attachement administratif explicite des fixtures protégées. Les autorisations d’extension restent indépendantes, hachées et limitées aux quatre routes autorisées. Anciens mots de passe/JWT/sessions maison, endpoints sociaux natifs et modules remplacés supprimés. Terraform commun et trois racines configurés, messages traduits dans les onze langues, runbook de bascule et .env.example alignés. Vérification : ruff/mypy backend (205 fichiers), uv lock --check, typecheck/lint mobile/web/core, build web, terraform fmt et validate module/dev/staging/prod. Aucun test automatisé exécuté. Un avertissement lint préexistant hors périmètre et l’avertissement de taille du bundle web restent signalés. Après fusion : fournir les secrets de fédération, appliquer Terraform, rattacher les fixtures, déployer API/stream/web et reconstruire les binaires ; les contrôles sur AWS et appareils appartiennent à la validation propriétaire décrite dans le runbook.
-<!-- SECTION:FINAL_SUMMARY:END -->
