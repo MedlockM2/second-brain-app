@@ -221,35 +221,33 @@ async def claim_pairing_code(claim: PairingCodeClaim) -> ExtensionTokenResponse:
     if not claim.code.isdigit():
         raise refused
 
-    user = await database_async.get_user_by_email(claim.email.lower().strip())
-    if not user:
-        raise refused
-
+    users = await database_async.get_users_by_email(claim.email.lower().strip())
     now = datetime.now(timezone.utc)
-    live = [
-        token
-        for token in await database_async.get_auth_tokens_by_user_id(user.id, TokenType.EXTENSION_PAIRING_CODE)
-        if token.expires_at > now
-    ]
+    live: List[AuthToken] = []
+    for user in users:
+        if not user.cognito_sub:
+            continue
+        codes = [
+            token for token in await database_async.get_auth_tokens_by_user_id(user.id, TokenType.EXTENSION_PAIRING_CODE)
+            if token.expires_at > now and token.failed_attempts < PAIRING_CODE_MAX_FAILURES
+        ]
+        if codes:
+            live.append(max(codes, key=lambda token: token.created_at))
     if not live:
         raise refused
-    pairing = max(live, key=lambda token: token.created_at)
 
-    if not secrets.compare_digest(pairing.token, _code_digest(user.id, claim.code)):
-        pairing.failed_attempts += 1
-        if pairing.failed_attempts >= PAIRING_CODE_MAX_FAILURES:
-            await database_async.delete_auth_token(pairing.id)
-            log_event(
-                logger,
-                logging.WARNING,
-                "auth.extension.pairing_code_destroyed",
-                "Pairing code destroyed after too many wrong guesses",
-                user_id=user.id,
-            )
-        else:
-            await database_async.update_auth_token(pairing)
+    matches = [token for token in live if secrets.compare_digest(token.token, _code_digest(token.user_id, claim.code))]
+    if len(matches) != 1:
+        # An email may locate multiple separate Cognito profiles. Wrong guesses
+        # count against every outstanding code; index order never picks an owner.
+        for pairing in live:
+            await database_async.record_extension_pairing_failure(pairing.id, PAIRING_CODE_MAX_FAILURES)
         raise refused
 
-    # Single use: the code is gone before the lineage exists.
-    await database_async.delete_auth_token(pairing.id)
-    return await _open_extension_lineage(user.id, user.email, claim.client_label)
+    pairing = matches[0]
+    owner = await database_async.get_user_by_id(pairing.user_id)
+    if owner is None or not owner.cognito_sub:
+        raise refused
+    if not await database_async.consume_extension_pairing_code(pairing.id, PAIRING_CODE_MAX_FAILURES):
+        raise refused
+    return await _open_extension_lineage(owner.id, owner.email, claim.client_label)

@@ -3,11 +3,11 @@ id: TASK-526
 title: >-
   Confier l’authentification de Deepn à Amazon Cognito et intégrer la
   récupération de mot de passe
-status: Done
+status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-17 15:50'
+updated_date: '2026-10-17 15:53'
 labels:
   - auth
   - mobile
@@ -79,6 +79,8 @@ CLARIFICATION PROPRIÉTAIRE (2026-10-17) : conserver les connexions Google et Ap
 3. Câbler inscription avec vérification, récupération par code et flux Google/Apple Cognito avec PKCE sur mobile et web ; partager contrats et messages, conserver les transports sécurisés et traduire tous les états.
 4. Intégrer la suppression Cognito au parcours de suppression de compte, enlever les anciens chemins et configurations inutilisés et documenter la bascule et les opérations propriétaire après déploiement.
 5. Exécuter les vérifications statiques backend/mobile/web/core et Terraform sans tests automatisés, vérifier le diff et les secrets, committer avec Web: done puis mettre à jour le backlog.
+
+6. Lors de l’intégration finale, corriger la réclamation du code de secours pour les profils distincts partageant un e-mail : rechercher le code parmi les profils concernés sans les fusionner, conserver la limite de tentatives et consommer le code atomiquement.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -91,6 +93,10 @@ Vérifications exécutées sans tests automatisés : ruff backend, mypy (205 fic
 Quota Cognito_DEFAULT revérifié dans la documentation AWS le 2026-10-17 : 50 e-mails/jour/compte, non augmentable, remise à zéro 09:00 UTC. Le runbook décrit les secrets et retours Google/Apple, le rattachement de Commonplace book sans suppression de bibliothèque, le nettoyage des seules anciennes sessions et la validation propriétaire après déploiement. Les fichiers .env.example racine/mobile/web ont été alignés ; aucun .env réel n’a été lu ni modifié.
 
 Livraison commitée dans 73c3a653 (Web: done). Le workflow Terraform Dev reçoit désormais les deux configurations de fédération par secrets GitHub Actions et refuse l’apply si elles manquent. Syntaxe YAML des workflows vérifiée. Mise à Done après le commit de résolution ; aucune validation déployée déclarée comme exécutée.
+
+Revue finale : le secours d’appairage choisissait le premier profil de l’index e-mail. Cognito peut conserver des identités distinctes avec la même adresse ; le code doit identifier son propriétaire, jamais l’ordre des résultats de l’index. Correction incluse dans le périmètre de cohérence de l’extension (AC6).
+
+Correction finale AC6 : le code de secours recherche tous les profils concernés par l’adresse, retient uniquement le code qui désigne son propriétaire et refuse une collision plutôt que de choisir arbitrairement. Consommation et compteur d’échecs atomiques DynamoDB, sans recréer un code déjà consommé. ruff/mypy backend et diff --check passent après cette correction ; aucun test automatisé ajouté ni exécuté.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

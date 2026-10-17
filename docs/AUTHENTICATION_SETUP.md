@@ -175,7 +175,10 @@ peuvent pas recréer le compte puisque `GetUser` refuse l’identité supprimée
 L’appairage et son code de secours restent les routes existantes
 `/api/auth/extension-tokens`. Ils exigent une session Cognito complète ; un token
 d’extension ne peut pas en émettre d’autres. La réclamation d’un code reste
-éphémère, à usage unique et limitée en tentatives.
+éphémère, consommée atomiquement une seule fois et limitée en tentatives. Si
+plusieurs profils partagent une adresse, le code désigne son profil sans les
+fusionner ; une erreur compte contre les codes vivants de cette adresse. Deux
+codes identiques simultanés sont refusés plutôt que de choisir un profil arbitraire.
 
 L’extension reçoit un secret opaque `ext_r_…`, stocké haché dans `auth_tokens`.
 Son refresh rend un access token opaque `ext_a_…`, haché également et valable cinq

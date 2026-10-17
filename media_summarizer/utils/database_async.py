@@ -224,25 +224,22 @@ async def get_user_by_id(user_id: str) -> Optional[User]:
         raise
 
 
-async def get_user_by_email(email: str) -> Optional[User]:
-    """Get a user by email."""
+async def get_users_by_email(email: str) -> List[User]:
+    """Email is a pairing-code locator, never an authentication identity or merge key."""
     session = get_session()
     async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
         table = await dynamodb.Table(USERS_TABLE)
-        try:
-            response = await table.query(IndexName="email-index", KeyConditionExpression=Key("email").eq(email))
-            items = response.get("Items", [])
-            if items:
-                return User.from_dynamodb_item(items[0])
-            return None
-        except ClientError as e:
-            _log_dynamodb_error(
-                "get_user_by_email",
-                e,
-                table=USERS_TABLE,
-                email=email,
-            )
-            raise
+        kwargs: Dict[str, Any] = {
+            "IndexName": "email-index", "KeyConditionExpression": Key("email").eq(email)
+        }
+        users: List[User] = []
+        while True:
+            response = await table.query(**kwargs)
+            users.extend(User.from_dynamodb_item(item) for item in response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                return users
+            kwargs["ExclusiveStartKey"] = last_key
 
 
 async def update_user(user: User) -> User:
@@ -1397,3 +1394,36 @@ async def renew_extension_grant(token: AuthToken) -> None:
             ExpressionAttributeValues={":expiry": token.expires_at.isoformat(),
                 ":ttl": int(token.expires_at.timestamp()) + 604800,
                 ":active": True, ":now": datetime.now(timezone.utc).isoformat()})
+
+
+async def consume_extension_pairing_code(token_id: str, max_failures: int) -> bool:
+    """Only one claimant can consume a live rescue code, including concurrent requests."""
+    async with get_session().resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        table = await dynamodb.Table(AUTH_TOKENS_TABLE)
+        try:
+            await table.delete_item(Key={"id": token_id},
+                ConditionExpression=("attribute_exists(id) AND token_type = :type AND expires_at > :now "
+                    "AND (attribute_not_exists(failed_attempts) OR failed_attempts < :max)"),
+                ExpressionAttributeValues={":type": TokenType.EXTENSION_PAIRING_CODE.value, ":max": max_failures,
+                    ":now": datetime.now(timezone.utc).isoformat()})
+            return True
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                return False
+            raise
+
+
+async def record_extension_pairing_failure(token_id: str, max_failures: int) -> None:
+    """Count guesses atomically without recreating a consumed or replaced code."""
+    async with get_session().resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        table = await dynamodb.Table(AUTH_TOKENS_TABLE)
+        try:
+            await table.update_item(Key={"id": token_id},
+                UpdateExpression="SET failed_attempts = if_not_exists(failed_attempts, :zero) + :one",
+                ConditionExpression=("attribute_exists(id) AND token_type = :type AND expires_at > :now "
+                    "AND (attribute_not_exists(failed_attempts) OR failed_attempts < :max)"),
+                ExpressionAttributeValues={":type": TokenType.EXTENSION_PAIRING_CODE.value,
+                    ":zero": 0, ":one": 1, ":max": max_failures, ":now": datetime.now(timezone.utc).isoformat()})
+        except ClientError as exc:
+            if exc.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                raise
