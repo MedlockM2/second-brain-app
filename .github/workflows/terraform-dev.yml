@@ -67,18 +67,7 @@ jobs:
   apply:
     name: Plan and apply (dev)
     runs-on: ubuntu-latest
-    env:
-      # Same inputs on every apply: omitting them would remove social providers.
-      TF_VAR_cognito_google: ${{ secrets.COGNITO_GOOGLE_PROVIDER_JSON || 'null' }}
-      TF_VAR_cognito_apple: ${{ secrets.COGNITO_APPLE_PROVIDER_JSON || 'null' }}
     steps:
-      - name: Require Cognito federation configuration
-        run: |
-          if [[ "$TF_VAR_cognito_google" == "null" || "$TF_VAR_cognito_apple" == "null" ]]; then
-            echo "::error::Configure COGNITO_GOOGLE_PROVIDER_JSON and COGNITO_APPLE_PROVIDER_JSON before applying the Cognito cutover. See docs/AUTHENTICATION_SETUP.md."
-            exit 1
-          fi
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -121,7 +110,7 @@ jobs:
         run: terraform -chdir=$TF_ROOT validate
 
       - name: Plan
-        run: terraform -chdir=$TF_ROOT plan -out=tfplan -input=false -lock-timeout=5m
+        run: python3 scripts/terraform_with_cognito.py dev plan -out=tfplan -input=false -lock-timeout=5m
 
       # NO GATE HERE, by owner decision of 2026-09-08. A `scripts/tf_plan_guard.sh dev
       # tfplan` step used to sit between plan and apply (added by task-341) and it ran
@@ -166,4 +155,4 @@ jobs:
       # plan file path is resolved relative to the environment directory, so the bare
       # `tfplan` is correct.
       - name: Apply the saved plan
-        run: terraform -chdir=$TF_ROOT apply -input=false -lock-timeout=5m tfplan
+        run: python3 scripts/terraform_with_cognito.py dev apply -input=false -lock-timeout=5m tfplan

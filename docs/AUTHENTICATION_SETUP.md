@@ -16,18 +16,32 @@ n’accepte que son retour exact : `media-summarizer://auth-callback` pour le mo
 Le module est appelé par dev, staging et prod ; staging reste une référence
 volontairement conservée, pas un environnement à recréer pour cette tâche.
 
-Les variables sensibles `cognito_google` (client Web Google et secret) et
-`cognito_apple` (Services ID, team ID, key ID et clé privée) se fournissent aux racines
-Terraform par le coffre ou un fichier local ignoré. Ne pas les mettre dans git,
-une tâche ou un journal. Les valeurs sont conservées dans le state privé Terraform.
-Sans ces entrées, Terraform ne crée pas les fournisseurs concernés : renseigner
-**les deux avant la bascule** pour que les boutons conservés fonctionnent.
-Le workflow `Terraform Dev` lit les objets JSON depuis les secrets GitHub Actions
-`COGNITO_GOOGLE_PROVIDER_JSON` et `COGNITO_APPLE_PROVIDER_JSON` et les transmet
-comme `TF_VAR_cognito_google` / `TF_VAR_cognito_apple`. Il refuse l’apply si un des
-deux manque, pour ne jamais retirer silencieusement un fournisseur lors d’un apply
-ultérieur. Configurer ces deux secrets avant le premier push de la bascule.
+Les six paramètres existent déjà dans le secret AWS
+`media-summarizer-runtime-<env>` : `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID` et `APPLE_PRIVATE_KEY`.
+`scripts/terraform_with_cognito.py` lit cette source avec le profil AWS courant et
+transmet uniquement ces valeurs en mémoire aux variables sensibles Terraform
+`cognito_google` et `cognito_apple`. Le secret complet, les autres credentials et
+les valeurs de fédération ne sont ni imprimés ni écrits dans un fichier local.
+Les détails des fournisseurs Cognito restent dans le state Terraform privé.
 
+Le workflow `Terraform Dev` utilise ce même script après son authentification AWS
+OIDC existante ; aucun secret GitHub supplémentaire n’est nécessaire. L’exécution
+s’arrête si une valeur manque. Les racines dev/prod exigent les deux objets : un
+plan direct sans raccordement ne peut pas retirer silencieusement un fournisseur.
+Pour un plan local :
+
+```sh
+AWS_PROFILE=second-brain-app python3 scripts/terraform_with_cognito.py dev plan -out=tfplan
+AWS_PROFILE=second-brain-app python3 scripts/terraform_with_cognito.py dev apply tfplan
+```
+
+Pour prod, employer le profil `prod` et l’argument `prod` uniquement lors d’une
+activation explicite de cet environnement. Le wrapper désactive le debug Terraform
+pour que les providers ne puissent pas journaliser les clés. Le plan sauvegardé
+contient des données sensibles : garder le fichier ignoré, privé, et le supprimer
+après application. Ne pas retirer les six paramètres du coffre après bascule : ils
+constituent désormais la source permanente de configuration des fournisseurs.
 
 Dans Google Cloud, autoriser comme URI de redirection la sortie Terraform
 `cognito_configuration.provider_callback`. Dans Apple Developer, configurer le
@@ -192,12 +206,12 @@ La déconnexion web ne délie pas l’extension. Supprimer le compte révoque le
 
 ## Bascule et validation propriétaire après fusion
 
-1. Récupérer les paramètres Google/Apple depuis le coffre, configurer les retours
-   fournisseurs et appliquer Terraform avec les variables sensibles. Vérifier
+1. Utiliser le wrapper Terraform qui reprend les paramètres Google/Apple depuis
+   le coffre existant, configurer les retours fournisseurs et appliquer le plan. Vérifier
    les deux fournisseurs, les callbacks et les clients dans la console Cognito.
-2. Garder dans le coffre la clé Apple utile à la fédération. Retirer du secret
-   runtime les anciennes clés JWT/refresh et `GOOGLE_*`, `APPLE_*` d’authentification
-   maison, sans toucher les clés IAP, App Store Connect ou RevenueCat.
+2. Conserver les six paramètres Google/Apple lus par le wrapper. Retirer seulement
+   les anciennes clés JWT/refresh et les autres paramètres d’authentification sans
+   lecteur, sans toucher les clés IAP, App Store Connect ou RevenueCat.
 3. Créer les nouvelles identités nécessaires et rattacher explicitement les
    fixtures protégées. Aucun import d’ancien mot de passe et aucune purge globale.
    Les anciennes lignes `auth_tokens` peuvent être supprimées : elles ne portent

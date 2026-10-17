@@ -153,11 +153,9 @@ variable "alert_email" {
 variable "cognito_google" {
   type      = object({ client_id = string, client_secret = string })
   sensitive = true
-  default   = null
 }
 variable "cognito_apple" {
   type      = object({ client_id = string, team_id = string, key_id = string, private_key = string })
   sensitive = true
-  default   = null
 }
 output "cognito_configuration" { value = module.platform.cognito_configuration }
