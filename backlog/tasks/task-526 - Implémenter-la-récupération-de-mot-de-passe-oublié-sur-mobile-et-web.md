@@ -3,7 +3,7 @@ id: TASK-526
 title: >-
   Confier l’authentification de Deepn à Amazon Cognito et intégrer la
   récupération de mot de passe
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
@@ -97,6 +97,8 @@ Livraison commitée dans 73c3a653 (Web: done). Le workflow Terraform Dev reçoit
 Revue finale : le secours d’appairage choisissait le premier profil de l’index e-mail. Cognito peut conserver des identités distinctes avec la même adresse ; le code doit identifier son propriétaire, jamais l’ordre des résultats de l’index. Correction incluse dans le périmètre de cohérence de l’extension (AC6).
 
 Correction finale AC6 : le code de secours recherche tous les profils concernés par l’adresse, retient uniquement le code qui désigne son propriétaire et refuse une collision plutôt que de choisir arbitrairement. Consommation et compteur d’échecs atomiques DynamoDB, sans recréer un code déjà consommé. ruff/mypy backend et diff --check passent après cette correction ; aucun test automatisé ajouté ni exécuté.
+
+Correction d’intégration commitée dans 5c734a3d ; ruff et mypy repassés avec succès (205 fichiers). Les vérifications TypeScript et de parité web ont également passé sur main après la première fusion. Aucun changement de configuration externe ni de données AWS n’a été effectué.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
