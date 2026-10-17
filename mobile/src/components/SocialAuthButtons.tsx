@@ -1,19 +1,17 @@
 import { useState } from "react";
+import type { SocialProvider } from "@media-summarizer/core/auth/cognito";
+import { authErrorKey } from "@media-summarizer/core/auth/cognito";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
   ActivityIndicator,
 } from "react-native";
-import * as AppleAuthentication from "expo-apple-authentication";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuth } from "../contexts/AuthContext";
-import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { t } from "../i18n";
-import { useGoogleSignIn } from "../hooks/useGoogleSignIn";
 import { POST_AUTH_ENTRY_POINT } from "../constants/routes";
 import {
   Typography,
@@ -29,104 +27,28 @@ interface SocialAuthButtonsProps {
   disabled?: boolean;
 }
 
-/**
- * Social authentication buttons for Google and Apple sign-in.
- * - Google: visible on both iOS and Android
- * - Apple: visible only on iOS (App Store requirement)
- *
- * The Google flow itself is platform-specific and lives in `useGoogleSignIn`:
- * a browser authorization flow on iOS and web, the system Credential Manager
- * sheet on Android. This component only maps the outcome to a message.
- */
+/** Google and Apple authenticate through Cognito's authorization code flow with PKCE. */
 export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const { loginWithGoogle, loginWithApple } = useAuth();
-  const { signInAsync: googleSignInAsync } = useGoogleSignIn();
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isAppleLoading, setIsAppleLoading] = useState(false);
-
-  const isLoading = isGoogleLoading || isAppleLoading;
-
-  const handleGoogleSignIn = async () => {
+  const { loginWithSocial } = useAuth();
+  const [provider, setProvider] = useState<SocialProvider | null>(null);
+  const isLoading = provider !== null;
+  const isGoogleLoading = provider === "Google";
+  const isAppleLoading = provider === "SignInWithApple";
+  const signIn = async (selected: SocialProvider) => {
     if (disabled || isLoading) return;
-    setIsGoogleLoading(true);
+    setProvider(selected);
     try {
-      const outcome = await googleSignInAsync();
-
-      switch (outcome.type) {
-        // The user backed out: stay silent and just drop the loading state.
-        case "cancelled":
-          return;
-        case "noGoogleAccount":
-          onError(t("auth.google.noGoogleAccount"));
-          return;
-        // The sheet came back with no token, which is our problem and not one the
-        // reader can name — same sentence as any other Google failure.
-        case "noIdToken":
-          onError(t("auth.google.failed"));
-          return;
-        case "notCompleted":
-          onError(t("auth.google.notCompleted"));
-          return;
-      }
-
-      await loginWithGoogle(outcome.idToken);
-      router.replace(POST_AUTH_ENTRY_POINT);
-    } catch (err) {
-      onError(
-        getFriendlyErrorMessage(err, {
-          fallback: t("auth.google.failed"),
-        }),
-      );
+      if (await loginWithSocial(selected)) router.replace(POST_AUTH_ENTRY_POINT);
+    } catch (error) {
+      onError(t(authErrorKey(error)));
     } finally {
-      setIsGoogleLoading(false);
+      setProvider(null);
     }
   };
-
-  const handleAppleSignIn = async () => {
-    if (disabled || isLoading) return;
-    setIsAppleLoading(true);
-    try {
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-
-      const identityToken = credential.identityToken;
-      if (!identityToken) {
-        onError(t("auth.apple.failed"));
-        return;
-      }
-
-      await loginWithApple(identityToken, {
-        email: credential.email ?? undefined,
-        fullName: credential.fullName
-          ? {
-              givenName: credential.fullName.givenName ?? undefined,
-              familyName: credential.fullName.familyName ?? undefined,
-            }
-          : undefined,
-      });
-      router.replace(POST_AUTH_ENTRY_POINT);
-    } catch (err: unknown) {
-      // Apple sign-in cancellation has a specific error code
-      if (
-        err &&
-        typeof err === "object" &&
-        "code" in err &&
-        (err as { code: string }).code === "ERR_REQUEST_CANCELED"
-      ) {
-        // User cancelled - no error to show
-      } else {
-        onError(getFriendlyErrorMessage(err, { fallback: t("auth.apple.failed") }));
-      }
-    } finally {
-      setIsAppleLoading(false);
-    }
-  };
+  const handleGoogleSignIn = () => void signIn("Google");
+  const handleAppleSignIn = () => void signIn("SignInWithApple");
 
   return (
     <View style={styles.container}>
@@ -157,9 +79,8 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
         )}
       </TouchableOpacity>
 
-      {/* Apple button - iOS only */}
-      {Platform.OS === "ios" && (
-        <TouchableOpacity
+      {/* Apple federation is available on both platforms. */}
+      <TouchableOpacity
           style={[styles.socialButton, styles.appleButton, (disabled || isLoading) && styles.appleButtonDisabled]}
           onPress={handleAppleSignIn}
           disabled={disabled || isLoading}
@@ -177,8 +98,7 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
               </Text>
             </>
           )}
-        </TouchableOpacity>
-      )}
+      </TouchableOpacity>
     </View>
   );
 }

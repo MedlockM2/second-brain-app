@@ -529,7 +529,12 @@ async def _purge_identity(user_id: str, report: PurgeReport) -> None:
     # success for a delete on a key that never existed, so a purge retried after a
     # partial failure would otherwise log an erasure it did not perform. Every
     # other count comes from a query, so this is the only step that needs it.
-    existed = (await database_async.get_user_by_id(user_id)) is not None
+    user = await database_async.get_user_by_id(user_id)
+    existed = user is not None
+    if user and user.cognito_username:
+        from media_summarizer.core.services.cognito_auth import delete_identity
+        await delete_identity(user.cognito_username)
+        report.add("cognito_identities_deleted")
     await database_async.delete_user(user_id)
     if existed:
         report.add("user_rows_deleted")

@@ -9,21 +9,6 @@ import {
 } from "expo/config-plugins";
 
 /**
- * Google's reserved custom URL scheme for an OAuth client ID: the client ID with
- * its `.apps.googleusercontent.com` suffix moved to the front.
- *
- * `123-abc.apps.googleusercontent.com` -> `com.googleusercontent.apps.123-abc`
- *
- * Kept inline rather than imported from `src/lib/googleOAuth.ts` (its runtime
- * counterpart, which builds the matching `redirect_uri`): `@expo/config`
- * transpiles this file alone, so a relative `.ts` import fails to resolve. Both
- * sides derive from the same `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS`, so they cannot
- * point at different clients — only this transformation is duplicated.
- *
- * Returns `null` when the env var is missing, so a build without it declares no
- * scheme rather than a broken one.
- */
-/**
  * The EAS project id, declared once for the whole file.
  *
  * It is read twice — `extra.eas.projectId`, which is what links the checkout to
@@ -62,16 +47,6 @@ const appName = "Deepn";
  * not from this string, so a rename needs no new App ID and no new profile.
  */
 const iosShareExtensionName = "Deepn Share";
-
-const googleReservedClientScheme = (clientId?: string): string | null => {
-  const suffix = ".apps.googleusercontent.com";
-  const trimmed = clientId?.trim();
-  if (!trimmed || !trimmed.endsWith(suffix)) {
-    return null;
-  }
-  const guid = trimmed.slice(0, -suffix.length);
-  return guid ? `com.googleusercontent.apps.${guid}` : null;
-};
 
 const withEmbeddedDebugBundle: ConfigPlugin = (config) => {
   config = withAppBuildGradle(config, (gradleConfig) => {
@@ -114,7 +89,7 @@ const withEmbeddedDebugBundle: ConfigPlugin = (config) => {
  * eas.json is the single source of truth for that host, and it is in the
  * repository — so any checkout can resolve it without an environment. Reading it
  * with `fs` rather than `import`: `@expo/config` transpiles app.config.ts alone
- * (see the note on `googleReservedClientScheme`), so a relative import does not
+ * so a relative import does not
  * resolve here, while node builtins do.
  *
  * The `internal` profile and not `production`: `production` points at
@@ -136,22 +111,6 @@ const apiBaseUrlFromEasJson = (projectRoot: string): string | undefined => {
 };
 
 export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
-  // Google's browser sign-in flow — iOS only — redirects to the reversed client
-  // ID of the iOS OAuth client (see src/lib/googleOAuth.ts). That scheme has to be
-  // declared for the callback to re-enter the app, and it is derived from the same
-  // env var the runtime reads so a client rotation cannot desynchronise the two.
-  // Android has no equivalent: it signs in through Credential Manager, with no
-  // redirect and therefore no scheme.
-  //
-  // Declared through `ios.scheme` rather than `ios.infoPlist.CFBundleURLTypes`:
-  // that field is *merged* into the generated CFBundleURLTypes by
-  // @expo/config-plugins, whereas setting `ios.infoPlist.CFBundleURLTypes`
-  // directly makes the plugin skip the abstract `scheme` property altogether and
-  // would silently drop `media-summarizer`.
-  const googleIosScheme = googleReservedClientScheme(
-    process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
-  );
-
   // The API every request of the app is addressed to, and the single place it is
   // read from the environment: it goes into `extra.apiBaseUrl` below, which the
   // app reads through `Constants.expoConfig` (src/constants/config.ts).
@@ -229,8 +188,7 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     // `updates.url` is where the installed binary asks for a newer JS bundle.
     // `runtimeVersion` is what stops it from accepting one it cannot run: the
     // `fingerprint` policy makes the runtime version a hash of the *native*
-    // project — every autolinked native module, the local
-    // `modules/google-credential-manager` module, the share-extension target,
+    // project — every autolinked native module, the share-extension target,
     // the intent filters, the plugin list. An update is only ever served to a
     // binary whose fingerprint matches the one it was published under, so a JS
     // bundle that calls into a native module the installed app does not have can
@@ -295,10 +253,6 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     ios: {
       supportsTablet: false,
       bundleIdentifier: "com.secondbrainlabs.core",
-      usesAppleSignIn: true,
-      // Merged with the top-level `scheme` into CFBundleURLTypes at prebuild, so
-      // `media-summarizer` (expo-router deep links) keeps working untouched.
-      scheme: googleIosScheme ? [googleIosScheme] : [],
       config: {
         // Writes ITSAppUsesNonExemptEncryption=false into the ipa's Info.plist.
         // The app only ever uses platform TLS (HTTPS to the API, Google/Apple
@@ -356,23 +310,14 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
         backgroundColor: "#fcf9f6",
       },
       package: "com.secondbrainlabs.core",
-      // No `scheme` for Google here, deliberately. Google refuses a custom URI
-      // scheme `redirect_uri` for an Android OAuth client — `Error 400:
-      // invalid_request`, "Custom URI scheme is not enabled for your Android
-      // client", with no setting to turn it on — so `com.secondbrainlabs.core:/`
-      // was an intent filter nothing could ever call back into. Android now signs
-      // in through Credential Manager (`modules/google-credential-manager`),
-      // which needs no redirect at all.
-      // Camera capture as an ingestion entry point (task-264). The runtime
-      // request is made by expo-image-picker; the manifest entry is what makes
-      // that request grantable.
+      // Social sign-in uses the top-level Cognito callback scheme.
+      // Camera ingestion is requested by expo-image-picker.
       permissions: ["android.permission.CAMERA"],
     },
     plugins: [
       "expo-router",
       "expo-secure-store",
       "expo-localization",
-      "expo-apple-authentication",
       "expo-font",
       // Media covers (task-304). The config plugin is what wires SDWebImage on
       // iOS and Glide on Android; without it `expo-image` falls back to a
@@ -488,12 +433,6 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     ],
     extra: {
       apiBaseUrl,
-      googleClientIdWeb: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || "",
-      googleClientIdIos: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || "",
-      // No Android client ID: Credential Manager takes the *Web* client ID as
-      // `serverClientId`. The Android OAuth client still has to exist on Google's
-      // side (it is matched on package name + signing fingerprint), but its ID
-      // never reaches the app.
       revenueCatAppleKey: process.env.EXPO_PUBLIC_REVENUCAT_APPLE_KEY || "",
       revenueCatGoogleKey: process.env.EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY || "",
       feedbackUrl: process.env.EXPO_PUBLIC_FEEDBACK_URL || "",

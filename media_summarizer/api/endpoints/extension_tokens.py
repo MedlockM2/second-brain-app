@@ -5,8 +5,8 @@ The extension never signs in. It is *paired* with an account that is already
 signed in on the web app, and gets the refresh token of a lineage of its own, of
 kind ``browser_extension``:
 
-- **Reduced scope.** The access tokens it mints carry ``scope: extension``, which
-  the authentication dependency confines to saving a page, saving a selection,
+- **Reduced scope.** Opaque ``ext_a_`` access tokens refer to the parent grant,
+  which the authentication dependency confines to saving a page, saving a selection,
   listing the folders and signing the extension out (``EXTENSION_ROUTES`` in
   api/dependencies/auth.py). Everything else answers 403.
 - **Durations.** Renewed at every /refresh, dead after 90 days without one, and
@@ -146,7 +146,7 @@ async def list_extension_tokens(
 ) -> LinkedExtensionsResponse:
     """The extensions linked to the account: one entry per live lineage, newest pairing first.
 
-    A lineage holds one live token, its head; its creation is the last use.
+    A lineage holds one stable refresh grant; last_used_at records its renewal.
     """
     now = datetime.now(timezone.utc)
     tokens = await database_async.get_auth_tokens_by_user_id(current_user.id, TokenType.REFRESH_TOKEN)
@@ -162,7 +162,7 @@ async def list_extension_tokens(
                 lineage_id=token.lineage_id,
                 client_label=token.client_label,
                 paired_at=token.lineage_started_at,
-                last_used_at=token.created_at,
+                last_used_at=token.last_used_at,
                 expires_at=token.expires_at,
             )
             for token in heads

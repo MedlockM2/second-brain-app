@@ -1,14 +1,12 @@
+import { authErrorKey, type SocialProvider } from "@media-summarizer/core/auth/cognito";
+import { authAction, startSocialSignIn } from "../session/cognito";
 import type { TranslationKey } from "@media-summarizer/core/i18n/runtime";
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { Icon } from "../components/Icon";
 import { LogoMark } from "../components/Logo";
-import { Config } from "../config";
 import { useI18n } from "../i18n/I18nProvider";
-import { AppleSignInButton, type AppleCredential } from "../session/AppleSignInButton";
-import { GoogleSignInButton } from "../session/GoogleSignInButton";
 import { useSession } from "../session/SessionProvider";
-import type { SignInRoute } from "../session/sessionStore";
 
 /**
  * Sign in and sign up (capture 19-connexion.png): Google, Apple, then email and
@@ -28,36 +26,31 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
   const after = (location.state as { from?: string } | null)?.from ?? "/";
 
-  async function open(route: SignInRoute, body: unknown, failure: (status?: number) => TranslationKey) {
-    setBusy(true);
-    setError(null);
-    try {
-      await signIn(route, body);
-      navigate(after, { replace: true });
-    } catch (caught) {
-      setError(failure((caught as { status?: number } | null)?.status));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const onSubmit = (event: FormEvent) => {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    void open(register ? "/register" : "/login", { email, password }, (status) => {
-      if (!register && status === 401) return "error.invalidCredentials";
-      if (register && status === 400) return "error.emailAlreadyExists";
-      return register ? "register.failed" : "login.failed";
-    });
-  };
-
-  const onGoogle = (idToken: string) =>
-    void open("/google/native", { id_token: idToken }, () => "auth.google.failed");
-
-  const onApple = ({ identityToken, user }: AppleCredential) =>
-    void open("/apple/native", { identity_token: identityToken, user }, () => "auth.apple.failed");
-
-  const hasGoogle = Boolean(Config.GOOGLE_CLIENT_ID);
-  const hasApple = Boolean(Config.APPLE_SERVICES_ID && Config.APPLE_REDIRECT_URI);
+    if (busy) return;
+    setBusy(true); setError(null);
+    try {
+      if (register) {
+        await authAction("/register", { email, password });
+        setPassword("");
+        navigate("/verify-email", { state: { email } });
+      } else {
+        await signIn("/login", { email, password });
+        navigate(after, { replace: true });
+      }
+    } catch (caught) {
+      if ((caught as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
+        navigate("/verify-email", { state: { email } });
+      } else { setError(authErrorKey(caught)); }
+    } finally { setBusy(false); }
+  }
+  async function social(provider: SocialProvider) {
+    if (busy) return;
+    setBusy(true); setError(null);
+    try { await startSocialSignIn(provider); }
+    catch (caught) { setError(authErrorKey(caught)); setBusy(false); }
+  }
 
   return (
     <div className="center-page">
@@ -72,15 +65,11 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         </p>
 
         <div className="auth-stack">
-          {hasGoogle && (
-            <GoogleSignInButton onIdToken={onGoogle} onError={() => setError("auth.google.failed")} />
-          )}
-          {hasApple && (
-            <AppleSignInButton onCredential={onApple} onError={() => setError("auth.apple.failed")} />
-          )}
-          {(hasGoogle || hasApple) && <div className="small muted auth-or">{t("auth.or")}</div>}
+          <button type="button" className="btn" disabled={busy} onClick={() => void social("Google")}>{t("auth.continueWithGoogle")}</button>
+          <button type="button" className="btn" disabled={busy} onClick={() => void social("SignInWithApple")}>{t("auth.signInWithApple")}</button>
+          <div className="small muted auth-or">{t("auth.or")}</div>
 
-          <form className="auth-stack" style={{ marginTop: 0 }} onSubmit={onSubmit}>
+          <form className="auth-stack" style={{ marginTop: 0 }} onSubmit={(event) => void submit(event)}>
             <label className="field">
               <span className="visually-hidden">{t("auth.email")}</span>
               <input
@@ -96,6 +85,9 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               <span className="visually-hidden">{t("auth.password")}</span>
               <input
                 type="password"
+                minLength={register ? 12 : undefined}
+                maxLength={256}
+                disabled={busy}
                 autoComplete={register ? "new-password" : "current-password"}
                 required
                 placeholder={t(register ? "register.passwordPlaceholder" : "login.passwordPlaceholder")}
@@ -112,6 +104,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             <button type="submit" className="btn primary" disabled={busy}>
               {t(register ? "register.submit" : "login.submit")}
             </button>
+            {!register && <Link to="/forgot-password">{t("auth.forgotPassword")}</Link>}
+            {register && <p className="small subtle">{t("auth.passwordPolicy")}</p>}
           </form>
         </div>
 

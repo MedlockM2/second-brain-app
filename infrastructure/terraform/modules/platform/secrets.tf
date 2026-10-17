@@ -20,12 +20,10 @@
 # The two secrets are SEPARATE AWS objects in separate accounts: copying a value
 # from dev to prod creates no live link, and changing dev's copy later does not
 # touch prod. So a per-environment value is only warranted when SHARING the value
-# is what couples the environments. That is the case for exactly three keys, and
-# prod holds its own (task-252): JWT_SECRET_KEY and PRICING_ADMIN_SECRET, because
-# a shared signing secret means a token minted by dev is accepted by prod; and
-# REVENUCAT_WEBHOOK_SECRET, because each RevenueCat webhook integration carries
-# its own Authorization header (dev's is filtered to sandbox purchases, prod's to
-# production purchases).
+# is what couples the environments. Authentication now uses isolated Cognito
+# pools/client IDs/issuers (task-526), without an application JWT signing key.
+# PRICING_ADMIN_SECRET and REVENUCAT_WEBHOOK_SECRET stay environment-specific;
+# each RevenueCat webhook has its own Authorization header and purchase filter.
 #
 # Everything else is copied from dev, deliberately. Third-party quotas that are
 # shared (Apify credits are per user, OpenAI rate limits and Deepgram credits are

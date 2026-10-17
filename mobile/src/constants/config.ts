@@ -35,8 +35,6 @@ function requireApiBaseUrl(): string {
 
 export const Config = {
   API_BASE_URL: requireApiBaseUrl(),
-  GOOGLE_CLIENT_ID_WEB: (extra.googleClientIdWeb as string) || "",
-  GOOGLE_CLIENT_ID_IOS: (extra.googleClientIdIos as string) || "",
   REVENUCAT_APPLE_KEY: (extra.revenueCatAppleKey as string) || "",
   REVENUCAT_GOOGLE_KEY: (extra.revenueCatGoogleKey as string) || "",
   FEEDBACK_URL: (extra.feedbackUrl as string) || "",

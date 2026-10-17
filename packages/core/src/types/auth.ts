@@ -30,7 +30,7 @@ export interface AuthUser {
 
 export interface TokenVerificationResponse {
   access_token: string;
-  /** Opaque refresh token of a mobile session, returned by register, login and refresh. */
+  /** Cognito refresh token of a mobile session, returned by login, OAuth exchange and refresh. */
   refresh_token: string;
   token_type: string;
   expires_in: number;
@@ -38,20 +38,12 @@ export interface TokenVerificationResponse {
 }
 
 /**
- * A web session's answer to register, login, refresh and the native sign-ins,
+ * A web session's answer to login, OAuth exchange and refresh,
  * sent with `X-Session-Transport: cookie`: the refresh token is an HttpOnly
  * cookie on the API host, never part of the body (docs/AUTHENTICATION_SETUP.md).
  */
 export interface WebSessionResponse {
   access_token: string;
-  token_type: string;
-  expires_in: number;
-  user: AuthUser;
-}
-
-export interface NativeAuthResponse {
-  access_token: string;
-  refresh_token: string;
   token_type: string;
   expires_in: number;
   user: AuthUser;

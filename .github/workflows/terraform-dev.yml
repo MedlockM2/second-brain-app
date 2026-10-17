@@ -67,7 +67,18 @@ jobs:
   apply:
     name: Plan and apply (dev)
     runs-on: ubuntu-latest
+    env:
+      # Same inputs on every apply: omitting them would remove social providers.
+      TF_VAR_cognito_google: ${{ secrets.COGNITO_GOOGLE_PROVIDER_JSON || 'null' }}
+      TF_VAR_cognito_apple: ${{ secrets.COGNITO_APPLE_PROVIDER_JSON || 'null' }}
     steps:
+      - name: Require Cognito federation configuration
+        run: |
+          if [[ "$TF_VAR_cognito_google" == "null" || "$TF_VAR_cognito_apple" == "null" ]]; then
+            echo "::error::Configure COGNITO_GOOGLE_PROVIDER_JSON and COGNITO_APPLE_PROVIDER_JSON before applying the Cognito cutover. See docs/AUTHENTICATION_SETUP.md."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 

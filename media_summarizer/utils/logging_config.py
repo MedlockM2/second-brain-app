@@ -36,6 +36,7 @@ _SENSITIVE_QUERY_KEYS = {
     "cookie",
     "password",
     "refresh_token",
+    "code_verifier",
     "secret",
     "sig",
     "signature",
@@ -61,6 +62,7 @@ _SENSITIVE_FIELD_NAMES = {
     "push_token",
     "expo_push_token",
     "refresh_token",
+    "code_verifier",
     "secret",
     "token",
 }

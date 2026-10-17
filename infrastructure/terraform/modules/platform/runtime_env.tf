@@ -102,8 +102,14 @@ locals {
   # -------------------------------------------------------------------------
   lambda_environment = merge(
     {
-      ENVIRONMENT         = var.environment
-      RUNTIME_SECRET_NAME = aws_secretsmanager_secret.runtime.name
+      COGNITO_USER_POOL_ID     = aws_cognito_user_pool.users.id
+      COGNITO_MOBILE_CLIENT_ID = aws_cognito_user_pool_client.app["mobile"].id
+      COGNITO_WEB_CLIENT_ID    = try(aws_cognito_user_pool_client.app["web"].id, "")
+      COGNITO_DOMAIN           = local.cognito_domain
+      COGNITO_MOBILE_CALLBACK  = local.cognito_mobile_callback
+      COGNITO_WEB_CALLBACK     = var.web_app_origin == "" ? "" : "${var.web_app_origin}/auth/callback"
+      ENVIRONMENT              = var.environment
+      RUNTIME_SECRET_NAME      = aws_secretsmanager_secret.runtime.name
       # AWS_DEFAULT_REGION is reserved by the Lambda runtime; boto3 reads it
       # automatically from the execution context. See
       # https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html#configuration-envvars-runtime

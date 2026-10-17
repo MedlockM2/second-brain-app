@@ -60,6 +60,10 @@ export default function LoginScreen() {
       await login({ email: email.trim(), password });
       router.replace(POST_AUTH_ENTRY_POINT);
     } catch (err) {
+      if ((err as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
+        router.push({ pathname: "/(auth)/verify-email", params: { email: email.trim() } });
+        return;
+      }
       setError(getFriendlyErrorMessage(err, { fallback: t("login.failed") }));
     } finally {
       setIsSubmitting(false);
@@ -151,6 +155,10 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        <Link href="/(auth)/forgot-password" style={styles.footerLink} accessibilityRole="link">
+          {t("auth.forgotPassword")}
+        </Link>
 
         <SocialAuthButtons
           onError={(message) => setError(message)}

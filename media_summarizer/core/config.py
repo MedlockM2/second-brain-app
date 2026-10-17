@@ -34,14 +34,6 @@ class Settings:
         )
 
 
-        # JWT Configuration
-        self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "default-secret-key-for-development")
-        self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-        self.JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
-
-        # Frontend Configuration
-        self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
         # OpenAI Configuration
         self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 

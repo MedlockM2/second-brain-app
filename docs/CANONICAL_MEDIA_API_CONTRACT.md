@@ -84,7 +84,7 @@ Operational behavior now implemented in runtime:
 9. `POST /api/chat/conversations`, `GET /api/chat/conversations?scope=&scope_id=`, `GET /api/chat/conversations/{conversation_id}`, `DELETE /api/chat/conversations/{conversation_id}`, `POST /api/chat/conversations/{conversation_id}/turns`, `POST /api/chat/conversations/{conversation_id}/turns/{turn_id}/stop` (see "Chat conversations")
 
 Authentication:
-- all endpoints require authenticated user context
+- all endpoints require authenticated user context (Cognito access token, verified by the shared dependency; see `AUTHENTICATION_SETUP.md`)
 
 ## Request and response contracts
 
@@ -842,7 +842,7 @@ Deletes the conversation and every item under it — messages, attempts, fragmen
 
 ### Chat stream — GET {chat_stream_url}/chat/conversations/{conversation_id}/stream
 
-**Not on the main API.** A separate door: a regional REST API Gateway in `STREAM` mode in front of a dedicated Lambda (`media_summarizer/api/chat_stream_app.py`, Terraform `chat_stream.tf`). Its base URL is the Terraform output `chat_stream_url` (`https://<id>.execute-api.<region>.amazonaws.com/v1`), which the app reads as a public variable. Same app JWT as the main API (`Authorization: Bearer …`, checked by the same `get_current_user`), same ownership rule: a conversation of another account answers 404. It generates nothing and calls no LLM: it replays and follows the fragments the chat worker persists.
+**Not on the main API.** A separate door: a regional REST API Gateway in `STREAM` mode in front of a dedicated Lambda (`media_summarizer/api/chat_stream_app.py`, Terraform `chat_stream.tf`). Its base URL is the Terraform output `chat_stream_url` (`https://<id>.execute-api.<region>.amazonaws.com/v1`), which the app reads as a public variable. Same Cognito access token as the main API (`Authorization: Bearer …`, checked by the same `get_current_user`), same ownership rule: a conversation of another account answers 404. It generates nothing and calls no LLM: it replays and follows the fragments the chat worker persists.
 
 Query parameters:
 

@@ -175,8 +175,8 @@ resource "aws_iam_role" "chat_stream" {
 }
 
 # Read-only, and only what a stream reads: the chat table, and the user row the
-# shared JWT check (api/dependencies/auth.py) loads. The runtime secret holds the
-# JWT key.
+# shared Cognito check (api/dependencies/auth.py) loads. Cognito public pool/client
+# configuration comes from local.lambda_environment.
 resource "aws_iam_role_policy" "chat_stream" {
   name = "${var.project_name}-chat-stream${local.suffix}"
   role = aws_iam_role.chat_stream.id

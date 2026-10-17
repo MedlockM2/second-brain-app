@@ -45,10 +45,9 @@ class User(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    # Optional auth-related / profile fields
-    password_hash: Optional[str] = None
-    auth_provider: Optional[str] = None  # e.g., "local", "google", "apple"
-    provider_id: Optional[str] = None  # External provider subject / ID
+    # Credentials stay in Cognito. These bind a profile to one pool subject.
+    cognito_sub: Optional[str] = None
+    cognito_username: Optional[str] = None
     email_verified_at: Optional[datetime] = None
     name: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -91,9 +90,7 @@ class User(BaseModel):
         """Update the updated_at timestamp."""
         self.updated_at = datetime.now(timezone.utc)
 
-    def reading_language_change_available_at(
-        self, now: Optional[datetime] = None
-    ) -> Optional[datetime]:
+    def reading_language_change_available_at(self, now: Optional[datetime] = None) -> Optional[datetime]:
         """When the next reading-language change becomes possible.
 
         ``None`` means "right now": an account that never changed its language
@@ -133,12 +130,10 @@ class User(BaseModel):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
-        if self.password_hash is not None:
-            item["password_hash"] = self.password_hash
-        if self.auth_provider is not None:
-            item["auth_provider"] = self.auth_provider
-        if self.provider_id is not None:
-            item["provider_id"] = self.provider_id
+        if self.cognito_sub is not None:
+            item["cognito_sub"] = self.cognito_sub
+        if self.cognito_username is not None:
+            item["cognito_username"] = self.cognito_username
         if self.email_verified_at is not None:
             item["email_verified_at"] = self.email_verified_at.isoformat()
         if self.name is not None:
@@ -164,21 +159,14 @@ class User(BaseModel):
             email=item["email"],
             created_at=datetime.fromisoformat(item["created_at"]),
             updated_at=datetime.fromisoformat(item["updated_at"]),
-            password_hash=item.get("password_hash"),
-            auth_provider=item.get("auth_provider"),
-            provider_id=item.get("provider_id"),
-            email_verified_at=(
-                datetime.fromisoformat(item["email_verified_at"])
-                if item.get("email_verified_at")
-                else None
-            ),
+            cognito_sub=item.get("cognito_sub"),
+            cognito_username=item.get("cognito_username"),
+            email_verified_at=(datetime.fromisoformat(item["email_verified_at"]) if item.get("email_verified_at") else None),
             name=item.get("name"),
             avatar_url=item.get("avatar_url"),
             reading_language=item.get("reading_language"),
             reading_language_changed_at=(
-                datetime.fromisoformat(item["reading_language_changed_at"])
-                if item.get("reading_language_changed_at")
-                else None
+                datetime.fromisoformat(item["reading_language_changed_at"]) if item.get("reading_language_changed_at") else None
             ),
             iana_timezone=item.get("iana_timezone"),
         )

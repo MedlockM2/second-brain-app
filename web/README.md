@@ -41,9 +41,10 @@ A change to `packages/core` is also a mobile change: typecheck and lint `mobile/
 
 1. `cp web/.env.example web/.env.local` (git-ignored) and set `VITE_API_BASE_URL` to the dev API:
    `AWS_PROFILE=second-brain-app terraform -chdir=infrastructure/terraform/envs/dev output -raw api_endpoint`.
-2. Optional: `VITE_GOOGLE_CLIENT_ID` (the Web OAuth client, whose *Authorised JavaScript origins*
-   must list `http://localhost:5173`). Apple needs a verified domain and stays empty for now. An
-   unconfigured provider's button is not shown.
+2. Configurer Google et Apple dans Cognito via Terraform (task-526), et vérifier le retour
+   `http://localhost:5173/auth/callback`. Les deux boutons passent par Cognito ; aucun SDK
+   fournisseur ni identifiant OAuth supplémentaire n’est intégré au bundle. Voir
+   `docs/AUTHENTICATION_SETUP.md` pour la bascule et les secrets de fédération.
 3. `npm run dev` in `web/`, and open http://localhost:5173 in a window at least 900 px wide.
 
 What works and what does not **until `api.<domain>` exists** (task-443, then task-445):

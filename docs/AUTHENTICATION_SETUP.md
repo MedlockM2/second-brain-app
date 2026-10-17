@@ -1,209 +1,215 @@
-# Guide d’Authentification — Deepn
+# Authentification Deepn — Amazon Cognito
 
-Objectif
-- Décrire les flux d’authentification supportés par l’API (OAuth Google/Apple + fallback email/mot de passe)
-- Documenter la configuration (variables d’environnement, transport des tokens, CORS) et les bonnes pratiques de sécurité
-- Fournir des exemples d’enchaînement côté client et des tests rapides (curl)
+Architecture livrée par task-526, décision propriétaire du 2026-10-17. Cognito User
+Pools gère les mots de passe, la vérification d’adresse, Google, Apple, la
+récupération et les sessions. DynamoDB conserve les profils, préférences et données
+métier. Les identifiants applicatifs utilisés par la bibliothèque et RevenueCat ne
+changent pas pour une fixture rattachée explicitement.
 
-Composants & Endpoints
-- Auth sociale native (le seul chemin qui ouvre une session sociale)
-  - POST /api/auth/google/native {"id_token": "..."} → vérifie l’id_token (SDK Google sur mobile, Google Identity Services sur le web), relie/crée l’utilisateur, ouvre une session (mobile : access_token + refresh_token en JSON ; web : voir « Mode web »)
-  - POST /api/auth/apple/native {"identity_token": "...", "user": {...}} → idem via la JWKS Apple (SDK natif ou Sign in with Apple JS)
-- Auth sociale web (flux navigateur, conservé pour les redirect URIs enregistrées chez Google/Apple)
-  - GET /api/auth/google/login → redirige vers Google avec un state lié au navigateur par un cookie oauth_state_google
-  - GET /api/auth/google/callback?code=...&state=... → échange code→tokens, vérifie id_token, relie/crée l’utilisateur, redirige FRONTEND_URL. **N’émet aucun token de session** : l’app web ouvre la sienne par les endpoints natifs ci-dessus
-  - GET /api/auth/apple/login et GET /api/auth/apple/callback → même contrat (client_secret ES256 généré à la volée)
-- Local (email/mot de passe)
-  - POST /api/auth/register → crée un utilisateur local auto-vérifié et ouvre directement la session (201 + access_token + refresh_token)
-  - POST /api/auth/login → access_token 60 min (JWT) + refresh_token (mobile : glissant 1 an en JSON ; web : cookie, voir « Mode web »)
-  - POST /api/auth/refresh {"refresh_token": "..."} → rotation du refresh (expiration recalculée selon le type de lignée) + nouvel access token. Un token consommé depuis moins de 60 s rejoue le couple déjà émis au lieu de répondre 401 (fenêtre de grâce, task-294). En mode web, pas de corps : le refresh est le cookie
-  - POST /api/auth/logout {"refresh_token": "..."} → révoque la seule lignée de l’appareil qui appelle ; les autres appareils du compte gardent leur session. En mode web, pas de corps : le refresh est le cookie, et la réponse l’efface
-  - GET  /api/auth/me → retourne l’utilisateur courant
-  - PATCH /api/auth/me {"reading_language": "...", "iana_timezone": "..."} → met à jour les préférences du compte et renvoie le profil. `reading_language` est plafonné à **un changement par mois et par compte** (task-396) : changer de langue retraduit le texte intégral de chaque média ouvert ensuite, donc l’intervalle entre deux changements est borné. Le premier réglage (choix d’onboarding) n’est pas un changement et n’est jamais refusé ; il ne démarre pas le compteur. Un second changement dans la fenêtre répond **429** avec `{"detail": {"error_code": "reading_language_change_too_soon", "available_at": "<ISO 8601>"}}` — un code stable et la date de réouverture, jamais une phrase : c’est l’app qui formule le refus depuis ses catalogues. Le profil renvoyé par les cinq endpoints de session porte `reading_language_change_available_at` (null quand un changement est possible tout de suite)
-- Exigences d’accès API
-  - La plupart des routes sensibles nécessitent un access token (Authorization: Bearer <JWT>)
-  - Exemple strict: POST /api/podcast-search/submit-episode → require_verified_email
+## Infrastructure et configuration
 
-Lignées et politique de durée (task-294, task-473)
-- Chaque refresh token porte un `lineage_id` généré côté serveur au login et recopié à chaque rotation : c’est l’identité de la session d’un appareil, jamais fournie par le client, et c’est ce que /logout révoque
-- Une lignée a un **type**, fixé au login par le mode de transport de la requête et recopié à chaque rotation avec `lineage_started_at` (l’instant du login). Le type décide de la durée (`get_refresh_token_expires_at`, `media_summarizer/utils/auth_utils.py`) :
+`infrastructure/terraform/modules/platform/cognito.tf` définit un pool par
+environnement, un domaine Cognito AWS et deux clients publics sans secret : mobile
+et web. Le client web existe lorsque `web_app_origin` est renseigné. Chaque client
+n’accepte que son retour exact : `media-summarizer://auth-callback` pour le mobile,
+`<web_app_origin>/auth/callback` pour le web. Aucune wildcard ni grant implicite.
+Le module est appelé par dev, staging et prod ; staging reste une référence
+volontairement conservée, pas un environnement à recréer pour cette tâche.
 
-  | Type | Ouverte par | Inactivité max. | Plafond absolu | Rotation |
-  |---|---|---|---|---|
-  | `mobile` | l’app mobile (mode par défaut) | 1 an (REFRESH_TOKEN_EXPIRE_DAYS=365) | aucun | repose `expires_at` à now + 1 an |
-  | `browser` | l’app web (`X-Session-Transport: cookie`) | 7 jours (BROWSER_REFRESH_IDLE_DAYS) | 30 jours après le login (BROWSER_REFRESH_MAX_DAYS) | repose `expires_at` à min(now + 7 j, login + 30 j) |
-  | `browser_extension` | l’appairage d’une extension navigateur (voir « Extension navigateur ») | 90 jours (EXTENSION_REFRESH_IDLE_DAYS) | 1 an après l’appairage (EXTENSION_REFRESH_MAX_DAYS) | repose `expires_at` à min(now + 90 j, appairage + 1 an) |
+Les variables sensibles `cognito_google` (client Web Google et secret) et
+`cognito_apple` (Services ID, team ID, key ID et clé privée) se fournissent aux racines
+Terraform par le coffre ou un fichier local ignoré. Ne pas les mettre dans git,
+une tâche ou un journal. Les valeurs sont conservées dans le state privé Terraform.
+Sans ces entrées, Terraform ne crée pas les fournisseurs concernés : renseigner
+**les deux avant la bascule** pour que les boutons conservés fonctionnent.
+Le workflow `Terraform Dev` lit les objets JSON depuis les secrets GitHub Actions
+`COGNITO_GOOGLE_PROVIDER_JSON` et `COGNITO_APPLE_PROVIDER_JSON` et les transmet
+comme `TF_VAR_cognito_google` / `TF_VAR_cognito_apple`. Il refuse l’apply si un des
+deux manque, pour ne jamais retirer silencieusement un fournisseur lors d’un apply
+ultérieur. Configurer ces deux secrets avant le premier push de la bascule.
 
-  - `mobile` : un utilisateur qui ouvre l’app une fois par an ne se reconnecte jamais ; un appareil abandonné tombe seul au bout d’un an
-  - `browser` : un navigateur est un lieu moins gardé que le Keychain/Keystore. La rotation ne prolonge jamais la durée initiale (RFC 10017 §6.3.2.3) : au plus tard 30 jours après le login, l’utilisateur se reconnecte, même s’il a utilisé l’app web chaque jour
-  - Une ligne écrite avant task-473 n’a ni type ni début : elle est lue comme `mobile`, débutée à sa création — seule l’app mobile pouvait l’avoir ouverte
-- Chaque transport n’accepte que les lignées qu’il ouvre : un refresh `browser` présenté dans le corps, ou un refresh `mobile` présenté par cookie, répond 401 « Invalid refresh token ». Une lignée `browser_extension` passe par le corps, comme le mobile
 
-Extension navigateur (task-485, `media_summarizer/api/endpoints/extension_tokens.py`)
-- L’extension ne se connecte jamais : elle est **appairée** à un compte déjà connecté sur l’app web et reçoit le refresh d’une lignée à elle, de type `browser_extension` (durées dans le tableau ci-dessus, décision de l’owner du 2026-10-11 ; au-delà, l’extension demande de ré-appairer en un clic). Le refresh passe dans le corps JSON ; l’extension le garde dans son stockage et le présente à `/api/auth/refresh`
-- **Portée réduite** : l’access token d’une lignée d’extension porte la revendication `scope: extension`. La dépendance d’authentification (`get_current_user`, `EXTENSION_ROUTES` dans `media_summarizer/api/dependencies/auth.py`) ne l’accepte que sur `POST /api/media/ingest-url`, `POST /api/media/ingest-shared-content`, `GET /api/folders` et `POST /api/auth/logout` ; **toute autre route répond 403**. Son refresh n’a pas besoin d’access token. Le contrôle compare le chemin de la requête, pas le gabarit de route : les quatre routes sont statiques, et un écart ne peut que refuser
-- Routes (préfixe `/api/auth/extension-tokens`)
-  - `POST ""` (session web) `{"client_label": "Chrome sur macOS"}` → 201 `{lineage_id, refresh_token, expires_at}` : l’appairage en un clic, l’app web transmet le refresh à l’extension par `externally_connectable`
-  - `GET ""` (session web) → `{"extensions": [{lineage_id, client_label, paired_at, last_used_at, expires_at}]}` : une entrée par lignée vivante, appairage le plus récent d’abord
-  - `DELETE "/{lineage_id}"` (session web) → 204 : délie une extension du compte appelant (404 sinon)
-  - `POST "/pairing-code"` (session web) → 201 `{code, expires_at}` : le **code de secours**, quand le message `externally_connectable` ne passe pas. 6 chiffres, 5 minutes, usage unique ; en redemander un remplace le précédent. Stocké haché (`sha256(user_id:code)`), jamais en clair
-  - `POST "/pairing-code/claim"` (non authentifié) `{"email": "...", "code": "482913", "client_label": "..."}` → 201 `{lineage_id, refresh_token, expires_at}`. La réclamation nomme le compte par son e-mail pour que chaque erreur soit comptée **sur le code de ce compte** : à la 3e erreur le code est détruit. Sans ce compteur porté par le code, six chiffres se forcent en quelques milliers d’essais malgré le throttling d’API Gateway. Toutes les erreurs (e-mail inconnu, pas de code vivant, code faux, code détruit) répondent le même 400 `invalid_pairing_code`
-- `/logout` depuis l’extension révoque sa propre lignée. La déconnexion de l’app web **ne délie pas** l’extension (autre lignée). La suppression du compte efface toutes les lignes `auth_tokens`, lignées d’extension et codes compris
+Dans Google Cloud, autoriser comme URI de redirection la sortie Terraform
+`cognito_configuration.provider_callback`. Dans Apple Developer, configurer le
+Services ID, le domaine Cognito et cette même URL `/oauth2/idpresponse`, et associer
+le Services ID à l’App ID existant. Les anciens clients natifs Google et le SDK
+Apple embarqué ne participent plus au flux ; aucun mot de passe n’est demandé aux
+comptes exclusivement sociaux. La clé de fédération Apple doit rester récupérable
+dans le coffre même après retrait des anciennes variables du secret runtime.
 
-Transport des tokens
-- Mode mobile (par défaut)
-  - Refresh transporté dans le **corps JSON** : champ `refresh_token` des réponses de register/login/refresh et des endpoints natifs, champ `refresh_token` du corps de /refresh et /logout
-  - Le client mobile le garde dans expo-secure-store (Keychain / Keystore)
-- Mode web (task-473), choisi par l’en-tête de requête **`X-Session-Transport: cookie`** sur login, register, google/native, apple/native, refresh et logout
-  - La réponse des routes qui ouvrent ou tournent une session ne contient que `access_token`, `token_type`, `expires_in` et `user` : **jamais** `refresh_token`
-  - Le refresh est posé en cookie `__Secure-refresh_token` : `HttpOnly; Secure; SameSite=Strict; Path=/api/auth`, sans `Domain` (host-only sur `api.<domaine>`), `Max-Age` aligné sur l’expiration de la lignée. Le préfixe `__Secure-` fait refuser le cookie par le navigateur s’il n’est pas `Secure` ; `__Host-` exigerait `Path=/`
-  - /refresh et /logout n’ont pas de corps : ils lisent ce cookie. Un /refresh sans cookie répond 401 « Missing refresh token ». /logout efface le cookie dans tous les cas
-  - L’app web garde l’access token **en mémoire seulement**, et rouvre la session au chargement de la page par un /refresh
-  - Pourquoi un en-tête plutôt qu’un champ : /refresh et /logout n’ont pas de corps en mode web, et un en-tête personnalisé impose un pré-vol CORS. Une page d’une autre origine ne peut donc ni déclencher un /refresh authentifié par le cookie ni en lire la réponse ; `SameSite=Strict` est le second verrou
-  - Le cookie n’est utilisable que si `app.<domaine>` et `api.<domaine>` sont sur le même site enregistrable. Avec l’URL `execute-api`, il serait tiers et bloqué : l’app web en local se connecte, mais sa session ne survit pas à un rechargement tant que `api.<domaine>` n’existe pas (task-443, task-445)
-- Refresh token, commun aux deux modes
-  - Valeur opaque stockée en base (table auth_tokens). Rotation à chaque /refresh : l’ancien est marqué used_at + is_active=false et ne sert plus qu’à rejouer son successeur pendant 60 s
-  - La table a un TTL (`expire_at` = expires_at + 7 jours) : une ligne périmée finit par disparaître, et la marge garantit qu’un balayage TTL ne peut pas tuer une session encore rafraîchissable
-- Access token (header Authorization: Bearer)
-  - Durée configurable (JWT_ACCESS_TOKEN_EXPIRE_MINUTES, 60 par défaut ; JWT_ACCESS_TOKEN_EXPIRE_SECONDS pour un dev flow). Sans effet sur la révocation : get_current_user relit l’utilisateur en DynamoDB à chaque requête
-  - Généré à /register, /login, /refresh et sur les deux endpoints natifs
-- Les autres cookies posés par l’API sont `oauth_state_<provider>` : garde CSRF du flux de redirection OAuth, host-only, Secure, httpOnly, SameSite=lax, 10 minutes, lu par le callback du même hôte
+Terraform injecte directement `COGNITO_USER_POOL_ID`, `COGNITO_MOBILE_CLIENT_ID`,
+`COGNITO_WEB_CLIENT_ID`, `COGNITO_DOMAIN`, `COGNITO_MOBILE_CALLBACK` et
+`COGNITO_WEB_CALLBACK` dans les runtimes. Les apps découvrent la configuration
+publique avec `GET /api/auth/oauth/config` ; le web ajoute
+`X-Session-Transport: cookie`. Il n’y a aucune clé de signature applicative.
+Les seuls droits administratifs de l’API sont `AdminGetUser` et `AdminDeleteUser`,
+limités au pool de son environnement. Le stream utilise les opérations Cognito
+autorisées par l’access token, pas des droits d’administration.
 
-CORS & Redirections
-- Le CORS de l’API HTTP est répondu par API Gateway (`cors_configuration` de `infrastructure/terraform/modules/platform/lambda_api.tf`), pas par FastAPI : une API HTTP dotée d’une configuration CORS ignore les en-têtes CORS de son intégration
-  - Origine autorisée : la variable Terraform `web_app_origin` de chaque environnement, **jamais `*`** (un cookie n’est pas envoyé vers une origine `*`), avec `allow_credentials = true` et des en-têtes nommés (`authorization`, `content-type`, `x-request-id`, `x-session-transport`)
-  - dev : `http://localhost:5173`, le serveur local de l’app web, tant que `app.<domaine>` n’existe pas ; staging et prod : vide, aucune origine navigateur, jusqu’à `https://app.<domaine>`
-  - L’app mobile n’est pas soumise au CORS
-- FRONTEND_URL utilisé pour construire les URLs de redirection après succès/erreur d’OAuth web
+## E-mails Cognito par défaut
 
-Sécurité & Bonnes Pratiques
-- Sessions
-  - Ne jamais logguer un refresh token : c’est un porteur de session (un an sur mobile, 30 jours sur le web)
-  - Un refresh token consommé est mort passé la fenêtre de grâce de 60 s, donc un rejeu tardif répond 401 « Expired or used refresh token ». Un token révoqué par /logout n’est jamais rejouable
-  - La révocation de toutes les lignées d’un compte n’existe qu’au sein de la suppression de compte, qui supprime les lignes plutôt que de les désactiver
-- OAuth
-  - Valider id_token (aud/iss/sub/email_verified) côté serveur
-  - Lier les comptes par email vérifié
-- Logs
-  - Éviter de logguer des secrets ou des tokens bruts
+La configuration est `COGNITO_DEFAULT`, sans `from_email_address`, `source_arn`,
+identité SES ni domaine d’expédition Deepn. L’expéditeur est l’adresse AWS standard.
+Le quota vérifié dans la documentation AWS le **2026-10-17** est **50 e-mails par
+jour et par compte AWS**, non augmentable dans ce mode, remis à zéro à **09:00 UTC**.
+Inscriptions, renvois de confirmation et récupérations consomment ce même budget ;
+ce n’est ni un quota par utilisateur ni 50 réinitialisations supplémentaires.
+Un rebond peut aussi être supprimé par la liste AWS dont Deepn n’a pas la maîtrise.
+La réponse générique à une récupération ne garantit donc pas la réception d’un
+message. Une configuration SES propre serait une décision ultérieure distincte.
+Sources : [quota AWS](https://docs.aws.amazon.com/cognito/latest/developerguide/quotas.html),
+[configuration e-mail](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html).
 
-Variables d’Environnement (extrait)
-- JWT & sessions
-  - JWT_SECRET_KEY
-  - JWT_ALGORITHM=HS256
-  - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=60
-  - REFRESH_TOKEN_EXPIRE_DAYS=365 (lignée mobile : fenêtre glissante, sans plafond absolu)
-  - La lignée navigateur n’a pas de variable : 7 jours d’inactivité et 30 jours de plafond sont des constantes de `auth_utils.py`
-  - (aucune variable COOKIE_* : les attributs du cookie web sont fixes, `media_summarizer/api/dependencies/session.py`)
-- Frontend
-  - FRONTEND_URL=https://app.yourdomain.com
-  - (aucune variable CORS_ORIGINS : le CORS est la variable Terraform `web_app_origin`)
-- Google OAuth
-  - GOOGLE_CLIENT_ID
-  - GOOGLE_CLIENT_SECRET
-  - GOOGLE_REDIRECT_URI=https://api.yourdomain.com/api/auth/google/callback
-- Apple OAuth
-  - APPLE_CLIENT_ID
-  - APPLE_TEAM_ID
-  - APPLE_KEY_ID
-  - APPLE_PRIVATE_KEY (PEM; peut être fourni en une ligne avec \n)
-  - APPLE_REDIRECT_URI=https://api.yourdomain.com/api/auth/apple/callback
+## Contrats API et parcours
 
-Exemples — Flux côté client
-- Login Google / Apple (mobile)
-  - 1) Le SDK natif rend un id_token (Google) ou un identity_token (Apple)
-  - 2) POST /api/auth/google/native ou /api/auth/apple/native avec ce token
-  - 3) Stocker access_token + refresh_token du corps de la réponse dans le secure store
-  - 4) À l’expiration de l’access token, POST /api/auth/refresh avec le refresh token stocké
+Toutes les routes ci-dessous restent sous `/api/auth`, avec les routes historiques
+montées également sous `/api/v1/auth` par le routeur existant. Aucun nouvel endpoint
+média ou artefact n’est ajouté sous `/api/v1/`.
 
-Sign-in Google mobile — un chemin par plateforme (task-325)
-- iOS : flux navigateur `expo-auth-session` (`src/hooks/useGoogleSignIn.ts`). Le
-  `redirect_uri` est le scheme réservé du client OAuth **iOS**
-  (`com.googleusercontent.apps.<guid>:/oauthredirect`), et le code est échangé
-  contre l’id_token auprès de ce même client : l’`aud` de l’id_token est donc le
-  client iOS (`GOOGLE_NATIVE_AUDIENCE_IOS` côté API)
-- Android : **Credential Manager**, via le module Expo local
-  `mobile/modules/google-credential-manager`
-  (`GetSignInWithGoogleOption` → `GoogleIdTokenCredential`, appelé par
-  `src/hooks/useGoogleSignIn.android.ts`). Le `serverClientId` passé au module est
-  le client OAuth **Web** (`EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB`, c’est-à-dire la même
-  valeur que `GOOGLE_CLIENT_ID` côté API), comme la documentation Google l’exige :
-  l’`aud` de l’id_token rendu est donc le client Web, déjà accepté par
-  `/api/auth/google/native` — aucune variable d’environnement API à ajouter
-  - Il n’y a **pas** de `redirect_uri` sur Android, et il ne peut pas y en avoir :
-    Google refuse un custom URI scheme pour un client OAuth Android (`Erreur 400 :
-    invalid_request`, « Custom URI scheme is not enabled for your Android client »),
-    sans réglage pour le réactiver. C’est ce qui a tué le flux navigateur sur
-    Android et motivé le module natif
-  - Aucun ID de client Android n’entre dans l’app. Mais un client OAuth **Android**
-    doit exister côté Google : Credential Manager vérifie l’appelant sur son nom de
-    package (`com.secondbrainlabs.core`) **et l’empreinte SHA-1 du certificat qui
-    signe le binaire installé**
-  - Pour tout binaire distribué par Google Play (piste interne comprise), ce
-    certificat n’est pas le keystore d’upload EAS : Play re-signe l’APK servi. Le
-    **SHA-1 de Play App Signing doit donc être déclaré sur un client OAuth
-    Android**, en plus de celui du keystore EAS (deux clients Android, même nom de
-    package). Sans ça, la feuille de sélection de compte échoue sur l’app installée
-    depuis Play alors qu’elle fonctionne sur un build local
-    - Où le lire : Play Console → *Test et publication* → *Intégrité de
-      l’application* → onglet *Signature de l’application* → *Certificat de clé de
-      signature d’application* (SHA-1)
-    - Où le déclarer : Google Cloud Console → *API et services* → *Identifiants* →
-      *ID clients OAuth 2.0* → *Créer des identifiants* → *ID client OAuth* →
-      type *Android*
+| Route | Entrée et réponse |
+|---|---|
+| `POST /register` | `{email, password}` → 202 `{status: verification_required}` ; aucune session avant confirmation |
+| `POST /confirm-registration` | `{email, code}` → `{status: confirmed}` ; retour à la connexion |
+| `POST /resend-confirmation` | `{email}` → 202 générique |
+| `POST /login` | `{email, password}` → session Cognito et profil |
+| `GET /oauth/config` | domaine, client et retour publics du transport choisi |
+| `POST /oauth/token` | `{code, code_verifier}` → session Cognito et profil ; retour fixé côté API |
+| `POST /forgot-password` | `{email}` → 202 `{status: accepted}`, compte absent/social compris |
+| `POST /confirm-password` | `{email, code, password}` → `{status: password_changed}` |
+| `POST /refresh` | refresh du corps mobile ou du cookie web → paire renouvelée et profil |
+| `POST /logout` | même transport de refresh → révocation Cognito et suppression du cookie web |
+| `GET /me`, `PATCH /me` | profil et préférences existants, après authentification |
 
-- Login local (curl)
-  ```bash path=null start=null
-  curl -X POST http://localhost:8000/api/auth/login \
-    -H 'Content-Type: application/json' \
-    -d '{"email": "user@example.com", "password": "your-pass"}'
-  # → {"access_token":"...","refresh_token":"...","token_type":"bearer","expires_in":1800,"user":{...}}
-  ```
+Un mot de passe comprend au moins 12 caractères, une majuscule, une minuscule et
+un chiffre. Le serveur délègue la validation à Cognito. Les erreurs sont des codes
+(`AUTH_CODE_INVALID`, `AUTH_CODE_EXPIRED`, `AUTH_PASSWORD_POLICY`,
+`AUTH_RATE_LIMITED`, `AUTH_RESET_REQUIRED`, `AUTH_UNAVAILABLE`,
+`EMAIL_NOT_VERIFIED`, `INVALID_CREDENTIALS`), traduits dans les onze langues des apps.
+Aucune prose fournisseur n’est affichée. Les écrans proposent renvoi, état de
+chargement, résultat, erreurs et retour à la connexion.
 
-- Refresh (curl)
-  ```bash path=null start=null
-  curl -X POST http://localhost:8000/api/auth/refresh \
-    -H 'Content-Type: application/json' \
-    -d '{"refresh_token": "<value>"}'
-  # → même contrat, avec un refresh_token neuf : l’ancien est consommé
-  ```
+La récupération contrôle le statut Cognito : seuls les comptes locaux confirmés
+ou à réinitialiser peuvent recevoir ce parcours. Un compte absent ou
+`EXTERNAL_PROVIDER` reçoit le même accusé de réception, et un code ne peut jamais
+y créer de mot de passe. Les erreurs de livraison sont aussi masquées sur cette
+route pour ne pas révéler l’existence d’un compte. Les erreurs réseau et de service
+restent présentées sans identité de compte. Cognito masque les utilisateurs
+inconnus sur les clients (`prevent_user_existence_errors = ENABLED`).
 
-- Login web (curl, depuis l’origine de l’app web)
-  ```bash path=null start=null
-  curl -i -X POST https://api.<domaine>/api/auth/login \
-    -H 'Origin: https://app.<domaine>' \
-    -H 'X-Session-Transport: cookie' \
-    -H 'Content-Type: application/json' \
-    -d '{"email": "user@example.com", "password": "your-pass"}'
-  # → set-cookie: __Secure-refresh_token=...; HttpOnly; Max-Age=604800; Path=/api/auth; SameSite=strict; Secure
-  # → {"access_token":"...","token_type":"bearer","expires_in":3600,"user":{...}}
-  curl -i -X POST https://api.<domaine>/api/auth/refresh \
-    -H 'X-Session-Transport: cookie' \
-    -b '__Secure-refresh_token=<value>'
-  ```
+Google et Apple restent accessibles depuis l’inscription et la connexion. Les
+boutons lancent `/oauth2/authorize` avec le fournisseur explicite, un état aléatoire
+et PKCE S256. Le navigateur mobile est géré par `expo-auth-session`, qui vérifie
+l’état et conserve le vérificateur pendant la demande. Sur le web, état,
+vérificateur et date vivent uniquement dans `sessionStorage` pendant au plus dix
+minutes ; le retour les consomme une seule fois, vérifie l’état, efface l’URL puis
+échange le code. Aucun jeton de session ne va dans le stockage du navigateur.
+Les tokens ID Google/Apple natifs et les anciens callbacks maison sont supprimés.
+Source : [PKCE Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/using-pkce-in-authorization-code.html).
 
-- Appel d’une route protégée
-  ```bash path=null start=null
-  curl -X GET http://localhost:8000/api/auth/me \
-    -H 'Authorization: Bearer <access_token>'
-  ```
+## Sessions, autorisation et révocation
 
-Gestion des Erreurs Courantes
-- 401 Invalid authentication token → vérifier le header Authorization
-- 401 Invalid refresh token / Expired or used refresh token → le refresh stocké est inconnu, expiré ou déjà rotaté : il faut se reconnecter
-- 401 Missing refresh token sur /api/auth/refresh → ni champ refresh_token dans le corps (mobile), ni cookie (web)
-- 400 OAuth non configuré → vérifier GOOGLE_* ou APPLE_* dans l’environnement
+L’API vérifie la signature RS256 avec le JWKS du pool, l’émetteur exact,
+l’expiration, `sub`, `iat`, `token_use: access` et un `client_id` autorisé. Un ID
+token ou un JWT signé par l’ancienne clé est refusé. Elle appelle ensuite `GetUser`
+pour vérifier la révocation et obtenir les attributs depuis Cognito. Seul un
+e-mail vérifié permet de créer/résoudre un profil. Le JWKS est mis en cache ; une
+indisponibilité de récupération des clés répond 503 plutôt que de détruire une
+session mobile. Chaque requête authentifiée implique une lecture Cognito et une
+lecture DynamoDB : prendre en compte les quotas `UserRead`, notamment les limites
+par utilisateur, lors de l’observation de la bêta.
 
-La vérification d’email par lien a été retirée : les comptes sont auto-vérifiés
-à l’inscription. Les endpoints stubs `/api/auth/verify-email` et
-`/api/auth/resend-verification` ont été supprimés (task-222) — le premier
-était non authentifié et mutait le champ `email_verified_at` d’un email
-arbitraire.
+Le mobile conserve les tokens dans `expo-secure-store`. Le web garde l’access token
+en mémoire et le refresh dans `__Secure-refresh_token`, cookie host-only sur l’API,
+`Secure; HttpOnly; SameSite=Strict; Path=/api/auth`, avec sept jours d’inactivité.
+Les requêtes de session web utilisent l’en-tête personnalisé et le CORS à origine
+explicite ; le corps ne contient jamais le refresh web. La configuration locale
+`localhost` + `execute-api` reste de sites différents : pas de restauration durable
+par cookie avant les domaines app/API sur le même site.
 
-Références Code
-- Auth locale: media_summarizer/api/endpoints/auth.py
-- OAuth social: media_summarizer/api/endpoints/auth_social.py
-- Dépendances/auth: media_summarizer/api/dependencies/auth.py
-- Transport de session (mode web, cookie): media_summarizer/api/dependencies/session.py
-- Politique de durée des lignées: media_summarizer/utils/auth_utils.py
-- CORS: infrastructure/terraform/modules/platform/lambda_api.tf (variable web_app_origin)
+Les access tokens durent quinze minutes. Les refresh tokens tournent avec
+`GetTokensFromRefreshToken`, grâce Cognito de 60 secondes. Leur limite absolue est
+**365 jours sur mobile, 30 jours sur le web**, depuis l’ouverture initiale ; la
+rotation ne prolonge pas cette limite. Cela remplace volontairement l’ancienne
+fenêtre mobile glissante maison. Aucun registre de sessions utilisateurs n’est
+conservé dans `auth_tokens`. La concurrence est regroupée par les gestionnaires de
+session clients existants.
+
+`RevokeToken` ferme le refresh présenté sans déconnecter les autres appareils.
+Une signature JWT seule ne détecterait pas cette révocation : le `GetUser` effectué
+par l’API et le stream est nécessaire. La déconnexion ne supprime pas la session
+Google/Apple du navigateur externe ni tous les autres refresh du compte. Hors
+ligne, les apps effacent leur stockage local ; une révocation distante ne peut pas
+être garantie sans réception par Cognito. Source :
+[révocation Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/token-revocation.html).
+
+## Profils, fixtures et suppression du compte
+
+Un nouveau profil utilise `id = sub` du pool. Aucun lookup par e-mail ne rattache
+une connexion à une ancienne bibliothèque : Google, Apple et un compte local ayant
+la même adresse restent des identités distinctes tant qu’un administrateur ne les
+a pas liés explicitement dans Cognito. Un e-mail fournisseur non vérifié n’est
+jamais une preuve de propriété. Les apps ne peuvent pas écrire l’attribut
+`custom:app_user_id`.
+
+Pour conserver une fixture protégée, dont l’article **Commonplace book**, le
+propriétaire relève en privé le profil applicatif qui la possède, crée/confirme sa
+nouvelle identité Cognito puis lui affecte `custom:app_user_id = <id du profil>`
+avec `AdminUpdateUserAttributes`, avant sa première connexion applicative. Ce
+choix administratif est la preuve du rattachement ; il ne faut ni import de hash,
+ni synchronisation de mots de passe, ni purge de bibliothèque. Le premier login
+lie atomiquement le profil à ce `sub` si aucun autre ne le possède, en supprimant
+les anciens champs de justificatifs. Ne pas consigner les identités réelles dans
+un fichier public. Les produits Test Store protégés restent en place.
+
+La suppression de compte conserve l’ordre existant : données découvrables et
+contenus privés, tables applicatives, autorisations d’extension, identité Cognito
+(`AdminDeleteUser`), profil. Le contenu partagé reste régi par la purge existante.
+Si une étape de données échoue, l’identité survit pour permettre de réessayer.
+Si l’effacement de la dernière ligne DynamoDB échoue après suppression Cognito,
+il ne reste qu’un profil orphelin à supprimer administrativement ; aucun contenu
+applicatif ne reste à effacer par l’utilisateur. Les anciens tokens Cognito ne
+peuvent pas recréer le compte puisque `GetUser` refuse l’identité supprimée.
+
+## Extension navigateur
+
+L’appairage et son code de secours restent les routes existantes
+`/api/auth/extension-tokens`. Ils exigent une session Cognito complète ; un token
+d’extension ne peut pas en émettre d’autres. La réclamation d’un code reste
+éphémère, à usage unique et limitée en tentatives.
+
+L’extension reçoit un secret opaque `ext_r_…`, stocké haché dans `auth_tokens`.
+Son refresh rend un access token opaque `ext_a_…`, haché également et valable cinq
+minutes. Le secret de renouvellement est stable, renouvelé jusqu’à 90 jours
+d’inactivité, plafonné à un an après appairage. Il ne devient jamais une session
+Cognito. Chaque accès relit le grant parent de façon cohérente pour appliquer
+immédiatement sa révocation. Les seules routes autorisées restent :
+`POST /api/media/ingest-url`, `POST /api/media/ingest-shared-content`,
+`GET /api/folders`, `POST /api/auth/logout`. Toute autre route est interdite.
+La déconnexion web ne délie pas l’extension. Supprimer le compte révoque les deux.
+
+## Bascule et validation propriétaire après fusion
+
+1. Récupérer les paramètres Google/Apple depuis le coffre, configurer les retours
+   fournisseurs et appliquer Terraform avec les variables sensibles. Vérifier
+   les deux fournisseurs, les callbacks et les clients dans la console Cognito.
+2. Garder dans le coffre la clé Apple utile à la fédération. Retirer du secret
+   runtime les anciennes clés JWT/refresh et `GOOGLE_*`, `APPLE_*` d’authentification
+   maison, sans toucher les clés IAP, App Store Connect ou RevenueCat.
+3. Créer les nouvelles identités nécessaires et rattacher explicitement les
+   fixtures protégées. Aucun import d’ancien mot de passe et aucune purge globale.
+   Les anciennes lignes `auth_tokens` peuvent être supprimées : elles ne portent
+   aucune bibliothèque ; les extensions se réappairent.
+4. Déployer l’image API et celle du stream, publier le web et reconstruire les
+   binaires mobiles (suppression des modules natifs de login). Commande Android de
+   référence depuis `mobile/` :
+   `eas build --platform android --profile internal --auto-submit --non-interactive`.
+   Pour iOS : workflow Mobile Build & Distribute ou le runbook mobile existant.
+5. Sur appareil et navigateur, vérifier inscription, réception/renvoi/expiration
+   des codes, confirmation, connexion, récupération et refus sur un compte social,
+   Google et Apple, retours annulés, restauration après reload/reprise, logout et
+   refus de l’ancien access token, appairage/portée/révocation de l’extension,
+   suppression du compte et préservation des fixtures et contenus partagés.
+
+Ces opérations après fusion/déploiement sont le contrôle propriétaire. Aucun
+apply, déploiement, build EAS ni test automatisé n’est requis pour terminer le
+travail de code de cette tâche. Le backend local n’est pas un substitut au dev AWS.

@@ -1,51 +1,17 @@
-"""
-Authentication endpoints for local email/password sessions.
-
-A session is a refresh-token *lineage* of one of two kinds, fixed at sign-in:
-
-- **mobile**: the refresh token carries a *sliding* one-year expiry, reposed at every
-  rotation, with no absolute cap (task-294). Opening the app at least once a year is
-  enough to never sign in again. Both tokens travel in the JSON body; the app keeps
-  the refresh token in its secure store and posts it back to /refresh.
-- **browser** (the web app, task-473): the refresh token lives in an ``HttpOnly``
-  cookie on ``api.<domain>`` and the body carries the access token only. The lineage
-  dies after a short idle period and at an absolute cap counted from the sign-in;
-  rotation never extends it. A request selects this mode with the header
-  ``X-Session-Transport: cookie`` (api/dependencies/session.py).
-
-Rotation is single-use, so /refresh keeps a 60-second grace window: a token consumed
-inside that window replays the pair it was exchanged for instead of answering 401,
-which is what stops two concurrent refreshes from signing the user out.
-
-/logout closes one device session, not the account: it revokes the lineage of the
-refresh token it is given. Erasing every lineage of an account is account deletion's
-job (core/services/account_deletion_service.py), which deletes the rows outright.
-"""
+"""Cognito authentication facade; profiles/preferences remain in the application."""
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Request,
-    status,
-)
+from botocore.exceptions import ClientError
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from media_summarizer.api.dependencies.auth import get_current_user
-from media_summarizer.api.dependencies.session import (
-    clear_refresh_cookie,
-    is_web_session,
-    open_session,
-    presented_refresh_token,
-    session_response,
-    transport_accepts,
-)
-from media_summarizer.core.models import User
+from media_summarizer.api.dependencies.session import clear_refresh_cookie, is_web_session, presented_refresh_token, session_response
 from media_summarizer.core.models.auth import (
     AuthToken,
     AuthUser,
@@ -54,242 +20,219 @@ from media_summarizer.core.models.auth import (
     RefreshRequest,
     RegisterRequest,
     TokenType,
-    TokenVerificationResponse,
 )
+from media_summarizer.core.services import cognito_auth as cognito
 from media_summarizer.utils import database_async
-from media_summarizer.utils.auth_utils import (
-    REFRESH_ROTATION_GRACE_SECONDS,
-    access_token_payload,
-    create_access_token,
-    get_access_token_expires_seconds,
-    get_refresh_token_expires_at,
-    hash_password,
-    verify_password,
-)
+from media_summarizer.utils.auth_utils import get_refresh_token_expires_at
 from media_summarizer.utils.database_async import DynamoDBConnection, get_db
 from media_summarizer.utils.logging_config import log_event
 from media_summarizer.utils.timezones import normalize_iana_timezone
 
-# Configure logging
 logger = logging.getLogger(__name__)
-
 router = APIRouter()
 
 
-@router.post(
-    "/register",
-    response_model=TokenVerificationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def register(
-    request: RegisterRequest,
-    http_request: Request,
-    db: DynamoDBConnection = Depends(get_db),
-):
-    email = request.email.lower().strip()
-    existing = await database_async.get_user_by_email(email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use"
-        )
-
-    user = User(
-        email=email,
-        password_hash=hash_password(request.password),
-        auth_provider="local",
-        email_verified_at=datetime.now(timezone.utc),
-    )
-    user = await database_async.create_user(user)
-
-    # Registration opens a session: no second /login round-trip needed
-    return await open_session(http_request, user, status.HTTP_201_CREATED)
+class EmailRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
 
 
-@router.post("/login", response_model=TokenVerificationResponse)
-async def login(
-    request: LoginRequest,
-    http_request: Request,
-    db: DynamoDBConnection = Depends(get_db),
-):
-    email = request.email.lower().strip()
-    user = await database_async.get_user_by_email(email)
-    if (
-        not user
-        or not user.password_hash
-        or not verify_password(request.password, user.password_hash)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
-        )
-
-    return await open_session(http_request, user)
+class CodeRequest(EmailRequest):
+    code: str = Field(min_length=1, max_length=2048)
 
 
-@router.post("/refresh", response_model=TokenVerificationResponse)
-async def refresh_token(
-    http_request: Request,
-    request: Optional[RefreshRequest] = None,
-    db: DynamoDBConnection = Depends(get_db),
-):
-    presented = presented_refresh_token(
-        http_request, request.refresh_token if request else None
-    )
-    # Load token from DB
-    auth_token = await database_async.get_auth_token_by_token(presented)
-    if (
-        not auth_token
-        or auth_token.token_type != TokenType.REFRESH_TOKEN
-        or not transport_accepts(http_request, auth_token)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-        )
+class ResetRequest(CodeRequest):
+    password: str = Field(min_length=1, max_length=256)
 
-    # A token consumed moments ago is a concurrent refresh, not an attack: replay the
-    # pair its rotation minted. Checked before is_active/used_at, since a rotated token
-    # is precisely an inactive, used one.
-    replay = auth_token.rotation_replay(REFRESH_ROTATION_GRACE_SECONDS)
 
-    if replay is None and (
-        not auth_token.is_active
-        or auth_token.is_expired()
-        or auth_token.used_at is not None
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Expired or used refresh token",
-        )
+class OAuthCodeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=4096)
+    code_verifier: str = Field(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9._~-]+$")
 
-    # Get user
-    user = await database_async.get_user_by_id(auth_token.user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
 
-    access_seconds = get_access_token_expires_seconds()
-    # Recomputed from the lineage, never inherited: a mobile lineage slides a year
-    # from now, a browser one slides its idle period but never past its cap.
-    refresh_expires_at = get_refresh_token_expires_at(
-        auth_token.lineage_kind, auth_token.lineage_started_at
+async def answer_session(request: Request, tokens: dict[str, Any], *, provision: bool = False):
+    user = await cognito.profile(tokens["AccessToken"], provision=provision)
+    return session_response(
+        request,
+        access_token=tokens["AccessToken"],
+        refresh_token=tokens["RefreshToken"],
+        expires_in=tokens["ExpiresIn"],
+        refresh_expires_at=datetime.now(timezone.utc) + timedelta(days=7 if is_web_session(request) else 365),
+        user=AuthUser.from_user(user).model_dump(),
     )
 
-    if replay is not None:
-        access_token, refresh_token_value = replay
-        # The replayed access token was minted up to a minute ago: report what is left
-        # of it, not a full lifetime, or the client would trust it past its expiry.
-        expires_in = max(1, access_seconds - int(auth_token.rotated_seconds_ago()))
-        log_event(
-            logger,
-            logging.INFO,
-            "auth.refresh.grace_replay",
-            "Replayed the rotation of a refresh token consumed moments ago",
-            user_id=user.id,
-            lineage_id=auth_token.lineage_id,
-            rotated_seconds_ago=int(auth_token.rotated_seconds_ago()),
+
+@router.get("/oauth/config")
+async def oauth_configuration(request: Request):
+    return JSONResponse(
+        cognito.oauth_config(is_web_session(request)), headers={"Cache-Control": "no-store", "Vary": "X-Session-Transport"}
+    )
+
+
+@router.post("/oauth/token")
+async def oauth_token(body: OAuthCodeRequest, request: Request):
+    tokens = await cognito.exchange_code(is_web_session(request), body.code, body.code_verifier)
+    return await answer_session(request, tokens, provision=True)
+
+
+@router.post("/register", status_code=202)
+async def register(body: RegisterRequest, request: Request):
+    try:
+        async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as client:
+            await client.sign_up(
+                ClientId=cognito.client_id(is_web_session(request)),
+                Username=body.email,
+                Password=body.password,
+                UserAttributes=[{"Name": "email", "Value": body.email}],
+            )
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "InvalidPasswordException":
+            raise cognito.refuse("AUTH_PASSWORD_POLICY") from None
+        if exc.response["Error"]["Code"] != "UsernameExistsException":
+            raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
+    return {"status": "verification_required"}
+
+
+@router.post("/confirm-registration")
+async def confirm_registration(body: CodeRequest, request: Request):
+    await cognito.call(
+        "confirm_sign_up",
+        ClientId=cognito.client_id(is_web_session(request)),
+        Username=body.email.strip().lower(),
+        ConfirmationCode=body.code,
+    )
+    return {"status": "confirmed"}
+
+
+@router.post("/resend-confirmation", status_code=202)
+async def resend_confirmation(body: EmailRequest, request: Request):
+    try:
+        await cognito.call(
+            "resend_confirmation_code", ClientId=cognito.client_id(is_web_session(request)), Username=body.email.strip().lower()
         )
-    else:
-        # Rotate: same lineage, and the successor is written before the parent is
-        # consumed so a failure in between leaves the caller with a token that
-        # still works.
-        new_refresh = AuthToken.create_refresh_token(
+    except HTTPException as exc:
+        if exc.status_code in (429, 503):
+            raise
+    return {"status": "accepted"}
+
+
+@router.post("/forgot-password", status_code=202)
+async def forgot_password(body: EmailRequest, request: Request):
+    email = body.email.strip().lower()
+    if await cognito.password_account(email):
+        try:
+            await cognito.call("forgot_password", ClientId=cognito.client_id(is_web_session(request)), Username=email)
+        except HTTPException as exc:
+            # A delivery error must not reveal that this account exists. The
+            # generic acknowledgement deliberately promises no actual delivery.
+            if exc.status_code not in (400, 401, 429, 503):
+                raise
+    return {"status": "accepted"}
+
+
+@router.post("/confirm-password")
+async def confirm_password(body: ResetRequest, request: Request):
+    email = body.email.strip().lower()
+    if not await cognito.password_account(email):
+        raise cognito.refuse("AUTH_CODE_INVALID")
+    try:
+        await cognito.call(
+            "confirm_forgot_password",
+            ClientId=cognito.client_id(is_web_session(request)),
+            Username=email,
+            ConfirmationCode=body.code,
+            Password=body.password,
+        )
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            raise cognito.refuse("AUTH_CODE_INVALID") from None
+        raise
+    return {"status": "password_changed"}
+
+
+@router.post("/login")
+async def login(body: LoginRequest, request: Request):
+    result = await cognito.call(
+        "initiate_auth",
+        ClientId=cognito.client_id(is_web_session(request)),
+        AuthFlow="USER_PASSWORD_AUTH",
+        AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
+    )
+    tokens = result.get("AuthenticationResult")
+    if tokens is None:
+        raise cognito.refuse("AUTH_RESET_REQUIRED")
+    return await answer_session(request, tokens, provision=True)
+
+
+@router.post("/refresh")
+async def refresh_token(request: Request, body: Optional[RefreshRequest] = None):
+    token = presented_refresh_token(request, body.refresh_token if body else None)
+    if token.startswith("ext_r_"):
+        if is_web_session(request):
+            raise cognito.refuse("INVALID_CREDENTIALS", 401)
+        parent = await database_async.get_auth_token_by_token(token)
+        if parent is None or parent.token_type != TokenType.REFRESH_TOKEN or not parent.is_valid():
+            raise cognito.refuse("INVALID_CREDENTIALS", 401)
+        user = await database_async.get_user_by_id(parent.user_id)
+        if user is None or not user.cognito_sub:
+            raise cognito.refuse("INVALID_CREDENTIALS", 401)
+        parent.expires_at = get_refresh_token_expires_at(parent.lineage_kind, parent.lineage_started_at)
+        try:
+            await database_async.renew_extension_grant(parent)
+        except ClientError:
+            raise cognito.refuse("INVALID_CREDENTIALS", 401) from None
+        access = AuthToken(
             user_id=user.id,
             email=user.email,
-            expires_at=refresh_expires_at,
-            lineage_id=auth_token.lineage_id,
-            lineage_kind=auth_token.lineage_kind,
-            lineage_started_at=auth_token.lineage_started_at,
+            token="ext_a_" + secrets.token_urlsafe(32),
+            token_type=TokenType.ACCESS_TOKEN,
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            lineage_id=parent.id,
+            lineage_started_at=parent.lineage_started_at,
         )
-        new_refresh = await database_async.create_auth_token(new_refresh)
-
-        # An extension lineage keeps its reduced scope across rotations (task-485).
-        access_token = create_access_token(
-            data=access_token_payload(user.id, user.email, auth_token.lineage_kind),
-            expires_delta=timedelta(seconds=access_seconds),
-        )
-
-        auth_token.mark_as_rotated(
-            refresh_token=new_refresh.token, access_token=access_token
-        )
-        await database_async.update_auth_token(auth_token)
-
-        refresh_token_value = new_refresh.token
-        expires_in = access_seconds
-
-    return session_response(
-        http_request,
-        access_token=access_token,
-        expires_in=expires_in,
-        user=AuthUser.from_user(user).model_dump(),
-        refresh_token=refresh_token_value,
-        refresh_expires_at=refresh_expires_at,
+        await database_async.create_auth_token(access)
+        return {
+            "access_token": access.token,
+            "refresh_token": token,
+            "token_type": "bearer",
+            "expires_in": 300,
+            "user": AuthUser.from_user(user).model_dump(),
+        }
+    result = await cognito.call(
+        "get_tokens_from_refresh_token", ClientId=cognito.client_id(is_web_session(request)), RefreshToken=token
     )
+    return await answer_session(request, result["AuthenticationResult"])
 
 
-@router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout(
-    http_request: Request,
-    request: Optional[LogoutRequest] = None,
-    current_user: AuthUser = Depends(get_current_user),
-    db: DynamoDBConnection = Depends(get_db),
-):
-    """Sign out the calling device only.
-
-    The refresh token names the device session; the access token only proves who
-    owns it. An unknown token — already revoked, or belonging to someone else — is
-    a no-op success: logout is idempotent and must not double as a probe telling a
-    caller whether a token exists. In web mode the token is the cookie, and the
-    answer drops it whatever happened.
-    """
-    response = JSONResponse(content={"message": "Successfully logged out"})
-    if is_web_session(http_request):
+@router.post("/logout")
+async def logout(request: Request, body: Optional[LogoutRequest] = None):
+    response = JSONResponse({"status": "signed_out"})
+    if is_web_session(request):
         clear_refresh_cookie(response)
     try:
-        presented = presented_refresh_token(
-            http_request, request.refresh_token if request else None
-        )
+        token = presented_refresh_token(request, body.refresh_token if body else None)
     except HTTPException:
-        # Nothing to close: a web tab whose cookie is already gone.
         return response
-
-    auth_token = await database_async.get_auth_token_by_token(presented)
-    if (
-        auth_token is None
-        or auth_token.token_type != TokenType.REFRESH_TOKEN
-        or auth_token.user_id != current_user.id
-    ):
-        log_event(
-            logger,
-            logging.INFO,
-            "auth.logout.unknown_refresh_token",
-            "Logout presented a refresh token with no live session to close",
-            user_id=current_user.id,
-        )
-        return response
-
-    revoked = await database_async.revoke_refresh_token_lineage(
-        current_user.id, auth_token.lineage_id
-    )
-    log_event(
-        logger,
-        logging.INFO,
-        "auth.logout.lineage_revoked",
-        "Signed out one device session",
-        user_id=current_user.id,
-        lineage_id=auth_token.lineage_id,
-        tokens_revoked=revoked,
-    )
+    if token.startswith("ext_r_"):
+        if is_web_session(request):
+            return response
+        grant = await database_async.get_auth_token_by_token(token)
+        if grant and grant.token_type == TokenType.REFRESH_TOKEN:
+            await database_async.revoke_refresh_token_lineage(grant.user_id, grant.lineage_id)
+    else:
+        try:
+            await cognito.call("revoke_token", ClientId=cognito.client_id(is_web_session(request)), Token=token)
+        except HTTPException as exc:
+            if exc.status_code in (429, 503):
+                response = JSONResponse({"detail": {"error_code": "AUTH_UNAVAILABLE"}}, status_code=503)
+                if is_web_session(request):
+                    clear_refresh_cookie(response)
     return response
 
 
 @router.get("/me", response_model=AuthUser)
 async def get_current_user_info(current_user: AuthUser = Depends(get_current_user)):
     if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     return current_user
 
@@ -307,9 +250,7 @@ READING_LANGUAGE_CHANGE_TOO_SOON = "reading_language_change_too_soon"
 class UpdateMeRequest(BaseModel):
     """Request model for updating the current user's preferences."""
 
-    reading_language: Optional[str] = Field(
-        default=None, description="Preferred reading language (ISO 639-1 code)"
-    )
+    reading_language: Optional[str] = Field(default=None, description="Preferred reading language (ISO 639-1 code)")
     iana_timezone: Optional[str] = Field(
         default=None,
         description=(
@@ -335,15 +276,11 @@ async def update_current_user(
     ``reading_language_change_too_soon`` and the date the guard lifts.
     """
     if not current_user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
     user = await database_async.get_user_by_id(current_user.id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     update_data: Dict[str, Any] = {}
 
@@ -356,10 +293,7 @@ async def update_current_user(
                 # list repr with its brackets and quotes. Joined instead: the app
                 # picks from a fixed list and cannot reach this, but a refusal that
                 # prints `['ar', 'de', …]` is not a sentence (task-397).
-                detail=(
-                    f"Unsupported reading language: {lang}. Supported: "
-                    f"{', '.join(sorted(V1_READING_LANGUAGES))}"
-                ),
+                detail=(f"Unsupported reading language: {lang}. Supported: {', '.join(sorted(V1_READING_LANGUAGES))}"),
             )
         # Re-sending the language already stored is not a change: it must neither
         # spend the monthly allowance nor be refused. The app does exactly that on
@@ -408,11 +342,7 @@ async def update_current_user(
     # Only write when a value actually moves. The app re-reads the device zone on
     # every return to the foreground, so without this a user who never travels
     # would pay a DynamoDB write per app opening for a value that never changes.
-    changed = {
-        field: value
-        for field, value in update_data.items()
-        if getattr(user, field) != value
-    }
+    changed = {field: value for field, value in update_data.items() if getattr(user, field) != value}
     if changed:
         user.update(**changed)
         user = await database_async.update_user(user)

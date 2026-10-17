@@ -1,8 +1,11 @@
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import type { AuthCodeAction, CognitoOAuthConfig, SocialProvider } from "@media-summarizer/core/auth/cognito";
+import { COGNITO_SCOPES } from "@media-summarizer/core/auth/cognito";
 import {
   RegisterRequest,
   LoginRequest,
   TokenVerificationResponse,
-  NativeAuthResponse,
   AuthUser,
 } from "@media-summarizer/core/types/auth";
 import { Config } from "../constants/config";
@@ -19,13 +22,16 @@ import { SessionManager } from "./sessionManager";
  * keychain — belongs to SessionManager, which is the only caller of the refresh
  * endpoint. There is no refresh entry point here for a screen to reach for.
  *
+ * Cognito credentials are carried through the existing secure transport.
  * Key differences from the web frontend:
  * - expo-secure-store instead of localStorage/sessionStorage
  * - the refresh token is stored explicitly: the API returns it in the JSON body
- *   of register/login/refresh, since a mobile client cannot read an httpOnly
+ *   of login/refresh, since a mobile client cannot read an httpOnly
  *   cookie
  * - all storage operations are async
  */
+WebBrowser.maybeCompleteAuthSession();
+
 export class AuthService {
   private static async postUnauthenticated<T>(
     path: string,
@@ -49,18 +55,12 @@ export class AuthService {
     return (await response.json()) as T;
   }
 
-  static async register(
-    data: RegisterRequest,
-  ): Promise<TokenVerificationResponse> {
-    // Registration opens the session itself: same body as login, refresh token
-    // included, so there is nothing left to establish with a second call.
-    const result = await this.postUnauthenticated<TokenVerificationResponse>(
-      "/api/auth/register",
-      data,
-      "Registration failed",
-    );
-    await SessionManager.persistSession(result);
-    return result;
+  static async action(path: AuthCodeAction, body: unknown): Promise<void> {
+    await this.postUnauthenticated(`/api/auth${path}`, body, "Authentication failed");
+  }
+
+  static async register(data: RegisterRequest): Promise<void> {
+    await this.action("/register", data);
   }
 
   static async login(data: LoginRequest): Promise<TokenVerificationResponse> {
@@ -73,40 +73,29 @@ export class AuthService {
     return result;
   }
 
-  /**
-   * Authenticate with Google using a native ID token.
-   * The backend verifies the token and returns access + refresh tokens.
-   */
-  static async loginWithGoogleNative(
-    idToken: string,
-  ): Promise<NativeAuthResponse> {
-    const result = await this.postUnauthenticated<NativeAuthResponse>(
-      "/api/auth/google/native",
-      { id_token: idToken },
-      "Google sign-in failed",
-    );
-    await SessionManager.persistSession(result);
-    return result;
-  }
-
-  /**
-   * Authenticate with Apple using a native identity token.
-   * The backend verifies the token and returns access + refresh tokens.
-   */
-  static async loginWithAppleNative(
-    identityToken: string,
-    user?: {
-      email?: string;
-      fullName?: { givenName?: string; familyName?: string };
-    },
-  ): Promise<NativeAuthResponse> {
-    const result = await this.postUnauthenticated<NativeAuthResponse>(
-      "/api/auth/apple/native",
-      {
-        identity_token: identityToken,
-        user: user?.email ? { email: user.email } : undefined,
-      },
-      "Apple sign-in failed",
+  static async loginWithSocial(provider: SocialProvider): Promise<TokenVerificationResponse | null> {
+    const response = await fetch(`${Config.API_BASE_URL}/api/auth/oauth/config`);
+    if (!response.ok) {
+      throw createHttpError("Authentication unavailable", response.status, "AUTH_UNAVAILABLE");
+    }
+    const config = await response.json() as CognitoOAuthConfig;
+    const discovery = {
+      authorizationEndpoint: `${config.domain}/oauth2/authorize`,
+      tokenEndpoint: `${config.domain}/oauth2/token`,
+    };
+    const request = new AuthSession.AuthRequest({
+      clientId: config.client_id, redirectUri: config.redirect_uri,
+      responseType: AuthSession.ResponseType.Code, scopes: COGNITO_SCOPES,
+      usePKCE: true, extraParams: { identity_provider: provider },
+    });
+    await request.makeAuthUrlAsync(discovery);
+    const outcome = await request.promptAsync(discovery);
+    if (outcome.type === "cancel" || outcome.type === "dismiss") return null;
+    if (outcome.type !== "success" || !outcome.params.code || !request.codeVerifier) {
+      throw createHttpError("Authentication failed", 400, "AUTH_UNAVAILABLE");
+    }
+    const result = await this.postUnauthenticated<TokenVerificationResponse>(
+      "/api/auth/oauth/token", { code: outcome.params.code, code_verifier: request.codeVerifier }, "Authentication failed",
     );
     await SessionManager.persistSession(result);
     return result;
