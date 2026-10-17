@@ -44,6 +44,7 @@ import {
 } from "../lib/folderTree";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { OrganizationService } from "../services/organizationService";
+import { NewFolderButton } from "./NewFolderButton";
 import type { Folder } from "@media-summarizer/core/types/organization";
 
 export interface FolderPickerViewProps {
@@ -319,16 +320,12 @@ export function FolderPickerView({
             <Text style={styles.sectionTitle}>
               {t("folderPicker.myFolders")}
             </Text>
-            <Pressable
-              style={styles.addButton}
+            <NewFolderButton
+              testID="folder-picker-new-folder"
               onPress={handleShowCreateInput}
               disabled={busy || isCreating}
-              testID="folder-picker-new-folder"
               accessibilityLabel={t("folderPicker.createA11y")}
-              accessibilityRole="button"
-            >
-              <Ionicons name="add" size={22} color={Colors.primary} />
-            </Pressable>
+            />
           </View>
 
           {isCreating && (
@@ -506,13 +503,6 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       fontWeight: "700",
       color: Colors.textMain,
       letterSpacing: -0.3,
-    },
-    addButton: {
-      width: 32,
-      height: 32,
-      borderRadius: BorderRadius.full,
-      alignItems: "center",
-      justifyContent: "center",
     },
     foldersContainer: {
       backgroundColor: Colors.surfaceContainerLow,

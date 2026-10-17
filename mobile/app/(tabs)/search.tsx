@@ -60,6 +60,7 @@ import {
 import { RenameDialog } from "../../src/components/RenameDialog";
 import { Toast, useToast } from "../../src/components/Toast";
 import { GlassSurface } from "../../src/components/GlassSurface";
+import { NewFolderButton } from "../../src/components/NewFolderButton";
 import { useMediaActions } from "../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../src/hooks/useFolderActions";
 import { useFoldersSectionExpanded } from "../../src/hooks/useFoldersSectionExpanded";
@@ -1234,25 +1235,12 @@ function LibraryHeader({
           expanded={foldersExpanded}
           onToggle={onToggleFolders}
         />
-        <Pressable
+        <NewFolderButton
           testID="library-new-folder"
-          style={({ pressed }) => [
-            styles.newFolderButton,
-            pressed && styles.foldersTogglePressed,
-          ]}
           onPress={onCreateFolder}
           disabled={editor?.saving}
-          hitSlop={4}
-          accessibilityRole="button"
           accessibilityLabel={t("search.newFolder.a11y")}
-        >
-          <GlassSurface
-            style={styles.newFolderSurface}
-            tintStyle={styles.headingGlassTint}
-          >
-            <Ionicons name="add" size={22} color={Colors.textMain} />
-          </GlassSurface>
-        </Pressable>
+        />
       </View>
 
       {/* Folded, everything the heading stands over leaves with the grid — the
@@ -1590,9 +1578,8 @@ function SearchResultsHeader({
  * reads it: the flag only changes on a bundle reload.
  */
 const FOLDED_CHEVRON = I18nManager.isRTL ? "chevron-back" : "chevron-forward";
-/** The glass circles of the `Folders` heading: the chevron's, and the `+`'s. */
+/** The glass circle of the `Folders` heading's chevron; the `+` is `NewFolderButton`. */
 const HEADING_CHEVRON_SIZE = 32;
-const NEW_FOLDER_BUTTON_SIZE = 40;
 
 /**
  * The `Folders` heading, and the switch that folds the grid under it.
@@ -2007,23 +1994,6 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       flexDirection: "row",
       alignItems: "flex-start",
       justifyContent: "space-between",
-    },
-    newFolderButton: {
-      width: TouchTarget.minimum,
-      height: TouchTarget.minimum,
-      alignItems: "center",
-      justifyContent: "center",
-      // Pulled into the gutter so the circle, not its invisible target, lines up
-      // with the end of the grid's last column.
-      marginEnd: -(TouchTarget.minimum - NEW_FOLDER_BUTTON_SIZE) / 2,
-    },
-    newFolderSurface: {
-      width: NEW_FOLDER_BUTTON_SIZE,
-      height: NEW_FOLDER_BUTTON_SIZE,
-      borderRadius: BorderRadius.full,
-      overflow: "hidden",
-      alignItems: "center",
-      justifyContent: "center",
     },
     sectionHint: {
       fontSize: Typography.body.fontSize,

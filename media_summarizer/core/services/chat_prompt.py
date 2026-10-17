@@ -90,11 +90,17 @@ def chat_instructions(language: Optional[str]) -> str:
             "You are answering questions about the sources above, in a conversation. "
             "The questions follow these instructions, after the earlier turns of the "
             "conversation if there are any.",
-            "- Answer from the sources only. When they do not contain the answer, say "
-            "so plainly instead of answering from general knowledge.",
-            "- Every statement drawn from a source carries that source's tag right "
-            'after it, e.g. "[S2]"; that tag is the "source_ref" of the rule below. A '
-            "statement drawn from several sources carries each of their tags.",
+            "- The sources are the starting point, not the limit. Think the question "
+            "through: reason from what the sources say, draw out what follows from it, "
+            "and bring in your own knowledge when it helps answer, explain, correct or "
+            "extend them. Never stop at \"the sources do not say\" when the question can "
+            "be answered by reasoning or by what is generally known.",
+            "- Keep the two apart for the reader. Every statement drawn from a source "
+            'carries that source\'s tag right after it, e.g. "[S2]"; that tag is the '
+            '"source_ref" of the rule below. A statement drawn from several sources '
+            "carries each of their tags. Reasoning and knowledge that do not come from "
+            "a source carry no tag, and where it matters, say in passing that they go "
+            "beyond the sources. Never put a tag on something the source does not say.",
             llm_corpus.source_ref_instruction(required=True),
             "- Keep an answer to a few short paragraphs unless the question asks for "
             "more detail, a list or a longer explanation.",
