@@ -259,3 +259,26 @@ est documenté dans [l’issue du provider AWS](https://github.com/hashicorp/ter
 Le retour dans Apple Developer attend encore la connexion du propriétaire à la
 console. Aucun changement n’a été appliqué à prod. Les images applicatives, le web
 et les binaires mobiles n’ont pas été déployés pendant ce raccordement.
+
+## Release dev du 2026-10-18
+
+Le frontend web local utilisait le nouveau contrat alors que l’API AWS exécutait
+encore l’ancien code : `/api/auth/oauth/config` répondait 404, ce qui rendait les
+parcours incompatibles. Après autorisation du propriétaire, les commits ont été
+poussés sur `main` et le [workflow de déploiement dev](https://github.com/MedlockM2/second-brain-app/actions/runs/39088195368)
+a reconstruit et déployé l’API, le chat stream et les workers avec succès.
+Le [workflow Terraform dev](https://github.com/MedlockM2/second-brain-app/actions/runs/39088195365)
+a également terminé avec succès en réutilisant les paramètres AWS existants.
+
+Contrôles sur l’API publiée : santé 200, configuration OAuth 200 pour les deux
+transports avec leurs clients/retours distincts et `Cache-Control: no-store`, CORS
+autorisé pour `http://localhost:5173`. Le contrat OpenAPI publié expose
+l’inscription 202, la confirmation, le renvoi de code et la récupération de mot
+de passe. Ces lectures ne créent aucun compte et ne valident pas le parcours
+utilisateur complet ; l’inscription et le code reçu restent à effectuer par le
+propriétaire depuis son navigateur.
+
+Le workflow mobile a démarré de nouveaux builds internes Android et iOS avec
+soumission automatique : les empreintes natives ont changé. La configuration du
+retour dans Apple Developer attend toujours la connexion du propriétaire. Prod
+reste inchangé.
