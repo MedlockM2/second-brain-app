@@ -752,7 +752,7 @@ export const hi: Catalog = {
   "auth.sendCode": "कोड भेजें",
   "auth.codeSent": "यदि इस पते पर पात्र खाता है, तो ईमेल से कोड आएगा।",
   "auth.verificationTitle": "ईमेल सत्यापित करें",
-  "auth.verificationHint": "ईमेल में मिला कोड दर्ज करें। फिर आप साइन इन कर सकेंगे।",
+  "auth.verificationHint": "अपने खाते में प्रवेश करने के लिए ईमेल में मिला कोड दर्ज करें।",
   "auth.code": "सत्यापन कोड",
   "auth.confirmCode": "कोड की पुष्टि करें",
   "auth.newPassword": "नया पासवर्ड",

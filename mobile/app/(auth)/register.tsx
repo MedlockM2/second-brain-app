@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { Link, router } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
@@ -19,6 +19,8 @@ import {
 } from "../../src/lib/validation";
 import { SocialAuthButtons } from "../../src/components/SocialAuthButtons";
 import { t } from "../../src/i18n";
+import type { LoginRequest } from "@media-summarizer/core/types/auth";
+import { AuthCodeScreen } from "../../src/components/AuthCodeScreen";
 
 import {
   Typography,
@@ -39,6 +41,11 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verification, setVerification] = useState<LoginRequest | null>(null);
+  useFocusEffect(useCallback(() => () => {
+    setVerification(null);
+    setPassword("");
+  }, []));
 
   const handleRegister = async () => {
     setError(null);
@@ -57,14 +64,18 @@ export default function RegisterScreen() {
 
     setIsSubmitting(true);
     try {
-      await register({ email: email.trim(), password });
-      router.replace({ pathname: "/(auth)/verify-email", params: { email: email.trim() } });
+      const credentials = { email: email.trim(), password };
+      await register(credentials);
+      setVerification(credentials);
+      setPassword("");
     } catch (err) {
       setError(getFriendlyErrorMessage(err, { fallback: t("register.failed") }));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (verification) return <AuthCodeScreen recovery={false} credentials={verification} onCancel={() => setVerification(null)} />;
 
   return (
     <KeyboardAvoidingView

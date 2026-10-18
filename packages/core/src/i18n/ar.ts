@@ -799,7 +799,7 @@ export const ar: Catalog = {
   "auth.sendCode": "إرسال الرمز",
   "auth.codeSent": "إذا كان لهذا العنوان حساب مؤهل، فسيصل رمز عبر البريد.",
   "auth.verificationTitle": "تأكيد البريد الإلكتروني",
-  "auth.verificationHint": "أدخل الرمز المرسل إلى بريدك. يمكنك بعدها تسجيل الدخول.",
+  "auth.verificationHint": "أدخل الرمز المرسل إلى بريدك للوصول إلى حسابك.",
   "auth.code": "رمز التحقق",
   "auth.confirmCode": "تأكيد الرمز",
   "auth.newPassword": "كلمة المرور الجديدة",

@@ -84,7 +84,7 @@ média ou artefact n’est ajouté sous `/api/v1/`.
 | Route | Entrée et réponse |
 |---|---|
 | `POST /register` | `{email, password}` → 202 `{status: verification_required}` ; aucune session avant confirmation |
-| `POST /confirm-registration` | `{email, code}` → `{status: confirmed}` ; retour à la connexion |
+| `POST /confirm-registration` | `{email, code}` → `{status: confirmed}` ; le formulaire ouvre ensuite automatiquement la session par `/login` |
 | `POST /resend-confirmation` | `{email}` → 202 générique |
 | `POST /login` | `{email, password}` → session Cognito et profil |
 | `GET /oauth/config` | domaine, client et retour publics du transport choisi |
@@ -94,6 +94,20 @@ média ou artefact n’est ajouté sous `/api/v1/`.
 | `POST /refresh` | refresh du corps mobile ou du cookie web → paire renouvelée et profil |
 | `POST /logout` | même transport de refresh → révocation Cognito et suppression du cookie web |
 | `GET /me`, `PATCH /me` | profil et préférences existants, après authentification |
+
+Après inscription, le formulaire web/mobile reste monté pendant la saisie du code.
+Les justificatifs restent uniquement dans son état React, sans passage dans les
+paramètres de navigation, l’historique, un stockage ou un cache global. Une fois
+le code confirmé, le formulaire appelle `/login` automatiquement puis rejoint la
+destination demandée sur web ou `POST_AUTH_ENTRY_POINT` sur mobile : les gates
+existants choisissent l’onboarding de langue ou l’app. Il n’y a aucun écran de
+succès de vérification à valider. Quitter le parcours libère les justificatifs ;
+sur mobile, ils sont également effacés lorsque l’écran perd le focus.
+
+Si l’ouverture de session échoue après confirmation, le formulaire permet de
+réessayer la connexion sur place sans rejouer le code déjà consommé. Une reprise
+directe de la page de vérification sans formulaire d’origine demande le mot de
+passe avec le code. La récupération de mot de passe reste un parcours distinct.
 
 Un mot de passe comprend au moins 12 caractères, une majuscule, une minuscule et
 un chiffre. Le serveur délègue la validation à Cognito. Les erreurs sont des codes

@@ -862,7 +862,7 @@ export const de: Catalog = {
   "auth.sendCode": "Code senden",
   "auth.codeSent": "Falls diese Adresse ein berechtigtes Konto hat, erhältst du einen Code per E-Mail.",
   "auth.verificationTitle": "E-Mail bestätigen",
-  "auth.verificationHint": "Gib den Code aus deiner E-Mail ein. Danach kannst du dich anmelden.",
+  "auth.verificationHint": "Gib den Code aus deiner E-Mail ein, um auf dein Konto zuzugreifen.",
   "auth.code": "Bestätigungscode",
   "auth.confirmCode": "Code bestätigen",
   "auth.newPassword": "Neues Passwort",

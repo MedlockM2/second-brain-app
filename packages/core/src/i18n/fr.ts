@@ -881,7 +881,7 @@ export const fr: Catalog = {
   "auth.sendCode": "Envoyer le code",
   "auth.codeSent": "Si cette adresse correspond à un compte éligible, un code arrivera par e-mail.",
   "auth.verificationTitle": "Vérifier votre adresse e-mail",
-  "auth.verificationHint": "Saisissez le code reçu par e-mail. Vous pourrez ensuite vous connecter.",
+  "auth.verificationHint": "Saisissez le code reçu par e-mail pour accéder à votre compte.",
   "auth.code": "Code de vérification",
   "auth.confirmCode": "Confirmer le code",
   "auth.newPassword": "Nouveau mot de passe",

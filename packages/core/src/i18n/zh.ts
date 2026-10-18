@@ -712,7 +712,7 @@ export const zh: Catalog = {
   "auth.sendCode": "发送验证码",
   "auth.codeSent": "如果此邮箱有符合条件的账户，将收到验证码邮件。",
   "auth.verificationTitle": "验证邮箱",
-  "auth.verificationHint": "请输入邮件中的验证码，然后即可登录。",
+  "auth.verificationHint": "请输入邮件中的验证码以访问您的账户。",
   "auth.code": "验证码",
   "auth.confirmCode": "确认验证码",
   "auth.newPassword": "新密码",

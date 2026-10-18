@@ -754,7 +754,7 @@ export const nl: Catalog = {
   "auth.sendCode": "Code versturen",
   "auth.codeSent": "Als dit adres een geschikt account heeft, ontvang je een code per e-mail.",
   "auth.verificationTitle": "E-mailadres bevestigen",
-  "auth.verificationHint": "Voer de code uit je e-mail in. Daarna kun je inloggen.",
+  "auth.verificationHint": "Voer de code uit je e-mail in om toegang te krijgen tot je account.",
   "auth.code": "Verificatiecode",
   "auth.confirmCode": "Code bevestigen",
   "auth.newPassword": "Nieuw wachtwoord",

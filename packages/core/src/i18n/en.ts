@@ -1001,7 +1001,7 @@ export const en = {
   "auth.sendCode": "Send code",
   "auth.codeSent": "If this address has an eligible account, a code will arrive by email.",
   "auth.verificationTitle": "Verify your email",
-  "auth.verificationHint": "Enter the code sent to your email address. You can then sign in.",
+  "auth.verificationHint": "Enter the code sent to your email address to access your account.",
   "auth.code": "Verification code",
   "auth.confirmCode": "Confirm code",
   "auth.newPassword": "New password",

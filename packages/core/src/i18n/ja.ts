@@ -727,7 +727,7 @@ export const ja: Catalog = {
   "auth.sendCode": "コードを送信",
   "auth.codeSent": "対象のアカウントがある場合、メールでコードが届きます。",
   "auth.verificationTitle": "メールアドレスを確認",
-  "auth.verificationHint": "メールで届いたコードを入力してください。その後ログインできます。",
+  "auth.verificationHint": "メールで届いたコードを入力して、アカウントにアクセスしてください。",
   "auth.code": "確認コード",
   "auth.confirmCode": "コードを確認",
   "auth.newPassword": "新しいパスワード",

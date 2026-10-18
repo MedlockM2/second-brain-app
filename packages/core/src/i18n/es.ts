@@ -853,7 +853,7 @@ export const es: Catalog = {
   "auth.sendCode": "Enviar código",
   "auth.codeSent": "Si esta dirección tiene una cuenta válida, recibirás un código por correo.",
   "auth.verificationTitle": "Verifica tu correo",
-  "auth.verificationHint": "Introduce el código enviado a tu correo. Después podrás iniciar sesión.",
+  "auth.verificationHint": "Introduce el código enviado a tu correo para acceder a tu cuenta.",
   "auth.code": "Código de verificación",
   "auth.confirmCode": "Confirmar código",
   "auth.newPassword": "Nueva contraseña",

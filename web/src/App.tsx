@@ -119,6 +119,7 @@ function SignedOutOnly() {
 /** An account that has never chosen a reading language chooses it first. */
 function RequireReadingLanguage() {
   const { user } = useSession();
-  if (!user?.reading_language) return <Navigate to="/welcome/language" replace />;
+  const location = useLocation();
+  if (!user?.reading_language) return <Navigate to="/welcome/language" replace state={{ from: location.pathname + location.search }} />;
   return <Outlet />;
 }

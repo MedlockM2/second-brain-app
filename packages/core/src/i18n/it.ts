@@ -753,7 +753,7 @@ export const it: Catalog = {
   "auth.sendCode": "Invia codice",
   "auth.codeSent": "Se questo indirizzo ha un account idoneo, riceverai un codice via e-mail.",
   "auth.verificationTitle": "Verifica la tua e-mail",
-  "auth.verificationHint": "Inserisci il codice ricevuto via e-mail. Poi potrai accedere.",
+  "auth.verificationHint": "Inserisci il codice ricevuto via e-mail per accedere al tuo account.",
   "auth.code": "Codice di verifica",
   "auth.confirmCode": "Conferma codice",
   "auth.newPassword": "Nuova password",

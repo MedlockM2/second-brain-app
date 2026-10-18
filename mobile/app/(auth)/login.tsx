@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { Link, router } from "expo-router";
+import { Link, router, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
@@ -20,6 +20,8 @@ import {
 import { SocialAuthButtons } from "../../src/components/SocialAuthButtons";
 import { t } from "../../src/i18n";
 import { POST_AUTH_ENTRY_POINT } from "../../src/constants/routes";
+import type { LoginRequest } from "@media-summarizer/core/types/auth";
+import { AuthCodeScreen } from "../../src/components/AuthCodeScreen";
 import {
   Typography,
   Spacing,
@@ -39,6 +41,11 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [verification, setVerification] = useState<LoginRequest | null>(null);
+  useFocusEffect(useCallback(() => () => {
+    setVerification(null);
+    setPassword("");
+  }, []));
 
   const handleLogin = async () => {
     setError(null);
@@ -61,7 +68,8 @@ export default function LoginScreen() {
       router.replace(POST_AUTH_ENTRY_POINT);
     } catch (err) {
       if ((err as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
-        router.push({ pathname: "/(auth)/verify-email", params: { email: email.trim() } });
+        setVerification({ email: email.trim(), password });
+        setPassword("");
         return;
       }
       setError(getFriendlyErrorMessage(err, { fallback: t("login.failed") }));
@@ -71,6 +79,8 @@ export default function LoginScreen() {
   };
 
   const displayError = error || sessionError;
+
+  if (verification) return <AuthCodeScreen recovery={false} credentials={verification} onCancel={() => setVerification(null)} />;
 
   return (
     <KeyboardAvoidingView

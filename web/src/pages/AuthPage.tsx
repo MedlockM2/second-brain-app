@@ -7,6 +7,8 @@ import { Icon } from "../components/Icon";
 import { LogoMark } from "../components/Logo";
 import { useI18n } from "../i18n/I18nProvider";
 import { useSession } from "../session/SessionProvider";
+import type { LoginRequest } from "@media-summarizer/core/types/auth";
+import { AuthCodePage } from "./AuthCodePage";
 
 /**
  * Sign in and sign up (capture 19-connexion.png): Google, Apple, then email and
@@ -22,6 +24,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
+  const [verification, setVerification] = useState<LoginRequest | null>(null);
   const register = mode === "register";
 
   const after = (location.state as { from?: string } | null)?.from ?? "/";
@@ -30,18 +33,20 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     event.preventDefault();
     if (busy) return;
     setBusy(true); setError(null);
+    const credentials = { email: email.trim(), password };
     try {
       if (register) {
-        await authAction("/register", { email, password });
+        await authAction("/register", credentials);
+        setVerification(credentials);
         setPassword("");
-        navigate("/verify-email", { state: { email } });
       } else {
-        await signIn("/login", { email, password });
+        await signIn("/login", credentials);
         navigate(after, { replace: true });
       }
     } catch (caught) {
       if ((caught as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
-        navigate("/verify-email", { state: { email } });
+        setVerification(credentials);
+        setPassword("");
       } else { setError(authErrorKey(caught)); }
     } finally { setBusy(false); }
   }
@@ -51,6 +56,10 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     try { await startSocialSignIn(provider); }
     catch (caught) { setError(authErrorKey(caught)); setBusy(false); }
   }
+
+  // Keep credentials in this mounted form only, never in router state or storage.
+  // Leaving the verification flow unmounts the form and drops them.
+  if (verification) return <AuthCodePage recovery={false} credentials={verification} onCancel={() => setVerification(null)} />;
 
   return (
     <div className="center-page">

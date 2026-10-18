@@ -5,7 +5,7 @@ import {
 } from "@media-summarizer/core/i18n/locales";
 import type { AuthUser } from "@media-summarizer/core/types/auth";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { apiRequest } from "../api";
 import { Icon } from "../components/Icon";
 import { useI18n } from "../i18n/I18nProvider";
@@ -22,6 +22,7 @@ export function ReadingLanguagePage() {
   const { t, locale } = useI18n();
   const { setUser } = useSession();
   const navigate = useNavigate();
+  const location = useLocation();
   const [choice, setChoice] = useState<SupportedLocale>(locale);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -35,7 +36,7 @@ export function ReadingLanguagePage() {
         body: { reading_language: choice },
       });
       setUser(user);
-      navigate("/", { replace: true });
+      navigate((location.state as { from?: string } | null)?.from ?? "/", { replace: true });
     } catch {
       setFailed(true);
     } finally {
