@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-18 02:49'
+updated_date: '2026-10-18 02:53'
 labels:
   - auth
   - mobile
@@ -143,4 +143,6 @@ Push c3f75c48 réalisé après intégration de e8930411. Main Branch Checks vert
 Retour UX livré dans ebc9ee27 (Web: done) : composants PasswordField web/native avec bouton œil accessible et masquage initial ; utilisés sur connexion, inscription, reprise de vérification et nouveau mot de passe. Les labels et règles sont séparés de la ligne de saisie : le texte d’aide ne peut plus réduire la largeur de l’input. Récupération en deux étapes avec titres/consignes courts, adresse affichée avec Modifier à la seconde étape, code puis mot de passe, règles compactes. Les onze langues sont alignées ; le préambule fournisseurs et le message long d’éligibilité ne sont plus affichés. Les réponses génériques côté API sont conservées. Après réinitialisation, connexion automatique vers l’app, avec reprise inline en cas d’erreur plutôt que nouvel écran de succès.
 
 Validation : typecheck/lint web, mobile et packages/core réussis ; build web et garde Web: done réussis. Avertissements préexistants : any dans purchaseService.ts et taille du bundle web. Contrôle manuel du navigateur sur le parcours de récupération avec adresse fictive sans compte : étape e-mail puis code, champ pleinement visible, texte d’aide sous le champ, bouton afficher/masquer et état accessible vérifiés, Modifier réouvre l’e-mail et efface code/mot de passe ; les saisies de contrôle ont été vidées. Aucun code de confirmation ni mot de passe soumis, aucune modification de compte, aucun test automatisé ajouté ou exécuté. Aucun changement backend/Terraform. Le réglage du retour Apple reste le point externe en attente de la tâche globale.
+
+Push de la correction UX réalisé sur main (bcec2745). Main Branch Checks vert : https://github.com/MedlockM2/second-brain-app/actions/runs/39091445463. Publication OTA interne Android et iOS réussie, avec contrôle des manifestes et source maps par le workflow : https://github.com/MedlockM2/second-brain-app/actions/runs/39091445447. Web local mis à jour et rendu contrôlé manuellement. Aucun déploiement backend nécessaire. L’état In Progress concerne toujours le réglage externe Apple déjà documenté.
 <!-- SECTION:NOTES:END -->
