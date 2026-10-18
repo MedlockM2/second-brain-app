@@ -1,11 +1,11 @@
 ---
 id: TASK-527
 title: Rétablir Sign in with Apple natif sur iOS avec une session Cognito
-status: In Progress
+status: Done
 assignee:
   - codex
 created_date: '2026-10-18 13:11'
-updated_date: '2026-10-18 13:34'
+updated_date: '2026-10-18 14:49'
 labels: []
 dependencies: []
 references:
@@ -54,10 +54,14 @@ Implémentation native et raccordement Cognito réalisés dans le worktree isol�
 Terraform validate et fmt passent. Plan dev contre le state réel : 7 créations, 4 modifications, aucune destruction ni recréation du pool. Seule l’API reçoit les deux nouvelles variables natives ; les workers restent inchangés. Introspection Expo iOS : usesAppleSignIn=true, plugin présent, entitlement com.apple.developer.applesignin=[Default]. Build web et typechecks mobile/core/web passent. Lint core passe ; lint mobile n’ajoute aucun avertissement. Revue de sécurité : nonce/state, signature/audience Apple, code consommé une seule fois, grants hachés et liés à la session Cognito, aucun rattachement par simple email. Les AC 1 et 3 restent à confirmer sur appareil avec le compte Apple du propriétaire ; aucun login Apple E2E n’est revendiqué.
 
 Publication autorisée dans la conversation : commit ef3a4b82 intégré et poussé sur main. Terraform Dev, Main Branch Checks, Deploy Lambda Functions et Mobile OTA or Build ont tous terminé avec succès. Hooks Cognito déployés, CUSTOM_AUTH activé uniquement sur mobile ; custom:apple_subject non modifiable par les clients publics. API réelle : santé 200, nouvelle route présente dans OpenAPI, preuve Apple invalide refusée en 401 AUTH_APPLE_INVALID. Build iOS 16 terminé et soumission EAS iOS terminée ; traitement App Store Connect en attente au dernier relevé. Build Android 20 en compilation. Aucune connexion Apple réelle revendiquée. Ajustement final du contraste du spinner Apple natif vérifié par typecheck/lint ; publication OTA prévue après achèvement des builds pour éviter un second binaire inutile.
+
+Publication terminée : iOS 16 (EAS e45a6758-cd34-47ce-904b-886c43b120ea) et Android 20 (EAS 2ce32a3e-b7a4-48c8-97b3-89e13ac3aa7d) compilés, soumissions EAS toutes deux FINISHED. App Store Connect expose le build 16, version 1.0.0, processing_state VALID. Ajustement du spinner livré par commit 0f2b1c61 ; Main Branch Checks et Mobile OTA or Build terminés avec succès (runs 39132179519 et 39132179521). Feedback ajouté au registre de déduplication. AC 1 et 3 laissés non cochés : connexion Apple et identité interplateforme nécessitent la validation du propriétaire sur appareil avec son compte, non reproductibles par vérification statique. Le callback Apple Services ID du parcours web/Android reste le point de configuration propriétaire déjà documenté dans task-526 ; le parcours natif iOS n’en dépend pas.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Restaure la feuille Apple et le bouton système sur iOS, avec annulation silencieuse. Le serveur valide et consomme la preuve Apple puis ouvre une session Cognito CUSTOM_AUTH avec autorisation liée au challenge et consommée atomiquement. Identité basée sur le sujet Apple et rattachement du parcours web/Android au même sujet ; collision email refusée sans fusion implicite. Infrastructure Terraform, capacité native, messages traduits et documentation sont livrés. Vérifications statiques et plan dev valides ; connexion Apple réelle et passage interplateforme restent à valider sur le nouveau binaire.
+
+Déployé sur AWS dev, publié en build TestFlight 16 et build Android interne 20, puis OTA du dernier ajustement de contraste. CI backend/mobile/Terraform/parité et publication OTA vertes. Le serveur refuse une preuve invalide en 401. Aucun test automatisé ajouté ou exécuté ; la connexion Apple réelle et le passage web/mobile restent à confirmer par le propriétaire (AC 1 et 3 non cochés).
 <!-- SECTION:FINAL_SUMMARY:END -->
