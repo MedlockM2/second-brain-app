@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - codex
 created_date: '2026-10-18 13:11'
-updated_date: '2026-10-18 13:20'
+updated_date: '2026-10-18 13:34'
 labels: []
 dependencies: []
 references:
@@ -52,6 +52,8 @@ Précision AWS vérifiée : custom:apple_subject doit être mutable dans le sch�
 Implémentation native et raccordement Cognito réalisés dans le worktree isolé. Vérifications TypeScript mobile/core/web vertes, lint mobile sans erreur (un avertissement préexistant dans purchaseService), lint core vert, ruff et mypy backend verts. Aucun test automatisé ajouté ou exécuté. Le code Swift Expo transmet nonce/state tels quels à la requête Apple.
 
 Terraform validate et fmt passent. Plan dev contre le state réel : 7 créations, 4 modifications, aucune destruction ni recréation du pool. Seule l’API reçoit les deux nouvelles variables natives ; les workers restent inchangés. Introspection Expo iOS : usesAppleSignIn=true, plugin présent, entitlement com.apple.developer.applesignin=[Default]. Build web et typechecks mobile/core/web passent. Lint core passe ; lint mobile n’ajoute aucun avertissement. Revue de sécurité : nonce/state, signature/audience Apple, code consommé une seule fois, grants hachés et liés à la session Cognito, aucun rattachement par simple email. Les AC 1 et 3 restent à confirmer sur appareil avec le compte Apple du propriétaire ; aucun login Apple E2E n’est revendiqué.
+
+Publication autorisée dans la conversation : commit ef3a4b82 intégré et poussé sur main. Terraform Dev, Main Branch Checks, Deploy Lambda Functions et Mobile OTA or Build ont tous terminé avec succès. Hooks Cognito déployés, CUSTOM_AUTH activé uniquement sur mobile ; custom:apple_subject non modifiable par les clients publics. API réelle : santé 200, nouvelle route présente dans OpenAPI, preuve Apple invalide refusée en 401 AUTH_APPLE_INVALID. Build iOS 16 terminé et soumission EAS iOS terminée ; traitement App Store Connect en attente au dernier relevé. Build Android 20 en compilation. Aucune connexion Apple réelle revendiquée. Ajustement final du contraste du spinner Apple natif vérifié par typecheck/lint ; publication OTA prévue après achèvement des builds pour éviter un second binaire inutile.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

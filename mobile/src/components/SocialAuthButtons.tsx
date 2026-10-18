@@ -102,7 +102,7 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
             style={[styles.nativeAppleButton, (disabled || isLoading) && styles.buttonDisabled]}
             onPress={handleAppleSignIn}
           />
-          {isAppleLoading && <ActivityIndicator style={styles.appleProgress} color={Colors.textMain} />}
+          {isAppleLoading && <ActivityIndicator style={styles.appleProgress} color={Colors.surface} />}
         </View>
       ) : <TouchableOpacity
           style={[styles.socialButton, styles.appleButton, (disabled || isLoading) && styles.appleButtonDisabled]}
