@@ -18,6 +18,12 @@ resource "aws_cognito_user_pool" "users" {
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
   username_configuration { case_sensitive = false }
+  lambda_config {
+    define_auth_challenge          = aws_lambda_function.apple_auth.arn
+    create_auth_challenge          = aws_lambda_function.apple_auth.arn
+    verify_auth_challenge_response = aws_lambda_function.apple_auth.arn
+    pre_sign_up                    = aws_lambda_function.apple_auth.arn
+  }
   email_configuration { email_sending_account = "COGNITO_DEFAULT" }
   account_recovery_setting {
     recovery_mechanism {
@@ -42,6 +48,19 @@ resource "aws_cognito_user_pool" "users" {
     string_attribute_constraints {
       min_length = 3
       max_length = 320
+    }
+  }
+  # Native Apple subjects are admin-only. Cognito requires mutable custom
+  # attributes on the destination of AdminLinkProviderForUser. Public clients cannot
+  # assign themselves an Apple identity, including through SignUp.
+  schema {
+    name                = "apple_subject"
+    attribute_data_type = "String"
+    required            = false
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 255
     }
   }
   # Only AdminUpdateUserAttributes may attach a fixture. Clients cannot write it.
@@ -125,7 +144,7 @@ resource "aws_cognito_user_pool_client" "app" {
   generate_secret                      = false
   prevent_user_existence_errors        = "ENABLED"
   enable_token_revocation              = true
-  explicit_auth_flows                  = ["ALLOW_USER_PASSWORD_AUTH"]
+  explicit_auth_flows                  = concat(["ALLOW_USER_PASSWORD_AUTH"], each.key == "mobile" ? ["ALLOW_CUSTOM_AUTH"] : [])
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid", "email", "aws.cognito.signin.user.admin"]
@@ -151,7 +170,7 @@ resource "aws_cognito_user_pool_client" "app" {
   }
 }
 # GetUser is access-token authorized, not IAM. Administrative operations are
-# restricted to the single pool; neither API nor stream can change passwords.
+# restricted to the single pool. Native Apple provisioning has a separate policy.
 resource "aws_iam_role_policy" "cognito_api" {
   name = "cognito-users${local.suffix}"
   role = aws_iam_role.lambda_api.id

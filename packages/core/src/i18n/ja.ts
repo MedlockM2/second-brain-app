@@ -746,4 +746,6 @@ export const ja: Catalog = {
   "auth.hidePassword": "パスワードを隠す",
   "auth.changeEmail": "変更",
   "auth.unavailable": "現在ログインできません。再試行してください。",
+  "auth.appleFailed": "Appleでのサインインに失敗しました。もう一度お試しください。",
+  "auth.accountConflict": "このメールアドレスは既に使われています。通常の方法でサインインしてください。",
 };

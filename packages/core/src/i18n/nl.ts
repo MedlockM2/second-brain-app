@@ -773,4 +773,6 @@ export const nl: Catalog = {
   "auth.hidePassword": "Wachtwoord verbergen",
   "auth.changeEmail": "Wijzigen",
   "auth.unavailable": "Inloggen is tijdelijk niet beschikbaar. Probeer het opnieuw.",
+  "auth.appleFailed": "Inloggen met Apple is mislukt. Probeer het opnieuw.",
+  "auth.accountConflict": "Een account gebruikt dit e-mailadres al. Log in op je gebruikelijke manier.",
 };

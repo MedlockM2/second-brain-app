@@ -881,4 +881,6 @@ export const de: Catalog = {
   "auth.hidePassword": "Passwort verbergen",
   "auth.changeEmail": "Ändern",
   "auth.unavailable": "Die Anmeldung ist vorübergehend nicht verfügbar. Versuche es erneut.",
+  "auth.appleFailed": "Die Apple-Anmeldung ist fehlgeschlagen. Bitte erneut versuchen.",
+  "auth.accountConflict": "Ein Konto verwendet bereits diese E-Mail-Adresse. Melde dich mit deiner bisherigen Methode an.",
 };

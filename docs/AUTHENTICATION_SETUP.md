@@ -47,9 +47,11 @@ constituent désormais la source permanente de configuration des fournisseurs.
 Dans Google Cloud, autoriser comme URI de redirection la sortie Terraform
 `cognito_configuration.provider_callback`. Dans Apple Developer, configurer le
 Services ID, le domaine Cognito et cette même URL `/oauth2/idpresponse`, et associer
-le Services ID à l’App ID existant. Les anciens clients natifs Google et le SDK
-Apple embarqué ne participent plus au flux ; aucun mot de passe n’est demandé aux
-comptes exclusivement sociaux. La clé de fédération Apple doit rester récupérable
+le Services ID à l’App ID existant. L’ancien client natif Google ne participe plus
+au flux. Sur iOS, Apple utilise
+le SDK natif et son App ID ; le Services ID et le retour Cognito concernent Apple
+sur web et Android. Aucun mot de passe n’est demandé aux comptes sociaux. La clé
+de fédération Apple doit rester récupérable
 dans le coffre même après retrait des anciennes variables du secret runtime.
 
 Terraform injecte directement `COGNITO_USER_POOL_ID`, `COGNITO_MOBILE_CLIENT_ID`,
@@ -57,9 +59,72 @@ Terraform injecte directement `COGNITO_USER_POOL_ID`, `COGNITO_MOBILE_CLIENT_ID`
 `COGNITO_WEB_CALLBACK` dans les runtimes. Les apps découvrent la configuration
 publique avec `GET /api/auth/oauth/config` ; le web ajoute
 `X-Session-Transport: cookie`. Il n’y a aucune clé de signature applicative.
-Les seuls droits administratifs de l’API sont `AdminGetUser` et `AdminDeleteUser`,
-limités au pool de son environnement. Le stream utilise les opérations Cognito
+Les droits administratifs de l’API sont limités au pool de son environnement :
+`AdminGetUser`, `AdminDeleteUser`, et, pour provisionner un compte Apple natif,
+`AdminCreateUser` / `AdminSetUserPassword`. Le stream utilise les opérations Cognito
 autorisées par l’access token, pas des droits d’administration.
+
+## Apple natif sur iOS (task-527)
+
+Le bouton système `expo-apple-authentication` ouvre directement la feuille Apple
+sur iOS : aucune session de navigateur Cognito n’est lancée. L’annulation ferme
+la feuille sans message d’erreur. Google et Apple sur Android/web conservent leur
+parcours navigateur avec PKCE. La disponibilité du bouton iOS est vérifiée via
+l’API système, sans repli silencieux vers le navigateur.
+
+Le mobile génère un nonce et un state aléatoires par tentative et contrôle le
+state retourné. `/api/auth/apple/native` vérifie la signature RS256 Apple, issuer,
+audience exacte `APPLE_NATIVE_CLIENT_ID` (App ID du binaire), expiration, nonce,
+sujet et email vérifié. Il échange ensuite le code auprès d’Apple avec les clés
+existantes `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` du coffre : le code
+est consommé une seule fois. Le token retourné par cet échange est lui aussi
+vérifié et doit désigner le même sujet et le même nonce. Aucune preuve Apple ni
+clé privée n’est conservée dans la table ou transmise au client après échange.
+
+Cognito reste l’émetteur des access/refresh tokens. Le client mobile autorise
+`CUSTOM_AUTH`. L’API crée une autorisation aléatoire de 90 secondes dans la table
+`media-summarizer-apple-auth-<env>`, indexée par son SHA-256 et liée au username,
+au client mobile et au challenge Cognito. Le trigger vérifie ces quatre conditions
+et supprime atomiquement l’autorisation. La TTL nettoie les autorisations abandonnées ;
+elle ne remplace pas le contrôle explicite d’expiration. Seul le rôle API peut
+créer une autorisation ; le trigger peut uniquement la lire/consommer. Le client
+web ne dispose pas de `ALLOW_CUSTOM_AUTH`.
+
+La même table conserve la correspondance durable entre le hash du sujet Apple et
+le username Cognito. Un profil Apple fédéré existant est retrouvé par son sujet
+et ses `identities`. Un nouveau profil natif porte `custom:apple_subject`, que les
+clients publics ne peuvent pas écrire. L’attribut reste mutable côté administrateur
+car AWS interdit le rattachement fédéré à un profil ayant un attribut immuable.
+Un mot de passe aléatoire inconnu du client confirme uniquement le provisionnement
+administrateur ; les endpoints de récupération refusent ces comptes Apple.
+
+Une collision avec un compte local utilisant la même adresse ne provoque aucune
+fusion : le message demande d’utiliser la méthode de connexion habituelle. Une
+création concurrente ne peut réutiliser un profil que si son sujet Apple correspond
+exactement. Lors d’une première connexion web/Android après la création native,
+`PreSignUp_ExternalProvider` rattache le fournisseur au compte déjà identifié par
+ce même sujet, jamais par l’adresse e-mail. La suppression du compte retire aussi
+sa correspondance de sujet. Le Services ID Apple doit rester associé au même
+App ID primaire pour que les deux plateformes reçoivent le même sujet Apple.
+
+Les triggers sont un zip Python standard + boto3 défini par Terraform ; leur rôle
+n’a accès ni au coffre ni aux preuves Apple. Le workflow Terraform Dev suit aussi
+les changements de `infrastructure/lambda/apple_auth.py`. L’API et la table sont
+isolées par environnement ; prod n’est pas activé par ce changement.
+
+**Publication et validation** : appliquer Terraform dev, puis publier l’API et un
+nouveau binaire iOS avec `usesAppleSignIn` et le plugin Expo Apple rétablis. Une OTA
+ne peut pas ajouter ce module natif au build 15. Les fingerprints des deux
+plateformes doivent être recalculés et les builds internes renouvelés si nécessaire.
+La validation finale sur appareil doit couvrir première connexion, reconnexion,
+annulation, adresse Apple masquée, restauration de session, déconnexion, et passage
+au même compte depuis le web. Elle exige l’intervention de l’utilisateur Apple ;
+les vérifications statiques ne constituent pas une connexion Apple E2E.
+
+Sources : [SDK Expo Apple](https://docs.expo.dev/versions/v55.0.0/sdk/apple-authentication/),
+[validation Apple](https://developer.apple.com/documentation/signinwithapplerestapi/generate-and-validate-tokens),
+[triggers Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-challenge.html),
+[rattachement Cognito](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminLinkProviderForUser.html).
 
 ## E-mails Cognito par défaut
 
@@ -88,6 +153,7 @@ média ou artefact n’est ajouté sous `/api/v1/`.
 | `POST /resend-confirmation` | `{email}` → 202 générique |
 | `POST /login` | `{email, password}` → session Cognito et profil |
 | `GET /oauth/config` | domaine, client et retour publics du transport choisi |
+| `POST /apple/native` | `{identity_token, authorization_code, nonce}` natifs iOS → session Cognito mobile et profil |
 | `POST /oauth/token` | `{code, code_verifier}` → session Cognito et profil ; retour fixé côté API |
 | `POST /forgot-password` | `{email}` → 202 `{status: accepted}`, compte absent/social compris |
 | `POST /confirm-password` | `{email, code, password}` → `{status: password_changed}` ; le formulaire ouvre ensuite automatiquement la session par `/login` |

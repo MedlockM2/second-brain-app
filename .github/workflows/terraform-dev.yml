@@ -30,6 +30,7 @@ on:
     branches: [main]
     paths:
       - "infrastructure/terraform/**"
+      - "infrastructure/lambda/apple_auth.py"
       - "scripts/terraform_with_cognito.py"
       - ".github/workflows/terraform-dev.yml"
   # Re-run an apply without a commit: after a manual `terraform state` operation, or

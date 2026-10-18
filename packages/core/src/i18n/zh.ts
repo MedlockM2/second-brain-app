@@ -731,4 +731,6 @@ export const zh: Catalog = {
   "auth.hidePassword": "隐藏密码",
   "auth.changeEmail": "修改",
   "auth.unavailable": "登录暂时不可用，请重试。",
+  "auth.appleFailed": "Apple 登录失败，请重试。",
+  "auth.accountConflict": "此邮箱已有关联账户，请使用原来的方式登录。",
 };

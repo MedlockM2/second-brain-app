@@ -252,6 +252,7 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     },
     ios: {
       supportsTablet: false,
+      usesAppleSignIn: true,
       bundleIdentifier: "com.secondbrainlabs.core",
       config: {
         // Writes ITSAppUsesNonExemptEncryption=false into the ipa's Info.plist.
@@ -317,6 +318,7 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     plugins: [
       "expo-router",
       "expo-secure-store",
+      "expo-apple-authentication",
       "expo-localization",
       "expo-font",
       // Media covers (task-304). The config plugin is what wires SDWebImage on

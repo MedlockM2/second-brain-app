@@ -872,4 +872,6 @@ export const es: Catalog = {
   "auth.hidePassword": "Ocultar contraseña",
   "auth.changeEmail": "Cambiar",
   "auth.unavailable": "El inicio de sesión no está disponible temporalmente. Inténtalo de nuevo.",
+  "auth.appleFailed": "No se pudo iniciar sesión con Apple. Inténtalo de nuevo.",
+  "auth.accountConflict": "Ya hay una cuenta con este correo. Inicia sesión con tu método habitual.",
 };

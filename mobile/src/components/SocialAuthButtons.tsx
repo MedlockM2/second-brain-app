@@ -1,7 +1,9 @@
-import { useState } from "react";
+import * as AppleAuthentication from "expo-apple-authentication";
+import { useEffect, useState } from "react";
 import type { SocialProvider } from "@media-summarizer/core/auth/cognito";
 import { authErrorKey } from "@media-summarizer/core/auth/cognito";
 import {
+  Platform,
   View,
   Text,
   TouchableOpacity,
@@ -20,19 +22,28 @@ import {
   TouchTarget,
   type Theme,
 } from "../constants/theme";
-import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
+import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
 
 interface SocialAuthButtonsProps {
   onError: (message: string) => void;
   disabled?: boolean;
 }
 
-/** Google and Apple authenticate through Cognito's authorization code flow with PKCE. */
+/** Native Apple on iOS; browser authorization for Google and Android Apple. */
 export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps) {
-  const Colors = useThemeColors();
+  const { colors: Colors, mode } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { loginWithSocial } = useAuth();
   const [provider, setProvider] = useState<SocialProvider | null>(null);
+  const [nativeAppleAvailable, setNativeAppleAvailable] = useState(false);
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    let active = true;
+    void AppleAuthentication.isAvailableAsync().then((available) => {
+      if (active) setNativeAppleAvailable(available);
+    }).catch(() => { /* An unavailable native provider is not offered. */ });
+    return () => { active = false; };
+  }, []);
   const isLoading = provider !== null;
   const isGoogleLoading = provider === "Google";
   const isAppleLoading = provider === "SignInWithApple";
@@ -79,8 +90,21 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
         )}
       </TouchableOpacity>
 
-      {/* Apple federation is available on both platforms. */}
-      <TouchableOpacity
+      {Platform.OS === "ios" ? nativeAppleAvailable && (
+        <View style={styles.nativeAppleContainer} pointerEvents={disabled || isLoading ? "none" : "auto"}
+          accessibilityState={{ disabled: disabled || isLoading, busy: isAppleLoading }}>
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={mode === "dark"
+              ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+              : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            cornerRadius={BorderRadius.md}
+            style={[styles.nativeAppleButton, (disabled || isLoading) && styles.buttonDisabled]}
+            onPress={handleAppleSignIn}
+          />
+          {isAppleLoading && <ActivityIndicator style={styles.appleProgress} color={Colors.textMain} />}
+        </View>
+      ) : <TouchableOpacity
           style={[styles.socialButton, styles.appleButton, (disabled || isLoading) && styles.appleButtonDisabled]}
           onPress={handleAppleSignIn}
           disabled={disabled || isLoading}
@@ -98,7 +122,7 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
               </Text>
             </>
           )}
-      </TouchableOpacity>
+      </TouchableOpacity>}
     </View>
   );
 }
@@ -143,6 +167,20 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       color: Colors.textMain,
       fontSize: Typography.body.fontSize,
       fontWeight: "500",
+    },
+    nativeAppleContainer: {
+      position: "relative",
+      width: "100%",
+    },
+    nativeAppleButton: {
+      height: TouchTarget.comfortable,
+      width: "100%",
+    },
+    appleProgress: {
+      position: "absolute",
+      right: Spacing.lg,
+      top: "50%",
+      marginTop: -10,
     },
     appleButton: {
       backgroundColor: Colors.textMain,

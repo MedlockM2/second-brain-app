@@ -8,6 +8,8 @@ can explicitly attach a protected development fixture to a new Cognito identity.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import os
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -141,7 +143,8 @@ async def password_account(email: str) -> bool:
         if exc.response["Error"]["Code"] == "UserNotFoundException":
             return False
         raise refuse("AUTH_UNAVAILABLE", 503) from None
-    return user.get("UserStatus") in {"CONFIRMED", "RESET_REQUIRED"}
+    attrs = {a["Name"]: a["Value"] for a in user.get("UserAttributes", [])}
+    return not attrs.get("custom:apple_subject") and user.get("UserStatus") in {"CONFIRMED", "RESET_REQUIRED"}
 
 
 async def exchange_code(web: bool, code: str, verifier: str) -> dict[str, Any]:
@@ -171,6 +174,23 @@ async def exchange_code(web: bool, code: str, verifier: str) -> dict[str, Any]:
 async def delete_identity(username: str) -> None:
     try:
         async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as cognito:
+            user = await cognito.admin_get_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=username)
+            attributes = {a["Name"]: a["Value"] for a in user["UserAttributes"]}
+            subjects = [attributes["custom:apple_subject"]] if attributes.get("custom:apple_subject") else []
+            subjects += [i["userId"] for i in json.loads(attributes.get("identities", "[]"))
+                         if i.get("providerName") == "SignInWithApple"]
+            async with database_async.get_session().resource("dynamodb", region_name=database_async.AWS_REGION) as db:
+                table = await db.Table(required_env("APPLE_AUTH_TABLE"))
+                for subject in set(subjects):
+                    try:
+                        await table.delete_item(
+                            Key={"pk": "apple#" + hashlib.sha256(subject.encode()).hexdigest()},
+                            ConditionExpression="#u = :u", ExpressionAttributeNames={"#u": "username"},
+                            ExpressionAttributeValues={":u": user["Username"]},
+                        )
+                    except ClientError as exc:
+                        if exc.response["Error"]["Code"] != "ConditionalCheckFailedException":
+                            raise
             await cognito.admin_delete_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=username)
     except ClientError as exc:
         if exc.response["Error"]["Code"] != "UserNotFoundException":

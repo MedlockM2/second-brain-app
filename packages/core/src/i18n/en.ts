@@ -1020,4 +1020,6 @@ export const en = {
   "auth.hidePassword": "Hide password",
   "auth.changeEmail": "Change",
   "auth.unavailable": "Sign-in is temporarily unavailable. Please try again.",
+  "auth.appleFailed": "Apple sign-in failed. Please try again.",
+  "auth.accountConflict": "An account already uses this email. Sign in with your original method.",
 } as const;

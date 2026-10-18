@@ -12,6 +12,8 @@ export type AuthCodeAction = "/register" | "/confirm-registration" | "/resend-co
 export function authErrorKey(error: unknown): TranslationKey {
   const code = (error as { code?: string } | null)?.code;
   const keys: Record<string, TranslationKey> = {
+    AUTH_APPLE_INVALID: "auth.appleFailed",
+    AUTH_ACCOUNT_CONFLICT: "auth.accountConflict",
     AUTH_CODE_INVALID: "auth.codeInvalid",
     AUTH_CODE_EXPIRED: "auth.codeExpired",
     AUTH_PASSWORD_POLICY: "auth.passwordPolicy",

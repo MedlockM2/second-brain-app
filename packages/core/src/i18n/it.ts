@@ -772,4 +772,6 @@ export const it: Catalog = {
   "auth.hidePassword": "Nascondi password",
   "auth.changeEmail": "Modifica",
   "auth.unavailable": "L’accesso è temporaneamente non disponibile. Riprova.",
+  "auth.appleFailed": "Accesso con Apple non riuscito. Riprova.",
+  "auth.accountConflict": "Un account usa già questa email. Accedi con il tuo metodo abituale.",
 };

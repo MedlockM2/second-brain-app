@@ -21,6 +21,7 @@ from media_summarizer.core.models.auth import (
     RegisterRequest,
     TokenType,
 )
+from media_summarizer.core.services import apple_native_auth
 from media_summarizer.core.services import cognito_auth as cognito
 from media_summarizer.utils import database_async
 from media_summarizer.utils.auth_utils import get_refresh_token_expires_at
@@ -47,6 +48,25 @@ class ResetRequest(CodeRequest):
 class OAuthCodeRequest(BaseModel):
     code: str = Field(min_length=1, max_length=4096)
     code_verifier: str = Field(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9._~-]+$")
+
+
+class AppleNativeRequest(BaseModel):
+    identity_token: str = Field(min_length=1, max_length=8192)
+    authorization_code: str = Field(min_length=1, max_length=4096)
+    nonce: str = Field(min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+@router.post("/apple/native")
+async def apple_native(body: AppleNativeRequest, request: Request):
+    if is_web_session(request):
+        raise cognito.refuse("AUTH_INVALID_REQUEST")
+    try:
+        tokens = await apple_native_auth.sign_in(body.identity_token, body.authorization_code, body.nonce)
+        return await answer_session(request, tokens, provision=True)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            raise cognito.refuse("AUTH_APPLE_INVALID", 401) from None
+        raise
 
 
 async def answer_session(request: Request, tokens: dict[str, Any], *, provision: bool = False):

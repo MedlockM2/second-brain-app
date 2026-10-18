@@ -818,4 +818,6 @@ export const ar: Catalog = {
   "auth.hidePassword": "إخفاء كلمة المرور",
   "auth.changeEmail": "تعديل",
   "auth.unavailable": "تسجيل الدخول غير متاح مؤقتًا. حاول مجددًا.",
+  "auth.appleFailed": "فشل تسجيل الدخول باستخدام Apple. حاول مجددًا.",
+  "auth.accountConflict": "يوجد حساب يستخدم هذا البريد. سجّل الدخول بطريقتك المعتادة.",
 };

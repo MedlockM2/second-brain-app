@@ -1,3 +1,6 @@
+import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
+import { Platform } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import type { AuthCodeAction, CognitoOAuthConfig, SocialProvider } from "@media-summarizer/core/auth/cognito";
@@ -74,6 +77,9 @@ export class AuthService {
   }
 
   static async loginWithSocial(provider: SocialProvider): Promise<TokenVerificationResponse | null> {
+    if (provider === "SignInWithApple" && Platform.OS === "ios") {
+      return this.loginWithNativeApple();
+    }
     const response = await fetch(`${Config.API_BASE_URL}/api/auth/oauth/config`);
     if (!response.ok) {
       throw createHttpError("Authentication unavailable", response.status, "AUTH_UNAVAILABLE");
@@ -99,6 +105,31 @@ export class AuthService {
     );
     await SessionManager.persistSession(result);
     return result;
+  }
+
+  private static async loginWithNativeApple(): Promise<TokenVerificationResponse | null> {
+    const nonce = Crypto.randomUUID();
+    const state = Crypto.randomUUID();
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
+        nonce,
+        state,
+      });
+      if (credential.state !== state || !credential.identityToken || !credential.authorizationCode) {
+        throw createHttpError("Authentication failed", 401, "AUTH_APPLE_INVALID");
+      }
+      const result = await this.postUnauthenticated<TokenVerificationResponse>(
+        "/api/auth/apple/native",
+        { identity_token: credential.identityToken, authorization_code: credential.authorizationCode, nonce },
+        "Authentication failed",
+      );
+      await SessionManager.persistSession(result);
+      return result;
+    } catch (error) {
+      if ((error as { code?: string }).code === "ERR_REQUEST_CANCELED") return null;
+      throw error;
+    }
   }
 
   /** The signed-in profile. GET /api/auth/me */

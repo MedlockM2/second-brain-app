@@ -900,4 +900,6 @@ export const fr: Catalog = {
   "auth.hidePassword": "Masquer le mot de passe",
   "auth.changeEmail": "Modifier",
   "auth.unavailable": "La connexion est temporairement indisponible. Réessayez.",
+  "auth.appleFailed": "La connexion Apple a échoué. Réessayez.",
+  "auth.accountConflict": "Un compte utilise déjà cette adresse. Connectez-vous avec votre méthode habituelle.",
 };

@@ -771,4 +771,6 @@ export const hi: Catalog = {
   "auth.hidePassword": "पासवर्ड छिपाएँ",
   "auth.changeEmail": "बदलें",
   "auth.unavailable": "साइन इन अभी उपलब्ध नहीं है। फिर कोशिश करें।",
+  "auth.appleFailed": "Apple से साइन इन नहीं हो पाया। फिर से कोशिश करें।",
+  "auth.accountConflict": "इस ईमेल से पहले से खाता है। अपने सामान्य तरीके से साइन इन करें।",
 };
