@@ -32,6 +32,8 @@ Le choix Deepn ne prouve aucun achat. Cette tâche couvre la propriété du doma
 Source : docs/V1_LAUNCH_PLAN.md, checklist de lancement réconciliée le 2026-10-10. Le plan contient des états de septembre périmés : vérifier les faits avant toute action. Ne pas recréer les fonctionnalités déjà couvertes par les tâches produit. Aucun nouveau test automatisé demandé. Aucun secret, email de compte, identifiant de support, compte reviewer ou donnée personnelle dans les fichiers suivis.
 
 Exécution owner-only : cette tâche inclut une décision, des appareils physiques, une publication ou une opération de release hors du worktree ; dispatchable: false. Les critères portent sur le compte rendu et les décisions documentées, pas sur un déploiement qu’un agent devrait réaliser depuis sa branche.
+
+Vérification de marque Google : elle commence dès l’achat, par la preuve de propriété du domaine dans Google Search Console. Les démarches complètes sont dans TASK-451, qui dépend de cette tâche. TASK-528 place Cognito sur `auth.<domaine>` et dépend aussi de cette tâche.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
