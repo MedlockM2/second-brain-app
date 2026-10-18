@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-17 16:39'
+updated_date: '2026-10-18 01:54'
 labels:
   - auth
   - mobile
@@ -83,6 +83,8 @@ CLARIFICATION PROPRIÉTAIRE (2026-10-17) : conserver les connexions Google et Ap
 6. Lors de l’intégration finale, corriger la réclamation du code de secours pour les profils distincts partageant un e-mail : rechercher le code parmi les profils concernés sans les fusionner, conserver la limite de tentatives et consommer le code atomiquement.
 
 7. Suite autorisée par le propriétaire : réutiliser directement les six valeurs d’authentification existantes dans AWS Secrets Manager, retirer le prérequis de secrets GitHub dupliqués, appliquer la configuration Cognito nécessaire et adapter les retours Google/Apple avec les accès disponibles. Préserver les fixtures et documenter précisément les vérifications et tout blocage externe.
+
+8. Suite au signalement d’échec d’inscription web du 2026-10-18, terminer la bascule de release dev : le frontend local appelle déjà Cognito mais /api/auth/oauth/config répond encore 404 sur le backend AWS. Faire déployer les commits prêts via le workflow habituel après le push propriétaire, vérifier la santé, la configuration OAuth publique et la présence des routes d’inscription/confirmation/récupération. Ne pas recopier les données du formulaire ni créer un compte au nom du propriétaire.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -113,4 +115,6 @@ Client Google Web existant enregistré dans la console avec le domaine Cognito d
 Validation de cette suite : ruff du wrapper, syntaxe YAML et déclencheur du workflow, terraform fmt -check et validate dev réussis, diff --check et contrôle des ajouts sensibles réussis. Plan réel final : aucune création/suppression ; seule la clé privée Apple, en écriture seule et jamais renvoyée par AWS, est réappliquée. Seules les métadonnées de découverte AWS sont ignorées ; une rotation de clé reste appliquée. Plans sauvegardés privés puis supprimés. Aucun test automatisé ajouté ni exécuté.
 
 Reste à réaliser dans Apple Developer : enregistrer le domaine et le retour Cognito sur le Services ID existant. La console attend la validation de connexion par clé d’accès du propriétaire ; demande de reprise envoyée dans cette session, onglet conservé ouvert. La tâche reste In Progress jusqu’à ce réglage autorisé ; les AC de livraison de code restent satisfaits. Les mentions historiques de secrets GitHub requis et d’absence d’apply sont remplacées par le présent résultat.
+
+Diagnostic du 2026-10-18 : API dev saine (HTTP 200), mais GET /api/auth/oauth/config = 404 ; Lambda active avec les variables Cognito attendues et encore l’ancienne image. Le frontend local possède le nouveau parcours, l’API déployée non. Le retour d’erreur du formulaire ne démontre donc pas une panne de Cognito : la release applicative nécessaire à la bascule n’a pas encore été effectuée. Commits prêts sur main local, remote main encore à la version antérieure ; demande de push transmise au propriétaire pour déclencher le workflow dev habituel.
 <!-- SECTION:NOTES:END -->
