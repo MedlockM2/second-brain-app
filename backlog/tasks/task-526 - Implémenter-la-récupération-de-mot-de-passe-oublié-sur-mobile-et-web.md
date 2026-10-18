@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-18 01:54'
+updated_date: '2026-10-18 01:58'
 labels:
   - auth
   - mobile
@@ -117,4 +117,8 @@ Validation de cette suite : ruff du wrapper, syntaxe YAML et déclencheur du wor
 Reste à réaliser dans Apple Developer : enregistrer le domaine et le retour Cognito sur le Services ID existant. La console attend la validation de connexion par clé d’accès du propriétaire ; demande de reprise envoyée dans cette session, onglet conservé ouvert. La tâche reste In Progress jusqu’à ce réglage autorisé ; les AC de livraison de code restent satisfaits. Les mentions historiques de secrets GitHub requis et d’absence d’apply sont remplacées par le présent résultat.
 
 Diagnostic du 2026-10-18 : API dev saine (HTTP 200), mais GET /api/auth/oauth/config = 404 ; Lambda active avec les variables Cognito attendues et encore l’ancienne image. Le frontend local possède le nouveau parcours, l’API déployée non. Le retour d’erreur du formulaire ne démontre donc pas une panne de Cognito : la release applicative nécessaire à la bascule n’a pas encore été effectuée. Commits prêts sur main local, remote main encore à la version antérieure ; demande de push transmise au propriétaire pour déclencher le workflow dev habituel.
+
+Après accord explicite du propriétaire, push main réalisé le 2026-10-18 (53073045), puis déploiement dev terminé avec succès : https://github.com/MedlockM2/second-brain-app/actions/runs/39088195368 ; API, chat stream et workers reconstruits et déployés par digest. Terraform dev également vert : https://github.com/MedlockM2/second-brain-app/actions/runs/39088195365. Le backend déployé expose désormais le contrat Cognito : santé 200, configuration OAuth web/mobile 200 avec retours distincts, no-store et Vary attendus, CORS localhost:5173, routes d’inscription/confirmation/récupération présentes dans OpenAPI publié. Aucune inscription exécutée au nom du propriétaire ; les données du formulaire ne sont pas enregistrées dans les notes.
+
+Le premier Main Branch Checks a révélé 16 erreurs ruff préexistantes dans quatre scripts d’outillage (imports et longues lignes). Correction de formatage seule commitée dans d37882a5 ; ruff sur tout le dépôt, mypy sur 205 fichiers et gardes des variables d’environnement/écrivains TTL réussis localement. Le workflow mobile 39088195367 a terminé avec succès et lancé de nouveaux builds internes Android/iOS avec soumission automatique, car les empreintes natives ont changé. Les builds EAS sont distincts du succès du workflow qui les a lancés ; ne pas les déclarer distribués avant leur fin. Prod inchangé. Le réglage du retour Apple dans sa console attend toujours la connexion du propriétaire.
 <!-- SECTION:NOTES:END -->
