@@ -7,6 +7,7 @@ the glyph is the exact outline of @expo/vector-icons' Ionicons.ttf, no network.
 """
 import json
 import pathlib
+
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont

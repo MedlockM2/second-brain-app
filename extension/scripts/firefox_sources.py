@@ -2,10 +2,11 @@
 import argparse
 import json
 import os
-from pathlib import Path
 import platform
 import subprocess
 import zipfile
+from pathlib import Path
+from urllib.parse import urlsplit
 
 EXTENSION = Path(__file__).resolve().parents[1]
 ROOT = EXTENSION.parent
@@ -14,7 +15,6 @@ parser.add_argument('--api', required=True, help='Public API origin used by this
 parser.add_argument('--web', required=True, help='Public web app origin used by this release')
 args = parser.parse_args()
 # These two origins are intentionally public. Never copy a developer's .env file.
-from urllib.parse import urlsplit
 for value in (args.api, args.web):
     parsed = urlsplit(value)
     if (parsed.scheme not in ('http', 'https') or not parsed.hostname

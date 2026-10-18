@@ -17,7 +17,8 @@ NAMES = sorted(set("""
 add alert-circle-outline chevron-back chevron-down chevron-forward document-attach-outline
 document-text-outline file-tray-outline folder headset-outline images-outline layers-outline
 link-outline log-out-outline moon-outline musical-notes-outline person-outline play-circle-outline
-search-outline share-outline sparkles sunny-outline text-outline globe-outline bug-outline bulb-outline extension-puzzle-outline card-outline
+search-outline share-outline sparkles sunny-outline text-outline globe-outline bug-outline
+bulb-outline extension-puzzle-outline card-outline
 book-outline card-outline checkmark checkmark-circle chatbubbles-outline close ellipsis-horizontal
 folder-outline add-circle-outline pencil-outline trash-outline sync-outline open-outline language-outline
 bulb-outline help-circle-outline close-circle refresh-outline sparkles-outline arrow-forward
