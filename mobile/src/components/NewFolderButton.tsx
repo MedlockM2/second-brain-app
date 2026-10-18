@@ -21,7 +21,11 @@ import { BorderRadius, TouchTarget, type Theme } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { GlassSurface } from "./GlassSurface";
 
-export const NEW_FOLDER_BUTTON_SIZE = 40;
+/**
+ * The size of the round media-page top-bar buttons (`MEDIA_HEADER_BUTTON_SIZE`),
+ * with their 24pt glyph: at 40pt with a 22pt `+` a tester found it too small.
+ */
+export const NEW_FOLDER_BUTTON_SIZE = 44;
 
 export interface NewFolderButtonProps {
   onPress: () => void;
@@ -53,7 +57,7 @@ export function NewFolderButton({
       accessibilityLabel={accessibilityLabel}
     >
       <GlassSurface style={styles.surface} tintStyle={styles.tint}>
-        <Ionicons name="add" size={22} color={Colors.textMain} />
+        <Ionicons name="add" size={24} color={Colors.textMain} />
       </GlassSurface>
     </Pressable>
   );

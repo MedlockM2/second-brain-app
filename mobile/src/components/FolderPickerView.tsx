@@ -33,6 +33,7 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   BorderRadius,
   Spacing,
+  TouchTarget,
   Typography,
   type Theme,
 } from "../constants/theme";
@@ -330,7 +331,7 @@ export function FolderPickerView({
 
           {isCreating && (
             <View style={styles.createInputContainer}>
-              <Ionicons name="folder-outline" size={20} color={Colors.primary} />
+              <Ionicons name="folder-outline" size={24} color={Colors.primary} />
               <TextInput
                 ref={createInputRef}
                 style={styles.createInput}
@@ -350,18 +351,20 @@ export function FolderPickerView({
                   <Pressable
                     onPress={() => void handleConfirmCreate()}
                     style={styles.createAction}
+                    hitSlop={CREATE_ACTION_HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel={t("folderPicker.confirm")}
                   >
-                    <Ionicons name="checkmark" size={20} color={Colors.primary} />
+                    <Ionicons name="checkmark" size={24} color={Colors.primary} />
                   </Pressable>
                   <Pressable
                     onPress={handleCancelCreate}
                     style={styles.createAction}
+                    hitSlop={CREATE_ACTION_HIT_SLOP}
                     accessibilityRole="button"
                     accessibilityLabel={t("common.cancel")}
                   >
-                    <Ionicons name="close" size={20} color={Colors.textMuted} />
+                    <Ionicons name="close" size={24} color={Colors.textMuted} />
                   </Pressable>
                 </>
               )}
@@ -410,6 +413,15 @@ function filterFolders(
     return acc;
   }, []);
 }
+
+/**
+ * The confirm and cancel of the name field: the 40pt slot and 24pt glyph of the
+ * header buttons, brought to `TouchTarget.minimum` by `hitSlop` so the row does
+ * not grow by the full target. They were bare 20pt glyphs with a 28pt target,
+ * which a tester found too small next to the rest of the app.
+ */
+const CREATE_ACTION_SIZE = 40;
+const CREATE_ACTION_HIT_SLOP = (TouchTarget.minimum - CREATE_ACTION_SIZE) / 2;
 
 const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
   StyleSheet.create({
@@ -562,7 +574,9 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       backgroundColor: Colors.surfaceContainerLow,
       borderRadius: BorderRadius.xl,
       paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
+      // The 40pt actions set the row's height; a full `sm` on top would make it
+      // taller than the folder rows below.
+      paddingVertical: Spacing.xs,
       marginBottom: Spacing.md,
       borderWidth: 2,
       borderColor: Colors.primary,
@@ -576,7 +590,10 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       paddingVertical: Spacing.sm,
     },
     createAction: {
-      padding: Spacing.xs,
+      width: CREATE_ACTION_SIZE,
+      height: CREATE_ACTION_SIZE,
+      alignItems: "center",
+      justifyContent: "center",
     },
     emptyState: {
       paddingVertical: Spacing.xl,
