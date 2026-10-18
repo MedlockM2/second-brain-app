@@ -202,7 +202,15 @@ inconnus sur les clients (`prevent_user_existence_errors = ENABLED`).
 Google et Apple restent accessibles depuis l’inscription et la connexion. Les
 boutons lancent `/oauth2/authorize` avec le fournisseur explicite, un état aléatoire
 et PKCE S256. Le navigateur mobile est géré par `expo-auth-session`, qui vérifie
-l’état et conserve le vérificateur pendant la demande. Sur le web, état,
+l’état et conserve le vérificateur pendant la demande. Sur iOS, la session est
+privée (`preferEphemeralSession`) : sans partage de cookies avec Safari, iOS
+n’affiche plus l’alerte « Deepn souhaite utiliser <domaine Cognito> », et aucun
+cookie Cognito ne rouvre le dernier compte après déconnexion. En contrepartie, la
+page Google ne reprend pas les comptes déjà connectés dans Safari. La page Google
+affiche encore le domaine Cognito (« Accéder à l’application … ») : Google montre
+l’hôte du retour OAuth. Le remplacer exige un domaine Cognito personnalisé (domaine
+Deepn, certificat ACM us-east-1) et la vérification de marque de l’écran de
+consentement Google. Sur le web, état,
 vérificateur et date vivent uniquement dans `sessionStorage` pendant au plus dix
 minutes ; le retour les consomme une seule fois, vérifie l’état, efface l’URL puis
 échange le code. Aucun jeton de session ne va dans le stockage du navigateur.

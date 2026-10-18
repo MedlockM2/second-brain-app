@@ -95,7 +95,10 @@ export class AuthService {
       usePKCE: true, extraParams: { identity_provider: provider },
     });
     await request.makeAuthUrlAsync(discovery);
-    const outcome = await request.promptAsync(discovery);
+    // A shared-cookie session makes iOS ask « Deepn souhaite utiliser <Cognito
+    // domain> », exposing a technical host. A private session skips that alert and
+    // also keeps no Cognito cookie that would reopen the last account after logout.
+    const outcome = await request.promptAsync(discovery, { preferEphemeralSession: true });
     if (outcome.type === "cancel" || outcome.type === "dismiss") return null;
     if (outcome.type !== "success" || !outcome.params.code || !request.codeVerifier) {
       throw createHttpError("Authentication failed", 400, "AUTH_UNAVAILABLE");
