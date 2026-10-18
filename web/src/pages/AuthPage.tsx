@@ -9,6 +9,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { useSession } from "../session/SessionProvider";
 import type { LoginRequest } from "@media-summarizer/core/types/auth";
 import { AuthCodePage } from "./AuthCodePage";
+import { PasswordField } from "../components/PasswordField";
 
 /**
  * Sign in and sign up (capture 19-connexion.png): Google, Apple, then email and
@@ -79,9 +80,11 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           <div className="small muted auth-or">{t("auth.or")}</div>
 
           <form className="auth-stack" style={{ marginTop: 0 }} onSubmit={(event) => void submit(event)}>
-            <label className="field">
-              <span className="visually-hidden">{t("auth.email")}</span>
+            <div className="auth-field">
+              <label htmlFor="auth-email">{t("auth.email")}</label>
+              <div className="field">
               <input
+                id="auth-email"
                 type="email"
                 autoComplete="email"
                 required
@@ -89,11 +92,11 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
-            </label>
-            <label className="field">
-              <span className="visually-hidden">{t("auth.password")}</span>
-              <input
-                type="password"
+              </div>
+            </div>
+            <PasswordField
+                label={t("auth.password")}
+                hint={register ? t("auth.passwordPolicy") : undefined}
                 minLength={register ? 12 : undefined}
                 maxLength={256}
                 disabled={busy}
@@ -102,8 +105,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 placeholder={t(register ? "register.passwordPlaceholder" : "login.passwordPlaceholder")}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
+            />
             {error && (
               <div className="banner-err" role="alert">
                 <Icon name="alert-circle-outline" size={18} />
@@ -114,7 +116,6 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               {t(register ? "register.submit" : "login.submit")}
             </button>
             {!register && <Link to="/forgot-password">{t("auth.forgotPassword")}</Link>}
-            {register && <p className="small subtle">{t("auth.passwordPolicy")}</p>}
           </form>
         </div>
 

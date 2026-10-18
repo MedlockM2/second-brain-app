@@ -90,7 +90,7 @@ média ou artefact n’est ajouté sous `/api/v1/`.
 | `GET /oauth/config` | domaine, client et retour publics du transport choisi |
 | `POST /oauth/token` | `{code, code_verifier}` → session Cognito et profil ; retour fixé côté API |
 | `POST /forgot-password` | `{email}` → 202 `{status: accepted}`, compte absent/social compris |
-| `POST /confirm-password` | `{email, code, password}` → `{status: password_changed}` |
+| `POST /confirm-password` | `{email, code, password}` → `{status: password_changed}` ; le formulaire ouvre ensuite automatiquement la session par `/login` |
 | `POST /refresh` | refresh du corps mobile ou du cookie web → paire renouvelée et profil |
 | `POST /logout` | même transport de refresh → révocation Cognito et suppression du cookie web |
 | `GET /me`, `PATCH /me` | profil et préférences existants, après authentification |
@@ -107,7 +107,15 @@ sur mobile, ils sont également effacés lorsque l’écran perd le focus.
 Si l’ouverture de session échoue après confirmation, le formulaire permet de
 réessayer la connexion sur place sans rejouer le code déjà consommé. Une reprise
 directe de la page de vérification sans formulaire d’origine demande le mot de
-passe avec le code. La récupération de mot de passe reste un parcours distinct.
+passe avec le code. Après une réinitialisation, le nouveau mot de passe ouvre lui
+aussi automatiquement la session, sans écran de succès supplémentaire.
+
+Les champs mot de passe de connexion, inscription et récupération ont un bouton
+afficher/masquer accessible, masqué par défaut. Les labels sont au-dessus de la
+saisie et les règles sous le champ ; aucun texte d’aide ne partage la ligne de
+l’input. La récupération demande d’abord l’e-mail, puis uniquement le code et le
+nouveau mot de passe, avec l’adresse en contexte et une action pour la modifier.
+Les consignes et les règles sont courtes et propres à chaque étape.
 
 Un mot de passe comprend au moins 12 caractères, une majuscule, une minuscule et
 un chiffre. Le serveur délègue la validation à Cognito. Les erreurs sont des codes

@@ -22,6 +22,7 @@ import { t } from "../../src/i18n";
 import { POST_AUTH_ENTRY_POINT } from "../../src/constants/routes";
 import type { LoginRequest } from "@media-summarizer/core/types/auth";
 import { AuthCodeScreen } from "../../src/components/AuthCodeScreen";
+import { PasswordField } from "../../src/components/PasswordField";
 import {
   Typography,
   Spacing,
@@ -124,11 +125,9 @@ export default function LoginScreen() {
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t("auth.password")}</Text>
-            <TextInput
+            <PasswordField
+              label={t("auth.password")}
               testID="login-password-input"
-              style={styles.input}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -136,7 +135,7 @@ export default function LoginScreen() {
               }}
               placeholder={t("login.passwordPlaceholder")}
               placeholderTextColor={Colors.textMuted}
-              secureTextEntry={process.env.EXPO_PUBLIC_E2E_MODE !== "true"}
+              initiallyVisible={process.env.EXPO_PUBLIC_E2E_MODE === "true"}
               autoComplete={
                 process.env.EXPO_PUBLIC_E2E_MODE === "true" ? "off" : "password"
               }
@@ -147,7 +146,6 @@ export default function LoginScreen() {
               }
               editable={!isSubmitting}
             />
-          </View>
 
           <TouchableOpacity
             testID="login-submit-button"

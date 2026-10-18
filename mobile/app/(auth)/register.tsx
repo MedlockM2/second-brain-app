@@ -21,6 +21,7 @@ import { SocialAuthButtons } from "../../src/components/SocialAuthButtons";
 import { t } from "../../src/i18n";
 import type { LoginRequest } from "@media-summarizer/core/types/auth";
 import { AuthCodeScreen } from "../../src/components/AuthCodeScreen";
+import { PasswordField } from "../../src/components/PasswordField";
 
 import {
   Typography,
@@ -118,11 +119,10 @@ export default function RegisterScreen() {
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t("auth.password")}</Text>
-            <TextInput
+            <PasswordField
+              label={t("auth.password")}
+              hint={t("auth.passwordPolicy")}
               testID="register-password-input"
-              style={styles.input}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -130,7 +130,7 @@ export default function RegisterScreen() {
               }}
               placeholder={t("register.passwordPlaceholder")}
               placeholderTextColor={Colors.textMuted}
-              secureTextEntry={process.env.EXPO_PUBLIC_E2E_MODE !== "true"}
+              initiallyVisible={process.env.EXPO_PUBLIC_E2E_MODE === "true"}
               autoComplete={
                 process.env.EXPO_PUBLIC_E2E_MODE === "true"
                   ? "off"
@@ -143,9 +143,6 @@ export default function RegisterScreen() {
               }
               editable={!isSubmitting}
             />
-          </View>
-
-          <Text style={styles.subtitle}>{t("auth.passwordPolicy")}</Text>
           <TouchableOpacity
             testID="register-submit-button"
             style={[styles.button, isSubmitting && styles.buttonDisabled]}

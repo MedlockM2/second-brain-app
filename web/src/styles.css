@@ -85,6 +85,14 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .auth-card { width: min(400px, 100%); padding: 32px; }
 .auth-card.wide { width: min(480px, 100%); }
 .auth-stack { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.auth-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.auth-field > label { font-size: 13px; font-weight: 500; }
+.auth-field > p { margin: 0; }
+.auth-field .field { min-height: 44px; }
+.password-field { padding-inline-end: 2px; }
+.password-field .icon-btn { width: 44px; height: 44px; }
+.auth-recipient { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.auth-recipient > span { min-width: 0; overflow-wrap: anywhere; }
 .auth-or { text-align: center; }
 .auth-switch { text-align: center; margin: 16px 0 0; }
 .gis-slot { display: flex; justify-content: center; min-height: 40px; }
