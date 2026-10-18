@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-18 02:26'
+updated_date: '2026-10-18 02:29'
 labels:
   - auth
   - mobile
@@ -135,4 +135,6 @@ Correction UX livrée dans e8930411 (Web: done) : inscription et connexion d’u
 Vérifications de la correction : typecheck/lint web, mobile et packages/core réussis ; un avertissement any préexistant dans purchaseService.ts reste hors périmètre. Diff --check et contrôle des ajouts sensibles réussis. Aucun changement backend/Terraform, aucun nouveau mode de connexion, aucun compte ou envoi d’e-mail initié au nom du propriétaire, aucun test automatisé ajouté ou exécuté. La vérification complète avec le code reçu reste une interaction du propriétaire ; la tâche globale demeure In Progress pour le retour Apple dans sa console.
 
 Après intégration locale : build web réussi (avertissement de taille du chunk préexistant), garde Web: done réussie. Inspection manuelle du web local : consigne de vérification alignée, reprise directe avec e-mail/code/mot de passe et abandon vers la connexion fonctionnel. Aucun formulaire d’inscription ni code utilisateur soumis pendant cette vérification ; aucun test automatisé exécuté.
+
+Push c3f75c48 réalisé après intégration de e8930411. Main Branch Checks vert : https://github.com/MedlockM2/second-brain-app/actions/runs/39090085771. Publication OTA interne Android et iOS réussie, manifeste servi et source maps vérifiés par le workflow : https://github.com/MedlockM2/second-brain-app/actions/runs/39090085773. Les deux binaires internes compilés pendant la release précédente sont FINISHED (Android versionCode 19, iOS build 15) ; les OTA ciblent leurs empreintes natives. Le web local reçoit les sources mises à jour. Aucun déploiement backend nécessaire à cette correction frontend ; état global In Progress inchangé pour le réglage Apple déjà documenté.
 <!-- SECTION:NOTES:END -->
