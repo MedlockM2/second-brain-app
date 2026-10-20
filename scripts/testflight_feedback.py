@@ -47,6 +47,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import sys
@@ -146,6 +147,9 @@ class Client:
         self._token = token
         self.requests = 0
         self.rate_limit = ""
+        # Every feedback of a build resolves the same build: 42 identical calls
+        # in a burst got the connection dropped by App Store Connect.
+        self.builds: dict[str, dict[str, Any]] = {}
 
     def get(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         if not url.startswith("http"):
@@ -175,6 +179,11 @@ class Client:
                     "shared with EAS Submit and RevenueCat — do not retry in a loop."
                 ) from exc
             raise AscError(f"GET {url} -> {exc.code}: {body}") from exc
+        except (http.client.HTTPException, OSError) as exc:
+            # A dropped connection or a timeout, not an HTTP answer. Without this
+            # it escapes every ``except AscError`` and kills the run even on an
+            # optional call.
+            raise AscError(f"GET {url} -> connexion interrompue: {exc}") from exc
 
     def paginate(self, path: str, params: dict[str, Any], cutoff: datetime) -> list[dict[str, Any]]:
         """Walk ``-createdDate`` pages until a row predates ``cutoff``.
@@ -225,6 +234,8 @@ def _resolve_build(client: Client, row: dict[str, Any]) -> dict[str, Any]:
     build_id = reference.get("id")
     if not build_id:
         return {"id": None, "version": None, "pre_release_version": None}
+    if build_id in client.builds:
+        return client.builds[build_id]
 
     included = row.get("_included", {})
     build = included.get(f"builds:{build_id}")
@@ -238,7 +249,12 @@ def _resolve_build(client: Client, row: dict[str, Any]) -> dict[str, Any]:
         pre_release = (payload.get("data") or {}).get("attributes", {}).get("version")
     except AscError:
         pass  # A build whose pre-release version has been reaped is still usable.
-    return {"id": build_id, "version": version, "pre_release_version": pre_release}
+    client.builds[build_id] = {
+        "id": build_id,
+        "version": version,
+        "pre_release_version": pre_release,
+    }
+    return client.builds[build_id]
 
 
 def _latest_build(client: Client, app_id: str) -> dict[str, Any]:
