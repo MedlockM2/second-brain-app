@@ -175,7 +175,8 @@ resource "aws_iam_role_policy" "cognito_api" {
   name = "cognito-users${local.suffix}"
   role = aws_iam_role.lambda_api.id
   policy = jsonencode({ Version = "2012-10-17", Statement = [{
-    Effect   = "Allow", Action = ["cognito-idp:AdminGetUser", "cognito-idp:AdminDeleteUser"],
+    Effect = "Allow", Action = ["cognito-idp:AdminGetUser", "cognito-idp:AdminDeleteUser", "cognito-idp:ListUsers",
+    "cognito-idp:AdminLinkProviderForUser"],
     Resource = aws_cognito_user_pool.users.arn
   }] })
 }

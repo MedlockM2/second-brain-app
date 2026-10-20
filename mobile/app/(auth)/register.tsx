@@ -10,7 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from "react-native";
-import { Link, useFocusEffect } from "expo-router";
+import { Link, router, useFocusEffect } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
@@ -27,6 +27,7 @@ import {
   Typography,
   Spacing,
   BorderRadius,
+  TouchTarget,
   type Theme,
 } from "../../src/constants/theme";
 import {
@@ -41,6 +42,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // The address already has an account (decision of 2026-10-20): say so and offer the way in.
+  const [accountExists, setAccountExists] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verification, setVerification] = useState<LoginRequest | null>(null);
   useFocusEffect(useCallback(() => () => {
@@ -50,6 +53,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setError(null);
+    setAccountExists(false);
 
     // Client-side validation
     const emailError = getEmailValidationError(email);
@@ -70,6 +74,10 @@ export default function RegisterScreen() {
       setVerification(credentials);
       setPassword("");
     } catch (err) {
+      if ((err as { code?: string }).code === "AUTH_ACCOUNT_EXISTS") {
+        setAccountExists(true);
+        return;
+      }
       setError(getFriendlyErrorMessage(err, { fallback: t("register.failed") }));
     } finally {
       setIsSubmitting(false);
@@ -98,6 +106,22 @@ export default function RegisterScreen() {
           </View>
         )}
 
+        {accountExists && (
+          <View style={styles.errorContainer} accessibilityLiveRegion="polite">
+            <Text style={styles.errorText}>{t("error.emailAlreadyExists")}</Text>
+            <View style={styles.existsActions}>
+              <TouchableOpacity accessibilityRole="button" style={styles.existsAction}
+                onPress={() => router.replace({ pathname: "/(auth)/login", params: { email: email.trim() } })}>
+                <Text style={styles.footerLink}>{t("register.signInLink")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button" style={styles.existsAction}
+                onPress={() => router.replace({ pathname: "/(auth)/forgot-password", params: { email: email.trim() } })}>
+                <Text style={styles.footerLink}>{t("auth.forgotPassword")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{t("auth.email")}</Text>
@@ -108,6 +132,7 @@ export default function RegisterScreen() {
               onChangeText={(text) => {
                 setEmail(text);
                 setError(null);
+                setAccountExists(false);
               }}
               placeholder={t("auth.emailPlaceholder")}
               placeholderTextColor={Colors.textMuted}
@@ -162,6 +187,10 @@ export default function RegisterScreen() {
 
         <SocialAuthButtons
           onError={(message) => setError(message)}
+          onAccountExists={(link) => router.replace({
+            pathname: "/(auth)/login",
+            params: { link: link.provider, methods: link.methods.join(",") },
+          })}
           disabled={isSubmitting}
         />
 
@@ -208,6 +237,16 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       padding: Spacing.md,
       borderRadius: BorderRadius.md,
       marginBottom: Spacing.md,
+    },
+    existsActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.lg,
+      marginTop: Spacing.sm,
+    },
+    existsAction: {
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
     },
     errorText: {
       color: Colors.error,

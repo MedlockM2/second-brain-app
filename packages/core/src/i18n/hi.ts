@@ -772,5 +772,11 @@ export const hi: Catalog = {
   "auth.changeEmail": "बदलें",
   "auth.unavailable": "साइन इन अभी उपलब्ध नहीं है। फिर कोशिश करें।",
   "auth.appleFailed": "Apple से साइन इन नहीं हो पाया। फिर से कोशिश करें।",
-  "auth.accountConflict": "इस ईमेल से पहले से खाता है। अपने सामान्य तरीके से साइन इन करें।",
+  "auth.socialOnly": "इस खाते का कोई पासवर्ड नहीं है: Apple या Google से साइन इन करें।",
+  "auth.linkRequired": "इस ईमेल से पहले से एक Deepn खाता है। उसमें {provider} जोड़ने के लिए {methods} से साइन इन करें।",
+  "auth.linkExpired": "यह साइन-इन तरीका जोड़ने का समय समाप्त हो गया। फिर से शुरू करें।",
+  "auth.providerInUse": "यह Google या Apple खाता पहले से किसी दूसरे Deepn खाते से जुड़ा है।",
+  "auth.method.password": "अपने पासवर्ड",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

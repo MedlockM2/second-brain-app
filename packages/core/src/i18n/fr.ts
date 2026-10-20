@@ -901,5 +901,11 @@ export const fr: Catalog = {
   "auth.changeEmail": "Modifier",
   "auth.unavailable": "La connexion est temporairement indisponible. Réessayez.",
   "auth.appleFailed": "La connexion Apple a échoué. Réessayez.",
-  "auth.accountConflict": "Un compte utilise déjà cette adresse. Connectez-vous avec votre méthode habituelle.",
+  "auth.socialOnly": "Ce compte n’a pas de mot de passe : connectez-vous avec Apple ou Google.",
+  "auth.linkRequired": "Un compte Deepn existe déjà avec cette adresse. Connectez-vous avec {methods} pour y ajouter {provider}.",
+  "auth.linkExpired": "Le délai pour ajouter ce moyen de connexion est dépassé. Recommencez.",
+  "auth.providerInUse": "Ce compte Google ou Apple appartient déjà à un autre compte Deepn.",
+  "auth.method.password": "votre mot de passe",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

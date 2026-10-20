@@ -1,5 +1,5 @@
-import { authErrorKey, type SocialProvider } from "@media-summarizer/core/auth/cognito";
-import { authAction, startSocialSignIn } from "../session/cognito";
+import { authErrorKey, pendingLinkMessage, type SocialProvider } from "@media-summarizer/core/auth/cognito";
+import { authAction, pendingLink, setPendingLink, startSocialSignIn } from "../session/cognito";
 import type { TranslationKey } from "@media-summarizer/core/i18n/runtime";
 import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -21,7 +21,10 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const { signIn } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState((location.state as { email?: string } | null)?.email ?? "");
+  // A social sign-in refused for an address that already has an account (task-529).
+  const [link] = useState(pendingLink);
+  const [accountExists, setAccountExists] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
@@ -33,7 +36,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setAccountExists(false);
     const credentials = { email: email.trim(), password };
     try {
       if (register) {
@@ -42,10 +45,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         setPassword("");
       } else {
         await signIn("/login", credentials);
+        if (link) {
+          // Signed in to the account holding the address: add the refused provider.
+          try { await startSocialSignIn(link.provider, "link"); return; }
+          catch { setPendingLink(null); }
+        }
         navigate(after, { replace: true });
       }
     } catch (caught) {
-      if ((caught as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
+      if (register && (caught as { code?: string }).code === "AUTH_ACCOUNT_EXISTS") {
+        setAccountExists(true);
+      } else if ((caught as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
         setVerification(credentials);
         setPassword("");
       } else { setError(authErrorKey(caught)); }
@@ -74,6 +84,8 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
           {t(register ? "register.subtitle" : "login.subtitle")}
         </p>
 
+        {link && !register && <p className="subtle" role="status" style={{ marginTop: 16 }}>{pendingLinkMessage(t, link)}</p>}
+
         <div className="auth-stack">
           <button type="button" className="btn" disabled={busy} onClick={() => void social("Google")}>{t("auth.continueWithGoogle")}</button>
           <button type="button" className="btn" disabled={busy} onClick={() => void social("SignInWithApple")}>{t("auth.signInWithApple")}</button>
@@ -90,7 +102,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
                 required
                 placeholder={t("auth.emailPlaceholder")}
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => { setEmail(event.target.value); setAccountExists(false); }}
               />
               </div>
             </div>
@@ -110,6 +122,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
               <div className="banner-err" role="alert">
                 <Icon name="alert-circle-outline" size={18} />
                 <span>{t(error)}</span>
+              </div>
+            )}
+            {accountExists && (
+              <div className="banner-err" role="alert">
+                <Icon name="alert-circle-outline" size={18} />
+                <span>
+                  {t("error.emailAlreadyExists")}{" "}
+                  <Link to="/login" state={{ ...(location.state as object | null), email: email.trim() }}>{t("register.signInLink")}</Link>
+                  {" · "}
+                  <Link to="/forgot-password" state={{ ...(location.state as object | null), email: email.trim() }}>{t("auth.forgotPassword")}</Link>
+                </span>
               </div>
             )}
             <button type="submit" className="btn primary" disabled={busy}>

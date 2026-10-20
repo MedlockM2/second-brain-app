@@ -774,5 +774,11 @@ export const pt: Catalog = {
   "auth.changeEmail": "Alterar",
   "auth.unavailable": "O início de sessão está temporariamente indisponível. Tente novamente.",
   "auth.appleFailed": "Não foi possível entrar com a Apple. Tente novamente.",
-  "auth.accountConflict": "Uma conta já usa este e-mail. Entre com o seu método habitual.",
+  "auth.socialOnly": "Esta conta não tem palavra-passe: entre com Apple ou Google.",
+  "auth.linkRequired": "Já existe uma conta Deepn com este e-mail. Entre com {methods} para lhe adicionar {provider}.",
+  "auth.linkExpired": "O tempo para adicionar este método de início de sessão esgotou. Recomece.",
+  "auth.providerInUse": "Esta conta Google ou Apple já pertence a outra conta Deepn.",
+  "auth.method.password": "a sua palavra-passe",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

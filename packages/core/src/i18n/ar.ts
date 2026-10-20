@@ -819,5 +819,11 @@ export const ar: Catalog = {
   "auth.changeEmail": "تعديل",
   "auth.unavailable": "تسجيل الدخول غير متاح مؤقتًا. حاول مجددًا.",
   "auth.appleFailed": "فشل تسجيل الدخول باستخدام Apple. حاول مجددًا.",
-  "auth.accountConflict": "يوجد حساب يستخدم هذا البريد. سجّل الدخول بطريقتك المعتادة.",
+  "auth.socialOnly": "لا يملك هذا الحساب كلمة مرور: سجّل الدخول باستخدام Apple أو Google.",
+  "auth.linkRequired": "يوجد حساب Deepn بهذا البريد بالفعل. سجّل الدخول باستخدام {methods} لإضافة {provider} إليه.",
+  "auth.linkExpired": "انتهت مهلة إضافة طريقة تسجيل الدخول هذه. ابدأ من جديد.",
+  "auth.providerInUse": "حساب Google أو Apple هذا مرتبط بالفعل بحساب Deepn آخر.",
+  "auth.method.password": "كلمة المرور",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

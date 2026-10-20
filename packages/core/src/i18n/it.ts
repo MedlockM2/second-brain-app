@@ -773,5 +773,11 @@ export const it: Catalog = {
   "auth.changeEmail": "Modifica",
   "auth.unavailable": "L’accesso è temporaneamente non disponibile. Riprova.",
   "auth.appleFailed": "Accesso con Apple non riuscito. Riprova.",
-  "auth.accountConflict": "Un account usa già questa email. Accedi con il tuo metodo abituale.",
+  "auth.socialOnly": "Questo account non ha una password: accedi con Apple o Google.",
+  "auth.linkRequired": "Esiste già un account Deepn con questa email. Accedi con {methods} per aggiungervi {provider}.",
+  "auth.linkExpired": "Il tempo per aggiungere questo metodo di accesso è scaduto. Ricomincia.",
+  "auth.providerInUse": "Questo account Google o Apple appartiene già a un altro account Deepn.",
+  "auth.method.password": "la tua password",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

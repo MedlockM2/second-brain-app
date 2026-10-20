@@ -9,8 +9,17 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from "react-native";
-import { Link, router, useFocusEffect } from "expo-router";
+import { Link, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import {
+  authErrorKey,
+  pendingLinkMessage,
+  type PendingLink,
+  type SignInMethod,
+  type SocialProvider,
+} from "@media-summarizer/core/auth/cognito";
+import { AuthService } from "../../src/services/authService";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import {
@@ -38,7 +47,13 @@ export default function LoginScreen() {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const { login, sessionError, clearSessionError } = useAuth();
-  const [email, setEmail] = useState("");
+  // A social sign-in refused on register hands its pending link over here.
+  const params = useLocalSearchParams<{ email?: string; link?: string; methods?: string }>();
+  const [email, setEmail] = useState(typeof params.email === "string" ? params.email : "");
+  const [pendingLink, setPendingLink] = useState<PendingLink | null>(() =>
+    params.link === "Google" || params.link === "SignInWithApple"
+      ? { provider: params.link as SocialProvider, methods: String(params.methods ?? "").split(",") as SignInMethod[] }
+      : null);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,6 +62,21 @@ export default function LoginScreen() {
     setVerification(null);
     setPassword("");
   }, []));
+
+  // Signed in to the account that holds the address: add the refused provider to
+  // it. Cancelling or failing leaves the person signed in (task-529).
+  const finish = async () => {
+    const link = pendingLink;
+    setPendingLink(null);
+    if (link) {
+      try {
+        await AuthService.linkProvider(link.provider);
+      } catch (caught) {
+        Alert.alert(t(authErrorKey(caught)));
+      }
+    }
+    router.replace(POST_AUTH_ENTRY_POINT);
+  };
 
   const handleLogin = async () => {
     setError(null);
@@ -66,7 +96,7 @@ export default function LoginScreen() {
     setIsSubmitting(true);
     try {
       await login({ email: email.trim(), password });
-      router.replace(POST_AUTH_ENTRY_POINT);
+      await finish();
     } catch (err) {
       if ((err as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
         setVerification({ email: email.trim(), password });
@@ -96,6 +126,12 @@ export default function LoginScreen() {
           <Text style={styles.title}>{t("login.title")}</Text>
           <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
         </View>
+
+        {pendingLink && !displayError && (
+          <View style={styles.noticeContainer} accessibilityLiveRegion="polite">
+            <Text style={styles.noticeText}>{pendingLinkMessage(t, pendingLink)}</Text>
+          </View>
+        )}
 
         {displayError && (
           <View style={styles.errorContainer}>
@@ -170,6 +206,8 @@ export default function LoginScreen() {
 
         <SocialAuthButtons
           onError={(message) => setError(message)}
+          onAccountExists={(link) => { setError(null); setPendingLink(link); }}
+          onSignedIn={finish}
           disabled={isSubmitting}
         />
 
@@ -219,6 +257,16 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     errorText: {
       color: Colors.error,
+      fontSize: Typography.small.fontSize,
+    },
+    noticeContainer: {
+      backgroundColor: Colors.surfaceContainerLow,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.md,
+      marginBottom: Spacing.md,
+    },
+    noticeText: {
+      color: Colors.textMain,
       fontSize: Typography.small.fontSize,
     },
     form: {

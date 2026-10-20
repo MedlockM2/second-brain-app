@@ -49,7 +49,7 @@ const OUT_OF_MINUTES: TranslationKey = "error.outOfMinutes";
  * only ever mean "our bug".
  */
 const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
-  ...Object.fromEntries(["AUTH_CODE_INVALID", "AUTH_CODE_EXPIRED", "AUTH_PASSWORD_POLICY", "AUTH_RATE_LIMITED", "AUTH_RESET_REQUIRED", "AUTH_UNAVAILABLE"].map(code => [code, authErrorKey({ code })])),
+  ...Object.fromEntries(["AUTH_CODE_INVALID", "AUTH_CODE_EXPIRED", "AUTH_PASSWORD_POLICY", "AUTH_RATE_LIMITED", "AUTH_RESET_REQUIRED", "AUTH_UNAVAILABLE", "AUTH_ACCOUNT_EXISTS", "AUTH_SOCIAL_ONLY"].map(code => [code, authErrorKey({ code })])),
   SESSION_EXPIRED: "error.sessionExpired",
   INVALID_CREDENTIALS: "error.invalidCredentials",
   EMAIL_NOT_VERIFIED: "error.emailNotVerified",

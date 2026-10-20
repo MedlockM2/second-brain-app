@@ -4,7 +4,7 @@ import { Platform } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import type { AuthCodeAction, CognitoOAuthConfig, SocialProvider } from "@media-summarizer/core/auth/cognito";
-import { COGNITO_SCOPES } from "@media-summarizer/core/auth/cognito";
+import { COGNITO_SCOPES, hostedUiRefusal } from "@media-summarizer/core/auth/cognito";
 import {
   RegisterRequest,
   LoginRequest,
@@ -78,8 +78,44 @@ export class AuthService {
 
   static async loginWithSocial(provider: SocialProvider): Promise<TokenVerificationResponse | null> {
     if (provider === "SignInWithApple" && Platform.OS === "ios") {
-      return this.loginWithNativeApple();
+      const proof = await this.appleProof();
+      if (!proof) return null;
+      const result = await this.postUnauthenticated<TokenVerificationResponse>(
+        "/api/auth/apple/native", proof, "Authentication failed",
+      );
+      await SessionManager.persistSession(result);
+      return result;
     }
+    const grant = await this.authorize(provider);
+    if (!grant) return null;
+    const result = await this.postUnauthenticated<TokenVerificationResponse>(
+      "/api/auth/oauth/token", grant, "Authentication failed",
+    );
+    await SessionManager.persistSession(result);
+    return result;
+  }
+
+  /**
+   * Add `provider` to the signed-in account once its address was refused for
+   * already having one (task-529). The session proves the account, the fresh
+   * provider proof the new identity. false when the person cancels.
+   */
+  static async linkProvider(provider: SocialProvider): Promise<boolean> {
+    if (provider === "SignInWithApple" && Platform.OS === "ios") {
+      const proof = await this.appleProof();
+      if (!proof) return false;
+      await apiRequest("/api/auth/link/apple", { method: "POST", body: proof });
+      return true;
+    }
+    await apiRequest("/api/auth/link/start", { method: "POST", body: { provider } });
+    const grant = await this.authorize(provider);
+    if (!grant) return false;
+    await apiRequest("/api/auth/link/complete", { method: "POST", body: grant });
+    return true;
+  }
+
+  /** Hosted UI authorization (Google everywhere, Apple off iOS); null when cancelled. */
+  private static async authorize(provider: SocialProvider, retried = false): Promise<{ code: string; code_verifier: string } | null> {
     const response = await fetch(`${Config.API_BASE_URL}/api/auth/oauth/config`);
     if (!response.ok) {
       throw createHttpError("Authentication unavailable", response.status, "AUTH_UNAVAILABLE");
@@ -100,17 +136,20 @@ export class AuthService {
     // also keeps no Cognito cookie that would reopen the last account after logout.
     const outcome = await request.promptAsync(discovery, { preferEphemeralSession: true });
     if (outcome.type === "cancel" || outcome.type === "dismiss") return null;
+    if (outcome.type === "error") {
+      // The pre sign-up refusal travels in error_description; its raw text is never shown.
+      const refusal = hostedUiRefusal(outcome.params.error_description ?? outcome.error?.description);
+      if (refusal === "retry" && !retried) return this.authorize(provider, true);
+      throw refusal === "retry" ? createHttpError("Authentication failed", 400, "AUTH_UNAVAILABLE") : refusal;
+    }
     if (outcome.type !== "success" || !outcome.params.code || !request.codeVerifier) {
       throw createHttpError("Authentication failed", 400, "AUTH_UNAVAILABLE");
     }
-    const result = await this.postUnauthenticated<TokenVerificationResponse>(
-      "/api/auth/oauth/token", { code: outcome.params.code, code_verifier: request.codeVerifier }, "Authentication failed",
-    );
-    await SessionManager.persistSession(result);
-    return result;
+    return { code: outcome.params.code, code_verifier: request.codeVerifier };
   }
 
-  private static async loginWithNativeApple(): Promise<TokenVerificationResponse | null> {
+  /** The Apple sheet's one-use proof for /apple/native or /link/apple; null when cancelled. */
+  private static async appleProof(): Promise<{ identity_token: string; authorization_code: string; nonce: string } | null> {
     const nonce = Crypto.randomUUID();
     const state = Crypto.randomUUID();
     try {
@@ -122,13 +161,7 @@ export class AuthService {
       if (credential.state !== state || !credential.identityToken || !credential.authorizationCode) {
         throw createHttpError("Authentication failed", 401, "AUTH_APPLE_INVALID");
       }
-      const result = await this.postUnauthenticated<TokenVerificationResponse>(
-        "/api/auth/apple/native",
-        { identity_token: credential.identityToken, authorization_code: credential.authorizationCode, nonce },
-        "Authentication failed",
-      );
-      await SessionManager.persistSession(result);
-      return result;
+      return { identity_token: credential.identityToken, authorization_code: credential.authorizationCode, nonce };
     } catch (error) {
       if ((error as { code?: string }).code === "ERR_REQUEST_CANCELED") return null;
       throw error;

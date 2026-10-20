@@ -169,13 +169,26 @@ to a log and the answer carries a code or a neutral sentence.
 Les routes d’authentification répondent avec un `detail.error_code`. Le module
 partagé `packages/core/src/auth/cognito.ts` associe `AUTH_CODE_INVALID`,
 `AUTH_CODE_EXPIRED`, `AUTH_PASSWORD_POLICY`, `AUTH_RATE_LIMITED`,
-`AUTH_RESET_REQUIRED`, `EMAIL_NOT_VERIFIED` et `INVALID_CREDENTIALS` aux catalogues
-des onze langues. Tout échec non reconnu utilise `auth.unavailable` ; le texte
+`AUTH_RESET_REQUIRED`, `AUTH_ACCOUNT_EXISTS`, `AUTH_SOCIAL_ONLY`,
+`AUTH_LINK_EXPIRED`, `AUTH_PROVIDER_IN_USE`, `EMAIL_NOT_VERIFIED` et
+`INVALID_CREDENTIALS` aux catalogues des onze langues. Tout échec non reconnu utilise `auth.unavailable` ; le texte
 brut du fournisseur n’est jamais affiché. Les formulaires distinguent code
 incorrect, code expiré, renvoi, confirmation d’adresse et mot de passe modifié.
 
-La demande de récupération affiche `auth.codeSent`, formulé au conditionnel sur
-l’existence d’un compte éligible. La même réponse 202 couvre les comptes inconnus,
-les comptes exclusivement sociaux et les échecs de livraison. Un compte Google
-ou Apple continue via son fournisseur et ne reçoit pas de mot de passe local.
+La demande de récupération affiche `auth.codeSent` pour un compte à mot de passe,
+une adresse inconnue ou un échec de livraison (même réponse 202). Un compte
+exclusivement Google ou Apple reçoit `AUTH_SOCIAL_ONLY` → `auth.socialOnly`
+(« Ce compte n’a pas de mot de passe : connectez-vous avec Apple ou Google. »),
+comme une connexion par mot de passe refusée sur ce compte ; il ne reçoit jamais
+de mot de passe local.
+
+Une inscription sur une adresse déjà inscrite reçoit `AUTH_ACCOUNT_EXISTS` →
+`error.emailAlreadyExists`, avec « Se connecter » et « Mot de passe oublié ? »
+pré-remplis (décision propriétaire du 2026-10-20 : ces formulaires disent qu’un
+compte existe, sans nommer le fournisseur). Une connexion Google ou Apple refusée
+pour la même raison porte en plus `methods` (`password`, `apple`, `google`) :
+`pendingLinkMessage` compose `auth.linkRequired` avec `auth.method.*`, puis l’app
+lie le fournisseur après la connexion. Le texte brut renvoyé par Cognito dans
+`error_description` n’est jamais affiché ; `hostedUiRefusal` n’en extrait que le
+code. Détails : `docs/AUTHENTICATION_SETUP.md`, « Une adresse, un compte ».
 Voir [AUTHENTICATION_SETUP.md](AUTHENTICATION_SETUP.md) pour le quota des messages.

@@ -747,5 +747,11 @@ export const ja: Catalog = {
   "auth.changeEmail": "変更",
   "auth.unavailable": "現在ログインできません。再試行してください。",
   "auth.appleFailed": "Appleでのサインインに失敗しました。もう一度お試しください。",
-  "auth.accountConflict": "このメールアドレスは既に使われています。通常の方法でサインインしてください。",
+  "auth.socialOnly": "このアカウントにはパスワードがありません。Apple または Google でサインインしてください。",
+  "auth.linkRequired": "このメールアドレスの Deepn アカウントがすでにあります。{methods}でサインインすると、{provider}を追加できます。",
+  "auth.linkExpired": "このサインイン方法の追加がタイムアウトしました。もう一度やり直してください。",
+  "auth.providerInUse": "この Google または Apple アカウントは、すでに別の Deepn アカウントで使われています。",
+  "auth.method.password": "パスワード",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

@@ -882,5 +882,11 @@ export const de: Catalog = {
   "auth.changeEmail": "Ändern",
   "auth.unavailable": "Die Anmeldung ist vorübergehend nicht verfügbar. Versuche es erneut.",
   "auth.appleFailed": "Die Apple-Anmeldung ist fehlgeschlagen. Bitte erneut versuchen.",
-  "auth.accountConflict": "Ein Konto verwendet bereits diese E-Mail-Adresse. Melde dich mit deiner bisherigen Methode an.",
+  "auth.socialOnly": "Dieses Konto hat kein Passwort: Melde dich mit Apple oder Google an.",
+  "auth.linkRequired": "Für diese E-Mail-Adresse gibt es bereits ein Deepn-Konto. Melde dich mit {methods} an, um {provider} hinzuzufügen.",
+  "auth.linkExpired": "Das Hinzufügen dieser Anmeldemethode hat zu lange gedauert. Bitte beginne erneut.",
+  "auth.providerInUse": "Dieses Google- oder Apple-Konto gehört bereits zu einem anderen Deepn-Konto.",
+  "auth.method.password": "deinem Passwort",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

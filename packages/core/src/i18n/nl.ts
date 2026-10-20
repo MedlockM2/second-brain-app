@@ -774,5 +774,11 @@ export const nl: Catalog = {
   "auth.changeEmail": "Wijzigen",
   "auth.unavailable": "Inloggen is tijdelijk niet beschikbaar. Probeer het opnieuw.",
   "auth.appleFailed": "Inloggen met Apple is mislukt. Probeer het opnieuw.",
-  "auth.accountConflict": "Een account gebruikt dit e-mailadres al. Log in op je gebruikelijke manier.",
+  "auth.socialOnly": "Dit account heeft geen wachtwoord: log in met Apple of Google.",
+  "auth.linkRequired": "Er bestaat al een Deepn-account met dit e-mailadres. Log in met {methods} om {provider} toe te voegen.",
+  "auth.linkExpired": "Het toevoegen van deze inlogmethode duurde te lang. Begin opnieuw.",
+  "auth.providerInUse": "Dit Google- of Apple-account hoort al bij een ander Deepn-account.",
+  "auth.method.password": "je wachtwoord",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

@@ -1021,5 +1021,11 @@ export const en = {
   "auth.changeEmail": "Change",
   "auth.unavailable": "Sign-in is temporarily unavailable. Please try again.",
   "auth.appleFailed": "Apple sign-in failed. Please try again.",
-  "auth.accountConflict": "An account already uses this email. Sign in with your original method.",
+  "auth.socialOnly": "This account has no password: sign in with Apple or Google.",
+  "auth.linkRequired": "A Deepn account already uses this email. Sign in with {methods} to add {provider} to it.",
+  "auth.linkExpired": "Adding this sign-in method took too long. Please start again.",
+  "auth.providerInUse": "This Google or Apple account already belongs to another Deepn account.",
+  "auth.method.password": "your password",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 } as const;

@@ -98,10 +98,11 @@ car AWS interdit le rattachement fédéré à un profil ayant un attribut immuab
 Un mot de passe aléatoire inconnu du client confirme uniquement le provisionnement
 administrateur ; les endpoints de récupération refusent ces comptes Apple.
 
-Une collision avec un compte local utilisant la même adresse ne provoque aucune
-fusion : le message demande d’utiliser la méthode de connexion habituelle. Une
-création concurrente ne peut réutiliser un profil que si son sujet Apple correspond
-exactement. Lors d’une première connexion web/Android après la création native,
+Une adresse déjà portée par un compte confirmé, quel qu’il soit, n’est jamais
+reprise et ne crée pas de second compte : l’API répond `AUTH_ACCOUNT_EXISTS` avec
+les méthodes du compte existant, et l’app propose de lier Apple après connexion
+(section « Une adresse, un compte »). Une création concurrente ne peut réutiliser
+un profil que si son sujet Apple correspond exactement. Lors d’une première connexion web/Android après la création native,
 `PreSignUp_ExternalProvider` rattache le fournisseur au compte déjà identifié par
 ce même sujet, jamais par l’adresse e-mail. La suppression du compte retire aussi
 sa correspondance de sujet. Le Services ID Apple doit rester associé au même
@@ -126,6 +127,78 @@ Sources : [SDK Expo Apple](https://docs.expo.dev/versions/v55.0.0/sdk/apple-auth
 [triggers Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-challenge.html),
 [rattachement Cognito](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminLinkProviderForUser.html).
 
+## Une adresse, un compte (task-529, task-530)
+
+Le pool utilise l’e-mail comme username, mais un profil fédéré (`Google_<sub>`,
+`SignInWithApple_<sub>`) ne réserve pas son adresse : sans contrôle explicite, une
+même personne obtenait un compte, donc une bibliothèque, par méthode de connexion.
+La règle est désormais : **une adresse vérifiée appartient à un seul compte**.
+
+- **Titulaires.** `cognito_auth.account_holders` et le trigger listent tous les
+  utilisateurs du pool portant l’adresse (`ListUsers`, filtre `email`, insensible à
+  la casse, vérifié sur le pool dev le 2026-10-20), profils fédérés compris. Un
+  titulaire compte s’il a l’e-mail vérifié et n’est pas `UNCONFIRMED`.
+- **Inscriptions non confirmées.** Elles n’ont jamais prouvé l’adresse : une
+  connexion sociale, une création Apple native ou une nouvelle inscription les
+  supprime au lieu de les reprendre. Sinon, celui qui a inscrit l’adresse d’autrui
+  garderait le mot de passe que la victime active en confirmant son code
+  (pre-hijacking, Sudhodanan & Paverd, MSRC 2022).
+- **Refus.** `PreSignUp_ExternalProvider` (Google partout, Apple Android/web), la
+  création Apple native de l’API et `PreSignUp_SignUp` refusent une nouvelle
+  identité dont l’adresse a déjà un titulaire. Le trigger lève
+  `AUTH_ACCOUNT_EXISTS:<méthodes>` ; Cognito le renvoie dans `error_description`
+  du retour Hosted UI, que les apps lisent sans jamais afficher le texte brut.
+  L’API répond 409 `{error_code: AUTH_ACCOUNT_EXISTS, methods}` avec `password`,
+  `apple`, `google`. `SignUp` étant appelable directement sur le client public, la
+  règle vit dans le trigger, pas seulement dans l’API. `cognito_auth.profile` refuse
+  aussi de créer un profil applicatif pour une identité dont l’adresse a un autre
+  titulaire : un profil fédéré resté en attente n’ouvre jamais de bibliothèque.
+- **Liaison prouvée.** Jamais sur la seule adresse : AWS réserve
+  `AdminLinkProviderForUser` aux attributs de confiance, et lier sur l’e-mail est la
+  cause des prises de compte de type nOAuth. La personne se connecte avec une méthode
+  existante, puis refait la preuve du fournisseur refusé :
+  - Hosted UI : `POST /link/start {provider}` (session Cognito requise, jamais un
+    jeton d’extension) ouvre une intention à usage unique de dix minutes, liée au
+    username, dans la table `apple-auth` (`link#sha256(username#provider)`). Le
+    trigger laisse alors Cognito créer le profil fédéré. `POST /link/complete
+    {code, code_verifier}` échange le code, consomme l’intention, supprime ce profil
+    fédéré (AWS l’exige pour un fédéré déjà connecté) puis le lie au compte de la
+    session par son `sub` fournisseur. Un profil fédéré qui possède déjà une
+    bibliothèque n’est jamais supprimé : `AUTH_PROVIDER_IN_USE`.
+  - Apple natif : `POST /link/apple` vérifie la preuve Apple comme `/apple/native`,
+    lie le sujet et enregistre sa correspondance. `custom:apple_subject` n’est pas
+    posé sur un compte à mot de passe, qui reste donc éligible à la récupération.
+  - Les connexions suivantes par ce fournisseur ouvrent le compte existant. Une
+    destination fédérée est désignée par son fournisseur et son identifiant, une
+    destination locale par `Cognito` et son username.
+- **Apps.** Mobile et web affichent « Un compte Deepn existe déjà avec cette
+  adresse. Connectez-vous avec <méthodes> pour y ajouter <fournisseur>. ». Après la
+  connexion par une méthode existante, la liaison s’enchaîne ; l’annuler laisse la
+  personne connectée. Sur le web, ce lien en attente (fournisseur et méthodes, aucun
+  justificatif) survit aux redirections dans `sessionStorage` pendant dix minutes.
+  Le premier retour après une liaison faite par le trigger (sujet Apple connu)
+  échoue une fois avec « Already found an entry for username » : les apps
+  relancent alors l’autorisation une fois.
+- **Formulaires e-mail (décision propriétaire du 2026-10-20).** Sans SES, aucun
+  e-mail « compte existant » n’est envoyé ; les formulaires disent les choses :
+  `/register` répond 409 `AUTH_ACCOUNT_EXISTS` (« Un compte existe déjà avec cette
+  adresse e-mail. », avec « Se connecter » et « Mot de passe oublié ? »
+  pré-remplis). `/login`, seulement après un refus du mot de passe, et
+  `/forgot-password` ou `/confirm-password` répondent 409 `AUTH_SOCIAL_ONLY`
+  quand aucun titulaire n’a choisi de mot de passe (« Ce compte n’a pas de mot de
+  passe : connectez-vous avec Apple ou Google. »). Le propriétaire accepte que ces
+  formulaires révèlent qu’une adresse est inscrite ; ils ne nomment jamais le
+  fournisseur, la personne n’ayant rien prouvé. Aucun mot de passe n’est créé pour
+  un compte exclusivement social.
+
+Sources : [Linking federated users](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-identity-federation-consolidate-users.html),
+[AdminLinkProviderForUser](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminLinkProviderForUser.html),
+[Pre sign-up](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-sign-up.html),
+[re:Post, liaison et consentement](https://repost.aws/questions/QURvkKUJpaQCCanZpnzpF5aA/what-s-the-best-practice-for-external-idp-and-existing-account-linking),
+[re:Post, « Already found an entry »](https://www.repost.aws/questions/QUzzrn542nS0yuSWl4JAHlSg/signing-in-with-social-google-facebook-throws-error-already-found-an-entry-for-username),
+[nOAuth](https://www.descope.com/blog/post/noauth),
+[pre-hijacking](https://thehackernews.com/2022/05/learn-how-hackers-can-hijack-your.html).
+
 ## E-mails Cognito par défaut
 
 La configuration est `COGNITO_DEFAULT`, sans `from_email_address`, `source_arn`,
@@ -148,14 +221,17 @@ média ou artefact n’est ajouté sous `/api/v1/`.
 
 | Route | Entrée et réponse |
 |---|---|
-| `POST /register` | `{email, password}` → 202 `{status: verification_required}` ; aucune session avant confirmation |
+| `POST /register` | `{email, password}` → 202 `{status: verification_required}` ; 409 `AUTH_ACCOUNT_EXISTS` si l’adresse a déjà un compte ; une inscription non confirmée est remplacée ; aucune session avant confirmation |
 | `POST /confirm-registration` | `{email, code}` → `{status: confirmed}` ; le formulaire ouvre ensuite automatiquement la session par `/login` |
 | `POST /resend-confirmation` | `{email}` → 202 générique |
-| `POST /login` | `{email, password}` → session Cognito et profil |
+| `POST /login` | `{email, password}` → session Cognito et profil ; 409 `AUTH_SOCIAL_ONLY` après refus si le compte n’a pas de mot de passe |
 | `GET /oauth/config` | domaine, client et retour publics du transport choisi |
 | `POST /apple/native` | `{identity_token, authorization_code, nonce}` natifs iOS → session Cognito mobile et profil |
-| `POST /oauth/token` | `{code, code_verifier}` → session Cognito et profil ; retour fixé côté API |
-| `POST /forgot-password` | `{email}` → 202 `{status: accepted}`, compte absent/social compris |
+| `POST /oauth/token` | `{code, code_verifier}` → session Cognito et profil ; retour fixé côté API ; 409 `AUTH_ACCOUNT_EXISTS` + `methods` si l’adresse appartient à un autre compte |
+| `POST /link/start` | session Cognito, `{provider}` → 202 ; intention de liaison de dix minutes |
+| `POST /link/complete` | session Cognito, `{code, code_verifier}` du fournisseur → `{status: linked}` |
+| `POST /link/apple` | session Cognito mobile, preuve Apple native → `{status: linked}` |
+| `POST /forgot-password` | `{email}` → 202 `{status: accepted}` pour un compte à mot de passe ou une adresse inconnue ; 409 `AUTH_SOCIAL_ONLY` pour un compte exclusivement social |
 | `POST /confirm-password` | `{email, code, password}` → `{status: password_changed}` ; le formulaire ouvre ensuite automatiquement la session par `/login` |
 | `POST /refresh` | refresh du corps mobile ou du cookie web → paire renouvelée et profil |
 | `POST /logout` | même transport de refresh → révocation Cognito et suppression du cookie web |
@@ -187,17 +263,21 @@ Un mot de passe comprend au moins 12 caractères, une majuscule, une minuscule e
 un chiffre. Le serveur délègue la validation à Cognito. Les erreurs sont des codes
 (`AUTH_CODE_INVALID`, `AUTH_CODE_EXPIRED`, `AUTH_PASSWORD_POLICY`,
 `AUTH_RATE_LIMITED`, `AUTH_RESET_REQUIRED`, `AUTH_UNAVAILABLE`,
-`EMAIL_NOT_VERIFIED`, `INVALID_CREDENTIALS`), traduits dans les onze langues des apps.
+`AUTH_ACCOUNT_EXISTS`, `AUTH_SOCIAL_ONLY`, `AUTH_LINK_EXPIRED`,
+`AUTH_PROVIDER_IN_USE`, `EMAIL_NOT_VERIFIED`, `INVALID_CREDENTIALS`), traduits dans
+les onze langues des apps.
 Aucune prose fournisseur n’est affichée. Les écrans proposent renvoi, état de
 chargement, résultat, erreurs et retour à la connexion.
 
-La récupération contrôle le statut Cognito : seuls les comptes locaux confirmés
-ou à réinitialiser peuvent recevoir ce parcours. Un compte absent ou
-`EXTERNAL_PROVIDER` reçoit le même accusé de réception, et un code ne peut jamais
-y créer de mot de passe. Les erreurs de livraison sont aussi masquées sur cette
-route pour ne pas révéler l’existence d’un compte. Les erreurs réseau et de service
-restent présentées sans identité de compte. Cognito masque les utilisateurs
-inconnus sur les clients (`prevent_user_existence_errors = ENABLED`).
+La récupération contrôle le statut Cognito : seuls les comptes dont un mot de passe
+a été choisi (locaux confirmés ou à réinitialiser, sans `custom:apple_subject`)
+peuvent recevoir ce parcours, y compris s’ils sont liés à Google ou Apple. Un
+compte exclusivement social reçoit `AUTH_SOCIAL_ONLY` (décision du 2026-10-20), et
+un code ne peut jamais y créer de mot de passe. Une adresse inconnue reçoit
+l’accusé de réception générique, et les erreurs de livraison restent masquées.
+Cognito masque les utilisateurs inconnus sur les clients
+(`prevent_user_existence_errors = ENABLED`) ; l’API ne révèle un compte qu’aux
+endroits décrits dans « Une adresse, un compte ».
 
 Google et Apple restent accessibles depuis l’inscription et la connexion. Les
 boutons lancent `/oauth2/authorize` avec le fournisseur explicite, un état aléatoire
@@ -256,10 +336,11 @@ ligne, les apps effacent leur stockage local ; une révocation distante ne peut 
 ## Profils, fixtures et suppression du compte
 
 Un nouveau profil utilise `id = sub` du pool. Aucun lookup par e-mail ne rattache
-une connexion à une ancienne bibliothèque : Google, Apple et un compte local ayant
-la même adresse restent des identités distinctes tant qu’un administrateur ne les
-a pas liés explicitement dans Cognito. Un e-mail fournisseur non vérifié n’est
-jamais une preuve de propriété. Les apps ne peuvent pas écrire l’attribut
+une connexion à une ancienne bibliothèque. Une adresse n’ouvre qu’un compte : une
+autre méthode de connexion s’y ajoute seulement par la liaison prouvée décrite
+dans « Une adresse, un compte », et le provisionnement refuse une identité dont
+l’adresse a déjà un titulaire. Un e-mail fournisseur non vérifié n’est jamais une
+preuve de propriété. Les apps ne peuvent pas écrire l’attribut
 `custom:app_user_id`.
 
 Pour conserver une fixture protégée, dont l’article **Commonplace book**, le
@@ -274,7 +355,8 @@ un fichier public. Les produits Test Store protégés restent en place.
 
 La suppression de compte conserve l’ordre existant : données découvrables et
 contenus privés, tables applicatives, autorisations d’extension, identité Cognito
-(`AdminDeleteUser`), profil. Le contenu partagé reste régi par la purge existante.
+(`AdminDeleteUser`, qui emporte les identités Google/Apple liées, après les
+correspondances de sujet Apple du compte), profil. Le contenu partagé reste régi par la purge existante.
 Si une étape de données échoue, l’identité survit pour permettre de réessayer.
 Si l’effacement de la dernière ligne DynamoDB échoue après suppression Cognito,
 il ne reste qu’un profil orphelin à supprimer administrativement ; aucun contenu

@@ -732,5 +732,11 @@ export const zh: Catalog = {
   "auth.changeEmail": "修改",
   "auth.unavailable": "登录暂时不可用，请重试。",
   "auth.appleFailed": "Apple 登录失败，请重试。",
-  "auth.accountConflict": "此邮箱已有关联账户，请使用原来的方式登录。",
+  "auth.socialOnly": "此账户没有密码：请使用 Apple 或 Google 登录。",
+  "auth.linkRequired": "此邮箱已有 Deepn 账户。请使用{methods}登录，以添加{provider}。",
+  "auth.linkExpired": "添加此登录方式已超时，请重新开始。",
+  "auth.providerInUse": "此 Google 或 Apple 账户已属于另一个 Deepn 账户。",
+  "auth.method.password": "密码",
+  "auth.method.apple": "Apple",
+  "auth.method.google": "Google",
 };

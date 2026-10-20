@@ -3,6 +3,10 @@
 No token or password is persisted by this service. Application profiles are
 addressed by pool subject, never merged by email. An admin-only custom attribute
 can explicitly attach a protected development fixture to a new Cognito identity.
+
+One verified address belongs to one account. Federated profiles do not reserve
+their address in an email-username pool, so every holder is looked up explicitly;
+a second identity joins an account only through a proven link (account_links).
 """
 
 from __future__ import annotations
@@ -41,8 +45,8 @@ def oauth_config(web: bool) -> dict[str, str]:
     }
 
 
-def refuse(code: str, status: int = 400) -> HTTPException:
-    return HTTPException(status_code=status, detail={"error_code": code})
+def refuse(code: str, status: int = 400, **details: Any) -> HTTPException:
+    return HTTPException(status_code=status, detail={"error_code": code, **details})
 
 
 async def call(operation: str, **kwargs: Any) -> dict[str, Any]:
@@ -104,7 +108,7 @@ async def profile(access_token: str, *, provision: bool = False) -> User:
     claims, attributes, username = await identity(access_token)
     subject = claims["sub"]
     # Only administrators can write app_user_id; it is excluded from both clients'
-    # write_attributes. No email lookup and no automatic provider linking.
+    # write_attributes. The address never selects a profile and never links providers.
     user_id = attributes.get("custom:app_user_id") or subject
     user = await database_async.get_user_by_id(user_id)
     if user:
@@ -118,6 +122,11 @@ async def profile(access_token: str, *, provision: bool = False) -> User:
         return user
     if not provision or user_id != subject:
         raise refuse("INVALID_CREDENTIALS", 401)
+    # A federated identity left over from an unfinished link, or one Cognito
+    # created before the pre sign-up check, never opens a second library.
+    others = [h for h in confirmed(await account_holders(attributes["email"])) if h["Username"] != username]
+    if others:
+        raise account_exists(others)
     user = User(
         id=subject,
         email=attributes["email"],
@@ -134,17 +143,69 @@ async def profile(access_token: str, *, provision: bool = False) -> User:
         return existing
 
 
-async def password_account(email: str) -> bool:
-    """Never let recovery set a password on a federated-only identity."""
+PROVIDER_METHODS = {"Google": "google", "SignInWithApple": "apple"}
+METHOD_ORDER = ("password", "apple", "google")
+
+
+async def account_holders(email: str) -> list[dict[str, Any]]:
+    """Every pool user carrying this address, federated profiles included."""
+    value = email.strip().lower().replace("\\", "\\\\").replace('"', '\\"')
     try:
         async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as cognito:
-            user = await cognito.admin_get_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=email)
-    except ClientError as exc:
-        if exc.response["Error"]["Code"] == "UserNotFoundException":
-            return False
+            result = await cognito.list_users(
+                UserPoolId=required_env("COGNITO_USER_POOL_ID"), Filter=f'email = "{value}"', Limit=60
+            )
+    except ClientError:
         raise refuse("AUTH_UNAVAILABLE", 503) from None
-    attrs = {a["Name"]: a["Value"] for a in user.get("UserAttributes", [])}
-    return not attrs.get("custom:apple_subject") and user.get("UserStatus") in {"CONFIRMED", "RESET_REQUIRED"}
+    return [
+        {"Username": u["Username"], "UserStatus": u.get("UserStatus"),
+         "attributes": {a["Name"]: a["Value"] for a in u.get("Attributes", [])}}
+        for u in result.get("Users", [])
+    ]
+
+
+def confirmed(holders: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Holders who proved the address. An UNCONFIRMED sign-up never did."""
+    return [h for h in holders if h["UserStatus"] != "UNCONFIRMED" and h["attributes"].get("email_verified") == "true"]
+
+
+async def purge_unconfirmed(holders: list[dict[str, Any]]) -> None:
+    """Drop pending sign-ups for an address: whoever owns it now must not inherit one (pre-hijacking)."""
+    for holder in holders:
+        if holder["UserStatus"] == "UNCONFIRMED":
+            try:
+                async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as cognito:
+                    await cognito.admin_delete_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=holder["Username"])
+            except ClientError as exc:
+                if exc.response["Error"]["Code"] != "UserNotFoundException":
+                    raise refuse("AUTH_UNAVAILABLE", 503) from None
+
+
+def has_password(holder: dict[str, Any]) -> bool:
+    """A password the person chose. Native Apple profiles carry a random one nobody knows."""
+    return not holder["attributes"].get("custom:apple_subject") and holder["UserStatus"] in {"CONFIRMED", "RESET_REQUIRED"}
+
+
+def sign_in_methods(holder: dict[str, Any]) -> list[str]:
+    attributes = holder["attributes"]
+    methods = {"password"} if has_password(holder) else set()
+    if attributes.get("custom:apple_subject"):
+        methods.add("apple")
+    methods.update(PROVIDER_METHODS.get(i.get("providerName"), "") for i in json.loads(attributes.get("identities", "[]")))
+    return [m for m in METHOD_ORDER if m in methods]
+
+
+def account_exists(holders: list[dict[str, Any]]) -> HTTPException:
+    methods = {m for h in holders for m in sign_in_methods(h)}
+    return refuse("AUTH_ACCOUNT_EXISTS", 409, methods=[m for m in METHOD_ORDER if m in methods])
+
+
+async def credential_kind(email: str) -> str | None:
+    """Return "password" when a holder chose one, "social" when only providers hold the address."""
+    holders = confirmed(await account_holders(email))
+    if any(has_password(h) for h in holders):
+        return "password"
+    return "social" if holders else None
 
 
 async def exchange_code(web: bool, code: str, verifier: str) -> dict[str, Any]:

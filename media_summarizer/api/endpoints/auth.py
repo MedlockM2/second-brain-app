@@ -3,7 +3,7 @@
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -21,7 +21,7 @@ from media_summarizer.core.models.auth import (
     RegisterRequest,
     TokenType,
 )
-from media_summarizer.core.services import apple_native_auth
+from media_summarizer.core.services import account_links, apple_native_auth
 from media_summarizer.core.services import cognito_auth as cognito
 from media_summarizer.utils import database_async
 from media_summarizer.utils.auth_utils import get_refresh_token_expires_at
@@ -56,6 +56,20 @@ class AppleNativeRequest(BaseModel):
     nonce: str = Field(min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
+class LinkStartRequest(BaseModel):
+    provider: Literal["Google", "SignInWithApple"]
+
+
+async def session_username(request: Request) -> str:
+    """Linking needs a full Cognito session; an extension grant never proves an account."""
+    header = request.headers.get("Authorization", "")
+    token = header[7:] if header[:7].lower() == "bearer " else ""
+    if not token or token.startswith("ext_"):
+        raise cognito.refuse("INVALID_CREDENTIALS", 401)
+    _, _, username = await cognito.identity(token)
+    return username
+
+
 @router.post("/apple/native")
 async def apple_native(body: AppleNativeRequest, request: Request):
     if is_web_session(request):
@@ -67,6 +81,28 @@ async def apple_native(body: AppleNativeRequest, request: Request):
         if exc.status_code == 401:
             raise cognito.refuse("AUTH_APPLE_INVALID", 401) from None
         raise
+
+
+@router.post("/link/start", status_code=202)
+async def link_start(body: LinkStartRequest, request: Request):
+    await account_links.start(await session_username(request), body.provider)
+    return {"status": "ready"}
+
+
+@router.post("/link/complete")
+async def link_complete(body: OAuthCodeRequest, request: Request):
+    username = await session_username(request)
+    await account_links.complete_oauth(username, is_web_session(request), body.code, body.code_verifier)
+    return {"status": "linked"}
+
+
+@router.post("/link/apple")
+async def link_apple(body: AppleNativeRequest, request: Request):
+    if is_web_session(request):
+        raise cognito.refuse("AUTH_INVALID_REQUEST")
+    username = await session_username(request)
+    await account_links.link_apple(username, body.identity_token, body.authorization_code, body.nonce)
+    return {"status": "linked"}
 
 
 async def answer_session(request: Request, tokens: dict[str, Any], *, provision: bool = False):
@@ -96,20 +132,37 @@ async def oauth_token(body: OAuthCodeRequest, request: Request):
 
 @router.post("/register", status_code=202)
 async def register(body: RegisterRequest, request: Request):
-    try:
-        async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as client:
-            await client.sign_up(
-                ClientId=cognito.client_id(is_web_session(request)),
-                Username=body.email,
-                Password=body.password,
-                UserAttributes=[{"Name": "email", "Value": body.email}],
-            )
-    except ClientError as exc:
-        if exc.response["Error"]["Code"] == "InvalidPasswordException":
-            raise cognito.refuse("AUTH_PASSWORD_POLICY") from None
-        if exc.response["Error"]["Code"] != "UsernameExistsException":
-            raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
-    return {"status": "verification_required"}
+    """Say so when the address already has an account (owner decision, 2026-10-20).
+
+    A pending UNCONFIRMED sign-up is replaced, never resumed: otherwise whoever
+    registered the address first would hold the password its owner then confirms.
+    """
+    for _ in range(2):
+        try:
+            async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as client:
+                await client.sign_up(
+                    ClientId=cognito.client_id(is_web_session(request)),
+                    Username=body.email,
+                    Password=body.password,
+                    UserAttributes=[{"Name": "email", "Value": body.email}],
+                )
+            return {"status": "verification_required"}
+        except ClientError as exc:
+            code = exc.response["Error"]["Code"]
+            if code == "InvalidPasswordException":
+                raise cognito.refuse("AUTH_PASSWORD_POLICY") from None
+            if code == "UserLambdaValidationException" and "AUTH_ACCOUNT_EXISTS" in exc.response["Error"].get("Message", ""):
+                raise cognito.refuse("AUTH_ACCOUNT_EXISTS", 409) from None
+            if code in {"TooManyRequestsException", "LimitExceededException"}:
+                raise cognito.refuse("AUTH_RATE_LIMITED", 429) from None
+            if code != "UsernameExistsException":
+                raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
+        holders = await cognito.account_holders(body.email)
+        if cognito.confirmed(holders):
+            raise cognito.refuse("AUTH_ACCOUNT_EXISTS", 409)
+        await cognito.purge_unconfirmed(holders)
+    # Another sign-up for the same address raced this one twice.
+    raise cognito.refuse("AUTH_RATE_LIMITED", 429)
 
 
 @router.post("/confirm-registration")
@@ -138,7 +191,10 @@ async def resend_confirmation(body: EmailRequest, request: Request):
 @router.post("/forgot-password", status_code=202)
 async def forgot_password(body: EmailRequest, request: Request):
     email = body.email.strip().lower()
-    if await cognito.password_account(email):
+    kind = await cognito.credential_kind(email)
+    if kind == "social":
+        raise cognito.refuse("AUTH_SOCIAL_ONLY", 409)
+    if kind == "password":
         try:
             await cognito.call("forgot_password", ClientId=cognito.client_id(is_web_session(request)), Username=email)
         except HTTPException as exc:
@@ -152,8 +208,9 @@ async def forgot_password(body: EmailRequest, request: Request):
 @router.post("/confirm-password")
 async def confirm_password(body: ResetRequest, request: Request):
     email = body.email.strip().lower()
-    if not await cognito.password_account(email):
-        raise cognito.refuse("AUTH_CODE_INVALID")
+    kind = await cognito.credential_kind(email)
+    if kind != "password":
+        raise cognito.refuse("AUTH_SOCIAL_ONLY" if kind == "social" else "AUTH_CODE_INVALID", 409 if kind == "social" else 400)
     try:
         await cognito.call(
             "confirm_forgot_password",
@@ -171,12 +228,20 @@ async def confirm_password(body: ResetRequest, request: Request):
 
 @router.post("/login")
 async def login(body: LoginRequest, request: Request):
-    result = await cognito.call(
-        "initiate_auth",
-        ClientId=cognito.client_id(is_web_session(request)),
-        AuthFlow="USER_PASSWORD_AUTH",
-        AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
-    )
+    try:
+        result = await cognito.call(
+            "initiate_auth",
+            ClientId=cognito.client_id(is_web_session(request)),
+            AuthFlow="USER_PASSWORD_AUTH",
+            AuthParameters={"USERNAME": body.email, "PASSWORD": body.password},
+        )
+    except HTTPException as exc:
+        # Only after a refusal, and without naming the provider (decision of 2026-10-20).
+        if isinstance(exc.detail, dict) and exc.detail.get("error_code") == "INVALID_CREDENTIALS" and (
+            await cognito.credential_kind(body.email) == "social"
+        ):
+            raise cognito.refuse("AUTH_SOCIAL_ONLY", 409) from None
+        raise
     tokens = result.get("AuthenticationResult")
     if tokens is None:
         raise cognito.refuse("AUTH_RESET_REQUIRED")

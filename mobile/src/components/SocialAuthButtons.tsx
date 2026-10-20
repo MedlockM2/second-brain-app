@@ -1,7 +1,7 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useEffect, useState } from "react";
-import type { SocialProvider } from "@media-summarizer/core/auth/cognito";
-import { authErrorKey } from "@media-summarizer/core/auth/cognito";
+import type { PendingLink, SocialProvider } from "@media-summarizer/core/auth/cognito";
+import { authErrorKey, pendingLinkFrom } from "@media-summarizer/core/auth/cognito";
 import {
   Platform,
   View,
@@ -26,11 +26,15 @@ import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
 
 interface SocialAuthButtonsProps {
   onError: (message: string) => void;
+  /** The address already has an account: sign in to it, then link (task-529). */
+  onAccountExists?: (link: PendingLink) => void;
+  /** Replaces the default entry into the app, e.g. to finish a pending link first. */
+  onSignedIn?: () => Promise<void>;
   disabled?: boolean;
 }
 
 /** Native Apple on iOS; browser authorization for Google and Android Apple. */
-export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps) {
+export function SocialAuthButtons({ onError, onAccountExists, onSignedIn, disabled }: SocialAuthButtonsProps) {
   const { colors: Colors, mode } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { loginWithSocial } = useAuth();
@@ -51,9 +55,14 @@ export function SocialAuthButtons({ onError, disabled }: SocialAuthButtonsProps)
     if (disabled || isLoading) return;
     setProvider(selected);
     try {
-      if (await loginWithSocial(selected)) router.replace(POST_AUTH_ENTRY_POINT);
+      if (await loginWithSocial(selected)) {
+        if (onSignedIn) await onSignedIn();
+        else router.replace(POST_AUTH_ENTRY_POINT);
+      }
     } catch (error) {
-      onError(t(authErrorKey(error)));
+      const link = pendingLinkFrom(error, selected);
+      if (link && onAccountExists) onAccountExists(link);
+      else onError(t(authErrorKey(error)));
     } finally {
       setProvider(null);
     }

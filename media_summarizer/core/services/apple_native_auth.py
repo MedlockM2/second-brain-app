@@ -83,7 +83,7 @@ async def redeem_code(code: str, nonce: str, subject: str) -> None:
         raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
 
 
-async def _get_user(username: str) -> dict[str, Any] | None:
+async def get_user(username: str) -> dict[str, Any] | None:
     try:
         async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as client:
             return await client.admin_get_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=username)
@@ -112,12 +112,17 @@ async def apple_username(claims: dict[str, Any]) -> str:
     async with database_async.get_session().resource("dynamodb", region_name=database_async.AWS_REGION) as db:
         table = await db.Table(required_env("APPLE_AUTH_TABLE"))
         mapping = (await table.get_item(Key={"pk": subject_key(subject)}, ConsistentRead=True)).get("Item")
-        user = await _get_user(mapping["username"] if mapping else f"SignInWithApple_{subject}")
+        user = await get_user(mapping["username"] if mapping else f"SignInWithApple_{subject}")
         if user is not None and not _is_apple_user(user, subject):
             raise cognito.refuse("AUTH_APPLE_INVALID", 401)
         if user is None:
-            # Email-only Cognito pools require an email for AdminCreateUser. A
-            # collision is reused only when the admin-only Apple subject matches.
+            # Federated profiles do not reserve their address: look for every holder,
+            # never reuse one on the address alone, and drop pending sign-ups.
+            holders = await cognito.account_holders(claims["email"])
+            if cognito.confirmed(holders):
+                raise cognito.account_exists(cognito.confirmed(holders))
+            await cognito.purge_unconfirmed(holders)
+            # Email-only Cognito pools require an email for AdminCreateUser.
             try:
                 async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as client:
                     created = await client.admin_create_user(
@@ -127,14 +132,14 @@ async def apple_username(claims: dict[str, Any]) -> str:
                                         {"Name": "email_verified", "Value": "true"},
                                         {"Name": "custom:apple_subject", "Value": subject}],
                     )
-                user = await _get_user(created["User"]["Username"])
+                user = await get_user(created["User"]["Username"])
             except ClientError as exc:
                 if exc.response["Error"]["Code"] not in {"UsernameExistsException", "AliasExistsException"}:
                     raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
                 # A concurrent creation is safe only with the same Apple subject.
-                user = await _get_user(claims["email"])
+                user = await get_user(claims["email"])
                 if user is None or _attributes(user).get("custom:apple_subject") != subject:
-                    raise cognito.refuse("AUTH_ACCOUNT_CONFLICT", 409) from None
+                    raise cognito.account_exists(cognito.confirmed(await cognito.account_holders(claims["email"]))) from None
         if user is None or not _is_apple_user(user, subject):
             raise cognito.refuse("AUTH_APPLE_INVALID", 401)
         username = user["Username"]
