@@ -70,15 +70,45 @@ export function SocialAuthButtons({ onError, onAccountExists, onSignedIn, disabl
   const handleGoogleSignIn = () => void signIn("Google");
   const handleAppleSignIn = () => void signIn("SignInWithApple");
 
+  const appleButton = Platform.OS === "ios" ? nativeAppleAvailable && (
+    <View style={styles.nativeAppleContainer} pointerEvents={disabled || isLoading ? "none" : "auto"}
+      accessibilityState={{ disabled: disabled || isLoading, busy: isAppleLoading }}>
+      <AppleAuthentication.AppleAuthenticationButton
+        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+        buttonStyle={mode === "dark"
+          ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+          : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+        cornerRadius={BorderRadius.full}
+        style={[styles.nativeAppleButton, (disabled || isLoading) && styles.buttonDisabled]}
+        onPress={handleAppleSignIn}
+      />
+      {isAppleLoading && <ActivityIndicator style={styles.appleProgress} color={Colors.surface} />}
+    </View>
+  ) : (
+    <TouchableOpacity
+      style={[styles.socialButton, styles.appleButton, (disabled || isLoading) && styles.buttonDisabled]}
+      onPress={handleAppleSignIn}
+      disabled={disabled || isLoading}
+      activeOpacity={0.8}
+      accessibilityLabel={t("auth.continueWithApple")}
+      accessibilityRole="button"
+    >
+      {isAppleLoading ? (
+        <ActivityIndicator color={Colors.surface} />
+      ) : (
+        <>
+          <Ionicons name="logo-apple" size={20} color={Colors.surface} />
+          <Text style={styles.appleButtonText}>{t("auth.continueWithApple")}</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+
+  // Apple, then Google, then « or » and the e-mail form below it: the two
+  // providers are seen without scrolling, as the HIG asks.
   return (
     <View style={styles.container}>
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>{t("auth.or")}</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Google button - visible on all platforms */}
+      {appleButton}
       <TouchableOpacity
         style={[styles.socialButton, styles.googleButton, (disabled || isLoading) && styles.buttonDisabled]}
         onPress={handleGoogleSignIn}
@@ -92,46 +122,16 @@ export function SocialAuthButtons({ onError, onAccountExists, onSignedIn, disabl
         ) : (
           <>
             <Ionicons name="logo-google" size={20} color={Colors.textMain} />
-            <Text style={styles.googleButtonText}>
-              {t("auth.continueWithGoogle")}
-            </Text>
+            <Text style={styles.googleButtonText}>{t("auth.continueWithGoogle")}</Text>
           </>
         )}
       </TouchableOpacity>
 
-      {Platform.OS === "ios" ? nativeAppleAvailable && (
-        <View style={styles.nativeAppleContainer} pointerEvents={disabled || isLoading ? "none" : "auto"}
-          accessibilityState={{ disabled: disabled || isLoading, busy: isAppleLoading }}>
-          <AppleAuthentication.AppleAuthenticationButton
-            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-            buttonStyle={mode === "dark"
-              ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-              : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-            cornerRadius={BorderRadius.md}
-            style={[styles.nativeAppleButton, (disabled || isLoading) && styles.buttonDisabled]}
-            onPress={handleAppleSignIn}
-          />
-          {isAppleLoading && <ActivityIndicator style={styles.appleProgress} color={Colors.surface} />}
-        </View>
-      ) : <TouchableOpacity
-          style={[styles.socialButton, styles.appleButton, (disabled || isLoading) && styles.appleButtonDisabled]}
-          onPress={handleAppleSignIn}
-          disabled={disabled || isLoading}
-          activeOpacity={0.8}
-          accessibilityLabel={t("auth.signInWithApple")}
-          accessibilityRole="button"
-        >
-          {isAppleLoading ? (
-            <ActivityIndicator color={Colors.surface} />
-          ) : (
-            <>
-              <Ionicons name="logo-apple" size={20} color={Colors.surface} />
-              <Text style={styles.appleButtonText}>
-                {t("auth.signInWithApple")}
-              </Text>
-            </>
-          )}
-      </TouchableOpacity>}
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>{t("auth.or")}</Text>
+        <View style={styles.dividerLine} />
+      </View>
     </View>
   );
 }
@@ -139,13 +139,14 @@ export function SocialAuthButtons({ onError, onAccountExists, onSignedIn, disabl
 const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
     container: {
-      gap: Spacing.md,
-      marginTop: Spacing.lg,
+      gap: Spacing.sm + 4,
     },
     divider: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.md,
+      marginTop: Spacing.xs,
+      marginBottom: Spacing.xs,
     },
     dividerLine: {
       flex: 1,
@@ -162,8 +163,8 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       alignItems: "center",
       justifyContent: "center",
       gap: Spacing.sm,
-      borderRadius: BorderRadius.md,
-      minHeight: TouchTarget.minimum,
+      borderRadius: BorderRadius.full,
+      minHeight: TouchTarget.comfortable - 4,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
     },
@@ -175,14 +176,14 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     googleButtonText: {
       color: Colors.textMain,
       fontSize: Typography.body.fontSize,
-      fontWeight: "500",
+      fontWeight: "600",
     },
     nativeAppleContainer: {
       position: "relative",
       width: "100%",
     },
     nativeAppleButton: {
-      height: TouchTarget.comfortable,
+      height: TouchTarget.comfortable - 4,
       width: "100%",
     },
     appleProgress: {
@@ -197,12 +198,9 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     appleButtonText: {
       color: Colors.surface,
       fontSize: Typography.body.fontSize,
-      fontWeight: "500",
+      fontWeight: "600",
     },
     buttonDisabled: {
-      opacity: 0.6,
-    },
-    appleButtonDisabled: {
       opacity: 0.6,
     },
   });

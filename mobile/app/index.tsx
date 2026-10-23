@@ -2,7 +2,7 @@ import { Redirect } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useUserPreferences } from "../src/contexts/UserPreferencesContext";
-import { LANGUAGE_ONBOARDING_ROUTE } from "../src/constants/routes";
+import { LANGUAGE_ONBOARDING_ROUTE, SIGNED_OUT_ENTRY_POINT } from "../src/constants/routes";
 import { type Theme } from "../src/constants/theme";
 import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
 
@@ -15,7 +15,7 @@ import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
  * Shows a loading indicator during session restoration.
  *
  * Routing logic:
- * 1. Not authenticated -> login
+ * 1. Not authenticated -> welcome carousel
  * 2. Authenticated, no reading language -> onboarding language selection
  * 3. Authenticated with a reading language -> inbox
  *
@@ -46,7 +46,7 @@ export default function Index() {
     return <Redirect href="/(tabs)/inbox" />;
   }
 
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href={SIGNED_OUT_ENTRY_POINT} />;
 }
 
 const makeStyles = ({ colors: Colors }: Theme) =>

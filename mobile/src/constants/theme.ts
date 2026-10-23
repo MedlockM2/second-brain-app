@@ -231,6 +231,14 @@ const lightColors = {
    */
   errorTint: "rgba(186, 26, 26, 0.1)",
 
+  /**
+   * A rule that is met: the password badges of the sign-up form and the
+   * "passwords match" line under the confirmation field. Text on `successTint`
+   * and on `background`: 5.3:1 light, 9.1:1 dark (`#7fd3a1` on `#171511`).
+   */
+  success: "#2e7d4f",
+  successTint: "rgba(46, 125, 79, 0.11)",
+
   // Tab bar
   tabActive: "#ffcb05",
   tabInactive: "#8d99ae",
@@ -383,6 +391,8 @@ const darkColors: ThemeColors = {
   // its *step*: 10 % of a dark red over white costs 6.8 L*, and 8 % of a light
   // red over `surface` buys 6.5.
   errorTint: "rgba(255, 180, 171, 0.08)",
+  success: "#7fd3a1",
+  successTint: "rgba(127, 211, 161, 0.12)",
 
   tabActive: "#f0bf2a",
   tabInactive: "#9aa3b4",

@@ -18,6 +18,7 @@ import { usePurchases } from "../../src/contexts/PurchasesContext";
 import { AccountService } from "../../src/services/accountService";
 import { hasActiveEntitlement } from "../../src/services/purchaseService";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
+import { SIGNED_OUT_ENTRY_POINT } from "../../src/constants/routes";
 import { t, type TranslationKey } from "../../src/i18n";
 import {
   PRIVACY_CONTACT_EMAIL,
@@ -98,7 +99,7 @@ export default function DeleteAccountScreen() {
       // copy and the RevenueCat login, and the replace leaves no screen behind
       // that would try to read a deleted account.
       await logout();
-      router.replace("/(auth)/login");
+      router.replace(SIGNED_OUT_ENTRY_POINT);
     } catch (err) {
       setError(
         getFriendlyErrorMessage(err, { fallback: t("deleteAccount.failed") }),

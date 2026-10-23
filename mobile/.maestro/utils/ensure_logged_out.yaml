@@ -4,11 +4,11 @@
 appId: com.secondbrainlabs.core
 
 ---
-# The three states a launch can settle on: the login screen, language
+# The three states a launch can settle on: the welcome carousel, language
 # onboarding (restored session without a reading language), or the tab bar.
 - extendedWaitUntil:
     visible:
-      id: "login-email-input|language-onboarding-screen|account-tab-button"
+      id: "welcome-screen|language-onboarding-screen|account-tab-button"
     timeout: 30000
 
 # Onboarding has no tab bar, so complete it first to reach a signed-in state

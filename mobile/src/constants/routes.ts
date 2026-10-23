@@ -25,3 +25,10 @@ export const POST_AUTH_ENTRY_POINT = "/";
  * and therefore the point that makes the gate impossible to walk past.
  */
 export const LANGUAGE_ONBOARDING_ROUTE = "/onboarding/language";
+
+/**
+ * Where a signed-out person lands: the welcome carousel, from which "Get
+ * started" and "I already have an account" push the sign-up and sign-in screens.
+ * Sign-out and account deletion end here too, like a first launch.
+ */
+export const SIGNED_OUT_ENTRY_POINT = "/(auth)/welcome";

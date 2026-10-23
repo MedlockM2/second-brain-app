@@ -2,16 +2,12 @@ import { useCallback, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { Link, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import {
   authErrorKey,
   pendingLinkMessage,
@@ -31,17 +27,23 @@ import { t } from "../../src/i18n";
 import { POST_AUTH_ENTRY_POINT } from "../../src/constants/routes";
 import type { LoginRequest } from "@media-summarizer/core/types/auth";
 import { AuthCodeScreen } from "../../src/components/AuthCodeScreen";
-import { PasswordField } from "../../src/components/PasswordField";
+import { AuthField } from "../../src/components/AuthField";
+import { AuthScreen } from "../../src/components/AuthScreen";
+import { SlotText } from "../../src/components/SlotText";
 import {
   Typography,
   Spacing,
   BorderRadius,
+  TouchTarget,
   type Theme,
 } from "../../src/constants/theme";
 import {
   useThemeColors,
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
+
+/** Which field an error belongs under; the rest go above the button. */
+type LoginError = { field: "email" | "password" | "form"; message: string; wrongPassword?: boolean };
 
 export default function LoginScreen() {
   const Colors = useThemeColors();
@@ -55,7 +57,7 @@ export default function LoginScreen() {
       ? { provider: params.link as SocialProvider, methods: String(params.methods ?? "").split(",") as SignInMethod[] }
       : null);
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<LoginError | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [verification, setVerification] = useState<LoginRequest | null>(null);
   useFocusEffect(useCallback(() => () => {
@@ -84,12 +86,12 @@ export default function LoginScreen() {
     // Client-side validation
     const emailError = getEmailValidationError(email);
     if (emailError) {
-      setError(emailError);
+      setError({ field: "email", message: emailError });
       return;
     }
     const passwordError = getPasswordValidationError(password);
     if (passwordError) {
-      setError(passwordError);
+      setError({ field: "password", message: passwordError });
       return;
     }
 
@@ -98,171 +100,134 @@ export default function LoginScreen() {
       await login({ email: email.trim(), password });
       await finish();
     } catch (err) {
-      if ((err as { code?: string }).code === "EMAIL_NOT_VERIFIED") {
+      const code = (err as { code?: string }).code;
+      if (code === "EMAIL_NOT_VERIFIED") {
         setVerification({ email: email.trim(), password });
         setPassword("");
         return;
       }
-      setError(getFriendlyErrorMessage(err, { fallback: t("login.failed") }));
+      if (code === "INVALID_CREDENTIALS") {
+        setError({ field: "password", message: t("login.wrongPassword"), wrongPassword: true });
+        return;
+      }
+      setError({ field: "form", message: getFriendlyErrorMessage(err, { fallback: t("login.failed") }) });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const displayError = error || sessionError;
+  const forgotPassword = () => router.push({ pathname: "/(auth)/forgot-password", params: { email: email.trim() } });
+  const formError = error?.field === "form" ? error.message : sessionError;
+  const messageFor = (field: LoginError["field"]) => error?.field === field ? {
+    tone: "error" as const,
+    content: error.wrongPassword
+      ? <SlotText template={error.message} slots={{
+          reset: <Text key="reset" style={styles.inlineLink} onPress={forgotPassword} accessibilityRole="link">{t("login.resetLink")}</Text>,
+        }} />
+      : error.message,
+  } : undefined;
 
   if (verification) return <AuthCodeScreen recovery={false} credentials={verification} onCancel={() => setVerification(null)} />;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>{t("login.title")}</Text>
-          <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
-        </View>
-
-        {pendingLink && !displayError && (
-          <View style={styles.noticeContainer} accessibilityLiveRegion="polite">
-            <Text style={styles.noticeText}>{pendingLinkMessage(t, pendingLink)}</Text>
-          </View>
-        )}
-
-        {displayError && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{displayError}</Text>
-          </View>
-        )}
-
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{t("auth.email")}</Text>
-            <TextInput
-              testID="login-email-input"
-              style={styles.input}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setError(null);
-                if (sessionError) clearSessionError();
-              }}
-              placeholder={t("auth.emailPlaceholder")}
-              placeholderTextColor={Colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="email"
-              editable={!isSubmitting}
-            />
-          </View>
-
-            <PasswordField
-              label={t("auth.password")}
-              testID="login-password-input"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setError(null);
-              }}
-              placeholder={t("login.passwordPlaceholder")}
-              placeholderTextColor={Colors.textMuted}
-              initiallyVisible={process.env.EXPO_PUBLIC_E2E_MODE === "true"}
-              autoComplete={
-                process.env.EXPO_PUBLIC_E2E_MODE === "true" ? "off" : "password"
-              }
-              textContentType={
-                process.env.EXPO_PUBLIC_E2E_MODE === "true"
-                  ? "none"
-                  : "password"
-              }
-              editable={!isSubmitting}
-            />
-
-          <TouchableOpacity
-            testID="login-submit-button"
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={isSubmitting}
-            activeOpacity={0.8}
-            accessibilityLabel={t("login.submitA11y")}
-            accessibilityRole="button"
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={Colors.onPrimary} />
-            ) : (
-              <Text style={styles.buttonText}>{t("login.submit")}</Text>
-            )}
+    <AuthScreen
+      title={t("login.title")}
+      subtitle={t("login.subtitle")}
+      footer={
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>{t("login.noAccount")} </Text>
+          <TouchableOpacity testID="login-sign-up-button" accessibilityRole="link"
+            onPress={() => router.replace("/(auth)/register")}>
+            <Text style={styles.footerLink}>{t("login.signUpLink")}</Text>
           </TouchableOpacity>
         </View>
+      }
+    >
+      {pendingLink && !formError && (
+        <View style={styles.noticeContainer} accessibilityLiveRegion="polite">
+          <Text style={styles.noticeText}>{pendingLinkMessage(t, pendingLink)}</Text>
+        </View>
+      )}
 
-        <Link href="/(auth)/forgot-password" style={styles.footerLink} accessibilityRole="link">
-          {t("auth.forgotPassword")}
-        </Link>
+      <SocialAuthButtons
+        onError={(message) => setError({ field: "form", message })}
+        onAccountExists={(link) => { setError(null); setPendingLink(link); }}
+        onSignedIn={finish}
+        disabled={isSubmitting}
+      />
 
-        <SocialAuthButtons
-          onError={(message) => setError(message)}
-          onAccountExists={(link) => { setError(null); setPendingLink(link); }}
-          onSignedIn={finish}
-          disabled={isSubmitting}
+      <View style={styles.form}>
+        <AuthField
+          label={t("auth.email")}
+          testID="login-email-input"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setError(null);
+            if (sessionError) clearSessionError();
+          }}
+          placeholder={t("auth.emailPlaceholder")}
+          keyboardType="email-address"
+          autoComplete="email"
+          textContentType="username"
+          editable={!isSubmitting}
+          message={messageFor("email")}
         />
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>{t("login.noAccount")} </Text>
-          <Link href="/(auth)/register" asChild>
-            <TouchableOpacity testID="login-sign-up-button">
-              <Text style={styles.footerLink}>{t("login.signUpLink")}</Text>
+        <AuthField
+          secure
+          label={t("auth.password")}
+          labelAccessory={
+            <TouchableOpacity onPress={forgotPassword} accessibilityRole="link" hitSlop={8}>
+              <Text style={styles.accessoryLink}>{t("auth.forgotPassword")}</Text>
             </TouchableOpacity>
-          </Link>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          }
+          testID="login-password-input"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setError(null);
+          }}
+          placeholder={t("login.passwordPlaceholder")}
+          initiallyVisible={process.env.EXPO_PUBLIC_E2E_MODE === "true"}
+          autoComplete={process.env.EXPO_PUBLIC_E2E_MODE === "true" ? "off" : "password"}
+          textContentType={process.env.EXPO_PUBLIC_E2E_MODE === "true" ? "none" : "password"}
+          returnKeyType="go"
+          onSubmitEditing={() => void handleLogin()}
+          editable={!isSubmitting}
+          message={messageFor("password")}
+        />
+
+        {formError && (
+          <Text style={styles.formError} accessibilityRole="alert">{formError}</Text>
+        )}
+
+        <TouchableOpacity
+          testID="login-submit-button"
+          style={[styles.button, isSubmitting && styles.buttonDisabled]}
+          onPress={() => void handleLogin()}
+          disabled={isSubmitting}
+          activeOpacity={0.8}
+          accessibilityLabel={t("login.submitA11y")}
+          accessibilityRole="button"
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color={Colors.onPrimary} />
+          ) : (
+            <Text style={styles.buttonText}>{t("login.submit")}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </AuthScreen>
   );
 }
 
 const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: Colors.background,
-    },
-    scrollContent: {
-      flexGrow: 1,
-      justifyContent: "center",
-      padding: Spacing.lg,
-    },
-    header: {
-      marginBottom: Spacing.xl,
-    },
-    title: {
-      fontSize: Typography.display.fontSize,
-      fontWeight: Typography.display.fontWeight,
-      color: Colors.textMain,
-      letterSpacing: Typography.display.letterSpacing,
-    },
-    subtitle: {
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMuted,
-      marginTop: Spacing.sm,
-    },
-    errorContainer: {
-      backgroundColor: Colors.errorContainer,
-      padding: Spacing.md,
-      borderRadius: BorderRadius.md,
-      marginBottom: Spacing.md,
-    },
-    errorText: {
-      color: Colors.error,
-      fontSize: Typography.small.fontSize,
-    },
     noticeContainer: {
       backgroundColor: Colors.surfaceContainerLow,
       padding: Spacing.md,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.lg,
       marginBottom: Spacing.md,
     },
     noticeText: {
@@ -272,31 +237,26 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     form: {
       gap: Spacing.md,
     },
-    inputGroup: {
-      gap: Spacing.xs,
-    },
-    inputLabel: {
+    accessoryLink: {
+      color: Colors.textSubtle,
       fontSize: Typography.label.fontSize,
-      fontWeight: Typography.label.fontWeight,
-      color: Colors.textMain,
+      fontWeight: "600",
     },
-    input: {
-      backgroundColor: Colors.surface,
-      borderWidth: 1,
-      borderColor: Colors.outlineVariant,
-      borderRadius: BorderRadius.md,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 14,
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMain,
+    inlineLink: {
+      textDecorationLine: "underline",
+      fontWeight: "600",
+    },
+    formError: {
+      color: Colors.error,
+      fontSize: Typography.small.fontSize,
     },
     button: {
       backgroundColor: Colors.primary,
-      borderRadius: BorderRadius.md,
-      paddingVertical: 16,
+      borderRadius: BorderRadius.full,
+      minHeight: TouchTarget.comfortable - 4,
       alignItems: "center",
       justifyContent: "center",
-      marginTop: Spacing.sm,
+      marginTop: Spacing.xs,
     },
     buttonDisabled: {
       opacity: 0.6,
@@ -304,20 +264,21 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     buttonText: {
       color: Colors.onPrimary,
       fontSize: Typography.body.fontSize,
-      fontWeight: "600",
+      fontWeight: "700",
     },
-    footer: {
+    footerRow: {
       flexDirection: "row",
       justifyContent: "center",
-      marginTop: Spacing.xl,
+      flexWrap: "wrap",
     },
     footerText: {
-      color: Colors.textMuted,
+      color: Colors.textSubtle,
       fontSize: Typography.label.fontSize,
     },
     footerLink: {
       color: Colors.textMain,
       fontSize: Typography.label.fontSize,
-      fontWeight: "600",
+      fontWeight: "700",
+      textDecorationLine: "underline",
     },
   });

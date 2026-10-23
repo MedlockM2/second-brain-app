@@ -16,12 +16,12 @@ tags:
 # Wait for the app to initialize (splash screen dismiss)
 - extendedWaitUntil:
     visible:
-      id: "login-email-input"
+      id: "welcome-screen"
     timeout: 15000
 
 # Register a fresh user and verify the development bypass lands on Inbox.
 - tapOn:
-    id: "login-sign-up-button"
+    id: "welcome-start-button"
 
 - assertVisible:
     id: "register-email-input"
@@ -32,6 +32,10 @@ tags:
 
 - tapOn:
     id: "register-password-input"
+- inputText: ${TEST_USER_PASSWORD}
+
+- tapOn:
+    id: "register-confirm-input"
 - inputText: ${TEST_USER_PASSWORD}
 
 - tapOn:

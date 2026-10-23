@@ -3,7 +3,7 @@ import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
-import { LANGUAGE_ONBOARDING_ROUTE } from "../../src/constants/routes";
+import { LANGUAGE_ONBOARDING_ROUTE, SIGNED_OUT_ENTRY_POINT } from "../../src/constants/routes";
 import { type Theme } from "../../src/constants/theme";
 import {
   useThemeColors,
@@ -67,7 +67,7 @@ export default function TabsLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href={SIGNED_OUT_ENTRY_POINT} />;
   }
 
   // Strictly after the two guards above: `needsLanguageOnboarding` is derived

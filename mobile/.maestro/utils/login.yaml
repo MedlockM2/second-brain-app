@@ -4,7 +4,15 @@ appId: com.secondbrainlabs.core
 
 ---
 
-# Wait for the login screen to appear
+# A signed-out launch opens on the welcome carousel; the sign-in screen is
+# pushed from its « I already have an account » button.
+- extendedWaitUntil:
+    visible:
+      id: "welcome-sign-in-button"
+    timeout: 15000
+- tapOn:
+    id: "welcome-sign-in-button"
+
 - assertVisible:
     id: "login-email-input"
     optional: false
