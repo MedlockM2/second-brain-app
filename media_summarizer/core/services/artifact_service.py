@@ -1267,6 +1267,10 @@ async def _arm_reading_language_translations(
     not an opening (the first one already decided, and a media scope holds a handful
     of entries anyway), and a reader with **no reading language** is served in the
     language of the sources.
+
+    An entry whose request pinned its language (task-533) is never armed, whatever
+    the reader's language: that rule lives with the choice of the entry to translate,
+    in ``artifact_translation_service``.
     """
     if scope != ArtifactScope.MEDIA or cursor is not None or not reading_language:
         return []

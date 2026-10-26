@@ -10,7 +10,7 @@ only when they differ, and persistence under a deterministic key so a couple
 ``(content, type, language)`` is never translated twice.
 
 Three properties, and each is a consequence of *where* and *how* this runs rather
-than of a flag:
+than of a flag — plus one that *is* a flag, below:
 
 - **it is the opening of a media that triggers it, never the language change.**
   ``PATCH /api/auth/me`` writes the preference and nothing else; this module is
@@ -28,6 +28,14 @@ than of a flag:
   a media whose artifacts are all translated costs no read at all, which is what
   makes reopening — and every poll of the tile — cost nothing.
 
+The flag is ``language_pinned`` (task-533): an entry whose request chose its
+language is **never translated**. Translating it would put a reading-language copy
+at the top of its type, which is the entry a client shows, and the language the
+reader asked for would be lost the moment the list is read. A pinned entry is read
+in its own language. This module is the only place a translation is armed, and the
+content route (``GET /api/artifacts/{id}/content``) arms nothing, so the one guard in
+:func:`_translate_one_type` covers both reads.
+
 Nothing here debits the quota, for the reason ``review_blurb_service`` states: the
 allowance is spent by what the *user* asks for, and this is a background
 generation nobody requested. What the operator pays is measured all the same, on
@@ -40,6 +48,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
+from media_summarizer.core.models import artifact_options
 from media_summarizer.core.models.media_artifact import (
     ArtifactScope,
     MediaArtifactRecord,
@@ -158,10 +167,18 @@ async def _translate_one_type(
     the reading language is already served, whatever the state of that entry. That
     check is what makes a reopen, and every poll of an in-flight tile, free.
 
-    Only then does it read one row, and only one: the *oldest* ``ready`` entry of
-    the type. Oldest rather than newest because that is the one generated from the
-    transcript — translating the newest would chain translation onto translation
-    and drift a little further from the source each time a reader changes language.
+    Only then does it read a row: the *oldest* ``ready`` entry of the type. Oldest
+    rather than newest because that is the one generated from the transcript —
+    translating the newest would chain translation onto translation and drift a
+    little further from the source each time a reader changes language.
+
+    An entry whose language was pinned by its request (task-533) is never that
+    source: it is read in its own language, so it is skipped and the next oldest is
+    read instead. Telling a pinned entry apart costs its read, because the listing
+    projects no ``parameters``: one ``GetItem`` per pinned entry older than the
+    first one that is not, on each opening where the fast path misses — that is,
+    for a type the reader has no default entry of in the reading language. A type
+    that only holds pinned entries pays that on every opening and arms nothing.
 
     Since task-531 a type can hold several entries that differ by their options (a
     ``long`` summary next to a ``short`` one), and this still translates one of
@@ -195,7 +212,7 @@ async def _translate_one_type(
         # that failed is retried by the request that asks for it, not from a read.
         return None
 
-    source = await media_artifacts.get_media_artifact_by_id(ready[0].artifact_id)
+    source = await _oldest_unpinned(ready)
     if source is None or source.storage is None:
         return None
 
@@ -269,6 +286,26 @@ async def _translate_one_type(
     return entry
 
 
+async def _oldest_unpinned(
+    ready: Sequence[MediaArtifactRecord],
+) -> Optional[MediaArtifactRecord]:
+    """The first of ``ready`` (oldest first) whose language follows the reader.
+
+    ``ready`` comes from the listing, which projects no ``parameters``, so each
+    candidate is read off the base table, and the reads stop at the first entry that
+    is not pinned. ``None`` when every candidate is pinned (or vanished since the
+    listing): there is then nothing this type may be translated from.
+    """
+    for row in ready:
+        record = await media_artifacts.get_media_artifact_by_id(row.artifact_id)
+        if record is None:
+            continue
+        if artifact_options.is_language_pinned(record.parameters):
+            continue
+        return record
+    return None
+
+
 async def _plan_translation(
     *,
     source: MediaArtifactRecord,
@@ -288,7 +325,10 @@ async def _plan_translation(
 
     The source's own snapshot is carried over unchanged: the translation covers
     exactly the sources its original covered, and it must claim neither more nor
-    less. Nothing of the source row is written.
+    less. Nothing of the source row is written. Its ``parameters`` are carried over
+    too, options included, and they hold no ``language_pinned``: the source is never
+    a pinned entry (:func:`_oldest_unpinned`), so a translation follows the reader
+    like its original.
     """
     parameters = artifact_service.normalize_artifact_parameters(
         {**source.parameters, "language": target_language}
