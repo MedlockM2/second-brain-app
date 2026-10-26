@@ -87,6 +87,7 @@ from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.core.services.llm_corpus import estimate_tokens
 from media_summarizer.core.services.media_identity import is_account_scoped_media_key
 from media_summarizer.core.services.transcript_translation import (
+    V1_LANGUAGES,
     detect_language,
     normalize_language_tag,
 )
@@ -170,19 +171,21 @@ INTERNAL_ARTIFACT_TYPES = {
 # is refused before the quota is even looked at.
 GENERATABLE_ARTIFACT_TYPES = REQUESTABLE_ARTIFACT_TYPES | INTERNAL_ARTIFACT_TYPES
 
+# The options every requestable type takes, on a media as on a folder: the topic to
+# favour (task-531) and the output language (task-533).
+_OPTIONS_OF_EVERY_TYPE = frozenset({artifact_options.FOCUS, artifact_options.LANGUAGE})
+
 # Which customisation option each requestable type accepts (task-531). A type absent
 # from this table — an internal one — accepts none. An option sent for a type it
 # does not apply to is refused rather than ignored: ignoring it would still hash it,
 # so `count` on a set of notes would buy a second, identical set of notes.
 OPTIONS_BY_ARTIFACT_TYPE: Dict[MediaArtifactType, frozenset[str]] = {
-    MediaArtifactType.SUMMARY_SHORT: frozenset({artifact_options.LENGTH, artifact_options.FOCUS}),
-    MediaArtifactType.NOTES: frozenset({artifact_options.FOCUS}),
-    MediaArtifactType.QUIZ: frozenset(
-        {artifact_options.COUNT, artifact_options.DIFFICULTY, artifact_options.FOCUS}
-    ),
-    MediaArtifactType.FLASHCARDS: frozenset(
-        {artifact_options.COUNT, artifact_options.DIFFICULTY, artifact_options.FOCUS}
-    ),
+    MediaArtifactType.SUMMARY_SHORT: _OPTIONS_OF_EVERY_TYPE | {artifact_options.LENGTH},
+    MediaArtifactType.NOTES: _OPTIONS_OF_EVERY_TYPE,
+    MediaArtifactType.QUIZ: _OPTIONS_OF_EVERY_TYPE
+    | {artifact_options.COUNT, artifact_options.DIFFICULTY},
+    MediaArtifactType.FLASHCARDS: _OPTIONS_OF_EVERY_TYPE
+    | {artifact_options.COUNT, artifact_options.DIFFICULTY},
 }
 
 # The enumerated options: the values each one takes, and the default that is
@@ -199,11 +202,6 @@ _ENUMERATED_OPTIONS: Dict[str, Tuple[type[Enum], Enum]] = {
     ),
 }
 
-# Keys of `parameters` the API knows but does not take from a client. `language` is
-# set by this service from the reading language (task-398), and a client value would
-# silently replace it. TASK-533 lifts it.
-_PARAMETERS_NOT_ACCEPTED = frozenset({"language"})
-
 #: The key of `parameters` that restricts a folder request to some of its sources
 #: (task-532). A scope option rather than a generation option: it is validated by
 #: :func:`resolve_source_selection` and applied by :func:`resolve_scope_sources`, and
@@ -213,7 +211,6 @@ SOURCE_IDS_PARAMETER = "source_ids"
 
 #: ``reason`` of an ``invalid_artifact_parameters`` refusal.
 PARAMETER_REASON_UNKNOWN = "unknown_parameter"
-PARAMETER_REASON_NOT_ACCEPTED = "not_accepted"
 PARAMETER_REASON_NOT_APPLICABLE = "not_applicable"
 PARAMETER_REASON_INVALID_VALUE = "invalid_value"
 #: An id of ``source_ids`` that is not a media of the folder (or of a subfolder) in
@@ -403,10 +400,11 @@ def resolve_request_options(
 ) -> Dict[str, str]:
     """A client's ``parameters``, validated and reduced to what changes the artifact.
 
-    The options of task-531 (``length``, ``count``, ``difficulty``, ``focus``) are
-    checked against the type asked for: an unknown key, a key the client may not set,
-    an option the type does not take, or a value outside its list is refused with
-    :class:`ArtifactParametersInvalidError`. A JSON ``null`` reads as an absent key.
+    The options of task-531 (``length``, ``count``, ``difficulty``, ``focus``) and the
+    ``language`` of task-533 are checked against the type asked for: an unknown key, a
+    key the client may not set, an option the type does not take, or a value outside
+    its list is refused with :class:`ArtifactParametersInvalidError`. A JSON ``null``
+    reads as an absent key.
 
     What comes back holds **no default**, and that is the half of this function the
     ids rely on. An option at its default value, like a ``focus`` that is empty once
@@ -414,6 +412,11 @@ def resolve_request_options(
     hashes to the same ``artifact_id`` and the same shared id as a request with no
     options at all — every entry generated before the options existed keeps
     answering, and so does the cross-account reuse of task-394.
+
+    The one default this function cannot see is the language's, which is the
+    reader's: ``language`` comes back normalized to its ISO 639-1 code, and
+    :func:`plan_artifact_generation`, which holds the reading language, drops it when
+    it names that language and pins it otherwise.
 
     An unknown type is the 400 of :class:`ArtifactTypeNotEnabledError`, raised here
     first so that a request naming no real type is not judged on its options.
@@ -428,13 +431,7 @@ def resolve_request_options(
     for key, value in (parameters or {}).items():
         if key == SOURCE_IDS_PARAMETER:
             continue
-        if key in _PARAMETERS_NOT_ACCEPTED:
-            raise ArtifactParametersInvalidError(
-                f"'{key}' cannot be set by the client.",
-                parameter=key,
-                reason=PARAMETER_REASON_NOT_ACCEPTED,
-            )
-        if key not in _ENUMERATED_OPTIONS and key != artifact_options.FOCUS:
+        if key not in _ENUMERATED_OPTIONS and key not in _OPTIONS_OF_EVERY_TYPE:
             raise ArtifactParametersInvalidError(
                 f"'{key}' is not a generation option.",
                 parameter=key,
@@ -452,6 +449,9 @@ def resolve_request_options(
             focus = _resolve_focus(value)
             if focus:
                 options[key] = focus
+            continue
+        if key == artifact_options.LANGUAGE:
+            options[key] = _resolve_language(value)
             continue
         enum_type, default = _ENUMERATED_OPTIONS[key]
         allowed = [member.value for member in enum_type]
@@ -536,6 +536,60 @@ def resolve_source_selection(
         seen.add(source_id)
         source_ids.append(source_id)
     return source_ids
+
+
+def _resolve_language(value: Any) -> str:
+    """The requested language as the bare ISO 639-1 code entries are keyed on.
+
+    Any tag :func:`normalize_language_tag` reduces to one of the reading languages is
+    accepted (``"EN-US"`` is ``"en"``), so two spellings of one language are one
+    artifact. Anything else is refused: a language no reader can pick is one the
+    translation path cannot serve either (``should_translate``), and a tag that
+    names no language would be written into the prompt as is.
+    """
+    language = normalize_language_tag(value) if isinstance(value, str) else None
+    if language is None or language not in V1_LANGUAGES:
+        raise ArtifactParametersInvalidError(
+            f"'{artifact_options.LANGUAGE}' must be one of "
+            f"{', '.join(sorted(V1_LANGUAGES))}.",
+            parameter=artifact_options.LANGUAGE,
+            reason=PARAMETER_REASON_INVALID_VALUE,
+        )
+    return language
+
+
+def _generation_parameters(
+    *,
+    options: Optional[Dict[str, str]],
+    output_language: Optional[str],
+) -> Dict[str, Any]:
+    """An entry's ``parameters``: the request's options plus the language it is written in.
+
+    The reading language is the default output language and the only one most
+    entries carry (task-398). A request may name another (task-533), and there are
+    exactly two outcomes, decided here because this is where both are known:
+
+    - **the language it names is the reading language.** It is the default, so it is
+      dropped like any other default: the material is the one a request without the
+      option hashes, hence the same ``artifact_id``, the same shared id, and the same
+      translation behaviour when the reader changes language later;
+    - **it names another one.** That language becomes the output language and the
+      entry is marked :data:`~artifact_options.LANGUAGE_PINNED`. Both are hashed, so
+      the entry is a different id from the translation or the native generation in
+      that language a reader of it would get, and its shared generation only ever
+      answers another request pinning the same language.
+    """
+    parameters: Dict[str, Any] = dict(options or {})
+    requested_language = parameters.pop(artifact_options.LANGUAGE, None)
+    if requested_language and requested_language != output_language:
+        parameters[artifact_options.LANGUAGE] = requested_language
+        parameters[artifact_options.LANGUAGE_PINNED] = True
+    elif output_language:
+        # No source text is translated for the output language, the prompt asks for
+        # it (task-398). It is part of the hash, so reading in another language is
+        # another artifact.
+        parameters[artifact_options.LANGUAGE] = output_language
+    return normalize_artifact_parameters(parameters)
 
 
 def _stable_json(value: Dict[str, Any]) -> str:
@@ -665,6 +719,11 @@ def build_artifact_id(
     (``artifact_translation_service``, task-395). The id recipe is what makes that
     possible — the translation lands on exactly the id a native request in that
     language computes, so it is found by reuse like any other entry.
+
+    A request that pins another language than the reader's (task-533) carries that
+    language *and* the ``language_pinned`` marker, so it never lands on the id of a
+    translation or of a native generation in that language, and no reading-language
+    change ever translates it.
 
     ``user_id`` stays in it, and stays first: this id is what the account's own
     listing and detail routes address, so it must be unguessable from another
@@ -854,10 +913,11 @@ class ScopeResolution:
         self.sources = sources
         self.excluded = excluded
         self.pending = pending
-        #: The language the artifact must be **written** in — the requester's
+        #: The language the artifact is **written** in by default — the requester's
         #: reading language, normalized. It reaches the model through
         #: ``parameters["language"]`` and ``corpus.language_instruction``; no
-        #: source text is ever translated for it (task-398).
+        #: source text is ever translated for it (task-398). A request that names
+        #: another language overrides it in ``plan_artifact_generation`` (task-533).
         self.output_language = output_language
         #: The library rows a folder request was restricted to, sorted, when they
         #: are a strict part of the folder (task-532). ``None`` for the whole scope,
@@ -1327,6 +1387,10 @@ async def _arm_reading_language_translations(
     not an opening (the first one already decided, and a media scope holds a handful
     of entries anyway), and a reader with **no reading language** is served in the
     language of the sources.
+
+    An entry whose request pinned its language (task-533) is never armed, whatever
+    the reader's language: that rule lives with the choice of the entry to translate,
+    in ``artifact_translation_service``.
     """
     if scope != ArtifactScope.MEDIA or cursor is not None or not reading_language:
         return []
@@ -1797,8 +1861,9 @@ async def plan_artifact_generation(
     """Decide whether anything has to be generated, and what has to be written.
 
     ``options`` is what :func:`resolve_request_options` returned — validated, with no
-    default left in it — and the output language is added to it here. That pair is
-    the entry's ``parameters``, so it is what both ids hash.
+    default left in it but the language — and the output language is settled here
+    against the reading language (:func:`_generation_parameters`, task-533). The
+    result is the entry's ``parameters``, so it is what both ids hash.
 
     Two lookups, in this order, and both without any time bound — the ids are
     derived from the sources alone, so what they find was generated over exactly
@@ -1856,13 +1921,9 @@ async def plan_artifact_generation(
             pending_count=len(resolution.pending),
         )
 
-    merged_parameters: Dict[str, Any] = dict(options or {})
-    # The reading language is the *only* carrier of the output language: no source
-    # text is translated for it, the prompt asks for it (task-398). It is part of
-    # the hash, so reading in another language is another artifact.
-    if resolution.output_language:
-        merged_parameters["language"] = resolution.output_language
-    normalized_parameters = normalize_artifact_parameters(merged_parameters)
+    normalized_parameters = _generation_parameters(
+        options=options, output_language=resolution.output_language
+    )
 
     generator_version = get_generator_version(resolved_type)
     effective_scope_id = content_scope_id or scope_id
