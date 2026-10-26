@@ -58,6 +58,8 @@ async def call(operation: str, **kwargs: Any) -> dict[str, Any]:
         code = exc.response["Error"]["Code"]
         mapping = {
             "NotAuthorizedException": ("INVALID_CREDENTIALS", 401),
+            # Rotation already spent this refresh token: it is dead, not the service.
+            "RefreshTokenReuseException": ("INVALID_CREDENTIALS", 401),
             "UserNotFoundException": ("INVALID_CREDENTIALS", 401),
             "UserNotConfirmedException": ("EMAIL_NOT_VERIFIED", 400),
             "CodeMismatchException": ("AUTH_CODE_INVALID", 400),
