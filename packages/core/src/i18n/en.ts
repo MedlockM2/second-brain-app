@@ -215,6 +215,34 @@ export const en = {
   "artifacts.panel.retryA11y": "Retry loading generated content",
   "artifacts.panel.empty":
     "Nothing generated yet. Pick a format above to create one.",
+  // The "Personnaliser" screen asked before each generation (task-535): one
+  // title and one prompt hint per format, the format's own options, and the
+  // marker of the value a tap on Generate keeps.
+  "artifacts.customize.title.summaryShort": "Customize the summary",
+  "artifacts.customize.title.notes": "Customize the learning notes",
+  "artifacts.customize.title.flashcards": "Customize the flashcards",
+  "artifacts.customize.title.quiz": "Customize the quiz",
+  "artifacts.customize.section.length": "Length",
+  "artifacts.customize.section.cardCount": "Number of cards",
+  "artifacts.customize.section.questionCount": "Number of questions",
+  "artifacts.customize.section.difficulty": "Difficulty level",
+  "artifacts.customize.section.prompt": "Prompt",
+  "artifacts.customize.length.short": "Short",
+  "artifacts.customize.length.medium": "Medium",
+  "artifacts.customize.length.long": "Long",
+  "artifacts.customize.count.fewer": "Fewer",
+  "artifacts.customize.count.standard": "Standard",
+  "artifacts.customize.count.more": "More",
+  "artifacts.customize.difficulty.easy": "Easy",
+  "artifacts.customize.difficulty.medium": "Medium",
+  "artifacts.customize.difficulty.hard": "Hard",
+  "artifacts.customize.defaultOption": "{label} (default)",
+  "artifacts.customize.promptHint.summaryShort":
+    "What should the summary focus on? Leave empty for a general summary.",
+  "artifacts.customize.promptHint.notes": "What should the learning notes focus on?",
+  "artifacts.customize.promptHint.flashcards": "What should the cards focus on?",
+  "artifacts.customize.promptHint.quiz": "What should the quiz focus on?",
+  "artifacts.customize.generate": "Generate",
   // --- Durations and relative time ---
   "duration.minutes.one": "{count} min",
   "duration.minutes.other": "{count} min",
