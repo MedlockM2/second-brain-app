@@ -236,6 +236,12 @@ export const en = {
   "artifacts.customize.promptHint.notes": "What should the learning notes focus on?",
   "artifacts.customize.promptHint.flashcards": "What should the cards focus on?",
   "artifacts.customize.promptHint.quiz": "What should the quiz focus on?",
+  "artifacts.customize.sources": "Sources",
+  "artifacts.customize.language": "Language",
+  "artifacts.customize.selectedSources": "{selected} of {total} selected",
+  "artifacts.customize.selectAll": "Select all",
+  "artifacts.customize.confirmSources": "Confirm · {count} sources",
+  "artifacts.customize.sourcesFailed": "Sources could not be loaded. Please try again.",
   "artifacts.customize.generate": "Generate",
   // --- Durations and relative time ---
   "duration.minutes.one": "{count} min",

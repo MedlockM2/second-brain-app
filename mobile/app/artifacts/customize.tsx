@@ -52,6 +52,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  sourceParameters,
+  type ArtifactSource,
+} from "@media-summarizer/core/artifacts/sources";
+import {
+  LOCALE_ENDONYMS,
+  SUPPORTED_LOCALES,
+} from "@media-summarizer/core/i18n/locales";
+import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
+import { ArtifactSourcePicker } from "../../src/components/ArtifactSourcePicker";
+import { getArtifactSources } from "../../src/services/artifactSources";
+import {
   DEFAULT_COUNT,
   DEFAULT_DIFFICULTY,
   DEFAULT_LENGTH,
@@ -151,6 +162,7 @@ export default function CustomizeArtifactScreen(): React.JSX.Element {
     >
       {scope && scopeId && format ? (
         <CustomizeForm
+          key={`${scope}:${scopeId}:${format.type}`}
           scope={scope}
           scopeId={scopeId}
           format={format}
@@ -190,6 +202,28 @@ function CustomizeForm({
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const { readingLanguage } = useUserPreferences();
+  const mountedRef = useRef(true);
+  const [language, setLanguage] = useState(readingLanguage);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [sources, setSources] = useState<ArtifactSource[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sourceError, setSourceError] = useState(false);
+  const [sourceLoading, setSourceLoading] = useState(true);
+  const loadSources = useCallback(async () => {
+    setSourceLoading(true);
+    setSourceError(false);
+    try {
+      const items = await getArtifactSources(scope, scopeId);
+      if (!mountedRef.current) return;
+      setSources(items);
+      setSelected(new Set(items.map((item) => item.media_item_id)));
+    } catch {
+      if (mountedRef.current) setSourceError(true);
+    } finally {
+      if (mountedRef.current) setSourceLoading(false);
+    }
+  }, [scope, scopeId]);
   const options = formatOptionsOf(format.type);
   const formatLabel = t(format.labelKey);
   const countSectionLabel = COUNT_SECTION_LABELS[format.type];
@@ -204,7 +238,6 @@ function CustomizeForm({
   // The ref makes a second tap a no-op on the frame it lands, before React has
   // redrawn the button as busy.
   const submittingRef = useRef(false);
-  const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -213,15 +246,31 @@ function CustomizeForm({
     };
   }, []);
 
+  useEffect(() => {
+    const timer = setTimeout(() => void loadSources(), 0);
+    return () => clearTimeout(timer);
+  }, [loadSources]);
+
   const handleGenerate = useCallback(async () => {
-    if (!isAuthenticated || submittingRef.current) return;
+    if (
+      !isAuthenticated ||
+      submittingRef.current ||
+      sourceLoading ||
+      sourceError ||
+      !sources ||
+      !selected.size
+    )
+      return;
     submittingRef.current = true;
     setSubmitting(true);
     setRefusal(null);
     Keyboard.dismiss();
 
     // Only the options this format takes: any other is a 422.
-    const parameters: ArtifactGenerationParameters = { focus };
+    const parameters: ArtifactGenerationParameters = {
+      focus,
+      ...sourceParameters(scope, sources, selected, language, readingLanguage),
+    };
     if (options.includes("length")) parameters.length = length;
     if (options.includes("count")) parameters.count = count;
     if (options.includes("difficulty")) parameters.difficulty = difficulty;
@@ -257,6 +306,12 @@ function CustomizeForm({
     }
   }, [
     isAuthenticated,
+    sourceLoading,
+    sourceError,
+    sources,
+    selected,
+    language,
+    readingLanguage,
     options,
     focus,
     length,
@@ -295,7 +350,10 @@ function CustomizeForm({
       >
         <View style={styles.titleBlock}>
           <View
-            style={[styles.formatIcon, { backgroundColor: Colors[format.tint] }]}
+            style={[
+              styles.formatIcon,
+              { backgroundColor: Colors[format.tint] },
+            ]}
           >
             <Ionicons name={format.icon} size={28} color={Colors[format.ink]} />
           </View>
@@ -343,6 +401,17 @@ function CustomizeForm({
           />
         ) : null}
 
+        <ArtifactSourcePicker
+          sources={sources ?? []}
+          selected={selected}
+          loading={sourceLoading}
+          error={sourceError}
+          single={scope === "media"}
+          disabled={submitting}
+          onRetry={() => void loadSources()}
+          onChange={setSelected}
+        />
+
         <Text style={styles.sectionLabel}>
           {t("artifacts.customize.section.prompt")}
         </Text>
@@ -364,6 +433,67 @@ function CustomizeForm({
           accessibilityHint={t(format.promptHintKey)}
           testID="artifact-customize-prompt"
         />
+        <Text style={styles.sectionLabel}>
+          {t("artifacts.customize.language")}
+        </Text>
+        <Pressable
+          style={styles.choice}
+          onPress={() => setLanguageOpen((open) => !open)}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel={t("artifacts.customize.language")}
+          accessibilityState={{ expanded: languageOpen, disabled: submitting }}
+        >
+          <Ionicons name="language-outline" size={20} color={Colors.textMain} />
+          <Text style={styles.choiceText}>
+            {language && language in LOCALE_ENDONYMS
+              ? language === readingLanguage
+                ? t("artifacts.customize.defaultOption", {
+                    label:
+                      LOCALE_ENDONYMS[language as keyof typeof LOCALE_ENDONYMS],
+                  })
+                : LOCALE_ENDONYMS[language as keyof typeof LOCALE_ENDONYMS]
+              : t("artifacts.customize.defaultOption", {
+                  label: t("artifacts.customize.language"),
+                })}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={Colors.textMain} />
+        </Pressable>
+        {languageOpen
+          ? SUPPORTED_LOCALES.map((code) => (
+              <Pressable
+                key={code}
+                style={[
+                  styles.choice,
+                  language === code && styles.choiceSelected,
+                ]}
+                disabled={submitting}
+                accessibilityRole="button"
+                accessibilityLabel={LOCALE_ENDONYMS[code]}
+                accessibilityState={{
+                  selected: language === code,
+                  disabled: submitting,
+                }}
+                onPress={() => {
+                  setLanguage(code);
+                  setLanguageOpen(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.choiceText,
+                    language === code && styles.choiceTextSelected,
+                  ]}
+                >
+                  {code === readingLanguage
+                    ? t("artifacts.customize.defaultOption", {
+                        label: LOCALE_ENDONYMS[code],
+                      })
+                    : LOCALE_ENDONYMS[code]}
+                </Text>
+              </Pressable>
+            ))
+          : null}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -388,12 +518,18 @@ function CustomizeForm({
             pressed && !submitting && styles.generateButtonPressed,
           ]}
           onPress={() => void handleGenerate()}
-          disabled={submitting}
+          disabled={
+            submitting || sourceLoading || sourceError || !selected.size
+          }
           accessibilityLabel={t("artifacts.a11yGenerate", {
             label: formatLabel,
           })}
           accessibilityRole="button"
-          accessibilityState={{ busy: submitting, disabled: submitting }}
+          accessibilityState={{
+            busy: submitting,
+            disabled:
+              submitting || sourceLoading || sourceError || !selected.size,
+          }}
           testID="artifact-customize-generate"
         >
           {submitting ? (
@@ -476,7 +612,10 @@ function ChoiceGroup<T extends string>({
                 />
               ) : null}
               <Text
-                style={[styles.choiceText, selected && styles.choiceTextSelected]}
+                style={[
+                  styles.choiceText,
+                  selected && styles.choiceTextSelected,
+                ]}
               >
                 {choiceLabel}
               </Text>

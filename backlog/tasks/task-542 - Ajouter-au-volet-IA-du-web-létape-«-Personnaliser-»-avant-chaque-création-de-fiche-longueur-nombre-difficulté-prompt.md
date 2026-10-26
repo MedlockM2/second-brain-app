@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-26 21:09'
+updated_date: '2026-10-26 23:06'
 labels:
   - web
   - artifacts
@@ -59,3 +60,9 @@ Note pour le propriétaire : contrôle visuel de l'étape pour chaque format, su
 - [ ] #5 La relance d'une fiche échouée envoie les request_parameters de l'entrée, sans passer par l'étape
 - [ ] #6 npm run typecheck et npm run lint passent dans web/
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Parité TASK-536 : porter également les sélecteurs Sources et Langue, en réutilisant artifacts/sources.ts et ses traductions. Les quatre formats et les deux scopes suivent les mêmes règles : toutes les sources par défaut, média non décochable, aucune sélection vide envoyée, source_ids seulement pour une sélection partielle de dossier, language seulement hors langue de lecture.
+<!-- SECTION:NOTES:END -->
