@@ -1,7 +1,6 @@
 import { SourceSupportRequestCard } from "./SourceSupportRequestCard";
 import { ResourceRefreshNotice } from "./ResourceRefreshNotice";
 import { useUserPreferences } from "../contexts/UserPreferencesContext";
-import type { ArtifactListResponse } from "@media-summarizer/core/types/artifacts";
 import { useResourceSnapshot } from "../contexts/ResourceCacheContext";
 import { resourceKeys } from "../services/resourceCache";
 import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
@@ -33,9 +32,8 @@ import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
  * The route keeps what belongs to a route: the fetch, and the loading,
  * processing, timeout and failure states of the item on its way here.
  *
- * `useRouter()` stays — the folder picker and an artifact are pushed the
- * same way from a route as from the carousel. What does not stay is any read of
- * the URL segment.
+ * Nothing here reads the URL segment. An artifact is still pushed the same way
+ * from a route as from the carousel, by `useScopeArtifacts`.
  */
 
 import { useRecoverableImage } from "../hooks/useRecoverableImage";
@@ -60,7 +58,7 @@ import {
   type ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { useFocusEffect, useIsFocused } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Linking from "expo-linking";
 import { useAuth } from "../contexts/AuthContext";
@@ -68,11 +66,9 @@ import {
   MediaService,
   type RawContentResponse,
 } from "../services/mediaService";
-import { ArtifactService } from "../services/artifactService";
-import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
 import { OrganizationService } from "../services/organizationService";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
-import type { ArtifactTileState } from "./ArtifactTile";
+import { useScopeArtifacts } from "../hooks/useScopeArtifacts";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ScreenTabs, type ScreenTab } from "./ScreenTabs";
 import { ChatDock } from "./chat/ChatDock";
@@ -108,11 +104,9 @@ import { isSupportedLocale } from "@media-summarizer/core/i18n/locales";
 import type {
   MediaStatusResponse,
   MediaItemContract,
-  ArtifactType,
 } from "@media-summarizer/core/types/media";
 import { getMediaTypeIcon, getMediaTypeLabel } from "../lib/mediaTypeDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
-import { describeArtifactRefusal } from "../lib/artifactRefusal";
 
 /**
  * The two intra-screen tabs of a media item: what it says, and what the models
@@ -125,23 +119,6 @@ const MEDIA_DETAIL_TABS: readonly ScreenTab<MediaDetailTabKey>[] = [
   { key: "reader", labelKey: "media.tab.reader", icon: "book-outline" },
   { key: "ai", labelKey: "media.tab.ai", icon: "sparkles-outline" },
 ];
-
-/**
- * Some legacy items still carry the unscoped "summary" type from before
- * `summary_short`. Surface them under the "Summary" tile instead of dropping
- * them on the floor.
- */
-function buildInitialArtifactStates(): Record<ArtifactType, ArtifactTileState> {
-  return {
-    summary: { status: "idle", generationAvailable: true },
-    summary_short: { status: "idle", generationAvailable: true },
-    notes: { status: "idle", generationAvailable: true },
-    flashcards: { status: "idle", generationAvailable: true },
-    quiz: { status: "idle", generationAvailable: true },
-  };
-}
-
-const ARTIFACT_POLL_INTERVAL_MS = 3000;
 
 /**
  * What a read of `/raw-content` says the Reader should show.
@@ -307,8 +284,6 @@ export interface CompletedDetailViewProps {
   translationBudgets?: TranslationBudgets;
 }
 
-const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
-
 export function CompletedDetailView({
   mediaData,
   onBack,
@@ -322,7 +297,6 @@ export function CompletedDetailView({
   const { mode, colors: Colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
-  const router = useRouter();
   const { media_item, processing_job } = mediaData;
 
   // --- Folder state ---
@@ -444,24 +418,12 @@ export function CompletedDetailView({
   const renderActionsPreview = useCallback(() => <MediaHeroMenuGlyph />, []);
 
   const [activeTab, setActiveTab] = useState<MediaDetailTabKey>("reader");
-  // Artifacts are a per-scope append-only history: the media detail response
-  // carries no artifact projection any more. This screen holds the history and
-  // derives its tiles from it — the newest entry per type — so there is one
-  // source of truth behind both the tiles and the list under them.
+  // The AI tab's data, shared with the folder screen. Held here rather than
+  // in the panel, so the history keeps polling while the Reader tab is shown.
+  const artifacts = useScopeArtifacts("media", media_item.media_item_id);
   const { readingLanguage } = useUserPreferences();
-  const [generationRefusal, setGenerationRefusal] = useState<string | null>(
-    null,
-  );
-  // The types whose POST is in flight. The history cannot know about them yet —
-  // the entry only exists once the request answers, and that request reads every
-  // source's transcript from S3 before it does. Without this, the tap stays
-  // visually unanswered for the whole round-trip and reads as ignored.
-  const [requestsInFlight, setRequestsInFlight] = useState<
-    readonly ArtifactType[]
-  >([]);
 
   const mountedRef = useRef(true);
-  const artifactPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cachedDetail = useResourceSnapshot<MediaStatusResponse>(
     resourceKeys.media(media_item.media_item_id),
   );
@@ -470,9 +432,6 @@ export function CompletedDetailView({
   );
   const cachedOriginal = useResourceSnapshot<RawContentResponse>(
     resourceKeys.text(media_item.media_item_id, "original"),
-  );
-  const cachedArtifacts = useResourceSnapshot<ArtifactListResponse>(
-    resourceKeys.artifacts("media", media_item.media_item_id),
   );
   const resolvedPreview = resolveSourcePreviewState(cachedDetail.data?.media_item ?? media_item);
   const preview: SourcePreviewState = resolvedPreview.status === "pending" && previewStalled
@@ -495,7 +454,6 @@ export function CompletedDetailView({
             : { status: "loading" },
     [cachedText.data, cachedText.error, media_item.transcript?.status],
   );
-  const artifactHistory = cachedArtifacts.data?.artifacts ?? EMPTY_ARTIFACTS;
   // What the last read of `/raw-content` said about translation. Kept beside the
   // text rather than folded into it: it answers two questions the text does not
   // — whether the body on screen is a translation (so whether the switch exists
@@ -520,135 +478,8 @@ export function CompletedDetailView({
   useEffect(() => {
     return () => {
       mountedRef.current = false;
-      if (artifactPollRef.current) {
-        clearInterval(artifactPollRef.current);
-      }
     };
   }, []);
-
-  // One request per scope serves both the history and the in-flight progress, so
-  // there is never a request per artifact type. A failure is surfaced rather
-  // than swallowed: the panel then offers a Retry instead of claiming the scope
-  // has nothing generated.
-  const refreshArtifacts = useCallback(async () => {
-    if (!isAuthenticated) return;
-    try {
-      await ArtifactService.listArtifacts(
-        "media",
-        media_item.media_item_id,
-        undefined,
-        readingLanguage,
-      );
-    } catch {
-      /* The resource snapshot retains readable data and exposes the failure. */
-    }
-  }, [isAuthenticated, media_item.media_item_id, readingLanguage]);
-  useFocusEffect(
-    useCallback(() => {
-      void refreshArtifacts();
-    }, [refreshArtifacts]),
-  );
-
-  // The list itself says whether anything is in flight, so the poll starts and
-  // stops from its own content rather than from a separate flag.
-  const hasArtifactInFlight = useMemo(
-    () =>
-      artifactHistory.some(
-        (artifact) =>
-          artifact.status === "queued" || artifact.status === "generating",
-      ),
-    [artifactHistory],
-  );
-
-  // The newest entry per type, for the tiles. The list comes back newest-first,
-  // so the first entry seen for a type wins.
-  const artifactStates = useMemo(() => {
-    const states = buildInitialArtifactStates();
-    const seen = new Set<ArtifactType>();
-    for (const artifact of artifactHistory) {
-      const type = artifact.artifact_type;
-      if (seen.has(type) || !(type in states)) continue;
-      seen.add(type);
-      states[type] = {
-        status: artifact.status,
-        error: artifact.error_code ?? undefined,
-        // A media item's sources never change, so one entry closes the type for
-        // good (task-322): asking again would answer this very artifact. Only a
-        // failure leaves the door open — it holds nothing to read, and the
-        // backend reruns it under the same id.
-        generationAvailable: artifact.status === "failed",
-      };
-    }
-    // A request still in flight wins over whatever the history says about that
-    // type — a previous `ready` or `failed` entry included, since the button
-    // that was just tapped belongs to the newest attempt. `queued` is the state
-    // the entry itself comes back with, so the tile shows the spinner from the
-    // tap frame and nothing changes visually when the POST answers. It also
-    // takes the button out of the tile, which is what stops a second tap from
-    // firing a second POST.
-    for (const type of requestsInFlight) {
-      states[type] = { status: "queued", generationAvailable: false };
-    }
-    return states;
-  }, [artifactHistory, requestsInFlight]);
-
-  const startArtifactPolling = useCallback(() => {
-    if (artifactPollRef.current) return;
-
-    artifactPollRef.current = setInterval(() => {
-      void refreshArtifacts();
-    }, ARTIFACT_POLL_INTERVAL_MS);
-  }, [refreshArtifacts]);
-
-  useEffect(() => {
-    if (hasArtifactInFlight) {
-      startArtifactPolling();
-      return;
-    }
-    if (artifactPollRef.current) {
-      clearInterval(artifactPollRef.current);
-      artifactPollRef.current = null;
-    }
-  }, [hasArtifactInFlight, startArtifactPolling]);
-
-  const handleGenerate = useCallback(
-    async (artifactType: ArtifactType) => {
-      if (!isAuthenticated || !mountedRef.current) return;
-      setGenerationRefusal(null);
-      // Before the POST, with nothing awaited in between: this is the update
-      // that flips the tile, and it must land on the frame the finger lifts.
-      setRequestsInFlight((current) =>
-        current.includes(artifactType) ? current : [...current, artifactType],
-      );
-
-      try {
-        await ArtifactService.generateArtifact(
-          "media",
-          media_item.media_item_id,
-          artifactType,
-        );
-        if (!mountedRef.current) return;
-      } catch (err) {
-        if (!mountedRef.current) return;
-        // A refusal is typed and carries its reason (a quota reached, a
-        // translation the provider refused for good). Showing it beats the
-        // silent retry loop that used to hide it behind a spinner. An unfinished
-        // preparation is not among them any more: the backend accepts the
-        // request and holds the entry until the text lands (task-360).
-        setGenerationRefusal(describeArtifactRefusal(err, { scope: "media" }));
-      } finally {
-        // Both paths: the merged entry carries a real status from here, and a
-        // refusal has to give the button back — keeping the type in the set
-        // would lock the tile on a spinner nothing will ever clear.
-        if (mountedRef.current) {
-          setRequestsInFlight((current) =>
-            current.filter((type) => type !== artifactType),
-          );
-        }
-      }
-    },
-    [isAuthenticated, media_item.media_item_id],
-  );
 
   // The way back to the thing itself. `null` for anything we cannot open, in
   // which case the title stays inert.
@@ -1210,27 +1041,7 @@ export function CompletedDetailView({
           </View>
         ) : (
           // No "N sources" line: a media item is a single source.
-          <ArtifactsPanel
-            tileStates={artifactStates}
-            onGenerate={(artifactType) => void handleGenerate(artifactType)}
-            refusal={generationRefusal}
-            refusalTestID="media-ai-refusal"
-            history={artifactHistory}
-            historyLoading={!cachedArtifacts.data && !cachedArtifacts.error}
-            historyError={
-              cachedArtifacts.error
-                ? getFriendlyErrorMessage(cachedArtifacts.error, {
-                    fallback: t("folder.artifactsLoadFailed"),
-                  })
-                : null
-            }
-            onRetryHistory={() => void refreshArtifacts()}
-            historyEmptyTestID="media-ai-history-empty"
-            onOpenArtifact={(artifact) =>
-              router.push(`/artifacts/${artifact.artifact_id}`)
-            }
-            showSourceCount={false}
-          />
+          <ArtifactsPanel scope="media" artifacts={artifacts} />
         )}
       </Animated.ScrollView>
 

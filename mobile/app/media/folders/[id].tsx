@@ -3,12 +3,11 @@ import {
   useResourceSnapshot,
   useResourceState,
   useFolderMediaState,
-  useResourceSnapshots,
 } from "../../../src/contexts/ResourceCacheContext";
 import { resourceKeys } from "../../../src/services/resourceCache";
 import type { ListMediaResponse } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -27,14 +26,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import { OrganizationService } from "../../../src/services/organizationService";
-import {
-  ArtifactService,
-  type ArtifactSummary,
-} from "../../../src/services/artifactService";
-import {
-  ARTIFACT_TILES,
-  type ArtifactTileState,
-} from "../../../src/components/ArtifactTile";
+import { useScopeArtifacts } from "../../../src/hooks/useScopeArtifacts";
 import { ArtifactsPanel } from "../../../src/components/ArtifactsPanel";
 import { ChatDock } from "../../../src/components/chat/ChatDock";
 import { AnchoredContextMenu } from "../../../src/components/AnchoredContextMenu";
@@ -47,13 +39,6 @@ import { SubfolderCard } from "../../../src/components/SubfolderCard";
 import { useMediaActions } from "../../../src/hooks/useMediaActions";
 import { useFolderActions } from "../../../src/hooks/useFolderActions";
 import { useProcessingRefresh } from "../../../src/hooks/useProcessingRefresh";
-import { describeArtifactRefusal } from "../../../src/lib/artifactRefusal";
-import { useUserPreferences } from "../../../src/contexts/UserPreferencesContext";
-import type {
-  ArtifactListResponse,
-  ArtifactDetail,
-} from "@media-summarizer/core/types/artifacts";
-import { sameSourceSet } from "../../../src/lib/artifactSources";
 import { getFriendlyErrorMessage } from "../../../src/lib/getFriendlyErrorMessage";
 import {
   buildFolderTree,
@@ -80,10 +65,7 @@ import {
   HeaderMenuGlyph,
   SCREEN_HEADER_HEIGHT,
 } from "../../../src/components/ScreenHeader";
-import type {
-  ArtifactType,
-  MediaListItem,
-} from "@media-summarizer/core/types/media";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
 
 /**
  * Folders explorer — single folder view, split in two intra-screen tabs
@@ -103,7 +85,8 @@ import type {
  *
  * **AI** generates artifacts over the **whole folder** (subfolders
  * included, as the backend resolves the folder and all its descendants), then
- * lists what has already been produced. That list is an append-only history:
+ * lists what has already been produced, newest first, under the generations
+ * still running. That list is an append-only history:
  * several entries of the same type coexist, each keeping the sources it was
  * generated over even after the folder has changed. Nothing here expires,
  * and nothing is regenerated automatically.
@@ -115,13 +98,10 @@ import type {
  *
  * A new entry only exists when the sources differ (task-322): an artifact is
  * keyed on the set of sources behind it, so asking again over an unchanged
- * folder answers the entry already stored. That is why the tab compares the
- * folder's current sources with the snapshot of the last artifact of each
- * type and only then offers to generate — a button that could not produce
- * anything would promise what no request delivers.
+ * folder answers the entry already stored, which then opens. The grid is
+ * therefore always offered (task-534) — there is no comparison of the
+ * folder's sources with what its last artifacts read.
  */
-
-const ARTIFACT_POLL_INTERVAL_MS = 3000;
 
 /**
  * The lifted copy of a pressed card is inert — the context menu draws it with
@@ -169,16 +149,6 @@ function rowKey(row: Row): string {
     case "media":
       return `media:${row.media.media_item_id}`;
   }
-}
-
-function buildInitialArtifactStates(): Record<ArtifactType, ArtifactTileState> {
-  return ARTIFACT_TILES.reduce(
-    (acc, tile) => {
-      acc[tile.type] = { status: "idle", generationAvailable: true };
-      return acc;
-    },
-    {} as Record<ArtifactType, ArtifactTileState>,
-  );
 }
 
 export default function FolderDetailScreen() {
@@ -292,10 +262,6 @@ export default function FolderDetailScreen() {
   const media = useMemo(
     () => folderMedia.filter((item) => item.folder_id === folderId),
     [folderMedia, folderId],
-  );
-  const scopeMediaIds = useMemo(
-    () => folderMedia.map((item) => item.media_item_id),
-    [folderMedia],
   );
 
   // What each subfolder card draws its collage from, regrouped from the
@@ -583,7 +549,7 @@ export default function FolderDetailScreen() {
         {folderId ? <SourceActions folder={{ id: folderId, path: title }} bottomOffset={0} /> : null}
         </View>
       ) : (
-        <AiTab folderId={folderId} scopeMediaIds={scopeMediaIds} />
+        <AiTab folderId={folderId} />
       )}
 
       {/* The chat composer, on the Sources tab only (owner decision of
@@ -639,236 +605,23 @@ export default function FolderDetailScreen() {
 
 interface AiTabProps {
   folderId: string;
-  /** Every media the generation would read, descendants included. */
-  scopeMediaIds: readonly string[];
 }
 
 /**
- * The folder's half of the AI tab: the data only. Everything visible is
- * `ArtifactsPanel`, shared verbatim with the AI tab of a media item so the two
- * cannot drift apart again.
- *
- * One request per scope serves both the tiles and the history:
- * `GET /api/artifacts?scope=folder` returns the history *and* the entries still
- * queued or generating, so the poll is a single call whatever the number of
- * artifact types in flight.
- *
- * That listing carries no `sources`, though — the index it reads does not project
- * them — so the snapshot each tile is compared against is fetched once per entry
- * from the detail route and kept: an entry is immutable, so one read per artifact
- * is all this ever costs.
+ * The folder's half of the AI tab. Everything visible is `ArtifactsPanel` and
+ * everything it reads is `useScopeArtifacts`, both shared verbatim with the
+ * AI tab of a media item so the two cannot drift apart again. The scope is
+ * the folder and all its descendants, which the backend resolves.
  */
-const EMPTY_ARTIFACTS: ArtifactSummary[] = [];
-
-function AiTab({ folderId, scopeMediaIds }: AiTabProps) {
-  const router = useRouter();
-  const { isAuthenticated } = useAuth();
-
-  const { readingLanguage } = useUserPreferences();
-  const cachedHistory = useResourceSnapshot<ArtifactListResponse>(
-    resourceKeys.artifacts("folder", folderId),
-  );
-  const history = cachedHistory.data?.artifacts ?? EMPTY_ARTIFACTS;
-  const isLoading = !cachedHistory.data && !cachedHistory.error;
-  const listError = cachedHistory.error
-    ? getFriendlyErrorMessage(cachedHistory.error, {
-        fallback: t("folder.artifactsLoadFailed"),
-      })
-    : null;
-  const [refusal, setRefusal] = useState<string | null>(null);
-  // The types whose POST is in flight. The history cannot know about them yet —
-  // the entry only exists once the request answers, and over a folder that
-  // request reads every descendant source's transcript from S3 first. Without
-  // this, the tap stays visually unanswered for the whole round-trip.
-  const [requestsInFlight, setRequestsInFlight] = useState<
-    readonly ArtifactType[]
-  >([]);
-  const mountedRef = useRef(true);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
-
-  const refresh = useCallback(async () => {
-    if (!isAuthenticated) return;
-    try {
-      await ArtifactService.listArtifacts(
-        "folder",
-        folderId,
-        undefined,
-        readingLanguage,
-      );
-    } catch {
-      /* The shared snapshot keeps data and publishes the error. */
-    }
-  }, [isAuthenticated, folderId, readingLanguage]);
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh]),
-  );
-
-  // The list itself says whether anything is in flight, so the poll starts and
-  // stops from its own content instead of from a separate flag.
-  const hasInFlight = useMemo(
-    () =>
-      history.some(
-        (artifact) =>
-          artifact.status === "queued" || artifact.status === "generating",
-      ),
-    [history],
-  );
-
-  useEffect(() => {
-    if (!hasInFlight) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-    if (pollRef.current) return;
-    pollRef.current = setInterval(() => {
-      void refresh();
-    }, ARTIFACT_POLL_INTERVAL_MS);
-  }, [hasInFlight, refresh]);
-
-  // The newest entry per type. The list comes back newest-first, so the first
-  // entry seen for a type wins.
-  const newestByType = useMemo(() => {
-    const newest = new Map<ArtifactType, ArtifactSummary>();
-    for (const artifact of history) {
-      if (!newest.has(artifact.artifact_type)) {
-        newest.set(artifact.artifact_type, artifact);
-      }
-    }
-    return newest;
-  }, [history]);
-
-  const newestIds = useMemo(
-    () => [...newestByType.values()].map((artifact) => artifact.artifact_id),
-    [newestByType],
-  );
-  const details = useResourceSnapshots<ArtifactDetail>(
-    newestIds.map((id) => resourceKeys.artifact(id)),
-  );
-  const sourceSnapshots = useMemo(
-    () =>
-      Object.fromEntries(
-        newestIds.map((id, index) => [
-          id,
-          details[index]?.data?.sources.map((source) => source.media_item_id) ??
-            null,
-        ]),
-      ),
-    [newestIds, details],
-  );
-  useFocusEffect(
-    useCallback(() => {
-      if (isAuthenticated)
-        for (const id of newestIds)
-          void ArtifactService.getArtifact(id, readingLanguage).catch(() => {});
-    }, [isAuthenticated, newestIds, readingLanguage]),
-  );
-
-  // The tiles show the newest entry per type, and whether generating that type
-  // again would produce anything.
-  const tileStates = useMemo(() => {
-    const states = buildInitialArtifactStates();
-    for (const [type, artifact] of newestByType) {
-      if (!(type in states)) continue;
-      const snapshot = sourceSnapshots[artifact.artifact_id];
-      states[type] = {
-        status: artifact.status,
-        error: artifact.error_code ?? undefined,
-        // The folder can legitimately be generated again, but only over a
-        // different set of sources (task-322): the same set answers this very
-        // entry. A failed entry is generated again as-is, and a snapshot not
-        // read yet counts as different — the button then does no harm, whereas
-        // hiding it on a failed read would lock a real regeneration out.
-        generationAvailable:
-          artifact.status === "failed" ||
-          snapshot === undefined ||
-          snapshot === null ||
-          !sameSourceSet(snapshot, scopeMediaIds),
-      };
-    }
-    // A request still in flight wins over whatever the history says about that
-    // type — a previous `ready` or `failed` entry included, since the button
-    // that was just tapped belongs to the newest attempt. `queued` is the state
-    // the entry itself comes back with, so the tile shows the spinner from the
-    // tap frame and nothing changes visually when the POST answers. It also
-    // takes the button out of the tile, which is what stops a second tap from
-    // firing a second POST.
-    for (const type of requestsInFlight) {
-      states[type] = { status: "queued", generationAvailable: false };
-    }
-    return states;
-  }, [newestByType, sourceSnapshots, scopeMediaIds, requestsInFlight]);
-
-  const handleGenerate = useCallback(
-    async (artifactType: ArtifactType) => {
-      if (!isAuthenticated) return;
-      setRefusal(null);
-      // Before the POST, with nothing awaited in between: this is the update
-      // that flips the tile, and it must land on the frame the finger lifts.
-      setRequestsInFlight((current) =>
-        current.includes(artifactType) ? current : [...current, artifactType],
-      );
-
-      try {
-        await ArtifactService.generateArtifact(
-          "folder",
-          folderId,
-          artifactType,
-        );
-        if (!mountedRef.current) return;
-      } catch (err) {
-        if (!mountedRef.current) return;
-        setRefusal(describeArtifactRefusal(err, { scope: "folder" }));
-      } finally {
-        // Both paths: the merged entry carries a real status from here, and a
-        // refusal has to give the button back — keeping the type in the set
-        // would lock the tile on a spinner nothing will ever clear.
-        if (mountedRef.current) {
-          setRequestsInFlight((current) =>
-            current.filter((type) => type !== artifactType),
-          );
-        }
-      }
-    },
-    [isAuthenticated, folderId],
-  );
-
-  const handleOpenArtifact = useCallback(
-    (artifact: ArtifactSummary) => {
-      router.push(`/artifacts/${artifact.artifact_id}`);
-    },
-    [router],
-  );
+function AiTab({ folderId }: AiTabProps) {
+  const artifacts = useScopeArtifacts("folder", folderId);
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} testID="folder-ai-tab">
       {/* Generation is always offered, whatever state the sources are in: one
           still being transcribed or translated no longer forbids the request —
           the entry is held and starts by itself when the text lands (task-360). */}
-      <ArtifactsPanel
-        tileStates={tileStates}
-        onGenerate={(artifactType) => void handleGenerate(artifactType)}
-        refusal={refusal}
-        refusalTestID="folder-ai-refusal"
-        history={history}
-        historyLoading={isLoading}
-        historyError={listError}
-        onRetryHistory={() => void refresh()}
-        historyEmptyTestID="folder-ai-history-empty"
-        onOpenArtifact={handleOpenArtifact}
-        showSourceCount
-      />
+      <ArtifactsPanel scope="folder" artifacts={artifacts} />
     </ScrollView>
   );
 }

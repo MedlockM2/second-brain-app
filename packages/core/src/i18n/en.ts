@@ -64,10 +64,17 @@ export const en = {
   "artifacts.status.queued": "Queued",
   "artifacts.status.generating": "Generating...",
   "artifacts.status.failed": "Failed",
-  // Shown where the "Generate" button was, once an artifact covers the current
-  // sources: there is nothing left to ask for on this type.
+  // Read by the web AI pane only, where a pill still says it once an artifact
+  // covers the current sources. The mobile app dropped that state (task-534);
+  // task-541 drops it on the web, and this key with it.
   "artifacts.status.generated": "Generated",
   "artifacts.history.a11yRow": "{type}: {title}",
+  // The AI tab's single list (task-534): the row of a generation in
+  // progress, under `artifacts.status.generating`, and the row of a failed
+  // one, which a tap relaunches.
+  "artifacts.row.generatingMeta": "{type} · A few seconds · you can leave this screen",
+  "artifacts.row.failed": "Generation failed · tap to retry",
+  "artifacts.row.a11yRetry": "{type}: retry generating",
   // --- Media type badges ---
   "mediaType.podcast": "PODCAST",
   "mediaType.article": "ARTICLE",
@@ -202,11 +209,9 @@ export const en = {
   "artifacts.type.notes": "Learning notes",
   "artifacts.type.flashcards": "Flashcards",
   "artifacts.type.quiz": "Quiz",
-  "artifacts.generate": "Generate",
   "artifacts.a11yGenerate": "Generate {label}",
   "artifacts.processing": "Processing...",
   "artifacts.panel.generateHeading": "Generate",
-  "artifacts.panel.generatedHeading": "Generated",
   "artifacts.panel.retryA11y": "Retry loading generated content",
   "artifacts.panel.empty":
     "Nothing generated yet. Pick a format above to create one.",
