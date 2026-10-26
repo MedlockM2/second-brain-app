@@ -34,7 +34,10 @@ def variant(source: str, background: str, scale: float) -> str:
 def render(svg: str, size: int, out: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         page = Path(tmp) / "logo.html"
-        page.write_text(f"<html><body style='margin:0;background:transparent'><div style='width:{size}px;height:{size}px'>{svg}</div></body></html>")
+        page.write_text(
+            "<html><body style='margin:0;background:transparent'>"
+            f"<div style='width:{size}px;height:{size}px'>{svg}</div></body></html>"
+        )
         subprocess.run(
             [CHROME, "--headless=new", "--disable-gpu", "--hide-scrollbars", f"--user-data-dir={tmp}/profile",
              "--default-background-color=00000000", f"--window-size={size},{size}", f"--screenshot={out}", page.as_uri()],
