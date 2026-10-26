@@ -154,6 +154,19 @@ export function ArtifactGeneratingRow({
     setWidth(event.nativeEvent.layout.width);
   };
 
+  // Kept across renders — the list re-renders on every poll — so the native
+  // driver keeps the node it is already animating.
+  const sheenTranslateX = useMemo(
+    () =>
+      // Each pass starts and ends entirely off the row, so the loop restarting
+      // at 0 is never visible as a jump back.
+      sweep.interpolate({
+        inputRange: [0, 1],
+        outputRange: SWEEPS_FROM_RIGHT ? [width, -width] : [-width, width],
+      }),
+    [sweep, width],
+  );
+
   // The mockup's twinkle: from dim, small and upright to bright, larger and
   // turned by 20°. The second sparkle runs the same curve backwards, which puts
   // it half a period behind the first: one brightens while the other dims.
@@ -201,21 +214,7 @@ export function ArtifactGeneratingRow({
           pointerEvents="none"
           style={[
             styles.sheen,
-            {
-              width,
-              transform: [
-                {
-                  // Each pass starts and ends entirely off the row, so the loop
-                  // restarting at 0 is never visible as a jump back.
-                  translateX: sweep.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: SWEEPS_FROM_RIGHT
-                      ? [width, -width]
-                      : [-width, width],
-                  }),
-                },
-              ],
-            },
+            { width, transform: [{ translateX: sheenTranslateX }] },
           ]}
         >
           <View style={styles.sheenBand}>
