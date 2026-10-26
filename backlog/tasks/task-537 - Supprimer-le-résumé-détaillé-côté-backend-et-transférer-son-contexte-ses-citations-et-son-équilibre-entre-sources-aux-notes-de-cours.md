@@ -3,9 +3,10 @@ id: TASK-537
 title: >-
   Supprimer le résumé détaillé côté backend et transférer son contexte, ses
   citations et son équilibre entre sources aux notes de cours
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 16:59'
+updated_date: '2026-10-26 17:15'
 labels:
   - backend
   - artifacts
@@ -84,7 +85,7 @@ Note pour le propriétaire : l'apply Terraform qui suit le push détruit le buck
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Le générateur notes produit context et notable_quotes (source_ref obligatoire et validée, citations facultatives) et applique source_balance_instruction à concepts et key_points
-- [ ] #2 summary_detailed n'existe plus dans le code backend : générateur, registre, enums, service, worker, variable SUMMARY_DETAILED_BUCKET ; une requête qui le nomme reçoit la 400 d'un type inconnu
+- [x] #2 summary_detailed n'existe plus dans le code backend : générateur, registre, enums, service, worker, variable SUMMARY_DETAILED_BUCKET ; une requête qui le nomme reçoit la 400 d'un type inconnu
 - [x] #3 Le bucket summary_detailed, ses droits IAM, sa sortie et sa variable d'environnement sont retirés de Terraform, et terraform validate passe
 - [x] #4 Les entrées summary_detailed de media_artifacts-dev sont supprimées, vérifié par un scan AWS CLI qui n'en renvoie aucune
 - [x] #5 slo-definitions.yaml, pipeline-alerts.md et le contrat d'API (markdown et OpenAPI) ne mentionnent plus summary_detailed et documentent les nouveaux champs des notes
