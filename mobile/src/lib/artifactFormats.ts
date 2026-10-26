@@ -1,10 +1,11 @@
 /**
  * The four artifact formats the AI tab offers, and how each one is drawn.
  *
- * One list for the two places a format appears (task-534): its tile in the
- * "Generate" grid, and the icon in front of each of its entries in the list
- * under it. Both read the same glyph and the same pair of colours, which is
- * what lets a scrolling list be read by colour before the words.
+ * One list for the places a format appears: its tile in the "Generate" grid,
+ * the icon in front of each of its entries in the list under it (task-534), and
+ * the head of its "Personnaliser" screen (task-535). All read the same glyph and
+ * the same pair of colours, which is what lets a scrolling list be read by
+ * colour before the words.
  *
  * The colours are named, not resolved: a format holds the *key* of its tint and
  * of its ink in the theme, and the caller reads them off `useThemeColors()`, so
@@ -27,6 +28,10 @@ export interface ArtifactFormat {
   tint: keyof ThemeColors;
   /** Colour of the format's icon, on its tint and alone on the page. */
   ink: keyof ThemeColors;
+  /** Title of the format's "Personnaliser" screen. */
+  customizeTitleKey: TranslationKey;
+  /** What the prompt field of that screen asks, before anything is typed. */
+  promptHintKey: TranslationKey;
 }
 
 /** Display order of the "Generate" grid, read row by row. */
@@ -37,6 +42,8 @@ export const ARTIFACT_FORMATS: readonly ArtifactFormat[] = [
     icon: "document-text-outline",
     tint: "artifactSummaryTint",
     ink: "artifactSummaryInk",
+    customizeTitleKey: "artifacts.customize.title.summaryShort",
+    promptHintKey: "artifacts.customize.promptHint.summaryShort",
   },
   {
     type: "notes",
@@ -44,6 +51,8 @@ export const ARTIFACT_FORMATS: readonly ArtifactFormat[] = [
     icon: "book-outline",
     tint: "artifactNotesTint",
     ink: "artifactNotesInk",
+    customizeTitleKey: "artifacts.customize.title.notes",
+    promptHintKey: "artifacts.customize.promptHint.notes",
   },
   {
     type: "flashcards",
@@ -51,6 +60,8 @@ export const ARTIFACT_FORMATS: readonly ArtifactFormat[] = [
     icon: "card-outline",
     tint: "artifactFlashcardsTint",
     ink: "artifactFlashcardsInk",
+    customizeTitleKey: "artifacts.customize.title.flashcards",
+    promptHintKey: "artifacts.customize.promptHint.flashcards",
   },
   {
     type: "quiz",
@@ -58,6 +69,8 @@ export const ARTIFACT_FORMATS: readonly ArtifactFormat[] = [
     icon: "help-circle-outline",
     tint: "artifactQuizTint",
     ink: "artifactQuizInk",
+    customizeTitleKey: "artifacts.customize.title.quiz",
+    promptHintKey: "artifacts.customize.promptHint.quiz",
   },
 ];
 

@@ -24,7 +24,9 @@
  * There is a single list, with no heading: "Generate" names the grid, and the
  * entries under it need no second title. The tiles carry no state at all — a
  * generation in progress is a row of the list, so a format can be asked for
- * again whatever its last entry says.
+ * again whatever its last entry says. A tile does not generate by itself: it
+ * opens the format's "Personnaliser" screen (task-535), whose Generate button
+ * sends the request and closes onto the generating row.
  */
 
 import React from "react";
@@ -88,7 +90,8 @@ export function ArtifactsPanel({
     refreshHistory,
     pendingTypes,
     refusal,
-    generate,
+    customize,
+    retry,
     openArtifact,
   } = artifacts;
 
@@ -117,7 +120,7 @@ export function ArtifactsPanel({
               <FormatTile
                 key={format.type}
                 format={format}
-                onPress={() => generate(format.type)}
+                onPress={() => customize(format.type)}
               />
             ))}
           </View>
@@ -189,7 +192,7 @@ export function ArtifactsPanel({
               artifact={artifact}
               showSourceCount={scope === "folder"}
               onOpen={openArtifact}
-              onRetry={generate}
+              onRetry={retry}
             />
           ))}
         </View>
@@ -205,7 +208,8 @@ interface FormatTileProps {
 
 /**
  * One format of the grid: its tint, its icon in its ink, its name. No state
- * and no disabled look — a tile is always an invitation to generate.
+ * and no disabled look — a tile is always an invitation to generate, through
+ * the format's "Personnaliser" screen.
  */
 function FormatTile({ format, onPress }: FormatTileProps): React.JSX.Element {
   const Colors = useThemeColors();

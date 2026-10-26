@@ -9,12 +9,16 @@
  *   its own, so coming back to it is legitimate.
  * - `artifact_failed` — the entry is `failed`, which is **terminal**: no worker
  *   will pick it up again, so anything that keeps asking asks forever. The
- *   refusal carries the scope and type a new generation needs, which is what lets
- *   the failure state offer one without a second round-trip.
+ *   refusal carries the scope, the type and the parameters a new generation
+ *   needs, which is what lets the failure state offer one without a second
+ *   round-trip — one that reruns this very entry, options included (task-535).
  */
 
 import type { HttpError } from "@media-summarizer/core/api/httpError";
-import type { ArtifactScope } from "@media-summarizer/core/types/artifacts";
+import type {
+  ArtifactGenerationParameters,
+  ArtifactScope,
+} from "@media-summarizer/core/types/artifacts";
 import type { ArtifactType } from "@media-summarizer/core/types/media";
 
 /** What a regeneration has to name. Taken from the refusal, not guessed. */
@@ -22,6 +26,11 @@ export interface ArtifactRegenerationTarget {
   scope: ArtifactScope;
   scopeId: string;
   artifactType: ArtifactType;
+  /**
+   * What the failed entry was asked with (`request_parameters`). Sent again, so
+   * the rerun lands on that entry rather than on the one at the defaults.
+   */
+  parameters: ArtifactGenerationParameters;
 }
 
 export type ArtifactContentBlock =
@@ -57,10 +66,15 @@ function readRegenerationTarget(
   ) {
     return null;
   }
+  const parameters = details.request_parameters;
   return {
     scope,
     scopeId,
     artifactType: artifactType as ArtifactType,
+    parameters:
+      parameters && typeof parameters === "object" && !Array.isArray(parameters)
+        ? (parameters as ArtifactGenerationParameters)
+        : {},
   };
 }
 
