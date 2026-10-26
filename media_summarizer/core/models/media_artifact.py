@@ -212,6 +212,14 @@ class MediaArtifactRecord(BaseModel):
     title: Optional[str] = None
     source_count: int = 0
     sources: List[ArtifactSource] = Field(default_factory=list)
+    #: The library rows a folder request restricted itself to (``parameters.source_ids``,
+    #: task-532), sorted. ``None`` when the request covered the whole folder — which
+    #: includes a list naming every source of it — so such an entry is the very row a
+    #: request without the option writes. Never hashed: the selection enters the
+    #: ``artifact_id`` through the source ids it resolved to, like any source set.
+    #: It is stored for one reader, the resume of a waiting entry, which has to
+    #: re-resolve the sources the request was accepted over and not the whole folder.
+    selected_source_ids: Optional[List[str]] = None
     storage: Optional[ArtifactStorageRef] = None
     llm_usage: Optional[ArtifactLlmUsage] = None
     # Worker lease, so a generation abandoned mid-flight becomes recoverable
@@ -260,6 +268,8 @@ class MediaArtifactRecord(BaseModel):
         }
         if self.shared_artifact_id:
             item["shared_artifact_id"] = self.shared_artifact_id
+        if self.selected_source_ids is not None:
+            item["selected_source_ids"] = list(self.selected_source_ids)
         if self.title:
             item["title"] = self.title
         if self.storage is not None:

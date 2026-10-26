@@ -144,15 +144,32 @@ async def _resume_one(record: MediaArtifactRecord) -> bool:
     waiting on something else" and "an existing generation of this content already
     answers it", which are different facts but the same absence of a provider call.
     """
-    resolution = await artifact_service.resolve_scope_sources(
-        user_id=record.user_id,
-        scope=record.scope,
-        scope_id=record.scope_id,
-        # The language the *requester* was reading, read back off the entry. Using
-        # the profile's current language instead would resolve a different corpus
-        # than the one the id was computed over.
-        reading_language=_reading_language(record),
-    )
+    try:
+        resolution = await artifact_service.resolve_scope_sources(
+            user_id=record.user_id,
+            scope=record.scope,
+            scope_id=record.scope_id,
+            # The language the *requester* was reading, read back off the entry.
+            # Using the profile's current language instead would resolve a different
+            # corpus than the one the id was computed over.
+            reading_language=_reading_language(record),
+            # The part of the folder the request chose, for the same reason: the
+            # whole folder is another source set, hence another id (task-532).
+            source_ids=record.selected_source_ids,
+        )
+    except artifact_service.ArtifactParametersInvalidError as exc:
+        # A source the request chose has left the folder while it waited: the
+        # selection can no longer be resolved, which is the source set changing.
+        await _fail(
+            record,
+            error_code=artifact_service.ERROR_CODE_SOURCES_CHANGED,
+            error_message=(
+                "A source chosen for this generation left the folder while it was "
+                f"waiting for its sources to be prepared ({exc}). Ask again to "
+                "generate over the current ones."
+            ),
+        )
+        return False
 
     if resolution.is_awaiting:
         log_event(

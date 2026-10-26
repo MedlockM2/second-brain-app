@@ -201,15 +201,24 @@ _ENUMERATED_OPTIONS: Dict[str, Tuple[type[Enum], Enum]] = {
 
 # Keys of `parameters` the API knows but does not take from a client. `language` is
 # set by this service from the reading language (task-398), and a client value would
-# silently replace it; `source_ids` restricts a folder to some of its sources, which
-# resolution does not do yet. TASK-533 and TASK-532 lift these two, one each.
-_PARAMETERS_NOT_ACCEPTED = frozenset({"language", "source_ids"})
+# silently replace it. TASK-533 lifts it.
+_PARAMETERS_NOT_ACCEPTED = frozenset({"language"})
+
+#: The key of `parameters` that restricts a folder request to some of its sources
+#: (task-532). A scope option rather than a generation option: it is validated by
+#: :func:`resolve_source_selection` and applied by :func:`resolve_scope_sources`, and
+#: it never reaches the stored ``parameters`` — the sources it selects are hashed
+#: already, as the source ids of the entry.
+SOURCE_IDS_PARAMETER = "source_ids"
 
 #: ``reason`` of an ``invalid_artifact_parameters`` refusal.
 PARAMETER_REASON_UNKNOWN = "unknown_parameter"
 PARAMETER_REASON_NOT_ACCEPTED = "not_accepted"
 PARAMETER_REASON_NOT_APPLICABLE = "not_applicable"
 PARAMETER_REASON_INVALID_VALUE = "invalid_value"
+#: An id of ``source_ids`` that is not a media of the folder (or of a subfolder) in
+#: this account's library.
+PARAMETER_REASON_NOT_IN_SCOPE = "not_in_scope"
 
 
 # Why a source is in the snapshot without having been read. Recorded rather than
@@ -408,11 +417,17 @@ def resolve_request_options(
 
     An unknown type is the 400 of :class:`ArtifactTypeNotEnabledError`, raised here
     first so that a request naming no real type is not judged on its options.
+
+    ``source_ids`` is skipped, for every type alike: it is not a generation option
+    and is judged by :func:`resolve_source_selection`. Leaving it out of what comes
+    back is what keeps it out of the hash (task-532).
     """
     resolved_type = _artifact_type(artifact_type)
     accepted = OPTIONS_BY_ARTIFACT_TYPE.get(resolved_type, frozenset())
     options: Dict[str, str] = {}
     for key, value in (parameters or {}).items():
+        if key == SOURCE_IDS_PARAMETER:
+            continue
         if key in _PARAMETERS_NOT_ACCEPTED:
             raise ArtifactParametersInvalidError(
                 f"'{key}' cannot be set by the client.",
@@ -468,6 +483,59 @@ def _resolve_focus(value: Any) -> str:
             reason=PARAMETER_REASON_INVALID_VALUE,
         )
     return focus
+
+
+def resolve_source_selection(
+    *,
+    scope: Any,
+    parameters: Optional[Dict[str, Any]],
+) -> Optional[List[str]]:
+    """The ``source_ids`` a folder request restricts itself to, or ``None`` (task-532).
+
+    Only the shape is judged here, before anything is read: the option exists on a
+    folder only (on a media it is ``not_applicable`` — a media has one source, there
+    is nothing to choose), and it is a non-empty list of distinct, non-empty string
+    ids (``invalid_value`` otherwise). A JSON ``null`` reads as an absent key, as for
+    every option. Whether each id is a media of this folder is a question about the
+    library, answered by :func:`resolve_scope_sources` once it has listed the folder.
+
+    Valid for every requestable type alike: the selection decides what is read, not
+    what is written from it.
+    """
+    value = (parameters or {}).get(SOURCE_IDS_PARAMETER)
+    if value is None:
+        return None
+    if _artifact_scope(scope) != ArtifactScope.FOLDER:
+        raise ArtifactParametersInvalidError(
+            f"'{SOURCE_IDS_PARAMETER}' only applies to a folder.",
+            parameter=SOURCE_IDS_PARAMETER,
+            reason=PARAMETER_REASON_NOT_APPLICABLE,
+        )
+    if not isinstance(value, list) or not value:
+        raise ArtifactParametersInvalidError(
+            f"'{SOURCE_IDS_PARAMETER}' must be a non-empty list of media ids.",
+            parameter=SOURCE_IDS_PARAMETER,
+            reason=PARAMETER_REASON_INVALID_VALUE,
+        )
+    source_ids: List[str] = []
+    seen: set[str] = set()
+    for item in value:
+        source_id = item.strip() if isinstance(item, str) else ""
+        if not source_id:
+            raise ArtifactParametersInvalidError(
+                f"'{SOURCE_IDS_PARAMETER}' must only hold media ids.",
+                parameter=SOURCE_IDS_PARAMETER,
+                reason=PARAMETER_REASON_INVALID_VALUE,
+            )
+        if source_id in seen:
+            raise ArtifactParametersInvalidError(
+                f"'{SOURCE_IDS_PARAMETER}' names {source_id} twice.",
+                parameter=SOURCE_IDS_PARAMETER,
+                reason=PARAMETER_REASON_INVALID_VALUE,
+            )
+        seen.add(source_id)
+        source_ids.append(source_id)
+    return source_ids
 
 
 def _stable_json(value: Dict[str, Any]) -> str:
@@ -781,6 +849,7 @@ class ScopeResolution:
         excluded: List[ArtifactSource],
         pending: List[PendingSource],
         output_language: Optional[str],
+        selected_source_ids: Optional[List[str]] = None,
     ) -> None:
         self.sources = sources
         self.excluded = excluded
@@ -790,6 +859,11 @@ class ScopeResolution:
         #: ``parameters["language"]`` and ``corpus.language_instruction``; no
         #: source text is ever translated for it (task-398).
         self.output_language = output_language
+        #: The library rows a folder request was restricted to, sorted, when they
+        #: are a strict part of the folder (task-532). ``None`` for the whole scope,
+        #: a list covering it included. Copied onto the entry so that resuming a
+        #: waiting entry re-resolves this same part of the folder.
+        self.selected_source_ids = selected_source_ids
 
     @property
     def estimated_tokens(self) -> int:
@@ -952,13 +1026,20 @@ async def resolve_scope_sources(
     scope: ArtifactScope,
     scope_id: str,
     reading_language: Optional[str],
+    source_ids: Optional[List[str]] = None,
 ) -> ScopeResolution:
     """List a scope's sources and resolve each one's effective transcript.
 
     For a folder the scope covers the folder **and every descendant**, matching
     ``GET /api/media?folder_id=`` and therefore the Sources tab the user is
-    looking at: generating over a strict subset of what that tab shows would
-    produce a ``source_count`` that contradicts the screen.
+    looking at — unless the request ticked only some of them. ``source_ids``
+    (task-532, already shaped by :func:`resolve_source_selection`) then keeps those
+    rows and drops the others **before any transcript is read**, so everything
+    below — the three outcomes, the ceilings, the ids, the debit — applies to the
+    part of the folder the user chose. An id that is not one of the folder's rows
+    is refused (``not_in_scope``) at the same point, with nothing read or written.
+    A list naming every source of the folder is no selection at all: the folder is
+    resolved exactly as without it.
 
     Each source lands in exactly one of three places, and the three are never
     conflated (task-360):
@@ -986,9 +1067,13 @@ async def resolve_scope_sources(
         resolve_pipeline_job,
     )
 
-    records = await _list_scope_media_records(
+    rows = await _list_scope_media_records(
         user_id=user_id, scope=scope, scope_id=scope_id
     )
+    selected_source_ids: Optional[List[str]] = None
+    if source_ids is not None:
+        rows, selected_source_ids = _select_scope_rows(rows, source_ids)
+    records = _one_row_per_content(rows)
 
     resolved: List[ResolvedSource] = []
     excluded: List[ArtifactSource] = []
@@ -1063,6 +1148,7 @@ async def resolve_scope_sources(
         excluded=excluded,
         pending=pending,
         output_language=normalize_language_tag(reading_language),
+        selected_source_ids=selected_source_ids,
     )
 
 
@@ -1072,6 +1158,12 @@ async def _list_scope_media_records(
     scope: ArtifactScope,
     scope_id: str,
 ) -> List[Any]:
+    """Every live library row of the scope, in listing order, duplicates included.
+
+    Duplicates — several saves of one content — are kept here and collapsed by
+    :func:`_one_row_per_content`, because a selection names *rows*: the one a
+    client ticked may well be the second save of a content, and it must be found.
+    """
     from media_summarizer.core.services.folder_service import _get_descendant_ids
     from media_summarizer.utils import database_async
     from media_summarizer.utils import user_media as user_media_store
@@ -1083,16 +1175,55 @@ async def _list_scope_media_records(
     all_folders = await database_async.get_folders_by_user_id(user_id)
     folder_ids = [scope_id, *_get_descendant_ids(scope_id, all_folders)]
 
-    seen: Dict[str, Any] = {}
     pages = await asyncio.gather(
         *(user_media_store.list_for_folder(user_id, folder_id) for folder_id in folder_ids)
     )
-    for page in pages:
-        for record in page:
-            # Several saves may point at one content item. A folder reads
-            # that transcript once, regardless of how many rows reference it.
-            seen.setdefault(record.media_key, record)
+    return [record for page in pages for record in page]
+
+
+def _one_row_per_content(rows: List[Any]) -> List[Any]:
+    """The first row of each content: a scope reads one transcript once, whatever
+    the number of saves that point at it."""
+    seen: Dict[str, Any] = {}
+    for record in rows:
+        seen.setdefault(record.media_key, record)
     return list(seen.values())
+
+
+def _select_scope_rows(
+    rows: List[Any],
+    source_ids: List[str],
+) -> Tuple[List[Any], Optional[List[str]]]:
+    """Restrict a scope's rows to the ones a request chose (task-532).
+
+    Returns the rows to resolve and the selection to record on the entry. The rows
+    are the account's own rows of the folder and its subfolders, so an id naming
+    another account's media, a media of another folder, or nothing at all is the
+    same refusal, ``not_in_scope``, raised before a single transcript is read.
+
+    A selection covering every content of the folder is dropped: the folder's rows
+    come back untouched and the recorded selection is ``None``, so the request *is*
+    the request without the option — same resolution, same ``artifact_id``, same
+    row. Coverage is judged on contents, not on rows, because a content is what a
+    source is: leaving out the second save of a content selects nothing less.
+
+    The rows keep the folder's listing order, not the request's, so the corpus a
+    selection produces does not depend on the order the client ticked in.
+    """
+    wanted = set(source_ids)
+    known = {record.media_item_id for record in rows}
+    missing = [source_id for source_id in source_ids if source_id not in known]
+    if missing:
+        raise ArtifactParametersInvalidError(
+            f"'{SOURCE_IDS_PARAMETER}' names {len(missing)} id(s) that are not media "
+            "of this folder.",
+            parameter=SOURCE_IDS_PARAMETER,
+            reason=PARAMETER_REASON_NOT_IN_SCOPE,
+        )
+    selected = [record for record in rows if record.media_item_id in wanted]
+    if {record.media_key for record in selected} == {record.media_key for record in rows}:
+        return rows, None
+    return selected, sorted(wanted)
 
 
 # ---------------------------------------------------------------------------
@@ -1797,6 +1928,10 @@ async def plan_artifact_generation(
         generator_version=generator_version,
         source_count=len(source_ids),
         sources=resolution.snapshot(),
+        # Not hashed — the selected sources already are, as `source_ids` above — but
+        # kept, so a resumed wait re-resolves the part of the folder that was asked
+        # for (task-532).
+        selected_source_ids=resolution.selected_source_ids,
         # A reclaimed entry keeps its original position in the history: the GSI
         # sorts on `created_at`, and a retry is the same generation attempted
         # again, not a later one.

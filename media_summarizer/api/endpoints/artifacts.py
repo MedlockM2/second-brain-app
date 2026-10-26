@@ -37,6 +37,7 @@ from media_summarizer.core.services.artifact_service import (
     plan_artifact_generation,
     resolve_request_options,
     resolve_scope_sources,
+    resolve_source_selection,
 )
 from media_summarizer.utils import s3
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
@@ -57,8 +58,10 @@ CONTENT_FAILED_ERROR_CODE = "artifact_failed"
 
 #: A ``POST /artifacts`` whose ``parameters`` cannot be honoured (task-531). The
 #: refusal names the key in ``parameter`` and why in ``reason`` — an unknown key, a
-#: key the client may not set, an option the type does not take, a value outside
-#: its list — so a client tells its own bug apart from a contract it misread.
+#: key the client may not set, an option the type (or, for ``source_ids``, the
+#: scope) does not take, a value outside its list, a selected source that is not
+#: in the folder (task-532) — so a client tells its own bug apart from a contract
+#: it misread.
 INVALID_PARAMETERS_ERROR_CODE = "invalid_artifact_parameters"
 
 # One message per outcome: a log line that says "queued" for a reuse would hide
@@ -84,7 +87,9 @@ class ArtifactCreateRequest(BaseModel):
             "Generation options (task-531): 'length' (summary_short: short, medium, "
             "long), 'count' (quiz, flashcards: fewer, standard, more), 'difficulty' "
             "(quiz, flashcards: easy, medium, hard), 'focus' (every type: free text, "
-            "300 characters at most). Anything else is refused with a 422."
+            "300 characters at most), 'source_ids' (folder scope, every type: a "
+            "non-empty list of distinct media ids of the folder, task-532). Anything "
+            "else is refused with a 422."
         ),
     )
 
@@ -291,16 +296,22 @@ async def create_artifact(
         options = resolve_request_options(
             artifact_type=artifact_type, parameters=payload.parameters
         )
+        source_ids = resolve_source_selection(scope=scope, parameters=payload.parameters)
 
         content_scope_id = await _assert_scope_owned(
             scope=scope, scope_id=scope_id, user_id=current_user.id
         )
 
+        # A selection is checked against the folder here, once it is listed and
+        # before any transcript is read: an id that is not one of its media is the
+        # same typed 422 as a malformed option. Everything after — ceilings, ids,
+        # the minutes checked and debited — counts the chosen sources only.
         resolution = await resolve_scope_sources(
             user_id=current_user.id,
             scope=scope,
             scope_id=scope_id,
             reading_language=current_user.reading_language,
+            source_ids=source_ids,
         )
         enforce_scope_ceilings(resolution)
 
