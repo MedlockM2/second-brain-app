@@ -40,6 +40,17 @@ const lightColors = {
    * not in one screen's `StyleSheet`.
    */
   primaryTint: "rgba(255, 203, 5, 0.05)",
+  /**
+   * The amber of a small glyph that has to be *seen* on a light surface — the
+   * two sparkles of a generation in progress (task-534).
+   *
+   * The light `primary` measures 1.24:1 on `background`, so it is only ever safe
+   * as a fill; drawn as a 14px glyph it all but disappears. This is the same hue
+   * (83°) darkened until it clears the 3:1 WCAG 1.4.11 asks of a graphic: 3.15:1
+   * on `surface`. It is the `--primary-ink` of the task-534 mockup
+   * (`mobile-design-mockups/ai_tab_notebooklm/`).
+   */
+  primaryInk: "#b88a00",
 
   background: "#fcf9f6",
   surface: "#ffffff",
@@ -218,6 +229,32 @@ const lightColors = {
   imagePostContainer: "#f3dcf2",
   articleContainer: "#c1ebec",
 
+  /**
+   * The four artifact formats of the AI tab (task-534): a *tint* fills the
+   * format's tile in the "Generate" grid and the box of its icon while it is
+   * being generated, an *ink* draws the format's icon — on the tile, and alone
+   * in front of every entry of that format in the list.
+   *
+   * The values are the task-534 mockup's (`mobile-design-mockups/
+   * ai_tab_notebooklm/`), which the owner validated. Each format keeps a hue of
+   * its own — amber for the summary (97°/83°), green for the notes (147°), rose
+   * for the flashcards (19°), the ink family's blue-grey for the quiz (272°) —
+   * so a scrolling list tells the formats apart by colour before the words.
+   *
+   * Every pair is measured in `mobile/docs/DARK_THEME_CONTRAST.md`: `textMain`
+   * sits at 10.75:1 or more on each tint, and each ink clears the 3:1 WCAG
+   * 1.4.11 asks of a graphic on its own tint (3.84:1 at worst, the summary) and
+   * on `background` (4.08:1 at worst).
+   */
+  artifactSummaryTint: "#fff3c4",
+  artifactSummaryInk: "#9c7400",
+  artifactNotesTint: "#e3eee4",
+  artifactNotesInk: "#3f7048",
+  artifactFlashcardsTint: "#f5e1e1",
+  artifactFlashcardsInk: "#9b4a52",
+  artifactQuizTint: "#e2e8f4",
+  artifactQuizInk: "#46598a",
+
   error: "#ba1a1a",
   onError: "#ffffff",
   errorContainer: "#ffdad6",
@@ -307,6 +344,9 @@ const darkColors: ThemeColors = {
   // is the floor at which a tint exists at all on this ground, not a value
   // tuned upward.
   primaryTint: "rgba(240, 191, 42, 0.05)",
+  // The dark amber is legible as a glyph in its own right (9.64:1 on `surface`),
+  // so the sparkle ink is the primary itself here — no darker step is needed.
+  primaryInk: "#f0bf2a",
 
   background: "#171511",
   surface: "#211e19",
@@ -380,6 +420,25 @@ const darkColors: ThemeColors = {
   audioContainer: "#275029",
   imagePostContainer: "#603962",
   articleContainer: "#0b4f51",
+
+  // The format tints and inks, re-derived on the dark canvas rather than
+  // inverted: every tint at L* 22 — a fill lifted off `background` (L* 6.9) and
+  // `surface` (L* 11.4) the way the light tints sit just under white — and
+  // every ink at L* 76, each on its light hue. The chroma is held back (12 for
+  // the tints, 18 for the summary's) for rule 3 of this palette. One hue moves:
+  // the summary tint goes from 97° to its ink's 85°, because at L* 22 the light
+  // tint's hue reads as olive rather than as amber.
+  //
+  // `textMain` measures 10.35:1 or more on each tint, each ink 6.41:1 or more on
+  // its tint and 8.66:1 or more on `surface` — see DARK_THEME_CONTRAST.md.
+  artifactSummaryTint: "#3f331a",
+  artifactSummaryInk: "#e2b55a",
+  artifactNotesTint: "#28392b",
+  artifactNotesInk: "#93c89a",
+  artifactFlashcardsTint: "#472e2f",
+  artifactFlashcardsInk: "#faa4a9",
+  artifactQuizTint: "#2a3546",
+  artifactQuizInk: "#a9baf4",
 
   // `#ba1a1a` measures 1.8:1 on `background` — unreadable, not merely weak — so
   // the error family inverts wholesale: a light red carrying dark text (7.7:1),

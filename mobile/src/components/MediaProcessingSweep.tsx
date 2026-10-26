@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   I18nManager,
@@ -11,6 +10,7 @@ import {
 import { BlurView } from "expo-blur";
 import { type Theme } from "../constants/theme";
 import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
+import { useReduceMotion } from "../hooks/useReduceMotion";
 import { t } from "../i18n";
 
 /**
@@ -195,42 +195,6 @@ function SweepMaterial(): React.JSX.Element {
       <View style={[StyleSheet.absoluteFill, styles.veil]} />
     </>
   );
-}
-
-/**
- * Whether the user has asked the system for less motion.
- *
- * Same shape as `GlassSurface`'s reduce-transparency reader: queried once on
- * mount and then kept live, because it is a toggle the user can flip while the
- * app is on screen. Both calls are safe on Android — React Native resolves the
- * query to `false` and hands back an inert subscription — so this needs no
- * platform guard, and it starts at `false`, which is the only thing an
- * asynchronous query allows.
- */
-function useReduceMotion(): boolean {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    void AccessibilityInfo.isReduceMotionEnabled()
-      // Rejects where there is no native accessibility manager to ask — web, in
-      // practice. The default then stands.
-      .catch(() => false)
-      .then((enabled) => {
-        if (active) setReduceMotion(enabled);
-      });
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      setReduceMotion,
-    );
-
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
-
-  return reduceMotion;
 }
 
 /**
