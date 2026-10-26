@@ -1,25 +1,30 @@
 /**
- * The complete "AI" tab of a scope: the four generation tiles on top, the
- * append-only history underneath.
+ * The complete "AI" tab of a scope, on the model of NotebookLM's Studio
+ * (task-534, mockup `mobile-design-mockups/ai_tab_notebooklm/`):
  *
- * Rendered by both `app/media/[id].tsx` (a single media item) and
- * `app/media/folders/[id].tsx` (a whole folder). The tab used to be
- * declared twice, and the two copies drifted until the same headings rendered as
- * a large dark title on one screen and a small muted uppercase caption on the
- * other. So this component owns *all* of the layout and every presentational
- * state, and there is deliberately **no prop per visual difference** — a knob
- * would just let the two callers drift again inside here.
+ *     Generate
+ *     [Summary]   [Learning notes]      ← four tinted tiles, always active
+ *     [Flashcards] [Quiz]
+ *     ┌ Generating…  (animated) ┐       ← generations in progress first
+ *     Title · Type · date          >    ← then every entry, newest first
  *
- * The screens keep owning their data: fetching, polling, the tile states, the
- * generation handler and the refusal message are all passed in. Whether a *given
- * type* can still be generated lives in the tile state, because only the screens
- * know their scope's sources — a media item is generated once per type, a
- * folder only after its sources change. How far along a source is is not
- * passed in at all any more: a request made while a transcription is still
- * running is accepted and starts by itself (task-360).
+ * Rendered by both `CompletedDetailView` (a single media item) and
+ * `app/media/folders/[id].tsx` (a whole folder). The tab used to be declared
+ * twice, and the two copies drifted until the same headings rendered as a large
+ * dark title on one screen and a small muted uppercase caption on the other.
+ * So this component owns *all* of the layout and every presentational state,
+ * and there is deliberately **no prop per visual difference** — a knob would
+ * just let the two callers drift again inside here. The data comes from
+ * `useScopeArtifacts`, shared the same way; the screens only hold it, so its
+ * poll keeps running while another tab is shown.
  *
- * The single scope-dependent piece of rendering is `showSourceCount`: an
- * artifact generated over one media item has no source count worth saying.
+ * The one scope-dependent piece of rendering follows from `scope`: a folder's
+ * entries say how many sources they read, a media item's do not.
+ *
+ * There is a single list, with no heading: "Generate" names the grid, and the
+ * entries under it need no second title. The tiles carry no state at all — a
+ * generation in progress is a row of the list, so a format can be asked for
+ * again whatever its last entry says.
  */
 
 import React from "react";
@@ -39,80 +44,88 @@ import {
   type Theme,
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
-import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
-import type { ArtifactType } from "@media-summarizer/core/types/media";
-import {
-  ARTIFACT_TILES,
-  ArtifactTile,
-  type ArtifactTileState,
-} from "./ArtifactTile";
+import type {
+  ArtifactScope,
+  ArtifactSummary,
+} from "@media-summarizer/core/types/artifacts";
+import { ARTIFACT_FORMATS, type ArtifactFormat } from "../lib/artifactFormats";
+import type { ScopeArtifacts } from "../hooks/useScopeArtifacts";
+import { ArtifactGeneratingRow } from "./ArtifactGeneratingRow";
+import { ArtifactRow } from "./ArtifactRow";
 import { ResourceRefreshNotice } from "./ResourceRefreshNotice";
-import { ArtifactHistoryRow } from "./ArtifactHistoryRow";
 import { t } from "../i18n";
 
+/** The grid, two tiles to a row. */
+const FORMAT_ROWS: readonly (readonly ArtifactFormat[])[] = ARTIFACT_FORMATS.reduce<
+  ArtifactFormat[][]
+>((rows, format, index) => {
+  if (index % 2 === 0) rows.push([format]);
+  else rows[rows.length - 1].push(format);
+  return rows;
+}, []);
+
+const isInFlight = (artifact: ArtifactSummary): boolean =>
+  artifact.status === "queued" || artifact.status === "generating";
+
+const newestFirst = (a: ArtifactSummary, b: ArtifactSummary): number =>
+  b.created_at.localeCompare(a.created_at);
+
 export interface ArtifactsPanelProps {
-  /**
-   * The newest state per artifact type, driving the four tiles. A screen also
-   * reports its own in-flight generation requests through it, so a tap flips the
-   * tile without waiting for the POST to answer.
-   */
-  tileStates: Record<ArtifactType, ArtifactTileState>;
-  onGenerate: (artifactType: ArtifactType) => void;
-  /** Why the last generation attempt was refused, or `null`. */
-  refusal: string | null;
-  /** `testID` of the refusal banner — scope-specific, the Maestro flows use it. */
-  refusalTestID: string;
-  /** The scope's artifacts, newest first. */
-  history: ArtifactSummary[];
-  /** True while the first fetch of this scope's history is in flight. */
-  historyLoading: boolean;
-  /** Why the history could not be loaded, or `null`. */
-  historyError: string | null;
-  onRetryHistory: () => void;
-  /** `testID` of the empty history — scope-specific, the Maestro flows use it. */
-  historyEmptyTestID: string;
-  onOpenArtifact: (artifact: ArtifactSummary) => void;
-  /**
-   * Whether a history line names the number of sources it was generated over:
-   * `true` for a folder, `false` for a single media item.
-   */
-  showSourceCount: boolean;
+  scope: ArtifactScope;
+  artifacts: ScopeArtifacts;
 }
 
 export function ArtifactsPanel({
-  tileStates,
-  onGenerate,
-  refusal,
-  refusalTestID,
-  history,
-  historyLoading,
-  historyError,
-  onRetryHistory,
-  historyEmptyTestID,
-  onOpenArtifact,
-  showSourceCount,
+  scope,
+  artifacts,
 }: ArtifactsPanelProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const {
+    history,
+    historyLoading,
+    historyError,
+    refreshHistory,
+    pendingTypes,
+    refusal,
+    generate,
+    openArtifact,
+  } = artifacts;
+
+  // Sorted here rather than trusted: a generation folded in by the POST, or a
+  // failed entry rerun under its own id, keeps the place it had in the list.
+  const inFlight = history.filter(isInFlight).sort(newestFirst);
+  const settled = history
+    .filter((artifact) => !isInFlight(artifact))
+    .sort(newestFirst);
+  // A request whose entry is already in flight needs no row of its own: it
+  // will answer that very entry (`collapsed`). This is also what keeps a row
+  // from showing twice in the frame between the POST answering and the
+  // request leaving `pendingTypes`.
+  const pending = pendingTypes.filter(
+    (type) => !inFlight.some((artifact) => artifact.artifact_type === type),
+  );
+  const hasGenerating = pending.length > 0 || inFlight.length > 0;
 
   return (
     <View style={styles.panel}>
       <Text style={styles.heading}>{t("artifacts.panel.generateHeading")}</Text>
-      <View style={styles.tileStack}>
-        {ARTIFACT_TILES.map((tile) => (
-          <ArtifactTile
-            key={tile.type}
-            type={tile.type}
-            label={t(tile.labelKey)}
-            icon={tile.icon}
-            state={tileStates[tile.type]}
-            onGenerate={() => onGenerate(tile.type)}
-          />
+      <View style={styles.grid}>
+        {FORMAT_ROWS.map((row) => (
+          <View key={row[0].type} style={styles.gridRow}>
+            {row.map((format) => (
+              <FormatTile
+                key={format.type}
+                format={format}
+                onPress={() => generate(format.type)}
+              />
+            ))}
+          </View>
         ))}
       </View>
 
       {refusal ? (
-        <View style={styles.refusalBanner} testID={refusalTestID}>
+        <View style={styles.refusalBanner} testID={`${scope}-ai-refusal`}>
           <Ionicons
             name="information-circle-outline"
             size={18}
@@ -122,19 +135,29 @@ export function ArtifactsPanel({
         </View>
       ) : null}
 
-      {/* The history is append-only and permanent: an entry is never replaced
-          and never expires. Several entries of the same type coexist only where
-          the sources differ between them — a folder that changed — so on a
-          media item this list holds at most one line per type. */}
-      <Text style={[styles.heading, styles.historyHeading]}>
-        {t("artifacts.panel.generatedHeading")}
-      </Text>
       {history.length > 0 && historyError ? (
-        <ResourceRefreshNotice
-          message={historyError}
-          onRetry={onRetryHistory}
-        />
+        <ResourceRefreshNotice message={historyError} onRetry={refreshHistory} />
       ) : null}
+
+      {hasGenerating ? (
+        <View style={styles.generatingList}>
+          {pending.map((type) => (
+            <ArtifactGeneratingRow
+              key={`pending-${type}`}
+              type={type}
+              testID={`artifact-generating-${type}`}
+            />
+          ))}
+          {inFlight.map((artifact) => (
+            <ArtifactGeneratingRow
+              key={artifact.artifact_id}
+              type={artifact.artifact_type}
+              testID={`artifact-history-row-${artifact.artifact_id}`}
+            />
+          ))}
+        </View>
+      ) : null}
+
       {historyLoading ? (
         <View style={styles.inlineState}>
           <ActivityIndicator size="small" color={Colors.primary} />
@@ -145,32 +168,67 @@ export function ArtifactsPanel({
           <Text style={styles.inlineStateText}>{historyError}</Text>
           <Pressable
             style={styles.retryButton}
-            onPress={onRetryHistory}
+            onPress={refreshHistory}
             accessibilityLabel={t("artifacts.panel.retryA11y")}
             accessibilityRole="button"
           >
             <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
           </Pressable>
         </View>
-      ) : history.length === 0 ? (
-        <View style={styles.inlineState} testID={historyEmptyTestID}>
+      ) : history.length === 0 && pending.length === 0 ? (
+        <View style={styles.inlineState} testID={`${scope}-ai-history-empty`}>
           <Text style={styles.inlineStateText}>
             {t("artifacts.panel.empty")}
           </Text>
         </View>
       ) : (
-        <View style={styles.historyList}>
-          {history.map((artifact) => (
-            <ArtifactHistoryRow
+        <View>
+          {settled.map((artifact) => (
+            <ArtifactRow
               key={artifact.artifact_id}
               artifact={artifact}
-              showSourceCount={showSourceCount}
-              onPress={onOpenArtifact}
+              showSourceCount={scope === "folder"}
+              onOpen={openArtifact}
+              onRetry={generate}
             />
           ))}
         </View>
       )}
     </View>
+  );
+}
+
+interface FormatTileProps {
+  format: ArtifactFormat;
+  onPress: () => void;
+}
+
+/**
+ * One format of the grid: its tint, its icon in its ink, its name. No state
+ * and no disabled look — a tile is always an invitation to generate.
+ */
+function FormatTile({ format, onPress }: FormatTileProps): React.JSX.Element {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+  const label = t(format.labelKey);
+
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.tile,
+        { backgroundColor: Colors[format.tint] },
+        pressed && styles.tilePressed,
+      ]}
+      onPress={onPress}
+      testID={`artifact-tile-generate-${format.type}`}
+      accessibilityLabel={t("artifacts.a11yGenerate", { label })}
+      accessibilityRole="button"
+    >
+      <Ionicons name={format.icon} size={22} color={Colors[format.ink]} />
+      <Text style={styles.tileLabel} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -183,24 +241,47 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       paddingTop: Spacing.sm,
       paddingBottom: Spacing.xxl,
     },
+    // The mockup's small section label over the grid, not a page title: the
+    // tab bar right above already says where the user is.
     heading: {
-      fontSize: Typography.headline.fontSize,
-      fontWeight: Typography.headline.fontWeight,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
       color: Colors.textMain,
       marginBottom: Spacing.md,
     },
-    // Air above the second heading only: the first one opens the tab and needs
-    // none, hence a separate style rather than a change to the shared one.
-    historyHeading: {
-      marginTop: Spacing.lg,
+    grid: {
+      gap: Spacing.sm,
+      marginBottom: Spacing.lg,
     },
-    // Stacks of self-contained cards: the gap does the sectioning, so there is no
-    // rule and no container frame ("No-Line rule").
-    tileStack: {
+    gridRow: {
+      flexDirection: "row",
       gap: Spacing.sm,
     },
-    historyList: {
+    // Tinted fills side by side, told apart by colour and a gap — no outline.
+    tile: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
       gap: Spacing.sm,
+      minHeight: TouchTarget.comfortable,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.xl,
+    },
+    // The same press feedback every other button in the app gives.
+    tilePressed: {
+      transform: [{ scale: 0.98 }],
+      opacity: 0.9,
+    },
+    tileLabel: {
+      flexShrink: 1,
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    generatingList: {
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
     },
     inlineState: {
       alignItems: "center",
@@ -218,7 +299,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       alignItems: "center",
       backgroundColor: Colors.primary,
       paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.sm + 4,
+      paddingVertical: Spacing.sm,
       borderRadius: BorderRadius.lg,
       minHeight: TouchTarget.minimum,
     },
@@ -234,7 +315,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       backgroundColor: Colors.errorContainer,
       borderRadius: BorderRadius.lg,
       padding: Spacing.md,
-      marginTop: Spacing.md,
+      marginBottom: Spacing.md,
     },
     refusalText: {
       flex: 1,

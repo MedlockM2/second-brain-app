@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-26 16:47'
-updated_date: '2026-10-26 17:01'
+updated_date: '2026-10-26 19:52'
 labels:
   - mobile
   - artifacts
@@ -65,17 +65,33 @@ Note pour le propriétaire : contrôle visuel sur simulateur, en clair et en som
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 L'onglet IA du média et du dossier affiche la grille « Générer » de quatre tuiles teintées (Résumé, Notes de cours, Cartes mémo, Quiz), toujours actives, sans état « Généré »
-- [ ] #2 Une liste unique sans titre suit la grille : générations en cours d'abord, puis fiches par date décroissante, une ligne en échec relançant la génération d'un appui
-- [ ] #3 Une génération répondue reused ouvre la fiche existante
-- [ ] #4 La ligne en cours est animée (reflet et étincelles) avec Animated, sans nouvelle dépendance native, et reste statique quand Réduire les animations est activé
-- [ ] #5 Les teintes de format sont des tokens de theme.ts en clair et en sombre
-- [ ] #6 Les composants et clés i18n devenus inutiles (tuile « Généré », titre « Généré ») sont supprimés, et les nouveaux textes existent dans les onze langues
-- [ ] #7 npm run typecheck et npm run lint passent dans mobile/
+- [x] #1 L'onglet IA du média et du dossier affiche la grille « Générer » de quatre tuiles teintées (Résumé, Notes de cours, Cartes mémo, Quiz), toujours actives, sans état « Généré »
+- [x] #2 Une liste unique sans titre suit la grille : générations en cours d'abord, puis fiches par date décroissante, une ligne en échec relançant la génération d'un appui
+- [x] #3 Une génération répondue reused ouvre la fiche existante
+- [x] #4 La ligne en cours est animée (reflet et étincelles) avec Animated, sans nouvelle dépendance native, et reste statique quand Réduire les animations est activé
+- [x] #5 Les teintes de format sont des tokens de theme.ts en clair et en sombre
+- [x] #6 Les composants et clés i18n devenus inutiles (tuile « Généré », titre « Généré ») sont supprimés, et les nouveaux textes existent dans les onze langues
+- [x] #7 npm run typecheck et npm run lint passent dans mobile/
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Mise à jour 2026-10-26 : le résumé détaillé est supprimé (TASK-537, TASK-538). La grille compte **quatre** tuiles : Résumé, Notes de cours, Cartes mémo, Quiz, donc huit couleurs dans theme.ts au lieu de dix. Partout où la description dit « cinq », lire « quatre ». Cette tâche passe après TASK-538, qui retire déjà le type des tuiles.
+
+Implémentation 2026-10-26 (agent, branche worktree-agent-ada20b0f6cafcb51b).
+
+- Composants : ArtifactsPanel refait (grille de quatre tuiles teintées, toujours actives ; liste unique sans titre), ArtifactRow (fusion d'ArtifactTile et ArtifactHistoryRow : fiche prête et ligne en échec), ArtifactGeneratingRow (ligne animée). Supprimés : ArtifactTile.tsx, ArtifactHistoryRow.tsx, lib/artifactSources.ts (la comparaison des sources du dossier n'a plus d'usage), et la lecture du détail de chaque fiche par l'écran dossier.
+- Données : hook useScopeArtifacts, partagé par CompletedDetailView et l'écran dossier (lecture de l'historique, sondage toutes les 3 s tant qu'une génération tourne, requêtes en cours, refus). Une réponse generation_outcome reused ouvre /artifacts/<id>. Un second appui sur une tuile dont la requête n'a pas encore répondu est ignoré.
+- Animation : API Animated, pilote natif (transform et opacity seulement). Sans expo-linear-gradient, le reflet est une bande de 24 bandes verticales de primary dont l'opacité suit une cloche (pic 0,28, valeur de la maquette). useReduceMotion est extrait de MediaProcessingSweep vers src/hooks ; sous Réduire les animations, pas de reflet et des étincelles fixes.
+- Couleurs : huit tokens artifact*Tint / artifact*Ink dans theme.ts, plus primaryInk (couleur des étincelles, --primary-ink de la maquette : l'ambre clair mesure 1,24:1 et ne se lit pas en glyphe). Mesures en clair et en sombre dans mobile/docs/DARK_THEME_CONTRAST.md.
+- i18n : ajout de artifacts.row.generatingMeta, artifacts.row.failed, artifacts.row.a11yRetry dans les onze langues ; « Génération… » réutilise artifacts.status.generating. Supprimés : artifacts.panel.generatedHeading et artifacts.generate (plus aucun lecteur). artifacts.status.generated est conservée parce que le volet IA du web la lit encore ; TASK-541 la supprime.
+- Parité web : TASK-541 créée (même refonte côté web).
+
+Écarts avec la maquette, à signaler au propriétaire :
+- Sens du reflet : la tâche et le README disent « de droite à gauche », mais les trois vignettes figées de screen.png montrent le reflet à gauche à 0,9 s puis à droite à 1,8 s (pièges du background-position CSS). J'ai suivi le texte : droite → gauche (miroir en RTL).
+- Icône des cartes mémo : la maquette montre copy-outline ; le code garde card-outline, que TASK-539 remplace.
+- Tailles : pas de 15 ni de 17 px dans Typography ; titre « Générer » en body 16/600 et libellés des tuiles en label 14/600.
+
+Hors de portée de cet agent : le contrôle visuel sur simulateur (clair, sombre, génération en cours, échec, dossier) reste à faire par le propriétaire. Le flux Maestro 05_artifact_trigger_action.yaml était déjà périmé (il cherche « AI Artifacts », « Ready », « View ») et n'a pas été touché.
 <!-- SECTION:NOTES:END -->

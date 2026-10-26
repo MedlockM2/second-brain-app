@@ -167,6 +167,61 @@ each new fill:
 | `articleContainer` vs `surfaceContainerHigh` | 24.1 | 15.7 |
 | `articleContainer` vs `shortVideoContainer` (SHORT) | 29.9 | 16.1 |
 
+### The artifact formats: four tints, four inks (task-534)
+
+The AI tab's "Generate" grid gives each format a tile filled with its *tint*
+and an icon drawn in its *ink*; the list under it draws the same ink alone, on
+the page, in front of each entry; the row of a generation in progress puts the
+ink on the tint inside a box on `surface`. The light values are the task-534
+mockup's (`mobile-design-mockups/ai_tab_notebooklm/`). The dark ones are
+re-derived: every tint at `L*` 22, every ink at `L*` 76, on the light hues.
+
+| Token | Light | `L*` `C*` `h` | Dark | `L*` `C*` `h` |
+| --- | --- | --- | --- | --- |
+| `artifactSummaryTint` | `#fff3c4` | 95.7 24.4 97.5° | `#3f331a` | 21.9 17.8 85.1° |
+| `artifactSummaryInk` | `#9c7400` | 51.3 58.0 83.1° | `#e2b55a` | 76.0 52.0 83.2° |
+| `artifactNotesTint` | `#e3eee4` | 93.1 6.5 146.8° | `#28392b` | 22.1 12.3 147.9° |
+| `artifactNotesInk` | `#3f7048` | 42.9 31.2 146.5° | `#93c89a` | 76.0 31.7 146.4° |
+| `artifactFlashcardsTint` | `#f5e1e1` | 91.1 7.3 19.8° | `#472e2f` | 21.9 12.3 19.0° |
+| `artifactFlashcardsInk` | `#9b4a52` | 42.0 36.4 18.1° | `#faa4a9` | 75.9 34.1 18.1° |
+| `artifactQuizTint` | `#e2e8f4` | 91.9 6.5 272.1° | `#2a3546` | 21.9 12.0 272.0° |
+| `artifactQuizInk` | `#46598a` | 38.3 30.4 283.5° | `#a9baf4` | 76.1 31.5 283.3° |
+
+The one hue that moves is the dark summary tint, from 97.5° to its ink's 85°:
+at `L*` 22 the light tint's hue reads as olive rather than as amber.
+
+The pairs that are drawn, dark then light. The label of a tile is `textMain`
+on the tint (4.5:1); an ink is a graphic (3:1), measured on its tint, on
+`background` (a list row) and on `surface` (the row in progress):
+
+| Format | `textMain` on tint | ink on tint | ink on `background` | ink on `surface` |
+| --- | --- | --- | --- | --- |
+| Summary | 10.42 ✅ / 12.12 ✅ | 6.47 ✅ / 3.84 ✅ | 9.54 ✅ / 4.08 ✅ | 8.69 ✅ / 4.28 ✅ |
+| Notes | 10.35 ✅ / 11.32 ✅ | 6.41 ✅ / 4.86 ✅ | 9.52 ✅ / 5.53 ✅ | 8.68 ✅ / 5.80 ✅ |
+| Flashcards | 10.42 ✅ / 10.75 ✅ | 6.44 ✅ / 4.79 ✅ | 9.51 ✅ / 5.73 ✅ | 8.66 ✅ / 6.01 ✅ |
+| Quiz | 10.44 ✅ / 10.97 ✅ | 6.50 ✅ / 5.59 ✅ | 9.57 ✅ / 6.55 ✅ | 8.71 ✅ / 6.87 ✅ |
+
+The four tiles sit side by side, so they have to be told apart. The closest
+pairs as ΔE (CIE76), dark then light:
+
+| Pair | Dark ΔE | Light ΔE |
+| --- | --- | --- |
+| Flashcards vs quiz | 19.6 | 11.2 |
+| Notes vs quiz | 21.5 | 11.6 |
+| Notes vs flashcards | 22.2 | 12.5 |
+| Summary vs notes | 16.4 | 20.9 |
+
+`primaryInk` draws the two sparkles of the row in progress. In the light
+palette it is `#b88a00`, the amber darkened to 3.15:1 on `surface` (the light
+`primary` is 1.24:1, a fill only); in the dark one it is `primary` itself,
+9.64:1 on `surface`. The sparkles are decorative — the row's text says what is
+happening — so this is legibility, not a conformance requirement.
+
+The amber sheen that crosses that row is `primary` at 28 % at its peak. Text
+stays readable under it: over `surface`, the peak resolves to `#fff0b9` light
+(`textMain` 11.83, `textSubtle` 4.92) and `#5b4b1e` dark (`textMain` 7.17,
+`textSubtle` 5.32).
+
 ## Text over a photograph, through a veil
 
 `coverTitleVeil` is the contrast *floor* of the strips laid over a media's cover
@@ -232,7 +287,7 @@ deliberately does not) rather than with a literal.
 | --- | --- | --- | --- | --- |
 | `MediaListCard` media-type badge, podcast (amber fill) | `textMain` | 1.45 ❌ | `onPrimary` | 9.98 ✅ |
 | `app/media/[id].tsx` retry button label (amber fill) | `textMain` | 1.45 ❌ | `onPrimary` | 9.98 ✅ |
-| `ArtifactTile` generate button label (amber fill) | `textMain` | 1.45 ❌ | `onPrimary` | 9.98 ✅ |
+| `ArtifactTile` generate button label (amber fill; the button went with the tile in task-534) | `textMain` | 1.45 ❌ | `onPrimary` | 9.98 ✅ |
 | `artifacts/[artifactId]` correct quiz option, row text (amber fill) | `textMain` | 1.45 ❌ | `onPrimary` | 9.98 ✅ |
 | `artifacts/[artifactId]` correct quiz option, letter badge (`onPrimary` fill) | `surface` | 1.04 ❌ | `primary` | 9.98 ✅ |
 | `MediaDetailHero` status-bar scrim over a cover | `textMain` as a dark ink | brightened the cover | `coverScrimInk` (mode-invariant) | — |
