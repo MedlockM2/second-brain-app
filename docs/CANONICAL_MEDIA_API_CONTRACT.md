@@ -58,7 +58,7 @@ Operational behavior now implemented in runtime:
 - one set of routes under `/api/artifacts` serves a single media (`scope="media"`) and a folder (`scope="folder"`); the per-media routes are gone, with no alias
 - a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=`
 - every generation writes a **new immutable entry** carrying a snapshot of the sources it read; nothing is overwritten, nothing is invalidated, and adding or removing a media from a folder changes no existing entry
-- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters` — the reading language plus the generation options set away from their defaults (§3, task-531); a folder regenerates only when its contents changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
+- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters` — the output language (the reading language, or the one the request pinned, task-533) plus the generation options set away from their defaults (§3, task-531); a folder regenerates only when its contents changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
 - **a media-scoped generation is paid for once per content, not once per account** (task-394). Under each account's entry sits a *shared generation* keyed on the content alone — the same hash minus the user — so the second account to ask for the same type in the same language over the same content is served by the generation the first one paid for, with no provider call. It applies to every media-scope type, `review_blurb` included, and to folder scope not at all. Two things it deliberately does not change: **the listing** (an account still sees only the entries it asked for; a shared generation is indexed under a scope key no account can produce and is not addressable through the API), and **the quota** (an account is debited whether or not a generation ran, because it gains an artifact either way — the avoided provider call is the operator's saving). Artifacts over a **user-uploaded file** are excluded, since the content identity of an upload is itself account-scoped
 - ownership is checked by comparing the entry's `user_id`, not by resolving a media item — a folder artifact has none
 - a media-scoped request still accepts a user-owned `media_item_id`, but storage and
@@ -311,6 +311,7 @@ Request:
 | `count` | `fewer`, `standard`, `more` | `quiz`, `flashcards` | `standard` |
 | `difficulty` | `easy`, `medium`, `hard` | `quiz`, `flashcards` | `medium` |
 | `focus` | free text, at most 300 characters once trimmed and its whitespace runs (newlines included) collapsed to one space | `summary_short`, `notes`, `quiz`, `flashcards` | none |
+| `language` | a reading language: `fr`, `en`, `es`, `de`, `it`, `pt`, `nl`, `ja`, `zh`, `ar`, `hi`, or any tag that normalizes to one (`EN-US` is `en`) | `summary_short`, `notes`, `quiz`, `flashcards`, on a media as on a folder | the caller's reading language |
 
 - **Defaults are not stored.** An option at its default value, a `focus` that is
   empty once cleaned, and a JSON `null` are dropped before the `artifact_id` is
@@ -332,9 +333,30 @@ Request:
   quoted words, never as an instruction, and when the sources do not treat the
   topic the artifact says so instead of inventing (in the first key point of a
   summary, the `context` of notes, the `title` of a quiz or a deck).
-- **`language` is not a client option.** The service sets it from the reading
-  language (see below); sent by the client, it is refused (`not_accepted`) until
-  task-533. `source_ids` is refused the same way until task-532.
+- **`language` chooses the language the artifact is written in** (task-533), the
+  "Langue" option of the screen. Its default is the caller's reading language,
+  which the service sets when the request names none, so the rule above applies
+  with that default:
+  - **equal to the reading language**, it is the request without the option: same
+    `artifact_id`, same shared generation, and the same translation behaviour as
+    any entry in the reading language — it follows the reader into a new language
+    (§4);
+  - **another language** becomes the output language and is part of the
+    `artifact_id`, and the entry is marked as *pinned*: it is stored with
+    `"language_pinned": true` next to `"language"` in its `parameters`, which the
+    hash covers too. A pinned entry is **never translated** — not when the scope is
+    listed (§4), not when its content is read (§6) — and is read in its own
+    language whatever the reader's language becomes. The marker is set by the
+    service only: a client sending `language_pinned` gets `unknown_parameter`;
+  - across accounts (task-394), a pinned entry is served to another account
+    pinning the same language over the same content, and never to a request in
+    that language that pins nothing (a native or translated entry of a reader of
+    that language), since the marker is in the shared key.
+
+  A value that is not a string or does not normalize to a reading language is
+  `invalid_value`.
+- **`source_ids` is not a client option yet.** Sent by the client, it is refused
+  (`not_accepted`) until task-532.
 - Anything else — an unknown key, a value outside its list, an option on a type it
   does not apply to (`count` on `notes`, `length` on `quiz`) — is the typed `422`
   `invalid_artifact_parameters` below. It is checked before anything is read: no
@@ -378,11 +400,12 @@ readable ones, so the id does not move when they land.
 Transcription is the **only** preparation a generation ever waits on. A media in
 a language the user does not read is generated immediately: the corpus is each
 source's original transcript and the output language travels in the prompt, via
-`parameters["language"]` (the requester's reading language, part of the
-`artifact_id` hash). Nothing on this endpoint translates a transcript, so a
-foreign media asked for the second it lands starts straight away (task-398). The
-reader's full-text translation (`GET /api/media/{id}/raw-content`) is a separate,
-non-blocking path and is unaffected.
+`parameters["language"]` (the requester's reading language, or the language the
+request pinned, part of the `artifact_id` hash). Nothing on this endpoint
+translates a transcript, so a foreign media asked for the second it lands starts
+straight away (task-398). The reader's full-text translation
+(`GET /api/media/{id}/raw-content`) is a separate, non-blocking path and is
+unaffected.
 
 A wait is bounded. `awaiting_expires_at` is stamped on the entry
 (`ARTIFACT_AWAITING_TIMEOUT_SECONDS`, one hour by default) and an expired wait
@@ -421,9 +444,9 @@ Typed refusals:
 | `reason` | Meaning |
 |---|---|
 | `unknown_parameter` | The key is not a generation option |
-| `not_accepted` | A key the API knows but does not take from a client: `language` (until task-533), `source_ids` (until task-532) |
+| `not_accepted` | A key the API knows but does not take from a client: `source_ids` (until task-532) |
 | `not_applicable` | The option exists but not for this `artifact_type` |
-| `invalid_value` | A value outside the option's list, a `focus` that is not a string, or a `focus` longer than 300 characters once cleaned |
+| `invalid_value` | A value outside the option's list, a `focus` that is not a string, a `focus` longer than 300 characters once cleaned, or a `language` that is not a string or not a reading language |
 
 An unknown `artifact_type` keeps its `400`, whatever its `parameters`.
 
@@ -503,6 +526,11 @@ Three consequences the client can rely on:
   for that type in that language returns `200 reused`, never a second generation.
 - **reopening translates nothing again.** The translated entry carries exactly the id
   the reading language computes, so its presence in the page is the whole check.
+- **an entry whose language was pinned is never translated** (task-533). It was asked
+  for in that language, so it stays in it: it is neither translated nor used as the
+  original of a translation, and the reader's default entry of the same type, if any,
+  is the one translated. Telling a pinned entry apart costs a read of the entry,
+  because this listing carries no `parameters`.
 
 `review_blurb` is included, which is what makes the library preview follow the
 reading language too: the translated card is copied onto the library rows whose owner
@@ -545,9 +573,12 @@ history rather than a defect.
 
 ### 6) GET /api/artifacts/{artifact_id}/content
 
-The stored JSON payload, inlined. `409` while the entry is not `ready`, as a typed
-refusal whose `error_code` — never the message text — says whether the entry is
-still coming (task-328):
+The stored JSON payload, inlined, in the language the entry was written in. This
+route never arms a translation, for a pinned entry (§3) or any other: translating
+on a reading-language change is the listing's job (§4).
+
+`409` while the entry is not `ready`, as a typed refusal whose `error_code` — never
+the message text — says whether the entry is still coming (task-328):
 
 ```json
 {
@@ -1187,7 +1218,7 @@ HTTP mapping rules:
 - `media_key` must be deterministic from canonical URL normalization.
 - Processing is idempotent for equivalent normalized URLs; saving is intentionally
   non-idempotent and creates a fresh library row on every successful request.
-- Artifact creation writes an entry **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet (`parameters` being the reading language plus the generation options away from their defaults, so a request spelling out every default is the request without options), or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
+- Artifact creation writes an entry **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet (`parameters` being the output language plus the generation options away from their defaults, so a request spelling out every default — the reading language included — is the request without options), or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
 - A **provider call** is made only when `(scope, media_key, artifact_type, parameters, sorted source ids)` — the same material without the user — has no live generation yet. So an account can gain an entry (and be debited for it) without any model being called, and one generation of one content is what every account's entry over that content reads. Artifacts over a user-uploaded file are outside this rule: their content identity is account-scoped, so they are never served to another account.
 - Timestamps use ISO-8601 UTC strings.
 - `request_id` must be returned in error payload and response header.

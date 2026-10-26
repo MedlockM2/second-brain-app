@@ -275,9 +275,13 @@ paths:
       tags: [artifacts]
       description: >
         Request a generation over a media or a folder. The per-media POST route is
-        gone (task-270). `parameters` carries the generation options (task-531);
-        an option at its default is dropped before the artifact id is computed, so
-        a request spelling out every default is the request without options.
+        gone (task-270). `parameters` carries the generation options (task-531)
+        and the output language (task-533); an option at its default is dropped
+        before the artifact id is computed, so a request spelling out every default
+        is the request without options. The language's default is the caller's
+        reading language: another language is pinned on the entry, which is then
+        never translated into the reading language, neither by the scope listing
+        nor by a content read.
       requestBody:
         required: true
         content:
@@ -632,9 +636,9 @@ components:
         (unknown_parameter) or a value outside its list (invalid_value). A null
         reads as an absent key. An option at its default, and a focus that is empty
         once cleaned, are dropped before the artifact id is computed, so a request
-        at the defaults is the request without options. `language` is set by the
-        service from the reading language and refused from a client (not_accepted)
-        until task-533; `source_ids` likewise until task-532.
+        at the defaults is the request without options. `language` (task-533)
+        defaults to the caller's reading language; `source_ids` is refused from a
+        client (not_accepted) until task-532.
       properties:
         length:
           type: [string, 'null']
@@ -668,6 +672,23 @@ components:
             space. Passed to the model as the reader's quoted words, never as an
             instruction; when the sources do not treat the topic, the artifact says
             so instead of inventing. No default: absent means no focus.
+        language:
+          type: [string, 'null']
+          examples: [fr, en]
+          description: >
+            Every type, on a media as on a folder (task-533). The language the
+            artifact is written in: one of the reading languages fr, en, es, de,
+            it, pt, nl, ja, zh, ar, hi, or any tag that normalizes to one of them
+            (EN-US is en); anything else is invalid_value. Defaults to
+            the caller's reading language, and naming that language is the request
+            without the option (same artifact id, same shared generation, same
+            translation behaviour). Another language becomes the output language
+            and is pinned: the entry is stored with language_pinned true in its
+            parameters, both are hashed, and a pinned entry is never translated
+            into the reading language, neither when the scope is listed nor when
+            its content is read. Across accounts (task-394) it only ever serves a
+            request pinning the same language. language_pinned is set by the
+            service, never by a client (unknown_parameter).
     ArtifactCreateResponse:
       type: object
       required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, generation_outcome]

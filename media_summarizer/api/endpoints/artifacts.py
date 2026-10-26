@@ -58,7 +58,8 @@ CONTENT_FAILED_ERROR_CODE = "artifact_failed"
 #: A ``POST /artifacts`` whose ``parameters`` cannot be honoured (task-531). The
 #: refusal names the key in ``parameter`` and why in ``reason`` — an unknown key, a
 #: key the client may not set, an option the type does not take, a value outside
-#: its list — so a client tells its own bug apart from a contract it misread.
+#: its list (a ``language`` that is not a reading language, task-533) — so a client
+#: tells its own bug apart from a contract it misread.
 INVALID_PARAMETERS_ERROR_CODE = "invalid_artifact_parameters"
 
 # One message per outcome: a log line that says "queued" for a reuse would hide
@@ -84,7 +85,9 @@ class ArtifactCreateRequest(BaseModel):
             "Generation options (task-531): 'length' (summary_short: short, medium, "
             "long), 'count' (quiz, flashcards: fewer, standard, more), 'difficulty' "
             "(quiz, flashcards: easy, medium, hard), 'focus' (every type: free text, "
-            "300 characters at most). Anything else is refused with a 422."
+            "300 characters at most), 'language' (every type, task-533: one of the "
+            "reading languages; defaults to the reader's, and another one is kept "
+            "as is and never translated). Anything else is refused with a 422."
         ),
     )
 
