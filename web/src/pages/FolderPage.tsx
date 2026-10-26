@@ -3,7 +3,7 @@ import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { apiRequest } from "../api";
 import { AddSourceDialog } from "../components/AddSourceDialog";
@@ -65,8 +65,7 @@ function FolderView({ folderId }: { folderId: string }) {
     loadSources,
   );
 
-  const scopeMediaIds = useMemo(() => (sources ?? []).map((item) => item.media_item_id), [sources]);
-  const ai = useAiPane({ scope: "folder", scopeId: folderId, showSourceCount: true, scopeMediaIds });
+  const ai = useAiPane({ scope: "folder", scopeId: folderId, showSourceCount: true });
 
   const found = folders.folders?.find((candidate) => candidate.id === folderId) ?? null;
   const folder = renamed ?? found;
