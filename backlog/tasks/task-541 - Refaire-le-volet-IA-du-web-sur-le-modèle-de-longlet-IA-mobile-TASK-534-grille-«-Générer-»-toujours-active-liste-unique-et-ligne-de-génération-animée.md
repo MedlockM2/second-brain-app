@@ -3,9 +3,10 @@ id: TASK-541
 title: >-
   Refaire le volet IA du web sur le modèle de l'onglet IA mobile (TASK-534) :
   grille « Générer » toujours active, liste unique et ligne de génération animée
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 19:12'
+updated_date: '2026-10-26 20:09'
 labels:
   - web
   - artifacts
