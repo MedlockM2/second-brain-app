@@ -148,9 +148,11 @@ async def _resume_one(record: MediaArtifactRecord) -> bool:
         user_id=record.user_id,
         scope=record.scope,
         scope_id=record.scope_id,
-        # The language the *requester* was reading, read back off the entry. Using
-        # the profile's current language instead would resolve a different corpus
-        # than the one the id was computed over.
+        # The language the entry is written in, read back off it: the requester's
+        # reading language at the time, or the one its request pinned (task-533).
+        # Using the profile's current language instead would resolve a different
+        # corpus than the one the id was computed over. The id itself is recomputed
+        # below from the stored `parameters`, pin marker included.
         reading_language=_reading_language(record),
     )
 

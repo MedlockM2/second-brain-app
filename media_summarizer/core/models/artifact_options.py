@@ -1,11 +1,16 @@
 """The customisation options of a generation, as the generators read them (task-531).
 
-A request carries them in ``parameters``, next to the ``language`` the service sets
-from the reading language. They are part of what ``artifact_id`` hashes, so two
-different option sets over the same sources are two artifacts — and an option left
-at its default is **never** stored: ``artifact_service.resolve_request_options``
-drops it before the hash, which is what keeps a request at the defaults on the very
-id a request with no options computes.
+A request carries them in ``parameters``, next to the output ``language``. They are
+part of what ``artifact_id`` hashes, so two different option sets over the same
+sources are two artifacts — and an option left at its default is **never** stored:
+``artifact_service.resolve_request_options`` drops it before the hash, which is what
+keeps a request at the defaults on the very id a request with no options computes.
+
+The language follows the same rule with a default that depends on the reader
+(task-533): it is the reading language unless the request names another one. A
+language equal to the reading language is the default and changes nothing; another
+one is stored with :data:`LANGUAGE_PINNED`, which is what keeps the entry out of the
+translations a reading-language change arms (``artifact_translation_service``).
 
 This module holds the vocabulary and its defaults only. Which option a type
 accepts, and the refusal of everything else, is a request rule and lives with the
@@ -48,6 +53,24 @@ LENGTH = "length"
 COUNT = "count"
 DIFFICULTY = "difficulty"
 FOCUS = "focus"
+#: The language the artifact is written in. Always present on an entry generated
+#: for a reader who has a reading language; set by the request only when it pins
+#: another one (task-533).
+LANGUAGE = "language"
+
+#: ``True`` on an entry whose ``language`` was chosen by the request rather than
+#: taken from the reading language. Never sent by a client — the request names a
+#: language, the service decides whether that is a pin — and absent, never
+#: ``False``, on every other entry, so an entry in the reading language keeps the
+#: exact ``parameters`` it had before the option existed.
+#:
+#: It lives in ``parameters`` for two reasons. It is hashed, so a pinned entry and a
+#: translated or native entry in the same language are two ids — locally and for the
+#: shared generation of task-394, which is how a pinned entry only ever serves a
+#: request that pins the same language. And it is stored with the entry, so it reads
+#: back off DynamoDB through ``normalize_artifact_parameters`` like any other key:
+#: a boolean is neither a ``Decimal`` nor a container, so it comes back as it went in.
+LANGUAGE_PINNED = "language_pinned"
 
 #: The value each enumerated option takes when the request does not set it. Also
 #: the value that is dropped before the hash when the request does set it.
@@ -69,6 +92,15 @@ def clean_focus(value: str) -> str:
     only differ by their spacing the same artifact.
     """
     return " ".join(value.split())
+
+
+def is_language_pinned(parameters: Mapping[str, Any]) -> bool:
+    """Whether this entry's language was chosen by its request (task-533).
+
+    Such an entry is read in its own language: no reading-language change ever arms
+    a translation of it.
+    """
+    return parameters.get(LANGUAGE_PINNED) is True
 
 
 @dataclass(frozen=True)
