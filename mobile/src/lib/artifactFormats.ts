@@ -48,7 +48,7 @@ export const ARTIFACT_FORMATS: readonly ArtifactFormat[] = [
   {
     type: "flashcards",
     labelKey: "artifacts.type.flashcards",
-    icon: "card-outline",
+    icon: "copy-outline",
     tint: "artifactFlashcardsTint",
     ink: "artifactFlashcardsInk",
   },
