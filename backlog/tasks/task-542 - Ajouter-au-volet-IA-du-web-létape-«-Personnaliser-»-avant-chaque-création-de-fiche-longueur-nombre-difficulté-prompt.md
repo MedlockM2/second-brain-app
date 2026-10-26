@@ -3,10 +3,11 @@ id: TASK-542
 title: >-
   Ajouter au volet IA du web l'étape « Personnaliser » avant chaque création de
   fiche (longueur, nombre, difficulté, prompt)
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@codex'
 created_date: '2026-10-26 21:09'
-updated_date: '2026-10-26 23:06'
+updated_date: '2026-10-26 23:10'
 labels:
   - web
   - artifacts
@@ -53,16 +54,30 @@ Note pour le propriétaire : contrôle visuel de l'étape pour chaque format, su
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Un clic sur une tuile du volet IA ouvre l'étape Personnaliser du format, avec un seul bouton Générer
-- [ ] #2 Le résumé propose Longueur ; quiz et cartes mémo proposent nombre et difficulté ; les quatre formats proposent le prompt ; les valeurs par défaut sont sélectionnées et marquées (par défaut)
-- [ ] #3 La requête ne transmet dans parameters que les options qui ne sont pas à leur valeur par défaut, via packages/core/src/artifacts/options.ts
-- [ ] #4 Après Générer, l'étape se ferme sur la ligne de génération ; une réponse reused ouvre la fiche existante ; un refus typé s'affiche dans l'étape sans la fermer
-- [ ] #5 La relance d'une fiche échouée envoie les request_parameters de l'entrée, sans passer par l'étape
-- [ ] #6 npm run typecheck et npm run lint passent dans web/
+- [x] #1 Un clic sur une tuile du volet IA ouvre l'étape Personnaliser du format, avec un seul bouton Générer
+- [x] #2 Le résumé propose Longueur ; quiz et cartes mémo proposent nombre et difficulté ; les quatre formats proposent le prompt ; les valeurs par défaut sont sélectionnées et marquées (par défaut)
+- [x] #3 La requête ne transmet dans parameters que les options qui ne sont pas à leur valeur par défaut, via packages/core/src/artifacts/options.ts
+- [x] #4 Après Générer, l'étape se ferme sur la ligne de génération ; une réponse reused ouvre la fiche existante ; un refus typé s'affiche dans l'étape sans la fermer
+- [x] #5 La relance d'une fiche échouée envoie les request_parameters de l'entrée, sans passer par l'étape
+- [x] #6 npm run typecheck et npm run lint passent dans web/
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Ajouter le formulaire Personnaliser dans le volet IA avec les options partagées et la parité Sources/Langue de TASK-536. 2. Garder les refus dans le formulaire et ouvrir les entrées réutilisées. 3. Relancer les échecs avec leurs request_parameters, lus dans le détail ou le 409. 4. Vérifier typecheck/lint/build web, lint/typecheck core, committer puis terminer la tâche.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Parité TASK-536 : porter également les sélecteurs Sources et Langue, en réutilisant artifacts/sources.ts et ses traductions. Les quatre formats et les deux scopes suivent les mêmes règles : toutes les sources par défaut, média non décochable, aucune sélection vide envoyée, source_ids seulement pour une sélection partielle de dossier, language seulement hors langue de lecture.
+
+Personnaliser intégré au volet IA : options par format, prompt de 300 caractères, defaults retirés via withoutDefaults, sources et langue en parité TASK-536. Sources chargées par le helper core paginé, sélection temporaire et validation non vide ; langue en endonymes, valeurs par défaut omises. Refus typés conservés dans le formulaire, succès vers la liste et reused vers la fiche. Relance des échecs depuis la ligne ou la fiche avec request_parameters du détail/409 ; aucun fallback vers les defaults si le contrat manque. État 409 effacé uniquement après une relance acceptée. Validation : typecheck et lint web, build Vite de production et typecheck/lint core passent ; avertissement Vite de taille du bundle. Revue de câblage des six AC et des contrats, aucun test automatisé ajouté. Contrôle visuel appareil/navigateur restant au propriétaire comme prévu dans la description.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Étape Personnaliser ajoutée au web pour les quatre formats, avec parité Sources/Langue. Refus conservés et relances fidèles aux paramètres enregistrés. Typecheck, lint et build web validés ; contrôles core validés.
+<!-- SECTION:FINAL_SUMMARY:END -->

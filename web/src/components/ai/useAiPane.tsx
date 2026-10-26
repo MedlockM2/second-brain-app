@@ -1,8 +1,13 @@
+import type { HttpError } from "@media-summarizer/core/api/httpError";
+import { withoutDefaults } from "@media-summarizer/core/artifacts/options";
+import { CustomizeArtifact } from "./CustomizeArtifact";
 import { mergeArtifactIntoHistory } from "@media-summarizer/core/artifacts/history";
 import { describeArtifactRefusal } from "@media-summarizer/core/artifacts/refusal";
 import { formatDate, tCount } from "@media-summarizer/core/i18n/runtime";
 import type {
   ArtifactContentResponse,
+  ArtifactDetail,
+  ArtifactGenerationParameters,
   ArtifactCreateResult,
   ArtifactListResponse,
   ArtifactScope,
@@ -16,7 +21,11 @@ import { Icon } from "../Icon";
 import { PaneEmpty, type PaneSpec } from "../panes/Panes";
 import { ArtifactBody, artifactContentTitle } from "./ArtifactBody";
 import { ArtifactGeneratingRow, ArtifactRow } from "./ArtifactRows";
-import { ARTIFACT_FORMATS, artifactFormatOf } from "./artifactFormats";
+import {
+  ARTIFACT_FORMATS,
+  artifactFormatOf,
+  type ArtifactFormat,
+} from "./artifactFormats";
 
 /**
  * The AI pane of a scope, on the model of the mobile AI tab and of NotebookLM's
@@ -36,9 +45,8 @@ import { ARTIFACT_FORMATS, artifactFormatOf } from "./artifactFormats";
  * Same data rules as the mobile `useScopeArtifacts`:
  * - the history is re-read every 3 s while anything in it is queued or
  *   generating;
- * - a click on a tile draws a generating row at once, without waiting for the
- *   POST, and a second click on the same format while that POST is out is
- *   ignored: it would ask the very same thing again;
+ * - a tile opens the customization form; accepted requests return to the
+ *   generating row, while typed refusals keep the chosen options visible;
  * - a generation the scope already holds over the same sources comes back
  *   `reused` and queues nothing: that entry opens, the only useful thing the
  *   click can still do;
@@ -51,9 +59,11 @@ import { ARTIFACT_FORMATS, artifactFormatOf } from "./artifactFormats";
  */
 const POLL_MS = 3_000;
 
-const isInFlight = (artifact: ArtifactSummary) => artifact.status === "queued" || artifact.status === "generating";
+const isInFlight = (artifact: ArtifactSummary) =>
+  artifact.status === "queued" || artifact.status === "generating";
 
-const newestFirst = (a: ArtifactSummary, b: ArtifactSummary) => b.created_at.localeCompare(a.created_at);
+const newestFirst = (a: ArtifactSummary, b: ArtifactSummary) =>
+  b.created_at.localeCompare(a.created_at);
 
 export function useAiPane({
   scope,
@@ -76,6 +86,7 @@ export function useAiPane({
   // see a click that landed before the re-render.
   const requestsRef = useRef(new Set<ArtifactType>());
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [customizing, setCustomizing] = useState<ArtifactFormat | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
   const locked = Boolean(lockedMessage);
@@ -83,7 +94,9 @@ export function useAiPane({
   const loadHistory = useCallback(async () => {
     try {
       const params = new URLSearchParams({ scope, scope_id: scopeId });
-      const response = await apiRequest<ArtifactListResponse>(`/api/artifacts?${params.toString()}`);
+      const response = await apiRequest<ArtifactListResponse>(
+        `/api/artifacts?${params.toString()}`,
+      );
       setHistory(response.artifacts);
       setHistoryFailed(false);
     } catch {
@@ -110,7 +123,11 @@ export function useAiPane({
   }, [polling, loadHistory]);
 
   const generate = useCallback(
-    async (type: ArtifactType): Promise<ArtifactCreateResult | null> => {
+    async (
+      type: ArtifactType,
+      parameters: ArtifactGenerationParameters = {},
+      propagate = false,
+    ): Promise<ArtifactCreateResult | null> => {
       if (requestsRef.current.has(type)) return null;
       setRefusal(null);
       // Before the POST, with nothing awaited in between: this is the update
@@ -118,14 +135,26 @@ export function useAiPane({
       requestsRef.current.add(type);
       setRequests([...requestsRef.current]);
       try {
-        const created = await apiRequest<ArtifactCreateResult>("/api/artifacts", {
-          method: "POST",
-          body: { scope, scope_id: scopeId, artifact_type: type },
-        });
-        setHistory((current) => mergeArtifactIntoHistory(current ?? [], created));
-        if (created.generation_outcome === "reused") setOpenId(created.artifact_id);
+        const created = await apiRequest<ArtifactCreateResult>(
+          "/api/artifacts",
+          {
+            method: "POST",
+            body: {
+              scope,
+              scope_id: scopeId,
+              artifact_type: type,
+              parameters: withoutDefaults(parameters),
+            },
+          },
+        );
+        setHistory((current) =>
+          mergeArtifactIntoHistory(current ?? [], created),
+        );
+        if (created.generation_outcome === "reused")
+          setOpenId(created.artifact_id);
         return created;
       } catch (error) {
+        if (propagate) throw error;
         setRefusal(describeArtifactRefusal(error, { scope }));
         return null;
       } finally {
@@ -138,7 +167,35 @@ export function useAiPane({
     [scope, scopeId],
   );
 
-  const open = (history ?? []).find((artifact) => artifact.artifact_id === openId) ?? null;
+  const retry = async (
+    artifact: ArtifactSummary,
+    knownParameters?: ArtifactGenerationParameters,
+  ) => {
+    try {
+      const parameters =
+        knownParameters ??
+        (
+          await apiRequest<ArtifactDetail>(
+            `/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`,
+          )
+        ).request_parameters;
+      // A missing contract field is a load failure, never permission to ask for
+      // a different artifact at the defaults.
+      if (
+        !parameters ||
+        typeof parameters !== "object" ||
+        Array.isArray(parameters)
+      )
+        throw new Error("Missing artifact request parameters");
+      return await generate(artifact.artifact_type, parameters);
+    } catch (error) {
+      setRefusal(describeArtifactRefusal(error, { scope }));
+      return null;
+    }
+  };
+
+  const open =
+    (history ?? []).find((artifact) => artifact.artifact_id === openId) ?? null;
 
   if (locked) {
     return {
@@ -155,6 +212,35 @@ export function useAiPane({
     };
   }
 
+  if (customizing) {
+    return {
+      wide: false,
+      spec: {
+        title: t("media.tab.ai"),
+        icon: "sparkles-outline",
+        body: (
+          <CustomizeArtifact
+            key={`${scope}:${scopeId}:${customizing.type}`}
+            scope={scope}
+            scopeId={scopeId}
+            format={customizing}
+            onClose={() => setCustomizing(null)}
+            onGenerate={async (parameters) => {
+              const created = await generate(
+                customizing.type,
+                parameters,
+                true,
+              );
+              if (!created)
+                throw new Error("Generation already being submitted");
+              setCustomizing(null);
+            }}
+          />
+        ),
+      },
+    };
+  }
+
   if (open) {
     const format = artifactFormatOf(open.artifact_type);
     return {
@@ -164,13 +250,20 @@ export function useAiPane({
         icon: "sparkles-outline",
         head: (
           <span className="row" style={{ gap: 4 }}>
-            <button type="button" className="btn ghost" style={{ minHeight: 32, padding: "0 8px" }} onClick={() => setOpenId(null)}>
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ minHeight: 32, padding: "0 8px" }}
+              onClick={() => setOpenId(null)}
+            >
               <span className="flip-rtl">
                 <Icon name="chevron-back" size={18} />
               </span>
               {t("media.tab.ai")}
             </button>
-            <span className="small muted ell">/ {format ? t(format.labelKey) : open.artifact_type}</span>
+            <span className="small muted ell">
+              / {format ? t(format.labelKey) : open.artifact_type}
+            </span>
           </span>
         ),
         body: (
@@ -179,9 +272,11 @@ export function useAiPane({
             artifact={open}
             showSourceCount={showSourceCount}
             onClose={() => setOpenId(null)}
-            onRegenerate={async () => {
-              const created = await generate(open.artifact_type);
+            refusal={refusal}
+            onRegenerate={async (parameters) => {
+              const created = await retry(open, parameters);
               if (created) setOpenId(created.artifact_id);
+              return Boolean(created);
             }}
           />
         ),
@@ -193,11 +288,15 @@ export function useAiPane({
   // one rerun under its own id, keeps the place it had in the list.
   const entries = history ?? [];
   const inFlight = entries.filter(isInFlight).sort(newestFirst);
-  const settled = entries.filter((artifact) => !isInFlight(artifact)).sort(newestFirst);
+  const settled = entries
+    .filter((artifact) => !isInFlight(artifact))
+    .sort(newestFirst);
   // A request whose format already has an entry in flight needs no row of its
   // own: it will answer that very entry (`collapsed`). This also keeps a row from
   // showing twice between the POST answering and the request leaving `requests`.
-  const pending = requests.filter((type) => !inFlight.some((artifact) => artifact.artifact_type === type));
+  const pending = requests.filter(
+    (type) => !inFlight.some((artifact) => artifact.artifact_type === type),
+  );
 
   const body = (
     <>
@@ -211,7 +310,10 @@ export function useAiPane({
               type="button"
               className={`tile ${format.tone}`}
               aria-label={t("artifacts.a11yGenerate", { label })}
-              onClick={() => void generate(format.type)}
+              onClick={() => {
+                setRefusal(null);
+                setCustomizing(format);
+              }}
             >
               <Icon name={format.icon} />
               <span className="grow">{label}</span>
@@ -231,14 +333,24 @@ export function useAiPane({
             <ArtifactGeneratingRow key={`pending-${type}`} type={type} />
           ))}
           {inFlight.map((artifact) => (
-            <ArtifactGeneratingRow key={artifact.artifact_id} type={artifact.artifact_type} />
+            <ArtifactGeneratingRow
+              key={artifact.artifact_id}
+              type={artifact.artifact_type}
+            />
           ))}
         </div>
       )}
       {history === null && historyFailed ? (
         <div className="section-error">
-          <span className="subtle small">{t("folder.artifactsLoadFailed")}</span>
-          <button type="button" className="btn tonal" aria-label={t("artifacts.panel.retryA11y")} onClick={() => void loadHistory()}>
+          <span className="subtle small">
+            {t("folder.artifactsLoadFailed")}
+          </span>
+          <button
+            type="button"
+            className="btn tonal"
+            aria-label={t("artifacts.panel.retryA11y")}
+            onClick={() => void loadHistory()}
+          >
             {t("common.retry")}
           </button>
         </div>
@@ -254,7 +366,7 @@ export function useAiPane({
               artifact={artifact}
               showSourceCount={showSourceCount}
               onOpen={(entry) => setOpenId(entry.artifact_id)}
-              onRetry={(type) => void generate(type)}
+              onRetry={() => void retry(artifact)}
             />
           ))}
         </div>
@@ -262,14 +374,22 @@ export function useAiPane({
     </>
   );
 
-  return { wide: false, spec: { title: t("media.tab.ai"), icon: "sparkles-outline", body } };
+  return {
+    wide: false,
+    spec: { title: t("media.tab.ai"), icon: "sparkles-outline", body },
+  };
 }
 
 function whenLabel(artifact: ArtifactSummary): string {
   const at = new Date(artifact.completed_at ?? artifact.created_at);
   return Number.isNaN(at.getTime())
     ? ""
-    : formatDate(at, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    : formatDate(at, {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
 }
 
 /**
@@ -283,16 +403,19 @@ function OpenArtifact({
   showSourceCount,
   onClose,
   onRegenerate,
+  refusal,
 }: {
   artifact: ArtifactSummary;
   showSourceCount: boolean;
   /** Back to the list: a finished quiz hands the reader back to it. */
   onClose: () => void;
-  onRegenerate: () => Promise<void>;
+  onRegenerate: (parameters?: ArtifactGenerationParameters) => Promise<boolean>;
+  refusal: string | null;
 }) {
   const { t } = useI18n();
   const [content, setContent] = useState<ArtifactContentResponse | null>(null);
   const [failed, setFailed] = useState(false);
+  const [contentError, setContentError] = useState<HttpError | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [regenerating, setRegenerating] = useState(false);
   const ready = artifact.status === "ready";
@@ -300,15 +423,21 @@ function OpenArtifact({
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
-    apiRequest<ArtifactContentResponse>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}/content`)
+    apiRequest<ArtifactContentResponse>(
+      `/api/artifacts/${encodeURIComponent(artifact.artifact_id)}/content`,
+    )
       .then((response) => {
         if (!cancelled) {
+          setContentError(null);
           setContent(response);
           setFailed(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
+      .catch((error: HttpError) => {
+        if (!cancelled) {
+          setContentError(error);
+          setFailed(error.status !== 409);
+        }
       });
     return () => {
       cancelled = true;
@@ -320,18 +449,30 @@ function OpenArtifact({
   const caption = [
     typeLabel,
     whenLabel(artifact),
-    showSourceCount ? tCount("artifacts.sourceCount", artifact.source_count) : null,
+    showSourceCount
+      ? tCount("artifacts.sourceCount", artifact.source_count)
+      : null,
   ]
     .filter(Boolean)
     .join(" · ");
 
-  if (artifact.status === "failed") {
+  if (
+    artifact.status === "failed" ||
+    contentError?.code === "artifact_failed"
+  ) {
     return (
       <div className="state-card" role="alert">
         <Icon name="alert-circle-outline" />
         <div className="grow">
-          <div style={{ fontWeight: 600 }}>{t("artifact.generationFailedTitle")}</div>
+          <div style={{ fontWeight: 600 }}>
+            {t("artifact.generationFailedTitle")}
+          </div>
           <p className="small subtle">{t("artifact.generationFailedBody")}</p>
+          {refusal && (
+            <div className="banner-err" role="alert">
+              {refusal}
+            </div>
+          )}
           <button
             type="button"
             className="btn primary"
@@ -340,18 +481,32 @@ function OpenArtifact({
             aria-label={t("artifact.regenerateA11y")}
             onClick={async () => {
               setRegenerating(true);
-              await onRegenerate();
+              const parameters = contentError?.details?.request_parameters;
+              const accepted = await onRegenerate(
+                parameters &&
+                  typeof parameters === "object" &&
+                  !Array.isArray(parameters)
+                  ? (parameters as ArtifactGenerationParameters)
+                  : undefined,
+              );
+              if (accepted) {
+                setContentError(null);
+                setContent(null);
+                setFailed(false);
+              }
               setRegenerating(false);
             }}
           >
-            {regenerating ? t("artifact.regenerating") : t("artifact.regenerate")}
+            {regenerating
+              ? t("artifact.regenerating")
+              : t("artifact.regenerate")}
           </button>
         </div>
       </div>
     );
   }
 
-  if (!ready) {
+  if (!ready || contentError?.status === 409) {
     return (
       <div className="state-card">
         <span className="spin" style={{ display: "inline-flex" }}>
@@ -369,7 +524,12 @@ function OpenArtifact({
     return (
       <div className="section-error" role="alert">
         <span className="subtle">{t("artifact.loadFailed")}</span>
-        <button type="button" className="btn tonal" aria-label={t("artifact.retryA11y")} onClick={() => setAttempt((n) => n + 1)}>
+        <button
+          type="button"
+          className="btn tonal"
+          aria-label={t("artifact.retryA11y")}
+          onClick={() => setAttempt((n) => n + 1)}
+        >
           {t("common.retry")}
         </button>
       </div>
@@ -378,14 +538,20 @@ function OpenArtifact({
 
   if (!content) return <p className="small muted">{t("common.loading")}</p>;
 
-  const title = artifactContentTitle(content.content) ?? (artifact.title?.trim() || typeLabel);
+  const title =
+    artifactContentTitle(content.content) ??
+    (artifact.title?.trim() || typeLabel);
   return (
     <article>
       <div className="caps">{caption}</div>
       <h2 className="headline" style={{ fontSize: 24, margin: "4px 0 16px" }}>
         {title}
       </h2>
-      <ArtifactBody type={content.artifact_type} payload={content.content} onFinish={onClose} />
+      <ArtifactBody
+        type={content.artifact_type}
+        payload={content.content}
+        onFinish={onClose}
+      />
     </article>
   );
 }

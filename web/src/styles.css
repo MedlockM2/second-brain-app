@@ -525,3 +525,24 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 [data-theme="dark"] .badge.tone-audio { background: #275029; }
 [data-theme="dark"] .badge.tone-imagePost { background: #603962; }
 [data-theme="dark"] .badge.tone-article { background: #0b4f51; }
+
+/* The options step stays inside the AI pane, beside the reading and chat. */
+.artifact-customize { display: flex; flex-direction: column; gap: 20px; }
+.customize-heading { display: flex; align-items: center; gap: 12px; }
+.customize-heading h2 { flex: 1; font-size: 20px; margin: 0; }
+.customize-icon { display: grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; border-radius: var(--r-xl); color: var(--ink); background: var(--tint); }
+.customize-label { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.customize-options { border: 0; padding: 0; margin: 0; min-width: 0; }
+.customize-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.customize-choice { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; background: var(--surface-container); border-radius: var(--r-full); font-size: 14px; cursor: pointer; }
+.customize-choice.selected { background: var(--text-main); color: var(--background); }
+.customize-choice input, .customize-source input { accent-color: var(--primary); }
+.artifact-customize textarea, .artifact-customize select { width: 100%; min-height: 44px; padding: 12px; border: 0; border-radius: var(--r-md); background: var(--surface-container-low); color: var(--text-main); font: inherit; font-weight: 400; }
+.artifact-customize textarea { resize: vertical; }
+.artifact-customize :is(textarea, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.customize-source-toggle { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 12px; border-radius: var(--r-md); background: var(--surface-container-low); cursor: pointer; }
+.customize-source-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-block: 12px; }
+.customize-source-list { max-height: 320px; overflow-y: auto; margin-block: 12px; }
+.customize-source { display: flex; align-items: center; gap: 12px; padding-block: 8px; min-height: 48px; }
+.customize-source img { width: 64px; height: 44px; object-fit: cover; border-radius: var(--r-sm); }
+.customize-source-title { display: block; overflow-wrap: anywhere; font-size: 14px; }
