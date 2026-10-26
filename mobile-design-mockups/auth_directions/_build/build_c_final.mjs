@@ -64,12 +64,14 @@ const caps = (t) => `<div style="font-size:11.5px;font-weight:700;letter-spacing
 // (the rows of the app's own AddSourceSheet).
 function twoGestures(os) {
   const arrow = `<span style="color:var(--outline)">${ic("chevron-forward", 18)}</span>`;
-  const row = (i, t, d) => `<div class="row" style="gap:12px;padding:7px 0"><span class="halo" style="width:38px;height:38px">${ic(i, 19)}</span><div style="flex:1;min-width:0;font-size:14px;font-weight:600;line-height:1.3">${t}<div style="font-size:12px;font-weight:400;color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</div></div></div>`;
+  // Each import on the app's amber disc.
+  const row = (i, t, d) => `<div class="row" style="gap:12px;padding:7px 0"><span class="mark" style="width:38px;height:38px">${ic(i, 19)}</span><div style="flex:1;min-width:0;font-size:14px;font-weight:600;line-height:1.3">${t}<div style="font-size:12px;font-weight:400;color:var(--text-subtle);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d}</div></div></div>`;
   return box(`
     ${card("left:20px;right:20px;top:4px;padding:14px 16px 16px", `${caps(`${ic(SHARE_ICON[os], 14)} DEPUIS UNE APP`)}
-      <div class="row" style="gap:10px;margin:12px 0 14px;justify-content:center">${appTile("youtube", 44, os)}${arrow}${pill(SHARE_ICON[os], "Partager")}${arrow}<span class="mark" style="width:44px;height:44px">${ic("layers-outline", 22)}</span></div>
+      <div class="row" style="gap:10px;margin:12px 0 26px;justify-content:center">${appTile("youtube", 44, os)}${arrow}${pill(SHARE_ICON[os], "Partager")}${arrow}<span style="position:relative;display:inline-flex"><span class="mark" style="width:44px;height:44px">${ic("layers-outline", 22)}</span><span style="position:absolute;top:48px;left:50%;transform:translateX(-50%);font-size:11.5px;font-weight:700;white-space:nowrap">Deepn</span></span></div>
+      <div class="row" style="gap:10px;margin-bottom:10px;font-size:11.5px;color:var(--text-subtle)"><span style="flex:1;height:1px;background:var(--outline-variant)"></span>Fonctionne avec<span style="flex:1;height:1px;background:var(--outline-variant)"></span></div>
       <div class="row" style="gap:6px;justify-content:center;flex-wrap:wrap">${APP_LIST[os].map((k) => appTile(k, 28, os)).join("")}</div>`)}
-    ${card("left:20px;right:20px;top:176px;padding:14px 16px 8px", `${caps(`${ic("add", 15)} DEPUIS VOTRE TÉLÉPHONE`)}<div style="height:6px"></div>
+    ${card("left:20px;right:20px;top:204px;padding:14px 16px 8px", `${caps(`${ic("add", 15)} DIRECTEMENT DANS DEEPN`)}<div style="height:6px"></div>
       ${row("document-text-outline", "Importer un fichier", "PDF, DOCX, PPTX, XLSX, TXT, MP3, M4A…")}
       ${row("images-outline", "Importer une photo", "Depuis la photothèque")}
       ${row("link-outline", "Coller un lien", "Un article, une vidéo ou un épisode de podcast")}`)}`);
@@ -125,12 +127,36 @@ function p1Front() {
 }
 
 
+// ---------- Page 3: search finds what was said, not only titles ----------
+// A remembered fragment typed in the search bar, and the three media of page 1 found by it: each result
+// quotes the passage where its words occur, highlighted in amber word by word as the app's search does
+// (Algolia over title, creator and full text). The timestamp on a video or a podcast says « it searched
+// what was spoken »; the app's results do not carry one yet, the owner keeps it in the image.
+function p3Search() {
+  const tile = (bg, fg, i) => `<span style="width:40px;height:40px;border-radius:12px;background:${bg};color:${fg};display:inline-flex;align-items:center;justify-content:center;flex:none">${ic(i, 20)}</span>`;
+  const hit = (w) => `<span style="background:var(--primary-30);border-radius:3px;padding:0 2px;color:var(--text-main);font-weight:650">${w}</span>`;
+  const at = (t) => `<span class="row" style="gap:4px;flex:none;height:24px;padding:0 8px;border-radius:999px;background:var(--surface-container);font-size:11.5px;font-weight:650;color:var(--text-main)">${ic("play", 10)}${t}</span>`;
+  const result = (top, [bg, fg, i], title, snippet, time) => card(`left:20px;right:20px;top:${top}px;height:92px;box-sizing:border-box;padding:12px 14px`, `
+    <div class="row" style="gap:12px;align-items:flex-start">${tile(bg, fg, i)}
+      <div style="flex:1;min-width:0"><div class="row" style="gap:8px"><div style="flex:1;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</div>${time ? at(time) : ""}</div>
+      <div style="font-size:13px;line-height:1.4;color:var(--text-subtle);margin-top:4px">${snippet}</div></div></div>`);
+  return box(`
+    <div style="position:absolute;left:-40px;right:-40px;top:60px;height:300px;background:radial-gradient(closest-side,var(--primary-30),transparent)"></div>
+    <div class="row" style="position:absolute;left:20px;right:20px;top:14px;height:52px;border-radius:26px;background:var(--surface);box-shadow:var(--shadow-lift);padding:0 18px;gap:10px;font-size:16px;font-weight:600">
+      <span style="color:var(--text-subtle)">${ic("search-outline", 20)}</span>mémoire à long terme<span style="width:2px;height:22px;background:var(--primary);border-radius:1px;margin-left:-8px"></span>
+      <span style="flex:1"></span><span style="font-size:12.5px;font-weight:500;color:var(--text-subtle)">3 résultats</span></div>
+    ${result(84, ["var(--primary)", "var(--on-primary)", "headset-outline"], "Sommeil et mémoire", `« Le sommeil profond fait passer les souvenirs en ${hit("mémoire à long terme")}. »`, "12:34")}
+    ${result(188, ["#3d4a6b", "#fff", "play-circle-outline"], "Le cerveau la nuit", `« La nuit, la ${hit("mémoire")} trie ce qui mérite de rester sur le ${hit("long terme")}. »`, "03:10")}
+    ${result(292, ["#c1ebec", "#1c1b1a", "document-text-outline"], "Dormir pour apprendre", `« Une sieste aide la ${hit("mémoire")} ${hit("à")} garder une leçon sur le ${hit("long terme")}. »`, "")}`);
+}
+
 const ART = {
   share: twoGestures("ios"),
 
   // From media to text to use: a video, a podcast and many other sources (the chips) become a
   // timestamped text, from which come questions, a summary, flash cards and a quiz.
   essentiel: p1Front(),
+  search: p3Search(),
 
   // Every format lands in the same place.
   formats: box([
@@ -208,8 +234,9 @@ const SLIDES = [
     ["layers-outline", "Enregistrez podcasts, vidéos, reels, articles web, PDF et bien plus."],
     ["chatbubbles-outline", "Parlez de votre contenu avec l’IA."],
     ["school-outline", "Créez des quiz, fiches et résumés pour réviser."]], why: "La promesse de l’app : vos médias, quel que soit leur format, et ce que vous en tirez. Trois médias sur un même sujet, posés sur un chat IA et un quiz ; les mêmes médias reviennent en pastilles au pied des deux cartes (« Sources »). Première page conseillée." },
-  { id: "share", n: 2, rec: true, title: "Depuis vos apps ou votre téléphone", sub: "Tout ce que vous partagez ou importez arrive dans votre bibliothèque.", why: "Le geste qui fait vivre l’app, et le moins découvrable : le partage se fait hors de Deepn. En haut, l’icône Partager et les logos des apps compatibles ; en bas, les trois lignes de la feuille « Ajouter » de l’app, avec les formats. Version Android : section 2." },
-  { id: "folder", n: 3, rec: true, title: "Interrogez tout un dossier", sub: "Une question, une réponse tirée de toutes ses sources.", why: "Variante plus ambitieuse de la page 3 ; à garder plutôt que la 3 si l’on veut parler aux gros lecteurs." },
+  { id: "share", n: 2, rec: true, title: "Enregistrez un média en un clic", sub: "Tout ce que vous partagez ou importez arrive dans votre bibliothèque.", why: "Le geste qui fait vivre l’app, et le moins découvrable : le partage se fait hors de Deepn. En haut, l’icône Partager et les logos des apps compatibles ; en bas, les trois lignes de la feuille « Ajouter » de l’app, avec les formats. Version Android : section 2." },
+  { id: "search", n: 3, rec: true, title: "Retrouvez ce que vous avez entendu", sub: "Quelques mots suffisent : Deepn retrouve le passage, même au milieu d’un podcast ou d’une vidéo.", why: "La recherche porte aussi sur ce qui est dit dans les vidéos et les podcasts. Le minutage de chaque résultat le montre sans phrase technique. Mêmes médias que la page 1." },
+  { id: "folder", n: 10, title: "Interrogez tout un dossier", sub: "Une question, une réponse tirée de toutes ses sources.", why: "Retirée le 2026-10-26 : redondante avec la page 1, qui montre déjà un chat sur plusieurs sources." },
   { id: "everywhere", n: 4, rec: true, title: "Sur votre téléphone et votre ordinateur", sub: "Votre bibliothèque vous suit dans l’app et sur le web.", why: "Rassure, mais n’illustre aucune capacité nouvelle : plutôt une phrase sur l’écran de création de compte." },
   { id: "chat", n: 5, title: "Posez vos questions à la source", sub: "Chaque réponse renvoie au passage d’où elle vient.", why: "Montre la discussion et la confiance qu’elle inspire (le passage cité, surligné à l’ambre)." },
   { id: "revise", n: 6, title: "Révisez sans rien préparer", sub: "Cartes mémo, quiz et notes de cours, générés depuis vos sources.", why: "Le « retenir » de la promesse, rendu concret." },
@@ -340,7 +367,7 @@ const page_ = page({
   <p class="lede">Le premier écran montre ce que fait Deepn, page par page. « Commencer » et « J’ai déjà un compte » ouvrent chacun un écran plein, pas une feuille. Les deux écrans ont la même structure : Apple, Google, « ou », puis le formulaire e-mail directement, sans étape « Continuer avec un e-mail ».</p>
 
   <h2>1. Pages du carrousel : propositions</h2>
-  <p>Neuf propositions, une facette chacune. Les quatre marquées <span class="tag y">Retenue</span> sont celles que l’owner a gardées le 2026-10-23, dans cet ordre ; les cinq autres restent pour mémoire. Les quatre marquées <span class="tag y">Conseillée</span> suivent la promesse de l’app (enregistrer, comprendre, retenir) ; au-delà de quatre pages, la plupart des gens ne vont plus au bout. Garde celles que tu veux : l’ordre suit les numéros.</p>
+  <p>Neuf propositions, une facette chacune. Les trois marquées <span class="tag y">Retenue</span> sont celles que l’owner garde (le 2026-10-23, la page 3 retirée le 2026-10-26 en attendant sa remplaçante), dans cet ordre ; les cinq autres restent pour mémoire. Les quatre marquées <span class="tag y">Conseillée</span> suivent la promesse de l’app (enregistrer, comprendre, retenir) ; au-delà de quatre pages, la plupart des gens ne vont plus au bout. Garde celles que tu veux : l’ordre suit les numéros.</p>
   <div class="cells">${SLIDES.map((s) => phone(welcome(s, s.rec ? s.n - 1 : 0, 4), { title: `${s.n}. ${s.title.replaceAll("<br>", " ")}${s.rec ? ` <span class="tag y">Retenue</span>` : ""}`, caption: s.why })).join("")}</div>
 
   <h2>2. Partager et importer : iOS et Android</h2>

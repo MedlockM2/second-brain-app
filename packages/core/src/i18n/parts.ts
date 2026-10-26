@@ -12,3 +12,17 @@ export function templateParts(template: string): TemplatePart[] {
     return slot ? { slot: slot[1] } : { text: piece };
   });
 }
+
+/**
+ * A translated sentence cut around its `[marked]` words, for the welcome art's
+ * search results: each language marks the words of its own query, so the
+ * highlight falls where that language puts them.
+ */
+export type MarkedPart = { text: string; marked: boolean };
+
+export function markedParts(text: string): MarkedPart[] {
+  return text.split(/(\[[^\]]+\])/).filter(Boolean).map((piece) => {
+    const marked = /^\[([^\]]+)\]$/.exec(piece);
+    return marked ? { text: marked[1], marked: true } : { text: piece, marked: false };
+  });
+}

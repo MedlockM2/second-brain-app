@@ -3,13 +3,13 @@ import type { TranslationKey } from "@media-summarizer/core/i18n/runtime";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon } from "../Icon";
 import { LogoMark } from "../Logo";
-import { DepthArt, EverywhereArt, FolderArt, ShareArt } from "./WelcomeArt";
+import { DepthArt, EverywhereArt, SearchArt, ShareArt } from "./WelcomeArt";
 
 /** The four pages of the mobile welcome carousel, in the same order. */
 const SLIDES: { key: string; Art: ComponentType; title: TranslationKey; body: TranslationKey[] }[] = [
   { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.save", "welcome.deep.chat", "welcome.deep.review"] },
   { key: "share", Art: ShareArt, title: "welcome.share.title", body: ["welcome.share.body"] },
-  { key: "folder", Art: FolderArt, title: "welcome.folder.title", body: ["welcome.folder.body"] },
+  { key: "search", Art: SearchArt, title: "welcome.search.title", body: ["welcome.search.body"] },
   { key: "everywhere", Art: EverywhereArt, title: "welcome.everywhere.title", body: ["welcome.everywhere.body"] },
 ];
 

@@ -3,7 +3,8 @@ import { Image, Platform, StyleSheet, Text, View, type ImageSourcePropType } fro
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, useThemedStyles } from "../../contexts/ThemeContext";
 import type { Theme } from "../../constants/theme";
-import { t, type TranslationKey } from "../../i18n";
+import { markedParts } from "@media-summarizer/core/i18n/parts";
+import { t, tCount, type TranslationKey } from "../../i18n";
 import { Bar, Card, CardHead, Glow } from "./artKit";
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -117,8 +118,8 @@ const makeDepthStyles = ({ colors }: Theme) => StyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
-// 2 — Two gestures: share from another app, or add from the phone (the rows of
-// `AddSourceSheet`). Each system shows its own share icon and its own app list:
+// 2 — Two gestures: share from another app, or add right in Deepn (the rows of
+// `AddSourceSheet`, each on the amber disc). Each system shows its own share icon and its own app list:
 // no Apple Podcasts on Android, Chrome and Keep instead of Safari and Notes.
 // The list follows SHARE_TARGETS (`core/media_ingestion/adapters/share_targets.py`).
 // ---------------------------------------------------------------------------
@@ -155,7 +156,7 @@ export function ShareArt() {
     <Text style={styles.capsText}>{t(key).toLocaleUpperCase()}</Text>
   </View>;
   const row = (icon: IconName, title: TranslationKey, detail: string) => <View style={styles.row}>
-    <View style={styles.halo}><Ionicons name={icon} size={19} color={colors.textMain} /></View>
+    <View style={styles.disc}><Ionicons name={icon} size={19} color={colors.onPrimary} /></View>
     <View style={styles.rowText}>
       <Text numberOfLines={1} style={styles.rowTitle}>{t(title)}</Text>
       <Text numberOfLines={1} style={styles.rowDetail}>{detail}</Text>
@@ -172,12 +173,22 @@ export function ShareArt() {
           <Text numberOfLines={1} style={styles.pillText}>{t("welcome.art.share")}</Text>
         </View>
         {arrow}
-        <View style={styles.mark}><Ionicons name="layers-outline" size={22} color={colors.onPrimary} /></View>
+        <View>
+          <View style={styles.mark}><Ionicons name="layers-outline" size={22} color={colors.onPrimary} /></View>
+          {/* Under the mark without widening it, so the three steps stay centred. */}
+          <Text numberOfLines={1} style={styles.markLabel}>Deepn</Text>
+        </View>
+      </View>
+      {/* « Works with » between two hairlines: the logos below are the apps that can share to Deepn. */}
+      <View style={styles.worksWith}>
+        <View style={styles.hairline} />
+        <Text style={styles.worksWithText}>{t("welcome.art.worksWith")}</Text>
+        <View style={styles.hairline} />
       </View>
       <View style={styles.tiles}>{Object.entries(TILES).map(([key, source]) => <Image key={key} source={source} style={styles.smallTile} />)}</View>
     </Card>
     <Card style={styles.bottom}>
-      {caps("add", "welcome.art.fromPhone")}
+      {caps("add", "welcome.art.inDeepn")}
       <View style={styles.rows}>
         {row("document-text-outline", "addSource.importFile.label", "PDF, DOCX, PPTX, XLSX, TXT, MP3, M4A…")}
         {row("images-outline", "addSource.importPhoto.label", t("welcome.art.photoLibrary"))}
@@ -189,81 +200,92 @@ export function ShareArt() {
 
 const makeShareStyles = ({ colors }: Theme) => StyleSheet.create({
   top: { left: 20, right: 20, top: 4, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 16 },
-  bottom: { left: 20, right: 20, top: 176, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 8 },
+  bottom: { left: 20, right: 20, top: 204, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 8 },
   caps: { flexDirection: "row", alignItems: "center", gap: 6 },
   capsText: { fontSize: 11.5, fontWeight: "700", letterSpacing: 0.8, color: colors.textSubtle },
-  gesture: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 12, marginBottom: 14 },
+  gesture: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 12, marginBottom: 26 },
   bigTile: { width: 44, height: 44 },
   pill: { flexDirection: "row", alignItems: "center", gap: 7, height: 34, paddingLeft: 11, paddingRight: 14, borderRadius: 999,
     backgroundColor: colors.surface, flexShrink: 1 },
   pillText: { fontSize: 14, fontWeight: "700", color: colors.textMain, flexShrink: 1 },
   mark: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  markLabel: { position: "absolute", top: 48, left: -20, right: -20, textAlign: "center", fontSize: 11.5, fontWeight: "700", color: colors.textMain },
+  worksWith: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  hairline: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.outlineVariant },
+  worksWithText: { fontSize: 11.5, color: colors.textSubtle },
   tiles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },
   smallTile: { width: 28, height: 28 },
   rows: { marginTop: 6 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 7 },
-  halo: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.highlight, alignItems: "center", justifyContent: "center" },
+  disc: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: 14, fontWeight: "600", color: colors.textMain },
   rowDetail: { fontSize: 12, color: colors.textSubtle },
 });
 
 // ---------------------------------------------------------------------------
-// 3 — A whole folder: its sources, and one question asked to all of them.
+// 3 — Search: a few remembered words typed, and the three media of page 1 found
+// by them. Each result quotes its passage with the query's words highlighted
+// (each language marks its own words, `[like this]`, in the catalog), and the
+// video and the podcast give the moment it is said. The app's results do not
+// carry that moment yet: the owner keeps it in the image.
 // ---------------------------------------------------------------------------
-const COVERS: { title: TranslationKey; type: TranslationKey; color: string; icon: IconName }[] = [
-  { title: "welcome.art.cover1", type: "welcome.art.cover1Type", color: "#3d4a6b", icon: "play-circle-outline" },
-  { title: "welcome.art.cover2", type: "welcome.art.cover2Type", color: "#b88a3e", icon: "document-text-outline" },
-  { title: "welcome.art.cover3", type: "welcome.art.cover3Type", color: "#4f6b5a", icon: "headset-outline" },
+const RESULTS: { medium: Medium; quote: TranslationKey; at?: string }[] = [
+  { medium: "podcast", quote: "welcome.art.searchPodcast", at: "12:34" },
+  { medium: "video", quote: "welcome.art.searchVideo", at: "03:10" },
+  { medium: "article", quote: "welcome.art.searchArticle" },
 ];
 
-export function FolderArt() {
+export function SearchArt() {
   const { colors } = useTheme();
-  const styles = useThemedStyles(makeFolderStyles);
+  const styles = useThemedStyles(makeSearchStyles);
+  // The article tile keeps a dark glyph: its sea-green stays light in both themes here.
+  const tile: Record<Medium, [string, string]> = { video: [VIDEO_FILL, "#fff"], podcast: [colors.primary, colors.onPrimary], article: ["#c1ebec", "#1c1b1a"] };
   return <>
-    <Card style={styles.folder}>
-      <View style={styles.head}>
-        <View style={styles.halo}><Ionicons name="folder-outline" size={21} color={colors.textMain} /></View>
-        <View>
-          <Text style={styles.name}>{t("welcome.art.folderName")}</Text>
-          <Text style={styles.count}>{t("welcome.art.folderCount")}</Text>
-        </View>
-      </View>
-      {COVERS.map((cover) => <View key={cover.title} style={styles.item}>
-        <View style={[styles.thumb, { backgroundColor: cover.color }]}><Ionicons name={cover.icon} size={15} color="#fff" /></View>
-        <View style={styles.itemText}>
-          <Text numberOfLines={1} style={styles.itemTitle}>{t(cover.title)}</Text>
-          <Text numberOfLines={1} style={styles.itemType}>{t(cover.type)}</Text>
-        </View>
-      </View>)}
+    <Glow top={60} height={300} />
+    <Card style={styles.bar}>
+      <Ionicons name="search-outline" size={20} color={colors.textSubtle} />
+      <Text numberOfLines={1} style={styles.query}>{t("welcome.art.searchQuery")}</Text>
+      <View style={styles.caret} />
+      <Text style={styles.count}>{tCount("search.resultCount", 3)}</Text>
     </Card>
-    <View style={styles.composer}>
-      <Text numberOfLines={1} style={styles.placeholder}>{t("welcome.art.askFolder")}</Text>
-      <View style={styles.send}><Ionicons name="arrow-up" size={20} color={colors.onPrimary} /></View>
-    </View>
+    {RESULTS.map(({ medium, quote, at }, index) => <Card key={medium} style={[styles.result, { top: 84 + index * 104 }]}>
+      <View style={[styles.tile, { backgroundColor: tile[medium][0] }]}><Ionicons name={MEDIA[medium].icon} size={20} color={tile[medium][1]} /></View>
+      <View style={styles.resultText}>
+        <View style={styles.resultHead}>
+          <Text numberOfLines={1} style={styles.resultTitle}>{t(MEDIA[medium].title)}</Text>
+          {at && <View style={styles.at}><Ionicons name="play" size={10} color={colors.textMain} /><Text style={styles.atText}>{at}</Text></View>}
+        </View>
+        <Text numberOfLines={2} style={styles.quote}>
+          « {markedParts(t(quote)).map((part, i) => <Text key={i} style={part.marked ? styles.hit : undefined}>{part.text}</Text>)} »
+        </Text>
+      </View>
+    </Card>)}
   </>;
 }
 
-const makeFolderStyles = ({ colors }: Theme) => StyleSheet.create({
-  folder: { left: 30, right: 30, top: 20, paddingTop: 16, paddingHorizontal: 16, paddingBottom: 8 },
-  head: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
-  halo: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.highlight, alignItems: "center", justifyContent: "center" },
-  name: { fontSize: 16, fontWeight: "700", color: colors.textMain },
-  count: { fontSize: 12.5, color: colors.textSubtle },
-  item: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.surfaceContainer },
-  thumb: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  itemText: { flex: 1, minWidth: 0 },
-  itemTitle: { fontSize: 13, fontWeight: "700", color: colors.textMain },
-  itemType: { fontSize: 12, color: colors.textSubtle },
-  composer: { position: "absolute", left: 30, right: 30, top: 296, height: 52, borderRadius: 26, backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: colors.outlineVariant, flexDirection: "row", alignItems: "center", paddingLeft: 18, paddingRight: 6 },
-  placeholder: { flex: 1, fontSize: 14.5, color: colors.textMuted },
-  send: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+const makeSearchStyles = ({ colors }: Theme) => StyleSheet.create({
+  bar: { left: 20, right: 20, top: 14, height: 52, borderRadius: 26, flexDirection: "row", alignItems: "center", paddingHorizontal: 18, gap: 10 },
+  query: { flexShrink: 1, fontSize: 16, fontWeight: "600", color: colors.textMain },
+  caret: { width: 2, height: 22, borderRadius: 1, backgroundColor: colors.primary, marginLeft: -8 },
+  count: { marginLeft: "auto", fontSize: 12.5, color: colors.textSubtle },
+  result: { left: 20, right: 20, height: 92, paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  tile: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  resultText: { flex: 1, minWidth: 0 },
+  resultHead: { flexDirection: "row", alignItems: "center", gap: 8 },
+  resultTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.textMain },
+  at: { flexDirection: "row", alignItems: "center", gap: 4, height: 24, paddingHorizontal: 8, borderRadius: 12, backgroundColor: colors.surfaceContainer },
+  atText: { fontSize: 11.5, fontWeight: "600", color: colors.textMain },
+  quote: { marginTop: 4, fontSize: 13, lineHeight: 18, color: colors.textSubtle },
+  hit: { backgroundColor: "rgba(255, 203, 5, 0.3)", color: colors.textMain, fontWeight: "600" },
 });
 
 // ---------------------------------------------------------------------------
 // 4 — Everywhere: the web app on a laptop, the app on a phone.
 // ---------------------------------------------------------------------------
+const LAPTOP_COVER = "#3d4a6b";
+const PHONE_COVERS = ["#b88a3e", "#4f6b5a"];
+
 export function EverywhereArt() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeEverywhereStyles);
@@ -275,7 +297,7 @@ export function EverywhereArt() {
         </View>
         <View style={styles.panes}>
           <View style={styles.leftPane}>
-            <View style={[styles.cover, { backgroundColor: COVERS[0].color }]} />
+            <View style={[styles.cover, { backgroundColor: LAPTOP_COVER }]} />
             <Bar width={60} height={5} /><Bar width={50} height={5} /><Bar width={64} height={5} />
           </View>
           <View style={styles.mainPane}>
@@ -291,9 +313,9 @@ export function EverywhereArt() {
     <View style={styles.phone}>
       <View style={styles.phoneScreen}>
         <Bar width={50} height={6} color={colors.textMain} />
-        <View style={[styles.phoneCover, { backgroundColor: COVERS[1].color }]} />
+        <View style={[styles.phoneCover, { backgroundColor: PHONE_COVERS[0] }]} />
         <Bar width="80%" height={5} />
-        <View style={[styles.phoneCover, { backgroundColor: COVERS[2].color }]} />
+        <View style={[styles.phoneCover, { backgroundColor: PHONE_COVERS[1] }]} />
         <Bar width="70%" height={5} />
       </View>
     </View>

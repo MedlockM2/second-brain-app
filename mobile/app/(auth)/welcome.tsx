@@ -13,20 +13,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { PaginationDots } from "../../src/components/PaginationDots";
 import { ART_HEIGHT, ART_WIDTH } from "../../src/components/welcome/artKit";
-import { DepthArt, EverywhereArt, FolderArt, ShareArt } from "../../src/components/welcome/WelcomeArt";
+import { DepthArt, EverywhereArt, SearchArt, ShareArt } from "../../src/components/welcome/WelcomeArt";
 import { t, type TranslationKey } from "../../src/i18n";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../src/constants/theme";
 import { useThemedStyles } from "../../src/contexts/ThemeContext";
 
 /**
- * The four pages of the carousel, chosen by the owner on 2026-10-23
+ * The four pages of the carousel, chosen by the owner on 2026-10-23 (page 3,
+ * search, replaced the folder one on 2026-10-26)
  * (`mobile-design-mockups/auth_directions/direction_c_finale`): what Deepn does
- * end to end, how content gets in, a whole folder asked at once, and the web.
+ * end to end, how content gets in, search inside what was said, and the web.
  */
 const SLIDES: { key: string; Art: ComponentType; title: TranslationKey; body: TranslationKey[] }[] = [
   { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.save", "welcome.deep.chat", "welcome.deep.review"] },
   { key: "share", Art: ShareArt, title: "welcome.share.title", body: ["welcome.share.body"] },
-  { key: "folder", Art: FolderArt, title: "welcome.folder.title", body: ["welcome.folder.body"] },
+  { key: "search", Art: SearchArt, title: "welcome.search.title", body: ["welcome.search.body"] },
   { key: "everywhere", Art: EverywhereArt, title: "welcome.everywhere.title", body: ["welcome.everywhere.body"] },
 ];
 

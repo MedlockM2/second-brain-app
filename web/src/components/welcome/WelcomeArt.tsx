@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { TranslationKey } from "@media-summarizer/core/i18n/runtime";
+import { markedParts } from "@media-summarizer/core/i18n/parts";
+import { tCount, type TranslationKey } from "@media-summarizer/core/i18n/runtime";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ICON_PATHS, ICON_VIEWBOX } from "../icons.generated";
 import { APP_LOGOS } from "./appLogos";
@@ -116,7 +117,7 @@ export function ShareArt() {
     letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-subtle)" }}><Glyph name={icon} size={14} />{t(key)}</div>;
   const arrow = <Glyph name="chevron-forward" size={18} color="var(--outline)" />;
   const row = (icon: IconName, title: TranslationKey, detail: string) => <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "7px 0" }}>
-    <span style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--highlight)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Glyph name={icon} size={19} /></span>
+    <span style={{ width: 38, height: 38, borderRadius: "50%", background: "var(--primary)", color: "var(--on-primary)", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Glyph name={icon} size={19} /></span>
     <div style={{ minWidth: 0, flex: 1, lineHeight: 1.3 }}>
       <div style={{ fontSize: 14, fontWeight: 600 }}>{t(title)}</div>
       <div style={{ fontSize: 12, color: "var(--text-subtle)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{detail}</div>
@@ -125,17 +126,25 @@ export function ShareArt() {
   return <>
     <div style={{ ...card, left: 20, right: 20, top: 4, padding: "14px 16px 16px" }}>
       {caps("share-outline", "welcome.art.fromApp")}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, margin: "12px 0 14px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, margin: "12px 0 26px" }}>
         <AppTile name="youtube" size={44} />{arrow}
         <span style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 34, padding: "0 14px 0 11px", borderRadius: 999, background: "var(--surface)",
           boxShadow: "0 4px 14px rgba(43, 45, 66, 0.12)", fontSize: 14, fontWeight: 700, whiteSpace: "nowrap" }}><Glyph name="share-outline" size={18} />{t("welcome.art.share")}</span>
         {arrow}
-        <span className="logo-mark" style={{ width: 44, height: 44 }}><Glyph name="layers-outline" size={22} /></span>
+        {/* « Deepn » under the mark without widening it, so the three steps stay centred. */}
+        <span style={{ position: "relative", display: "inline-flex" }}>
+          <span className="logo-mark" style={{ width: 44, height: 44 }}><Glyph name="layers-outline" size={22} /></span>
+          <span style={{ position: "absolute", top: 48, left: "50%", transform: "translateX(-50%)", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>Deepn</span>
+        </span>
+      </div>
+      {/* « Works with » between two hairlines: the logos below are the apps that can share to Deepn. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, fontSize: 11.5, color: "var(--text-subtle)" }}>
+        <span style={{ flex: 1, height: 1, background: "var(--outline-variant)" }} />{t("welcome.art.worksWith")}<span style={{ flex: 1, height: 1, background: "var(--outline-variant)" }} />
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 6 }}>{Object.keys(APP_LOGOS).map((name) => <AppTile key={name} name={name} size={28} />)}</div>
     </div>
-    <div style={{ ...card, left: 20, right: 20, top: 176, padding: "14px 16px 8px" }}>
-      {caps("add", "welcome.art.fromPhone")}
+    <div style={{ ...card, left: 20, right: 20, top: 204, padding: "14px 16px 8px" }}>
+      {caps("add", "welcome.art.inDeepn")}
       <div style={{ marginTop: 6 }}>
         {row("document-text-outline", "addSource.importFile.label", "PDF, DOCX, PPTX, XLSX, TXT, MP3, M4A…")}
         {row("images-outline", "addSource.importPhoto.label", t("welcome.art.photoLibrary"))}
@@ -145,38 +154,52 @@ export function ShareArt() {
   </>;
 }
 
-// 3 — A whole folder -------------------------------------------------------------
-const COVERS: { title: TranslationKey; type: TranslationKey; color: string; icon: IconName }[] = [
-  { title: "welcome.art.cover1", type: "welcome.art.cover1Type", color: "linear-gradient(135deg,#3d4a6b,#1f2740)", icon: "play-circle-outline" },
-  { title: "welcome.art.cover2", type: "welcome.art.cover2Type", color: "linear-gradient(135deg,#b88a3e,#7a5523)", icon: "document-text-outline" },
-  { title: "welcome.art.cover3", type: "welcome.art.cover3Type", color: "linear-gradient(135deg,#4f6b5a,#2c4136)", icon: "headset-outline" },
+// 3 — Search -------------------------------------------------------------------
+// A few remembered words, and the three media of page 1 found by them: each
+// quotes its passage with the query's words highlighted (marked `[like this]` in
+// each catalog), and the video and the podcast give the moment it is said. The
+// app's results do not carry that moment yet: the owner keeps it in the image.
+const RESULTS: { medium: Medium; quote: TranslationKey; at?: string }[] = [
+  { medium: "podcast", quote: "welcome.art.searchPodcast", at: "12:34" },
+  { medium: "video", quote: "welcome.art.searchVideo", at: "03:10" },
+  { medium: "article", quote: "welcome.art.searchArticle" },
 ];
+// The article tile keeps a dark glyph: its sea-green stays light in both themes here.
+const RESULT_TILE: Record<Medium, [string, string]> = { video: [VIDEO_FILL, "#fff"], podcast: ["var(--primary)", "var(--on-primary)"], article: ["#c1ebec", "#1c1b1a"] };
 
-export function FolderArt() {
+export function SearchArt() {
   const { t } = useI18n();
   return <>
-    <div style={{ ...card, left: 30, right: 30, top: 20, padding: "16px 16px 8px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-        <span style={{ width: 42, height: 42, borderRadius: "50%", background: "var(--highlight)", display: "flex", alignItems: "center", justifyContent: "center" }}><Glyph name="folder-outline" size={21} /></span>
-        <div style={{ fontSize: 16, fontWeight: 700 }}>{t("welcome.art.folderName")}<div style={{ fontSize: 12.5, fontWeight: 400, color: "var(--text-subtle)" }}>{t("welcome.art.folderCount")}</div></div>
-      </div>
-      {COVERS.map((cover) => <div key={cover.title} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderTop: "1px solid var(--surface-container)" }}>
-        <span style={{ width: 34, height: 34, borderRadius: 10, background: cover.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}><Glyph name={cover.icon} size={15} /></span>
-        <div style={{ minWidth: 0, flex: 1, fontSize: 13, lineHeight: 1.3 }}>
-          <b style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t(cover.title)}</b>
-          <span style={{ color: "var(--text-subtle)", fontSize: 12 }}>{t(cover.type)}</span>
+    <div style={{ position: "absolute", left: -40, right: -40, top: 60, height: 300, background: "radial-gradient(closest-side, var(--primary-30), transparent)" }} />
+    <div style={{ ...card, ...row, left: 20, right: 20, top: 14, height: 52, borderRadius: 26, padding: "0 18px", gap: 10, fontSize: 16, fontWeight: 600 }}>
+      <Glyph name="search-outline" size={20} color="var(--text-subtle)" />
+      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t("welcome.art.searchQuery")}</span>
+      <span style={{ width: 2, height: 22, borderRadius: 1, background: "var(--primary)", marginLeft: -8, flex: "none" }} />
+      <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 500, color: "var(--text-subtle)", whiteSpace: "nowrap" }}>{tCount("search.resultCount", 3)}</span>
+    </div>
+    {RESULTS.map(({ medium, quote, at }, index) => <div key={medium} style={{ ...card, left: 20, right: 20, top: 84 + index * 104, height: 92, boxSizing: "border-box",
+      padding: "12px 14px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <span style={{ width: 40, height: 40, borderRadius: 12, background: RESULT_TILE[medium][0], color: RESULT_TILE[medium][1], display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>
+        <Glyph name={MEDIA[medium].icon} size={20} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...row, gap: 8 }}>
+          <b style={{ flex: 1, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t(MEDIA[medium].title)}</b>
+          {at && <span style={{ ...row, gap: 4, height: 24, padding: "0 8px", borderRadius: 12, background: "var(--surface-container)", fontSize: 11.5, fontWeight: 650 }}><Glyph name="play" size={10} />{at}</span>}
         </div>
-      </div>)}
-    </div>
-    <div style={{ position: "absolute", left: 30, right: 30, top: 296, height: 52, borderRadius: 999, background: "var(--surface)", boxShadow: "inset 0 0 0 1px var(--outline-variant)",
-      display: "flex", alignItems: "center", padding: "0 6px 0 18px", fontSize: 14.5, color: "var(--text-muted)" }}>
-      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t("welcome.art.askFolder")}</span>
-      <span style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--primary)", color: "var(--on-primary)", display: "flex", alignItems: "center", justifyContent: "center" }}><Glyph name="arrow-up" size={20} /></span>
-    </div>
+        <div style={{ marginTop: 4, fontSize: 13, lineHeight: 1.4, color: "var(--text-subtle)" }}>
+          « {markedParts(t(quote)).map((part, i) => part.marked
+            ? <span key={i} style={{ background: "var(--primary-30)", borderRadius: 3, padding: "0 2px", color: "var(--text-main)", fontWeight: 650 }}>{part.text}</span>
+            : <span key={i}>{part.text}</span>)} »
+        </div>
+      </div>
+    </div>)}
   </>;
 }
 
 // 4 — Everywhere -------------------------------------------------------------------
+const LAPTOP_COVER = "linear-gradient(135deg,#3d4a6b,#1f2740)";
+const PHONE_COVERS = ["linear-gradient(135deg,#b88a3e,#7a5523)", "linear-gradient(135deg,#4f6b5a,#2c4136)"];
+
 export function EverywhereArt() {
   const { t } = useI18n();
   const column = (style: CSSProperties, children: ReactNode) => <div style={{ display: "flex", flexDirection: "column", gap: 6, ...style }}>{children}</div>;
@@ -187,7 +210,7 @@ export function EverywhereArt() {
           <span style={{ width: 12, height: 12, borderRadius: "50%", background: "var(--primary)" }} />{bar(34, 5)}{bar(34, 5)}{bar(34, 5)}
         </div>
         <div style={{ flex: 1, display: "flex", gap: 6, padding: 8 }}>
-          {column({ width: 70 }, <><div style={{ height: 42, borderRadius: 6, background: COVERS[0].color }} />{bar(60, 5)}{bar(50, 5)}{bar(64, 5)}</>)}
+          {column({ width: 70 }, <><div style={{ height: 42, borderRadius: 6, background: LAPTOP_COVER }} />{bar(60, 5)}{bar(50, 5)}{bar(64, 5)}</>)}
           {column({ flex: 1, background: "var(--surface)", borderRadius: 6, padding: 8 }, <>{bar("80%", 5)}{bar("60%", 5)}
             <div style={{ marginLeft: "auto", width: "60%", height: 16, borderRadius: 6, background: "var(--surface-container-high)" }} />{bar("70%", 5)}</>)}
           {column({ width: 58, gap: 5 }, [0, 1, 2, 3].map((i) => <div key={i} style={{ height: 14, borderRadius: 7, background: "var(--highlight)" }} />))}
@@ -197,8 +220,8 @@ export function EverywhereArt() {
     <div style={{ position: "absolute", left: 8, top: 262, width: 350, height: 12, borderRadius: "0 0 10px 10px", background: "#c9c4bf" }} />
     <div style={{ position: "absolute", left: 282, top: 118, width: 104, height: 212, borderRadius: 22, background: "#1c1b1a", padding: 5, boxSizing: "border-box", boxShadow: "0 8px 24px rgba(43, 45, 66, 0.18)" }}>
       {column({ width: "100%", height: "100%", borderRadius: 17, background: "var(--background)", padding: "18px 8px 8px", boxSizing: "border-box" }, <>
-        {bar(50, 6, "var(--text-main)")}<div style={{ height: 52, borderRadius: 8, background: COVERS[1].color }} />{bar("80%", 5)}
-        <div style={{ height: 52, borderRadius: 8, background: COVERS[2].color }} />{bar("70%", 5)}</>)}
+        {bar(50, 6, "var(--text-main)")}<div style={{ height: 52, borderRadius: 8, background: PHONE_COVERS[0] }} />{bar("80%", 5)}
+        <div style={{ height: 52, borderRadius: 8, background: PHONE_COVERS[1] }} />{bar("70%", 5)}</>)}
     </div>
     <div style={{ position: "absolute", left: 0, right: 0, top: 350, display: "flex", justifyContent: "center", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text-subtle)" }}>
       <Glyph name="desktop-outline" size={16} />{t("welcome.art.platforms")}
