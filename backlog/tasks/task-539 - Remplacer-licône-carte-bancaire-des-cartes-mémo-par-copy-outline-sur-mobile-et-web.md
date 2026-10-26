@@ -3,10 +3,10 @@ id: TASK-539
 title: >-
   Remplacer l'icône carte bancaire des cartes mémo par copy-outline sur mobile
   et web
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 17:09'
-updated_date: '2026-10-26 17:09'
+updated_date: '2026-10-26 20:12'
 labels:
   - mobile
   - web
