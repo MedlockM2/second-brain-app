@@ -112,7 +112,7 @@ const KIND_ICON: Record<
   summary_short: "document-text-outline",
   summary: "document-text-outline",
   notes: "book-outline",
-  flashcards: "card-outline",
+  flashcards: "copy-outline",
   quiz: "help-circle-outline",
 };
 

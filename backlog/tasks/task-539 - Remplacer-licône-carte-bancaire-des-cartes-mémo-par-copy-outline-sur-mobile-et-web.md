@@ -47,8 +47,22 @@ Note pour le propriétaire : contrôle visuel de l'onglet IA et d'une fiche de c
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Aucune icône du format cartes mémo n'utilise plus card-outline dans mobile/ ni web/src ; toutes utilisent copy-outline
-- [ ] #2 card-outline reste sur la page compte web, où il désigne le paiement
-- [ ] #3 npm run typecheck et npm run lint passent dans mobile/, et la vérification de types passe dans web/
-- [ ] #4 copy-outline est ajouté à la liste de noms de web/scripts/extract_icons.py, et web/src/components/icons.generated.ts est régénéré par ce script
+- [x] #1 Aucune icône du format cartes mémo n'utilise plus card-outline dans mobile/ ni web/src ; toutes utilisent copy-outline
+- [x] #2 card-outline reste sur la page compte web, où il désigne le paiement
+- [x] #3 npm run typecheck et npm run lint passent dans mobile/, et la vérification de types passe dans web/
+- [x] #4 copy-outline est ajouté à la liste de noms de web/scripts/extract_icons.py, et web/src/components/icons.generated.ts est régénéré par ce script
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implémentation 2026-10-26 (agent, branche worktree-agent-a7b0215a5ff1cd909).
+
+- Emplacements après TASK-534 et TASK-541 (`ArtifactTile.tsx` et la liste de `useAiPane.tsx` n'existent plus) : mobile, `ARTIFACT_FORMATS` de `mobile/src/lib/artifactFormats.ts` (tuile de la grille « Générer » et icône des lignes de la liste) et `KIND_ICON` de `mobile/app/artifacts/[artifactId].tsx` (en-tête de la fiche) ; web, `ARTIFACT_FORMATS` de `web/src/components/ai/artifactFormats.ts`, seule définition côté web, lue par la grille, les lignes et la fiche du volet IA. Les trois passent de `card-outline` à `copy-outline`.
+- `web/scripts/extract_icons.py` : `card-outline` y figurait deux fois. La seconde occurrence, à côté de `book-outline`, servait aux cartes mémo : elle devient `copy-outline`. La première reste pour `web/src/pages/AccountPage.tsx` (ligne « Plan », le paiement), donc `card-outline` reste aussi dans `icons.generated.ts`.
+- `icons.generated.ts` régénéré par `python3 web/scripts/extract_icons.py` (66 -> 67 icônes). Le diff ne contient que l'ajout de `copy-outline` : toutes les autres entrées sont identiques à l'octet près, le script reproduit donc le fichier versionné.
+- Vérifications : grep `card-outline` sur `mobile/app`, `mobile/src`, `mobile/.maestro`, `packages`, `web/src` et `web/scripts` : il ne reste que `AccountPage.tsx`, la ligne 21 de `extract_icons.py` et l'entrée générée correspondante. `npm run typecheck` et `npm run lint` passent dans `mobile/` (0 erreur, un avertissement préexistant dans `purchaseService.ts`, non touché). `npm run typecheck` et `npm run lint` passent dans `web/`.
+- Hors périmètre, non modifiés : les maquettes et recherches antérieures (`mobile-design-mockups/`, `docs/research/task-424-*`) qui dessinent encore `card-outline`. Ce sont des archives de maquettes, pas du code de l'app.
+
+Hors de portée de cet agent : le contrôle visuel de l'onglet IA et d'une fiche de cartes mémo sur mobile et web, que la description laisse au propriétaire. Seul le backend déployé fonctionne, et la branche n'est pas déployée.
+<!-- SECTION:NOTES:END -->

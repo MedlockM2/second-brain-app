@@ -25,7 +25,7 @@ export interface ArtifactFormat {
 export const ARTIFACT_FORMATS: readonly ArtifactFormat[] = [
   { type: "summary_short", labelKey: "artifacts.type.summaryShort", icon: "document-text-outline", tone: "f-summary" },
   { type: "notes", labelKey: "artifacts.type.notes", icon: "book-outline", tone: "f-notes" },
-  { type: "flashcards", labelKey: "artifacts.type.flashcards", icon: "card-outline", tone: "f-flashcards" },
+  { type: "flashcards", labelKey: "artifacts.type.flashcards", icon: "copy-outline", tone: "f-flashcards" },
   { type: "quiz", labelKey: "artifacts.type.quiz", icon: "help-circle-outline", tone: "f-quiz" },
 ];
 
