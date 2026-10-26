@@ -277,7 +277,10 @@ paths:
         Request a generation over a media or a folder. The per-media POST route is
         gone (task-270). `parameters` carries the generation options (task-531);
         an option at its default is dropped before the artifact id is computed, so
-        a request spelling out every default is the request without options.
+        a request spelling out every default is the request without options. On a
+        folder, `parameters.source_ids` limits the generation to the chosen sources
+        (task-532); a list naming every source of the folder is the request without
+        it.
       requestBody:
         required: true
         content:
@@ -634,7 +637,8 @@ components:
         once cleaned, are dropped before the artifact id is computed, so a request
         at the defaults is the request without options. `language` is set by the
         service from the reading language and refused from a client (not_accepted)
-        until task-533; `source_ids` likewise until task-532.
+        until task-533. `source_ids` (folder scope only) chooses the sources the
+        generation reads and is never stored in the entry's parameters.
       properties:
         length:
           type: [string, 'null']
@@ -668,6 +672,29 @@ components:
             space. Passed to the model as the reader's quoted words, never as an
             instruction; when the sources do not treat the topic, the artifact says
             so instead of inventing. No default: absent means no focus.
+        source_ids:
+          type: [array, 'null']
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+          description: >
+            scope=folder only, every artifact_type (task-532). The media_item_ids,
+            among the folder's and its subfolders' media, the generation is limited
+            to; absent or null means every source of the folder. The resolution is
+            restricted before any transcript is read, so the exclusions (a source
+            with no usable text), the waits (a source still being transcribed), the
+            ceilings (scope_too_large, scope_empty), the minutes checked and
+            debited (one per five sources) and the entry's source_count and sources
+            all apply to the chosen sources. Not stored in the entry's parameters and
+            not hashed a second time: the chosen sources enter the artifact id as its
+            source ids, so a list naming every source of the folder gives the same
+            artifact_id as a request without it. Refused with 422
+            invalid_artifact_parameters on scope=media (not_applicable), as an empty
+            list, a non-string or repeated id (invalid_value), or when an id is not a
+            media of this folder or its subfolders in the caller's library
+            (not_in_scope); nothing is written or debited.
     ArtifactCreateResponse:
       type: object
       required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, generation_outcome]
@@ -720,8 +747,10 @@ components:
               description: invalid_artifact_parameters only, the offending key.
             reason:
               type: string
-              enum: [unknown_parameter, not_accepted, not_applicable, invalid_value]
-              description: invalid_artifact_parameters only, why the key was refused.
+              enum: [unknown_parameter, not_accepted, not_applicable, invalid_value, not_in_scope]
+              description: >
+                invalid_artifact_parameters only, why the key was refused.
+                not_in_scope is a source_ids id that is not a media of the folder.
             source_count: { type: integer, description: scope_too_large only. }
             max_sources: { type: integer, description: scope_too_large only. }
             estimated_tokens: { type: integer, description: scope_too_large only. }
@@ -948,8 +977,9 @@ components:
     ArtifactRequestRefused:
       description: >
         Typed refusal of a generation request: invalid_artifact_parameters (an
-        option the type cannot take), scope_empty, or scope_too_large. Nothing is
-        written and nothing is debited.
+        option the type or the scope cannot take, or a source_ids the folder cannot
+        satisfy), scope_empty, or scope_too_large. Nothing is written and nothing is
+        debited.
       content:
         application/json:
           schema:

@@ -56,9 +56,9 @@ Operational behavior now implemented in runtime:
 
 `task-270` makes artifact generation **scope-addressed** and its storage **append-only**:
 - one set of routes under `/api/artifacts` serves a single media (`scope="media"`) and a folder (`scope="folder"`); the per-media routes are gone, with no alias
-- a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=`
+- a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=` — or only the sources the request chose among them (`parameters.source_ids`, §3, task-532)
 - every generation writes a **new immutable entry** carrying a snapshot of the sources it read; nothing is overwritten, nothing is invalidated, and adding or removing a media from a folder changes no existing entry
-- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters` — the reading language plus the generation options set away from their defaults (§3, task-531); a folder regenerates only when its contents changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
+- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters` — the reading language plus the generation options set away from their defaults (§3, task-531); a folder regenerates only when its contents, or the sources chosen among them, changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
 - **a media-scoped generation is paid for once per content, not once per account** (task-394). Under each account's entry sits a *shared generation* keyed on the content alone — the same hash minus the user — so the second account to ask for the same type in the same language over the same content is served by the generation the first one paid for, with no provider call. It applies to every media-scope type, `review_blurb` included, and to folder scope not at all. Two things it deliberately does not change: **the listing** (an account still sees only the entries it asked for; a shared generation is indexed under a scope key no account can produce and is not addressable through the API), and **the quota** (an account is debited whether or not a generation ran, because it gains an artifact either way — the avoided provider call is the operator's saving). Artifacts over a **user-uploaded file** are excluded, since the content identity of an upload is itself account-scoped
 - ownership is checked by comparing the entry's `user_id`, not by resolving a media item — a folder artifact has none
 - a media-scoped request still accepts a user-owned `media_item_id`, but storage and
@@ -297,7 +297,11 @@ Request:
   "parameters": {
     "count": "fewer",
     "difficulty": "hard",
-    "focus": "the pop-up and how to time it"
+    "focus": "the pop-up and how to time it",
+    "source_ids": [
+      "0b7d4c1e-2f3a-4e5b-9c6d-7e8f9a0b1c2d",
+      "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d"
+    ]
   }
 }
 ```
@@ -311,6 +315,7 @@ Request:
 | `count` | `fewer`, `standard`, `more` | `quiz`, `flashcards` | `standard` |
 | `difficulty` | `easy`, `medium`, `hard` | `quiz`, `flashcards` | `medium` |
 | `focus` | free text, at most 300 characters once trimmed and its whitespace runs (newlines included) collapsed to one space | `summary_short`, `notes`, `quiz`, `flashcards` | none |
+| `source_ids` | non-empty list of distinct `media_item_id`s of the folder or its subfolders | `summary_short`, `notes`, `quiz`, `flashcards` — **`scope=folder` only** | every source of the folder |
 
 - **Defaults are not stored.** An option at its default value, a `focus` that is
   empty once cleaned, and a JSON `null` are dropped before the `artifact_id` is
@@ -332,9 +337,27 @@ Request:
   quoted words, never as an instruction, and when the sources do not treat the
   topic the artifact says so instead of inventing (in the first key point of a
   summary, the `context` of notes, the `title` of a quiz or a deck).
+- **`source_ids` chooses the sources of a folder** (task-532), as the
+  "Personnaliser" screen's source picker does, every source ticked by default.
+  The ids are the `media_item_id`s the folder listing returns. The resolution is
+  limited to them *before* any transcript is read, and everything that follows
+  applies to that part of the folder alone: a chosen source still being
+  transcribed is waited on, a chosen source with no usable text is listed as
+  excluded, the ceilings (`scope_too_large`, `scope_empty`) count the chosen
+  sources, the minutes checked and debited are one per five chosen sources, and the
+  entry's `source_count` and `sources` describe the subset. `source_ids` itself is
+  **not stored in `parameters` and not hashed a second time**: the chosen sources
+  enter the `artifact_id` as its source ids, like any source set. So a list naming
+  every source of the folder *is* the request without the option — same
+  `artifact_id`, same entry — and two requests choosing the same sources are one
+  artifact. Refused with the `422` below: on `scope=media` (`not_applicable`, a
+  media has one source), as an empty list, a non-string id or a repeated id
+  (`invalid_value`), and when an id is not a media of this folder or its
+  subfolders in the caller's library (`not_in_scope`) — checked once the folder is
+  listed and before any transcript is read, so nothing is written or debited.
 - **`language` is not a client option.** The service sets it from the reading
   language (see below); sent by the client, it is refused (`not_accepted`) until
-  task-533. `source_ids` is refused the same way until task-532.
+  task-533.
 - Anything else — an unknown key, a value outside its list, an option on a type it
   does not apply to (`count` on `notes`, `length` on `quiz`) — is the typed `422`
   `invalid_artifact_parameters` below. It is checked before anything is read: no
@@ -391,13 +414,15 @@ forever. A preparation that will not complete ends the wait early with
 `sources_preparation_failed`: an ingestion that failed or produced no readable
 transcript. `sources_changed` is the residual case where the scope's
 sources moved while the entry waited, so the generation would no longer be the one
-that was asked for.
+that was asked for. An entry over chosen sources (`source_ids`) resumes over those
+same sources, not the whole folder; one of them leaving the folder meanwhile is
+`sources_changed` too.
 
 Typed refusals:
 
 | Situation | Status | `error_code` | Retryable |
 |---|---|---|---|
-| `parameters` holds a key or a value the type cannot take | `422` | `invalid_artifact_parameters` | no |
+| `parameters` holds a key or a value the type cannot take, or a `source_ids` the folder cannot satisfy | `422` | `invalid_artifact_parameters` | no |
 | No source at all in the scope, or every source definitively unusable | `422` | `scope_empty` | no |
 | More than 25 sources, or more than 120 000 estimated tokens | `422` | `scope_too_large` | no |
 | Out of minutes (folder scope only) | `403` | `out_of_minutes` | next period, or on upgrade |
@@ -421,9 +446,10 @@ Typed refusals:
 | `reason` | Meaning |
 |---|---|
 | `unknown_parameter` | The key is not a generation option |
-| `not_accepted` | A key the API knows but does not take from a client: `language` (until task-533), `source_ids` (until task-532) |
-| `not_applicable` | The option exists but not for this `artifact_type` |
-| `invalid_value` | A value outside the option's list, a `focus` that is not a string, or a `focus` longer than 300 characters once cleaned |
+| `not_accepted` | A key the API knows but does not take from a client: `language` (until task-533) |
+| `not_applicable` | The option exists but not for this `artifact_type` — or, for `source_ids`, not for `scope=media` |
+| `invalid_value` | A value outside the option's list, a `focus` that is not a string, a `focus` longer than 300 characters once cleaned, or a `source_ids` that is not a non-empty list of distinct string ids |
+| `not_in_scope` | An id of `source_ids` is not a media of this folder or its subfolders in the caller's library |
 
 An unknown `artifact_type` keeps its `400`, whatever its `parameters`.
 
@@ -438,7 +464,8 @@ generation can be blocked by the state of a translation.
 A generation over a **single item** is free — its LLM cost is already inside what
 the item cost to ingest — so `out_of_minutes` can only ever come back on
 `scope=folder`, where the cost scales with the sources behind it (one minute per
-five sources). Its `message` names the figures and the app shows it verbatim.
+five sources, counted on the chosen sources when the request sets `source_ids`).
+Its `message` names the figures and the app shows it verbatim.
 
 ### 4) GET /api/artifacts?scope=&scope_id=
 
