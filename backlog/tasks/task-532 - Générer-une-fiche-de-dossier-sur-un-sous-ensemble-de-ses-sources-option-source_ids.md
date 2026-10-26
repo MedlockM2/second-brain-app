@@ -3,10 +3,10 @@ id: TASK-532
 title: >-
   Générer une fiche de dossier sur un sous-ensemble de ses sources (option
   source_ids)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 16:46'
-updated_date: '2026-10-26 17:01'
+updated_date: '2026-10-26 19:48'
 labels:
   - backend
   - artifacts
