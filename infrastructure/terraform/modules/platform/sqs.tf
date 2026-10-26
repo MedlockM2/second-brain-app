@@ -198,8 +198,8 @@ resource "aws_sqs_queue" "deepgram_transcription" {
 }
 
 # =============================================================================
-# Artifact Generator (unified queue for flashcards, notes, quiz, summary_short,
-# summary_detailed — consolidation per task-195)
+# Artifact Generator (unified queue for flashcards, notes, quiz, summary_short —
+# consolidation per task-195)
 # =============================================================================
 
 resource "aws_sqs_queue" "artifact_generator_dlq" {

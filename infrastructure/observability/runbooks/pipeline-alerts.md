@@ -159,7 +159,7 @@ the image still runs the Lambda Web Adapter with `AWS_LWA_INVOKE_MODE=response_s
 | `audio-download-dlq` | `audio-download-queue` | Audio download |
 | `deepgram-transcription-dlq` | `deepgram-transcription-queue` | Deepgram transcription |
 | `article-extraction-dlq` | `article-extraction-queue` | Article extraction |
-| `artifact-generator-dlq` | `artifact-generator-queue` | Artifact generation (flashcards, notes, quiz, summary_short, summary_detailed) |
+| `artifact-generator-dlq` | `artifact-generator-queue` | Artifact generation (flashcards, notes, quiz, summary_short) |
 | `episode-completed-dlq` | `episode-completed-events` | Episode completed fan-out |
 | `push-notification-dlq` | `push-notification-queue` | Push notifications |
 | `chat-dlq` | `chat-queue` | Chat answers (worker-chat, task-463) — see "Chat DLQ" below |

@@ -1152,7 +1152,7 @@ queue      queue      queue                         queue    queue      the requ
 
 ### Artifact generation (unified worker — task-195)
 
-All artifact generation (flashcards, notes, quiz, summary_short, summary_detailed) is handled by a single unified worker consuming one SQS queue (`artifact-generator-queue`). The worker dispatches to per-kind generators via a registry keyed on `MediaArtifactType`.
+All artifact generation (flashcards, notes, quiz, summary_short) is handled by a single unified worker consuming one SQS queue (`artifact-generator-queue`). The worker dispatches to per-kind generators via a registry keyed on `MediaArtifactType`.
 
 | Component | Path |
 |---|---|
@@ -1161,10 +1161,9 @@ All artifact generation (flashcards, notes, quiz, summary_short, summary_detaile
 | Common corpus (transcript download, byte measure and token estimate, corpus-first prompt layout and its shared instruction fragments) — task-460 | `media_summarizer/core/services/llm_corpus.py` |
 | Generator registry | `media_summarizer/workers/artifact_generator/generators/__init__.py` |
 | FlashcardsGenerator (prompt + pydantic schema + structured outputs) | `media_summarizer/workers/artifact_generator/generators/flashcards.py` |
-| NotesGenerator (prompt + pydantic schema) | `media_summarizer/workers/artifact_generator/generators/notes.py` |
+| NotesGenerator (prompt + pydantic schema; `context` and `notable_quotes` with a required `source_ref`, task-537) | `media_summarizer/workers/artifact_generator/generators/notes.py` |
 | QuizGenerator (prompt + pydantic schema + structured outputs) | `media_summarizer/workers/artifact_generator/generators/quiz.py` |
 | SummaryShortGenerator (prompt + pydantic schema) | `media_summarizer/workers/artifact_generator/generators/summary_short.py` |
-| SummaryDetailedGenerator (prompt + pydantic schema) | `media_summarizer/workers/artifact_generator/generators/summary_detailed.py` |
 
 **Model** (owner decision of 2026-10-10, task-439, replacing the per-kind split of task-72): one OpenAI model, `gpt-6-luna` in Standard processing, for every kind, the internal `review_blurb`, the re-translation of an existing artifact (task-395) and the future chat. It is read from a single place, `media_summarizer/core/services/llm_config.py`; no generator chooses its own model.
 

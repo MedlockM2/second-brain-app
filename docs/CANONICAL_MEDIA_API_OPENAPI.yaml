@@ -589,7 +589,7 @@ components:
       properties:
         artifact_type:
           type: string
-          enum: [summary, quiz, notes]
+          enum: [summary_short, quiz, notes, flashcards]
         parameters:
           type: object
           additionalProperties: true
@@ -639,12 +639,16 @@ components:
               transcript_s3_key: job_01JQ8X8J5T9Q5V7Q4TW4N1HY03.txt
               generator_version: notes:gpt-4o-mini-2024-07-18:prompt-v1
             content:
+              context: "2-3 sentences setting the stage, or empty"
               objectives: ["..."]
               concepts:
                 - term: "..."
                   explanation: "..."
                   importance: core
               key_points: ["..."]
+              notable_quotes:
+                - text: "Verbatim passage"
+                  source_ref: "[S1]"
               action_items: ["..."]
               glossary:
                 - term: "..."
@@ -754,7 +758,7 @@ components:
         media_item_id: { type: string }
         artifact_type:
           type: string
-          enum: [summary, quiz, notes]
+          enum: [summary_short, quiz, notes, flashcards]
         status:
           type: string
           enum: [queued, generating, ready, failed]

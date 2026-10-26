@@ -8,13 +8,34 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional, Sequence
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from media_summarizer.core.services import llm_corpus as corpus
 
 
 class NotesValidationError(Exception):
     """Raised when the model output does not match the canonical notes schema."""
+
+
+class NotesQuote(BaseModel):
+    """A verbatim quote and the source it came from.
+
+    ``source_ref`` is mandatory here and optional everywhere else: a quote is
+    literal text, so its origin is objectively defined and checkable. A concept or
+    key point legitimately draws on several sources, and demanding a reference
+    there would only make the model invent one.
+    """
+
+    text: str
+    source_ref: str
+
+    @field_validator("text", "source_ref")
+    @classmethod
+    def _non_empty_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value must be non-empty")
+        return normalized
 
 
 class NotesConcept(BaseModel):
@@ -59,9 +80,13 @@ class NotesGlossaryItem(BaseModel):
 
 class NotesContent(BaseModel):
     title: str
+    # Optional: empty when the sources do not set a scene (who, what, why).
+    context: str = ""
     objectives: List[str]
     concepts: List[NotesConcept]
     key_points: List[str]
+    # Optional: empty when no passage is worth quoting.
+    notable_quotes: List[NotesQuote] = Field(default_factory=list)
     action_items: List[str]
     glossary: List[NotesGlossaryItem]
 
@@ -72,6 +97,11 @@ class NotesContent(BaseModel):
         if not normalized:
             raise ValueError("title must be non-empty")
         return normalized
+
+    @field_validator("context")
+    @classmethod
+    def _normalized_context(cls, value: str) -> str:
+        return value.strip()
 
     @field_validator("objectives", "key_points", "action_items")
     @classmethod
@@ -101,10 +131,12 @@ class NotesGenerator:
         language: Optional[str] = None,
     ) -> str:
         optional_sections = corpus.empty_section_instruction(
-            'Every section is optional: leave "objectives" empty when the sources '
-            'do not teach anything to achieve, "concepts" empty when they explain '
-            'no notion, "action_items" empty when they prescribe nothing, and '
-            '"glossary" empty when they introduce no term.'
+            'Every section is optional: leave "context" empty when the sources do '
+            'not set the scene, "objectives" empty when the sources do not teach '
+            'anything to achieve, "concepts" empty when they explain no notion, '
+            '"notable_quotes" empty when no passage is worth quoting rather than '
+            'quoting for the sake of it, "action_items" empty when they prescribe '
+            'nothing, and "glossary" empty when they introduce no term.'
         )
         importance_rule = (
             "- `importance` is either `core` or `supporting`, and the two are not "
@@ -125,17 +157,23 @@ Rules:
 - Build one set of notes across all the sources, not one section per source.
 - Avoid sponsor/ad content unless it is central to the source material.
 {corpus.coverage_instruction("entry", "entries", fields='"concepts" and "key_points"')}
+{corpus.source_balance_instruction("entry", "entries")}
+- "context": 2-3 sentences setting the stage (who, what, why).
+- "notable_quotes": copy verbatim only the passages that carry the material
+  themselves, and never quote a passage that a key point or a concept already states.
+{corpus.source_ref_instruction(required=True)}
 {optional_sections}
 - Every string must be concise and useful.
 {importance_rule}
 {corpus.transcript_markers_instruction()}
 {corpus.dated_facts_instruction()}
-{corpus.subject_matter_instruction()}
+{corpus.subject_matter_instruction(verbatim_exception=True)}
 {corpus.title_instruction("set of notes")}
 
 Return JSON with this exact schema:
 {{
   "title": "A short specific title",
+  "context": "2-3 sentences setting the stage",
   "objectives": ["..."],
   "concepts": [
     {{
@@ -145,6 +183,7 @@ Return JSON with this exact schema:
     }}
   ],
   "key_points": ["..."],
+  "notable_quotes": [{{"text": "Quote copied verbatim", "source_ref": "[S1]"}}],
   "action_items": ["..."],
   "glossary": [
     {{

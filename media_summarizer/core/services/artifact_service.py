@@ -105,7 +105,6 @@ ARTIFACT_GENERATION_ENABLED = os.environ.get(
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 SUMMARY_BUCKET = required_env("SUMMARY_BUCKET")
 SUMMARY_SHORT_BUCKET = required_env("SUMMARY_SHORT_BUCKET")
-SUMMARY_DETAILED_BUCKET = required_env("SUMMARY_DETAILED_BUCKET")
 QUIZ_BUCKET = required_env("QUIZ_BUCKET")
 NOTES_BUCKET = required_env("NOTES_BUCKET")
 FLASHCARDS_BUCKET = required_env("FLASHCARDS_BUCKET")
@@ -150,7 +149,6 @@ INTERNAL_GENERATION_STALL_SECONDS = int(
 
 REQUESTABLE_ARTIFACT_TYPES = {
     MediaArtifactType.SUMMARY_SHORT,
-    MediaArtifactType.SUMMARY_DETAILED,
     MediaArtifactType.QUIZ,
     MediaArtifactType.NOTES,
     MediaArtifactType.FLASHCARDS,
@@ -298,7 +296,12 @@ def _now_utc() -> datetime:
 def _artifact_type(value: Any) -> MediaArtifactType:
     if isinstance(value, MediaArtifactType):
         return value
-    return MediaArtifactType(str(value))
+    try:
+        return MediaArtifactType(str(value))
+    except ValueError as exc:
+        # An unknown or retired type is a caller's mistake: the endpoint maps this
+        # error to the 400 INVALID_ARTIFACT_TYPE, where a bare ValueError was a 500.
+        raise ArtifactTypeNotEnabledError(f"Artifact type '{value}' is unknown.") from exc
 
 
 def _artifact_scope(value: Any) -> ArtifactScope:
@@ -355,9 +358,11 @@ def get_generator_version(artifact_type: MediaArtifactType) -> str:
     """
     prompt_versions = {
         MediaArtifactType.SUMMARY_SHORT: "prompt-v4",
-        MediaArtifactType.SUMMARY_DETAILED: "prompt-v4",
         MediaArtifactType.QUIZ: "prompt-v4",
-        MediaArtifactType.NOTES: "prompt-v4",
+        # v5: context, notable quotes with their source, and the source balance
+        # rule on concepts and key points. Existing notes are not regenerated; the
+        # new version only tells a new generation apart from an old one.
+        MediaArtifactType.NOTES: "prompt-v5",
         MediaArtifactType.FLASHCARDS: "prompt-v4",
         # v3: v1's prose paragraph was unreadable on the triage card, and v2's
         # structured card asked for bullets of up to 110 characters when the card
@@ -374,7 +379,6 @@ def get_generator_version(artifact_type: MediaArtifactType) -> str:
 def get_artifact_bucket(artifact_type: MediaArtifactType) -> str:
     buckets = {
         MediaArtifactType.SUMMARY_SHORT: SUMMARY_SHORT_BUCKET,
-        MediaArtifactType.SUMMARY_DETAILED: SUMMARY_DETAILED_BUCKET,
         MediaArtifactType.QUIZ: QUIZ_BUCKET,
         MediaArtifactType.NOTES: NOTES_BUCKET,
         MediaArtifactType.FLASHCARDS: FLASHCARDS_BUCKET,

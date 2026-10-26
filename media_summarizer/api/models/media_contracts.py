@@ -106,7 +106,6 @@ LEGACY_PROCESSING_JOB_STATUS_MAP: Dict[str, ProcessingJobLifecycleStatus] = {
 
 class ArtifactType(str, Enum):
     SUMMARY_SHORT = "summary_short"
-    SUMMARY_DETAILED = "summary_detailed"
     QUIZ = "quiz"
     NOTES = "notes"
     FLASHCARDS = "flashcards"

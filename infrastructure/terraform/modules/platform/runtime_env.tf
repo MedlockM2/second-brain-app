@@ -86,7 +86,6 @@ locals {
     TRANSCRIPT_BUCKET       = aws_s3_bucket.transcripts.bucket
     SUMMARY_BUCKET          = aws_s3_bucket.summaries.bucket
     SUMMARY_SHORT_BUCKET    = aws_s3_bucket.summary_short.bucket
-    SUMMARY_DETAILED_BUCKET = aws_s3_bucket.summary_detailed.bucket
     NOTES_BUCKET            = aws_s3_bucket.notes.bucket
     FLASHCARDS_BUCKET       = aws_s3_bucket.flashcards.bucket
     QUIZ_BUCKET             = aws_s3_bucket.quiz.bucket

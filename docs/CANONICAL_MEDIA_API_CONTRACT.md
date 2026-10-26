@@ -293,7 +293,7 @@ Request:
 {
   "scope": "folder",
   "scope_id": "c4ef2e55-8449-4a71-be46-bcf1a6eeca3e",
-  "artifact_type": "summary_detailed",
+  "artifact_type": "notes",
   "parameters": {
     "language": "fr"
   }
@@ -390,7 +390,7 @@ artifact type.
   "artifacts": [
     {
       "artifact_id": "art_9f3c...",
-      "artifact_type": "summary_detailed",
+      "artifact_type": "notes",
       "status": "ready",
       "title": "Les limites du scaling",
       "source_count": 7,
@@ -451,7 +451,7 @@ The same fields plus the scope and the immutable source snapshot:
 ```json
 {
   "artifact_id": "art_9f3c...",
-  "artifact_type": "summary_detailed",
+  "artifact_type": "notes",
   "status": "ready",
   "title": "Les limites du scaling",
   "source_count": 7,
@@ -469,7 +469,7 @@ The same fields plus the scope and the immutable source snapshot:
       "excluded_reason": null
     }
   ],
-  "s3_key": "summary_detailed/art_9f3c....json"
+  "s3_key": "notes/art_9f3c....json"
 }
 ```
 
@@ -539,7 +539,7 @@ extra.
         "transcript_s3_key": "job_01JQ8X8J5T9Q5V7Q4TW4N1HY03.txt"
       }
     ],
-    "generator_version": "notes:gpt-6-luna:prompt-v4",
+    "generator_version": "notes:gpt-6-luna:prompt-v5",
     "llm_usage": {
       "model": "gpt-6-luna",
       "prompt_tokens": 4622,
@@ -550,6 +550,7 @@ extra.
     },
     "content": {
       "title": "...",
+      "context": "2-3 sentences, or empty",
       "objectives": ["..."],
       "concepts": [
         {
@@ -559,6 +560,12 @@ extra.
         }
       ],
       "key_points": ["..."],
+      "notable_quotes": [
+        {
+          "text": "Verbatim passage",
+          "source_ref": "[S1]"
+        }
+      ],
       "action_items": ["..."],
       "glossary": [
         {
@@ -572,10 +579,11 @@ extra.
 ```
 
 Every content schema carries a `title` (3-80 characters) emitted by the model.
-`summary_detailed.notable_quotes` is a list of `{text, source_ref}` where
-`source_ref` is **required** — a quote is verbatim, so its origin is checkable.
-Flashcards and quiz questions carry an **optional** `source_ref`, null when the
-entry draws on several sources. `source_ref` is the corpus tag (`"[S2]"`), which
+`notes.notable_quotes` is a list of `{text, source_ref}` where `source_ref` is
+**required** — a quote is verbatim, so its origin is checkable. The list itself is
+optional and empty when no passage is worth quoting. `notes.context` is 2-3
+sentences setting the stage, or empty. Flashcards and quiz questions carry an
+**optional** `source_ref`, null when the entry draws on several sources. `source_ref` is the corpus tag (`"[S2]"`), which
 the client resolves through the index in `sources`; the model is never asked to
 write a media id.
 
@@ -588,9 +596,10 @@ Canonical `notes` content shape for client rendering:
   "generated_at": "ISO-8601",
   "source": {
     "transcript_s3_key": "...",
-    "generator_version": "notes:...:prompt-v1"
+    "generator_version": "notes:...:prompt-v5"
   },
   "content": {
+    "context": "...",
     "objectives": [
       "..."
     ],
@@ -603,6 +612,12 @@ Canonical `notes` content shape for client rendering:
     ],
     "key_points": [
       "..."
+    ],
+    "notable_quotes": [
+      {
+        "text": "...",
+        "source_ref": "[S1]"
+      }
     ],
     "action_items": [
       "..."
@@ -1042,7 +1057,7 @@ note).
 
 `MediaArtifact`:
 - `scope`: `media | folder`
-- `artifact_type`: `summary_short | summary_detailed | notes | quiz | flashcards`
+- `artifact_type`: `summary_short | notes | quiz | flashcards`
 - `status`: `queued | generating | ready | failed`
 
 `ProcessingJob` lifecycle usage:

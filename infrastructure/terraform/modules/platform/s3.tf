@@ -59,20 +59,6 @@ resource "aws_s3_bucket" "summary_short" {
   }
 }
 
-resource "aws_s3_bucket" "summary_detailed" {
-  bucket = "${var.project_name}-summary-detailed-${data.aws_caller_identity.current.account_id}-${var.environment}"
-  tags = {
-    Name = "${var.project_name}-summary-detailed${local.suffix}"
-  }
-
-  # Buckets hold the only copy of every transcript, summary and uploaded
-  # document. prevent_destroy errors at PLAN time, so "I destroyed the
-  # wrong environment" becomes "the plan refused to run".
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
 resource "aws_s3_bucket" "notes" {
   bucket = "${var.project_name}-notes-${data.aws_caller_identity.current.account_id}-${var.environment}"
   tags = {
@@ -272,11 +258,6 @@ output "summaries_bucket_name" {
 output "summary_short_bucket_name" {
   description = "Name of the S3 bucket for short summaries"
   value       = aws_s3_bucket.summary_short.bucket
-}
-
-output "summary_detailed_bucket_name" {
-  description = "Name of the S3 bucket for detailed summaries"
-  value       = aws_s3_bucket.summary_detailed.bucket
 }
 
 output "notes_bucket_name" {

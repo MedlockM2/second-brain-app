@@ -68,7 +68,7 @@ class ArtifactCreateRequest(BaseModel):
     scope_id: str = Field(..., description="Media item id, or folder id")
     artifact_type: str = Field(
         ...,
-        description="Type of artifact: summary_short, summary_detailed, notes, quiz, flashcards",
+        description="Type of artifact: summary_short, notes, quiz, flashcards",
     )
     parameters: Optional[dict] = Field(
         default=None, description="Optional parameters for artifact generation"

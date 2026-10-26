@@ -245,9 +245,6 @@ async def process_message(message: Dict[str, Any]) -> None:
         from media_summarizer.workers.artifact_generator.generators.review_blurb import (
             ReviewBlurbValidationError,
         )
-        from media_summarizer.workers.artifact_generator.generators.summary_detailed import (
-            SummaryDetailedValidationError,
-        )
         from media_summarizer.workers.artifact_generator.generators.summary_short import SummaryShortValidationError
 
         if isinstance(exc, (
@@ -256,7 +253,6 @@ async def process_message(message: Dict[str, Any]) -> None:
             QuizValidationError,
             ReviewBlurbValidationError,
             SummaryShortValidationError,
-            SummaryDetailedValidationError,
         )):
             error_code = "VALIDATION_ERROR"
 

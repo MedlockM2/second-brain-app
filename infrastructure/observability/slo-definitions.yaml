@@ -97,13 +97,12 @@ slos:
   - name: artifact_generation_success_rate
     description: >
       Proportion of artifact generation requests that produce a READY artifact
-      within the expected time window. Covers summary_short, summary_detailed,
-      notes, and flashcards.
+      within the expected time window. Covers summary_short, notes, and flashcards.
     sli:
       good_event: artifact.generation.completed
       bad_event: artifact.generation.failed
       dimensions:
-        - artifact_type: [summary_short, summary_detailed, notes, flashcards]
+        - artifact_type: [summary_short, notes, flashcards]
     target: 95.0%
     burn_rate_thresholds:
       - window: 15m
