@@ -3,9 +3,10 @@ id: TASK-538
 title: >-
   Retirer le résumé détaillé des apps mobile et web et afficher le contexte et
   les citations des notes de cours
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 17:00'
+updated_date: '2026-10-26 17:24'
 labels:
   - mobile
   - web
