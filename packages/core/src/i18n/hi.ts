@@ -122,7 +122,6 @@ export const hi: Catalog = {
   "auth.apple.failed":
     "Apple से साइन इन पूरा नहीं हो सका। कृपया फिर से कोशिश करें।",
   "artifacts.type.summaryShort": "सारांश",
-  "artifacts.type.summaryDetailed": "विस्तृत सारांश",
   "artifacts.type.notes": "अध्ययन नोट्स",
   "artifacts.type.flashcards": "फ़्लैशकार्ड",
   "artifacts.type.quiz": "क्विज़",
@@ -590,10 +589,7 @@ export const hi: Catalog = {
     "बनाना फिर से शुरू हुआ। कुछ देर बाद वापस आएँ।",
   "artifact.section.keyPoints": "मुख्य बिंदु",
   "artifact.section.takeaway": "निचोड़",
-  "artifact.section.context": "संदर्भ",
-  "artifact.section.mainTopics": "मुख्य विषय",
   "artifact.section.quotes": "उल्लेखनीय उद्धरण",
-  "artifact.section.conclusion": "निष्कर्ष",
   "artifact.section.objectives": "उद्देश्य",
   "artifact.section.concepts": "अवधारणाएँ",
   "artifact.section.actionItems": "करने योग्य काम",

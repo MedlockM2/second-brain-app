@@ -122,7 +122,6 @@ export const pt: Catalog = {
   "auth.apple.failed":
     "Não foi possível concluir a sessão com a Apple. Tente novamente.",
   "artifacts.type.summaryShort": "Resumo",
-  "artifacts.type.summaryDetailed": "Resumo detalhado",
   "artifacts.type.notes": "Apontamentos",
   "artifacts.type.flashcards": "Cartões de memória",
   "artifacts.type.quiz": "Questionário",
@@ -590,10 +589,7 @@ export const pt: Catalog = {
     "Geração reiniciada. Volte dentro de um momento.",
   "artifact.section.keyPoints": "Pontos-chave",
   "artifact.section.takeaway": "A reter",
-  "artifact.section.context": "Contexto",
-  "artifact.section.mainTopics": "Temas principais",
   "artifact.section.quotes": "Citações marcantes",
-  "artifact.section.conclusion": "Conclusão",
   "artifact.section.objectives": "Objetivos",
   "artifact.section.concepts": "Conceitos",
   "artifact.section.actionItems": "Ações a realizar",

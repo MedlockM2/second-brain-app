@@ -199,7 +199,6 @@ export const en = {
 
   // --- Artifact tiles and panel ---
   "artifacts.type.summaryShort": "Summary",
-  "artifacts.type.summaryDetailed": "Detailed summary",
   "artifacts.type.notes": "Learning notes",
   "artifacts.type.flashcards": "Flashcards",
   "artifacts.type.quiz": "Quiz",
@@ -798,10 +797,7 @@ export const en = {
     "Generation restarted. Come back in a moment.",
   "artifact.section.keyPoints": "Key points",
   "artifact.section.takeaway": "Takeaway",
-  "artifact.section.context": "Context",
-  "artifact.section.mainTopics": "Main topics",
   "artifact.section.quotes": "Notable quotes",
-  "artifact.section.conclusion": "Conclusion",
   "artifact.section.objectives": "Objectives",
   "artifact.section.concepts": "Concepts",
   "artifact.section.actionItems": "Action items",

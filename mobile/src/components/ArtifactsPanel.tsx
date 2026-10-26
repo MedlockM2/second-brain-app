@@ -1,5 +1,5 @@
 /**
- * The complete "AI" tab of a scope: the five generation tiles on top, the
+ * The complete "AI" tab of a scope: the four generation tiles on top, the
  * append-only history underneath.
  *
  * Rendered by both `app/media/[id].tsx` (a single media item) and
@@ -52,7 +52,7 @@ import { t } from "../i18n";
 
 export interface ArtifactsPanelProps {
   /**
-   * The newest state per artifact type, driving the five tiles. A screen also
+   * The newest state per artifact type, driving the four tiles. A screen also
    * reports its own in-flight generation requests through it, so a tap flips the
    * tile without waiting for the POST to answer.
    */

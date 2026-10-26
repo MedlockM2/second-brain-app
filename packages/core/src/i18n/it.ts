@@ -122,7 +122,6 @@ export const it: Catalog = {
   "auth.apple.failed":
     "Non è stato possibile completare l'accesso con Apple. Riprova.",
   "artifacts.type.summaryShort": "Riassunto",
-  "artifacts.type.summaryDetailed": "Riassunto dettagliato",
   "artifacts.type.notes": "Appunti",
   "artifacts.type.flashcards": "Flashcard",
   "artifacts.type.quiz": "Quiz",
@@ -589,10 +588,7 @@ export const it: Catalog = {
     "Generazione riavviata. Torna tra un momento.",
   "artifact.section.keyPoints": "Punti chiave",
   "artifact.section.takeaway": "Da ricordare",
-  "artifact.section.context": "Contesto",
-  "artifact.section.mainTopics": "Temi principali",
   "artifact.section.quotes": "Citazioni notevoli",
-  "artifact.section.conclusion": "Conclusione",
   "artifact.section.objectives": "Obiettivi",
   "artifact.section.concepts": "Concetti",
   "artifact.section.actionItems": "Azioni da fare",

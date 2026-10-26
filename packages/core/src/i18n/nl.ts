@@ -122,7 +122,6 @@ export const nl: Catalog = {
   "auth.apple.failed":
     "Inloggen met Apple kon niet worden afgerond. Probeer het opnieuw.",
   "artifacts.type.summaryShort": "Samenvatting",
-  "artifacts.type.summaryDetailed": "Uitgebreide samenvatting",
   "artifacts.type.notes": "Studienotities",
   "artifacts.type.flashcards": "Flashcards",
   "artifacts.type.quiz": "Quiz",
@@ -590,10 +589,7 @@ export const nl: Catalog = {
     "Genereren opnieuw gestart. Kom straks terug.",
   "artifact.section.keyPoints": "Kernpunten",
   "artifact.section.takeaway": "Om te onthouden",
-  "artifact.section.context": "Context",
-  "artifact.section.mainTopics": "Hoofdthema's",
   "artifact.section.quotes": "Opvallende citaten",
-  "artifact.section.conclusion": "Conclusie",
   "artifact.section.objectives": "Doelen",
   "artifact.section.concepts": "Begrippen",
   "artifact.section.actionItems": "Actiepunten",

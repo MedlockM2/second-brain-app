@@ -143,7 +143,6 @@ export const fr: Catalog = {
   "auth.apple.failed":
     "La connexion avec Apple n'a pas pu aboutir. Veuillez réessayer.",
   "artifacts.type.summaryShort": "Résumé",
-  "artifacts.type.summaryDetailed": "Résumé détaillé",
   "artifacts.type.notes": "Notes de cours",
   "artifacts.type.flashcards": "Cartes mémo",
   "artifacts.type.quiz": "Quiz",
@@ -705,10 +704,7 @@ export const fr: Catalog = {
     "Génération relancée. Revenez dans un instant.",
   "artifact.section.keyPoints": "Points clés",
   "artifact.section.takeaway": "À retenir",
-  "artifact.section.context": "Contexte",
-  "artifact.section.mainTopics": "Thèmes principaux",
   "artifact.section.quotes": "Citations marquantes",
-  "artifact.section.conclusion": "Conclusion",
   "artifact.section.objectives": "Objectifs",
   "artifact.section.concepts": "Concepts",
   "artifact.section.actionItems": "Actions à mener",

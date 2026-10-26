@@ -83,12 +83,11 @@ export type ReviewBlurbStatus = "pending" | "ready" | "failed";
 /**
  * Internal artifact types as produced/accepted by the backend workers.
  * `summary` is the legacy alias still emitted by older items; new ones use
- * `summary_short` / `summary_detailed` explicitly.
+ * `summary_short` explicitly.
  */
 export type ArtifactType =
   | "summary"
   | "summary_short"
-  | "summary_detailed"
   | "notes"
   | "quiz"
   | "flashcards";

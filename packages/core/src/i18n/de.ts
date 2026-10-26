@@ -130,7 +130,6 @@ export const de: Catalog = {
   "auth.apple.failed":
     "Die Anmeldung mit Apple konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
   "artifacts.type.summaryShort": "Zusammenfassung",
-  "artifacts.type.summaryDetailed": "Ausführliche Zusammenfassung",
   "artifacts.type.notes": "Lernnotizen",
   "artifacts.type.flashcards": "Lernkarten",
   "artifacts.type.quiz": "Quiz",
@@ -688,10 +687,7 @@ export const de: Catalog = {
     "Erstellung neu gestartet. Schau in einem Moment wieder vorbei.",
   "artifact.section.keyPoints": "Kernpunkte",
   "artifact.section.takeaway": "Fazit",
-  "artifact.section.context": "Kontext",
-  "artifact.section.mainTopics": "Hauptthemen",
   "artifact.section.quotes": "Bemerkenswerte Zitate",
-  "artifact.section.conclusion": "Schluss",
   "artifact.section.objectives": "Ziele",
   "artifact.section.concepts": "Konzepte",
   "artifact.section.actionItems": "Aufgaben",

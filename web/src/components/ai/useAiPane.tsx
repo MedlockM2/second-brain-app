@@ -37,7 +37,6 @@ import { ArtifactBody, artifactContentTitle } from "./ArtifactBody";
  */
 export const ARTIFACT_PILLS: readonly { type: ArtifactType; labelKey: TranslationKey; icon: IconName }[] = [
   { type: "summary_short", labelKey: "artifacts.type.summaryShort", icon: "document-text-outline" },
-  { type: "summary_detailed", labelKey: "artifacts.type.summaryDetailed", icon: "reader-outline" },
   { type: "notes", labelKey: "artifacts.type.notes", icon: "book-outline" },
   { type: "flashcards", labelKey: "artifacts.type.flashcards", icon: "card-outline" },
   { type: "quiz", labelKey: "artifacts.type.quiz", icon: "help-circle-outline" },

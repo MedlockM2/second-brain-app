@@ -2,6 +2,19 @@ import { useResourceSnapshot } from "../../src/contexts/ResourceCacheContext";
 import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
 import { resourceKeys } from "../../src/services/resourceCache";
 import type { ArtifactContentResponse } from "@media-summarizer/core/types/artifacts";
+import {
+  normalizeArtifactKind,
+  pickConceptArray,
+  pickFlashcardArray,
+  pickGlossaryArray,
+  pickQuizQuestions,
+  pickQuotes,
+  pickString,
+  pickStringArray,
+  type ArtifactKind,
+  type Flashcard,
+  type QuizQuestion,
+} from "@media-summarizer/core/artifacts/content";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -46,28 +59,11 @@ import { t, tCount, useTranslation, type TranslationKey } from "../../src/i18n";
  *   { artifact_id, scope, scope_id, artifact_type, generated_at, sources,
  *     source_count, generator_version, llm_usage, content }
  * where `content` is the actual structured payload, shaped per artifact_type.
- * Every shape carries a model-written `title` (task-270), and a quote carries the
- * corpus tag it came from:
- *
- * - summary_short:    { title, key_points: string[], takeaway }
- * - summary_detailed: { title, context, main_topics, key_points,
- *                       notable_quotes: [{text, source_ref}], conclusion }
- * - notes:            { objectives, concepts: [{term, explanation, importance}],
- *                       key_points, action_items, glossary: [{term, definition}] }
- * - flashcards:       { cards: [{question, answer}], card_count }
- * - quiz:             { questions: [{question, options: [{label, text}],
- *                       correct_answer, explanation}], question_count }
+ * The shapes, and the defensive readers this screen takes them apart with, live
+ * in `packages/core/src/artifacts/content.ts`, shared with the web AI pane.
  *
  * This screen renders each shape with its own dedicated UI.
  */
-
-type ArtifactKind =
-  | "summary_short"
-  | "summary_detailed"
-  | "summary"
-  | "notes"
-  | "flashcards"
-  | "quiz";
 
 /**
  * The four things this screen can be showing.
@@ -103,7 +99,6 @@ interface ArtifactPayload {
 
 const KIND_LABEL_KEYS: Record<ArtifactKind, TranslationKey> = {
   summary_short: "artifacts.type.summaryShort",
-  summary_detailed: "artifacts.type.summaryShort",
   summary: "artifacts.type.summaryShort",
   notes: "artifacts.type.notes",
   flashcards: "artifacts.type.flashcards",
@@ -115,7 +110,6 @@ const KIND_ICON: Record<
   React.ComponentProps<typeof Ionicons>["name"]
 > = {
   summary_short: "document-text-outline",
-  summary_detailed: "document-text-outline",
   summary: "document-text-outline",
   notes: "book-outline",
   flashcards: "card-outline",
@@ -437,9 +431,6 @@ function ArtifactBody({
   if (type === "summary_short" || type === "summary") {
     return <SummaryShortBody content={content} />;
   }
-  if (type === "summary_detailed") {
-    return <SummaryDetailedBody content={content} />;
-  }
   if (type === "notes") {
     return <NotesBody content={content} />;
   }
@@ -489,80 +480,30 @@ function SummaryShortBody({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-// --- Summary (detailed) ---
-
-function SummaryDetailedBody({
-  content,
-}: {
-  content: Record<string, unknown>;
-}) {
-  const styles = useThemedStyles(makeStyles);
-  const context = pickString(content, ["context"]);
-  const mainTopics = pickStringArray(content, ["main_topics"]);
-  const keyPoints = pickStringArray(content, ["key_points"]);
-  // `notable_quotes` is a list of `{text, source_ref}` since task-270: the
-  // reference is mandatory there because a quote is verbatim, so its origin is
-  // checkable. Rendered next to the quote rather than dropped.
-  const quotes = pickQuotes(content, ["notable_quotes"]);
-  const conclusion = pickString(content, ["conclusion"]);
-
-  return (
-    <View>
-      {context ? (
-        <Section title={t("artifact.section.context")}>
-          <Text style={styles.body}>{context}</Text>
-        </Section>
-      ) : null}
-      {mainTopics && mainTopics.length > 0 ? (
-        <Section title={t("artifact.section.mainTopics")}>
-          <View style={styles.topicChipsRow}>
-            {mainTopics.map((topic, i) => (
-              <View key={`topic-${i}`} style={styles.topicChip}>
-                <Text style={styles.topicChipText}>{topic}</Text>
-              </View>
-            ))}
-          </View>
-        </Section>
-      ) : null}
-      {keyPoints && keyPoints.length > 0 ? (
-        <Section title={t("artifact.section.keyPoints")}>
-          <Bullets items={keyPoints} />
-        </Section>
-      ) : null}
-      {quotes && quotes.length > 0 ? (
-        <Section title={t("artifact.section.quotes")}>
-          {quotes.map((q, i) => (
-            <View key={`quote-${i}`} style={styles.quoteCard}>
-              <Text style={styles.quoteMark}>“</Text>
-              <Text style={styles.quoteText}>{q.text}</Text>
-              {q.sourceRef ? (
-                <Text style={styles.quoteSourceRef}>{q.sourceRef}</Text>
-              ) : null}
-            </View>
-          ))}
-        </Section>
-      ) : null}
-      {conclusion ? (
-        <Section title={t("artifact.section.conclusion")}>
-          <Text style={styles.body}>{conclusion}</Text>
-        </Section>
-      ) : null}
-    </View>
-  );
-}
-
 // --- Notes ---
 
 function NotesBody({ content }: { content: Record<string, unknown> }) {
   const styles = useThemedStyles(makeStyles);
+  // Who, what, why, in two or three sentences: an introduction, so it reads
+  // first and carries no section title.
+  const context = pickString(content, ["context"]);
   const objectives = pickStringArray(content, ["objectives"]);
   const concepts = pickConceptArray(content);
   const keyPoints = pickStringArray(content, ["key_points"]);
+  // A list of `{text, source_ref}`: the reference is mandatory there because a
+  // quote is verbatim, so its origin is checkable. Rendered under the quote
+  // rather than dropped.
+  const quotes = pickQuotes(content, ["notable_quotes"]);
   const actionItems = pickStringArray(content, ["action_items"]);
   const glossary = pickGlossaryArray(content);
 
   return (
     <View>
+      {context ? (
+        <Section>
+          <Text style={styles.body}>{context}</Text>
+        </Section>
+      ) : null}
       {objectives && objectives.length > 0 ? (
         <Section title={t("artifact.section.objectives")}>
           <Bullets items={objectives} />
@@ -608,6 +549,19 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
           <Bullets items={keyPoints} />
         </Section>
       ) : null}
+      {quotes && quotes.length > 0 ? (
+        <Section title={t("artifact.section.quotes")}>
+          {quotes.map((q, i) => (
+            <View key={`quote-${i}`} style={styles.quoteCard}>
+              <Text style={styles.quoteMark}>“</Text>
+              <Text style={styles.quoteText}>{q.text}</Text>
+              {q.sourceRef ? (
+                <Text style={styles.quoteSourceRef}>{q.sourceRef}</Text>
+              ) : null}
+            </View>
+          ))}
+        </Section>
+      ) : null}
       {actionItems && actionItems.length > 0 ? (
         <Section title={t("artifact.section.actionItems")}>
           <Bullets items={actionItems} variant="check" />
@@ -628,11 +582,6 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
 }
 
 // --- Flashcards (revealable) ---
-
-interface Flashcard {
-  question: string;
-  answer: string;
-}
 
 function FlashcardsBody({ content }: { content: Record<string, unknown> }) {
   const styles = useThemedStyles(makeStyles);
@@ -692,13 +641,6 @@ function FlashcardCard({ index, card }: { index: number; card: Flashcard }) {
 }
 
 // --- Quiz ---
-
-interface QuizQuestion {
-  question: string;
-  options: { label: string; text: string }[];
-  correct_answer: string;
-  explanation: string;
-}
 
 function QuizBody({
   content,
@@ -923,16 +865,6 @@ function Section({
 
 // --- Helpers ---
 
-function normalizeArtifactKind(raw: string): ArtifactKind {
-  const lower = (raw ?? "").toLowerCase();
-  if (lower === "summary_short") return "summary_short";
-  if (lower === "summary_detailed") return "summary_detailed";
-  if (lower === "summary") return "summary";
-  if (lower === "notes") return "notes";
-  if (lower === "flashcards") return "flashcards";
-  return "quiz";
-}
-
 function pickSourceTitle(payload: ArtifactPayload | undefined): string | null {
   const source = payload?.source;
   if (!source || typeof source !== "object") return null;
@@ -941,174 +873,6 @@ function pickSourceTitle(payload: ArtifactPayload | undefined): string | null {
   const pod = (source as Record<string, unknown>)["podcast_title"];
   if (typeof pod === "string" && pod.trim()) return pod.trim();
   return null;
-}
-
-function pickString(
-  obj: Record<string, unknown>,
-  keys: string[],
-): string | null {
-  for (const key of keys) {
-    const v = obj[key];
-    if (typeof v === "string" && v.trim().length > 0) return v.trim();
-  }
-  return null;
-}
-
-function pickStringArray(
-  obj: Record<string, unknown>,
-  keys: string[],
-): string[] | null {
-  for (const key of keys) {
-    const v = obj[key];
-    if (Array.isArray(v)) {
-      const strs = v
-        .map((item) => (typeof item === "string" ? item.trim() : ""))
-        .filter((s) => s.length > 0);
-      if (strs.length > 0) return strs;
-    }
-  }
-  return null;
-}
-
-interface ArtifactQuote {
-  text: string;
-  sourceRef?: string;
-}
-
-function pickQuotes(
-  obj: Record<string, unknown>,
-  keys: string[],
-): ArtifactQuote[] | null {
-  for (const key of keys) {
-    const value = obj[key];
-    if (!Array.isArray(value)) continue;
-    const quotes: ArtifactQuote[] = [];
-    for (const item of value) {
-      if (item && typeof item === "object" && !Array.isArray(item)) {
-        const record = item as Record<string, unknown>;
-        const text = typeof record.text === "string" ? record.text.trim() : "";
-        if (!text) continue;
-        const sourceRef =
-          typeof record.source_ref === "string"
-            ? record.source_ref.trim() || undefined
-            : undefined;
-        quotes.push({ text, sourceRef });
-      }
-    }
-    if (quotes.length > 0) return quotes;
-  }
-  return null;
-}
-
-interface Concept {
-  term: string;
-  explanation: string;
-  importance?: string;
-}
-
-function pickConceptArray(obj: Record<string, unknown>): Concept[] | null {
-  const v = obj["concepts"];
-  if (!Array.isArray(v)) return null;
-  const out: Concept[] = [];
-  for (const item of v) {
-    if (item && typeof item === "object") {
-      const r = item as Record<string, unknown>;
-      const term = r["term"];
-      const explanation = r["explanation"];
-      const importance = r["importance"];
-      if (typeof term === "string" && typeof explanation === "string") {
-        out.push({
-          term: term.trim(),
-          explanation: explanation.trim(),
-          importance:
-            typeof importance === "string" ? importance.trim() : undefined,
-        });
-      }
-    }
-  }
-  return out.length > 0 ? out : null;
-}
-
-interface GlossaryEntry {
-  term: string;
-  definition: string;
-}
-
-function pickGlossaryArray(
-  obj: Record<string, unknown>,
-): GlossaryEntry[] | null {
-  const v = obj["glossary"];
-  if (!Array.isArray(v)) return null;
-  const out: GlossaryEntry[] = [];
-  for (const item of v) {
-    if (item && typeof item === "object") {
-      const r = item as Record<string, unknown>;
-      const term = r["term"];
-      const definition = r["definition"];
-      if (typeof term === "string" && typeof definition === "string") {
-        out.push({ term: term.trim(), definition: definition.trim() });
-      }
-    }
-  }
-  return out.length > 0 ? out : null;
-}
-
-function pickFlashcardArray(obj: Record<string, unknown>): Flashcard[] | null {
-  const v = obj["cards"];
-  if (!Array.isArray(v)) return null;
-  const out: Flashcard[] = [];
-  for (const item of v) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    const question = r["question"];
-    const answer = r["answer"];
-    if (typeof question === "string" && typeof answer === "string") {
-      out.push({ question: question.trim(), answer: answer.trim() });
-    }
-  }
-  return out.length > 0 ? out : null;
-}
-
-function pickQuizQuestions(
-  obj: Record<string, unknown>,
-): QuizQuestion[] | null {
-  const v = obj["questions"];
-  if (!Array.isArray(v)) return null;
-  const out: QuizQuestion[] = [];
-  for (const item of v) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    const question = r["question"];
-    const optionsRaw = r["options"];
-    const correct = r["correct_answer"];
-    const explanation = r["explanation"];
-    if (
-      typeof question !== "string" ||
-      !Array.isArray(optionsRaw) ||
-      typeof correct !== "string" ||
-      typeof explanation !== "string"
-    ) {
-      continue;
-    }
-    const options: { label: string; text: string }[] = [];
-    for (const opt of optionsRaw) {
-      if (!opt || typeof opt !== "object") continue;
-      const or = opt as Record<string, unknown>;
-      const label = or["label"];
-      const text = or["text"];
-      if (typeof label === "string" && typeof text === "string") {
-        options.push({ label: label.trim(), text: text.trim() });
-      }
-    }
-    if (options.length === 0) continue;
-    out.push({
-      question: question.trim(),
-      options,
-      correct_answer: correct.trim().toUpperCase(),
-      explanation: explanation.trim(),
-    });
-  }
-  return out.length > 0 ? out : null;
 }
 
 // --- Styles ---
@@ -1229,23 +993,7 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
       lineHeight: 24,
     },
 
-    // Summary (detailed)
-    topicChipsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: Spacing.sm,
-    },
-    topicChip: {
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 6,
-      borderRadius: BorderRadius.full,
-      backgroundColor: Colors.surfaceContainerHigh,
-    },
-    topicChipText: {
-      fontSize: Typography.small.fontSize,
-      fontWeight: "600",
-      color: Colors.textMain,
-    },
+    // Notes — quotes
     quoteCard: {
       backgroundColor: Colors.surface,
       borderRadius: BorderRadius.xl,

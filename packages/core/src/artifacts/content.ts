@@ -4,24 +4,26 @@
  * The backend writes each artifact as a JSON envelope whose `content` is shaped
  * per type, with a model-written `title` on every shape (task-270):
  *
- * - summary_short:    { title, key_points: string[], takeaway }
- * - summary_detailed: { title, context, main_topics, key_points,
- *                       notable_quotes: [{text, source_ref}], conclusion }
- * - notes:            { objectives, concepts: [{term, explanation, importance}],
- *                       key_points, action_items, glossary: [{term, definition}] }
- * - flashcards:       { cards: [{question, answer}], card_count }
- * - quiz:             { questions: [{question, options: [{label, text}],
- *                       correct_answer, explanation}], question_count }
+ * - summary_short: { title, key_points: string[], takeaway }
+ * - notes:         { title, context, objectives,
+ *                    concepts: [{term, explanation, importance}], key_points,
+ *                    notable_quotes: [{text, source_ref}], action_items,
+ *                    glossary: [{term, definition}] }
+ * - flashcards:    { cards: [{question, answer}], card_count }
+ * - quiz:          { questions: [{question, options: [{label, text}],
+ *                    correct_answer, explanation}], question_count }
+ *
+ * Every section of the notes is optional, `context` and `notable_quotes`
+ * included: the model leaves one empty when the sources give it nothing to put
+ * there, and a reader then returns `null`, so the section is not drawn.
  *
  * Model output is not trusted to match: every reader below drops what does not
- * fit instead of throwing. The same readers as `mobile/app/artifacts/[artifactId].tsx`,
- * shared with the web app from here; the mobile screen keeps its copies until a
- * mobile change points them here.
+ * fit instead of throwing. Read by the mobile artifact screen
+ * (`mobile/app/artifacts/[artifactId].tsx`) and the web AI pane alike.
  */
 
 export type ArtifactKind =
   | "summary_short"
-  | "summary_detailed"
   | "summary"
   | "notes"
   | "flashcards"
@@ -30,7 +32,6 @@ export type ArtifactKind =
 export function normalizeArtifactKind(raw: string): ArtifactKind {
   const lower = (raw ?? "").toLowerCase();
   if (lower === "summary_short") return "summary_short";
-  if (lower === "summary_detailed") return "summary_detailed";
   if (lower === "summary") return "summary";
   if (lower === "notes") return "notes";
   if (lower === "flashcards") return "flashcards";

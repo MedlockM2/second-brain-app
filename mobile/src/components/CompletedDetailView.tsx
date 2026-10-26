@@ -127,15 +127,14 @@ const MEDIA_DETAIL_TABS: readonly ScreenTab<MediaDetailTabKey>[] = [
 ];
 
 /**
- * Some legacy items still carry the unscoped "summary" type from before the
- * short/detailed split. Surface them under the "Summary" tile instead of
- * dropping them on the floor.
+ * Some legacy items still carry the unscoped "summary" type from before
+ * `summary_short`. Surface them under the "Summary" tile instead of dropping
+ * them on the floor.
  */
 function buildInitialArtifactStates(): Record<ArtifactType, ArtifactTileState> {
   return {
     summary: { status: "idle", generationAvailable: true },
     summary_short: { status: "idle", generationAvailable: true },
-    summary_detailed: { status: "idle", generationAvailable: true },
     notes: { status: "idle", generationAvailable: true },
     flashcards: { status: "idle", generationAvailable: true },
     quiz: { status: "idle", generationAvailable: true },

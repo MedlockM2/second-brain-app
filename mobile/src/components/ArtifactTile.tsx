@@ -1,7 +1,7 @@
 /**
  * One AI artifact type, as a full-width tile carrying its own state.
  *
- * Shared because the same five tiles are offered from two places: the "AI" tab
+ * Shared because the same four tiles are offered from two places: the "AI" tab
  * of a media item (`app/media/[id].tsx`) and the AI tab of a folder. The
  * component is deliberately free of any media/folder notion — it takes a
  * label, a glyph, the state of that artifact and one callback.
@@ -26,8 +26,7 @@
  * The tile carries no "View" action either: opening a generated artifact is the
  * job of the history list below it, which routes to `/artifacts/<id>`. Keeping
  * the action column to a single control is what lets the label breathe; two
- * buttons side by side squeezed long labels like "Detailed summary" into a
- * mid-word wrap.
+ * buttons side by side squeezed the longer labels into a mid-word wrap.
  */
 
 import React from "react";
@@ -67,7 +66,7 @@ export type ArtifactTileState = {
 };
 
 /**
- * The five artifact types offered to the user, each backed by a dedicated
+ * The four artifact types offered to the user, each backed by a dedicated
  * backend worker. Order is the order they are displayed in.
  */
 export const ARTIFACT_TILES: readonly {
@@ -84,11 +83,6 @@ export const ARTIFACT_TILES: readonly {
     type: "summary_short",
     labelKey: "artifacts.type.summaryShort",
     icon: "document-text-outline",
-  },
-  {
-    type: "summary_detailed",
-    labelKey: "artifacts.type.summaryDetailed",
-    icon: "reader-outline",
   },
   { type: "notes", labelKey: "artifacts.type.notes", icon: "book-outline" },
   {

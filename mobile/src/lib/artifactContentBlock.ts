@@ -38,7 +38,6 @@ export type ArtifactContentBlock =
 const ARTIFACT_TYPES: readonly ArtifactType[] = [
   "summary",
   "summary_short",
-  "summary_detailed",
   "notes",
   "quiz",
   "flashcards",

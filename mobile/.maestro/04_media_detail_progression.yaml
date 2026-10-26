@@ -6,8 +6,8 @@
 # - Back navigation returns to the inbox
 #
 # Last reviewed against the codebase on 2026-06-11.
-# The "AI Artifacts" tiles are: Summary, Detailed summary, Learning notes,
-# Flashcards, Quiz (each backed by a distinct backend artifact_type).
+# The "AI Artifacts" tiles are: Summary, Learning notes, Flashcards, Quiz
+# (each backed by a distinct backend artifact_type).
 appId: com.secondbrainlabs.core
 tags:
   - critical
@@ -71,12 +71,10 @@ tags:
 - tapOn:
     text: "AI Artifacts"
 
-# All five artifact tiles must be listed
+# All four artifact tiles must be listed
 - assertVisible:
     text: "Summary"
     timeout: 3000
-- assertVisible:
-    text: "Detailed summary"
 - assertVisible:
     text: "Learning notes"
 - assertVisible:

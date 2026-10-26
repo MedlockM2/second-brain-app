@@ -121,7 +121,6 @@ export const ar: Catalog = {
   "auth.apple.failed":
     "تعذّر إكمال تسجيل الدخول باستخدام Apple. يرجى المحاولة مرة أخرى.",
   "artifacts.type.summaryShort": "ملخّص",
-  "artifacts.type.summaryDetailed": "ملخّص مفصّل",
   "artifacts.type.notes": "ملاحظات دراسية",
   "artifacts.type.flashcards": "بطاقات مراجعة",
   "artifacts.type.quiz": "اختبار",
@@ -582,10 +581,7 @@ export const ar: Catalog = {
   "artifact.regenerationQueued": "أُعيد بدء الإنشاء. عُد بعد قليل.",
   "artifact.section.keyPoints": "النقاط الأساسية",
   "artifact.section.takeaway": "الخلاصة",
-  "artifact.section.context": "السياق",
-  "artifact.section.mainTopics": "المواضيع الرئيسية",
   "artifact.section.quotes": "اقتباسات لافتة",
-  "artifact.section.conclusion": "الخاتمة",
   "artifact.section.objectives": "الأهداف",
   "artifact.section.concepts": "المفاهيم",
   "artifact.section.actionItems": "إجراءات للتنفيذ",

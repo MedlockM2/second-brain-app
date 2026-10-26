@@ -28,8 +28,6 @@ export function ArtifactBody({ type, payload, onFinish }: { type: string; payloa
     case "summary_short":
     case "summary":
       return <SummaryShort content={content} />;
-    case "summary_detailed":
-      return <SummaryDetailed content={content} />;
     case "notes":
       return <Notes content={content} />;
     case "flashcards":
@@ -85,58 +83,25 @@ function SummaryShort({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function SummaryDetailed({ content }: { content: Record<string, unknown> }) {
-  const { t } = useI18n();
-  const context = pickString(content, ["context"]);
-  const mainTopics = pickStringArray(content, ["main_topics"]);
-  const keyPoints = pickStringArray(content, ["key_points"]);
-  const quotes = pickQuotes(content, ["notable_quotes"]);
-  const conclusion = pickString(content, ["conclusion"]);
-  return (
-    <>
-      {context && (
-        <Section title={t("artifact.section.context")}>
-          <p>{context}</p>
-        </Section>
-      )}
-      {mainTopics && (
-        <Section title={t("artifact.section.mainTopics")}>
-          <Bullets items={mainTopics} />
-        </Section>
-      )}
-      {keyPoints && (
-        <Section title={t("artifact.section.keyPoints")}>
-          <Bullets items={keyPoints} />
-        </Section>
-      )}
-      {quotes && (
-        <Section title={t("artifact.section.quotes")}>
-          {quotes.map((quote, i) => (
-            <blockquote key={i} className="quote">
-              {quote.text}
-              {quote.sourceRef && <span className="small muted"> — {quote.sourceRef}</span>}
-            </blockquote>
-          ))}
-        </Section>
-      )}
-      {conclusion && (
-        <Section title={t("artifact.section.conclusion")}>
-          <p>{conclusion}</p>
-        </Section>
-      )}
-    </>
-  );
-}
-
 function Notes({ content }: { content: Record<string, unknown> }) {
   const { t } = useI18n();
+  // An introduction (who, what, why): it reads first, under the title, with no
+  // section title of its own.
+  const context = pickString(content, ["context"]);
   const objectives = pickStringArray(content, ["objectives"]);
   const concepts = pickConceptArray(content);
   const keyPoints = pickStringArray(content, ["key_points"]);
+  // Verbatim, so each carries the corpus tag it came from, shown after it.
+  const quotes = pickQuotes(content, ["notable_quotes"]);
   const actionItems = pickStringArray(content, ["action_items"]);
   const glossary = pickGlossaryArray(content);
   return (
     <>
+      {context && (
+        <Section>
+          <p>{context}</p>
+        </Section>
+      )}
       {objectives && (
         <Section title={t("artifact.section.objectives")}>
           <Bullets items={objectives} />
@@ -162,6 +127,16 @@ function Notes({ content }: { content: Record<string, unknown> }) {
       {keyPoints && (
         <Section title={t("artifact.section.keyPoints")}>
           <Bullets items={keyPoints} />
+        </Section>
+      )}
+      {quotes && (
+        <Section title={t("artifact.section.quotes")}>
+          {quotes.map((quote, i) => (
+            <blockquote key={i} className="quote">
+              {quote.text}
+              {quote.sourceRef && <span className="small muted"> — {quote.sourceRef}</span>}
+            </blockquote>
+          ))}
         </Section>
       )}
       {actionItems && (
