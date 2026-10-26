@@ -8,9 +8,10 @@
  *
  * A new entry only appears when the set of sources differs from every entry
  * already stored (task-322): a media item therefore holds one entry per type for
- * good, and a folder gains one each time its contents change. The `sources`
- * snapshot of an entry is what a screen compares against the folder's
- * current contents to know whether generating again would produce anything.
+ * good, and a folder gains one each time its contents change. No screen compares
+ * the `sources` snapshot with the folder any more (task-534, task-541): a
+ * generation is always offered, and one over sources already covered answers
+ * the existing entry (`reused`), which the screen then opens.
  */
 
 import type { ArtifactStatus, ArtifactType } from "./media";

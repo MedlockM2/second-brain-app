@@ -61,13 +61,7 @@ export const en = {
   // --- AI artifacts, shared between the media and folder scopes ---
   "artifacts.sourceCount.one": "{count} source",
   "artifacts.sourceCount.other": "{count} sources",
-  "artifacts.status.queued": "Queued",
   "artifacts.status.generating": "Generating...",
-  "artifacts.status.failed": "Failed",
-  // Read by the web AI pane only, where a pill still says it once an artifact
-  // covers the current sources. The mobile app dropped that state (task-534);
-  // task-541 drops it on the web, and this key with it.
-  "artifacts.status.generated": "Generated",
   "artifacts.history.a11yRow": "{type}: {title}",
   // The AI tab's single list (task-534): the row of a generation in
   // progress, under `artifacts.status.generating`, and the row of a failed
