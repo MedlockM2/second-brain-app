@@ -308,7 +308,8 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
       googleServicesFile: "./google-services.json",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#fcf9f6",
+        // The logo's amber: the foreground is the planes alone (mobile/scripts/make_icons.py).
+        backgroundColor: "#ffcb05",
       },
       package: "com.secondbrainlabs.core",
       // Social sign-in uses the top-level Cognito callback scheme.
