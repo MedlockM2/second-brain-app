@@ -19,11 +19,40 @@ import type { ArtifactStatus, ArtifactType } from "./media";
 /** What a generation was run over: a single media item, or a whole folder. */
 export type ArtifactScope = "media" | "folder";
 
+/** How deep a summary goes (`length`, `summary_short` only). Same schema at every length. */
+export type SummaryLength = "short" | "medium" | "long";
+
+/** How many questions or cards, against what the material carries (`count`). */
+export type ItemCount = "fewer" | "standard" | "more";
+
+/** How demanding the questions or cards are (`difficulty`). */
+export type Difficulty = "easy" | "medium" | "hard";
+
+/**
+ * The `parameters` of a generation request: the options of the "Personnaliser"
+ * screen (task-531), and the language and sources of task-533 and task-532.
+ *
+ * Which option a type accepts, and the default of each, is in
+ * `artifacts/options.ts`. An option at its default is not sent: the backend drops
+ * it before the hash anyway, and leaving it out keeps the request readable.
+ */
+export interface ArtifactGenerationParameters {
+  length?: SummaryLength;
+  count?: ItemCount;
+  difficulty?: Difficulty;
+  /** The topic to favour, 300 characters at most once its whitespace is collapsed. */
+  focus?: string;
+  /** Sent only to pin another language than the reading language. */
+  language?: string;
+  /** A folder's chosen sources; never on a media. */
+  source_ids?: string[];
+}
+
 export interface GenerateArtifactRequest {
   scope: ArtifactScope;
   scope_id: string;
   artifact_type: ArtifactType;
-  parameters?: Record<string, unknown>;
+  parameters?: ArtifactGenerationParameters;
 }
 
 /**
@@ -57,6 +86,13 @@ export interface ArtifactDetail extends ArtifactSummary {
   scope_id: string;
   sources: ArtifactSource[];
   s3_key?: string | null;
+  /**
+   * The `parameters` that ask for this very entry again (task-535): its options,
+   * its language when the request pinned one, its chosen sources. `{}` at the
+   * defaults. What a failed entry is rerun with, so the rerun lands on it and not
+   * on the entry at the defaults.
+   */
+  request_parameters: ArtifactGenerationParameters;
 }
 
 /**

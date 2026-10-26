@@ -11,22 +11,28 @@
  *   the ones still queued or generating, so there is never a request per type.
  *   It is re-read on focus, and every few seconds for as long as anything in it
  *   is in flight: the list itself says when to poll.
- * - **The requests in flight.** A tap is answered on the frame it lands, by a
- *   generating row for that format, without waiting for the POST — over a
- *   folder that request reads every source's transcript before it answers.
- *   A second tap on the same format while its POST is out is ignored: it would
- *   ask the very same thing again.
- * - **The answer.** A generation the scope already holds over the same sources
- *   comes back `reused` and queues nothing; the existing artifact then opens,
- *   which is the only useful thing a tap can do in that case. Anything else is
- *   folded into the history by `ArtifactService.generateArtifact`, and its row
- *   moves on its own.
- * - **The refusal**, typed and worded from its code (a quota reached, a source
- *   with no text, …), shown until the next tap.
+ * - **A new generation** is not asked from here. A tile opens the
+ *   "Personnaliser" screen of its format (task-535), which sends the request
+ *   with the options chosen there, waits for the answer so a refusal can be read
+ *   where it was asked, and closes. The entry it created is folded into this
+ *   history by `ArtifactService.generateArtifact`, so its generating row is in
+ *   the list the screen closes onto.
+ * - **A rerun of a failed entry** is asked from here, from the entry's row and
+ *   without the screen: the same request again, with the parameters the entry
+ *   was asked with, so it lands on that entry (`retried`) and not on the one at
+ *   the defaults. The list carries no parameters, so the entry is read first.
+ *   The tap is answered on the frame it lands, by a generating row for that
+ *   format; a second tap on the same format while its request is out is
+ *   ignored: it would ask the very same thing again.
+ * - **The answer.** A generation the scope already holds comes back `reused`
+ *   and queues nothing; the existing artifact then opens. Anything else is
+ *   folded into the history, and its row moves on its own.
+ * - **The refusal** of a rerun, typed and worded from its code (a quota
+ *   reached, a source with no text, …), shown until the next tap.
  *
  * There is no "can this type be generated?" question any more (task-534): the
- * tiles are always offered. Asking again over the same sources costs nothing
- * and opens what exists; asking over different sources creates a new entry.
+ * tiles are always offered. The same options over the same sources open what
+ * exists; other options, or other sources, create a new entry.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,12 +64,14 @@ export interface ScopeArtifacts {
   /** Why the history could not be read, or `null`. */
   historyError: string | null;
   refreshHistory: () => void;
-  /** The formats whose generation request has not answered yet. */
+  /** The formats whose rerun request has not answered yet. */
   pendingTypes: readonly ArtifactType[];
-  /** Why the last generation request was refused, or `null`. */
+  /** Why the last rerun was refused, or `null`. */
   refusal: string | null;
-  /** Ask for a generation of this format over the whole scope. */
-  generate: (artifactType: ArtifactType) => void;
+  /** Open the "Personnaliser" screen of this format, which asks for the generation. */
+  customize: (artifactType: ArtifactType) => void;
+  /** Ask again for a failed entry, with the parameters it was asked with. */
+  retry: (artifact: ArtifactSummary) => void;
   openArtifact: (artifact: Pick<ArtifactSummary, "artifact_id">) => void;
 }
 
@@ -86,6 +94,10 @@ export function useScopeArtifacts(
   // The same set, readable synchronously: the guard against a second tap must
   // see a tap that landed in the same frame, before any re-render.
   const pendingRef = useRef(new Set<ArtifactType>());
+  // Set when a tile opens "Personnaliser", cleared when this screen has the
+  // focus back: a second tap landing before the modal covers the tab would
+  // otherwise open it twice.
+  const customizingRef = useRef(false);
   const mountedRef = useRef(true);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -118,6 +130,7 @@ export function useScopeArtifacts(
 
   useFocusEffect(
     useCallback(() => {
+      customizingRef.current = false;
       void refresh();
     }, [refresh]),
   );
@@ -152,20 +165,38 @@ export function useScopeArtifacts(
     [router],
   );
 
-  const generate = useCallback(
-    async (artifactType: ArtifactType) => {
+  const customize = useCallback(
+    (artifactType: ArtifactType) => {
+      if (customizingRef.current) return;
+      customizingRef.current = true;
+      setRefusal(null);
+      router.push({
+        pathname: "/artifacts/customize",
+        params: { scope, scopeId, type: artifactType },
+      });
+    },
+    [router, scope, scopeId],
+  );
+
+  const retry = useCallback(
+    async (artifact: ArtifactSummary) => {
+      const artifactType = artifact.artifact_type;
       if (!isAuthenticated || pendingRef.current.has(artifactType)) return;
       setRefusal(null);
-      // Before the POST, with nothing awaited in between: this is the update
+      // Before any request, with nothing awaited in between: this is the update
       // that draws the generating row, on the frame the finger lifts.
       pendingRef.current.add(artifactType);
       setPendingTypes([...pendingRef.current]);
 
       try {
+        // The list is the `scope-index` projection, which holds no parameters:
+        // the entry itself says what it was asked with.
+        const entry = await ArtifactService.getArtifact(artifact.artifact_id);
         const result = await ArtifactService.generateArtifact(
           scope,
           scopeId,
           artifactType,
+          entry.request_parameters,
         );
         if (mountedRef.current && result.generation_outcome === "reused") {
           openArtifact(result);
@@ -195,7 +226,8 @@ export function useScopeArtifacts(
     refreshHistory: () => void refresh(),
     pendingTypes,
     refusal,
-    generate: (artifactType) => void generate(artifactType),
+    customize,
+    retry: (artifact) => void retry(artifact),
     openArtifact,
   };
 }

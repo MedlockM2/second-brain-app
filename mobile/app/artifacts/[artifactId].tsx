@@ -199,11 +199,13 @@ export default function ArtifactDetailScreen() {
   /**
    * Ask for this artifact again, from the failure state.
    *
-   * The refusal named the scope and the type, so the request needs nothing this
-   * screen would have to guess. The backend reruns the entry under its own id and
-   * charges nothing extra, and it comes back `queued` — which is exactly the
-   * `pending` state, so the screen stops describing a failure the moment there is
-   * something running again.
+   * The refusal named the scope, the type and the parameters the entry was asked
+   * with, so the request needs nothing this screen would have to guess, and it
+   * does not go through the "Personnaliser" screen: it is the same request again
+   * (task-535). The backend reruns the entry under its own id and charges nothing
+   * extra, and it comes back `queued` — which is exactly the `pending` state, so
+   * the screen stops describing a failure the moment there is something running
+   * again.
    */
   const handleRegenerate = useCallback(
     async (target: ArtifactRegenerationTarget) => {
@@ -215,6 +217,7 @@ export default function ArtifactDetailScreen() {
           target.scope,
           target.scopeId,
           target.artifactType,
+          target.parameters,
         );
         if (!mountedRef.current) return;
         setRefusal(null);

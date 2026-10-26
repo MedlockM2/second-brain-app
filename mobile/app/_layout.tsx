@@ -263,6 +263,18 @@ function AppNavigator() {
             animation: "slide_from_right",
           }}
         />
+        {/* The "Personnaliser" step before a generation (task-535). Full
+            screen, as the mockup draws it: the iOS card modal would inset it
+            and round its corners, and its swipe down would drop whatever was
+            typed in the prompt. The close button is the way out. */}
+        <Stack.Screen
+          name="artifacts/customize"
+          options={{
+            presentation: "fullScreenModal",
+            animation: "slide_from_bottom",
+            gestureEnabled: false,
+          }}
+        />
         <Stack.Screen
           name="media/folder"
           options={{

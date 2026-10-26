@@ -1,4 +1,5 @@
 import { mergeArtifactIntoHistory } from "../lib/artifactHistory";
+import { withoutDefaults } from "@media-summarizer/core/artifacts/options";
 import {
   readResource,
   resourceKeys,
@@ -12,6 +13,7 @@ import type {
   ArtifactContentResponse,
   ArtifactCreateResult,
   ArtifactDetail,
+  ArtifactGenerationParameters,
   ArtifactListResponse,
   ArtifactScope,
   GenerateArtifactRequest,
@@ -22,6 +24,7 @@ export type {
   ArtifactCreateResult,
   ArtifactDetail,
   ArtifactGenerationOutcome,
+  ArtifactGenerationParameters,
   ArtifactListResponse,
   ArtifactScope,
   ArtifactSource,
@@ -49,20 +52,28 @@ export class ArtifactService {
    * already holds, which consumes nothing. Note that `reused` alone does not mean
    * free — it also answers the first request of this account over content someone
    * else already generated for, and that one is charged.
+   *
+   * `parameters` are the options of the "Personnaliser" screen (task-535), or the
+   * `request_parameters` of a failed entry being rerun. Whatever sits at its
+   * default is left out, and no `parameters` at all are sent when nothing is
+   * left: the request is then, byte for byte, the one at the defaults.
    */
   static async generateArtifact(
     scope: ArtifactScope,
     scopeId: string,
     artifactType: ArtifactType,
+    parameters: ArtifactGenerationParameters = {},
   ): Promise<ArtifactCreateResult> {
     const owner = mutationOwner();
     const language = resourceSession().language;
+    const sent = withoutDefaults(parameters);
     const result = await apiRequest<ArtifactCreateResult>(`/api/artifacts`, {
       method: "POST",
       body: {
         scope,
         scope_id: scopeId,
         artifact_type: artifactType,
+        ...(Object.keys(sent).length > 0 ? { parameters: sent } : {}),
       } satisfies GenerateArtifactRequest,
     });
     if (

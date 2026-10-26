@@ -9,7 +9,8 @@
  * and only a folder says it — a media item is a single source. A tap opens it.
  *
  * A **failed** entry stays in the list, says so in the error colour, and a tap
- * asks for the same generation again: the backend reruns a failed entry over
+ * asks for the same generation again, with the options it was asked with and
+ * without the "Personnaliser" screen: the backend reruns a failed entry over
  * the same sources under the same id (`generation_outcome: "retried"`).
  *
  * The rows are flat, on the page itself: the gap between them and the tonal
@@ -32,14 +33,13 @@ import { artifactFormatOf } from "../lib/artifactFormats";
 import { getRelativeTime } from "../lib/relativeTime";
 import { t, tCount } from "../i18n";
 import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
-import type { ArtifactType } from "@media-summarizer/core/types/media";
 
 interface ArtifactRowProps {
   artifact: ArtifactSummary;
   /** Whether the meta line names the number of sources: a folder's entries do. */
   showSourceCount: boolean;
   onOpen: (artifact: ArtifactSummary) => void;
-  onRetry: (artifactType: ArtifactType) => void;
+  onRetry: (artifact: ArtifactSummary) => void;
 }
 
 export function ArtifactRow({
@@ -58,7 +58,7 @@ export function ArtifactRow({
     return (
       <Pressable
         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-        onPress={() => onRetry(artifact.artifact_type)}
+        onPress={() => onRetry(artifact)}
         testID={`artifact-history-row-${artifact.artifact_id}`}
         accessibilityLabel={t("artifacts.row.a11yRetry", { type: typeLabel })}
         accessibilityRole="button"

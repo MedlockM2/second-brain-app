@@ -35,6 +35,7 @@ from media_summarizer.core.services.artifact_service import (
     get_media_artifact_record,
     list_scope_artifacts,
     plan_artifact_generation,
+    request_parameters_of,
     resolve_request_options,
     resolve_scope_sources,
     resolve_source_selection,
@@ -144,6 +145,15 @@ class ArtifactDetailResponse(ArtifactSummaryResponse):
     scope_id: str
     sources: List[ArtifactSourceResponse] = Field(default_factory=list)
     s3_key: Optional[str] = None
+    request_parameters: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "The 'parameters' of a POST /api/artifacts that asks for this entry "
+            "again (task-535): its options, its language when the request pinned "
+            "one, its chosen sources as 'source_ids'. Empty for an entry at the "
+            "defaults. What a client sends to rerun a failed entry unchanged."
+        ),
+    )
 
 
 class ArtifactCreateResponse(ArtifactDetailResponse):
@@ -224,6 +234,7 @@ def _detail(record: Any) -> ArtifactDetailResponse:
             for source in record.sources
         ],
         s3_key=record.storage.key if record.storage is not None else None,
+        request_parameters=request_parameters_of(record),
     )
 
 
@@ -669,9 +680,11 @@ async def get_artifact_content(
             # Terminal, and said as such: nothing is running any more, so telling
             # the caller to come back once generation completes would describe a
             # completion that will never happen and keep a client polling an entry
-            # that can only ever answer this. The three fields a new generation
-            # needs travel with the refusal, so the failure state can offer one
-            # without a second round-trip.
+            # that can only ever answer this. What a new generation needs travels
+            # with the refusal, so the failure state can offer one without a
+            # second round-trip: the scope, the type, and the parameters the entry
+            # was asked with, so that the new request reruns this very entry
+            # instead of the one at the defaults (task-535).
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
@@ -685,6 +698,7 @@ async def get_artifact_content(
                     "scope": record.scope.value,
                     "scope_id": record.scope_id,
                     "artifact_type": record.artifact_type.value,
+                    "request_parameters": request_parameters_of(record),
                 },
             )
 
