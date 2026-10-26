@@ -3,10 +3,10 @@ id: TASK-534
 title: >-
   Refaire l'onglet IA sur le modèle de NotebookLM : grille « Générer » de quatre
   formats, liste unique et animation de génération
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 16:47'
-updated_date: '2026-10-26 19:52'
+updated_date: '2026-10-26 19:53'
 labels:
   - mobile
   - artifacts
