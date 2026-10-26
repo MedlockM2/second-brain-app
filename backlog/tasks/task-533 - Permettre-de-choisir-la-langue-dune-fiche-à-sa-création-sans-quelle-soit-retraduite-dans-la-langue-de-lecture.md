@@ -3,10 +3,10 @@ id: TASK-533
 title: >-
   Permettre de choisir la langue d'une fiche à sa création, sans qu'elle soit
   retraduite dans la langue de lecture
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 16:46'
-updated_date: '2026-10-26 17:01'
+updated_date: '2026-10-26 19:52'
 labels:
   - backend
   - artifacts
@@ -104,4 +104,6 @@ Ce que cette sortie établit :
 - **Aucun test automatisé ajouté** (règle du projet). Le script de vérification est jetable et n'est pas versionné.
 - Après déploiement (le push sur `main` déclenche le déploiement, après la fin de cette exécution), le propriétaire peut vérifier à la main sur `-dev`. Lecteur en `fr` : créer un quiz en `en` ; il est généré en anglais, avec `generation_outcome: created`. Changer la langue de lecture, puis rouvrir le média : aucune entrée traduite n'apparaît pour ce quiz, alors que le résumé par défaut est traduit. Ce n'est pas un critère d'acceptation.
 - Mobile et web : l'écran « Personnaliser » doit envoyer `parameters.language`, la langue de lecture étant présélectionnée. Ce travail n'est pas dans le périmètre (ni `mobile/` ni `web/`).
+
+Merge avec task-532 (orchestrateur) : les deux tâches levaient chacune l'un des deux refus `not_accepted`. Plus aucune clé n'étant refusée ainsi, le mécanisme est supprimé : `_PARAMETERS_NOT_ACCEPTED`, `PARAMETER_REASON_NOT_ACCEPTED`, sa ligne dans le contrat markdown et sa valeur dans l'enum `reason` de l'OpenAPI. ruff et mypy passent, l'OpenAPI se charge.
 <!-- SECTION:NOTES:END -->
