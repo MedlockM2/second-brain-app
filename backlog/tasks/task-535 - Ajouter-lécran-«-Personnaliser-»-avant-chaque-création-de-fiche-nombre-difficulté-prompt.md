@@ -3,10 +3,10 @@ id: TASK-535
 title: >-
   Ajouter l'écran « Personnaliser » avant chaque création de fiche (longueur,
   nombre, difficulté, prompt)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 16:47'
-updated_date: '2026-10-26 21:20'
+updated_date: '2026-10-26 20:12'
 labels:
   - mobile
   - artifacts
