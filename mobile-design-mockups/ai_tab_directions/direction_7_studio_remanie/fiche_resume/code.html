@@ -1,0 +1,446 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Fiche Résumé — direction 7</title>
+<!--
+  Onglet IA, direction 7 — maquette autonome : aucune balise &lt;link&gt;, &lt;script&gt; ni &lt;img&gt;.
+  Police système, glyphes extraits de Ionicons.ttf, tokens de mobile/src/constants/theme.ts,
+  cadres aux dimensions logiques exactes (414x896 et 320x568), overflow:hidden. Données fictives.
+-->
+<style>
+:root {
+  /* --- Colors (theme.ts) --- */
+  --primary: #ffcb05;
+  --on-primary: #1c1b1a;
+  --primary-05: rgba(255, 203, 5, 0.05);
+  --background: #fcf9f6;
+  --surface: #ffffff;
+  --surface-container: #f1edea;
+  --surface-container-high: #ebe7e5;
+  --surface-container-low: #f7f3f0;
+  --text-main: #2b2d42;
+  --text-muted: #8d99ae;
+  --text-subtle: #5c6880;
+  --outline-variant: #c8c7bd;
+  --error-container: #ffdad6;
+  /* --- Spacing / BorderRadius / Shadows (theme.ts) --- */
+  --space-xs: 4px; --space-sm: 8px; --space-md: 16px; --space-lg: 24px; --space-xl: 32px; --space-xxl: 48px;
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-full: 9999px;
+  --shadow-soft: 0 8px 24px rgba(43, 45, 66, 0.04);
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: var(--space-xl) var(--space-lg) var(--space-xxl);
+  background: var(--surface-container-high); color: var(--text-main);
+  font-family: var(--font-system); -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 var(--space-sm); }
+h2 { font-size: 20px; font-weight: 600; margin: var(--space-xl) 0 var(--space-sm); }
+h3 { font-size: 16px; font-weight: 600; margin: var(--space-md) 0 var(--space-xs); }
+p, li { font-size: 16px; line-height: 1.6; margin: 0 0 var(--space-sm); max-width: 84ch; }
+ul { padding-inline-start: var(--space-lg); margin: 0 0 var(--space-sm); }
+.lede { color: var(--text-subtle); }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: var(--surface-container-low); border-radius: var(--radius-sm); padding: 1px 4px; }
+.panel { background: var(--surface); border-radius: var(--radius-xl); padding: var(--space-lg); margin: var(--space-lg) 0; max-width: 1340px; }
+.panel.two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-xl); }
+.panel.two h3:first-child { margin-top: 0; }
+table { border-collapse: collapse; font-size: 14px; margin: var(--space-sm) 0; }
+th, td { text-align: left; padding: 6px 12px 6px 0; vertical-align: top; }
+th { color: var(--text-subtle); font-weight: 600; }
+.cells { display: flex; flex-wrap: wrap; gap: var(--space-lg); align-items: flex-start; }
+.cell { display: flex; flex-direction: column; gap: var(--space-sm); }
+.caption { font-size: 13px; font-weight: 500; color: var(--text-subtle); margin: 0; max-width: 414px; line-height: 1.45; }
+.caption b { color: var(--text-main); font-weight: 600; }
+.tag { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .5px; background: var(--primary); color: var(--on-primary); border-radius: var(--radius-full); padding: 2px 10px; margin-bottom: var(--space-sm); }
+
+.ic { display: inline-block; flex: 0 0 auto; fill: currentColor; vertical-align: middle; }
+.ic use { fill: currentColor; }
+.cov { display: block; width: 100%; height: 100%; }
+.blank { display: block; background: var(--surface-container); }
+
+/* ================================================================ cadre */
+.frame { position: relative; width: 414px; height: 896px; background: var(--background); border-radius: 28px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 0 0 8px #1c1b1a; margin: 8px; }
+.frame.narrow { width: 320px; height: 568px; border-radius: 12px; }
+.frame.short { height: 640px; }
+.sb { flex: 0 0 48px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font-size: 16px; font-weight: 600; color: var(--text-main); }
+.narrow .sb { flex-basis: 20px; padding-top: 0; font-size: 12px; }
+.narrow .sb svg { transform: scale(.8); }
+.sb-right { display: flex; gap: 6px; align-items: center; fill: currentColor; color: var(--text-main); }
+.hdr { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; padding: 16px 24px; }
+.hbtn { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--text-main); }
+.hbtn.filled { background: var(--surface-container-high); }
+.htitle { flex: 1; text-align: center; font-size: 20px; font-weight: 700; letter-spacing: -0.3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tabs-wrap { flex: 0 0 auto; padding: 0 24px 16px; }
+.tabs { display: flex; background: var(--surface-container-low); border-radius: var(--radius-full); padding: 4px; }
+.tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: var(--radius-full); font-size: 14px; font-weight: 500; color: var(--text-muted); }
+.tab.sel { background: var(--primary); color: var(--on-primary); font-weight: 600; }
+.scroll { flex: 1; overflow: hidden; position: relative; }
+.home-ind { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; border-radius: 3px; background: var(--text-main); opacity: .9; }
+
+/* ================================================================ onglet IA */
+:root { --primary-ink: #b88a00; --error: #ba1a1a; --scrim: rgba(43,45,66,.35); }
+.pad { padding: 4px 24px 120px; }
+.narrow .pad { padding: 0 16px 80px; }
+.narrow .hdr { padding: 8px 16px; } .narrow .tabs-wrap { padding: 0 16px 10px; } .narrow .tab { min-height: 40px; }
+.htitle.sm { font-size: 17px; }
+.col { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.col b { font-size: 16px; font-weight: 600; }
+.meta { font-size: 13px; color: var(--text-subtle); display: flex; align-items: center; gap: 6px; line-height: 1.35; }
+.meta.err { color: var(--error); }
+.kick { font-size: 11px; font-weight: 700; letter-spacing: .6px; color: var(--text-subtle); display: flex; align-items: center; gap: 5px; }
+.one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.two { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.ibox { flex: 0 0 36px; width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--primary-05); display: flex; align-items: center; justify-content: center; color: var(--primary-ink); }
+.ibox.muted { background: var(--surface-container-low); color: var(--text-subtle); }
+.ibox.err { background: var(--error-container); color: var(--error); }
+.spin { display: inline-block; border-radius: 50%; border: 2px solid var(--surface-container-high); border-top-color: var(--primary-ink); flex: 0 0 auto; }
+.ident { display: flex; gap: 12px; align-items: center; padding: 0 24px 14px; }
+.ident-cov { width: 56px; height: 56px; border-radius: var(--radius-md); flex: 0 0 56px; overflow: hidden; }
+.ident-title { font-size: 17px; font-weight: 700; line-height: 1.3; }
+.narrow .ident { padding: 0 16px 8px; } .narrow .ident-cov { width: 40px; height: 40px; flex-basis: 40px; } .narrow .ident-title { font-size: 15px; }
+.intro { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text-subtle); margin: 4px 0 14px; line-height: 1.45; }
+.intro svg { margin-top: 2px; }
+
+/* actuel */
+.cur-h { font-size: 20px; font-weight: 600; margin: 4px 0 12px; }
+.cur-tile, .cur-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface); border-radius: var(--radius-xl); padding: 0 16px; min-height: 56px; }
+.cur-row { padding: 8px 16px; }
+.cur-id { display: flex; align-items: center; gap: 16px; font-size: 16px; }
+.cur-id b { font-weight: 600; }
+.cur-act { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.cur-btn { background: var(--primary); color: var(--on-primary); font-weight: 600; border-radius: var(--radius-md); padding: 0 16px; min-height: 40px; display: flex; align-items: center; }
+.cur-done { color: var(--text-muted); font-size: 14px; }
+.cur-prog { display: flex; gap: 8px; align-items: center; color: var(--text-muted); }
+.cur-fail { color: var(--error); }
+.cur-retry { background: var(--error-container); color: var(--error); font-weight: 600; border-radius: var(--radius-md); padding: 0 12px; min-height: 40px; display: flex; align-items: center; }
+
+/* A */
+.acard { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius-xl); padding: 12px 14px; min-height: 64px; }
+.acard.ready .col b { font-size: 15px; line-height: 1.3; }
+.acard.live { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.agroup { background: var(--surface); border-radius: var(--radius-xl); overflow: hidden; }
+.agroup .acard { border-radius: 0; }
+.asub { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin: 0 10px 8px; border-radius: var(--radius-lg); font-size: 14px; }
+.asub .col b { font-size: 14px; }
+.asub.stale { background: var(--primary-05); box-shadow: inset 0 0 0 1px rgba(255,203,5,.35); }
+.asub.old { background: var(--surface-container-low); }
+.asub.toggle { justify-content: center; gap: 4px; color: var(--text-subtle); font-weight: 600; font-size: 13px; padding: 6px; margin-top: -4px; }
+.flip { transform: rotate(180deg); }
+.pill-add, .pill-retry { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 600; border-radius: var(--radius-full); padding: 0 14px 0 10px; min-height: 36px; background: var(--primary); color: var(--on-primary); }
+.pill-retry { background: var(--error-container); color: var(--error); }
+.bar { display: block; height: 4px; border-radius: 2px; background: var(--surface-container); overflow: hidden; margin-top: 8px; position: relative; }
+.bar i { position: absolute; left: 22%; width: 38%; top: 0; bottom: 0; border-radius: 2px; background: var(--primary); }
+.refusal { display: flex; gap: 8px; align-items: flex-start; background: var(--error-container); color: var(--error); border-radius: var(--radius-lg); padding: 12px; font-size: 14px; line-height: 1.45; margin-bottom: 12px; }
+
+/* B */
+.sec { font-size: 13px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-subtle); margin: 6px 0 10px; display: flex; align-items: center; gap: 8px; }
+.sec .count { background: var(--surface-container-high); color: var(--text-main); border-radius: var(--radius-full); padding: 0 8px; font-size: 12px; }
+.bcard { background: var(--surface); border-radius: var(--radius-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow-soft); }
+.bhead { display: flex; justify-content: space-between; align-items: center; }
+.bhead .kick { color: var(--primary-ink); }
+.btitle { font-size: 17px; font-weight: 700; line-height: 1.3; letter-spacing: -.2px; }
+.bex { font-size: 14px; color: var(--text-subtle); line-height: 1.5; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.badge { font-size: 12px; font-weight: 600; border-radius: var(--radius-full); padding: 2px 8px; display: flex; gap: 5px; align-items: center; }
+.badge.live { background: var(--primary-05); color: var(--text-subtle); box-shadow: inset 0 0 0 1px rgba(255,203,5,.5); }
+.badge.err { background: var(--error-container); color: var(--error); }
+.bstale { display: flex; gap: 8px; align-items: center; background: var(--primary-05); border-radius: var(--radius-md); padding: 8px 10px; font-size: 13px; margin-top: 4px; }
+.bstale span:first-of-type { flex: 1; }
+.link { color: var(--text-main); font-weight: 700; font-size: 14px; text-decoration: underline; text-decoration-color: var(--primary); text-decoration-thickness: 2px; text-underline-offset: 3px; display: flex; gap: 4px; align-items: center; }
+.sk { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--surface-container) 0%, var(--surface-container-low) 50%, var(--surface-container) 100%); }
+.sk.thin { height: 10px; } .sk.tall { height: 20px; border-radius: 6px; margin-bottom: 8px; }
+.w40{width:40%}.w60{width:60%}.w70{width:70%}.w80{width:80%}.w90{width:90%}.w95{width:95%}
+.sk.center { margin: 16px auto 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: flex; align-items: center; gap: 6px; background: var(--surface); border-radius: var(--radius-full); padding: 0 12px; min-height: 44px; font-size: 14px; font-weight: 600; box-shadow: inset 0 0 0 1px rgba(0,0,0,.05); }
+.chip svg:first-child { color: var(--primary-ink); }
+.older { display: flex; align-items: center; gap: 8px; color: var(--text-subtle); font-size: 14px; font-weight: 600; padding: 12px 4px 0; }
+.older svg:last-child { margin-left: auto; }
+.bempty { text-align: center; padding: 12px 8px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.bempty b { font-size: 19px; letter-spacing: -.2px; }
+.bempty p { font-size: 14px; color: var(--text-subtle); margin: 0; line-height: 1.5; }
+.narrow .bempty { padding: 4px 0 10px; } .narrow .bempty b { font-size: 16px; } .narrow .bempty p { font-size: 13px; }
+.bigic { width: 56px; height: 56px; border-radius: 50%; background: var(--primary-05); box-shadow: inset 0 0 0 1px rgba(255,203,5,.4); display: flex; align-items: center; justify-content: center; }
+.narrow .bigic { width: 44px; height: 44px; }
+.bchoices { display: flex; flex-direction: column; gap: 8px; }
+.bchoice { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius-xl); padding: 10px 14px; }
+.narrow .bchoice { padding: 8px 10px; }
+
+/* C */
+.cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ctile { background: var(--surface); border-radius: var(--radius-xl); padding: 14px; display: flex; flex-direction: column; gap: 4px; min-height: 150px; position: relative; }
+.narrow .ctile { min-height: 0; padding: 10px; } .narrow .ctile .meta.two { display: none; } .narrow .cicon { width: 34px; height: 34px; margin-bottom: 4px; }
+.ctile b { font-size: 15px; font-weight: 700; }
+.cicon { width: 44px; height: 44px; border-radius: 12px; background: var(--primary-05); color: var(--primary-ink); display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.ctile.todo .cicon { background: var(--surface-container-low); color: var(--text-subtle); }
+.ctile.fail .cicon { background: var(--error-container); color: var(--error); }
+.ctile.live { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.ctile.ghost { background: transparent; box-shadow: inset 0 0 0 1.5px var(--surface-container-high); align-items: center; justify-content: center; text-align: center; gap: 8px; }
+.ctile.ghost .meta { justify-content: center; }
+.narrow .ctile.ghost { display: none; }
+.cfoot { margin-top: auto; padding-top: 8px; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 5px; color: var(--text-subtle); }
+.cfoot.add { color: var(--on-primary); background: var(--primary); align-self: flex-start; border-radius: var(--radius-full); padding: 0 12px 0 8px; min-height: 32px; margin-top: auto; }
+.ctile .cfoot.add { margin-top: auto; } .ctile .cfoot.add { margin-top: auto; }
+.cfoot.ok svg { color: var(--primary-ink); }
+.cfoot.err { color: var(--error); }
+.cnew { position: absolute; top: 12px; right: 12px; font-size: 11px; font-weight: 700; background: var(--primary); color: var(--on-primary); border-radius: var(--radius-full); padding: 2px 8px; }
+
+/* feuille */
+.scrim { position: absolute; inset: 0; background: var(--scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--background); border-radius: 24px 24px 0 0; padding: 10px 24px 40px; display: flex; flex-direction: column; gap: 12px; }
+.grab { width: 40px; height: 5px; border-radius: 3px; background: var(--outline-variant); align-self: center; margin-bottom: 6px; }
+.shead { display: flex; gap: 12px; align-items: center; }
+.big { font-size: 20px; font-weight: 700; letter-spacing: -.2px; }
+.sp { font-size: 14px; color: var(--text-subtle); margin: 4px 0 0; font-weight: 600; }
+.sl { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.sl li { display: flex; gap: 8px; align-items: center; font-size: 15px; margin: 0; }
+.sbox { display: flex; gap: 10px; background: var(--surface-container-low); border-radius: var(--radius-lg); padding: 12px; font-size: 14px; color: var(--text-subtle); line-height: 1.45; }
+.cta { display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: 16px; border-radius: var(--radius-full); min-height: 52px; margin-top: 4px; }
+.cta.small { min-height: 44px; padding: 0 20px; font-size: 15px; }
+
+/* écrans de fiche */
+.srcline { display: flex; align-items: center; gap: 8px; background: var(--surface-container-low); border-radius: var(--radius-full); padding: 4px 12px 4px 4px; margin-bottom: 16px; }
+.mini-cov { width: 28px; height: 28px; border-radius: 50%; flex: 0 0 28px; }
+.build { display: flex; gap: 12px; align-items: flex-start; background: var(--primary-05); box-shadow: inset 0 0 0 1px rgba(255,203,5,.4); border-radius: var(--radius-lg); padding: 14px; margin-bottom: 20px; }
+.build .spin { margin-top: 3px; }
+.build > span { display: flex; flex-direction: column; gap: 4px; } .build b { font-size: 15px; }
+.art-title { font-size: 24px; font-weight: 700; letter-spacing: -.4px; line-height: 1.25; margin: 8px 0 12px; }
+.art-h { font-size: 13px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-subtle); margin: 16px 0 8px; }
+.art-h.ghost { color: var(--outline-variant); }
+.art-ul { margin: 0; padding-left: 18px; } .art-ul li { font-size: 16px; line-height: 1.6; margin-bottom: 6px; }
+.callout { border-left: 4px solid var(--primary); background: var(--primary-05); padding: 12px 14px; border-radius: 0 var(--radius-md) var(--radius-md) 0; display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 15px; line-height: 1.5; }
+.callout.ghost { border-left-color: var(--surface-container-high); background: var(--surface-container-low); }
+.skrow { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; } .skrow .sk { flex: 0 0 auto; }
+.dot { width: 6px; height: 6px; border-radius: 3px; background: var(--outline-variant); flex: 0 0 6px; }
+.fc-stack { position: relative; height: 300px; margin: 10px 8px 0; }
+.fc { position: absolute; left: 0; right: 0; top: 0; height: 270px; border-radius: 20px; background: var(--surface); }
+.fc.back2 { transform: translateY(24px) scale(.9); background: var(--surface-container); }
+.fc.back1 { transform: translateY(12px) scale(.95); background: var(--surface-container-low); }
+.fc.front { box-shadow: 0 8px 24px rgba(43,45,66,.08); padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.center-col { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; height: 640px; }
+.muted-p { color: var(--text-subtle); font-size: 15px; margin: 0; max-width: 280px; line-height: 1.5; }
+.toast { position: absolute; left: 16px; right: 16px; bottom: 40px; background: #2b2d42; color: #fcf9f6; border-radius: var(--radius-lg); padding: 14px 16px; display: flex; gap: 10px; align-items: center; font-size: 15px; box-shadow: 0 8px 24px rgba(43,45,66,.25); }
+.toast span { flex: 1; } .toast b { color: var(--primary); }
+.track { position: absolute; left: 16px; right: 16px; bottom: 36px; background: var(--surface); border-radius: var(--radius-full); padding: 10px 18px 10px 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 8px 24px rgba(43,45,66,.14), inset 0 0 0 1px rgba(255,203,5,.5); }
+.track .col b { font-size: 14px; } .track .go { font-size: 14px; background: var(--primary); color: var(--on-primary); border-radius: var(--radius-full); padding: 6px 14px; }
+.rd { font-size: 16px; line-height: 1.6; margin: 0 0 12px; }
+
+/* ================================================================ direction 7 */
+:root { --ok: #1f7a4d; --ok-container: #d9f2e4; }
+.pr { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 32px; }
+.pr li { margin: 0; font-size: 15px; line-height: 1.5; max-width: none; }
+.pr li b { display: block; }
+.pr .src { color: var(--text-subtle); font-size: 13px; }
+.refs { font-size: 13px; color: var(--text-subtle); }
+.refs li { font-size: 13px; line-height: 1.5; }
+sup { font-size: 10px; color: var(--text-subtle); font-weight: 600; }
+
+/* onglet */
+.grp { margin: 2px 0 8px; display: flex; align-items: baseline; gap: 8px; }
+.grp .sec { margin: 0; }
+.grp .meta { font-size: 13px; }
+.grp + .stack { margin-bottom: 20px; }
+.acard .col .meta b { font-weight: 600; color: var(--text-main); font-size: 13px; }
+.acard.reco { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.tagreco { font-size: 11px; font-weight: 700; background: var(--primary); color: var(--on-primary); border-radius: var(--radius-full); padding: 1px 8px; letter-spacing: .3px; }
+.acard.fail .col b { color: var(--text-main); }
+.inline-stale { display: flex; align-items: center; gap: 8px; margin: -2px 10px 8px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--primary-05); box-shadow: inset 0 0 0 1px rgba(255,203,5,.35); font-size: 13px; color: var(--text-subtle); }
+.inline-stale span { flex: 1; }
+.inline-stale b { color: var(--text-main); font-size: 13px; text-decoration: underline; text-decoration-color: var(--primary); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.fold { display: flex; align-items: center; gap: 6px; padding: 2px 4px 10px 64px; font-size: 13px; color: var(--text-subtle); font-weight: 600; }
+.foot-note { font-size: 13px; color: var(--text-subtle); line-height: 1.5; display: flex; gap: 8px; margin-top: 4px; }
+
+/* feuilles */
+.optl { font-size: 13px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--text-subtle); margin: 4px 0 -2px; }
+.segs { display: flex; background: var(--surface-container-low); border-radius: var(--radius-full); padding: 4px; }
+.segs span { flex: 1; text-align: center; min-height: 40px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-full); font-size: 15px; font-weight: 500; color: var(--text-subtle); }
+.segs span.on { background: var(--surface); color: var(--text-main); font-weight: 700; box-shadow: 0 1px 4px rgba(43,45,66,.12); }
+.field { background: var(--surface); border-radius: var(--radius-lg); min-height: 48px; display: flex; align-items: center; padding: 0 14px; font-size: 15px; color: var(--text-muted); box-shadow: inset 0 0 0 1px var(--outline-variant); }
+.cost { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--text-subtle); line-height: 1.45; }
+.cost b { color: var(--text-main); }
+.menu { background: var(--surface); border-radius: var(--radius-xl); overflow: hidden; }
+.menu div { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 16px; font-size: 16px; border-top: 1px solid var(--surface-container); }
+.menu div:first-child { border-top: 0; }
+.menu div .meta { margin-left: auto; }
+.menu .danger { color: var(--error); }
+.ghost-btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; font-size: 16px; font-weight: 600; color: var(--text-main); border-radius: var(--radius-full); }
+.ghost-btn.outline { box-shadow: inset 0 0 0 1.5px var(--outline-variant); }
+
+/* page de fiche */
+.hdr .right { display: flex; gap: 4px; }
+.fkick { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: .6px; color: var(--text-subtle); text-transform: uppercase; }
+.fkick svg { color: var(--primary-ink); }
+.art-title { margin: 6px 0 14px; }
+.srcchip { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: var(--radius-lg); padding: 8px 12px 8px 8px; margin-bottom: 18px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.04); }
+.srcchip .mini-cov { width: 36px; height: 36px; border-radius: var(--radius-md); flex-basis: 36px; }
+.srcchip .col b { font-size: 14px; font-weight: 600; }
+.covs { display: flex; flex: 0 0 auto; }
+.covs svg { width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
+.covs svg + svg { margin-left: -10px; }
+.stale { display: flex; gap: 10px; align-items: flex-start; background: var(--primary-05); box-shadow: inset 0 0 0 1px rgba(255,203,5,.45); border-radius: var(--radius-lg); padding: 12px; font-size: 14px; line-height: 1.45; margin: -6px 0 18px; }
+.stale .col { gap: 6px; }
+.essentiel { background: var(--primary); color: var(--on-primary); border-radius: var(--radius-xl); padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.essentiel .kick { color: var(--on-primary); opacity: .75; }
+.essentiel p { font-size: 17px; font-weight: 600; line-height: 1.45; margin: 0; letter-spacing: -.1px; }
+.nl { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.nl li { display: flex; gap: 12px; margin: 0; font-size: 16px; line-height: 1.5; }
+.nl li > i { font-style: normal; flex: 0 0 24px; height: 24px; border-radius: 50%; background: var(--surface-container); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+.art-h { margin: 24px 0 10px; }
+.toc { display: flex; gap: 8px; overflow: hidden; margin: 0 -24px 18px; padding: 0 24px; white-space: nowrap; }
+.toc span { flex: 0 0 auto; font-size: 14px; font-weight: 600; border-radius: var(--radius-full); padding: 0 14px; min-height: 36px; display: flex; align-items: center; gap: 6px; background: var(--surface); box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); color: var(--text-subtle); }
+.toc span.on { background: var(--text-main); color: var(--background); box-shadow: none; }
+.toc span i { font-style: normal; font-weight: 500; opacity: .7; }
+.sticky { flex: 0 0 auto; background: var(--background); padding: 0 24px 10px; box-shadow: 0 6px 10px -8px rgba(43,45,66,.18); position: relative; z-index: 2; }
+.sticky .toc { margin-bottom: 0; }
+.rprog { height: 3px; background: var(--surface-container); border-radius: 2px; margin: 0 0 10px; overflow: hidden; }
+.rprog i { display: block; height: 100%; background: var(--primary); border-radius: 2px; }
+.topics { display: flex; flex-wrap: wrap; gap: 8px; }
+.topics span { background: var(--surface-container-low); border-radius: var(--radius-full); padding: 6px 12px; font-size: 14px; font-weight: 500; }
+.qcard { background: var(--surface); border-radius: var(--radius-xl); padding: 16px 18px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.qcard .mark { font-size: 40px; line-height: 34px; height: 14px; overflow: visible; color: var(--primary-ink); font-family: Georgia, serif; }
+.qcard p { margin: 0; font-size: 16px; line-height: 1.55; font-style: italic; }
+.qcard .who { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-subtle); font-weight: 600; }
+.qcard .who svg.mini-cov { width: 22px; height: 22px; flex-basis: 22px; }
+.next { display: flex; flex-direction: column; gap: 8px; }
+.next .acard { min-height: 60px; }
+.fb { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--surface-container-high); font-size: 14px; color: var(--text-subtle); }
+.fb > span:first-child { flex: 1; }
+.fb .hbtn { width: 40px; height: 40px; background: var(--surface); }
+.disc { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 10px 0 0; display: flex; gap: 6px; }
+.obj { background: var(--surface); border-radius: var(--radius-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.obj .sl li { font-size: 15px; align-items: flex-start; line-height: 1.45; }
+.obj .sl li svg { margin-top: 2px; flex: 0 0 auto; }
+.concept { background: var(--surface); border-radius: var(--radius-xl); padding: 14px 16px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+.concept .top { display: flex; align-items: center; gap: 8px; }
+.concept .top b { font-size: 16px; flex: 1; }
+.concept p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-main); }
+.imp { font-size: 12px; font-weight: 700; border-radius: var(--radius-full); padding: 2px 9px; }
+.imp.core { background: var(--primary); color: var(--on-primary); }
+.imp.sup { background: var(--surface-container); color: var(--text-subtle); }
+.concept.closed { flex-direction: row; align-items: center; }
+.chk { display: flex; flex-direction: column; background: var(--surface); border-radius: var(--radius-xl); overflow: hidden; }
+.chk div { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; font-size: 15px; line-height: 1.45; border-top: 1px solid var(--surface-container); }
+.chk div:first-child { border-top: 0; }
+.chk div svg { flex: 0 0 auto; margin-top: 1px; }
+.chk div.done span { color: var(--text-muted); text-decoration: line-through; }
+.gl { background: var(--surface); border-radius: var(--radius-xl); overflow: hidden; }
+.gl div { padding: 12px 16px; border-top: 1px solid var(--surface-container); font-size: 15px; line-height: 1.45; }
+.gl div:first-child { border-top: 0; }
+.gl b { display: block; font-size: 15px; margin-bottom: 2px; }
+.gl span { color: var(--text-subtle); }
+.cnt { font-weight: 600; color: var(--text-subtle); font-size: 13px; text-transform: none; letter-spacing: 0; margin-left: 6px; }
+
+/* séance (cartes mémo, quiz) */
+.study { background: var(--surface-container-low); }
+.stop { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 12px 20px 8px; }
+.stop .count { flex: 1; text-align: center; font-size: 15px; font-weight: 700; }
+.sprog { margin: 0 24px; height: 6px; border-radius: 3px; background: var(--surface-container-high); overflow: hidden; flex: 0 0 auto; }
+.sprog i { display: block; height: 100%; background: var(--primary); border-radius: 3px; }
+.tally { display: flex; justify-content: space-between; padding: 10px 24px 0; font-size: 13px; font-weight: 600; color: var(--text-subtle); flex: 0 0 auto; }
+.tally span { display: flex; align-items: center; gap: 6px; }
+.tally i { font-style: normal; min-width: 24px; height: 22px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; padding: 0 7px; }
+.tally .again i { background: var(--error-container); color: var(--error); }
+.tally .known i { background: var(--ok-container); color: var(--ok); }
+.bigcard { margin: 18px 24px 0; flex: 1; max-height: 520px; background: var(--surface); border-radius: 24px; box-shadow: 0 10px 30px rgba(43,45,66,.10); padding: 28px 26px; display: flex; flex-direction: column; gap: 14px; position: relative; }
+.bigcard .q { font-size: 23px; font-weight: 700; line-height: 1.35; letter-spacing: -.3px; }
+.bigcard .q.small { font-size: 16px; font-weight: 600; color: var(--text-subtle); letter-spacing: 0; }
+.bigcard .a { font-size: 21px; line-height: 1.45; font-weight: 500; }
+.bigcard hr { border: 0; border-top: 1px dashed var(--outline-variant); width: 100%; margin: 4px 0; }
+.bigcard .hint { margin-top: auto; text-align: center; font-size: 13px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.bigcard .src { margin-top: auto; display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-subtle); }
+.under { position: absolute; left: 34px; right: 34px; height: 30px; bottom: -10px; background: var(--surface); border-radius: 0 0 24px 24px; opacity: .6; z-index: -1; }
+.sbot { flex: 0 0 auto; padding: 20px 24px 44px; display: flex; gap: 12px; }
+.sbot > * { flex: 1; }
+.grade { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 64px; border-radius: 20px; font-size: 16px; font-weight: 700; }
+.grade small { font-size: 12px; font-weight: 500; opacity: .8; }
+.grade.again { background: var(--surface); color: var(--error); box-shadow: inset 0 0 0 1.5px var(--error-container); }
+.grade.known { background: var(--primary); color: var(--on-primary); }
+.cta.wide { min-height: 56px; }
+.qopt { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius-lg); padding: 12px 14px; min-height: 60px; font-size: 16px; line-height: 1.4; box-shadow: inset 0 0 0 1.5px transparent; }
+.qopt .lt { flex: 0 0 30px; height: 30px; border-radius: 50%; background: var(--surface-container); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+.qopt span.t { flex: 1; }
+.qopt.sel { box-shadow: inset 0 0 0 2px var(--text-main); }
+.qopt.sel .lt { background: var(--text-main); color: var(--background); }
+.qopt.ok { background: var(--ok-container); box-shadow: inset 0 0 0 1.5px var(--ok); }
+.qopt.ok .lt { background: var(--ok); color: #fff; }
+.qopt.ko { background: var(--error-container); box-shadow: inset 0 0 0 1.5px var(--error); }
+.qopt.ko .lt { background: var(--error); color: #fff; }
+.qopt.dim { opacity: .55; }
+.qq { font-size: 21px; font-weight: 700; line-height: 1.35; letter-spacing: -.2px; margin: 22px 24px 18px; }
+.qopts { display: flex; flex-direction: column; gap: 10px; padding: 0 24px; }
+.qfeed { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 24px 24px 0 0; padding: 20px 24px 40px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 -8px 24px rgba(43,45,66,.10); }
+.qfeed .verdict { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: var(--error); }
+.qfeed .right-ans { font-size: 15px; font-weight: 600; }
+.qfeed p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text-subtle); }
+.qfeed .src { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-subtle); }
+.btn-dis { background: var(--surface-container-high); color: var(--text-muted); }
+.ring { width: 132px; height: 132px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.ring > span { width: 108px; height: 108px; border-radius: 50%; background: var(--background); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring b { font-size: 34px; letter-spacing: -1px; }
+.ring small { font-size: 13px; color: var(--text-subtle); font-weight: 600; }
+.res-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 8px 0 18px; }
+.res-head .big { font-size: 22px; }
+.miss { background: var(--surface); border-radius: var(--radius-xl); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.miss b { font-size: 15px; line-height: 1.4; font-weight: 600; }
+.miss .ans { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.miss .ans span { display: flex; gap: 6px; align-items: flex-start; }
+.miss .ans svg { flex: 0 0 auto; margin-top: 2px; }
+.split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; width: 240px; }
+.split i { display: block; height: 100%; }
+.legend { display: flex; gap: 16px; font-size: 14px; font-weight: 600; }
+.legend span { display: flex; gap: 6px; align-items: center; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.deck { background: var(--surface); border-radius: var(--radius-xl); overflow: hidden; }
+.deck div { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-top: 1px solid var(--surface-container); font-size: 15px; line-height: 1.4; }
+.deck div:first-child { border-top: 0; }
+.deck div i { font-style: normal; font-size: 13px; font-weight: 700; color: var(--text-muted); flex: 0 0 22px; margin-top: 1px; }
+.deck div span { flex: 1; }
+.startbox { background: var(--surface); border-radius: var(--radius-xl); padding: 18px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.facts { display: flex; gap: 18px; font-size: 14px; color: var(--text-subtle); font-weight: 600; flex-wrap: wrap; }
+.facts span { display: flex; gap: 6px; align-items: center; }
+.last { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-subtle); background: var(--surface-container-low); border-radius: var(--radius-md); padding: 8px 10px; }
+.status { display: flex; gap: 12px; align-items: center; background: var(--surface); border-radius: var(--radius-lg); padding: 12px 14px; margin-bottom: 20px; box-shadow: inset 0 0 0 1.5px var(--primary); }
+.status .col b { font-size: 15px; }
+.status .bar { margin-top: 6px; }
+.status .bar.det i { left: 0; width: 46%; }
+.failbox { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 90px 8px 0; }
+.failbox .bigic { background: var(--error-container); box-shadow: none; }
+.failbox .cta { align-self: stretch; }
+
+.narrow .acard .meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.narrow .acard .meta .spin { display: none; }
+.narrow .tagreco { display: none; }
+.stale .col b { font-size: 14px; }
+</style></head><body><svg width="0" height="0" style="position:absolute"><symbol id="c-art1" viewBox="0 0 1200 630" preserveAspectRatio="xMidYMid slice">
+<rect width="1200" height="630" fill="#d9c7b0"/>
+<rect x="120" y="70" width="300" height="360" rx="8" fill="#ffffff" opacity=".55"/>
+<line x1="270" y1="70" x2="270" y2="430" stroke="#d9c7b0" stroke-width="10"/>
+<line x1="120" y1="250" x2="420" y2="250" stroke="#d9c7b0" stroke-width="10"/>
+<circle cx="880" cy="170" r="80" fill="#ffffff" opacity=".7"/><path d="M880 170 L880 115 M880 170 L920 190" stroke="#2b2d42" stroke-width="10" stroke-linecap="round"/>
+<rect x="0" y="470" width="1200" height="160" fill="#8a6a4f"/>
+<rect x="560" y="330" width="360" height="150" rx="10" fill="#2b2d42"/><rect x="580" y="345" width="320" height="120" rx="4" fill="#9ec5d6"/>
+<rect x="520" y="478" width="440" height="16" rx="8" fill="#2b2d42"/>
+<rect x="1000" y="380" width="70" height="95" rx="12" fill="#ffffff"/><path d="M1070 400 q40 20 0 50" stroke="#ffffff" stroke-width="12" fill="none"/>
+<path d="M200 470 C200 390 170 360 150 330 M200 470 C200 400 240 370 262 350 M200 470 C205 410 200 380 205 340" stroke="#4d7c57" stroke-width="18" fill="none" stroke-linecap="round"/>
+<rect x="165" y="450" width="70" height="40" rx="8" fill="#b5654a"/>
+</symbol><symbol id="c-pod1" viewBox="0 0 1000 1000" preserveAspectRatio="xMidYMid slice">
+<rect width="1000" height="1000" fill="#5b3cc4"/>
+<circle cx="500" cy="420" r="300" fill="none" stroke="#a896f0" stroke-width="26" opacity=".6"/>
+<circle cx="500" cy="420" r="210" fill="none" stroke="#a896f0" stroke-width="26" opacity=".8"/>
+<rect x="430" y="250" width="140" height="250" rx="70" fill="#ffffff"/>
+<path d="M380 430 C380 540 440 580 500 580 C560 580 620 540 620 430" stroke="#ffffff" stroke-width="26" fill="none" stroke-linecap="round"/>
+<rect x="487" y="580" width="26" height="70" fill="#ffffff"/>
+<rect x="120" y="790" width="560" height="64" rx="12" fill="#ffffff"/>
+<rect x="120" y="880" width="380" height="44" rx="10" fill="#ffffff" opacity=".7"/>
+</symbol><symbol id="c-video" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+ <defs><linearGradient id="gv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1d2a4a"/><stop offset="1" stop-color="#3b2b5e"/></linearGradient></defs>
+ <rect width="1280" height="720" fill="url(#gv)"/><circle cx="930" cy="250" r="150" fill="#f4d58d" opacity=".9"/>
+ <circle cx="985" cy="215" r="135" fill="#2a2f55"/><g fill="#fff" opacity=".7"><circle cx="210" cy="140" r="5"/><circle cx="420" cy="90" r="4"/><circle cx="640" cy="180" r="3"/><circle cx="330" cy="300" r="4"/></g>
+ <path d="M0 560 Q320 470 640 540 T1280 520 V720 H0Z" fill="#15203a"/></symbol><symbol id="c-yt1" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+<defs><linearGradient id="c-yt1g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b2340"/><stop offset="1" stop-color="#3e4f86"/></linearGradient></defs><rect width="1280" height="720" fill="url(#c-yt1g)"/>
+<circle cx="930" cy="330" r="330" fill="#ffffff" opacity=".08"/>
+<path d="M700 720 C700 520 800 450 930 450 C1060 450 1160 520 1160 720Z" fill="#c0392b"/>
+<ellipse cx="930" cy="300" rx="120" ry="140" fill="#e2b08f"/>
+<path d="M808 300 C790 150 870 130 930 130 C1020 130 1070 180 1052 300 C1030 220 990 205 930 208 C870 208 830 230 808 300Z" fill="#2a1e18"/>
+<rect x="80" y="170" width="520" height="96" rx="12" fill="#ffcb05"/>
+<rect x="80" y="290" width="420" height="96" rx="12" fill="#ffffff"/>
+<rect x="80" y="410" width="300" height="96" rx="12" fill="#ffffff" opacity=".85"/>
+</symbol><symbol id="ion-arrow-back" viewBox="0 0 512 512"><path d="M238.0 89.0Q238.0 89.0 238.0 89.0Q246.0 87.0 255.0 91.0Q263.0 95.0 266.0 103.0Q269.0 111.0 267.0 120.0Q265.0 124.0 211.0 178.0Q211.0 178.0 157.0 232.0H288.0L419.0 233.0L423.0 235.0Q431.0 239.0 434.0 248.0Q437.0 256.0 434.0 264.0Q431.0 273.0 423.0 277.0Q423.0 277.0 419.0 279.0L289.0 280.0Q159.0 280.0 159.0 280.5Q159.0 281.0 212.0 334.5Q265.0 388.0 267.0 392.0Q272.0 408.0 259.0 418.0Q252.0 424.0 244.0 424.0Q241.0 424.0 236.0 422.0Q231.0 420.0 156.0 345.5Q81.0 271.0 79.0 267.0Q74.0 258.0 78.0 248.0Q80.0 243.0 154.0 168.5Q228.0 94.0 231.0 92.0Q234.0 90.0 238.0 89.0Z"/></symbol><symbol id="ion-bulb-outline" viewBox="0 0 512 512"><path d="M242.0 17.0Q246.0 16.0 257.0 16.0Q268.0 16.0 274.0 17.0Q330.0 23.0 370.0 63.0Q393.0 87.0 406.0 119.0Q419.0 154.0 415.0 195.0Q411.0 236.0 391.0 267.0Q382.0 281.0 358.0 304.0Q331.0 331.0 324.0 346.0L320.0 353.0V371.0V390.0L317.0 393.0Q311.0 401.0 303.0 400.0Q295.0 399.0 290.0 392.0L288.0 388.0V369.0Q288.0 351.0 290.0 344.0Q299.0 316.0 338.0 279.0Q350.0 268.0 355.0 261.0Q378.0 233.0 382.0 198.0Q389.0 145.0 362.0 105.0Q328.0 53.0 265.0 49.0Q226.0 46.0 192.5 65.0Q159.0 84.0 141.0 120.0Q127.0 149.0 128.5 184.5Q130.0 220.0 148.0 248.0Q155.0 260.0 179.0 284.0Q211.0 315.0 219.0 335.0Q224.0 348.0 224.0 370.0V388.0L222.0 392.0Q217.0 400.0 209.0 400.0Q201.0 400.0 195.0 393.0L192.0 390.0V371.0V353.0L188.0 345.0Q180.0 331.0 154.0 304.0Q133.0 284.0 129.0 278.0Q92.0 228.0 96.0 164.0Q100.0 117.0 128.5 79.5Q157.0 42.0 201.0 26.0Q217.0 20.0 233.0 18.0Q240.0 17.0 242.0 17.0ZM211.0 226.0Q214.0 224.0 218.5 224.0Q223.0 224.0 230.0 228.5Q237.0 233.0 243.5 236.0Q250.0 239.0 256.0 239.0Q262.0 239.0 268.5 236.0Q275.0 233.0 282.0 228.5Q289.0 224.0 293.0 224.0Q301.0 224.0 305.0 229.0Q310.0 233.0 309.5 240.5Q309.0 248.0 303.0 253.0Q292.0 262.0 279.0 267.0L272.0 269.0V327.0Q272.0 385.0 271.0 388.0Q270.0 395.0 264.0 398.0Q258.0 401.0 252.0 399.0Q243.0 397.0 241.0 389.0Q240.0 385.0 240.0 327.0V269.0L233.0 267.0Q220.0 262.0 209.0 253.0Q201.0 247.0 202.0 238.0Q203.0 229.0 211.0 226.0ZM201.0 418.0Q204.0 416.0 256.0 416.0Q308.0 416.0 311.0 418.0Q316.0 421.0 319.0 426.0Q321.0 432.0 319.0 438.0Q316.0 445.0 309.0 447.0Q307.0 448.0 256.0 448.0Q205.0 448.0 203.0 447.0Q196.0 445.0 193.0 438.0Q191.0 432.0 194.0 425.0Q196.0 420.0 201.0 418.0ZM217.0 466.0Q217.0 466.0 217.0 466.0Q220.0 464.0 256.0 464.0Q292.0 464.0 295.0 466.0Q304.0 470.0 304.0 480.0Q304.0 490.0 295.0 494.0Q292.0 496.0 256.0 496.0Q225.0 496.0 220.0 495.0Q215.0 494.0 211.0 489.0Q209.0 486.0 209.0 480.0Q209.0 474.0 211.0 471.0Q213.0 468.0 217.0 466.0Z"/></symbol><symbol id="ion-chatbubble-ellipses-outline" viewBox="0 0 512 512"><path d="M228.0 34.0Q238.0 33.0 259.5 33.0Q281.0 33.0 290.0 34.0Q345.0 43.0 387.0 74.0Q448.0 117.0 470.0 187.0Q492.0 257.0 466.0 328.0Q452.0 367.0 423.5 399.0Q395.0 431.0 358.0 449.0Q319.0 469.0 274.0 472.0Q229.0 475.0 174.0 455.0Q165.0 452.0 161.5 452.0Q158.0 452.0 121.0 465.5Q84.0 479.0 81.0 480.0Q73.0 481.0 65.0 477.0Q53.0 471.0 51.0 457.0Q51.0 452.0 61.0 414.0L72.0 377.0L65.0 366.0Q36.0 318.0 33.0 264.0Q31.0 236.0 36.0 210.0Q43.0 175.0 59.0 146.0Q86.0 99.0 130.0 70.0Q174.0 41.0 228.0 34.0ZM283.0 66.0Q260.0 63.0 241.0 65.0Q215.0 67.0 192.0 75.0Q131.0 96.0 95.5 148.5Q60.0 201.0 65.0 264.0Q68.0 310.0 92.0 349.0Q101.0 364.0 103.0 373.0Q104.0 379.0 94.0 415.0Q92.0 423.0 90.5 429.5Q89.0 436.0 88.0 440.0Q87.0 444.0 87.0 444.0Q87.0 444.0 117.5 433.0Q148.0 422.0 154.0 421.0Q165.0 419.0 187.0 426.0Q204.0 432.0 212.0 434.0Q268.0 448.0 320.0 430.0Q370.0 414.0 404.0 373.0Q438.0 332.0 446.0 280.0Q453.0 229.0 434.0 182.0Q415.0 135.0 374.0 104.0Q334.0 73.0 283.0 66.0ZM148.0 226.0Q153.0 224.0 161.0 224.5Q169.0 225.0 174.0 228.0Q184.0 233.0 189.0 243.0Q191.0 248.0 191.0 256.0Q191.0 264.0 189.0 269.0Q182.0 284.0 165.0 288.0Q155.0 289.0 145.0 284.0Q135.0 279.0 131.0 269.0Q129.0 264.0 129.0 256.0Q129.0 244.0 135.0 236.0Q140.0 230.0 148.0 226.0ZM245.0 226.0Q258.0 221.0 270.0 227.0Q285.0 234.0 287.5 250.5Q290.0 267.0 278.0 278.0Q265.0 292.0 246.5 286.0Q228.0 280.0 224.0 261.0Q223.0 250.0 229.0 240.0Q235.0 230.0 245.0 226.0ZM340.0 226.0Q340.0 226.0 340.0 226.0Q345.0 224.0 353.0 224.5Q361.0 225.0 366.0 228.0Q376.0 233.0 381.0 243.0Q383.0 248.0 383.0 256.0Q383.0 264.0 381.0 269.0Q374.0 284.0 357.0 288.0Q347.0 289.0 337.0 284.0Q327.0 279.0 323.0 269.0Q321.0 264.0 321.0 256.0Q321.0 244.0 327.0 236.0Q332.0 230.0 340.0 226.0Z"/></symbol><symbol id="ion-chevron-forward" viewBox="0 0 512 512"><path d="M179.0 89.0Q179.0 89.0 179.0 89.0Q187.0 87.0 195.0 91.0Q198.0 92.0 273.0 167.0Q335.0 228.0 343.5 238.0Q352.0 248.0 352.0 256.0Q352.0 264.0 343.5 274.0Q335.0 284.0 273.0 345.0Q213.0 405.0 203.0 414.0Q193.0 423.0 186.0 424.0Q177.0 425.0 169.5 419.0Q162.0 413.0 161.0 404.0Q159.0 396.0 163.0 389.0Q164.0 386.0 229.0 321.0Q229.0 321.0 294.0 256.0L229.0 191.0Q164.0 126.0 163.0 123.0Q159.0 116.0 161.0 108.0Q163.0 92.0 179.0 89.0Z"/></symbol><symbol id="ion-document-text-outline" viewBox="0 0 512 512"><path d="M192.0 32.0Q241.0 32.0 249.5 33.0Q258.0 34.0 266.0 38.0Q272.0 41.0 348.0 117.0Q424.0 193.0 426.0 199.0Q431.0 207.0 431.5 220.0Q432.0 233.0 432.0 320.0Q432.0 425.0 430.0 431.5Q428.0 438.0 424.5 445.5Q421.0 453.0 413.0 461.0Q405.0 469.0 397.0 473.0Q386.0 479.0 372.0 479.5Q358.0 480.0 256.0 480.0Q154.0 480.0 140.0 479.5Q126.0 479.0 115.0 473.0Q107.0 469.0 99.0 461.0Q91.0 453.0 87.5 445.5Q84.0 438.0 82.0 431.5Q80.0 425.0 80.0 256.0Q80.0 87.0 82.0 80.5Q84.0 74.0 87.5 66.5Q91.0 59.0 99.0 51.0Q107.0 43.0 115.0 39.0Q123.0 35.0 128.5 34.0Q134.0 33.0 192.0 32.0ZM240.0 121.0V64.0H190.0Q140.0 64.0 136.0 65.0Q116.0 70.0 113.0 91.0Q112.0 97.0 112.0 256.0Q112.0 415.0 113.0 421.0Q115.0 438.0 131.0 445.0L136.0 448.0H256.0H376.0L382.0 445.0Q397.0 437.0 399.0 421.0Q400.0 415.0 400.0 320.0V225.0L340.0 224.0Q279.0 224.0 275.0 222.0Q262.0 218.0 252.5 207.5Q243.0 197.0 241.0 184.0Q240.0 179.0 240.0 121.0ZM331.0 192.0H377.0L325.0 139.0L272.0 87.0V134.0L273.0 181.0L275.0 185.0Q277.0 188.0 281.0 190.0Q285.0 192.0 331.0 192.0ZM169.0 274.0Q172.0 272.0 257.0 272.0L342.0 273.0L345.0 275.0Q350.0 279.0 351.0 285.0Q354.0 298.0 342.0 303.0Q340.0 304.0 256.0 304.0Q172.0 304.0 170.0 303.0Q160.0 299.0 160.0 288.0Q160.0 278.0 169.0 274.0ZM169.0 353.0Q169.0 353.0 169.0 353.0Q171.0 352.0 256.0 352.0Q341.0 352.0 343.0 354.0Q350.0 357.0 351.0 363.0Q352.0 366.0 352.0 367.0Q354.0 372.0 348.0 379.0Q346.0 381.0 342.5 382.5Q339.0 384.0 256.0 384.0Q173.0 384.0 169.0 382.0Q163.0 379.0 161.0 372.0Q158.0 360.0 169.0 353.0Z"/></symbol><symbol id="ion-ellipsis-horizontal" viewBox="0 0 512 512"><path d="M84.0 210.0Q97.0 206.0 111.0 210.0Q127.0 215.0 137.0 231.0Q153.0 256.0 137.0 281.0Q122.0 304.0 96.0 304.0Q70.0 304.0 55.5 281.5Q41.0 259.0 53.0 235.0Q63.0 215.0 84.0 210.0ZM246.0 209.0Q259.0 206.0 272.0 211.0Q297.0 220.0 302.5 245.5Q308.0 271.0 290.0 290.0Q275.0 304.0 256.0 304.0Q237.0 304.0 222.5 290.0Q208.0 276.0 208.0 256.0Q208.0 239.0 219.0 226.0Q230.0 213.0 246.0 209.0ZM404.0 210.0Q404.0 210.0 404.0 210.0Q417.0 206.0 431.0 210.0Q447.0 215.0 457.0 231.0Q473.0 256.0 457.0 281.0Q442.0 304.0 416.0 304.0Q390.0 304.0 375.5 281.5Q361.0 259.0 373.0 235.0Q383.0 215.0 404.0 210.0Z"/></symbol><symbol id="ion-help-circle-outline" viewBox="0 0 512 512"><path d="M242.0 65.0Q261.0 63.0 284.0 66.0Q313.0 71.0 340.0 84.0Q395.0 110.0 424.5 163.5Q454.0 217.0 447.0 278.0Q441.0 327.0 413.0 367.0Q385.0 407.0 340.0 428.0Q285.0 456.0 224.5 445.5Q164.0 435.0 120.0 391.0Q98.0 369.0 84.0 341.0Q64.0 301.0 64.0 256.0Q64.0 211.0 84.0 171.0Q113.0 112.0 172.0 84.0Q203.0 69.0 242.0 65.0ZM279.0 98.0Q272.0 97.0 257.0 96.5Q242.0 96.0 235.0 97.0Q181.0 105.0 143.0 143.0Q105.0 181.0 98.0 233.0Q94.0 256.0 98.0 279.0Q107.0 341.0 156.0 380.5Q205.0 420.0 267.0 416.0Q320.0 412.0 359.5 378.0Q399.0 344.0 412.0 293.0Q419.0 264.0 414.0 233.0Q407.0 181.0 369.0 143.0Q331.0 105.0 279.0 98.0ZM243.0 145.0Q248.0 144.0 261.0 144.5Q274.0 145.0 279.0 146.0Q300.0 152.0 314.0 169.0Q327.0 185.0 326.0 207.0Q325.0 224.0 316.5 236.5Q308.0 249.0 287.0 264.0Q267.0 278.0 265.0 293.0Q264.0 305.0 257.0 308.0Q246.0 314.0 239.0 303.0Q232.0 292.0 243.0 270.0Q251.0 255.0 271.0 240.0Q290.0 227.0 295.0 218.0Q297.0 212.0 297.0 204.0Q297.0 196.0 295.0 192.0Q288.0 178.0 272.0 174.0Q267.0 173.0 258.5 172.5Q250.0 172.0 245.0 173.0Q225.0 177.0 217.0 195.0Q214.0 200.0 214.0 202.0Q214.0 209.0 208.0 214.0Q200.0 220.0 191.0 213.0Q184.0 206.0 188.0 192.0Q193.0 174.0 208.5 161.0Q224.0 148.0 243.0 145.0ZM241.0 330.0Q241.0 330.0 241.0 330.0Q251.0 325.0 261.0 331.0Q269.0 337.0 270.0 346.0Q270.0 355.0 265.0 361.0Q259.0 368.0 250.0 368.0Q242.0 368.0 237.0 362.0Q229.0 355.0 230.5 345.0Q232.0 335.0 241.0 330.0Z"/></symbol><symbol id="ion-reader-outline" viewBox="0 0 512 512"><path d="M256.0 33.0Q358.0 32.0 372.0 33.0Q386.0 34.0 397.0 39.0Q405.0 43.0 413.0 51.0Q421.0 59.0 424.5 66.5Q428.0 74.0 430.0 80.5Q432.0 87.0 432.0 256.0Q432.0 425.0 430.0 431.5Q428.0 438.0 424.5 445.5Q421.0 453.0 413.0 461.0Q405.0 469.0 397.0 473.0Q386.0 479.0 372.0 479.5Q358.0 480.0 256.0 480.0Q154.0 480.0 140.0 479.5Q126.0 479.0 115.0 473.0Q107.0 469.0 99.0 461.0Q91.0 453.0 87.5 445.5Q84.0 438.0 82.0 431.5Q80.0 425.0 80.0 256.0Q80.0 87.0 82.0 80.5Q84.0 74.0 87.5 66.5Q91.0 59.0 99.0 51.0Q107.0 43.0 115.0 39.0Q123.0 35.0 128.5 34.0Q134.0 33.0 256.0 33.0ZM376.0 65.0Q370.0 64.0 255.5 64.0Q141.0 64.0 136.0 65.0Q116.0 70.0 113.0 91.0Q112.0 97.0 112.0 256.0Q112.0 415.0 113.0 421.0Q115.0 438.0 131.0 445.0L136.0 448.0H256.0H376.0L382.0 445.0Q397.0 437.0 399.0 421.0Q400.0 415.0 400.0 256.0Q400.0 97.0 399.0 91.0Q396.0 70.0 376.0 65.0ZM172.0 112.0Q175.0 112.0 257.0 112.0H340.0L344.0 114.0Q352.0 119.0 352.0 128.0Q352.0 137.0 344.0 142.0L341.0 144.0H256.0H171.0L168.0 142.0Q155.0 134.0 162.0 120.0Q165.0 114.0 172.0 112.0ZM169.0 194.0Q173.0 192.0 256.0 192.0Q339.0 192.0 343.0 194.0Q349.0 197.0 351.0 204.0Q353.0 210.0 350.0 216.0Q347.0 222.0 341.0 223.0Q338.0 224.0 256.0 224.0Q174.0 224.0 171.0 223.0Q165.0 222.0 162.0 216.0Q159.0 210.0 161.0 204.0Q163.0 197.0 169.0 194.0ZM169.0 274.0Q169.0 274.0 169.0 274.0Q172.0 272.0 215.5 272.0Q259.0 272.0 262.0 273.0Q272.0 277.0 272.0 288.0Q272.0 299.0 262.0 303.0Q259.0 304.0 215.5 304.0Q172.0 304.0 170.0 303.0Q160.0 299.0 160.0 288.0Q160.0 278.0 169.0 274.0Z"/></symbol><symbol id="ion-refresh" viewBox="0 0 512 512"><path d="M254.0 42.0Q254.0 42.0 254.0 42.0Q258.0 41.0 264.0 44.0Q266.0 45.0 308.5 87.5Q351.0 130.0 351.5 134.0Q352.0 138.0 352.0 139.0Q352.0 140.0 351.5 142.5Q351.0 145.0 308.0 188.0Q265.0 231.0 262.0 233.0Q256.0 235.0 250.0 233.0Q240.0 229.0 240.0 218.0Q240.0 213.0 245.0 207.0Q250.0 201.0 271.0 180.0Q280.0 171.0 286.0 165.0Q292.0 159.0 295.0 155.5Q298.0 152.0 298.0 152.0Q297.0 151.0 273.0 150.0Q239.0 150.0 221.0 155.0Q185.0 164.0 157.5 190.0Q130.0 216.0 119.0 251.0Q105.0 296.0 119.0 338.0Q134.0 383.0 171.5 410.5Q209.0 438.0 256.0 438.0Q303.0 438.0 341.0 410.0Q379.0 382.0 393.0 337.0Q398.0 321.0 399.0 302.0Q400.0 290.0 402.0 286.0Q404.0 282.0 410.0 279.0Q416.0 277.0 422.0 279.0Q432.0 284.0 432.0 298.0Q432.0 322.0 423.0 349.0Q410.0 388.0 380.5 417.5Q351.0 447.0 312.0 461.0Q256.0 479.0 200.0 461.0Q152.0 445.0 120.0 406.0Q88.0 367.0 81.0 317.0Q79.0 295.0 81.0 274.0Q87.0 229.0 112.5 192.5Q138.0 156.0 179.0 136.0Q204.0 124.0 231.0 120.0Q240.0 118.0 263.0 118.0Q286.0 118.0 290.0 119.0Q290.0 119.0 295.0 120.0L268.0 93.0Q247.0 72.0 243.5 67.0Q240.0 62.0 240.0 57.0Q240.0 53.0 243.5 48.5Q247.0 44.0 251.0 43.0Q253.0 43.0 254.0 42.0Z"/></symbol><symbol id="ion-share-outline" viewBox="0 0 512 512"><path d="M248.0 34.0Q256.0 29.0 265.0 35.0Q268.0 37.0 308.5 77.5Q349.0 118.0 350.0 121.0Q354.0 128.0 350.0 135.5Q346.0 143.0 338.0 144.0Q333.0 145.0 328.0 141.0Q323.0 137.0 300.0 114.0L272.0 87.0V205.0Q272.0 323.0 271.0 327.0Q267.0 337.0 256.0 337.0Q245.0 337.0 241.0 327.0Q240.0 323.0 240.0 205.0V87.0L212.0 114.0Q189.0 137.0 184.0 141.0Q179.0 145.0 174.0 144.0Q166.0 143.0 162.0 135.5Q158.0 128.0 162.0 121.0Q163.0 118.0 204.0 77.0Q245.0 36.0 248.0 34.0ZM128.0 177.0Q128.0 177.0 128.0 177.0Q134.0 176.0 157.0 176.0Q177.0 176.0 181.0 177.0Q185.0 178.0 189.0 183.0Q192.0 186.0 192.0 192.0Q192.0 198.0 189.0 201.0Q185.0 206.0 180.5 207.0Q176.0 208.0 155.0 208.0Q129.0 209.0 125.0 211.0Q118.0 215.0 114.0 223.0Q112.0 227.0 112.0 328.0Q112.0 328.0 112.0 430.0L114.0 434.0Q118.0 441.0 126.0 446.0Q126.0 446.0 129.0 448.0H256.0H383.0L386.0 446.0Q394.0 441.0 398.0 434.0Q398.0 434.0 400.0 430.0V328.0V226.0L397.0 221.0Q392.0 212.0 383.0 209.0Q380.0 208.0 356.5 208.0Q333.0 208.0 329.5 206.0Q326.0 204.0 323.0 201.0Q320.0 198.0 320.0 192.0Q320.0 186.0 323.0 183.0Q327.0 178.0 331.5 177.0Q336.0 176.0 359.0 176.0Q386.0 176.0 393.0 179.0Q419.0 187.0 429.0 213.0Q429.0 213.0 431.0 220.0L432.0 325.0Q432.0 413.0 431.5 426.5Q431.0 440.0 426.0 449.0Q415.0 471.0 390.0 478.0Q384.0 480.0 256.0 480.0Q128.0 480.0 122.0 478.0Q90.0 469.0 82.0 438.0Q80.0 432.0 80.0 328.0Q80.0 224.0 81.0 220.0Q85.0 203.0 98.5 191.0Q112.0 179.0 128.0 177.0Z"/></symbol><symbol id="ion-sparkles-outline" viewBox="0 0 512 512"><path d="M81.0 2.0Q95.0 -5.0 102.0 9.0Q104.0 12.0 112.0 33.0Q120.0 54.0 121.0 55.0Q122.0 56.0 145.0 65.0Q172.0 76.0 175.0 82.0Q180.0 94.0 170.0 101.0Q168.0 102.0 144.5 111.0Q121.0 120.0 120.5 121.0Q120.0 122.0 111.0 145.0Q104.0 163.0 101.5 168.0Q99.0 173.0 94.0 175.0Q88.0 177.0 81.5 174.5Q75.0 172.0 65.0 145.0Q56.0 122.0 55.0 121.0Q54.0 120.0 33.0 112.0Q7.0 102.0 5.0 99.0Q0.0 94.0 0.0 88.0Q0.0 81.0 5.0 76.0Q7.0 74.0 30.5 65.0Q54.0 56.0 55.0 55.0Q56.0 54.0 65.0 31.0Q74.0 8.0 76.0 5.5Q78.0 3.0 81.0 2.0ZM392.0 34.0Q401.0 30.0 409.0 35.0Q413.0 38.0 428.0 75.0Q439.0 105.0 439.0 105.0Q439.0 105.0 470.0 117.0Q501.0 129.0 503.0 130.0Q509.0 133.0 511.0 139.0Q515.0 149.0 506.0 156.0Q503.0 158.0 471.0 171.0L439.0 183.0L427.0 215.0Q414.0 247.0 412.0 250.0Q408.0 256.0 400.0 256.0Q392.0 256.0 387.0 250.0Q386.0 248.0 373.5 215.5Q361.0 183.0 361.0 183.0Q361.0 183.0 329.0 171.0Q293.0 157.0 290.0 152.0Q285.0 141.0 293.0 133.0Q296.0 130.0 328.0 118.0Q360.0 106.0 360.5 105.0Q361.0 104.0 373.5 72.5Q386.0 41.0 387.5 38.5Q389.0 36.0 392.0 34.0ZM91.0 69.0 88.0 61.0 86.0 65.0Q85.0 69.0 84.0 72.0Q81.0 80.0 71.0 84.0Q63.0 87.0 62.5 88.0Q62.0 89.0 69.0 91.0Q77.0 95.0 79.5 97.0Q82.0 99.0 84.5 106.5Q87.0 114.0 87.5 114.0Q88.0 114.0 91.0 107.0Q96.0 96.0 107.0 91.0Q114.0 89.0 114.0 88.0Q114.0 87.0 106.5 84.5Q99.0 82.0 97.0 79.5Q95.0 77.0 91.0 69.0ZM406.0 108.0Q401.0 94.0 400.0 94.0Q400.0 94.0 399.0 95.5Q398.0 97.0 397.0 100.5Q396.0 104.0 394.0 108.0Q388.0 123.0 387.0 126.0Q384.0 130.0 364.0 138.0Q360.0 140.0 356.5 141.0Q353.0 142.0 351.5 143.0Q350.0 144.0 350.0 144.0Q350.0 145.0 364.0 150.0Q381.0 156.0 385.0 160.0Q387.0 162.0 393.0 178.0Q395.0 183.0 396.5 186.5Q398.0 190.0 399.0 192.0Q400.0 194.0 400.0 194.0Q401.0 193.0 407.0 178.0Q412.0 163.0 415.5 159.5Q419.0 156.0 434.0 151.0Q450.0 145.0 450.0 144.0Q450.0 144.0 448.0 143.0Q446.0 142.0 442.5 140.5Q439.0 139.0 434.0 137.0Q418.0 131.0 416.0 129.0Q412.0 125.0 406.0 108.0ZM200.0 130.0Q215.0 124.0 227.0 137.0Q230.0 141.0 251.5 197.0Q273.0 253.0 274.0 254.0Q275.0 255.0 330.0 276.0Q385.0 297.0 387.0 298.0Q393.0 301.0 397.0 309.0Q403.0 320.0 397.0 331.0Q393.0 339.0 387.0 342.0Q385.0 343.0 330.0 364.0Q275.0 385.0 274.0 386.0Q273.0 387.0 252.0 443.0L230.0 500.0L225.0 504.0Q218.0 512.0 208.0 512.0Q196.0 512.0 188.0 502.0Q186.0 499.0 164.0 442.5Q142.0 386.0 142.0 386.0Q142.0 386.0 87.0 364.5Q32.0 343.0 28.0 341.0Q16.0 334.0 16.0 320.0Q16.0 306.0 28.0 299.0Q31.0 297.0 86.5 275.5Q142.0 254.0 142.0 254.0Q142.0 254.0 163.5 198.0Q185.0 142.0 187.0 139.0Q191.0 133.0 200.0 130.0ZM227.0 223.0Q227.0 223.0 227.0 223.0Q209.0 175.0 208.0 174.0Q208.0 174.0 205.5 180.0Q203.0 186.0 198.5 197.0Q194.0 208.0 189.0 221.0Q171.0 268.0 169.5 271.0Q168.0 274.0 164.0 278.0Q160.0 282.0 98.0 306.0Q61.0 320.0 61.0 320.0Q61.0 320.0 98.0 334.0Q160.0 358.0 164.0 362.0Q168.0 366.0 169.5 369.0Q171.0 372.0 189.0 419.0Q194.0 432.0 198.5 443.0Q203.0 454.0 205.5 460.0Q208.0 466.0 208.0 466.0Q209.0 465.0 227.5 417.0Q246.0 369.0 249.0 365.0Q252.0 361.0 257.0 358.5Q262.0 356.0 308.0 338.5Q354.0 321.0 354.0 320.0Q354.0 319.0 305.5 300.5Q257.0 282.0 254.0 280.0Q251.0 278.0 248.5 274.5Q246.0 271.0 227.0 223.0Z"/></symbol><symbol id="ion-thumbs-down-outline" viewBox="0 0 512 512"><path d="M99.0 34.0Q107.0 32.0 148.0 34.0Q183.0 35.0 188.0 37.0Q190.0 37.0 199.5 35.5Q209.0 34.0 221.0 33.0Q232.0 32.0 251.5 32.0Q271.0 32.0 279.0 33.0Q315.0 37.0 348.0 58.0L357.0 64.0H389.0Q420.0 64.0 430.5 65.5Q441.0 67.0 453.0 74.0Q481.0 88.0 492.0 118.0Q496.0 131.0 496.0 172.0Q495.0 206.0 493.0 212.0Q480.0 255.0 440.0 268.0Q427.0 272.0 401.0 272.0Q382.0 272.0 379.0 274.0Q374.0 276.0 366.0 292.0Q339.0 345.0 284.0 427.0Q261.0 461.0 256.0 468.0Q249.0 480.0 237.0 480.0Q216.0 479.0 202.0 465.5Q188.0 452.0 188.0 432.0Q188.0 420.0 200.0 388.0Q209.0 364.0 211.0 356.0Q218.0 334.0 216.0 333.0Q216.0 333.0 152.5 328.0Q89.0 323.0 84.0 321.0Q69.0 317.0 59.0 304.5Q49.0 292.0 48.0 276.0Q47.0 268.0 51.0 256.0Q51.0 255.0 50.0 254.5Q49.0 254.0 46.0 253.0Q28.0 245.0 20.0 228.0Q13.0 212.0 18.0 196.0Q21.0 184.0 31.0 174.0L38.0 167.0L35.0 162.0Q27.0 140.0 38.0 120.0Q47.0 105.0 63.0 99.0Q67.0 98.0 65.0 91.0Q61.0 73.0 70.0 56.0Q80.0 39.0 99.0 34.0ZM145.0 66.0Q112.0 64.0 111.0 64.0Q106.0 64.0 101.0 68.0Q98.0 71.0 97.0 77.0Q96.0 83.0 97.0 86.0Q100.0 92.0 105.0 95.0Q109.0 96.0 156.0 95.0Q180.0 94.0 184.0 92.0Q192.0 88.0 192.0 79.0Q191.0 74.0 189.0 72.0Q185.0 68.0 145.0 66.0ZM271.0 65.0Q254.0 63.0 230.0 65.0Q222.0 65.0 223.0 66.0Q228.0 90.0 215.0 107.0Q212.0 112.0 212.0 112.5Q212.0 113.0 213.0 115.0Q222.0 122.0 224.0 138.0Q226.0 157.0 215.0 171.0L211.0 176.0L214.0 180.0Q224.0 191.0 224.0 209.0Q224.0 227.0 213.0 237.0Q211.0 239.0 211.0 240.0Q211.0 241.0 214.0 245.0Q224.0 256.0 224.0 273.0Q224.0 287.0 218.0 296.0Q215.0 300.0 216.0 300.0Q229.0 301.0 235.0 304.0Q244.0 308.0 247.0 318.0Q252.0 330.0 243.0 360.0Q240.0 371.0 225.0 412.0Q217.0 431.0 221.0 439.0Q225.0 447.0 231.0 446.0Q232.0 446.0 262.5 401.0Q293.0 356.0 305.0 335.0Q322.0 308.0 339.0 275.0Q350.0 254.0 361.0 247.5Q372.0 241.0 402.0 240.0Q427.0 239.0 432.0 237.0Q455.0 229.0 462.0 206.0Q464.0 200.0 464.0 168.0Q464.0 136.0 462.0 131.0Q456.0 112.0 439.0 102.0Q432.0 98.0 425.0 97.0Q418.0 96.0 388.0 96.0Q352.0 96.0 348.0 95.0Q344.0 94.0 335.0 88.0Q305.0 68.0 271.0 65.0ZM82.0 128.0Q73.0 128.0 67.5 134.5Q62.0 141.0 65.0 149.0Q67.0 158.0 76.0 159.0Q80.0 160.0 129.0 159.0Q169.0 158.0 177.0 157.5Q185.0 157.0 188.0 153.0Q193.0 148.0 192.0 141.5Q191.0 135.0 185.0 132.0Q180.0 130.0 133.5 129.0Q87.0 128.0 82.0 128.0ZM146.0 194.0Q114.0 193.0 87.0 193.0Q58.0 192.0 53.0 197.0Q47.0 202.0 48.5 210.0Q50.0 218.0 56.0 222.0Q60.0 224.0 81.0 224.0Q175.0 223.0 181.0 221.0Q193.0 218.0 192.0 207.0Q191.0 200.0 184.0 196.0Q180.0 194.0 146.0 194.0ZM150.0 259.0Q150.0 259.0 150.0 259.0Q121.0 258.0 107.5 257.5Q94.0 257.0 92.0 258.0Q83.0 261.0 81.0 270.0Q79.0 279.0 86.0 286.0Q89.0 289.0 92.0 290.0Q95.0 291.0 137.0 289.0Q179.0 287.0 184.0 284.5Q189.0 282.0 190.0 279.0Q193.0 273.0 190.5 267.5Q188.0 262.0 182.0 260.0Q179.0 259.0 150.0 259.0Z"/></symbol><symbol id="ion-thumbs-up-outline" viewBox="0 0 512 512"><path d="M274.0 32.0Q296.0 32.0 310.0 46.0Q324.0 60.0 324.0 80.0Q324.0 92.0 316.0 116.0Q299.0 159.0 296.0 176.0Q295.0 179.0 297.0 180.0Q304.0 181.0 412.0 189.0Q424.0 189.0 428.0 191.0Q453.0 198.0 461.0 223.0Q466.0 238.0 461.0 256.0Q461.0 257.0 462.5 258.0Q464.0 259.0 468.0 261.0Q481.0 267.0 488.0 278.0Q495.0 288.0 496.0 302.0Q497.0 323.0 481.0 338.0L474.0 345.0L477.0 350.0Q486.0 373.0 473.0 393.0Q465.0 405.0 453.0 411.0Q447.0 414.0 446.0 414.0Q445.0 414.0 447.0 421.0Q451.0 439.0 442.0 456.0Q435.0 468.0 423.0 474.0Q412.0 480.0 399.0 480.0Q344.0 479.0 326.0 476.0Q321.0 474.0 317.0 475.0Q289.0 483.0 244.0 480.0Q199.0 477.0 163.0 453.0L155.0 448.0H122.0Q81.0 448.0 66.0 442.0Q33.0 429.0 20.0 394.0Q16.0 381.0 16.0 340.0Q17.0 306.0 19.0 298.5Q21.0 291.0 24.0 286.0Q33.0 266.0 51.0 254.0Q72.0 240.0 114.0 240.0Q133.0 240.0 137.0 235.0Q139.0 233.0 146.0 220.0Q173.0 167.0 238.0 71.0Q252.0 50.0 256.5 43.0Q261.0 36.0 264.5 34.5Q268.0 33.0 274.0 32.0ZM286.0 68.0Q283.0 66.0 281.5 66.0Q280.0 66.0 236.0 131.0Q199.0 188.0 173.0 237.0Q161.0 260.0 148.0 267.0Q136.0 272.0 110.0 272.0Q91.0 272.0 86.0 273.0Q74.0 275.0 64.0 284.5Q54.0 294.0 50.0 306.0Q48.0 312.0 48.0 344.0Q48.0 376.0 50.0 381.0Q58.0 406.0 83.0 414.0Q87.0 416.0 127.0 416.0L166.0 417.0L176.0 423.0Q206.0 443.0 239.0 447.0Q246.0 448.0 267.0 448.0Q288.0 448.0 289.0 447.0Q290.0 446.0 289.0 443.5Q288.0 441.0 288.0 432.0Q288.0 417.0 300.0 401.0Q301.0 399.0 298.0 397.0Q286.0 383.0 288.0 362.0Q290.0 350.0 297.0 341.0L301.0 336.0L298.0 332.0Q288.0 321.0 288.0 303.0Q288.0 285.0 299.0 275.0Q301.0 273.0 301.0 272.0Q301.0 271.0 298.0 267.0Q288.0 256.0 288.0 239.0Q288.0 225.0 294.0 216.0L297.0 212.0L290.0 211.0Q278.0 210.0 271.0 204.0Q262.0 195.0 263.0 181.0Q264.0 159.0 282.0 113.0Q293.0 86.0 293.0 81.0Q293.0 72.0 286.0 68.0ZM421.0 222.0Q418.0 221.0 371.0 223.0L332.0 225.0L328.0 228.0Q316.0 234.0 321.0 245.0Q325.0 251.0 334.0 252.0Q340.0 253.0 379.0 254.0Q411.0 255.0 417.0 254.5Q423.0 254.0 427.0 250.0Q432.0 246.0 432.0 239.0Q432.0 227.0 421.0 222.0ZM456.0 290.0Q452.0 288.0 430.0 289.0Q338.0 289.0 331.0 291.0Q324.0 293.0 321.0 299.0Q317.0 308.0 325.0 314.0Q329.0 317.0 338.5 317.5Q348.0 318.0 393.0 319.0Q450.0 320.0 454.0 319.0Q464.0 315.0 464.0 304.0Q464.0 295.0 456.0 290.0ZM416.0 353.0Q339.0 353.0 331.0 355.0Q320.0 358.0 320.0 368.0Q320.0 379.0 332.0 381.0Q337.0 382.0 385.0 383.0Q433.0 384.0 437.0 383.0Q441.0 382.0 444.5 377.5Q448.0 373.0 448.0 368.0Q448.0 362.0 444.0 357.0Q442.0 356.0 439.0 354.0Q436.0 352.0 416.0 353.0ZM406.0 417.0Q406.0 417.0 406.0 417.0Q403.0 416.0 354.0 417.0Q332.0 418.0 328.0 420.0Q320.0 424.0 320.0 432.0Q320.0 438.0 323.0 440.5Q326.0 443.0 329.0 444.0Q332.0 445.0 367.0 446.0Q405.0 448.0 410.0 445.0Q414.0 442.0 415.5 435.5Q417.0 429.0 414.0 425.0Q412.0 420.0 406.0 417.0Z"/></symbol></svg><span class="tag">Onglet IA — direction 7</span><h1>7 — Page « Résumé »</h1><p class="lede">Contenu produit aujourd’hui : <code>title</code>, <code>key_points</code>, <code>takeaway</code>. La page actuelle affiche un badge de type en capitales, le titre de la <em>source</em> (pas celui de la fiche), les points, puis la conclusion en dernier.</p><div class="panel"><h3 style="margin-top:0">Ce qui change</h3><ul><li><b>L’essentiel d’abord</b> : <code>takeaway</code> passe en tête, en encart ambré. On lit la conclusion avant les détails, comme dans un article bien écrit (pyramide inversée, NN/g).</li><li><b>Le titre de la fiche</b> devient le titre de la page ; la source passe dans une carte qui s’ouvre (« Comment le sommeil… · 42 min »).</li><li><b>Durée de lecture</b> dans la ligne de type, pour décider avant de commencer.</li><li><b>Points numérotés</b> plutôt qu’à puces : on peut dire « le point 4 » et suivre où l’on en est.</li><li><b>Partager et ⋯</b> en haut à droite (copier, ouvrir la source, recréer, supprimer).</li><li><b>« Et ensuite ? »</b> en pied de page : le format suivant logique et la conversation. L’onglet n’est plus la seule porte vers les autres fiches.</li><li><b>Retour sur la qualité</b> (pouce haut ou bas) et une mention discrète qui rappelle que la fiche est rédigée par l’IA (Google PAIR, « Feedback + Control »).</li></ul></div><h2>Écrans</h2><div class="cells"><div class="cell"><div class="frame  "><div class="sb"><span>9:41</span><span class="sb-right"><svg width="18" height="11" viewBox="0 0 18 11"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg><svg width="26" height="12" viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="2"/><rect x="24" y="4" width="1.6" height="4" rx=".8" opacity=".45"/></svg></span></div><div class="hdr"><span class="hbtn filled"><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-arrow-back"/></svg></span><span class="htitle sm"></span><span class="right"><span class="hbtn "><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-share-outline"/></svg></span><span class="hbtn "><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-ellipsis-horizontal"/></svg></span></span></div><div class="scroll"><div class="pad"><div class="fkick"><svg class="ic " width="16" height="16" style="color:currentColor"><use href="#ion-document-text-outline"/></svg>Résumé · 1 min de lecture</div><div class="art-title">Le sommeil profond trie ce que l’on retient</div><div class="srcchip"><svg class="mini-cov"><use href="#c-video"/></svg><span class="col"><b class="one">Comment le sommeil consolide la mémoire</b><span class="meta">Vidéo · Neuro Notes · 42 min</span></span><svg class="ic " width="18" height="18" style="color:var(--text-muted)"><use href="#ion-chevron-forward"/></svg></div><div class="essentiel"><span class="kick"><svg class="ic " width="14" height="14" style="color:var(--on-primary)"><use href="#ion-bulb-outline"/></svg>L’ESSENTIEL</span><p>Dormir après avoir appris fait partie de l’apprentissage : c’est la nuit que le cerveau choisit ce qu’il garde.</p></div><div class="art-h">Points clés</div><ol class="nl"><li><i>1</i><span>Pendant le sommeil profond, l’hippocampe rejoue les expériences de la journée, dans le même ordre.</span></li><li><i>2</i><span>Ce rejeu transfère les souvenirs vers le cortex, où ils tiennent plus longtemps.</span></li><li><i>3</i><span>Le sommeil paradoxal relie les souvenirs récents à ce que l’on sait déjà.</span></li><li><i>4</i><span>Une nuit courte après un apprentissage en efface une partie, même si l’on récupère ensuite.</span></li><li><i>5</i><span>Une sieste de 20 à 90 minutes suffit à observer un effet sur la mémoire.</span></li></ol></div></div><div class="home-ind"></div></div><p class="caption"><b>Haut de page, média.</b> Type et durée, titre de la fiche, source qui s’ouvre, l’essentiel en encart, puis les points numérotés.</p></div><div class="cell"><div class="frame  "><div class="sb"><span>9:41</span><span class="sb-right"><svg width="18" height="11" viewBox="0 0 18 11"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg><svg width="26" height="12" viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="2"/><rect x="24" y="4" width="1.6" height="4" rx=".8" opacity=".45"/></svg></span></div><div class="hdr"><span class="hbtn filled"><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-arrow-back"/></svg></span><span class="htitle sm">Le sommeil profond trie ce que l’on retient</span><span class="right"><span class="hbtn "><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-share-outline"/></svg></span><span class="hbtn "><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-ellipsis-horizontal"/></svg></span></span></div><div class="sticky"><div class="rprog"><i style="width:100%"></i></div></div><div class="scroll"><div class="pad"><ol class="nl"><li><i>4</i><span>Une nuit courte après un apprentissage en efface une partie, même si l’on récupère ensuite.</span></li><li><i>5</i><span>Une sieste de 20 à 90 minutes suffit à observer un effet sur la mémoire.</span></li></ol><div class="art-h">Et ensuite ?</div><div class="next"><div class="acard"><span class="ibox"><svg class="ic " width="20" height="20" style="color:currentColor"><use href="#ion-reader-outline"/></svg></span><span class="col"><b>Aller plus loin</b><span class="meta">Résumé détaillé · 6 min</span></span><svg class="ic " width="18" height="18" style="color:var(--text-muted)"><use href="#ion-chevron-forward"/></svg></div><div class="acard"><span class="ibox"><svg class="ic " width="20" height="20" style="color:currentColor"><use href="#ion-help-circle-outline"/></svg></span><span class="col"><b>Vérifier ce que vous avez retenu</b><span class="meta">Quiz · 10 questions</span></span><svg class="ic " width="18" height="18" style="color:var(--text-muted)"><use href="#ion-chevron-forward"/></svg></div><div class="acard"><span class="ibox"><svg class="ic " width="20" height="20" style="color:currentColor"><use href="#ion-chatbubble-ellipses-outline"/></svg></span><span class="col"><b>Poser une question sur la vidéo</b><span class="meta">Ouvre la conversation</span></span><svg class="ic " width="18" height="18" style="color:var(--text-muted)"><use href="#ion-chevron-forward"/></svg></div></div><div class="fb"><span>Cette fiche est-elle juste et utile ?</span><span class="hbtn"><svg class="ic " width="20" height="20" style="color:currentColor"><use href="#ion-thumbs-up-outline"/></svg></span><span class="hbtn"><svg class="ic " width="20" height="20" style="color:currentColor"><use href="#ion-thumbs-down-outline"/></svg></span></div><p class="disc"><svg class="ic " width="14" height="14" style="color:currentColor"><use href="#ion-sparkles-outline"/></svg><span>Rédigée par l’IA à partir de la source. Vérifiez un point important dans la source avant de le citer.</span></p></div></div><div class="home-ind"></div></div><p class="caption"><b>Fin de page.</b> L’en-tête se réduit au titre, une fine barre dit où l’on en est. Trois suites possibles, puis le retour sur la qualité.</p></div><div class="cell"><div class="frame  "><div class="sb"><span>9:41</span><span class="sb-right"><svg width="18" height="11" viewBox="0 0 18 11"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="6" rx="1"/><rect x="10" y="2.5" width="3" height="8.5" rx="1"/><rect x="15" y="0" width="3" height="11" rx="1"/></svg><svg width="26" height="12" viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="16" height="8" rx="2"/><rect x="24" y="4" width="1.6" height="4" rx=".8" opacity=".45"/></svg></span></div><div class="hdr"><span class="hbtn filled"><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-arrow-back"/></svg></span><span class="htitle sm"></span><span class="right"><span class="hbtn "><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-share-outline"/></svg></span><span class="hbtn "><svg class="ic " width="24" height="24" style="color:currentColor"><use href="#ion-ellipsis-horizontal"/></svg></span></span></div><div class="scroll"><div class="pad"><div class="fkick"><svg class="ic " width="16" height="16" style="color:currentColor"><use href="#ion-document-text-outline"/></svg>Résumé · 1 min de lecture</div><div class="art-title">Travailler moins, mieux : l’essentiel de vos sources</div><div class="srcchip"><span class="covs"><svg class=""><use href="#c-yt1"/></svg><svg class=""><use href="#c-art1"/></svg><svg class=""><use href="#c-pod1"/></svg></span><span class="col"><b>D’après 12 sources</b><span class="meta">Dossier Productivité</span></span><svg class="ic " width="18" height="18" style="color:var(--text-muted)"><use href="#ion-chevron-forward"/></svg></div><div class="stale"><svg class="ic " width="18" height="18" style="color:var(--primary-ink)"><use href="#ion-refresh"/></svg><span class="col"><span>Le dossier a changé depuis cette fiche : <b>3 sources ajoutées</b>.</span><span class="link">Mettre à jour · 3 min de forfait</span></span></div><div class="essentiel"><span class="kick"><svg class="ic " width="14" height="14" style="color:var(--on-primary)"><use href="#ion-bulb-outline"/></svg>L’ESSENTIEL</span><p>Vos sources convergent : on produit plus en protégeant de longs blocs sans interruption qu’en allongeant ses journées.</p></div><div class="art-h">Points clés</div><ol class="nl"><li><i>1</i><span>Le multitâche coûte jusqu’à un quart du temps de travail, en reprises de contexte.</span></li><li><i>2</i><span>Les blocs de 90 minutes sans notification reviennent dans 9 sources sur 12.</span></li><li><i>3</i><span>La semaine de quatre jours maintient la production quand les réunions sont réduites.</span></li></ol></div></div><div class="home-ind"></div></div><p class="caption"><b>Sur un dossier.</b> La carte source devient « D’après 12 sources » et ouvre la liste. Si le dossier a changé, un encart propose « Mettre à jour » et dit ce que cela coûte.</p></div></div></body></html>

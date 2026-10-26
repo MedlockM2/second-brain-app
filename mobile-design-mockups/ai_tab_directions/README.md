@@ -1,8 +1,9 @@
-# Onglet IA : six directions de rupture
+# Onglet IA : six directions de rupture et une refonte
 
 `../ai_tab_refonte/` améliorait l’onglet sans en changer le principe : un catalogue de cinq formats à générer. Ce
 dossier remet en cause ce principe. Il pose d’abord le but de l’onglet, puis propose six directions qui parient
-chacune sur un besoin différent. `comparatif/` réunit le brainstorm, une matrice et la première vue de chaque
+chacune sur un besoin différent. Une septième garde le principe et le refait selon les bonnes pratiques, jusqu’à la
+page de chaque fiche. `comparatif/` réunit le brainstorm, une matrice et la première vue de chaque
 direction ; chaque `direction_*/` montre trois écrans et ses conséquences (ce qui disparaît, backend, risque,
 effort).
 
@@ -38,11 +39,16 @@ revanche, une génération consomme des minutes du forfait, et un geste explicit
 | **4 — « Calque »** `direction_4_calque/` | comprendre sans quitter la source | l’onglet IA d’un média : les points clés sont surlignés dans le texte, et « L’essentiel · 4 min » replie la transcription | passages ancrés dans la transcription (positions ou horodatages) | L |
 | **5 — « Conversation »** `direction_5_conversation/` | utiliser | tuiles, historique, et le doublon onglet IA / chat : une seule conversation avec des suggestions, des réponses riches et un épinglage | réponses structurées comme des artefacts, épinglage (le chat existe : task-430, task-434) | M |
 | **6 — « Carte des idées »** `direction_6_carte_des_idees/` | relier | le résumé comme produit principal : les idées d’un dossier, leurs accords et désaccords, et leurs liens avec le reste de la bibliothèque | idées normalisées par source, rapprochement entre sources | XL |
+| **7 — « Studio remanié »** `direction_7_studio_remanie/` | le catalogue actuel, bien fait | le doublon tuiles / historique et « Générer » / « Généré » ; la création ouvre la fiche ; chaque page de fiche est refaite (séance plein écran pour les cartes et le quiz) | options de création (nombre, difficulté, sujet), retour sur la qualité | M |
 
 Les directions se combinent. Le dossier n’a pas de texte unique, donc 4 ne s’y applique pas et s’associe à 1, 5
 ou 6. La révision de 3 peut naître des cartes de 1 ou de 2.
 
 ## Ce que je retiendrais
+
+- **Socle : 7.** Elle ne tranche rien sur le principe de l’onglet, mais ses pages de fiche (sommaire, citations
+  attribuées, séance de cartes, quiz avec bilan) servent quelle que soit la direction retenue : 1, 2 et 5
+  affichent les mêmes fiches. C’est le travail à faire de toute façon.
 
 - **Court terme : 1 + 5.** On supprime le geste de génération sur un média, qui est gratuit, et le résumé est là
   à l’ouverture. On fusionne ensuite l’onglet avec le chat, qui existe déjà : il ne reste qu’une surface IA, et
