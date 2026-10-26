@@ -1,114 +1,119 @@
+import type { ReactNode } from "react";
 import { Image, Platform, StyleSheet, Text, View, type ImageSourcePropType } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, useThemedStyles } from "../../contexts/ThemeContext";
 import type { Theme } from "../../constants/theme";
 import { t, type TranslationKey } from "../../i18n";
-import { Bar, Card, CardHead, Dashes, Glow } from "./artKit";
+import { Bar, Card, CardHead, Glow } from "./artKit";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
 // ---------------------------------------------------------------------------
-// 1 — Depth: the sources fanned at the back, their text in the middle, what it
-// becomes in front. Each source wears the fill of its media-type badge in the
-// app (`src/lib/mediaTypeDisplay.ts`); video and podcast, the rare ones, sit at
-// the centre; the edges run off the screen and fade: the list goes on.
+// 1 — Depth: three media on one subject (sleep and memory) lie on top of what
+// you get from them, a chat with the AI and a quiz, covering only the empty
+// head of those cards. The same three media come back in small at the foot of
+// both cards (« Sources »): that is what ties them together, with no line.
 // ---------------------------------------------------------------------------
-type Source = "video" | "podcast" | "short" | "audio" | "photo" | "article" | "pdf" | "link";
-const SOURCE: Record<Source, { fill: keyof Theme["colors"]; icon: IconName; label: TranslationKey }> = {
-  video: { fill: "errorContainer", icon: "play-circle-outline", label: "welcome.art.video" },
-  podcast: { fill: "primary", icon: "headset-outline", label: "welcome.art.podcast" },
-  short: { fill: "shortVideoContainer", icon: "play-circle-outline", label: "welcome.art.short" },
-  audio: { fill: "audioContainer", icon: "mic-outline", label: "welcome.art.audio" },
-  photo: { fill: "imagePostContainer", icon: "images-outline", label: "welcome.art.photo" },
-  article: { fill: "articleContainer", icon: "document-text-outline", label: "welcome.art.article" },
-  pdf: { fill: "surfaceContainerHigh", icon: "reader-outline", label: "welcome.art.pdf" },
-  link: { fill: "surfaceContainerHigh", icon: "link-outline", label: "welcome.art.link" },
+type Medium = "video" | "podcast" | "article";
+const MEDIA: Record<Medium, { icon: IconName; type: TranslationKey; title: TranslationKey }> = {
+  video: { icon: "play-circle-outline", type: "welcome.art.video", title: "welcome.art.videoTitle" },
+  podcast: { icon: "headset-outline", type: "welcome.art.podcast", title: "welcome.art.podcastTitle" },
+  article: { icon: "document-text-outline", type: "welcome.art.article", title: "welcome.art.articleTitle" },
 };
-// [source, centre x, top, rotation, opacity]
-const FAN: [Source, number, number, number, number][] = [
-  ["pdf", -61, 66, -15, 0.3], ["audio", 17, 44, -11, 0.45], ["article", 93, 24, -7, 1], ["video", 169, 10, -3, 1],
-  ["podcast", 245, 10, 3, 1], ["short", 321, 24, 7, 1], ["photo", 397, 44, 11, 0.45], ["link", 475, 66, 15, 0.3],
-];
+// [medium, left, top, rotation]: the podcast at the centre, a little higher.
+const SPREAD: [Medium, number, number, number][] = [["video", 18, 30, -6], ["article", 274, 30, 6], ["podcast", 146, 16, 0]];
+// A sound wave's bar heights, irregular but fixed.
+const WAVE = Array.from({ length: 10 }, (_, k) => Math.max(4, Math.round(34 * (0.35 + 0.65 * Math.abs(Math.sin(k * 1.7) * Math.cos(k * 0.6))))));
+const VIDEO_FILL = "#3d4a6b";
 
 export function DepthArt() {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeDepthStyles);
-  // Outer cards first, so the centre ones are drawn on top.
-  const fan = [...FAN].sort((a, b) => Math.abs(b[1] - 207) - Math.abs(a[1] - 207));
-  const lines = (widths: `${number}%`[]) => <View style={styles.lines}>{widths.map((w, i) => <Bar key={i} width={w} />)}</View>;
+  const fill: Record<Medium, string> = { video: VIDEO_FILL, podcast: colors.primary, article: colors.articleContainer };
+  const ink: Record<Medium, string> = { video: "#fff", podcast: colors.onPrimary, article: colors.textMain };
+  // The three media in small, overlapping like avatars.
+  const sources = <View style={styles.sources}>
+    <Text style={styles.sourcesLabel}>{t("welcome.art.sources")}</Text>
+    {(["video", "podcast", "article"] as const).map((key, n) => <View key={key} style={[styles.token, { backgroundColor: fill[key], marginLeft: n ? -5 : 0 }]}>
+      <Ionicons name={MEDIA[key].icon} size={15} color={ink[key]} />
+    </View>)}
+  </View>;
+  const look: Record<Medium, ReactNode> = {
+    video: <View style={styles.player}>
+      <View style={styles.playDisc}><Ionicons name="play" size={16} color={VIDEO_FILL} /></View>
+      <View style={styles.progress}><View style={styles.progressDone} /></View>
+    </View>,
+    podcast: <View style={styles.wave}>
+      <Ionicons name="headset-outline" size={28} color={ink.podcast} />
+      <View style={styles.bars}>{WAVE.map((h, k) => <View key={k} style={[styles.waveBar, { height: h }]} />)}</View>
+    </View>,
+    article: <View style={styles.page}>
+      <Bar width="70%" height={6} color="rgba(28, 27, 26, 0.55)" />
+      {(["100%", "90%", "96%"] as const).map((w) => <Bar key={w} width={w} height={4} color="rgba(28, 27, 26, 0.2)" />)}
+    </View>,
+  };
   return <>
-    <Glow top={96} height={260} />
-    {FAN.slice(1, 7).map(([key, x, y]) => <Dashes key={key} from={[x, y + 88]} c1={[x, y + 116]} c2={[207, 128]} to={[207, 152]} />)}
-    {[30, 136, 278, 384].map((x) => <Dashes key={x} from={[207, 262]} c1={[207, 276]} c2={[x, 274]} to={[x, 290]} />)}
-    {fan.map(([key, x, y, rotation, opacity]) => {
-      const source = SOURCE[key];
-      const ink = key === "podcast" ? colors.onPrimary : colors.textMain;
-      return <View key={key} style={[styles.source, { left: x - 39, top: y, opacity, backgroundColor: colors[source.fill],
-        transform: [{ rotate: `${rotation}deg` }] }]}>
-        <Ionicons name={source.icon} size={28} color={ink} />
-        <Text numberOfLines={1} style={[styles.sourceLabel, { color: ink }]}>{t(source.label)}</Text>
-      </View>;
-    })}
-    <Card style={styles.callout}>
-      <CardHead icon="color-wand-outline" label={t("welcome.art.extracted")} />
-      <Text style={styles.quote}>
-        {t("welcome.art.quoteStart")}
-        <Text style={styles.highlight}>{t("welcome.art.quoteHighlight")}</Text>
-        {t("welcome.art.quoteEnd")}
-      </Text>
-    </Card>
-    {/* The faded cards at the edges show their title on the visible side. */}
-    <Card style={[styles.use, styles.edge, { left: -62, alignItems: "flex-end" }]}>
-      <CardHead icon="reader-outline" label={t("welcome.art.summary")} size={20} />
-      {lines(["90%", "100%", "70%", "85%"])}
-    </Card>
-    <Card style={[styles.use, styles.edge, { left: 340 }]}>
-      <CardHead icon="copy-outline" label={t("welcome.art.cards")} size={20} />
-      {lines(["80%", "95%", "60%"])}
-    </Card>
-    <Card style={[styles.use, { left: 68 }]}>
-      <CardHead icon="chatbubbles-outline" label={t("welcome.art.chat")} />
+    <Glow top={40} height={360} />
+    <Card style={[styles.front, { left: 18, transform: [{ rotate: "-3deg" }] }]}>
+      <CardHead icon="chatbubbles-outline" label={t("welcome.art.chat")} size={24} />
       <View style={styles.question}><Text style={styles.questionText}>{t("welcome.art.chatQuestion")}</Text></View>
       <View style={styles.thinking}>
         <Text numberOfLines={1} style={styles.thinkingText}>{t("welcome.art.chatThinking")}</Text>
         {[1, 0.6, 0.3].map((o) => <View key={o} style={[styles.dot, { opacity: o }]} />)}
       </View>
+      {sources}
     </Card>
-    <Card style={[styles.use, { left: 210 }]}>
-      <CardHead icon="school-outline" label={t("welcome.art.quiz")} />
+    <Card style={[styles.front, { left: 214, transform: [{ rotate: "3deg" }] }]}>
+      <CardHead icon="school-outline" label={t("welcome.art.quiz")} size={24} />
       <Text style={styles.quizQuestion}>{t("welcome.art.quizQuestion")}</Text>
       <View style={styles.answers}>
         <View style={[styles.answer, styles.answerWrong]}><Text numberOfLines={1} style={styles.answerText}>{t("welcome.art.quizWrong")}</Text></View>
-        <View style={[styles.answer, styles.answerRight]}><Text numberOfLines={1} style={[styles.answerText, styles.answerRightText]}>{t("welcome.art.quizRight")}</Text></View>
+        <View style={[styles.answer, styles.answerRight]}>
+          <Ionicons name="checkmark" size={14} color={colors.success} />
+          <Text numberOfLines={1} style={[styles.answerText, styles.answerRightText]}>{t("welcome.art.quizRight")}</Text>
+        </View>
       </View>
+      {sources}
     </Card>
+    {SPREAD.map(([key, x, y, rotation]) => <View key={key} style={[styles.medium, { left: x, top: y, backgroundColor: fill[key],
+      transform: [{ rotate: `${rotation}deg` }] }]}>
+      {look[key]}
+      <Text numberOfLines={1} style={[styles.mediumType, { color: ink[key] }]}>{t(MEDIA[key].type)}</Text>
+      <Text numberOfLines={2} style={[styles.mediumTitle, { color: ink[key] }]}>{t(MEDIA[key].title)}</Text>
+    </View>)}
   </>;
 }
 
 const makeDepthStyles = ({ colors }: Theme) => StyleSheet.create({
-  source: { position: "absolute", width: 78, height: 84, borderRadius: 20, alignItems: "center", justifyContent: "center", gap: 6,
-    shadowColor: "#2b2d42", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 3 },
-  sourceLabel: { fontSize: 12, fontWeight: "700", paddingHorizontal: 4 },
-  callout: { left: 30, right: 30, top: 152, paddingVertical: 14, paddingLeft: 20, paddingRight: 16, gap: 8,
-    borderTopLeftRadius: 4, borderBottomLeftRadius: 4, borderLeftWidth: 4, borderLeftColor: colors.primary },
-  quote: { fontSize: 14.5, lineHeight: 22, fontStyle: "italic", color: colors.textMain },
-  highlight: { backgroundColor: "rgba(255, 203, 5, 0.3)" },
-  use: { top: 290, width: 136, height: 122, paddingVertical: 10, paddingHorizontal: 12, gap: 6 },
-  edge: { opacity: 0.45, paddingHorizontal: 8 },
-  lines: { gap: 7, marginTop: 4, alignSelf: "stretch" },
-  question: { backgroundColor: colors.textMain, borderRadius: 14, borderBottomRightRadius: 4, paddingVertical: 6, paddingHorizontal: 10 },
-  questionText: { color: colors.background, fontSize: 12, lineHeight: 16, fontWeight: "600" },
-  thinking: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.surfaceContainer,
-    borderRadius: 14, borderBottomLeftRadius: 4, paddingVertical: 6, paddingHorizontal: 8, maxWidth: "100%" },
-  thinkingText: { fontSize: 11, fontStyle: "italic", color: colors.textSubtle, flexShrink: 1, marginRight: 2 },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.textSubtle },
-  quizQuestion: { fontSize: 12, lineHeight: 16, fontWeight: "700", color: colors.textMain },
-  answers: { flexDirection: "row", gap: 6, marginTop: 2 },
-  answer: { height: 26, borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  medium: { position: "absolute", width: 122, height: 142, borderRadius: 18, padding: 12, gap: 4,
+    shadowColor: "#2b2d42", shadowOffset: { width: 0, height: 18 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 4 },
+  mediumType: { marginTop: 8, fontSize: 11.5, fontWeight: "600", opacity: 0.75 },
+  mediumTitle: { fontSize: 14, lineHeight: 17, fontWeight: "800" },
+  player: { height: 58, borderRadius: 10, backgroundColor: "rgba(255, 255, 255, 0.14)", alignItems: "center", justifyContent: "center" },
+  playDisc: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", paddingLeft: 2 },
+  progress: { position: "absolute", left: 8, right: 8, bottom: 7, height: 3, borderRadius: 2, backgroundColor: "rgba(255, 255, 255, 0.3)" },
+  progressDone: { width: "40%", height: 3, borderRadius: 2, backgroundColor: "#ff5a4f" },
+  wave: { height: 58, flexDirection: "row", alignItems: "center", gap: 10 },
+  bars: { flexDirection: "row", alignItems: "center", gap: 3 },
+  waveBar: { width: 3, borderRadius: 1.5, backgroundColor: "rgba(28, 27, 26, 0.6)" },
+  page: { height: 58, borderRadius: 10, backgroundColor: "rgba(255, 255, 255, 0.6)", padding: 9, gap: 5 },
+  front: { top: 150, width: 182, height: 236, borderRadius: 20, paddingTop: 44, paddingHorizontal: 14, paddingBottom: 14, gap: 10 },
+  question: { alignSelf: "flex-end", backgroundColor: colors.textMain, borderRadius: 16, borderBottomRightRadius: 4, paddingVertical: 8, paddingHorizontal: 12 },
+  questionText: { color: colors.background, fontSize: 13, lineHeight: 17, fontWeight: "600" },
+  thinking: { alignSelf: "flex-start", height: 34, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.surfaceContainer,
+    borderRadius: 16, borderBottomLeftRadius: 4, paddingHorizontal: 12, maxWidth: "100%" },
+  thinkingText: { fontSize: 12.5, fontStyle: "italic", color: colors.textSubtle, flexShrink: 1, marginRight: 3 },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: colors.textSubtle },
+  quizQuestion: { fontSize: 14.5, lineHeight: 19, fontWeight: "800", color: colors.textMain },
+  answers: { flexDirection: "row", gap: 6 },
+  answer: { height: 34, borderRadius: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 4 },
   answerWrong: { flex: 1, borderWidth: 1, borderColor: colors.outlineVariant },
-  answerRight: { flex: 1.5, borderWidth: 1.5, borderColor: colors.success, backgroundColor: colors.successTint },
-  answerText: { fontSize: 11.5, color: colors.textMain },
+  answerRight: { flex: 1.3, borderWidth: 1.5, borderColor: colors.success, backgroundColor: colors.successTint },
+  answerText: { fontSize: 13, color: colors.textMain },
   answerRightText: { color: colors.success, fontWeight: "700" },
+  sources: { marginTop: "auto", flexDirection: "row", alignItems: "center" },
+  sourcesLabel: { fontSize: 12, color: colors.textSubtle, marginRight: 6 },
+  token: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.surface, alignItems: "center", justifyContent: "center" },
 });
 
 // ---------------------------------------------------------------------------

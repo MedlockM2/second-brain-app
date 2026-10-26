@@ -32,78 +32,72 @@ function CardHead({ icon, label, size = 22 }: { icon: IconName; label: string; s
   </div>;
 }
 
-function Dashes({ paths }: { paths: string[] }) {
-  return <svg width="414" height="416" style={{ position: "absolute", inset: 0, overflow: "visible" }} stroke="var(--outline)"
-    strokeWidth="1.4" strokeDasharray="3 4" fill="none" aria-hidden="true">
-    {paths.map((d) => <path key={d} d={d} />)}
-  </svg>;
-}
-
 // 1 — Depth -------------------------------------------------------------------
-type Source = "video" | "podcast" | "short" | "audio" | "photo" | "article" | "pdf" | "link";
-const SOURCE: Record<Source, { fill: string; ink?: string; icon: IconName; label: TranslationKey }> = {
-  video: { fill: "var(--error-container)", icon: "play-circle-outline", label: "welcome.art.video" },
-  podcast: { fill: "var(--primary)", ink: "var(--on-primary)", icon: "headset-outline", label: "welcome.art.podcast" },
-  short: { fill: "var(--short-video-container)", icon: "play-circle-outline", label: "welcome.art.short" },
-  audio: { fill: "var(--audio-container)", icon: "mic-outline", label: "welcome.art.audio" },
-  photo: { fill: "var(--image-post-container)", icon: "images-outline", label: "welcome.art.photo" },
-  article: { fill: "var(--article-container)", icon: "document-text-outline", label: "welcome.art.article" },
-  pdf: { fill: "var(--surface-container-high)", icon: "reader-outline", label: "welcome.art.pdf" },
-  link: { fill: "var(--surface-container-high)", icon: "link-outline", label: "welcome.art.link" },
+// Three media on one subject lie on top of what you get from them, a chat with
+// the AI and a quiz; the same media come back in small at the foot of both cards.
+type Medium = "video" | "podcast" | "article";
+const VIDEO_FILL = "#3d4a6b";
+const MEDIA: Record<Medium, { fill: string; ink: string; icon: IconName; type: TranslationKey; title: TranslationKey }> = {
+  video: { fill: VIDEO_FILL, ink: "#fff", icon: "play-circle-outline", type: "welcome.art.video", title: "welcome.art.videoTitle" },
+  podcast: { fill: "var(--primary)", ink: "var(--on-primary)", icon: "headset-outline", type: "welcome.art.podcast", title: "welcome.art.podcastTitle" },
+  article: { fill: "var(--article-container)", ink: "var(--text-main)", icon: "document-text-outline", type: "welcome.art.article", title: "welcome.art.articleTitle" },
 };
-const FAN: [Source, number, number, number, number][] = [
-  ["pdf", -61, 66, -15, 0.3], ["audio", 17, 44, -11, 0.45], ["article", 93, 24, -7, 1], ["video", 169, 10, -3, 1],
-  ["podcast", 245, 10, 3, 1], ["short", 321, 24, 7, 1], ["photo", 397, 44, 11, 0.45], ["link", 475, 66, 15, 0.3],
-];
+// [medium, left, top, rotation]: the podcast at the centre, a little higher.
+const SPREAD: [Medium, number, number, number][] = [["video", 18, 30, -6], ["article", 274, 30, 6], ["podcast", 146, 16, 0]];
+const WAVE = Array.from({ length: 10 }, (_, k) => Math.max(4, Math.round(34 * (0.35 + 0.65 * Math.abs(Math.sin(k * 1.7) * Math.cos(k * 0.6))))));
+const row: CSSProperties = { display: "flex", alignItems: "center" };
 
 export function DepthArt() {
   const { t } = useI18n();
-  const use: CSSProperties = { ...card, top: 290, width: 136, height: 122, boxSizing: "border-box", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 };
-  const lines = (widths: string[]) => <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 4, alignSelf: "stretch" }}>{widths.map((w, i) => <div key={i}>{bar(w)}</div>)}</div>;
-  const edgeHead = (icon: IconName, label: string) => <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}><AmberDot icon={icon} size={20} />{label}</div>;
+  const front: CSSProperties = { ...card, top: 150, width: 182, height: 236, boxSizing: "border-box", borderRadius: 20, padding: "44px 14px 14px",
+    display: "flex", flexDirection: "column", gap: 10 };
+  const sources = <div style={{ ...row, marginTop: "auto", fontSize: 12, color: "var(--text-subtle)" }}>
+    <span style={{ marginRight: 6 }}>{t("welcome.art.sources")}</span>
+    {(["video", "podcast", "article"] as const).map((key, n) => <span key={key} style={{ width: 26, height: 26, borderRadius: "50%", background: MEDIA[key].fill,
+      color: MEDIA[key].ink, boxShadow: "0 0 0 2px var(--surface)", display: "inline-flex", alignItems: "center", justifyContent: "center", marginLeft: n ? -5 : 0 }}>
+      <Glyph name={MEDIA[key].icon} size={15} /></span>)}
+  </div>;
+  const look: Record<Medium, ReactNode> = {
+    video: <div style={{ height: 58, borderRadius: 10, background: "rgba(255, 255, 255, 0.14)", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+      <span style={{ width: 30, height: 30, borderRadius: "50%", background: "#fff", color: VIDEO_FILL, display: "flex", alignItems: "center", justifyContent: "center", paddingLeft: 2, boxSizing: "border-box" }}><Glyph name="play" size={16} /></span>
+      <div style={{ position: "absolute", left: 8, right: 8, bottom: 7, height: 3, borderRadius: 2, background: "rgba(255, 255, 255, 0.3)" }}><div style={{ width: "40%", height: 3, borderRadius: 2, background: "#ff5a4f" }} /></div>
+    </div>,
+    podcast: <div style={{ ...row, height: 58, gap: 10 }}><Glyph name="headset-outline" size={28} />
+      <div style={{ ...row, gap: 3 }}>{WAVE.map((h, k) => <span key={k} style={{ width: 3, height: h, borderRadius: 1.5, background: "rgba(28, 27, 26, 0.6)" }} />)}</div></div>,
+    article: <div style={{ height: 58, borderRadius: 10, background: "rgba(255, 255, 255, 0.6)", padding: 9, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 5 }}>
+      {bar("70%", 6, "rgba(28, 27, 26, 0.55)")}{["100%", "90%", "96%"].map((w) => <div key={w}>{bar(w, 4, "rgba(28, 27, 26, 0.2)")}</div>)}</div>,
+  };
   return <>
-    <div style={{ position: "absolute", left: -40, right: -40, top: 96, height: 260, background: "radial-gradient(closest-side, var(--primary-30), transparent)" }} />
-    <Dashes paths={[
-      ...FAN.slice(1, 7).map(([, x, y]) => `M${x} ${y + 88} C${x} ${y + 116} 207 128 207 152`),
-      ...[30, 136, 278, 384].map((x) => `M207 262 C207 276 ${x} 274 ${x} 290`),
-    ]} />
-    {[...FAN].sort((a, b) => Math.abs(b[1] - 207) - Math.abs(a[1] - 207)).map(([key, x, y, rotation, opacity]) => {
-      const source = SOURCE[key];
-      return <div key={key} style={{ position: "absolute", left: x - 39, top: y, width: 78, height: 84, borderRadius: 20, background: source.fill,
-        boxShadow: "0 6px 14px rgba(43, 45, 66, 0.12)", transform: `rotate(${rotation}deg)`, opacity, display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 6, color: source.ink ?? "var(--text-main)", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
-        <Glyph name={source.icon} size={28} />{t(source.label)}
+    <div style={{ position: "absolute", left: -40, right: -40, top: 40, height: 360, background: "radial-gradient(closest-side, var(--primary-30), transparent)" }} />
+    <div style={{ ...front, left: 18, transform: "rotate(-3deg)" }}>
+      <CardHead icon="chatbubbles-outline" label={t("welcome.art.chat")} size={24} />
+      <div style={{ alignSelf: "flex-end", background: "var(--text-main)", color: "var(--background)", borderRadius: "16px 16px 4px 16px", padding: "8px 12px", fontSize: 13, lineHeight: 1.3, fontWeight: 600 }}>{t("welcome.art.chatQuestion")}</div>
+      <div style={{ ...row, alignSelf: "flex-start", maxWidth: "100%", boxSizing: "border-box", height: 34, gap: 3, background: "var(--surface-container)", borderRadius: "16px 16px 16px 4px",
+        padding: "0 12px", fontSize: 12.5, fontStyle: "italic", color: "var(--text-subtle)", whiteSpace: "nowrap" }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", marginRight: 3 }}>{t("welcome.art.chatThinking")}</span>
+        {[1, 0.6, 0.3].map((o) => <span key={o} style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--text-subtle)", opacity: o, flex: "none" }} />)}
+      </div>
+      {sources}
+    </div>
+    <div style={{ ...front, left: 214, transform: "rotate(3deg)" }}>
+      <CardHead icon="school-outline" label={t("welcome.art.quiz")} size={24} />
+      <div style={{ fontSize: 14.5, fontWeight: 750, lineHeight: 1.3 }}>{t("welcome.art.quizQuestion")}</div>
+      <div style={{ display: "flex", gap: 6, fontSize: 13 }}>
+        <div style={{ flex: 1, height: 34, borderRadius: 10, boxShadow: "inset 0 0 0 1px var(--outline-variant)", display: "flex", alignItems: "center", justifyContent: "center" }}>{t("welcome.art.quizWrong")}</div>
+        <div style={{ flex: 1.3, height: 34, borderRadius: 10, background: "var(--success-tint)", boxShadow: "inset 0 0 0 1.5px var(--success)",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontWeight: 700, color: "var(--success)" }}><Glyph name="checkmark" size={14} />{t("welcome.art.quizRight")}</div>
+      </div>
+      {sources}
+    </div>
+    {SPREAD.map(([key, x, y, rotation]) => {
+      const medium = MEDIA[key];
+      return <div key={key} style={{ position: "absolute", left: x, top: y, width: 122, height: 142, boxSizing: "border-box", borderRadius: 18, padding: 12,
+        background: medium.fill, color: medium.ink, boxShadow: "0 18px 40px rgba(43, 45, 66, 0.10)", transform: `rotate(${rotation}deg)`, display: "flex", flexDirection: "column", gap: 4 }}>
+        {look[key]}
+        <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 650, opacity: 0.75 }}>{t(medium.type)}</div>
+        <div style={{ fontSize: 14, fontWeight: 750, lineHeight: 1.2 }}>{t(medium.title)}</div>
       </div>;
     })}
-    <div style={{ ...card, left: 30, right: 30, top: 152, borderRadius: "4px 16px 16px 4px", boxShadow: "inset 4px 0 0 var(--primary), 0 8px 24px rgba(43, 45, 66, 0.08)",
-      padding: "14px 16px 14px 20px" }}>
-      <CardHead icon="color-wand-outline" label={t("welcome.art.extracted")} />
-      <div style={{ marginTop: 8, fontSize: 14.5, lineHeight: 1.55, fontStyle: "italic" }}>
-        {t("welcome.art.quoteStart")}
-        <span style={{ background: "linear-gradient(transparent 55%, var(--primary-30) 55%)" }}>{t("welcome.art.quoteHighlight")}</span>
-        {t("welcome.art.quoteEnd")}
-      </div>
-    </div>
-    <div style={{ ...use, left: -62, padding: "10px 8px", alignItems: "flex-end", opacity: 0.45 }}>{edgeHead("reader-outline", t("welcome.art.summary"))}{lines(["90%", "100%", "70%", "85%"])}</div>
-    <div style={{ ...use, left: 340, padding: "10px 8px", opacity: 0.45 }}>{edgeHead("copy-outline", t("welcome.art.cards"))}{lines(["80%", "95%", "60%"])}</div>
-    <div style={{ ...use, left: 68 }}>
-      <CardHead icon="chatbubbles-outline" label={t("welcome.art.chat")} />
-      <div style={{ background: "var(--text-main)", color: "var(--background)", borderRadius: "14px 14px 4px 14px", padding: "6px 10px", fontSize: 12, lineHeight: 1.35, fontWeight: 600 }}>{t("welcome.art.chatQuestion")}</div>
-      <div style={{ alignSelf: "flex-start", maxWidth: "100%", display: "flex", alignItems: "center", gap: 3, background: "var(--surface-container)",
-        borderRadius: "14px 14px 14px 4px", padding: "6px 8px", fontSize: 11, fontStyle: "italic", color: "var(--text-subtle)", whiteSpace: "nowrap" }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", marginRight: 2 }}>{t("welcome.art.chatThinking")}</span>
-        {[1, 0.6, 0.3].map((o) => <span key={o} style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--text-subtle)", opacity: o, flex: "none" }} />)}
-      </div>
-    </div>
-    <div style={{ ...use, left: 210 }}>
-      <CardHead icon="school-outline" label={t("welcome.art.quiz")} />
-      <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>{t("welcome.art.quizQuestion")}</div>
-      <div style={{ display: "flex", gap: 6, marginTop: 2, fontSize: 11.5 }}>
-        <div style={{ flex: 1, height: 26, borderRadius: 8, boxShadow: "inset 0 0 0 1px var(--outline-variant)", display: "flex", alignItems: "center", justifyContent: "center" }}>{t("welcome.art.quizWrong")}</div>
-        <div style={{ flex: 1.5, height: 26, borderRadius: 8, background: "var(--success-tint)", boxShadow: "inset 0 0 0 1.5px var(--success)",
-          display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "var(--success)" }}>{t("welcome.art.quizRight")}</div>
-      </div>
-    </div>
   </>;
 }
 

@@ -7,7 +7,7 @@ import { DepthArt, EverywhereArt, FolderArt, ShareArt } from "./WelcomeArt";
 
 /** The four pages of the mobile welcome carousel, in the same order. */
 const SLIDES: { key: string; Art: ComponentType; title: TranslationKey; body: TranslationKey[] }[] = [
-  { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.extract", "welcome.deep.chat", "welcome.deep.review"] },
+  { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.save", "welcome.deep.chat", "welcome.deep.review"] },
   { key: "share", Art: ShareArt, title: "welcome.share.title", body: ["welcome.share.body"] },
   { key: "folder", Art: FolderArt, title: "welcome.folder.title", body: ["welcome.folder.body"] },
   { key: "everywhere", Art: EverywhereArt, title: "welcome.everywhere.title", body: ["welcome.everywhere.body"] },

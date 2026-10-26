@@ -43,26 +43,7 @@ export function CardHead({ icon, label, size = 22 }: { icon: IconName; label: st
   </View>;
 }
 
-/**
- * A dashed cubic Bézier, drawn as dots: the app has no SVG renderer, and a dozen
- * two-pixel views per connector cost nothing.
- */
-export function Dashes({ from, c1, c2, to }: { from: [number, number]; c1: [number, number]; c2: [number, number]; to: [number, number] }) {
-  const { colors } = useTheme();
-  const at = (t: number, i: 0 | 1) => {
-    const u = 1 - t;
-    return u * u * u * from[i] + 3 * u * u * t * c1[i] + 3 * u * t * t * c2[i] + t * t * t * to[i];
-  };
-  // Enough dots for a 7px step along the chord, the dash rhythm of the mockup.
-  const count = Math.max(4, Math.round(Math.hypot(to[0] - from[0], to[1] - from[1]) / 7));
-  return <>{Array.from({ length: count + 1 }, (_, i) => {
-    const t = i / count;
-    return <View key={i} style={{ position: "absolute", left: at(t, 0) - 1, top: at(t, 1) - 1, width: 2.4, height: 2.4,
-      borderRadius: 1.2, backgroundColor: colors.outline }} />;
-  })}</>;
-}
-
-/** The amber halo the extracted text sits on: three soft ellipses instead of a radial gradient. */
+/** The amber halo behind the focal point: three soft ellipses instead of a radial gradient. */
 export function Glow({ top, height }: { top: number; height: number }) {
   const { colors } = useTheme();
   return <>{[1, 0.72, 0.46].map((scale) =>

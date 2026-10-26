@@ -24,7 +24,7 @@ import { useThemedStyles } from "../../src/contexts/ThemeContext";
  * end to end, how content gets in, a whole folder asked at once, and the web.
  */
 const SLIDES: { key: string; Art: ComponentType; title: TranslationKey; body: TranslationKey[] }[] = [
-  { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.extract", "welcome.deep.chat", "welcome.deep.review"] },
+  { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.save", "welcome.deep.chat", "welcome.deep.review"] },
   { key: "share", Art: ShareArt, title: "welcome.share.title", body: ["welcome.share.body"] },
   { key: "folder", Art: FolderArt, title: "welcome.folder.title", body: ["welcome.folder.body"] },
   { key: "everywhere", Art: EverywhereArt, title: "welcome.everywhere.title", body: ["welcome.everywhere.body"] },

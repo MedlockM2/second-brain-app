@@ -24,7 +24,7 @@ folder-outline add-circle-outline pencil-outline trash-outline sync-outline open
 bulb-outline help-circle-outline close-circle refresh-outline sparkles-outline arrow-forward
 information-circle-outline eye-outline eye-off-outline reader-outline time-outline cloud-upload-outline
 create-outline arrow-up arrow-down stop download newspaper remove-circle-outline
-color-wand-outline school-outline copy-outline mic-outline desktop-outline mail-open-outline
+play school-outline desktop-outline mail-open-outline
 person-circle-outline logo-apple logo-google ellipse-outline
 """.split()))
 

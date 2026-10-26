@@ -75,62 +75,62 @@ function twoGestures(os) {
       ${row("link-outline", "Coller un lien", "Un article, une vidéo ou un épisode de podcast")}`)}`);
 }
 
-// ---------- Page 1: every source becomes text, and the text becomes chat, quiz, summary, cards ----------
-// All formats are drawn alike: none outranks another. Video and podcast, the rare ones, are put
-// forward by their place (centre, top) and by the subtitle, which names them first.
-const dashes = (paths) => `<svg width="414" height="416" style="position:absolute;inset:0" stroke="var(--outline)" stroke-width="1.4" stroke-dasharray="3 4" fill="none">${paths.join("")}</svg>`;
+// ---------- Page 1: your media, and what you get from them ----------
+// What you saved, and what you get from it, with no line and no « extracted text » step: the image
+// says it alone. Rules applied (Material Design « Top user benefits », NN/g on onboarding): the
+// benefit rather than the app's interface, only the essentials, every element legible at phone size.
+const disc = (i, bg = "var(--primary)", fg = "var(--on-primary)", s = 26) => `<span style="width:${s}px;height:${s}px;border-radius:50%;background:${bg};color:${fg};display:inline-flex;align-items:center;justify-content:center;flex:none">${ic(i, Math.round(s * 0.55))}</span>`;
+const wave = (n, h, c, w = 4, g = 3) => `<div class="row" style="gap:${g}px;align-items:center">${Array.from({ length: n }, (_, k) => `<span style="width:${w}px;height:${Math.max(4, Math.round(h * (0.35 + 0.65 * Math.abs(Math.sin(k * 1.7) * Math.cos(k * 0.6)))))}px;border-radius:${w / 2}px;background:${c}"></span>`).join("")}</div>`;
 
-// Each format in the fill of its media-type badge in the app (mobile/src/lib/mediaTypeDisplay.ts): amber
-// podcast, red video, blue short, green audio, orchid photo, sea-green article, grey for documents and links.
-const BADGE = {
-  video: ["#ffdad6", "play-circle-outline", "Vidéo"], podcast: ["var(--primary)", "headset-outline", "Podcast"],
-  short: ["#d6e4fd", "play-circle-outline", "Short"], voice: ["#d4e9d2", "mic-outline", "Audio"],
-  photo: ["#f3dcf2", "images-outline", "Photo"], article: ["#c1ebec", "document-text-outline", "Article"],
-  pdf: ["var(--surface-container-high)", "reader-outline", "PDF"], link: ["var(--surface-container-high)", "link-outline", "Lien"],
-};
-// Depth with its path: the sources fanned at the back (each in its badge colour, video and podcast at
-// the centre, the edges fading: the list goes on) flow into the extracted text (the reader's amber callout,
-// on an amber glow), which flows into what it becomes: the AI chat (a question, the AI answering) and a quiz.
-// The dashed connectors carry the story for someone who has never heard of Deepn.
-function p1Depth() {
-  // [badge, centre x, top, rotation, opacity]
-  const fan = [["pdf", -61, 66, -15, .3], ["voice", 17, 44, -11, .45], ["article", 93, 24, -7, 1], ["video", 169, 10, -3, 1],
-    ["podcast", 245, 10, 3, 1], ["short", 321, 24, 7, 1], ["photo", 397, 44, 11, .45], ["link", 475, 66, 15, .3]];
-  const cards = [...fan].sort((a, b) => Math.abs(b[1] - 207) - Math.abs(a[1] - 207)).map(([k, x, y, rot, o]) => {
-    const [bg, i, t] = BADGE[k];
-    return `<div style="position:absolute;left:${x - 39}px;top:${y}px;width:78px;height:84px;border-radius:20px;background:${bg};box-shadow:var(--shadow-lift);transform:rotate(${rot}deg);opacity:${o};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:${k === "podcast" ? "var(--on-primary)" : "var(--text-main)"};font-size:12px;font-weight:700">${ic(i, 28)}${t}</div>`;
-  }).join("");
-  const into = fan.slice(1, 7).map(([, x, y]) => `<path d="M${x} ${y + 88} C${x} ${y + 116} 207 128 207 152"/>`);
-  // What the text becomes, two cards of the same size, each titled like the extracted text above it.
-  const head = (i, t) => `<div class="row" style="gap:7px;font-size:13px;font-weight:700"><span style="width:22px;height:22px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center">${ic(i, 13)}</span>${t}</div>`;
-  // A ribbon like the sources above: chat and quiz at the centre, summary and flash cards running off the
-  // edges, faded (the list goes on).
-  const useCard = (x, i, t, body) => `<div style="position:absolute;left:${x}px;top:290px;width:136px;height:122px;box-sizing:border-box;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-lift);padding:10px 12px;display:flex;flex-direction:column;gap:6px">${head(i, t)}${body}</div>`;
-  // The faded cards at the edges show their title on the visible side: the left one is aligned right.
-  const edgeCard = (x, i, t, ws, right) => `<div style="position:absolute;left:${x}px;top:290px;width:136px;height:122px;box-sizing:border-box;border-radius:16px;background:var(--surface);box-shadow:var(--shadow-lift);padding:10px 8px;display:flex;flex-direction:column;gap:6px;opacity:.45;${right ? "align-items:flex-end" : ""}"><div class="row" style="gap:5px;font-size:12.5px;font-weight:700"><span style="width:20px;height:20px;border-radius:50%;background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center">${ic(i, 12)}</span>${t}</div>${lines(ws)}</div>`;
-  const lines = (ws) => `<div class="stack" style="gap:7px;margin-top:4px;align-self:stretch">${ws.map((w) => bar(w, 6)).join("")}</div>`;
+// Three media on one subject (a player, a sound wave, a page) lie on top of two cards, a chat with the
+// AI and a quiz, covering only their empty heads, so every title stays readable. The link is said
+// twice: by depth, and by the same media in small at the foot of both cards (« Sources »), while the
+// AI « reads your sources » with the dots of an answer being written.
+function p1Front() {
+  const media = {
+    video: [`linear-gradient(160deg,#4a5a80,#2b3550)`, "#fff", "play-circle-outline", "Vidéo", "Le cerveau la nuit"],
+    podcast: ["var(--primary)", "var(--on-primary)", "headset-outline", "Podcast", "Sommeil et mémoire"],
+    article: ["#c1ebec", "var(--text-main)", "document-text-outline", "Article", "Dormir pour apprendre"],
+  };
+  // What makes each format recognisable at a glance: a player, a sound wave, a page of text.
+  const look = {
+    video: `<div style="height:58px;border-radius:10px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;position:relative">${disc("play", "#fff", "#2b3550", 30)}<div style="position:absolute;left:8px;right:8px;bottom:7px;height:3px;border-radius:2px;background:rgba(255,255,255,.3)"><div style="width:40%;height:100%;border-radius:2px;background:#ff5a4f"></div></div></div>`,
+    podcast: `<div style="height:58px;display:flex;align-items:center;gap:10px">${ic("headset-outline", 28)}${wave(10, 34, "rgba(28,27,26,.6)", 3, 3)}</div>`,
+    article: `<div style="height:58px;border-radius:10px;background:rgba(255,255,255,.6);padding:9px 9px;box-sizing:border-box;display:flex;flex-direction:column;gap:5px">${bar("70%", 6, "rgba(28,27,26,.55)")}${bar("100%", 4, "rgba(28,27,26,.2)")}${bar("90%", 4, "rgba(28,27,26,.2)")}${bar("96%", 4, "rgba(28,27,26,.2)")}</div>`,
+  };
+  const src = (x, y, rot, k) => {
+    const [bg, fg, , type, title] = media[k];
+    return `<div style="position:absolute;left:${x}px;top:${y}px;width:122px;height:142px;border-radius:18px;background:${bg};color:${fg};box-shadow:var(--shadow-lift);transform:rotate(${rot}deg);padding:12px;box-sizing:border-box;display:flex;flex-direction:column;gap:4px">
+      ${look[k]}<div style="margin-top:8px;font-size:11.5px;font-weight:650;opacity:.75">${type}</div><div style="font-size:14px;font-weight:750;line-height:1.2">${title}</div></div>`;
+  };
+  // The three media in small: the same colours and icons, overlapping like avatars.
+  const tokens = `<span class="row" style="flex:none">${Object.values(media).map(([bg, fg, i], n) => `<span style="width:26px;height:26px;border-radius:50%;background:${bg};color:${fg};box-shadow:0 0 0 2px var(--surface);display:inline-flex;align-items:center;justify-content:center;margin-left:${n ? -5 : 0}px">${ic(i, 15)}</span>`).join("")}</span>`;
+  // Quiz and chat: two separate cards, tilted apart like the media behind them.
+  const front = (x, rot, i, t, body) => `<div style="position:absolute;left:${x}px;top:150px;width:182px;height:236px;box-sizing:border-box;border-radius:20px;background:var(--surface);box-shadow:var(--shadow-lift);transform:rotate(${rot}deg);padding:44px 14px 14px;display:flex;flex-direction:column;gap:10px">
+    <div class="row" style="gap:8px;font-size:13px;font-weight:700">${disc(i, "var(--primary)", "var(--on-primary)", 24)}${t}</div>${body}</div>`;
   return box(`
-    <div style="position:absolute;left:-40px;right:-40px;top:96px;height:260px;background:radial-gradient(closest-side,var(--primary-30),transparent)"></div>
-    ${dashes([...into, ...[30, 136, 278, 384].map((x) => `<path d="M207 262 C207 276 ${x} 274 ${x} 290"/>`)])}
-    ${cards}
-    <div class="callout" style="position:absolute;left:30px;right:30px;top:152px;font-size:14.5px">
-      ${head("color-wand-outline", "Texte extrait")}
-      <div style="margin-top:8px;font-style:italic;font-weight:400;line-height:1.55">« Pendant le sommeil lent profond, <span style="background:linear-gradient(transparent 55%, var(--primary-30) 55%)">le cerveau rejoue ce qu’il a appris</span> dans la journée. »</div></div>
-    ${edgeCard(-62, "reader-outline", "Résumé", ["90%", "100%", "70%", "85%"], true)}
-    ${edgeCard(340, "copy-outline", "Fiches", ["80%", "95%", "60%"])}
-    ${useCard(68, "chatbubbles-outline", "Chat IA", `<div style="background:var(--text-main);color:var(--background);border-radius:14px 14px 4px 14px;padding:6px 10px;font-size:12px;line-height:1.35;font-weight:550">Le sommeil aide à retenir ?</div>
-      <div class="row" style="align-self:flex-start;gap:3px;background:var(--surface-container);border-radius:14px 14px 14px 4px;padding:6px 8px;font-size:11px;font-style:italic;color:var(--text-subtle);white-space:nowrap">Lit vos sources${[1, .6, .3].map((o) => `<span style="width:4px;height:4px;border-radius:50%;background:var(--text-subtle);opacity:${o}"></span>`).join("")}</div>`)}
-    ${useCard(210, "school-outline", "Quiz", `<div style="font-size:12px;font-weight:700;line-height:1.3">Quel sommeil fixe la mémoire ?</div>
-      <div class="row" style="gap:6px;margin-top:2px"><div style="flex:1;height:26px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:11.5px">Léger</div>
-      <div style="flex:1.5;height:26px;border-radius:8px;background:rgba(46,125,79,.10);box-shadow:inset 0 0 0 1.5px var(--success);display:flex;align-items:center;justify-content:center;gap:4px;font-size:11.5px;font-weight:650;color:var(--success)">Profond</div></div>`)}`);
+    <div style="position:absolute;left:-40px;right:-40px;top:40px;height:360px;background:radial-gradient(closest-side,var(--primary-30),transparent)"></div>
+    ${front(214, 3, "school-outline", "Quiz", `
+      <div style="font-size:14.5px;font-weight:750;line-height:1.3">Quel sommeil fixe la mémoire ?</div>
+      <div class="row" style="gap:6px">
+        <div style="flex:1;height:34px;border-radius:10px;box-shadow:inset 0 0 0 1px var(--outline-variant);display:flex;align-items:center;justify-content:center;font-size:13px">Léger</div>
+        <div style="flex:1.3;height:34px;border-radius:10px;background:rgba(46,125,79,.10);box-shadow:inset 0 0 0 1.5px var(--success);display:flex;align-items:center;justify-content:center;gap:4px;font-size:13px;font-weight:700;color:var(--success)">${ic("checkmark", 14)}Profond</div>
+      </div>
+      <div class="row" style="gap:6px;margin-top:auto;font-size:12px;color:var(--text-subtle)">Sources ${tokens}</div>`)}
+    ${front(18, -3, "chatbubbles-outline", "Chat IA", `
+      <div style="align-self:flex-end;background:var(--text-main);color:var(--background);border-radius:16px 16px 4px 16px;padding:8px 12px;font-size:13px;font-weight:600;line-height:1.3">Le sommeil aide à retenir ?</div>
+      <div class="row" style="align-self:flex-start;height:34px;box-sizing:border-box;gap:6px;background:var(--surface-container);border-radius:16px 16px 16px 4px;padding:0 12px;font-size:12.5px;font-style:italic;color:var(--text-subtle)">Lit vos sources<span class="row" style="gap:3px">${[1, .6, .3].map((o) => `<span style="width:5px;height:5px;border-radius:50%;background:var(--text-subtle);opacity:${o}"></span>`).join("")}</span></div>
+      <div class="row" style="gap:6px;margin-top:auto;font-size:12px;color:var(--text-subtle)">Sources ${tokens}</div>`)}
+    ${src(18, 30, -6, "video")}${src(274, 30, 6, "article")}${src(146, 16, 0, "podcast")}`);
 }
+
 
 const ART = {
   share: twoGestures("ios"),
 
   // From media to text to use: a video, a podcast and many other sources (the chips) become a
   // timestamped text, from which come questions, a summary, flash cards and a quiz.
-  essentiel: p1Depth(),
+  essentiel: p1Front(),
 
   // Every format lands in the same place.
   formats: box([
@@ -204,10 +204,10 @@ const ART = {
 };
 
 const SLIDES = [
-  { id: "essentiel", n: 1, rec: true, title: "Gardez ce qui compte.<br>Approfondissez.<br>Apprenez.", sub: "Podcasts, vidéos, reels, articles web, PDF et bien plus : Deepn en extrait le texte. Parlez de votre contenu avec l’IA. Créez des quiz, fiches et résumés pour réviser.", points: [
-    ["color-wand-outline", "Podcasts, vidéos, reels, articles web, PDF et bien plus : Deepn en extrait le texte."],
+  { id: "essentiel", n: 1, rec: true, title: "Gardez ce qui compte.<br>Approfondissez.<br>Apprenez.", sub: "Enregistrez podcasts, vidéos, reels, articles web, PDF et bien plus. Parlez de votre contenu avec l’IA. Créez des quiz, fiches et résumés pour réviser.", points: [
+    ["layers-outline", "Enregistrez podcasts, vidéos, reels, articles web, PDF et bien plus."],
     ["chatbubbles-outline", "Parlez de votre contenu avec l’IA."],
-    ["school-outline", "Créez des quiz, fiches et résumés pour réviser."]], why: "La promesse de l’app, de bout en bout : un média, quel que soit son format, devient du texte, et ce texte devient chat IA, résumé, fiches et quiz. Première page conseillée." },
+    ["school-outline", "Créez des quiz, fiches et résumés pour réviser."]], why: "La promesse de l’app : vos médias, quel que soit leur format, et ce que vous en tirez. Trois médias sur un même sujet, posés sur un chat IA et un quiz ; les mêmes médias reviennent en pastilles au pied des deux cartes (« Sources »). Première page conseillée." },
   { id: "share", n: 2, rec: true, title: "Depuis vos apps ou votre téléphone", sub: "Tout ce que vous partagez ou importez arrive dans votre bibliothèque.", why: "Le geste qui fait vivre l’app, et le moins découvrable : le partage se fait hors de Deepn. En haut, l’icône Partager et les logos des apps compatibles ; en bas, les trois lignes de la feuille « Ajouter » de l’app, avec les formats. Version Android : section 2." },
   { id: "folder", n: 3, rec: true, title: "Interrogez tout un dossier", sub: "Une question, une réponse tirée de toutes ses sources.", why: "Variante plus ambitieuse de la page 3 ; à garder plutôt que la 3 si l’on veut parler aux gros lecteurs." },
   { id: "everywhere", n: 4, rec: true, title: "Sur votre téléphone et votre ordinateur", sub: "Votre bibliothèque vous suit dans l’app et sur le web.", why: "Rassure, mais n’illustre aucune capacité nouvelle : plutôt une phrase sur l’écran de création de compte." },
@@ -313,7 +313,7 @@ W.code = web(S.share, 1, `<div class="halo">${ic("mail-open-outline", 30)}</div>
 // Page
 // =====================================================================================
 const TEXTS = [
-  ["Accueil", "(aucun : l’app s’ouvre sur « Bon retour »)", "Une page de carrousel par facette ; la première : « Gardez ce qui compte. Approfondissez. Apprenez. » · « Podcasts, vidéos, reels, articles web, PDF et bien plus : Deepn en extrait le texte. Parlez de votre contenu avec l’IA. Créez des quiz, fiches et résumés pour réviser. »"],
+  ["Accueil", "(aucun : l’app s’ouvre sur « Bon retour »)", "Une page de carrousel par facette ; la première : « Gardez ce qui compte. Approfondissez. Apprenez. » · « Enregistrez podcasts, vidéos, reels, articles web, PDF et bien plus. Parlez de votre contenu avec l’IA. Créez des quiz, fiches et résumés pour réviser. »"],
   ["Boutons d’accueil", "—", "« Commencer » · « J’ai déjà un compte », sur toutes les pages du carrousel"],
   ["Connexion", "« Bon retour » · « Connectez-vous pour accéder à votre bibliothèque »", "« Se connecter » · « Retrouvez votre bibliothèque. »"],
   ["Inscription", "« Créer un compte » · « Commencez à bâtir votre base de connaissances »", "« Créer votre compte » · « Pour retrouver votre bibliothèque partout. »"],
