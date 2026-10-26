@@ -162,6 +162,17 @@ async def _translate_one_type(
     the type. Oldest rather than newest because that is the one generated from the
     transcript — translating the newest would chain translation onto translation
     and drift a little further from the source each time a reader changes language.
+
+    Since task-531 a type can hold several entries that differ by their options (a
+    ``long`` summary next to a ``short`` one), and this still translates one of
+    them, the oldest, whatever its options — ``_plan_translation`` carries them over,
+    so the translation lands on the id a request with those options computes. The
+    pointer the fast path looks for is the one of a request **at the default
+    options**, the only one whose ``parameters`` are known without reading a row
+    (the listing projects none, and a request at the defaults stores the language
+    alone). When the oldest entry carries options, the fast path cannot see its
+    translation, and each opening costs two reads — the source, then the
+    translation's id — before standing down.
     """
     expected_id = artifact_service.build_artifact_id(
         user_id=user_id,
@@ -199,8 +210,9 @@ async def _translate_one_type(
         return None
 
     # The recipe is verified, not assumed. The fast path above hashed the material a
-    # media artifact is keyed on — one content id, and the language as the only
-    # parameter — so it is recomputed here on the entry in hand, whose id is known.
+    # media artifact at the default options is keyed on — one content id, and the
+    # language as the only parameter — so it is recomputed here on the entry in
+    # hand, whose id is known, with its own parameters (options included).
     # A mismatch would mean the target id is wrong too, and a translation written
     # under an id no request ever computes is paid for and never reused. Standing
     # down leaves the type to be generated as before, which is merely expensive.

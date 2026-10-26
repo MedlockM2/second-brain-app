@@ -1,17 +1,48 @@
 """Summary (short) artifact generator.
 
 Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type.
-Concise format for digest/newsletter (title + key points + optional takeaway).
+Title + key points + optional takeaway, at the depth the request's ``length`` asks
+for (task-531): ``short`` is the concise digest format, ``long`` covers the whole
+material at the depth of the detailed summary it replaced (task-537).
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from pydantic import BaseModel, ValidationError, field_validator
 
+from media_summarizer.core.models.artifact_options import ArtifactOptions, SummaryLength
 from media_summarizer.core.services import llm_corpus as corpus
+
+# What each `length` asks for (task-531): the opening line saying what the summary
+# is for, and the rule on how much each key point says. The schema is the same at
+# every length — only the depth moves. `short` is the summary as it always was.
+_LENGTHS: Dict[SummaryLength, Tuple[str, str]] = {
+    SummaryLength.SHORT: (
+        "You produce a concise summary of everything above, suitable for a "
+        "daily/weekly digest newsletter.",
+        "- Keep each key point to one sentence, and keep the whole summary quick to read.",
+    ),
+    SummaryLength.MEDIUM: (
+        "You produce a summary of everything above that explains its important "
+        "points, for a reader who wants to understand the material without going "
+        "through it.",
+        "- Write each key point as one sentence stating the point, followed by one "
+        "sentence explaining it: why it holds, how it works, or what follows from "
+        "it.",
+    ),
+    SummaryLength.LONG: (
+        "You produce a comprehensive summary of everything above, meant for "
+        "learning and reference.",
+        "- This summary is for learning, not quick reading: it must cover the "
+        "material, which means being as long as the material is and no longer. "
+        "Write each key point as a detailed point: state it, then give the detail "
+        "the sources carry for it — the figures, the steps, the conditions, the "
+        "examples — in as many sentences as that takes and no more.",
+    ),
+}
 
 
 class SummaryShortValidationError(Exception):
@@ -68,27 +99,42 @@ class SummaryShortGenerator:
         sources: Sequence[Dict[str, Any]],
         *,
         language: Optional[str] = None,
+        options: ArtifactOptions,
     ) -> str:
         optional_takeaway = corpus.empty_section_instruction(
             '"takeaway" is optional: give one actionable insight or memorable '
             "conclusion when the sources genuinely carry one, and return an empty "
             "string when they do not."
         )
-        instructions = f"""You produce a concise summary of everything above, suitable for a daily/weekly digest newsletter.
+        purpose, depth = _LENGTHS[options.length]
+        # `long` is what the detailed summary was before task-537 removed it: every
+        # point, and every source in proportion to what it carries.
+        source_balance = (
+            corpus.source_balance_instruction("key point", "key points")
+            if options.length is SummaryLength.LONG
+            else None
+        )
+        focus = corpus.focus_instruction(
+            options.focus,
+            kind="summary",
+            unit_plural="key points",
+            absent_in='the first entry of "key_points"',
+        )
+        instructions = f"""{purpose}
 
 Rules:
 - {corpus.language_instruction(language)}
 - Output STRICT JSON only. No markdown. No commentary. No code fences.
-- Keep each key point to one sentence, and keep the whole summary quick to read.
+{depth}
 {corpus.corpus_shape_instruction()}
-{corpus.coverage_instruction("key point", "key points", fields='"key_points"')}
+{corpus.coverage_instruction("key point", "key points", fields='"key_points"')}{corpus.extra_rule(source_balance)}
 - Never write more than the sources say. If one sentence covers everything they
   carry, write one key point.
 {optional_takeaway}
 {corpus.transcript_markers_instruction()}
 {corpus.dated_facts_instruction()}
 {corpus.subject_matter_instruction()}
-{corpus.title_instruction("summary")}
+{corpus.title_instruction("summary")}{focus}
 
 Return JSON with this exact schema:
 {{
