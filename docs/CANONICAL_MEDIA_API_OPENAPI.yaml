@@ -716,40 +716,15 @@ components:
             request pinning the same language. language_pinned is set by the
             service, never by a client (unknown_parameter).
     ArtifactCreateResponse:
-      type: object
-      required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, generation_outcome]
-      properties:
-        artifact_id: { type: string }
-        artifact_type:
-          type: string
-          enum: [summary_short, quiz, notes, flashcards]
-        status:
-          type: string
-          enum: [queued, generating, ready, failed]
-        title: { type: [string, 'null'] }
-        source_count: { type: integer, minimum: 0 }
-        created_at: { type: string }
-        completed_at: { type: [string, 'null'] }
-        error_code: { type: [string, 'null'] }
-        scope:
-          type: string
-          enum: [media, folder]
-        scope_id: { type: string }
-        sources:
-          type: array
-          items:
-            type: object
-            required: [media_item_id, excluded]
-            properties:
-              media_item_id: { type: string }
-              title: { type: [string, 'null'] }
-              language: { type: [string, 'null'] }
-              excluded: { type: boolean }
-              excluded_reason: { type: [string, 'null'] }
-        s3_key: { type: [string, 'null'] }
-        generation_outcome:
-          type: string
-          enum: [created, retried, reused, collapsed]
+      description: The entry the request answers, plus what the request did.
+      allOf:
+        - $ref: '#/components/schemas/ArtifactDetailResponse'
+        - type: object
+          required: [generation_outcome]
+          properties:
+            generation_outcome:
+              type: string
+              enum: [created, retried, reused, collapsed]
     ArtifactRefusal:
       type: object
       required: [detail]
@@ -789,45 +764,46 @@ components:
           minimum: 0
     ArtifactDetailResponse:
       type: object
-      required: [artifact]
+      required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, request_parameters]
       properties:
-        artifact:
-          $ref: '#/components/schemas/MediaArtifactContract'
-      example:
-        artifact:
-          artifact_id: art_01JQ8ZNOTESGWQ9VJ24M4S0C9H4
-          media_item_id: med_01JQ8X8J5S3H3CXX8V70M9M3K7
-          artifact_type: notes
-          status: ready
-          parameters:
-            language: fr
-            audience: study
-          content:
-            artifact_id: art_01JQ8ZNOTESGWQ9VJ24M4S0C9H4
-            media_item_id: med_01JQ8X8J5S3H3CXX8V70M9M3K7
-            artifact_type: notes
-            generated_at: "2026-02-24T20:37:10Z"
-            source:
-              transcript_s3_key: job_01JQ8X8J5T9Q5V7Q4TW4N1HY03.txt
-              generator_version: notes:gpt-4o-mini-2024-07-18:prompt-v1
-            content:
-              context: "2-3 sentences setting the stage, or empty"
-              objectives: ["..."]
-              concepts:
-                - term: "..."
-                  explanation: "..."
-                  importance: core
-              key_points: ["..."]
-              notable_quotes:
-                - text: "Verbatim passage"
-                  source_ref: "[S1]"
-              action_items: ["..."]
-              glossary:
-                - term: "..."
-                  definition: "..."
-          created_at: "2026-02-24T20:36:04Z"
-          updated_at: "2026-02-24T20:37:10Z"
-          completed_at: "2026-02-24T20:37:10Z"
+        artifact_id: { type: string }
+        artifact_type:
+          type: string
+          enum: [summary_short, quiz, notes, flashcards]
+        status:
+          type: string
+          enum: [queued, generating, ready, failed]
+        title: { type: [string, 'null'] }
+        source_count: { type: integer, minimum: 0 }
+        created_at: { type: string }
+        completed_at: { type: [string, 'null'] }
+        error_code: { type: [string, 'null'] }
+        scope:
+          type: string
+          enum: [media, folder]
+        scope_id: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [media_item_id, excluded]
+            properties:
+              media_item_id: { type: string }
+              title: { type: [string, 'null'] }
+              language: { type: [string, 'null'] }
+              excluded: { type: boolean }
+              excluded_reason: { type: [string, 'null'] }
+        s3_key: { type: [string, 'null'] }
+        request_parameters:
+          $ref: '#/components/schemas/ArtifactGenerationOptions'
+          description: >
+            The parameters of a POST /api/artifacts that asks for this entry again
+            (task-535): its options, its language only when the request pinned one,
+            and the sources a folder request chose as source_ids. Empty for an entry
+            at the defaults. A client sends it to rerun a failed entry unchanged; the
+            reading language is never echoed, since sending it back would pin it.
+            Also carried by the 409 artifact_failed refusal of
+            GET /api/artifacts/{artifact_id}/content.
     ProcessingJobContract:
       type: object
       required: [job_id, status, progress, created_at, updated_at]

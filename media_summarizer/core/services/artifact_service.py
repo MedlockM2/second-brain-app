@@ -592,6 +592,39 @@ def _generation_parameters(
     return normalize_artifact_parameters(parameters)
 
 
+def request_parameters_of(record: MediaArtifactRecord) -> Dict[str, Any]:
+    """The ``parameters`` of a ``POST /artifacts`` that asks for this very entry again.
+
+    What a client sends to rerun a failed entry without asking its user anything
+    (task-535): the failed entry's key is the hash of what its request carried, so
+    a rerun has to carry the same thing to land on it (``retried``) rather than on
+    the entry at the defaults. It is the stored ``parameters`` read back in the
+    request's vocabulary, which differs in two places:
+
+    - the output **language** is sent only when the request pinned it. Otherwise it
+      is the reading language the service sets by itself, and echoing it would pin
+      it — a different id — the day the reader changes language;
+    - the **sources** a folder request chose are not in ``parameters`` at all
+      (task-532) but in ``selected_source_ids``, and go back as ``source_ids``.
+
+    An option is never at its default here, since none is stored, so an entry at
+    the defaults answers ``{}``.
+    """
+    stored = record.parameters or {}
+    parameters: Dict[str, Any] = {
+        key: stored[key]
+        for key in (*_ENUMERATED_OPTIONS, artifact_options.FOCUS)
+        if stored.get(key) is not None
+    }
+    if artifact_options.is_language_pinned(stored) and stored.get(
+        artifact_options.LANGUAGE
+    ):
+        parameters[artifact_options.LANGUAGE] = stored[artifact_options.LANGUAGE]
+    if record.selected_source_ids:
+        parameters[SOURCE_IDS_PARAMETER] = list(record.selected_source_ids)
+    return parameters
+
+
 def _stable_json(value: Dict[str, Any]) -> str:
     return json.dumps(
         value,

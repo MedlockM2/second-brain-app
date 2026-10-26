@@ -585,9 +585,25 @@ The same fields plus the scope and the immutable source snapshot:
       "excluded_reason": null
     }
   ],
-  "s3_key": "notes/art_9f3c....json"
+  "s3_key": "notes/art_9f3c....json",
+  "request_parameters": {
+    "count": "fewer",
+    "focus": "the pop-up and how to time it",
+    "source_ids": ["0b7d4c1e-2f3a-4e5b-9c6d-7e8f9a0b1c2d"]
+  }
 }
 ```
+
+`request_parameters` is the `parameters` of a `POST /api/artifacts` (§3) that asks
+for **this entry** again (task-535): its options (`length`, `count`, `difficulty`,
+`focus`), its `language` only when the request pinned one, and the sources a folder
+request chose as `source_ids`. An entry at the defaults answers `{}`. It is what a
+client sends to rerun a `failed` entry without asking its user anything again: the
+entry's id is the hash of what its request carried, so a rerun at the defaults would
+land on another entry. The reading language an entry was written in is deliberately
+not echoed — sent back, it would pin it (§3). The field costs no extra read, since
+it comes off the entry this route already reads; the listing (§4) does not carry
+it, so a client rerunning a failed row of the list reads the entry first.
 
 A source with `excluded: true` was in the scope but carried no usable transcript:
 it is recorded rather than dropped, so the entry stays honest about what it could
@@ -623,7 +639,8 @@ the message text — says whether the entry is still coming (task-328):
     "artifact_error_code": "LLM_ERROR",
     "scope": "media",
     "scope_id": "med_01JQ8X8J5S3H3CXX8V70M9M3K7",
-    "artifact_type": "notes"
+    "artifact_type": "notes",
+    "request_parameters": { "focus": "the pop-up and how to time it" }
   }
 }
 ```
@@ -631,10 +648,10 @@ the message text — says whether the entry is still coming (task-328):
 `artifact_not_ready` resolves on its own, so a client may come back to it.
 `artifact_failed` is **terminal**: no worker will pick the entry up again, and a
 client that keeps polling it polls forever. The refusal therefore carries the
-`scope`, `scope_id` and `artifact_type` a new generation needs, so a failure state
-can offer `POST /api/artifacts` without a second round-trip — that request reruns
-the entry under its own id (`generation_outcome: "retried"`) and debits nothing
-extra.
+`scope`, `scope_id`, `artifact_type` and `request_parameters` (§5) a new generation
+needs, so a failure state can offer `POST /api/artifacts` without a second
+round-trip — that request, sent with those `parameters`, reruns the entry under its
+own id (`generation_outcome: "retried"`) and debits nothing extra.
 
 ```json
 {
