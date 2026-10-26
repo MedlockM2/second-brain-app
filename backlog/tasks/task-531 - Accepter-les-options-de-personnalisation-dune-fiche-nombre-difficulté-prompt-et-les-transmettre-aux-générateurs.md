@@ -3,10 +3,10 @@ id: TASK-531
 title: >-
   Accepter les options de personnalisation d'une fiche (longueur, nombre,
   difficulté, prompt) et les transmettre aux générateurs
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 16:46'
-updated_date: '2026-10-26 17:01'
+updated_date: '2026-10-26 17:42'
 labels:
   - backend
   - artifacts
