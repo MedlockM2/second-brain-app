@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from media_summarizer.core.models.artifact_options import ArtifactOptions
 from media_summarizer.core.services import llm_corpus as corpus
 
 
@@ -129,7 +130,16 @@ class NotesGenerator:
         sources: Sequence[Dict[str, Any]],
         *,
         language: Optional[str] = None,
+        options: ArtifactOptions,
     ) -> str:
+        # Notes take a focus only: their length is set by the material, section by
+        # section, and they hold no question to count or to pitch.
+        focus = corpus.focus_instruction(
+            options.focus,
+            kind="set of notes",
+            unit_plural="entries",
+            absent_in='"context"',
+        )
         optional_sections = corpus.empty_section_instruction(
             'Every section is optional: leave "context" empty when the sources do '
             'not set the scene, "objectives" empty when the sources do not teach '
@@ -168,7 +178,7 @@ Rules:
 {corpus.transcript_markers_instruction()}
 {corpus.dated_facts_instruction()}
 {corpus.subject_matter_instruction(verbatim_exception=True)}
-{corpus.title_instruction("set of notes")}
+{corpus.title_instruction("set of notes")}{focus}
 
 Return JSON with this exact schema:
 {{

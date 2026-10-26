@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
 
+from media_summarizer.core.models.artifact_options import ArtifactOptions
 from media_summarizer.core.services import llm_corpus as corpus
 
 # At most four bullets reach the card. The cap is enforced by truncating the *list*,
@@ -98,7 +99,10 @@ class ReviewBlurbGenerator:
         sources: Sequence[Dict[str, Any]],
         *,
         language: Optional[str] = None,
+        options: ArtifactOptions,
     ) -> str:
+        # An internal type takes no option: nobody requests it, so nobody sets one.
+        del options
         instructions = f"""You produce the triage card of everything above, for a reader
 deciding in about three seconds whether to discard this, dig into it, or file it.
 

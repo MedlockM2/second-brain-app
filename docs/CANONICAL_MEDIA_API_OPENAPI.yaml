@@ -269,16 +269,15 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
-  /api/media/{media_item_id}/artifacts:
+  /api/artifacts:
     post:
-      operationId: createMediaArtifact
+      operationId: createArtifact
       tags: [artifacts]
-      parameters:
-        - name: media_item_id
-          in: path
-          required: true
-          schema:
-            type: string
+      description: >
+        Request a generation over a media or a folder. The per-media POST route is
+        gone (task-270). `parameters` carries the generation options (task-531);
+        an option at its default is dropped before the artifact id is computed, so
+        a request spelling out every default is the request without options.
       requestBody:
         required: true
         content:
@@ -287,25 +286,50 @@ paths:
               $ref: '#/components/schemas/ArtifactCreateRequest'
       responses:
         '200':
-          description: Artifact request accepted or deduplicated
+          description: >
+            An existing entry answers the request (generation_outcome reused or
+            collapsed); nothing was queued.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ArtifactCreateResponse'
+        '202':
+          description: A generation was queued (generation_outcome created or retried).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactCreateResponse'
+        '400':
+          description: Unknown or disabled artifact type, or a scope other than media or folder.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalErrorResponse'
         '401':
           $ref: '#/components/responses/SessionExpired'
-        '402':
-          $ref: '#/components/responses/InsufficientMinutes'
         '403':
-          $ref: '#/components/responses/NotAuthorized'
+          description: out_of_minutes (folder scope only).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalErrorResponse'
         '404':
-          $ref: '#/components/responses/MediaNotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '429':
-          $ref: '#/components/responses/RateLimited'
+          description: Media item or folder not found for this account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalErrorResponse'
+        '422':
+          $ref: '#/components/responses/ArtifactRequestRefused'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          description: Artifact generation is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanonicalErrorResponse'
+  /api/media/{media_item_id}/artifacts:
     get:
       operationId: listMediaArtifacts
       tags: [artifacts]
@@ -585,24 +609,123 @@ components:
             The stored title, normalized. Absent when the patch did not touch it.
     ArtifactCreateRequest:
       type: object
-      required: [artifact_type]
+      required: [scope, scope_id, artifact_type]
       properties:
+        scope:
+          type: string
+          enum: [media, folder]
+        scope_id:
+          type: string
+          description: Media item id, or folder id.
         artifact_type:
           type: string
           enum: [summary_short, quiz, notes, flashcards]
         parameters:
-          type: object
-          additionalProperties: true
-        idempotency_key:
-          type: string
+          $ref: '#/components/schemas/ArtifactGenerationOptions'
+    ArtifactGenerationOptions:
+      type: object
+      additionalProperties: false
+      description: >
+        The generation options (task-531). Each applies to some types only, and an
+        option sent for a type it does not apply to is refused with 422
+        invalid_artifact_parameters (reason not_applicable), like an unknown key
+        (unknown_parameter) or a value outside its list (invalid_value). A null
+        reads as an absent key. An option at its default, and a focus that is empty
+        once cleaned, are dropped before the artifact id is computed, so a request
+        at the defaults is the request without options. `language` is set by the
+        service from the reading language and refused from a client (not_accepted)
+        until task-533; `source_ids` likewise until task-532.
+      properties:
+        length:
+          type: [string, 'null']
+          enum: [short, medium, long, null]
+          default: short
+          description: >
+            summary_short only. Same schema at every length: short is the digest
+            format, medium adds a sentence of explanation to each point, long
+            covers the whole material with every source in proportion.
+        count:
+          type: [string, 'null']
+          enum: [fewer, standard, more, null]
+          default: standard
+          description: >
+            quiz and flashcards only. standard lets the material decide; fewer keeps
+            the essentials (about half), more reaches the secondary points (about
+            double), never by inventing.
+        difficulty:
+          type: [string, 'null']
+          enum: [easy, medium, hard, null]
+          default: medium
+          description: >
+            quiz and flashcards only. easy is direct recall of stated facts, hard
+            asks to apply, compare or explain, with plausible quiz distractors.
+        focus:
+          type: [string, 'null']
+          maxLength: 300
+          description: >
+            Every type. The topic the reader wants favoured, free text of at most
+            300 characters once trimmed and its whitespace runs collapsed to one
+            space. Passed to the model as the reader's quoted words, never as an
+            instruction; when the sources do not treat the topic, the artifact says
+            so instead of inventing. No default: absent means no focus.
     ArtifactCreateResponse:
       type: object
-      required: [artifact, reused_existing]
+      required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, generation_outcome]
       properties:
-        artifact:
-          $ref: '#/components/schemas/MediaArtifactContract'
-        reused_existing:
-          type: boolean
+        artifact_id: { type: string }
+        artifact_type:
+          type: string
+          enum: [summary_short, quiz, notes, flashcards]
+        status:
+          type: string
+          enum: [queued, generating, ready, failed]
+        title: { type: [string, 'null'] }
+        source_count: { type: integer, minimum: 0 }
+        created_at: { type: string }
+        completed_at: { type: [string, 'null'] }
+        error_code: { type: [string, 'null'] }
+        scope:
+          type: string
+          enum: [media, folder]
+        scope_id: { type: string }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [media_item_id, excluded]
+            properties:
+              media_item_id: { type: string }
+              title: { type: [string, 'null'] }
+              language: { type: [string, 'null'] }
+              excluded: { type: boolean }
+              excluded_reason: { type: [string, 'null'] }
+        s3_key: { type: [string, 'null'] }
+        generation_outcome:
+          type: string
+          enum: [created, retried, reused, collapsed]
+    ArtifactRefusal:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: object
+          required: [error_code, message]
+          properties:
+            error_code:
+              type: string
+              enum: [invalid_artifact_parameters, scope_empty, scope_too_large]
+            message: { type: string }
+            parameter:
+              type: string
+              description: invalid_artifact_parameters only, the offending key.
+            reason:
+              type: string
+              enum: [unknown_parameter, not_accepted, not_applicable, invalid_value]
+              description: invalid_artifact_parameters only, why the key was refused.
+            source_count: { type: integer, description: scope_too_large only. }
+            max_sources: { type: integer, description: scope_too_large only. }
+            estimated_tokens: { type: integer, description: scope_too_large only. }
+            max_tokens: { type: integer, description: scope_too_large only. }
     ArtifactListResponse:
       type: object
       required: [media_item_id, items, count]
@@ -822,6 +945,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/CanonicalErrorResponse'
+    ArtifactRequestRefused:
+      description: >
+        Typed refusal of a generation request: invalid_artifact_parameters (an
+        option the type cannot take), scope_empty, or scope_too_large. Nothing is
+        written and nothing is debited.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ArtifactRefusal'
     PayloadTooLarge:
       description: >
         Declared or stored size above the ceiling for that target. Pronounced when

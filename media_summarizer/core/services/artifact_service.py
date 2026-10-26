@@ -66,7 +66,7 @@ from pydantic import ValidationError
 from media_summarizer.core.media_ingestion.source_description import (
     job_source_description,
 )
-from media_summarizer.core.models import ProcessingJob
+from media_summarizer.core.models import ProcessingJob, artifact_options
 from media_summarizer.core.models.media_artifact import (
     DEFAULT_ARTIFACT_TYPES_ALLOWED,
     ArtifactLlmUsage,
@@ -170,6 +170,47 @@ INTERNAL_ARTIFACT_TYPES = {
 # is refused before the quota is even looked at.
 GENERATABLE_ARTIFACT_TYPES = REQUESTABLE_ARTIFACT_TYPES | INTERNAL_ARTIFACT_TYPES
 
+# Which customisation option each requestable type accepts (task-531). A type absent
+# from this table — an internal one — accepts none. An option sent for a type it
+# does not apply to is refused rather than ignored: ignoring it would still hash it,
+# so `count` on a set of notes would buy a second, identical set of notes.
+OPTIONS_BY_ARTIFACT_TYPE: Dict[MediaArtifactType, frozenset[str]] = {
+    MediaArtifactType.SUMMARY_SHORT: frozenset({artifact_options.LENGTH, artifact_options.FOCUS}),
+    MediaArtifactType.NOTES: frozenset({artifact_options.FOCUS}),
+    MediaArtifactType.QUIZ: frozenset(
+        {artifact_options.COUNT, artifact_options.DIFFICULTY, artifact_options.FOCUS}
+    ),
+    MediaArtifactType.FLASHCARDS: frozenset(
+        {artifact_options.COUNT, artifact_options.DIFFICULTY, artifact_options.FOCUS}
+    ),
+}
+
+# The enumerated options: the values each one takes, and the default that is
+# dropped before the hash.
+_ENUMERATED_OPTIONS: Dict[str, Tuple[type[Enum], Enum]] = {
+    artifact_options.LENGTH: (
+        artifact_options.SummaryLength,
+        artifact_options.DEFAULT_LENGTH,
+    ),
+    artifact_options.COUNT: (artifact_options.ItemCount, artifact_options.DEFAULT_COUNT),
+    artifact_options.DIFFICULTY: (
+        artifact_options.Difficulty,
+        artifact_options.DEFAULT_DIFFICULTY,
+    ),
+}
+
+# Keys of `parameters` the API knows but does not take from a client. `language` is
+# set by this service from the reading language (task-398), and a client value would
+# silently replace it; `source_ids` restricts a folder to some of its sources, which
+# resolution does not do yet. TASK-533 and TASK-532 lift these two, one each.
+_PARAMETERS_NOT_ACCEPTED = frozenset({"language", "source_ids"})
+
+#: ``reason`` of an ``invalid_artifact_parameters`` refusal.
+PARAMETER_REASON_UNKNOWN = "unknown_parameter"
+PARAMETER_REASON_NOT_ACCEPTED = "not_accepted"
+PARAMETER_REASON_NOT_APPLICABLE = "not_applicable"
+PARAMETER_REASON_INVALID_VALUE = "invalid_value"
+
 
 # Why a source is in the snapshot without having been read. Recorded rather than
 # dropped: the snapshot is what makes an artifact interpretable, and "13 of 15
@@ -266,6 +307,20 @@ class ArtifactScopeEmptyError(ArtifactServiceError):
     """The scope holds no usable source at all."""
 
 
+class ArtifactParametersInvalidError(ArtifactServiceError):
+    """A request's ``parameters`` names an option it cannot carry.
+
+    Raised before anything is read or written, so a refused request leaves no entry
+    and debits nothing. ``parameter`` is the offending key and ``reason`` one of the
+    ``PARAMETER_REASON_*`` tokens, which is what a client branches on.
+    """
+
+    def __init__(self, message: str, *, parameter: str, reason: str) -> None:
+        super().__init__(message)
+        self.parameter = parameter
+        self.reason = reason
+
+
 class ArtifactScopeTooLargeError(ArtifactServiceError):
     """The scope exceeds a ceiling. Carries the four numbers the UI displays."""
 
@@ -332,6 +387,89 @@ def normalize_artifact_parameters(value: Optional[Dict[str, Any]]) -> Dict[str, 
     return _normalize(value or {})
 
 
+def resolve_request_options(
+    *,
+    artifact_type: Any,
+    parameters: Optional[Dict[str, Any]],
+) -> Dict[str, str]:
+    """A client's ``parameters``, validated and reduced to what changes the artifact.
+
+    The options of task-531 (``length``, ``count``, ``difficulty``, ``focus``) are
+    checked against the type asked for: an unknown key, a key the client may not set,
+    an option the type does not take, or a value outside its list is refused with
+    :class:`ArtifactParametersInvalidError`. A JSON ``null`` reads as an absent key.
+
+    What comes back holds **no default**, and that is the half of this function the
+    ids rely on. An option at its default value, like a ``focus`` that is empty once
+    its whitespace is cleaned, is dropped, so a request spelling out every default
+    hashes to the same ``artifact_id`` and the same shared id as a request with no
+    options at all — every entry generated before the options existed keeps
+    answering, and so does the cross-account reuse of task-394.
+
+    An unknown type is the 400 of :class:`ArtifactTypeNotEnabledError`, raised here
+    first so that a request naming no real type is not judged on its options.
+    """
+    resolved_type = _artifact_type(artifact_type)
+    accepted = OPTIONS_BY_ARTIFACT_TYPE.get(resolved_type, frozenset())
+    options: Dict[str, str] = {}
+    for key, value in (parameters or {}).items():
+        if key in _PARAMETERS_NOT_ACCEPTED:
+            raise ArtifactParametersInvalidError(
+                f"'{key}' cannot be set by the client.",
+                parameter=key,
+                reason=PARAMETER_REASON_NOT_ACCEPTED,
+            )
+        if key not in _ENUMERATED_OPTIONS and key != artifact_options.FOCUS:
+            raise ArtifactParametersInvalidError(
+                f"'{key}' is not a generation option.",
+                parameter=key,
+                reason=PARAMETER_REASON_UNKNOWN,
+            )
+        if value is None:
+            continue
+        if key not in accepted:
+            raise ArtifactParametersInvalidError(
+                f"'{key}' does not apply to {resolved_type.value}.",
+                parameter=key,
+                reason=PARAMETER_REASON_NOT_APPLICABLE,
+            )
+        if key == artifact_options.FOCUS:
+            focus = _resolve_focus(value)
+            if focus:
+                options[key] = focus
+            continue
+        enum_type, default = _ENUMERATED_OPTIONS[key]
+        allowed = [member.value for member in enum_type]
+        if not isinstance(value, str) or value not in allowed:
+            raise ArtifactParametersInvalidError(
+                f"'{key}' must be one of {', '.join(allowed)}.",
+                parameter=key,
+                reason=PARAMETER_REASON_INVALID_VALUE,
+            )
+        if value != default.value:
+            options[key] = value
+    return options
+
+
+def _resolve_focus(value: Any) -> str:
+    """The cleaned ``focus``, empty when there is nothing left to favour."""
+    if not isinstance(value, str):
+        raise ArtifactParametersInvalidError(
+            f"'{artifact_options.FOCUS}' must be a string.",
+            parameter=artifact_options.FOCUS,
+            reason=PARAMETER_REASON_INVALID_VALUE,
+        )
+    focus = artifact_options.clean_focus(value)
+    if len(focus) > artifact_options.MAX_FOCUS_CHARS:
+        raise ArtifactParametersInvalidError(
+            f"'{artifact_options.FOCUS}' is {len(focus)} characters long; the limit "
+            f"is {artifact_options.MAX_FOCUS_CHARS}.",
+            parameter=artifact_options.FOCUS,
+            reason=PARAMETER_REASON_INVALID_VALUE,
+        )
+    return focus
+
+
 def _stable_json(value: Dict[str, Any]) -> str:
     return json.dumps(
         value,
@@ -356,14 +494,19 @@ def get_generator_version(artifact_type: MediaArtifactType) -> str:
     override was free text, so it could name a model the worker no longer calls,
     and a row would then claim a generation it is not.
     """
+    # The task-531 bumps (summary v5, quiz v5, notes v6, flashcards v5) mark the
+    # templates that read the generation options: `length` on the summary, `count`
+    # and `difficulty` on the quiz and the cards, `focus` on all four. A request at
+    # the defaults is sent the same prompt as before, line for line: the bump says
+    # that the template has options, not that the default text moved.
     prompt_versions = {
-        MediaArtifactType.SUMMARY_SHORT: "prompt-v4",
-        MediaArtifactType.QUIZ: "prompt-v4",
+        MediaArtifactType.SUMMARY_SHORT: "prompt-v5",
+        MediaArtifactType.QUIZ: "prompt-v5",
         # v5: context, notable quotes with their source, and the source balance
         # rule on concepts and key points. Existing notes are not regenerated; the
         # new version only tells a new generation apart from an old one.
-        MediaArtifactType.NOTES: "prompt-v5",
-        MediaArtifactType.FLASHCARDS: "prompt-v4",
+        MediaArtifactType.NOTES: "prompt-v6",
+        MediaArtifactType.FLASHCARDS: "prompt-v5",
         # v3: v1's prose paragraph was unreadable on the triage card, and v2's
         # structured card asked for bullets of up to 110 characters when the card
         # can show ~65 -- half of them came back clipped mid-word. v3 states the
@@ -443,7 +586,12 @@ def build_artifact_id(
       thing the owner's decision rules out. The corollary is deliberate: bumping a
       prompt does **not** invalidate anything already generated.
 
-    ``parameters`` carries the reading language, so two reading languages are two
+    ``parameters`` carries the generation options a request set away from their
+    defaults (task-531) — another length, another count, a focus — so a different
+    option set is a different entry, and a request at the defaults is the entry a
+    request with no options computes.
+
+    ``parameters`` also carries the reading language, so two reading languages are two
     different ids and therefore two legitimate entries. What fills the second one is
     *not* a second generation, though: it is the first one translated
     (``artifact_translation_service``, task-395). The id recipe is what makes that
@@ -1513,9 +1661,13 @@ async def plan_artifact_generation(
     content_scope_id: Optional[str] = None,
     artifact_type: Any,
     resolution: ScopeResolution,
-    parameters: Optional[Dict[str, Any]] = None,
+    options: Optional[Dict[str, str]] = None,
 ) -> ArtifactGenerationPlan:
     """Decide whether anything has to be generated, and what has to be written.
+
+    ``options`` is what :func:`resolve_request_options` returned — validated, with no
+    default left in it — and the output language is added to it here. That pair is
+    the entry's ``parameters``, so it is what both ids hash.
 
     Two lookups, in this order, and both without any time bound — the ids are
     derived from the sources alone, so what they find was generated over exactly
@@ -1573,7 +1725,7 @@ async def plan_artifact_generation(
             pending_count=len(resolution.pending),
         )
 
-    merged_parameters = dict(parameters or {})
+    merged_parameters: Dict[str, Any] = dict(options or {})
     # The reading language is the *only* carrier of the output language: no source
     # text is translated for it, the prompt asks for it (task-398). It is part of
     # the hash, so reading in another language is another artifact.

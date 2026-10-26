@@ -82,16 +82,27 @@ Note pour le propriétaire : vérifier après déploiement, sur `-dev`, qu'un r�
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La requête de création valide length, count, difficulty et focus selon le tableau du contrat : une clé inconnue, une valeur hors liste ou une option non applicable au type répond 422 typée, sans entrée créée ni débit
-- [ ] #2 Les valeurs par défaut et un focus vide sont retirés des paramètres avant le hachage : artifact_id et build_shared_artifact_id d'une requête aux valeurs par défaut sont identiques à ceux d'une requête sans options
-- [ ] #3 Le générateur summary_short applique length (long couvre tout le contenu, avec équilibre entre sources) sans changer son schéma ; quiz et flashcards appliquent count et difficulty ; les quatre générateurs appliquent focus, placé après le corpus et délimité comme une demande de l'utilisateur
-- [ ] #4 language et source_ids envoyés par le client sont rejetés (levés par TASK-533 et TASK-532)
-- [ ] #5 Le contrat d'API (markdown et OpenAPI) documente les clés, les valeurs, les défauts et la 422
-- [ ] #6 ruff et mypy passent sans erreur sur les fichiers modifiés
+- [x] #1 La requête de création valide length, count, difficulty et focus selon le tableau du contrat : une clé inconnue, une valeur hors liste ou une option non applicable au type répond 422 typée, sans entrée créée ni débit
+- [x] #2 Les valeurs par défaut et un focus vide sont retirés des paramètres avant le hachage : artifact_id et build_shared_artifact_id d'une requête aux valeurs par défaut sont identiques à ceux d'une requête sans options
+- [x] #3 Le générateur summary_short applique length (long couvre tout le contenu, avec équilibre entre sources) sans changer son schéma ; quiz et flashcards appliquent count et difficulty ; les quatre générateurs appliquent focus, placé après le corpus et délimité comme une demande de l'utilisateur
+- [x] #4 language et source_ids envoyés par le client sont rejetés (levés par TASK-533 et TASK-532)
+- [x] #5 Le contrat d'API (markdown et OpenAPI) documente les clés, les valeurs, les défauts et la 422
+- [x] #6 ruff et mypy passent sans erreur sur les fichiers modifiés
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Tâches liées : sous-ensemble de sources en TASK-532, langue explicite en TASK-533. Les refus de `source_ids` et de `language` posés ici sont levés par ces deux tâches.
+
+### Réalisé (2026-10-26)
+
+- **Vocabulaire** : `media_summarizer/core/models/artifact_options.py` (enums `SummaryLength`, `ItemCount`, `Difficulty`, défauts, `MAX_FOCUS_CHARS = 300`, `clean_focus`, lecture `ArtifactOptions.from_parameters` côté worker).
+- **Règle de requête** : `artifact_service.resolve_request_options` valide `parameters` contre `OPTIONS_BY_ARTIFACT_TYPE` et renvoie les options sans aucun défaut (une valeur par défaut, un `focus` vide après nettoyage et un `null` sont retirés). `plan_artifact_generation(options=…)` y ajoute `language` : un `{}` donne exactement le matériau haché avant la tâche (`{"language": …}`), donc les fiches existantes, `artifact_id` et l'id partagé (task-394) ne bougent pas.
+- **422 typée** : `POST /api/artifacts` appelle `resolve_request_options` en premier, avant la vérification de propriété, la résolution des sources, le quota et toute écriture. Corps : `error_code: invalid_artifact_parameters`, `parameter`, `reason` ∈ `unknown_parameter`, `not_accepted` (`language`, `source_ids`), `not_applicable`, `invalid_value`. Un type inconnu garde son 400.
+- **Générateurs** : fragments partagés dans `llm_corpus.py` (`count_instruction`, `difficulty_instruction`, `focus_instruction`, `extra_rule`, variante `exhaustive=False` de `source_balance_instruction` pour `fewer`). `summary_short` lit `length` (`long` = intro et profondeur de l'ancien résumé détaillé + `source_balance_instruction`, même schéma) ; quiz et cartes lisent `count` et `difficulty` (le quiz `hard` change aussi la règle des distracteurs) ; les quatre lisent `focus`, placé après les règles, donc après le corpus, entre deux marqueurs, présenté comme les mots du lecteur. Sujet absent : dit dans la 1re entrée de `key_points` (résumé), `context` (notes), `title` (quiz, cartes). `review_blurb` reçoit les options et les ignore. Versions de prompt : summary v5, quiz v5, flashcards v5, notes v6.
+- **Prompts par défaut inchangés** : vérifié en comparant, sur un corpus fixe, les prompts des cinq générateurs produits par `HEAD` et par la branche sans options : identiques octet pour octet.
+- **Contrat** : `docs/CANONICAL_MEDIA_API_CONTRACT.md` §3 (tableau des options, règle des défauts, effet de chaque option, ligne et corps de la 422) ; `docs/CANONICAL_MEDIA_API_OPENAPI.yaml` : le POST documenté sur la route par média supprimée (task-270) est déplacé sur `POST /api/artifacts`, avec `ArtifactCreateRequest` à jour, `ArtifactGenerationOptions`, `ArtifactCreateResponse` réel et la réponse 422 `ArtifactRequestRefused`.
+- **Traduction (task-395)** : `artifact_translation_service` traduit toujours l'entrée `ready` la plus ancienne d'un type, options comprises (elles sont recopiées). Son chemin rapide ne cherche que le pointeur d'une requête aux défauts : quand l'entrée la plus ancienne porte des options, chaque ouverture coûte deux lectures avant de s'arrêter, et les autres variantes d'un même type restent dans leur langue. C'est documenté dans le code, pas corrigé ici ; TASK-533 retouche ce service.
+- Aucun test automatisé ajouté (règle du projet). Rien de déployé : la vérification manuelle sur `-dev` décrite dans la note pour le propriétaire reste à faire après le push.
 <!-- SECTION:NOTES:END -->

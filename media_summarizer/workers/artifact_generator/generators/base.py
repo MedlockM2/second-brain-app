@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Protocol, Sequence
 
+from media_summarizer.core.models.artifact_options import ArtifactOptions
+
 
 class ArtifactGenerator(Protocol):
     """Protocol that each per-kind generator must implement."""
@@ -18,12 +20,17 @@ class ArtifactGenerator(Protocol):
         sources: Sequence[Dict[str, Any]],
         *,
         language: Optional[str] = None,
+        options: ArtifactOptions,
     ) -> str:
         """Build the LLM prompt over the ordered corpus.
 
         ``sources`` is the snapshot order: one dict per source with ``title``,
         ``language`` and ``text``. A single-media scope is a one-element sequence
         — there is no separate per-media code path.
+
+        ``options`` are the request's generation options, defaults filled in
+        (task-531). A generator reads the ones its type accepts and ignores the
+        rest, which the request validation already refused anyway.
         """
         ...
 

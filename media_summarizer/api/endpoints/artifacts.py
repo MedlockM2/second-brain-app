@@ -26,6 +26,7 @@ from media_summarizer.core.services.artifact_service import (
     INTERNAL_ARTIFACT_TYPES,
     ArtifactGenerationDisabledError,
     ArtifactGenerationOutcome,
+    ArtifactParametersInvalidError,
     ArtifactScopeEmptyError,
     ArtifactScopeTooLargeError,
     ArtifactTypeNotEnabledError,
@@ -34,6 +35,7 @@ from media_summarizer.core.services.artifact_service import (
     get_media_artifact_record,
     list_scope_artifacts,
     plan_artifact_generation,
+    resolve_request_options,
     resolve_scope_sources,
 )
 from media_summarizer.utils import s3
@@ -53,6 +55,12 @@ MAX_LIST_LIMIT = 100
 CONTENT_NOT_READY_ERROR_CODE = "artifact_not_ready"
 CONTENT_FAILED_ERROR_CODE = "artifact_failed"
 
+#: A ``POST /artifacts`` whose ``parameters`` cannot be honoured (task-531). The
+#: refusal names the key in ``parameter`` and why in ``reason`` — an unknown key, a
+#: key the client may not set, an option the type does not take, a value outside
+#: its list — so a client tells its own bug apart from a contract it misread.
+INVALID_PARAMETERS_ERROR_CODE = "invalid_artifact_parameters"
+
 # One message per outcome: a log line that says "queued" for a reuse would hide
 # exactly the fact this endpoint is now built around.
 _CREATE_LOG_MESSAGES = {
@@ -71,7 +79,13 @@ class ArtifactCreateRequest(BaseModel):
         description="Type of artifact: summary_short, notes, quiz, flashcards",
     )
     parameters: Optional[dict] = Field(
-        default=None, description="Optional parameters for artifact generation"
+        default=None,
+        description=(
+            "Generation options (task-531): 'length' (summary_short: short, medium, "
+            "long), 'count' (quiz, flashcards: fewer, standard, more), 'difficulty' "
+            "(quiz, flashcards: easy, medium, hard), 'focus' (every type: free text, "
+            "300 characters at most). Anything else is refused with a 422."
+        ),
     )
 
     @field_validator("artifact_type")
@@ -271,6 +285,13 @@ async def create_artifact(
         artifact_type=artifact_type,
     )
     try:
+        # First, before any read: a request whose options cannot be honoured is
+        # refused without resolving a single transcript, and therefore without an
+        # entry or a debit.
+        options = resolve_request_options(
+            artifact_type=artifact_type, parameters=payload.parameters
+        )
+
         content_scope_id = await _assert_scope_owned(
             scope=scope, scope_id=scope_id, user_id=current_user.id
         )
@@ -290,7 +311,7 @@ async def create_artifact(
             content_scope_id=content_scope_id,
             artifact_type=artifact_type,
             resolution=resolution,
-            parameters=payload.parameters,
+            options=options,
         )
 
         # Quota comes after planning and before the write: an account already
@@ -397,6 +418,26 @@ async def create_artifact(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Artifact generation is currently disabled",
+        )
+    except ArtifactParametersInvalidError as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "artifact.create.invalid_parameters",
+            "Artifact requested with options it cannot carry",
+            artifact_type=artifact_type,
+            parameter=exc.parameter,
+            reason=exc.reason,
+            error_code=INVALID_PARAMETERS_ERROR_CODE,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "error_code": INVALID_PARAMETERS_ERROR_CODE,
+                "message": str(exc),
+                "parameter": exc.parameter,
+                "reason": exc.reason,
+            },
         )
     except ArtifactScopeEmptyError as exc:
         raise HTTPException(

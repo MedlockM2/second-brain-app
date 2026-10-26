@@ -18,6 +18,11 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
+from media_summarizer.core.models.artifact_options import (
+    ArtifactOptions,
+    Difficulty,
+    ItemCount,
+)
 from media_summarizer.core.services import llm_corpus as corpus
 
 # One question is a valid quiz: the material decides how many questions there
@@ -28,6 +33,20 @@ from media_summarizer.core.services import llm_corpus as corpus
 # able to cover every point a dense source teaches instead of being truncated.
 MIN_QUESTIONS = 1
 LABELS = ("A", "B", "C", "D")
+
+# The calibre of the distractors and what a question tests, at the default level.
+# A `hard` request replaces both (task-531); an `easy` one only the second, since
+# a distractor that is plausibly wrong is what makes even a recall question a test.
+DEFAULT_DISTRACTOR_RULE = (
+    "- Make incorrect options plausible but clearly wrong to someone who understood the content."
+)
+HARD_DISTRACTOR_RULE = (
+    "- Make every incorrect option a distractor that tempts a reader who only half "
+    "understood the content: a common misconception, a near-miss value, a step out "
+    "of order, or a notion the sources set apart from the right one. Each one must "
+    "still be wrong for a reason the sources make clear."
+)
+DEFAULT_LEVEL_RULE = "- Questions should test comprehension of key concepts, not trivial details."
 
 
 class QuizValidationError(Exception):
@@ -108,14 +127,30 @@ class QuizGenerator:
         sources: Sequence[Dict[str, Any]],
         *,
         language: Optional[str] = None,
+        options: ArtifactOptions,
     ) -> str:
+        level_rule = (
+            corpus.difficulty_instruction(options.difficulty, "questions")
+            or DEFAULT_LEVEL_RULE
+        )
+        distractor_rule = (
+            HARD_DISTRACTOR_RULE
+            if options.difficulty is Difficulty.HARD
+            else DEFAULT_DISTRACTOR_RULE
+        )
+        focus = corpus.focus_instruction(
+            options.focus,
+            kind="quiz",
+            unit_plural="questions",
+            absent_in='"title"',
+        )
         instructions = f"""You produce a multiple-choice quiz from everything above, for knowledge testing.
 
 Rules:
 - {corpus.language_instruction(language)}
 - Output STRICT JSON only. No markdown. No commentary. No code fences.
-{corpus.coverage_instruction("question", "questions", fields='"questions"')}
-{corpus.source_balance_instruction("question", "questions")}
+{corpus.count_instruction("question", "questions", fields='"questions"', count=options.count)}
+{corpus.source_balance_instruction("question", "questions", exhaustive=options.count is not ItemCount.FEWER)}
 - "options" is an object holding exactly the keys {", ".join(LABELS)}, each mapping to
   that option's text. Never omit one, never add another, never nest an object or an
   array under a key.
@@ -125,10 +160,10 @@ Rules:
 - All four options must be of comparable length and specificity — within roughly
   ten words of each other. A reader who has not read the sources must not be able
   to spot the correct option by its length, its extra detail or its hedging.
-- Make incorrect options plausible but clearly wrong to someone who understood the content.
+{distractor_rule}
 - "correct_answer" must be the label of the correct option. Vary which label holds it
   across questions — do not systematically put the correct option first.
-- Questions should test comprehension of key concepts, not trivial details.
+{level_rule}
 - Do NOT generate questions about ads/sponsors unless central to the content.
 - Include a brief explanation for why the correct answer is right.
 - A quiz of one question is a valid quiz. The quiz must hold at least one
@@ -139,7 +174,7 @@ Rules:
 {corpus.transcript_markers_instruction()}
 {corpus.dated_facts_instruction(review_item="quiz question")}
 {corpus.subject_matter_instruction()}
-{corpus.title_instruction("quiz")}
+{corpus.title_instruction("quiz")}{focus}
 
 Return JSON with this exact schema:
 {{

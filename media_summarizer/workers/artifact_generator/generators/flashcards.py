@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, ValidationError, field_validator
 
+from media_summarizer.core.models.artifact_options import ArtifactOptions, ItemCount
 from media_summarizer.core.services import llm_corpus as corpus
 
 # One card is a valid deck: the material decides how many cards there are, and a
@@ -62,15 +63,24 @@ class FlashcardsGenerator:
         sources: Sequence[Dict[str, Any]],
         *,
         language: Optional[str] = None,
+        options: ArtifactOptions,
     ) -> str:
+        # The default level adds no rule: it is what the deck has always been.
+        level_rule = corpus.difficulty_instruction(options.difficulty, "cards")
+        focus = corpus.focus_instruction(
+            options.focus,
+            kind="card deck",
+            unit_plural="cards",
+            absent_in='"title"',
+        )
         instructions = f"""You produce a set of Q&A flashcards from everything above, for spaced repetition learning.
 
 Rules:
 - {corpus.language_instruction(language)}
 - Output STRICT JSON only. No markdown. No commentary. No code fences.
-{corpus.coverage_instruction("card", "cards", fields='"cards"')}
-{corpus.source_balance_instruction("card", "cards")}
-- Follow the minimum information principle: one concept per card.
+{corpus.count_instruction("card", "cards", fields='"cards"', count=options.count)}
+{corpus.source_balance_instruction("card", "cards", exhaustive=options.count is not ItemCount.FEWER)}
+- Follow the minimum information principle: one concept per card.{corpus.extra_rule(level_rule)}
 - Do NOT generate trivial cards (e.g. "What is the title of this episode?").
 - Do NOT generate ambiguous cards: each question must have a single, verifiable answer.
 - Keep questions clear and concise.
@@ -84,7 +94,7 @@ Rules:
 {corpus.transcript_markers_instruction()}
 {corpus.dated_facts_instruction(review_item="flashcard")}
 {corpus.subject_matter_instruction()}
-{corpus.title_instruction("card deck")}
+{corpus.title_instruction("card deck")}{focus}
 
 Return JSON with this exact schema:
 {{

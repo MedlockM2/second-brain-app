@@ -58,7 +58,7 @@ Operational behavior now implemented in runtime:
 - one set of routes under `/api/artifacts` serves a single media (`scope="media"`) and a folder (`scope="folder"`); the per-media routes are gone, with no alias
 - a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=`
 - every generation writes a **new immutable entry** carrying a snapshot of the sources it read; nothing is overwritten, nothing is invalidated, and adding or removing a media from a folder changes no existing entry
-- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters`; a folder regenerates only when its contents changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
+- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters` — the reading language plus the generation options set away from their defaults (§3, task-531); a folder regenerates only when its contents changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
 - **a media-scoped generation is paid for once per content, not once per account** (task-394). Under each account's entry sits a *shared generation* keyed on the content alone — the same hash minus the user — so the second account to ask for the same type in the same language over the same content is served by the generation the first one paid for, with no provider call. It applies to every media-scope type, `review_blurb` included, and to folder scope not at all. Two things it deliberately does not change: **the listing** (an account still sees only the entries it asked for; a shared generation is indexed under a scope key no account can produce and is not addressable through the API), and **the quota** (an account is debited whether or not a generation ran, because it gains an artifact either way — the avoided provider call is the operator's saving). Artifacts over a **user-uploaded file** are excluded, since the content identity of an upload is itself account-scoped
 - ownership is checked by comparing the entry's `user_id`, not by resolving a media item — a folder artifact has none
 - a media-scoped request still accepts a user-owned `media_item_id`, but storage and
@@ -293,12 +293,52 @@ Request:
 {
   "scope": "folder",
   "scope_id": "c4ef2e55-8449-4a71-be46-bcf1a6eeca3e",
-  "artifact_type": "notes",
+  "artifact_type": "quiz",
   "parameters": {
-    "language": "fr"
+    "count": "fewer",
+    "difficulty": "hard",
+    "focus": "the pop-up and how to time it"
   }
 }
 ```
+
+`parameters` is optional and carries the **generation options** of the
+"Personnaliser" screen (task-531). Each applies to some types only:
+
+| Key | Values | Types | Default |
+|---|---|---|---|
+| `length` | `short`, `medium`, `long` | `summary_short` | `short` |
+| `count` | `fewer`, `standard`, `more` | `quiz`, `flashcards` | `standard` |
+| `difficulty` | `easy`, `medium`, `hard` | `quiz`, `flashcards` | `medium` |
+| `focus` | free text, at most 300 characters once trimmed and its whitespace runs (newlines included) collapsed to one space | `summary_short`, `notes`, `quiz`, `flashcards` | none |
+
+- **Defaults are not stored.** An option at its default value, a `focus` that is
+  empty once cleaned, and a JSON `null` are dropped before the `artifact_id` is
+  computed. A request spelling out every default is therefore *the same request*
+  as one with no `parameters`: same `artifact_id`, same shared generation
+  (task-394), and every artifact generated before the options existed still
+  answers it. Any other option set is a different artifact, generated and debited
+  like any first request.
+- **What each option does.** `length` keeps the summary's schema (`title`,
+  `key_points`, `takeaway`) and changes its depth: `short` is the digest format,
+  `medium` adds one sentence of explanation to each point, `long` covers the whole
+  material with every source in proportion, at the depth of the former detailed
+  summary. `count` moves the number of questions or cards against what the material
+  carries: `standard` lets the material decide, `fewer` keeps the essentials (about
+  half), `more` reaches the secondary points (about double) — never by inventing.
+  `difficulty`: `easy` is direct recall of stated facts, `medium` the usual level,
+  `hard` asks to apply, compare or explain, with plausible quiz distractors. `focus`
+  is the topic the reader wants favoured: it is passed to the model as the reader's
+  quoted words, never as an instruction, and when the sources do not treat the
+  topic the artifact says so instead of inventing (in the first key point of a
+  summary, the `context` of notes, the `title` of a quiz or a deck).
+- **`language` is not a client option.** The service sets it from the reading
+  language (see below); sent by the client, it is refused (`not_accepted`) until
+  task-533. `source_ids` is refused the same way until task-532.
+- Anything else — an unknown key, a value outside its list, an option on a type it
+  does not apply to (`count` on `notes`, `length` on `quiz`) — is the typed `422`
+  `invalid_artifact_parameters` below. It is checked before anything is read: no
+  entry is written and nothing is debited.
 
 `202` when a generation was queued, `200` when the response is an entry that
 already existed. Response is the shape of `GET /api/artifacts/{artifact_id}` plus
@@ -357,11 +397,35 @@ Typed refusals:
 
 | Situation | Status | `error_code` | Retryable |
 |---|---|---|---|
+| `parameters` holds a key or a value the type cannot take | `422` | `invalid_artifact_parameters` | no |
 | No source at all in the scope, or every source definitively unusable | `422` | `scope_empty` | no |
 | More than 25 sources, or more than 120 000 estimated tokens | `422` | `scope_too_large` | no |
 | Out of minutes (folder scope only) | `403` | `out_of_minutes` | next period, or on upgrade |
 | Artifact type disabled | `400` | — | no |
 | Generation disabled globally | `503` | — | no |
+
+`invalid_artifact_parameters` names the offending key in `parameter` and why in
+`reason`, so a client tells a bug of its own from a contract it misread:
+
+```json
+{
+  "detail": {
+    "error_code": "invalid_artifact_parameters",
+    "message": "'count' does not apply to notes.",
+    "parameter": "count",
+    "reason": "not_applicable"
+  }
+}
+```
+
+| `reason` | Meaning |
+|---|---|
+| `unknown_parameter` | The key is not a generation option |
+| `not_accepted` | A key the API knows but does not take from a client: `language` (until task-533), `source_ids` (until task-532) |
+| `not_applicable` | The option exists but not for this `artifact_type` |
+| `invalid_value` | A value outside the option's list, a `focus` that is not a string, or a `focus` longer than 300 characters once cleaned |
+
+An unknown `artifact_type` keeps its `400`, whatever its `parameters`.
 
 `scope_too_large` carries the four numbers the client displays, so it computes
 nothing: `source_count`, `max_sources`, `estimated_tokens`, `max_tokens`.
@@ -1123,7 +1187,7 @@ HTTP mapping rules:
 - `media_key` must be deterministic from canonical URL normalization.
 - Processing is idempotent for equivalent normalized URLs; saving is intentionally
   non-idempotent and creates a fresh library row on every successful request.
-- Artifact creation writes an entry **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet, or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
+- Artifact creation writes an entry **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet (`parameters` being the reading language plus the generation options away from their defaults, so a request spelling out every default is the request without options), or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
 - A **provider call** is made only when `(scope, media_key, artifact_type, parameters, sorted source ids)` — the same material without the user — has no live generation yet. So an account can gain an entry (and be debited for it) without any model being called, and one generation of one content is what every account's entry over that content reads. Artifacts over a user-uploaded file are outside this rule: their content identity is account-scoped, so they are never served to another account.
 - Timestamps use ISO-8601 UTC strings.
 - `request_id` must be returned in error payload and response header.

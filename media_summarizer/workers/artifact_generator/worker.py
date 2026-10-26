@@ -36,6 +36,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from media_summarizer.core.models.artifact_options import ArtifactOptions
 from media_summarizer.core.models.media_artifact import MediaArtifactType
 from media_summarizer.core.services import llm_client, llm_corpus
 from media_summarizer.core.services.artifact_service import (
@@ -174,7 +175,13 @@ async def process_message(message: Dict[str, Any]) -> None:
                 f"{MAX_FOLDER_CORPUS_TOKENS}"
             )
 
-        prompt = generator.build_prompt(corpus_sources, language=language)
+        # The options travel in `parameters` without their defaults (the request
+        # dropped them before hashing); reading them here fills the defaults back in.
+        prompt = generator.build_prompt(
+            corpus_sources,
+            language=language,
+            options=ArtifactOptions.from_parameters(parameters),
+        )
 
         # The configured model supports Structured Outputs (llm_config), so a
         # generator that has a schema always sends it.
