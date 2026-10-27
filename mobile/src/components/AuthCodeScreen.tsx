@@ -22,7 +22,7 @@ const RESEND_DELAY_SECONDS = 60;
 
 /**
  * The e-mail code, after sign-up (`recovery` false) and for a forgotten password
- * (`recovery` true: address, then code and new password). A verified sign-up
+ * (`recovery` true: address, then code and the new password typed twice). A verified sign-up
  * opens the session and goes to `/`, which leads to the reading language.
  */
 export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: boolean; credentials?: LoginRequest; onCancel?: () => void }) {
@@ -32,6 +32,10 @@ export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: 
   const [email, setEmail] = useState(initialEmail);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState(credentials?.password ?? "");
+  // Recovery asks for the new password twice, like sign-up.
+  const [confirmation, setConfirmation] = useState("");
+  // The mismatch is said once the person leaves the confirmation, not while they type it.
+  const [confirmationLeft, setConfirmationLeft] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "signIn">(recovery ? "email" : "code");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +43,8 @@ export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: 
   const [resendIn, setResendIn] = useState(recovery ? 0 : RESEND_DELAY_SECONDS);
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const passwordValid = meetsPasswordPolicy(password);
+  const matches = confirmation.length > 0 && confirmation === password;
 
   useEffect(() => {
     if (resendIn <= 0) return;
@@ -58,6 +64,8 @@ export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: 
 
   async function confirm(enteredCode = code) {
     if (busy || !email.trim() || (step === "code" && enteredCode.length < CODE_LENGTH) || !password) return;
+    // A new password is saved only when it meets the policy and both entries are the same.
+    if (recovery && step === "code" && !(passwordValid && matches)) return;
     setBusy(true); setError(null);
     try {
       if (step === "code") {
@@ -65,7 +73,7 @@ export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: 
           email: email.trim(), code: enteredCode, ...(recovery ? { password } : {}),
         });
         // Keep the confirmed state if opening the session needs a retry.
-        setStep("signIn"); setCode("");
+        setStep("signIn"); setCode(""); setConfirmation("");
       }
       await login({ email: email.trim(), password });
       setPassword("");
@@ -121,7 +129,7 @@ export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: 
   // The code step. The address is the one the code went to; « Edit » goes back to
   // where it was typed (the sign-up form, or the first step of recovery).
   const edit = recovery
-    ? () => { setStep("email"); setCode(""); setPassword(""); setError(null); }
+    ? () => { setStep("email"); setCode(""); setPassword(""); setConfirmation(""); setConfirmationLeft(false); setError(null); }
     : onCancel;
   const needsPassword = recovery || !credentials;
   return <AuthScreen
@@ -143,8 +151,17 @@ export function AuthCodeScreen({ recovery, credentials, onCancel }: { recovery: 
         textContentType={recovery ? "newPassword" : "password"} editable={!busy}>
         {recovery && <PasswordRules password={password} />}
       </AuthField>}
+      {recovery && <AuthField secure label={t("auth.confirmPassword")} value={confirmation}
+        onChangeText={setConfirmation} onBlur={() => setConfirmationLeft(true)}
+        autoComplete="new-password" textContentType="newPassword" editable={!busy}
+        returnKeyType="go" onSubmitEditing={() => void confirm()}
+        message={matches && passwordValid
+          ? { tone: "success", content: t("auth.passwordsMatch") }
+          : confirmationLeft && confirmation.length > 0 && !matches
+            ? { tone: "error", content: t("auth.passwordsMismatch") }
+            : undefined} />}
       {needsPassword && button(t(recovery ? "auth.savePassword" : "auth.confirmCode"),
-        !busy && code.length === CODE_LENGTH && (recovery ? meetsPasswordPolicy(password) : password.length > 0),
+        !busy && code.length === CODE_LENGTH && (recovery ? passwordValid && matches : password.length > 0),
         () => void confirm())}
       {!needsPassword && busy && <ActivityIndicator color={colors.primary} />}
     </View>
