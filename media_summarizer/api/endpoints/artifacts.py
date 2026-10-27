@@ -523,10 +523,8 @@ async def list_artifacts(
     ``queued`` or ``generating``, so the mobile polls once per scope rather than
     once per artifact type.
 
-    And, at media scope, it is the moment a media is *opened* — which is what makes
-    the artifacts of a media whose reader changed language get translated rather
-    than regenerated (task-395). Hence the reading language travels down: the
-    decision is taken against the entries this very query returns.
+    Listing an existing entry never translates or regenerates it. The media's
+    saved language and every artifact's output language survive profile changes.
     """
     resolved_scope = _parse_scope((scope or "").strip().lower())
     token = bind_log_context(
@@ -542,7 +540,6 @@ async def list_artifacts(
             scope=resolved_scope,
             scope_id=scope_id,
             content_scope_id=content_scope_id,
-            reading_language=current_user.reading_language,
             limit=limit,
             cursor=cursor,
         )

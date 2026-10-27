@@ -6,8 +6,9 @@ is translated into their reading language, in the background, and cached. The
 translation is armed at ingestion for every account that saved the media
 (``core/services/ingestion_translation_service.py``, task-414), so it is ready
 when the media is first opened; ``/raw-content``
-(``core/services/raw_content_service.py``) stays the fallback for a language
-nobody asked for at ingestion. Both go through
+(``core/services/raw_content_service.py``) recovers missing translations for the
+same language captured on each save (task-545). The search worker shares that
+resolver and never indexes foreign source text before its translation. Both go through
 :func:`reserve_and_dispatch_translation`. Artifact generation
 does *not* come through here any more — it reads the original transcript and asks
 the model for the output language (task-398) — so nothing on the generation path
@@ -24,7 +25,7 @@ The step, which runs after a transcript is available:
      in the user's reading language (no translation needed).
 
 2. Decide whether to translate: only when ``detected_language`` differs from the
-   user's ``reading_language`` (task-190) AND the target is one of the 11 V1
+   save's fixed ``reading_language`` (task-545) AND the target is one of the 11 V1
    languages validated in the task-189 benchmark.
 
 3. Translate with GPT-5-nano (task-189 owner decision) using a system prompt that
@@ -484,6 +485,7 @@ class TranslationDispatchOutcome(str, Enum):
 
 async def enqueue_translation_job(
     *,
+    media_key: str,
     transcript_s3_key: str,
     target_language: str,
     source_language_hint: Optional[str],
@@ -494,6 +496,7 @@ async def enqueue_translation_job(
     await sqs.send_message(
         queue_name=TRANSCRIPT_TRANSLATION_QUEUE,
         message_body={
+            "media_key": media_key,
             "transcript_s3_key": transcript_s3_key,
             "target_language": target_language,
             "source_language_hint": source_language_hint,
@@ -505,6 +508,7 @@ async def enqueue_translation_job(
 
 async def reserve_and_dispatch_translation(
     *,
+    media_key: str,
     transcript_s3_key: str,
     target_language: str,
     source_language_hint: Optional[str],
@@ -517,7 +521,8 @@ async def reserve_and_dispatch_translation(
 
     Two callers ask for a translation: the ingestion completion hook, which arms
     it as soon as the transcript exists, and ``/raw-content``, which remains the
-    fallback for a reader whose language nobody asked for at ingestion. Both go
+    recovery for a save whose translation is missing. The search worker uses the
+    same resolver; account preference changes never reach this gate. All go
     through the same atomic reservation on ``(transcript_s3_key, target_language)``,
     so whichever comes first enqueues and the other one reads the state — the
     proactive and the lazy trigger can never enqueue the same couple twice.
@@ -559,6 +564,7 @@ async def reserve_and_dispatch_translation(
 
     try:
         await enqueue_translation_job(
+            media_key=media_key,
             transcript_s3_key=transcript_s3_key,
             target_language=target_language,
             source_language_hint=source_language_hint,

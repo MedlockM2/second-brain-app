@@ -18,12 +18,6 @@ that flashcards and quizzes live on is still in front of the model. The 300 s
 timeout and the 180 s LLM timeout are unchanged because the number of sequential
 calls per invocation is still one.
 
-A message carrying a ``translation`` block is the same work in the small: the
-artifact already exists in another language, so one stored payload is read instead
-of N transcripts and the model rewrites a few hundred words instead of reading the
-whole corpus (task-395). Everything around it is shared on purpose — the same
-queue, the same lease, the same failure taxonomy, the same sealing call — because
-what changes is only where the input text comes from.
 """
 
 from __future__ import annotations
@@ -45,7 +39,7 @@ from media_summarizer.core.services.artifact_service import (
     complete_artifact_generation,
     fail_artifact_generation,
 )
-from media_summarizer.utils import s3, sqs
+from media_summarizer.utils import sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
     LLMFailureKind,
@@ -87,11 +81,6 @@ async def process_message(message: Dict[str, Any]) -> None:
     parameters = body.get("parameters") or {}
     language = parameters.get("language")
     prompt_cache_key = body.get("prompt_cache_key")
-    # Present when this entry is another entry's text in another language: the input
-    # is one stored artifact, so there is no corpus to download and no snapshot to
-    # carry in the message (task-395).
-    translation = body.get("translation") or None
-
     # Resolve artifact type
     try:
         artifact_type = MediaArtifactType(artifact_type_str)
@@ -124,7 +113,7 @@ async def process_message(message: Dict[str, Any]) -> None:
     )
 
     try:
-        if not artifact_id or not (sources or translation):
+        if not artifact_id or not sources:
             log_event(
                 logger,
                 logging.ERROR,
@@ -146,17 +135,6 @@ async def process_message(message: Dict[str, Any]) -> None:
                 "Artifact already terminal or leased by another worker; standing down",
                 artifact_id=artifact_id,
                 artifact_type=artifact_type.value,
-            )
-            return
-
-        if translation is not None:
-            # Same lease, same failure handling below, same sealing call — only the
-            # input text and the prompt differ.
-            await _translate_stored_artifact(
-                body=body,
-                artifact_id=artifact_id,
-                artifact_type=artifact_type,
-                translation=translation,
             )
             return
 
@@ -306,124 +284,6 @@ async def process_message(message: Dict[str, Any]) -> None:
         raise
     finally:
         reset_log_context(context_token)
-
-
-async def _translate_stored_artifact(
-    *,
-    body: Dict[str, Any],
-    artifact_id: str,
-    artifact_type: MediaArtifactType,
-    translation: Dict[str, Any],
-) -> None:
-    """Write this entry as another entry's payload in another language (task-395).
-
-    One S3 read and one model call over a text of a few hundred words, where a
-    generation reads the whole corpus. The stored envelope's ``sources`` and
-    ``source_count`` are carried over unchanged: the translation covers exactly what
-    its original covered, and claiming anything else would make the Sources tab lie.
-    """
-    from media_summarizer.workers.artifact_generator import translation as translator
-
-    source_language = translation.get("source_language")
-    target_language = translation.get("target_language")
-    source_artifact_id = translation.get("source_artifact_id")
-    bucket = translation.get("bucket")
-    key = translation.get("key")
-    if not bucket or not key or not source_language or not target_language:
-        raise ValueError("Incomplete translation block on the artifact message")
-
-    raw = await s3.download_file_to_memory(bucket=bucket, key=key)
-    source_envelope = json.loads(raw.decode("utf-8"))
-    source_content = source_envelope.get("content")
-    if not isinstance(source_content, (dict, list)):
-        raise ValueError(
-            f"Artifact {source_artifact_id} has no payload to translate"
-        )
-
-    segments = translator.collect_segments(source_content)
-    if not segments:
-        raise ValueError(
-            f"Artifact {source_artifact_id} holds no translatable text"
-        )
-
-    result = await llm_client.complete(
-        [
-            {
-                "role": "user",
-                "content": translator.build_prompt(
-                    segments=segments,
-                    source_language=source_language,
-                    target_language=target_language,
-                    artifact_type=artifact_type.value,
-                ),
-            }
-        ],
-        response_format=translator.build_response_format(len(segments)),
-        artifact_type=artifact_type.value,
-    )
-    raw_content = result.content
-    llm_usage = result.usage
-    translated_content = translator.apply_segments(
-        source_content,
-        segments=segments,
-        translated=translator.read_translated_segments(
-            _strip_code_fences(raw_content)
-        ),
-    )
-
-    envelope: Dict[str, Any] = {
-        "artifact_id": artifact_id,
-        "artifact_type": artifact_type.value,
-        "scope": body.get("scope"),
-        "scope_id": body.get("scope_id"),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source_count": source_envelope.get("source_count"),
-        "sources": source_envelope.get("sources") or [],
-        "generator_version": body.get("generator_version"),
-        "llm_usage": llm_usage.model_dump(exclude_none=True),
-        # What this entry is, readable from the payload alone: whose text it carries
-        # and which model moved it across.
-        "translated_from": {
-            "artifact_id": source_artifact_id,
-            "source_language": source_language,
-            "target_language": target_language,
-            "model": llm_usage.model,
-        },
-        "content": translated_content,
-    }
-
-    await complete_artifact_generation(
-        artifact_id=artifact_id,
-        content=envelope,
-        title=(
-            translated_content.get("title")
-            if isinstance(translated_content, dict)
-            else None
-        ),
-        llm_usage=llm_usage,
-    )
-    await llm_client.record_observed_cost(
-        body.get("user_id"),
-        llm_usage,
-        idempotency_token=f"artifact_cost:{artifact_id}",
-    )
-
-    log_event(
-        logger,
-        logging.INFO,
-        "artifact.translated",
-        "Artifact translated from an existing entry instead of regenerated",
-        artifact_id=artifact_id,
-        source_artifact_id=source_artifact_id,
-        artifact_type=artifact_type.value,
-        source_language=source_language,
-        target_language=target_language,
-        segment_count=len(segments),
-        model=llm_usage.model,
-        prompt_tokens=llm_usage.prompt_tokens,
-        completion_tokens=llm_usage.completion_tokens,
-        cost_eur=llm_usage.cost_eur,
-    )
 
 
 async def poll_queue() -> None:

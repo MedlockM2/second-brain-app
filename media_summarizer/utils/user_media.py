@@ -71,7 +71,7 @@ _FORBIDDEN_UPDATE_ATTRS = frozenset({"purge_at", "deleted_at"})
 
 # Written once by the create path and never rewritten: rewriting saved_at would
 # reorder the library, and rewriting the keys is meaningless.
-_IMMUTABLE_ATTRS = frozenset({"user_id", "media_item_id", "media_key", "saved_at"})
+_IMMUTABLE_ATTRS = frozenset({"user_id", "media_item_id", "media_key", "saved_at", "reading_language"})
 MEDIA_KEY_INDEX = os.environ.get("USER_MEDIA_MEDIA_KEY_INDEX", "media-key-index")
 
 # Sparse GSI (user_id, last_engaged_at) behind "Continue learning" (task-303).

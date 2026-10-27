@@ -746,17 +746,10 @@ def build_artifact_id(
     option set is a different entry, and a request at the defaults is the entry a
     request with no options computes.
 
-    ``parameters`` also carries the reading language, so two reading languages are two
-    different ids and therefore two legitimate entries. What fills the second one is
-    *not* a second generation, though: it is the first one translated
-    (``artifact_translation_service``, task-395). The id recipe is what makes that
-    possible — the translation lands on exactly the id a native request in that
-    language computes, so it is found by reuse like any other entry.
-
-    A request that pins another language than the reader's (task-533) carries that
-    language *and* the ``language_pinned`` marker, so it never lands on the id of a
-    translation or of a native generation in that language, and no reading-language
-    change ever translates it.
+    ``parameters`` also carries the output language: two languages are distinct
+    immutable entries. A media defaults to the language captured on its save;
+    folders default to the current account preference. An explicit request for
+    another language retains its ``language_pinned`` marker (task-533).
 
     ``user_id`` stays in it, and stays first: this id is what the account's own
     listing and detail routes address, so it must be unguessable from another
@@ -1150,8 +1143,8 @@ async def resolve_scope_sources(
     (task-398), so a freshly ingested foreign media resolves as *read* on the
     first request.
 
-    ``output_language`` is derived from the *reading language*, never from a
-    source that happened to resolve. That is what makes it knowable before any
+    ``output_language`` defaults to the save's captured language at media scope,
+    and the current preference at folder scope, never a source that happened to resolve. That is what makes it knowable before any
     source is readable, hence what makes a waiting entry's ``artifact_id`` equal
     to the one the finished resolution computes.
     """
@@ -1163,6 +1156,8 @@ async def resolve_scope_sources(
     rows = await _list_scope_media_records(
         user_id=user_id, scope=scope, scope_id=scope_id
     )
+    if scope == ArtifactScope.MEDIA:
+        reading_language = rows[0].reading_language if rows else None
     selected_source_ids: Optional[List[str]] = None
     if source_ids is not None:
         rows, selected_source_ids = _select_scope_rows(rows, source_ids)
@@ -1330,7 +1325,6 @@ async def list_scope_artifacts(
     scope: ArtifactScope,
     scope_id: str,
     content_scope_id: Optional[str] = None,
-    reading_language: Optional[str] = None,
     limit: Optional[int] = None,
     cursor: Optional[str] = None,
 ) -> Tuple[List[MediaArtifactRecord], Optional[str]]:
@@ -1356,13 +1350,8 @@ async def list_scope_artifacts(
     (task-394). Doing both on read is what makes them felt at the only moment they
     matter — someone is looking at the tile — instead of at the next nightly pass.
 
-    And it is where a media whose artifacts exist in another language than the
-    reader's gets them translated rather than regenerated (task-395). This request
-    *is* the opening of a media — the detail screen issues it on mount — and it
-    already holds the whole scope, internal entries included, so the decision costs
-    no extra query. The entries armed are returned with the page: they are the newest
-    of their type, so the tile spins and the poll it starts brings the translation in
-    without a second trip to the screen.
+    Existing entries are immutable in their generation language. Reading this
+    history never translates or regenerates them after a profile change.
     """
     records, next_cursor = await media_artifacts.list_artifacts_by_scope(
         scope_key=build_scope_key(
@@ -1373,70 +1362,17 @@ async def list_scope_artifacts(
         limit=limit,
         cursor=cursor,
     )
-    armed = await _arm_reading_language_translations(
-        user_id=user_id,
-        scope=scope,
-        scope_id=scope_id,
-        content_scope_id=content_scope_id or scope_id,
-        reading_language=reading_language,
-        listed=records,
-        cursor=cursor,
-    )
     visible = [
         record
         for record in records
         if record.artifact_type not in INTERNAL_ARTIFACT_TYPES
     ]
     # In parallel: a scope holds at most one in-flight entry per type, and the
-    # terminal ones cost nothing here. The armed entries skip it — they were just
-    # read from the base table, so there is nothing a refresh could add.
+    # terminal ones cost nothing here.
     refreshed = list(
         await asyncio.gather(*(refresh_listed_artifact(record) for record in visible))
     )
-    return [
-        *(
-            record
-            for record in armed
-            if record.artifact_type not in INTERNAL_ARTIFACT_TYPES
-        ),
-        *refreshed,
-    ], next_cursor
-
-
-async def _arm_reading_language_translations(
-    *,
-    user_id: str,
-    scope: ArtifactScope,
-    scope_id: str,
-    content_scope_id: str,
-    reading_language: Optional[str],
-    listed: List[MediaArtifactRecord],
-    cursor: Optional[str],
-) -> List[MediaArtifactRecord]:
-    """Translate this media's artifacts into the reader's language, on its opening.
-
-    Three guards, and each rules out a case where the question does not arise: a
-    **folder** scope has no content identity to translate under, a **later page** is
-    not an opening (the first one already decided, and a media scope holds a handful
-    of entries anyway), and a reader with **no reading language** is served in the
-    language of the sources.
-
-    An entry whose request pinned its language (task-533) is never armed, whatever
-    the reader's language: that rule lives with the choice of the entry to translate,
-    in ``artifact_translation_service``.
-    """
-    if scope != ArtifactScope.MEDIA or cursor is not None or not reading_language:
-        return []
-
-    from media_summarizer.core.services import artifact_translation_service
-
-    return await artifact_translation_service.translate_scope_artifacts_for_reader(
-        user_id=user_id,
-        scope_id=scope_id,
-        content_scope_id=content_scope_id,
-        reading_language=reading_language,
-        listed=listed,
-    )
+    return refreshed, next_cursor
 
 
 async def refresh_listed_artifact(
@@ -1621,14 +1557,14 @@ async def resolve_internal_review_blurb(
     for listed in records:
         if listed.artifact_type != MediaArtifactType.REVIEW_BLURB:
             continue
-        status = await _internal_status(listed)
+        full = await media_artifacts.get_media_artifact_by_id(listed.artifact_id)
+        if full is None or not _reads_artifact_language(media=media, record=full):
+            continue
+        status = await _internal_status(full)
         if status != MediaArtifactStatus.READY:
             return None, status
 
-        record = await media_artifacts.get_media_artifact_by_id(listed.artifact_id)
-        if record is None:
-            return None, MediaArtifactStatus.FAILED
-        record = await resolve_through_shared_generation(record)
+        record = await resolve_through_shared_generation(full)
         blurb = await _read_stored_review_blurb(record)
         if blurb is None:
             return None, MediaArtifactStatus.FAILED
@@ -2453,10 +2389,8 @@ def entry_served_by(
     away, so the entry is born ``ready`` with the storage ref and the account's very
     next read costs one query.
 
-    Public for the same reason :func:`arm_shared_generation` is: two things now build
-    a pointer over a generation somebody else armed — a request
-    (:func:`commit_artifact_generation`) and a translation planned into the reading
-    language (``artifact_translation_service``) — and both must produce the same row.
+    The request planner uses the same pointer shape for a shared generation
+    whether it is still running or already complete.
     """
     if shared.status in _IN_FLIGHT_ARTIFACT_STATUSES:
         return entry
@@ -2722,11 +2656,8 @@ async def _mirror_review_blurb_onto_content_rows(
     attribute write, never an ownership transfer.
 
     It stops at the language, though, and that is the whole reason this filters
-    (task-395): the same content now has one blurb per reading language, so copying a
-    French card onto the row of somebody reading Spanish would replace a correct card
-    with an unreadable one — and the newest generation would always win. The
-    requesting row is exempt from the lookup: the entry's language *is* that
-    account's, since its id was computed from it.
+    (task-545): the same content can have saves in different fixed languages,
+    including within one account. A finished card only fills matching saves.
 
     Best-effort like the single-row copy it wraps: the artifact is sealed by the time
     this runs, and ``copy_review_blurb_to_library_row`` remains the repair path for a
@@ -2735,12 +2666,20 @@ async def _mirror_review_blurb_onto_content_rows(
     if blurb is None:
         return
 
-    targets = [(record.user_id, record.scope_id)]
+    from media_summarizer.utils import user_media as user_media_store
+
+    try:
+        initiating = await user_media_store.get_user_media(record.user_id, record.scope_id)
+    except Exception:
+        # The immutable artifact remains readable; the detail read repairs its
+        # projection when the library store is reachable again.
+        initiating = None
+    targets = []
+    if initiating is not None and _reads_artifact_language(media=initiating, record=record):
+        targets.append((record.user_id, record.scope_id))
     content_id = content_scope_id_from_scope_key(record.scope_key)
     if content_id:
         try:
-            from media_summarizer.utils import user_media as user_media_store
-
             rows = await user_media_store.list_by_media_key(content_id)
         except Exception as exc:
             log_event(
@@ -2756,11 +2695,9 @@ async def _mirror_review_blurb_onto_content_rows(
             )
             rows = []
         for row in rows:
-            if (row.user_id, row.media_item_id) == (record.user_id, record.scope_id):
+            if (row.user_id, row.media_item_id) in targets:
                 continue
-            if not await _reads_artifact_language(
-                user_id=row.user_id, record=record
-            ):
+            if not _reads_artifact_language(media=row, record=record):
                 continue
             targets.append((row.user_id, row.media_item_id))
 
@@ -2773,37 +2710,12 @@ async def _mirror_review_blurb_onto_content_rows(
         )
 
 
-async def _reads_artifact_language(
-    *,
-    user_id: str,
-    record: MediaArtifactRecord,
+def _reads_artifact_language(
+    *, media: UserMediaRecord, record: MediaArtifactRecord,
 ) -> bool:
-    """Whether this account reads in the language the artifact was written in.
-
-    ``None`` on both sides is a match, not an absence of one: an account that set no
-    reading language is served whatever came out of the sources, which is exactly
-    what an entry carrying no declared language holds.
-
-    A profile that cannot be read answers ``False``. Skipping the copy leaves the
-    tile without its card, which the account can repair by asking; writing a card in
-    a language it may not read cannot be repaired at all.
-    """
-    from media_summarizer.core.services.transcript_translation import (
-        normalize_language_tag,
-    )
-
-    artifact_language = normalize_language_tag(record.parameters.get("language"))
-    try:
-        from media_summarizer.utils import database_async
-
-        user = await database_async.get_user_by_id(user_id)
-    except Exception:
-        return False
-    if user is None:
-        return False
-    return (
-        normalize_language_tag(getattr(user, "reading_language", None))
-        == artifact_language
+    """A preview belongs to this save's fixed language, never its owner's profile."""
+    return normalize_language_tag(media.reading_language) == normalize_language_tag(
+        record.parameters.get("language")
     )
 
 

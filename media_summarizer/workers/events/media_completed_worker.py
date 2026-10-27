@@ -19,12 +19,9 @@ Media completed events consumer -- content ledger close, watcher fan-out, indexi
   first opened. Enqueue only, through the same atomic reservation as
   ``/raw-content``; the translation runs in ``transcript_translation_worker``.
 
-Search indexing (Algolia) is decoupled from the watcher loop:
-- The submitting user (resolved from the event's canonical_job_id) is ALWAYS indexed,
-  regardless of whether watchers exist.
-- Each watcher is also indexed (for cross-user dedup scenarios).
-- Deduplication: a user_id is only indexed once per event, even if they appear both as
-  the canonical submitter and as a watcher.
+Search indexing and previews are per save, including repeated saves by one
+account. Notifications remain per account. The index worker waits for the text
+in each save's captured language.
 """
 from __future__ import annotations
 
@@ -40,7 +37,7 @@ from media_summarizer.core.services.push_notification_dispatch import (
 from media_summarizer.core.services.search_index_dispatch import (
     enqueue_transcript_indexing,
 )
-from media_summarizer.utils import media_idempotence, media_watchers, sqs
+from media_summarizer.utils import media_idempotence, media_watchers, sqs, user_media
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
@@ -279,7 +276,6 @@ async def process_event(message: Dict[str, Any]) -> None:
 
     media_key = body.get("media_key")
     status = body.get("status", "success")
-    media_title = body.get("media_title")
     transcription_s3_key = body.get("transcription_s3_key")
     canonical_job_id = body.get("canonical_job_id")
 
@@ -326,12 +322,12 @@ async def process_event(message: Dict[str, Any]) -> None:
     )
 
     # -------------------------------------------------------------------------
-    # Primary-user search indexing (decoupled from watcher loop)
+    # Per-save indexing/preview preparation and per-user notifications
     # -------------------------------------------------------------------------
     # The canonical_job_id identifies the processing job that produced this
     # completion event. Its user_id is the submitting user who must always be
     # indexed, regardless of whether watchers exist.
-    indexed_user_ids: set = set()
+    notified_user_ids: set = set()
 
     from media_summarizer.utils import database_async
 
@@ -350,22 +346,29 @@ async def process_event(message: Dict[str, Any]) -> None:
             transcription_s3_key=transcription_s3_key,
             watchers=watchers,
         )
-        await enqueue_transcript_indexing(
-            media_item_id=canonical_job.media_item_id or canonical_job_id,
-            job_id=canonical_job_id,
-            user_id=canonical_job.user_id,
-            transcription_s3_key=transcription_s3_key,
-            title=canonical_job.title or media_title,
-            creator_name=canonical_job.creator_name,
-            source_platform=canonical_job.source_platform,
-        )
-        # Only the durable library id will do here: the blurb is written onto the
-        # user_media row, and the job id fallback used for Algolia is not a library
-        # key.
-        await _trigger_review_blurb(
-            media_item_id=canonical_job.media_item_id,
-            user_id=canonical_job.user_id,
-        )
+
+    # Every save needs its own index and preview, even when the same account
+    # saved twice while ingestion ran. Watchers and notifications are per user.
+    # Read known users' partitions consistently; the cross-user GSI can lag a
+    # just-created save. Its processing job is not the identity of that save.
+    known_users = {w.get("user_id") for w in (watchers or []) if w.get("user_id")}
+    if canonical_job and canonical_job.user_id:
+        known_users.add(canonical_job.user_id)
+    saves = {
+        (row.user_id, row.media_item_id): row
+        for row in await user_media.list_by_media_key(media_key)
+    }
+    for user_id in known_users:
+        for row in await user_media.list_for_user_by_media_key(user_id, media_key):
+            saves[(row.user_id, row.media_item_id)] = row
+    for row in saves.values():
+        if not await enqueue_transcript_indexing(
+            media_item_id=row.media_item_id, user_id=row.user_id,
+        ):
+            raise RuntimeError("Could not dispatch saved-media indexing")
+        await _trigger_review_blurb(media_item_id=row.media_item_id, user_id=row.user_id)
+
+    if canonical_job and canonical_job.user_id:
         # The library id again, and for a second reason: it is what the tap on the
         # notification opens. The job's media_type comes along because the body
         # names the category of what was processed (task-407) -- the job is where
@@ -376,7 +379,7 @@ async def process_event(message: Dict[str, Any]) -> None:
             media_item_id=canonical_job.media_item_id,
             media_type=canonical_job.media_type,
         )
-        indexed_user_ids.add(canonical_job.user_id)
+        notified_user_ids.add(canonical_job.user_id)
     elif not canonical_job_id:
         log_event(
             logger,
@@ -412,7 +415,7 @@ async def process_event(message: Dict[str, Any]) -> None:
                 logger.error(f"Failed to update processing job {job_id}: {e}")
 
             # Mark watcher as processed. Deduplication of the fan-out itself: the
-            # notification below is deduplicated separately, by `indexed_user_ids`.
+            # notification below is deduplicated separately, by `notified_user_ids`.
             try:
                 await media_watchers.mark_watcher_processed(media_key, w.get("user_id"))
                 logger.info(f"Marked watcher {w.get('user_id')} as processed for media key {media_key}")
@@ -427,33 +430,9 @@ async def process_event(message: Dict[str, Any]) -> None:
 
             logger.info(f"Successfully processed watcher {w.get('user_id')} for media key {media_key}")
 
-            # Per-watcher Algolia indexing (cross-user dedup). Deduplicate
-            # against the primary user who was already indexed above.
+            # Notifications remain per user; indexing above is per save.
             watcher_user_id = (getattr(job, "user_id", None) if job else None) or w.get("user_id")
-            if watcher_user_id and watcher_user_id not in indexed_user_ids:
-                await enqueue_transcript_indexing(
-                    media_item_id=(
-                        getattr(job, "media_item_id", None) if job else None
-                    )
-                    or job_id,
-                    job_id=job_id,
-                    user_id=watcher_user_id,
-                    transcription_s3_key=transcription_s3_key,
-                    title=(getattr(job, "title", None) if job else None) or media_title,
-                    creator_name=(
-                        getattr(job, "creator_name", None) if job else None
-                    ),
-                    source_platform=(getattr(job, "source_platform", None) if job else None),
-                )
-                # Not a retry of the call above: this is the fan-out over the other
-                # users watching the same content, and each of them owns a separate
-                # library row with its own blurb to write.
-                await _trigger_review_blurb(
-                    media_item_id=(
-                        getattr(job, "media_item_id", None) if job else None
-                    ),
-                    user_id=watcher_user_id,
-                )
+            if watcher_user_id and watcher_user_id not in notified_user_ids:
                 # One notification per person, not per content: this user saved the
                 # media themselves and their own library row is what a tap opens.
                 # The dedup set is what stops the submitter being told twice when
@@ -468,7 +447,7 @@ async def process_event(message: Dict[str, Any]) -> None:
                     # person being told about it.
                     media_type=(getattr(job, "media_type", None) if job else None),
                 )
-                indexed_user_ids.add(watcher_user_id)
+                notified_user_ids.add(watcher_user_id)
 
         except Exception as e:
             logger.error(f"Error processing watcher {w.get('user_id')} for {media_key}: {e}")

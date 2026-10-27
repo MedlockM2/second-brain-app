@@ -38,7 +38,9 @@ from media_summarizer.core.models.user_media import (
     new_media_item_id,
 )
 from media_summarizer.core.services.folder_service import ensure_default_folder
+from media_summarizer.utils import database_async
 from media_summarizer.utils import user_media as user_media_store
+from media_summarizer.utils.language_codes import normalize_language_code
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
@@ -150,6 +152,13 @@ async def save_media_for_user(
         )
         raise DurableMediaWriteError(str(exc))
 
+    # This common save path covers URLs, shared text, podcasts and uploads,
+    # including deduplicated saves. Never consult the profile again to choose
+    # this entry's language after its creation.
+    user = await database_async.get_user_by_id(user_id)
+    if user is None:
+        raise DurableMediaWriteError("Cannot save media without its owner")
+    reading_language = normalize_language_code(user.reading_language)
     media_item_id = new_media_item_id()
 
     resolved_folder_id = await _resolve_folder_id(user_id, folder_id)
@@ -158,6 +167,7 @@ async def save_media_for_user(
         user_id=user_id,
         media_item_id=media_item_id,
         media_key=media_key,
+        reading_language=reading_language,
         title=title,
         title_label_key=title_label_key,
         creator_name=creator_name,
@@ -454,10 +464,6 @@ async def finalize_deduplicated_save(
         await enqueue_transcript_indexing(
             media_item_id=media_item_id,
             user_id=user_id,
-            transcription_s3_key=content_job.transcription_s3_key,
-            title=content_job.title,
-            creator_name=content_job.creator_name,
-            source_platform=content_job.source_platform,
             job_id=content_job.id,
         )
         await _provision_review_blurb(user_id=user_id, media_item_id=media_item_id)

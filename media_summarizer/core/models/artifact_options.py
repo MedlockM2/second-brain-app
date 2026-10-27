@@ -6,11 +6,11 @@ sources are two artifacts — and an option left at its default is **never** sto
 ``artifact_service.resolve_request_options`` drops it before the hash, which is what
 keeps a request at the defaults on the very id a request with no options computes.
 
-The language follows the same rule with a default that depends on the reader
-(task-533): it is the reading language unless the request names another one. A
-language equal to the reading language is the default and changes nothing; another
-one is stored with :data:`LANGUAGE_PINNED`, which is what keeps the entry out of the
-translations a reading-language change arms (``artifact_translation_service``).
+The output language defaults to the save's captured language for a media, and
+its owner's current preference for a folder (task-545). Naming that default in a
+request changes nothing; another language is stored with :data:`LANGUAGE_PINNED`
+to preserve that explicit choice in the entry's identity (task-533). All existing
+entries retain their language after account preference changes.
 
 This module holds the vocabulary and its defaults only. Which option a type
 accepts, and the refusal of everything else, is a request rule and lives with the

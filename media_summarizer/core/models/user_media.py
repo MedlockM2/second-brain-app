@@ -101,6 +101,9 @@ class UserMediaRecord(BaseModel):
     # every account shares, and `acct_mkey_v1_<sha256>` for a file this account sent,
     # which no other account can compute (see `services/media_identity.py`).
     media_key: str
+    # Account preference captured once for this save, independent of the source
+    # language below. Re-saving the content may capture a different language.
+    reading_language: Optional[str] = None
 
     # --- display metadata ----------------------------------------------------
     title: Optional[str] = None
@@ -205,6 +208,7 @@ class UserMediaRecord(BaseModel):
             "user_id": self.user_id,
             "media_item_id": self.media_item_id,
             "media_key": self.media_key,
+            "reading_language": self.reading_language,
             "saved_at": self.saved_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "folder_sort_key": self.folder_sort_key,

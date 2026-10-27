@@ -37,10 +37,14 @@ def methods(users):
     found = set()
     for user in users:
         attributes = user["attributes"]
-        if not attributes.get("custom:apple_subject") and user.get("UserStatus") in {"CONFIRMED", "RESET_REQUIRED"}:
+        if (
+            not any(attributes.get(f"custom:{p}_subject") for p in ("apple", "google"))
+            and user.get("UserStatus") in {"CONFIRMED", "RESET_REQUIRED"}
+        ):
             found.add("password")
-        if attributes.get("custom:apple_subject"):
-            found.add("apple")
+        for provider in ("apple", "google"):
+            if attributes.get(f"custom:{provider}_subject"):
+                found.add(provider)
         found.update(METHODS.get(i.get("providerName"), "") for i in json.loads(attributes.get("identities", "[]")))
     return ",".join(m for m in ("password", "apple", "google") if m in found)
 

@@ -27,10 +27,10 @@ event, or a reader polling ``/raw-content`` while this runs, reads the existing
 lock and enqueues nothing: the task-203 anti-thundering-herd guarantee holds
 across both triggers.
 
-The target is the owner's reading language, read the way the ingestion-time
-``review_blurb`` reads it (``review_blurb_service._reading_language``). The
-transcript key is the canonical content job's, because that is the key
-``/raw-content`` resolves through the content ledger for every account.
+Targets come from the immutable reading language of every saved library row
+(task-545), not from account preferences at completion time. The search worker
+also arms a missing translation when a deduplicated save needs a new language.
+Every caller resolves the source through the content ledger.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ from media_summarizer.core.services.transcript_translation import (
     reserve_and_dispatch_translation,
     should_translate,
 )
-from media_summarizer.utils import database_async, s3
+from media_summarizer.utils import s3, user_media
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ async def arm_transcript_translations(
 
     ``user_ids`` are the accounts that saved this media during its ingestion — the
     submitter and every watcher whose save was folded into the same job. Their
-    reading languages are deduplicated, so three French readers cost one
+    saves' captured reading languages are deduplicated, so three French readers cost one
     reservation, not three.
 
     Returns the result per target language (empty when nobody has a reading
@@ -94,7 +94,7 @@ async def arm_transcript_translations(
     if not key:
         return {}
 
-    targets = await _reading_languages(user_ids)
+    targets = await _reading_languages(user_ids, job.media_key or "")
     if not targets:
         return {}
 
@@ -113,6 +113,7 @@ async def arm_transcript_translations(
             results[target] = IngestionTranslationSkip.NOT_NEEDED
         else:
             results[target] = await reserve_and_dispatch_translation(
+                media_key=job.media_key or "",
                 transcript_s3_key=key,
                 target_language=target,
                 source_language_hint=source_hint,
@@ -136,29 +137,15 @@ async def arm_transcript_translations(
     return results
 
 
-async def _reading_languages(user_ids: Iterable[str]) -> List[str]:
-    """Distinct normalized reading languages of these accounts, in first-seen order.
-
-    An account that cannot be read, or has no reading language, contributes
-    nothing: ``/raw-content`` would not translate for it either.
-    """
+async def _reading_languages(user_ids: Iterable[str], media_key: str) -> List[str]:
+    """Languages captured by these saves, including repeated saves by one account."""
     languages: List[str] = []
     for user_id in dict.fromkeys(u for u in user_ids if u):
-        try:
-            user = await database_async.get_user_by_id(user_id)
-        except Exception as exc:  # noqa: BLE001 - one unreadable account skips itself
-            log_event(
-                logger,
-                logging.WARNING,
-                "translation.ingestion_user_read_failed",
-                "Could not read the saver's reading language; skipping this account",
-                user_id=user_id,
-                error_type=type(exc).__name__,
-            )
-            continue
-        language = normalize_language_tag(getattr(user, "reading_language", None))
-        if language and language not in languages:
-            languages.append(language)
+        records = await user_media.list_for_user_by_media_key(user_id, media_key)
+        for record in records:
+            language = normalize_language_tag(record.reading_language)
+            if language and language not in languages:
+                languages.append(language)
     return languages
 
 

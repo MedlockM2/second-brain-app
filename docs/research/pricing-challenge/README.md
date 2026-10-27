@@ -4,15 +4,18 @@ owner_decision: more  # pending | ok | abandoned | redo | more
 
 # Challenge du système de pricing de bout en bout
 
-> Répertoire provisoire. Le brief demande `docs/research/task-<NN>-pricing-challenge/` ; aucun
-> numéro ne m'a été attribué et la session n'était pas interactive. Le prochain libre est
-> **task-389** (`backlog/tasks/` s'arrête à `task-388`). Un `git mv` suffit — vérifie le dernier
-> numéro d'abord, six tâches ont été créées pendant cette session.
+> Référence conservée sous son chemin historique. **task-543** suit la mise à jour documentaire
+> du 2026-10-26 ; ce numéro n'est pas une réattribution du benchmark ni une tâche d'implémentation.
+> **Owner Validation et R.1–R.2 portent la décision de consommation actuelle.** Les diagnostics et
+> propositions commerciales antérieurs restent des éléments de recherche datés, à recalculer
+> avant leur utilisation avec le modèle retenu et les tarifs d'octobre 2026.
 
 ## Owner Validation
 
-**Decision**: *Décisions partielles du 2026-10-04 — `owner_decision` reste `pending` tant que les
-questions encore ouvertes (ci-dessous) ne sont pas tranchées.*
+**Decision**: *Décisions partielles du 2026-10-04, amendées le 2026-10-26 sur la consommation bêta.
+`owner_decision` reste `more` : le tableau cible est retenu, les offres commerciales restent
+ouvertes. L'amendement du 2026-10-26 prime sur les anciennes équivalences en minutes, le forfait
+de 2 crédits par import et les générations incluses dans ce forfait.*
 
 > Question de l'owner qui les a amenées (2026-10-04) : « c'est pas mal le système de crédits mais
 > j'ai peur ce soit trop confusant pour l'user de comprendre ce que représente un crédit
@@ -23,51 +26,69 @@ questions encore ouvertes (ci-dessous) ne sont pas tranchées.*
 > plein de médias…) et qu'on augmente le churn alors qu'avec un accès presque "illimité" pendant un
 > mois ce n'est pas le cas. »
 
-1. **Le crédit remplace la minute, mais en backend seulement.** Il sert au compteur et au barème
-   de § R.2 ; il n'apparaît **nulle part** dans l'app. L'utilisateur voit :
-   - sur la carte d'une formule, des équivalents en objets formulés comme une alternative
-     (« jusqu'à ≈ 6 h de podcast, *ou* 70 vidéos YouTube d'une heure, *ou* 180 articles par
-     mois ») ;
-   - sur la jauge, un pourcentage du forfait consommé et ce qu'il reste, en objets ;
-   - sur un refus, une phrase sur le média refusé (« ce podcast de 3 h dépasse ce qu'il reste de
-     votre forfait ce mois-ci ») ;
-   - pour la recharge, son équivalent (« ≈ 1 h 40 de podcast ou 50 articles de plus ce mois-ci »).
-
-   Les équivalents sont **calculés par l'API à partir du barème**, jamais écrits en dur dans les
-   catalogues i18n. Remplace la règle 2 de § R.5 et la formulation en crédits des clés
-   `plan.card.allowance` et `quota.refusal.topUp` de § R.5. À vérifier contre la règle store de
-   § 4.3 : la description « jusqu'à ≈ … » doit suffire à dire ce que l'abonnement donne.
+1. **Le compteur valorise les coûts fournisseurs mesurés, en backend seulement.** Amendement du
+   2026-10-26 : la durée transcrite, les pages facturées et les tokens effectivement consommés
+   sont valorisés au tarif du fournisseur et du modèle utilisés (§ R.2). L'app affiche un
+   **pourcentage consommé, sans euros ni crédits**. Des équivalents en objets peuvent l'expliquer,
+   à condition d'être calculés à partir d'hypothèses explicites ; ce ne sont pas des capacités
+   garanties et les anciens exemples « 6 h ou 180 articles » ne sont pas des allocations validées.
+   Les refus parlent de l'action et de la consommation disponible. La tarification d'une
+   éventuelle recharge reste ouverte, sans unité technique visible pour l'utilisateur.
 2. **Essai à la création du compte, puis petit palier gratuit permanent** — remplace Découverte
    comme porte d'entrée (§ R.3), la puce « L'essai gratuit de 30 jours » de § R.4, la
    correction 15 et la question 12(b) :
-   - **30 jours au niveau du palier haut**, accordés par le backend sans moyen de paiement, comme
-     aujourd'hui (`free_trial` dans `pricing_config_service.py`, `_free_trial_window` dans
-     `quota_enforcer.py`). Coût borné par l'allocation de ce palier ; les burst guards doivent
+   - **30 jours au niveau du palier haut**, cible après bêta, accordés par le backend sans moyen
+     de paiement. Le principe d'un essai backend existe déjà (`free_trial` dans
+     `pricing_config_service.py`, `_free_trial_window` dans `quota_enforcer.py`) ; cette étape
+     n'en modifie pas l'allocation. Coût borné par l'allocation de ce palier ; les burst guards doivent
      refuser et non journaliser (correction 6), parce qu'un nouveau compte Apple/Google donne un
      nouvel essai ;
-   - **après l'essai, on garde quelques envois gratuits par mois** (le palier Découverte, 40
-     crédits, valeur à ajuster sur la consommation beta) au lieu d'un mur. La bibliothèque, la
+   - **après l'essai, on garde quelques envois gratuits par mois** (le palier Découverte, dont
+     l'allocation reste à fixer avec le nouveau comptage) au lieu d'un mur. La bibliothèque, la
      recherche et les artefacts déjà générés restent accessibles ;
    - raison : la valeur d'un second cerveau est cumulative (dossiers, génération sur un dossier,
-     recherche, digest) et 40 crédits/mois ne permettent pas de la découvrir. Un essai généreux est
+     recherche, digest) et une allocation trop faible ne permet pas de la découvrir. Un essai généreux est
      aussi un meilleur instrument de mesure de la consommation qu'un petit palier qui la tronque,
      et il nourrit la recommandation de formule `plan.rec.*`.
+3. **Consommation bêta retenue le 2026-10-26 : 5 € par testeur et par mois**, avec remise à zéro
+   mensuelle sans report du solde. Cette enveloppe couvre les coûts fournisseurs d'usage du
+   tableau R.2, hors infrastructure fixe ; ce n'est ni un prix demandé au testeur ni une
+   allocation commerciale après la bêta.
+   - **Chaque nouvelle génération est comptée**, sur un média comme sur un dossier, et chaque
+     réponse de chat compte le corpus, la question et l'historique transmis. Les traitements
+     automatiques, dont l'aperçu et une traduction lorsqu'ils sont exécutés, comptent aussi.
+   - **Le coût suit l'usage réel** : réserver un budget avant l'appel puis régulariser sur les
+     métriques retournées est le principe retenu. La consommation exacte est connue après
+     l'appel ; le protocole de réservation appartient à l'étape d'implémentation.
+   - **Les crédits promotionnels ou volumes offerts par un fournisseur ne réduisent pas le
+     quota** : valoriser l'usage au tarif normal, pour que la mesure reste comparable avant et
+     après leur épuisement. Les économies de cache correspondent en revanche à un tarif d'usage
+     distinct et sont prises en compte. Réutiliser un résultat sans nouvel appel fournisseur
+     ne crée pas de nouvelle consommation.
+   - **Livraison de cette étape : la référence chiffrée uniquement.** Le compteur, les
+     réservations, les API et les interfaces backend, mobile et web feront l'objet de l'étape
+     suivante. Le runtime existant compte encore en minutes ; les valeurs ci-dessous ne sont
+     pas présentées comme déjà appliquées ou déployées.
 
 **Encore ouvert** : suppression du palier à 3 € (Q2), recharge consommable (Q3), commission rendue
 ou encaissée (Q4), prix et allocation du palier haut (§ 2.8), numéro de tâche du répertoire (Q9).
 
-**Validated at**:
+**Validated at**: décisions partielles les **2026-10-04** et **2026-10-26** ; validation globale
+du benchmark toujours en attente.
 
 ---
 
 ## Recommendation
 
-**Il faut refondre, pas rapiécer : remplacer la minute par un crédit, ramener trois formules à un
-palier gratuit permanent plus deux payants, facturer un forfait par envoi en plus du volume, et
-sortir le nom des formules de la config pour le mettre dans les onze catalogues.** La grille de
-remplacement, son barème vérifié ligne à ligne contre le coût mesuré, son arithmétique de marge et
-sa copy sont en **§ La refonte proposée**. Les quatre axes qui suivent en sont la preuve, pas la
-livraison.
+**Consommation retenue le 2026-10-26 : un budget bêta de 5 €/mois valorisé sur l'usage fournisseur
+mesuré, avec chaque génération comptée et un pourcentage visible dans l'app.** R.1 et R.2
+remplacent la proposition initiale de forfait par import et de crédits à taux fixe. Les prix,
+allocations commerciales, annuels et recharges de R.3 restent des propositions à recalculer et à
+valider ; cette mise à jour ne les approuve pas.
+
+**Lecture des diagnostics ci-dessous :** les mesures et simulations de septembre 2026 expliquent
+les défauts du compteur en minutes. Leurs montants et modèles sont historiques, notamment avant
+le choix de Luna du 2026-10-10 ; ils ne sont pas des prévisions de coût au nouveau barème.
 
 Le diagnostic qui impose cette forme : l'unité facturée est juste pour le seul chemin sur lequel
 elle a été calibrée (l'audio transcrit par Deepgram) et fausse d'un facteur 2 à 10 sur les trois
@@ -210,121 +231,198 @@ Par force décroissante :
 
 ## La refonte proposée
 
-Cette section est le livrable. Les quatre axes qui la suivent sont l'instruction du dossier ; ici
-c'est la grille de remplacement, avec l'arithmétique qui la justifie et l'endroit où chaque
-changement s'applique. Tous les chiffres viennent des tarifs relevés en § Sources et sont
-recalculés, jamais recopiés.
+**R.1 et R.2 sont la référence de consommation retenue le 2026-10-26.** Les sections R.3 à R.7
+conservent les propositions commerciales et pistes initiales du benchmark ; leurs allocations,
+équivalents, marges et instructions ne sont pas validés par cette décision. Ils devront être
+réexaminés à partir du nouveau comptage et de l'état du code au moment de l'implémentation.
 
-### R.1 Pourquoi la minute doit céder la place au crédit
+### R.1 Un budget fondé sur l'usage fournisseur mesuré
 
-Le problème n'est pas que la minute soit mal convertie : c'est qu'**aucun taux unique ne peut
-couvrir à la fois l'audio et le texte**, parce que le coût n'a pas une composante mais deux.
+**Décision de l'owner du 2026-10-26.** La minute ne porte plus les coûts de chemins différents :
+le compteur cible additionne les coûts fournisseurs calculés à partir de l'usage mesuré. Il n'y
+a plus de forfait de 2 crédits par import ni de lot de générations réputées incluses dans l'import.
 
-Décomposition du coût réel d'une source, obtenue en faisant varier la longueur à barème constant
-(tarifs OpenAI et Deepgram de § Sources, traduction rendue conditionnelle) :
+Pour la bêta :
 
-```
-coût(source) = 0,00592 €  (plancher, indépendant de la longueur)
-             + 0,903 €/million de tokens  (volume, les 6 générateurs)
-             + acquisition  (Deepgram 0,003703 €/min | Apify 0,0043 € forfait | LlamaParse /page | 0)
-```
+- **Budget : 5 € par testeur et par mois**, remise à zéro mensuelle sans report du solde.
+  Il s'agit de coûts fournisseurs d'usage, hors infrastructure fixe, et non d'un prix de vente.
+- **Consommation = somme des traitements effectivement exécutés** : acquisition, aperçu
+  automatique, traduction éventuelle, générations demandées et réponses du chat.
+- **Pourcentage consommé = 100 × consommation / 5 €** ; 1 % représente donc 0,05 € de coût
+  valorisé. L'utilisateur ne voit ni euros ni crédits.
+- **Valorisation hors crédits promotionnels et volumes offerts** : un appel fourni gratuitement
+  dans le cadre d'une promotion consomme le même quota qu'après son épuisement. La consommation
+  normalisée n'est donc pas la trésorerie effectivement débitée sur la facture.
+- **Cache : appliquer le tarif correspondant à l'usage retourné**, sans supposer un taux moyen de
+  cache. Réutiliser un résultat disponible sans nouvel appel fournisseur ne coûte rien de plus.
+- **Précision : conserver les quantités et coûts non arrondis pendant le calcul** ; arrondir les
+  exemples et les pourcentages pour leur affichage, sans arrondi systématique à une minute, une
+  page entière supplémentaire ou un centime par opération.
 
-Deux conséquences, et elles condamnent l'unité actuelle :
+La réservation avant appel puis sa régularisation sur l'usage retourné est le principe retenu.
+Cette livraison ne définit ni son protocole ni le traitement des réservations abandonnées,
+des échecs ou des métriques manquantes : ces points appartiennent à l'étape d'implémentation.
+**La présente référence ne démontre donc pas encore un plafond de facture garanti à 5 €.**
 
-1. **Le plancher de 0,00592 € par source ne s'exprime pas en durée.** Il est le même pour une note
-   de 200 mots et pour un podcast de 3 h, parce qu'il est fait des *tokens de sortie* des six
-   générateurs. Une unité qui est une durée ne peut, par construction, pas porter un coût fixe par
-   objet — c'est exactement pourquoi `text_file_minutes: 0` et le « Free » du paywall sont faux :
-   ils facturent zéro une chose qui coûte 0,0059 € au minimum.
+### R.2 Le barème de consommation bêta
 
-   *Précision apportée après vérification du pipeline* : ce plancher est celui d'une source dont les
-   cinq artefacts sont demandés. Si l'utilisateur ne demande **rien**, le seul appel qui part est
-   `review_blurb`, dont la sortie ne coûte que **0,000129 €** (§ R.6). Le forfait de 2 crédits n'est
-   donc pas dimensionné sur le pire cas : il est dimensionné sur **la source qui sert**, ce qui est
-   le seul cas qui intéresse un produit dont la promesse est justement de générer ces artefacts. Une
-   source envoyée puis jamais ouverte est sur-facturée, et c'est assumé — c'est la contrepartie d'un
-   barème qu'un acheteur peut lire en une ligne.
-2. **La même minute de contenu coûte 22× plus cher en audio qu'en texte.** Une minute d'audio à
-   transcrire : 0,003703 € (Deepgram) + 0,00018 € (LLM) = **0,003883 €**. Une minute de contenu
-   livrée en texte : **0,00018 €**. Un taux unique appelé « minute » mentira d'un facteur 22 dans
-   un sens ou dans l'autre, quelle que soit la valeur qu'on lui donne.
+**Référence cible arrêtée le 2026-10-26.** Les lignes ci-dessous remplacent le forfait par import,
+les équivalences en minutes et le tarif d'une génération par nombre de sources. Elles décrivent
+les coûts à compter, pas un changement déjà appliqué au runtime.
 
-D'où le crédit — non pas comme du jargon, mais comme la seule unité capable de porter un plancher
-*et* trois taux de volume différents :
+#### R.2.1 Tarifs et change de référence
 
-> **1 crédit = 0,005 € de budget fournisseur.** Ancré sur l'intuition que la copy actuelle a déjà
-> construite : **1 crédit ≈ 1 minute d'audio transcrit**.
+Tarifs publics consultés le **2026-10-26**, hors promotions, volumes gratuits et infrastructure
+fixe. Le mode, le modèle, les options facturées et le fournisseur réellement utilisés déterminent
+la ligne à appliquer ; un changement de mode exige de revoir cette référence.
 
-Ce n'est pas un abandon de la thèse de task-287 (« un seul compteur »), c'est ce qui la rend
-tenable : le compteur reste unique, il change juste de taux de change.
+**Change BCE du 2026-10-26 : 1 EUR = 1,1188 USD, donc 1 USD = 1 / 1,1188 EUR
+≈ 0,893814801573114 EUR.** Les calculs ci-dessous utilisent ce quotient, pas sa version arrondie
+à 0,893815. Le taux 0,86 encore présent dans le code n'est pas utilisé pour ces exemples.
+Source : [flux quotidien BCE](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml).
 
-### R.2 Le barème
-
-Cinq lignes, chacune adossée à un coût mesuré. Le forfait de 2 crédits est ce qui rend le reste
-honnête : il paie le plancher, donc plus rien n'est « gratuit ».
-
-| Ce que l'utilisateur envoie | Ce que ça coûte |
-|---|---|
-| **Tout envoi**, quel qu'il soit | **2 crédits** |
-| + audio ou vidéo qu'il faut transcrire | **+ 1 crédit par minute commencée** |
-| + vidéo dont on achète les sous-titres (YouTube…) | **+ 1 crédit par 20 minutes commencées** |
-| + document (PDF, photo de page) | **+ 1 crédit par page** |
-| + article, page web, post, note, fichier texte | **rien de plus** |
-| Génération sur un dossier entier | **1 crédit par 3 sources** |
-
-Vérification contre le coût réel, dans l'hypothèse **prudente** (aucun *cache hit* de prompt,
-traduction rendue conditionnelle). « Couverture » = ce qui est facturé ÷ ce que ça coûte :
-
-| Source | Facturé | Coût réel | Couverture |
+| Traitement fournisseur | Tarif USD de référence | Conversion indicative EUR | Source primaire |
 |---|---|---|---|
-| Podcast 60 min | 62 crédits = 0,3100 € | 0,2386 € | **130 %** |
-| Podcast 180 min | 182 crédits = 0,9100 € | 0,7041 € | **129 %** |
-| Vidéo YouTube 20 min | 3 crédits = 0,0150 € | 0,0138 € | **108 %** |
-| Vidéo YouTube 3 h | 11 crédits = 0,0550 € | 0,0427 € | **129 %** |
-| Article, page web, note | 2 crédits = 0,0100 € | 0,0077 € | **129 %** |
-| PDF 10 pages (LlamaParse à **3 crédits/page**) | 12 crédits = 0,0600 € | 0,0442 € | **136 %** |
-| PDF 10 pages (**repli Unstructured**) | 12 crédits = 0,0600 € | 0,1409 € | **43 %** |
+| Deepgram Nova-3 batch monolingue | 0,0043 $/minute | 0,003843404 €/minute ; 0,230604219 €/heure | [Deepgram, Pre-Recorded](https://deepgram.com/pricing) |
+| Sous-titres YouTube, acteur Starvibe de référence | 5 $/1 000 résultats, soit 0,005 $/vidéo | 0,004469074 €/vidéo | [Starvibe](https://apify.com/starvibe/youtube-video-transcript) |
+| LlamaParse, mode Cost-effective / Parse page with LLM | 3 crédits fournisseur/page × 1,25 $/1 000 crédits = 0,00375 $/page | 0,003351806 €/page facturée | [LlamaParse](https://developers.llamaindex.ai/llamaparse/general/pricing/) |
+| Unstructured, fournisseur de repli | 0,015 $/page | 0,013407222 €/page facturée | [Unstructured](https://unstructured.io/pricing) |
 
-Le barème couvre tout entre 108 % et 136 %, sauf une ligne — et cette ligne ne se corrige pas par
-le prix. Facturer la page au coût d'Unstructured (2,6 crédits/page) ferait payer 28 crédits un PDF
-de 10 pages à tous les utilisateurs pour couvrir une panne de LlamaParse. **La réponse est de
-supprimer le repli**, pas de le tarifer : voir R.4.
+Les crédits de cette table sont **l'unité de facturation de LlamaParse**, jamais une unité
+affichée au testeur ni une allocation de l'app. Une image analysée compte selon les pages
+facturées par le parseur. Pour un tableur ou un autre format à unité spécifique, lire l'unité
+réellement facturée plutôt que d'inventer un nombre de pages.
 
-La ligne documentaire est celle qui a le plus bougé depuis la première version de ce document, et
-c'est le seul endroit où le barème a été **re-dérivé plutôt que confirmé** : à 3 crédits/page — le
-tarif v1 le moins cher qui produise du markdown, cf. argument 3 — la page coûte 0,003225 € en
-acquisition, contre 0,005 € facturés par le crédit de page, soit **155 % sur le seul terme
-d'acquisition**. Le 1 crédit/page du barème tient donc, alors que le `document_pages_per_minute: 5`
-d'aujourd'hui ne tenait pas.
+**LLM, prix USD par million de tokens, traitement Standard :**
 
-**Une réserve à porter au crédit du lecteur : les lignes non-audio sont plus serrées que ce tableau
-ne le dit.** Ses coûts réels supposent 12 000 tokens par heure de contenu ; la mesure de bout en bout
-en donne **≈16 500** (§ 3.9). L'effet est très inégal selon la ligne, et c'est ce qui rend la réserve
-utile :
+| Modèle et contexte | Entrée fraîche | Lecture du cache | Écriture du cache | Sortie facturée |
+|---|---|---|---|---|
+| Luna, au plus 272 000 tokens en entrée | 0,10 $ | 0,01 $ | 0,125 $ | 0,50 $ |
+| Luna, au-delà de 272 000 tokens en entrée | 0,20 $ | 0,02 $ | 0,25 $ | 0,75 $ |
+| GPT-5-nano, traduction, modèle configuré actuellement | 0,05 $ | 0,005 $ | Pas de tarif distinct retenu | 0,40 $ |
 
-- **Les deux lignes de podcast ne bougent presque pas** — Deepgram y pèse 93 % du coût, et son tarif
-  mesuré (0,003727 €/min) est à 0,6 % de l'hypothèse. Elles passent de 130 % et 129 % à **≈126 %**.
-- **La ligne « Vidéo YouTube 3 h » est celle qui souffre.** Son coût est presque intégralement du LLM,
-  donc il croît avec les tokens : les 129 % tombent dans une fourchette de **95 à 110 %**, selon la
-  part d'entrée (qui croît de 37,8 %) et de sortie (qui ne croît pas proportionnellement) dans le
-  scénario « les cinq artefacts demandés ». Je ne peux pas la resserrer davantage sans mesurer un
-  transcript YouTube long, et aucun n'est journalisé avec sa durée.
-- **Le remède, si tu veux la sécuriser : 1 crédit par 15 minutes commencées** au lieu de 20. Une vidéo
-  de 3 h passe de 11 à 14 crédits (0,0700 €), ce qui remonte la couverture à ~121 % dans l'hypothèse
-  la plus défavorable. Le prix affiché ne change pas ; c'est un ajustement d'une ligne du barème.
+Sources consultées le 2026-10-26 : [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna),
+[GPT-5-nano](https://developers.openai.com/api/docs/models/gpt-5-nano).
+La ligne de contexte long de Luna s'applique à **toute** la requête au-delà du seuil.
+Les exemples supposent le traitement Standard sans supplément régional. Une autre modalité ou
+un supplément effectivement applicable doit être compté à son propre tarif.
 
-Je ne l'ai pas appliqué d'office parce qu'il durcit la ligne mise en avant par le produit sur la base
-d'un seul point de mesure, pris sur un podcast et non sur des sous-titres — voir la question 14.
+#### R.2.2 Tableau des actions
 
-**Le barème est dimensionné sans cache, et c'est maintenant un choix mesuré, plus une prudence.** Sur
-les 90 générations de `media_artifacts-dev`, le prompt caching ne récupère que **7,6 %** du coût LLM
-(§ R.6, point 3) : 8 appels sur 90 touchent, 43 % ont un prompt sous le seuil de 1 024 tokens
-qu'OpenAI exige, et le TTL relevé — `in_memory`, ~5–10 min d'inactivité, 1 h au maximum, pas de
-rétention étendue 24 h sur `gpt-5.4-nano` — confine le gain à **l'intérieur d'une rafale**. Un
-utilisateur qui demande un résumé aujourd'hui et des flashcards demain paie deux fois l'entrée
-pleine. Compter sur le cache dans un barème aurait donc été une erreur de 7,6 %, pas de 56 %.
+| Action | Consommation à retenir |
+|---|---|
+| Audio ou vidéo nécessitant une transcription | Durée réellement transcrite × tarif du chemin utilisé : **≈ 0,00384 €/minute**, soit **≈ 0,231 €/heure**, pour Nova-3 batch monolingue. Ajouter les traitements automatiques effectivement exécutés et une collecte payante éventuelle. |
+| Vidéo YouTube dont les sous-titres sont récupérés via le fournisseur payant | **≈ 0,00447 €/vidéo pour la récupération Starvibe**, puis coût réel de l'aperçu et d'une éventuelle traduction. Les générations ultérieures sont comptées séparément. |
+| Document ou images analysées, dont les photos Instagram | **≈ 0,00335 €/page ou image facturée par LlamaParse au mode retenu**, puis traitements IA exécutés. Ajouter la collecte Instagram lorsqu'elle est nécessaire. |
+| Document traité par le fournisseur de repli Unstructured | **≈ 0,01341 €/page facturée**, puis traitements IA exécutés. Le coût du repli est compté selon le fournisseur utilisé, sans l'assimiler à celui de LlamaParse. |
+| Article, page web, note ou fichier texte décodé localement | Extraction locale à **0 € de fournisseur**, puis coût réel de l'aperçu et d'une éventuelle traduction. Cela ne rend pas l'import complet systématiquement gratuit. |
+| Nouvelle génération de résumé, fiche ou cartes mémo sur un média | **Coût réel de l'appel IA**, selon les tokens en entrée, en sortie et en cache, au tarif du modèle utilisé. Chaque nouvelle génération est comptée. |
+| Nouvelle génération sur un dossier | **Même règle**, sur le contenu sélectionné et les instructions réellement transmis ; le nombre de sources seul n'est plus un tarif. |
+| Chaque question au chat, même sur un seul média | **Coût réel de chaque réponse**, en comptant corpus, instructions, question et historique transmis, ainsi que sortie et cache. |
+| Lecture d'un contenu ou résultat déjà disponible | **0 €**, tant qu'aucun nouveau traitement fournisseur n'est déclenché. Une traduction ou une nouvelle génération déclenchée à l'ouverture compte comme un traitement distinct. |
+
+L'aperçu automatique est un appel Luna propre. La traduction de transcript garde le modèle et
+le tarif de son chemin actuel ; elle ne prend pas automatiquement le tarif de Luna.
+Chaque appel réellement exécuté est compté **une seule fois** : le tableau n'ajoute pas un
+forfait d'import à des coûts qui couvriraient déjà les mêmes traitements.
+
+Les collectes TikTok et Instagram restent des composantes distinctes : valoriser les événements
+facturés par l'acteur et le plan utilisés. Les prix « from » des pages commerciales ne suffisent
+pas à fixer un coût unique pour tous les comptes ou toutes les options.
+Sources : [TikTok](https://apify.com/scrape-creators/best-tiktok-transcripts-scraper),
+[Instagram posts](https://apify.com/apify/instagram-post-scraper),
+[Instagram reels](https://apify.com/apify/instagram-reel-scraper).
+
+#### R.2.3 Calcul des appels IA
+
+Pour Luna, partitionner les tokens d'entrée en catégories disjointes ; ne pas compter les tokens
+en cache une deuxième fois au tarif d'entrée fraîche :
+
+    entrée_fraîche = entrée_totale − lecture_cache − écriture_cache
+    coût_USD = (entrée_fraîche × tarif_entrée
+                + lecture_cache × tarif_lecture
+                + écriture_cache × tarif_écriture
+                + sortie_facturée × tarif_sortie) / 1 000 000
+    coût_EUR = coût_USD / 1,1188
+    consommation_pct = coût_EUR / 5 × 100
+
+La sortie facturée inclut les tokens de raisonnement lorsque le fournisseur les inclut dans le
+total de sortie. **Ne pas les ajouter à nouveau** ; la longueur du texte visible n'est pas à elle
+seule une mesure du coût. Appliquer à la traduction les catégories et tarifs réellement retournés
+par son modèle, sans lui attribuer une écriture de cache Luna.
+
+Pour le chat, la taille du contexte inclut les tours antérieurs renvoyés au modèle. Deux
+questions portant sur les mêmes sources peuvent donc consommer différemment. La lecture du cache
+est valorisée au tarif réduit uniquement si les métriques du fournisseur la confirment.
+
+#### R.2.4 Exemples calculés, sans forfait par action
+
+Les valeurs sont des **exemples arithmétiques**, jamais des prix fixes par réponse ni des
+capacités mensuelles promises. Les deux premières lignes utilisent Luna Standard, contexte
+court, sans cache ; les tokens de sortie indiqués comprennent tous les tokens de sortie facturés.
+
+| Exemple | Calcul fournisseur | Coût indicatif EUR | Part du budget de 5 € |
+|---|---|---|---|
+| 10 000 tokens d'entrée + 2 000 de sortie | (10 000 × 0,10 + 2 000 × 0,50) / 1 000 000 = 0,002 $ | **≈ 0,00179 €** | **≈ 0,036 %** |
+| 100 000 tokens d'entrée + 5 000 de sortie | (100 000 × 0,10 + 5 000 × 0,50) / 1 000 000 = 0,0125 $ | **≈ 0,01117 €** | **≈ 0,223 %** |
+| 600 minutes d'audio + 100 pages LlamaParse + 100 générations du premier exemple | 600 × 0,0043 + 100 × 0,00375 + 100 × 0,002 = 3,155 $ | **≈ 2,82 €** | **≈ 56,4 %** |
+
+**Le troisième exemple est un sous-total**, avant les aperçus, traductions, collectes
+supplémentaires et autres appels effectivement exécutés. Il ne représente pas le coût complet
+de ces imports.
+
+Vérifications complémentaires :
+
+- **Secondes de transcription** : 40 secondes à 0,0043 $/minute donnent
+  (40 / 60) × 0,0043 / 1,1188 **≈ 0,002562269 €** ; 65 secondes donnent
+  **≈ 0,004163687 €**. Ne pas arrondir ces durées à une ou deux minutes dans le quota.
+  Un éventuel minimum de facturation fournisseur doit être confirmé séparément.
+- **Pages facturées** : 10 pages à 3 crédits fournisseur/page coûtent
+  10 × 3 × 1,25 / 1 000 / 1,1188 **≈ 0,033518055 €** ; 100 pages coûtent
+  **≈ 0,335180551 €**. Lire les unités réellement facturées, dont celles des formats particuliers.
+- **Lecture du cache** : sur 10 000 tokens d'entrée dont 8 000 lus en cache et 2 000 frais,
+  avec 2 000 tokens de sortie, le coût est
+  (2 000 × 0,10 + 8 000 × 0,01 + 2 000 × 0,50) / 1 000 000 / 1,1188
+  **≈ 0,001144083 €** ; ne pas facturer aussi les 8 000 tokens comme de l'entrée fraîche.
+- **Écriture du cache** : sur 10 000 tokens d'entrée dont 8 000 écrits en cache et 2 000 frais,
+  avec 2 000 tokens de sortie, le coût est
+  (2 000 × 0,10 + 8 000 × 0,125 + 2 000 × 0,50) / 1 000 000 / 1,1188
+  **≈ 0,001966393 €** ; l'écriture remplace le tarif d'entrée sur ces tokens, elle ne s'y ajoute pas.
+- **Réutilisation** : ouvrir un résultat existant sans appel fournisseur supplémentaire ajoute
+  **0 €** au compteur. Relancer une lecture ne crée pas un nouveau coût de génération.
+- **Promotion** : 60 minutes Nova-3 batch monolingue consomment **≈ 0,230604219 €** de budget
+  normalisé, même si le fournisseur les fournit sur un crédit d'inscription.
+
+#### R.2.5 Limites des mesures et prochaine étape
+
+- **Tarifs publics, exemples et mesures de dev sont distingués.** Les prix ci-dessus ont été
+  consultés le 2026-10-26 ; les simulations utilisent des quantités choisies. Ils ne constituent
+  pas une nouvelle facture ni un benchmark de qualité.
+- Les lectures dev du 2026-10-26 ont retrouvé **43 tours de chat Luna**, **18 aperçus** et
+  **2 résumés courts** avec ce modèle. Le plus gros prompt de chat de cet échantillon contient
+  **9 525 tokens** : il ne valide pas les coûts ou le taux de cache de longues conversations.
+  Les anciennes générations sans modèle renseigné ne sont pas réattribuées à Luna.
+- Le tarif normal hors promotions est un **coût d'usage calculé**. Il faut conserver fournisseur,
+  modèle, mode, quantités et tarif daté pour comparer ensuite la valorisation aux relevés ; le
+  taux de change peut également différer de celui du règlement bancaire.
+- Confirmer les arrondis et minima Deepgram, les unités facturées par format documentaire et les
+  événements facturés par les acteurs de collecte avant le branchement du compteur. Ne pas
+  transformer une métrique manquante en coût nul.
+- Les échecs facturés, tentatives multiples, appels partagés entre comptes et interruptions sans
+  métrique complète demandent une règle explicite d'attribution lors de l'implémentation. Le
+  tableau seul ne prouve ni un débit unique ni un plafond de dépense strict.
+- L'artefact podcast avec synthèse vocale n'est pas couvert par les exemples de génération de
+  texte : son appel de synthèse devra être valorisé à son propre tarif et s'ajouter au LLM.
+  Aucun tarif de synthèse n'est fixé ici (§ question 15).
+- **Le runtime reste inchangé dans cette livraison** : compteur en minutes et allocation bêta
+  actuelle encore en place, réservations et nouvelles interfaces à implémenter ensuite. Cette
+  étape ne valide ni les allocations après bêta ni les offres, annuels ou recharges de R.3.
 
 ### R.3 La grille de paliers
+
+> **Proposition commerciale historique, à recalculer.** Les 40 / 360 / 720 crédits, équivalents
+> et marges ci-dessous reposent sur l'ancien barème à forfait. Ils ne définissent ni le budget
+> bêta de 5 € ni les futures allocations commerciales. Le facteur de charge reste à mesurer.
 
 Trois formules dont deux ne diffèrent que par un nombre, sans moyen de connaître son propre
 volume : c'est le vrai défaut de compréhensibilité, et il ne se règle pas par de la copy. Il se
@@ -406,6 +504,9 @@ stock** plutôt qu'illimité en conservation.
 
 ### R.4 Ce qui disparaît, et pourquoi
 
+> **Pistes initiales, non ordre d'exécution.** La décision du 2026-10-26 remplace le barème de
+> consommation ; elle n'autorise pas une refonte des offres ou un changement de fournisseurs.
+
 - **Le palier à 3 € (`text_only` / « Reader »).** Sa raison d'être était « seulement du texte », une
   catégorie qui cesse d'exister dès que le texte est mesuré. Même à 15 % de commission son net est de
   2,125 € : il faudrait **18 abonnés au minimum** — avant tout coût variable — pour couvrir la seule
@@ -424,14 +525,18 @@ stock** plutôt qu'illimité en conservation.
   > coût de 2,89 € venait du taux de change faux de la minute ; avec le barème de § R.2, il est
   > borné par l'allocation de l'essai. **L'essai est conservé**, au niveau du palier haut, suivi
   > du palier Découverte — décision de l'owner, § Owner Validation point 2.
-- **Le repli Unstructured.** 43 % de couverture même avec le barème corrigé, et il se déclenche sur
-  *n'importe quelle* `ParseError` (`docs/INGESTION_WORKERS_PROVIDERS.md:509`), y compris le HTTP 402
-  d'un pool épuisé. Quand LlamaParse ne répond pas, le document attend ou est refusé — il n'est pas
-  traité en silence à 3,7× le prix.
+- **Le repli Unstructured : ancienne proposition de suppression, non validée ici.** Le modèle
+  cible de R.2 valorise le fournisseur effectivement utilisé, avec un coût distinct pour le
+  repli. Le ratio de couverture de 43 % concernait le forfait initial ; il ne justifie pas de
+  supprimer ce chemin dans cette étape documentaire. Le choix de conserver ou retirer le
+  fournisseur est un arbitrage séparé.
 - **`name_fr`.** Mauvaise forme, pas mauvaise valeur : **un champ pour onze locales**. Le nom d'une
   formule est de la copy, donc une clé i18n. Voir R.5.
 - **`captions_minutes`, `document_pages_per_minute`, `text_file_minutes`, `folder_sources_per_minute`,
-  `minutes_per_month`, `max_minutes_per_item`.** Remplacés, pas conservés. Attention : le docstring
+  `minutes_per_month`.** Barèmes à remplacer lors de l'implémentation du comptage de R.2, pas dans
+  cette livraison. Une durée maximale d'import, telle que `max_minutes_per_item`, est une
+  contrainte technique distincte du budget ; le nouveau tableau n'en décide pas la suppression.
+  Attention : le docstring
   de `_merge_defaults` (`pricing_config_service.py:210-214`) est explicite — une clé de premier
   niveau retirée des defaults **reste dans la table** jusqu'à sa suppression. Il faut donc les
   supprimer dans `pricing_config-dev` *et* `pricing_config-prod`, pas seulement dans le code.
@@ -440,6 +545,10 @@ Aucune couche de compatibilité n'est nécessaire : rien n'est en circulation qu
 réémettre, et un testeur ne détient que le build qu'il a installé.
 
 ### R.5 Comment on le dit à quelqu'un qui ne connaît rien
+
+> **Copy initiale à revoir.** Les formulations en crédits et les capacités chiffrées ci-dessous
+> ne sont pas la copy cible de la bêta. Owner Validation et R.2 imposent un pourcentage, sans
+> euros ni crédits visibles ; les équivalents éventuels nécessitent des hypothèses explicites.
 
 Le paywall actuel est meilleur que ce que l'axe 1 laissait croire : il a déjà une table de coûts en
 langage humain (`plan.cost.*`), un sélecteur « Choose how much you send each month », et un badge
@@ -673,6 +782,10 @@ précisément ce qui empêche `notes` de partir sur `gpt-4o-mini`. L'absence tot
 la facture sur trois mois le prouve indépendamment du code.
 
 ### R.7 Où chaque changement s'applique
+
+> **Cartographie historique à revalider.** Ces emplacements et choix de modèles décrivent la
+> recherche initiale. Cette livraison ne les applique pas ; le choix Luna du 2026-10-10 et le
+> comptage de R.2 priment sur les anciennes suggestions de modèles et de forfaits.
 
 | Quoi | Où, exactement |
 |---|---|
@@ -1824,14 +1937,19 @@ l'axe 1 invalide.
 
 ## Ce qui doit changer
 
+**État au 2026-10-26 :** la référence de consommation est arrêtée dans Owner Validation et R.2.
+La liste ci-dessous conserve les autres pistes du benchmark initial ; les choix commerciaux et
+changements de fournisseurs restent ouverts. Aucun statut de déploiement ne découle de cette
+mise à jour documentaire.
+
 Du plus coûteux si ignoré au plus cosmétique. « **B** » = bug (code ≠ config), « **M** » = erreur
 de modèle (le chiffre est faux), « **A** » = arbitrage produit (le chiffre est juste, le choix se
 discute).
 
 | # | Type | Correction | Emplacement | Priorité |
 |---|---|---|---|---|
-| **0** | **A** | **Trancher la refonte de § La refonte proposée** : le crédit à la place de la minute, un forfait de 2 crédits par envoi, Découverte gratuit 40 / **Standard 5 € 360** / **Intensif 9 € 720**, annuel à −20 %, recharge consommable 100 crédits à 2,99 €. **Les corrections 1, 15, 16 et 19 sont absorbées par cette décision** et ne se font pas séparément : les traiter une à une revient à recalibrer deux fois, ce que la règle « les nettoyages d'abord » interdit. | § R.7 donne l'emplacement ligne à ligne | **Bloque le lancement** |
-| 1 | **M** | Cesser de facturer 1 minute forfaitaire une vidéo YouTube — **absorbé par la correction 0** (barème : 2 crédits + 1 par 20 min commencées, couverture 108–129 %). Si la refonte est refusée, le minimum vital est de facturer YouTube **à sa durée**, car le coût dominant est le LLM en aval, proportionnel à la longueur du transcript. | `unit_conversion.captions_minutes` dans DynamoDB `pricing_config-<env>` + `docs/research/task-287-…/README.md` (thèse à corriger) + `plan.cost.captions.*` dans les 11 catalogues i18n | **Bloque le lancement** |
+| **0** | **A** | **Consommation décidée le 2026-10-26** : 5 €/testeur/mois, usage fournisseur mesuré hors promotions, chaque génération comptée et pourcentage visible. R.1–R.2 remplacent le forfait de 2 crédits par import. L'implémentation reste une étape suivante ; offres, allocations commerciales, annuels et recharges restent à trancher après recalcul. | Owner Validation et R.1–R.2 ; R.7 à revalider avant implémentation | Référence documentée ; runtime à faire |
+| 1 | **M** | Remplacer la minute forfaitaire YouTube par la récupération réellement facturée, puis compter séparément aperçu, traduction et générations exécutés. Il n'y a plus de choix entre 15 ou 20 minutes de vidéo par crédit : l'acquisition a son tarif fournisseur et le LLM suit ses tokens (§ R.2). | Compteur et interfaces à reprendre lors de l'implémentation du modèle cible | À implémenter |
 | 2 | **B** | Appeler `provider_pool_guard.spend_allowed` avant LlamaParse, comme `apify_adapter.py:212-214` le fait pour Apify, **et compter en crédits** : à 3 crédits/page le pool croit avoir dépensé le tiers du réel, donc `alarm_pct: 60` se déclenche après l'épuisement et `stop_pct: 90` jamais. Sans cet appel, l'épuisement bascule silencieusement sur un fournisseur 9,7× plus cher, et il arrive **dès le premier abonné documentaire intensif** (3 333 pages, pas 10 000). | `media_summarizer/workers/document_parsing/worker.py` (avant `:156`, et `:253-260` pour l'unité) + `provider_pools.llamaparse.capacity_unit` | **Bloque le lancement** |
 | 2b | **B** | **Envoyer le mode LlamaParse explicitement** dans la charge utile d'upload : `parse_mode=parse_page_with_llm`, qui est le défaut mesuré le 2026-09-09 — donc **à coût rigoureusement nul**, 3 crédits/page avant comme après. Ce qu'on achète est la stabilité : le défaut n'est publié nulle part, l'organisation porte un drapeau `show_parse_v1` réévalué par le fournisseur, et sa nomenclature de facturation a déjà changé sous le dépôt le 2026-08-29. Le mode est une décision de prix : il appartient à la requête. | `media_summarizer/infrastructure/resolvers/llamaparse_resolver.py:191-194` | **Bloque le lancement** |
 | 3 | **M** | **Accordé — confirmé par l'owner le 2026-10-04**, consigné dans `docs/V1_LAUNCH_PLAN.md` § 2. Seules la date d'approbation et la date d'effet restent à relever dans le mail Apple. *Historique :* **fait le 2026-09-09** : la candidature au Small Business Program est déposée. Reste à **relever et consigner la date d'approbation** — l'effet est décalé de « fifteen (15) days after the end of the fiscal calendar month in which your enrollment is approved », soit ~15 novembre 2026 pour une approbation en septembre. Jusque-là les nets sont ceux de 30 % (−17,6 %). | Confirmation Apple par mail + App Store Connect → **Business**. Trace à écrire dans `docs/V1_LAUNCH_PLAN.md`, qui ne mentionne pas le programme | Haute |
@@ -1864,20 +1982,20 @@ discute).
 
 ## Questions restées ouvertes
 
-Ma recommandation d'abord dans chaque cas. Les trois premières conditionnent la refonte ; les
-suivantes, le reste du dossier. **Les questions auxquelles la session du 2026-09-09 a répondu ont été
+Les entrées 1 et 14 ont été closes par la décision de consommation du 2026-10-26. Les valeurs
+commerciales encore citées dans les autres questions sont les hypothèses historiques de R.3,
+à recalculer avant décision ; elles ne découlent pas du budget bêta de 5 €. **Les questions
+auxquelles la session du 2026-09-09 a répondu ont été
 retirées de cette liste** et leurs réponses sont dans les sections concernées — l'acteur Apify
 réellement déployé (§ 3.3), le plan Apify (§ 2.3), la table de tarifs LlamaParse (§ 3.4), le TTL du
 cache de prompt (§ R.6), le dépôt de la candidature SBP (§ 2.4), les records Algolia par source
 (§ 3.6), **le taux réel de `cached_tokens` et le volume de tokens** (§ R.6 point 3 et § 3.9 — ils
 étaient lisibles dans `media_artifacts-dev` et CloudWatch, sans rien demander à l'owner).
 
-1. **Le crédit remplace-t-il la minute ?** Recommandation : **oui**. L'argument n'est pas
-   esthétique : un coût fixe par source ne s'exprime pas en durée, et une minute de contenu coûte 22×
-   plus en audio qu'en texte. Aucune valeur de « minute » ne peut être juste sur les deux. Si tu
-   refuses, la conséquence assumée est que le texte reste sous-facturé et qu'il faut descendre
-   `items_per_day` de 60 à ~12 pour borner l'exposition — sachant qu'à 12 on passe aussi sous le
-   plafond d'acteur Apify de 50/jour, ce qui n'est pas un hasard.
+1. **Close le 2026-10-26 — quel comptage remplace la minute ?** Retenu : coût fournisseur
+   valorisé sur l'usage mesuré, hors crédits promotionnels, avec chaque génération comptée.
+   Budget bêta de 5 €/mois, affichage en pourcentage sans euros ni crédits. Le barème cible est
+   en R.2 ; le compteur runtime reste à implémenter.
 2. **Supprime-t-on le palier à 3 € ?** Recommandation : **oui**, il perd sa raison d'être (« seulement
    du texte » n'existe plus dès que le texte est mesuré) et même à 15 % son net de 2,125 € exigerait
    18 abonnés pour couvrir la seule infrastructure, avant tout coût variable. Il est remplacé par
@@ -1915,13 +2033,9 @@ cache de prompt (§ R.6), le dépôt de la candidature SBP (§ 2.4), les records
    poste à zéro** (aucun événement `stored_file_mb`, 0 fichier dans le magasin du projet). Détail et
    conséquences en § 3.4 ; commandes en § Sources. Ce qui reste, et qui est une décision et non une
    lecture : **envoyer le mode explicitement** (correction 2b), parce que le défaut est révocable.
-9. **Numéro de tâche pour ce répertoire.** Recommandation : **task-389**, le prochain libre.
-   *Corrigé deux fois le 2026-09-09* — `task-383` était libre à la rédaction de cette question, puis
-   `task-384` ; le backlog s'arrête maintenant à **task-388** (383 à 385 : Instagram/TikTok ; 386 à
-   388 : l'artefact podcast audio). Un
-   `git mv docs/research/pricing-challenge docs/research/task-389-pricing-challenge` suffit. Vérifie
-   `ls backlog/tasks/ | tail -1` avant de le faire : trois tâches ont été créées pendant cette
-   session.
+9. **Rattachement du benchmark à une tâche dédiée.** Les numéros proposés en septembre ne sont
+   pas des réservations et ne doivent pas être réutilisés sans vérification. Le chemin du dossier
+   est conservé dans cette étape ; task-543 suit uniquement sa mise à jour documentaire.
 10. **Marché de lancement.** J'ai recalculé les nets sur FR / DE / IE / HU et l'amplitude est de
    ±3 % : la question ne change aucune conclusion, mais elle décide de quoi `revenue_net_eur` est le
    net. Hypothèse retenue faute de réponse : **France seule**.
@@ -1941,23 +2055,17 @@ cache de prompt (§ R.6), le dépôt de la candidature SBP (§ 2.4), les records
     `gpt-5.4-nano-2026-03-17`. Le recalcul `amount / quantity` sur les six lignes de l'export de
     facturation rend exactement les tarifs de base : **aucune majoration n'est appliquée**. Rien à
     corriger dans `llm_pricing.py:22-25`.
-14. **Veux-tu resserrer la ligne « sous-titres » du barème à 1 crédit par 15 minutes ?** C'est la seule
-    question que la mesure des tokens ouvre plutôt qu'elle ne ferme. À 20 minutes, la couverture d'une
-    vidéo de 3 h tombe entre 95 et 110 % (§ R.2) ; à 15 minutes elle remonte à ~121 %. Recommandation :
-    **non, pas tout de suite** — mesurer d'abord un transcript YouTube long, ce qui suppose la
-    correction 19b (aucun job YouTube ne journalise sa durée). Le seul point de mesure dont je dispose
-    est un podcast en français, et durcir la ligne mise en avant par le produit sur cette base serait
-    une extrapolation. Si tu préfères la sécurité au bon prix, c'est un chiffre à changer, rien
-    d'autre.
+14. **Close le 2026-10-26 — 15 ou 20 minutes de vidéo par crédit ?** Cette alternative disparaît
+    avec le forfait initial. La récupération des sous-titres et les appels IA réellement exécutés
+    sont comptés séparément (§ R.2). Les longs contenus restent nécessaires pour mesurer l'usage
+    réel et valider les estimations de réservation lors de l'implémentation.
 15. **L'artefact podcast audio (task-386 à 388) n'est pas dans le barème.** Créées le 2026-09-09,
     après la rédaction de ce document : un **sixième type d'artefact demandable**, un podcast audio
     généré depuis un média ou un dossier. Son coût n'est pas de même nature que les cinq autres — il
     porte de la **synthèse vocale**, facturée au caractère ou à la minute produite, là où les cinq
-    artefacts actuels ne coûtent que des tokens. Le forfait de 2 crédits ne le couvre donc pas, et je
-    ne peux pas le tarifer avant que le benchmark task-386 ait tranché le fournisseur. Recommandation :
-    **le facturer à l'acte, en crédits, dès sa mise en service** — pas l'inclure dans le forfait — et
-    ajouter à task-386 un critère de coût unitaire pour que le chiffre existe au moment de décider.
-    C'est la seule ligne du barème dont je sais d'avance qu'elle manque.
+    artefacts textuels ne coûtent que des tokens. **Le modèle de R.2 doit compter l'appel de synthèse
+    à son propre tarif, en plus du LLM.** Le fournisseur et ses unités doivent être confirmés avant
+    d'en donner un exemple chiffré. Aucun forfait ni tarif de synthèse n'est arrêté dans cette étape.
 
 ---
 
@@ -2055,7 +2163,9 @@ sections concernées et n'apparaît plus ici ; le partage exact entre mesuré et
 
 ### Tarifs et normes, avec date de consultation
 
-Toutes consultées le **2026-09-09**.
+Les sources de R.2 ont été consultées le **2026-10-26**, avec le change BCE du même jour.
+La table historique ci-dessous rapporte les consultations du **2026-09-09** ; ses montants ne
+remplacent pas la référence d'octobre et ne sont pas réactualisés implicitement.
 
 | Source | URL | Ce qui en est tiré |
 |---|---|---|

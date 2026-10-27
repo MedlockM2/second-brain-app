@@ -35,6 +35,7 @@ import { BorderRadius, Spacing, type Theme } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import { FolderPickerView } from "./FolderPickerView";
+import { KeyboardViewport, type KeyboardViewportHandle } from "./KeyboardViewport";
 import { ScreenHeader, HeaderIconButton } from "./ScreenHeader";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { OrganizationService } from "../services/organizationService";
@@ -70,6 +71,7 @@ export function FolderSaveSheet({
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
+  const viewportRef = useRef<KeyboardViewportHandle>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,6 +176,7 @@ export function FolderSaveSheet({
       animationType="slide"
       onRequestClose={onClose}
       onDismiss={handleDismissed}
+      onShow={() => viewportRef.current?.refresh()}
       statusBarTranslucent
     >
       <View style={styles.root}>
@@ -187,42 +190,44 @@ export function FolderSaveSheet({
           accessibilityRole="button"
         />
 
-        <View
-          style={[styles.sheet, { paddingBottom: insets.bottom }]}
-        >
-          <View style={styles.handle} />
+        <KeyboardViewport ref={viewportRef} active={visible} contentContainerStyle={styles.root}>
+          {(keyboardVisible) => (
+            <View style={[styles.sheet, { paddingBottom: keyboardVisible ? 0 : insets.bottom }]}>
+              <View style={styles.handle} />
 
-          {/* The picker's screen header, minus the Save button it has no use
-              for: the trailing slot carries the saving spinner instead. */}
-          <ScreenHeader
-            title={t("folderPicker.title")}
-            titleStyle={styles.headerTitle}
-            leading={
-              <HeaderIconButton
-                icon="arrow-back"
-                onPress={onClose}
-                testID="folder-save-sheet-close"
-                accessibilityLabel={t("common.goBack")}
+              {/* The picker's screen header, minus the Save button it has no use
+                  for: the trailing slot carries the saving spinner instead. */}
+              <ScreenHeader
+                title={t("folderPicker.title")}
+                titleStyle={styles.headerTitle}
+                leading={
+                  <HeaderIconButton
+                    icon="arrow-back"
+                    onPress={onClose}
+                    testID="folder-save-sheet-close"
+                    accessibilityLabel={t("common.goBack")}
+                  />
+                }
+                trailing={
+                  <View style={styles.headerAction}>
+                    {isSaving ? <ActivityIndicator color={Colors.primary} /> : null}
+                  </View>
+                }
               />
-            }
-            trailing={
-              <View style={styles.headerAction}>
-                {isSaving ? <ActivityIndicator color={Colors.primary} /> : null}
-              </View>
-            }
-          />
 
-          <FolderPickerView
-            folders={folders}
-            selectedId={null}
-            showUnsorted={false}
-            busy={isSaving}
-            error={error}
-            onSelect={handleSelect}
-            onFolderCreated={handleFolderCreated}
-            onCreateFailed={setError}
-          />
-        </View>
+              <FolderPickerView
+                folders={folders}
+                selectedId={null}
+                showUnsorted={false}
+                busy={isSaving}
+                error={error}
+                onSelect={handleSelect}
+                onFolderCreated={handleFolderCreated}
+                onCreateFailed={setError}
+              />
+            </View>
+          )}
+        </KeyboardViewport>
       </View>
     </Modal>
   );

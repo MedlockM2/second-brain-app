@@ -13,6 +13,8 @@ export type AuthCodeAction = "/register" | "/confirm-registration" | "/resend-co
 export function authErrorKey(error: unknown): TranslationKey {
   const code = (error as { code?: string } | null)?.code;
   const keys: Record<string, TranslationKey> = {
+    AUTH_GOOGLE_INVALID: "auth.google.failed",
+    AUTH_GOOGLE_NO_ACCOUNT: "auth.google.noGoogleAccount",
     AUTH_APPLE_INVALID: "auth.appleFailed",
     AUTH_ACCOUNT_EXISTS: "error.emailAlreadyExists",
     AUTH_SOCIAL_ONLY: "auth.socialOnly",

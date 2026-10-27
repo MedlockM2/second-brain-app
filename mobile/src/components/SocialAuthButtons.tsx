@@ -33,7 +33,7 @@ interface SocialAuthButtonsProps {
   disabled?: boolean;
 }
 
-/** Native Apple on iOS; browser authorization for Google and Android Apple. */
+/** Native Apple on iOS and Google on Android; browser authorization otherwise. */
 export function SocialAuthButtons({ onError, onAccountExists, onSignedIn, disabled }: SocialAuthButtonsProps) {
   const { colors: Colors, mode } = useTheme();
   const styles = useThemedStyles(makeStyles);

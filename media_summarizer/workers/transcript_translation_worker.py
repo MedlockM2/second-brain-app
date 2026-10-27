@@ -2,6 +2,7 @@
 Transcript translation worker -- translates transcripts asynchronously via SQS.
 
 Consumes messages from TRANSCRIPT_TRANSLATION_QUEUE containing:
+- media_key: content identity for indexing the saves awaiting this translation
 - transcript_s3_key: S3 key of the original transcript to translate
 - target_language: ISO 639-1 language code to translate into
 - source_language_hint: (optional) reliable source-provided language tag
@@ -24,10 +25,10 @@ Unlike the /raw-content endpoint (constrained by API Gateway's 30s timeout),
 this Lambda is triggered by SQS with no Gateway timeout, allowing translations
 of any length to complete.
 
-Nothing else waits on this worker. It serves the reader's full text only: an
+The search worker indexes each save once this translated text is available; an
 artifact is generated from the original transcript and asks the model for the
 output language (task-398), so a translation landing here has no generation to
-wake up and a translation the provider refuses fails nothing but itself.
+wake up. A refused translation leaves the foreign text out of search.
 """
 
 from __future__ import annotations
@@ -37,6 +38,7 @@ import logging
 import time
 from typing import Any, Dict
 
+from media_summarizer.core.services.search_index_dispatch import enqueue_translated_content_indexing
 from media_summarizer.core.services.transcript_translation import (
     TRANSCRIPT_BUCKET,
     TranscriptTranslationError,
@@ -55,6 +57,9 @@ from media_summarizer.utils.logging_config import (
     reset_log_context,
 )
 from media_summarizer.utils.translation_idempotence import (
+    TranslationStatus,
+    build_translation_fingerprint,
+    get_translation_lock,
     mark_translation_done,
     mark_translation_failed,
     mark_translation_in_progress,
@@ -79,6 +84,7 @@ async def process_message(message: Dict[str, Any]) -> None:
     """
     body = json.loads(message.get("Body", "{}"))
 
+    media_key = body.get("media_key")
     transcript_s3_key = body.get("transcript_s3_key")
     target_language = body.get("target_language")
     source_language_hint = body.get("source_language_hint")
@@ -93,7 +99,8 @@ async def process_message(message: Dict[str, Any]) -> None:
 
     try:
         if (
-            not transcript_s3_key
+            not media_key
+            or not transcript_s3_key
             or not target_language
             or not isinstance(worker_owner_id, str)
             or not worker_owner_id
@@ -119,6 +126,15 @@ async def process_message(message: Dict[str, Any]) -> None:
             worker_owner_id=worker_owner_id,
         )
         if not owns_translation:
+            # A previous attempt may have stored the translation and then failed
+            # to dispatch indexing. Replay the fan-out without translating again.
+            lock = await get_translation_lock(build_translation_fingerprint(
+                transcript_s3_key=transcript_s3_key, target_language=target_language,
+            ))
+            if lock and lock.status == TranslationStatus.DONE:
+                await enqueue_translated_content_indexing(
+                    media_key=media_key, reading_language=target_language,
+                )
             log_event(
                 logger,
                 logging.INFO,
@@ -289,6 +305,10 @@ async def process_message(message: Dict[str, Any]) -> None:
         await mark_translation_done(
             transcript_s3_key=transcript_s3_key,
             target_language=target_language,
+        )
+
+        await enqueue_translated_content_indexing(
+            media_key=media_key, reading_language=target_language,
         )
 
         # --- Persist detected language on the job (AC#2, moved from prewarm) ---

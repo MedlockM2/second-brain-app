@@ -102,8 +102,9 @@ resource "aws_lambda_function" "api" {
   # of resource names at runtime (see runtime_env.tf).
   environment {
     variables = merge(local.lambda_environment, {
-      APPLE_AUTH_TABLE       = aws_dynamodb_table.apple_auth.name
-      APPLE_NATIVE_CLIENT_ID = "com.secondbrainlabs.core"
+      APPLE_AUTH_TABLE        = aws_dynamodb_table.apple_auth.name
+      APPLE_NATIVE_CLIENT_ID  = "com.secondbrainlabs.core"
+      GOOGLE_NATIVE_CLIENT_ID = var.cognito_google == null ? "" : var.cognito_google.client_id
       # Disable the S3 preflight check on Lambda (infra is guaranteed by Terraform)
       PRESTART_INFRA_CHECK = "0"
     })

@@ -47,8 +47,8 @@ constituent désormais la source permanente de configuration des fournisseurs.
 Dans Google Cloud, autoriser comme URI de redirection la sortie Terraform
 `cognito_configuration.provider_callback`. Dans Apple Developer, configurer le
 Services ID, le domaine Cognito et cette même URL `/oauth2/idpresponse`, et associer
-le Services ID à l’App ID existant. L’ancien client natif Google ne participe plus
-au flux. Sur iOS, Apple utilise
+le Services ID à l’App ID existant. Le client OAuth Android identifie le package et le certificat de signature pour
+Credential Manager ; le client Web Cognito reste l’audience des preuves Google. Sur iOS, Apple utilise
 le SDK natif et son App ID ; le Services ID et le retour Cognito concernent Apple
 sur web et Android. Aucun mot de passe n’est demandé aux comptes sociaux. La clé
 de fédération Apple doit rester récupérable
@@ -64,11 +64,72 @@ Les droits administratifs de l’API sont limités au pool de son environnement 
 `AdminCreateUser` / `AdminSetUserPassword`. Le stream utilise les opérations Cognito
 autorisées par l’access token, pas des droits d’administration.
 
+## Google natif sur Android (task-540)
+
+Le bouton Google et la liaison Google utilisent le module Expo local
+`mobile/modules/google-credential-manager`, déjà choisi et validé dans task-325.
+Il ouvre le sélecteur système Android via Credential Manager et
+`GetSignInWithGoogleOption`, sans navigateur. iOS conserve Google via la Hosted UI ;
+le web utilise également son parcours OAuth. `Web: n/a (sélecteur système Android)`.
+
+Avant la fenêtre, `POST /api/auth/google/native/challenge` reçoit
+`{purpose: "sign_in" | "link"}`. Pour une liaison, une session Cognito du compte
+cible est obligatoire. La réponse `{client_id, nonce}` porte un nonce aléatoire
+valable dix minutes, enregistré dans la table existante `APPLE_AUTH_TABLE` sous
+`google-proof#<hash>`. Le module passe le nonce à Google. La réponse native est
+soit une preuve, soit une annulation silencieuse, soit l’absence de compte Google,
+qui affiche le message traduit existant. Aucune redirection navigateur de secours.
+
+`POST /api/auth/google/native` reçoit `{identity_token, nonce}`. L’API vérifie la
+signature RS256 avec les clés Google, l’émetteur, l’audience Web exacte,
+l’expiration, le sujet, l’adresse vérifiée et le nonce. Elle consomme atomiquement
+le nonce avec sa date et le compte cible (vide pour une connexion) : une preuve de
+connexion ne peut pas servir à une liaison, ni inversement. Aucun token Google
+n’est conservé ou journalisé. Les sessions passent par le même challenge Cognito
+à usage unique qu’Apple (`native_cognito.py`) ; Cognito reste l’unique émetteur.
+
+La correspondance durable `google#<hash du sub>` et les `identities` Cognito
+retrouvent le compte par sujet Google exact. Une adresse seule ne permet jamais
+la connexion au compte ni sa fusion. Un conflit d’adresse renvoie
+`AUTH_ACCOUNT_EXISTS` et ses méthodes, comme la Hosted UI. Après connexion au
+compte cible, `POST /api/auth/link/google` vérifie une nouvelle preuve liée à cette
+session et applique les règles de liaison existantes, dont le refus de supprimer
+un profil ayant déjà une bibliothèque.
+
+Un nouveau profil natif porte `custom:google_subject`, attribut réservé à
+l’administration, et son identité Google est liée dans Cognito pour ouvrir le
+même compte sur le web et iOS. Un profil Google fédéré existant conserve son
+`sub` et sa bibliothèque. Pour permettre `CUSTOM_AUTH`, que Cognito refuse à un
+profil `EXTERNAL_PROVIDER`, l’API le marque social seul puis le confirme avec un
+mot de passe aléatoire qui ne quitte pas la mémoire. Les méthodes proposées et la
+récupération de mot de passe excluent ce mot de passe technique. Les comptes
+locaux auxquels Google est lié conservent leur mot de passe choisi.
+
+Configuration : `GOOGLE_NATIVE_CLIENT_ID` vient du même `cognito_google.client_id`
+Web que le fournisseur Cognito, injecté par Terraform ; aucun nouveau secret ni
+client ID EAS. Le client OAuth Android doit appartenir au même projet Google et
+déclarer `com.secondbrainlabs.core` avec le SHA-1 du certificat du binaire installé.
+Pour la piste interne, utiliser le certificat **Play App Signing**, distinct de
+la clé d’upload EAS (configuration validée historiquement dans task-165).
+
+Livraison après intégration : appliquer Terraform Dev (attribut Cognito, droit
+`AdminUpdateUserAttributes`, variable Lambda et trigger), déployer l’API, puis
+produire un **nouveau binaire Android** depuis `mobile/` avec
+`eas build --platform android --profile internal --auto-submit --non-interactive`.
+Une OTA ne peut pas ajouter le module natif. Vérifier ensuite sur téléphone :
+sélection de compte, annulation, nouvelle connexion, retour à la même bibliothèque
+et liaison après conflit d’adresse. Les contrôles statiques ne remplacent pas
+cette vérification utilisateur.
+
+Sources : [Credential Manager et le bouton Google](https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation),
+[nonce Google](https://developers.google.com/identity/android-credential-manager/android/reference/com/google/android/libraries/identity/googleid/GetSignInWithGoogleOption.Builder),
+[statut fédéré et authentification API Cognito](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_AdminSetUserPassword.html).
+
 ## Apple natif sur iOS (task-527)
 
 Le bouton système `expo-apple-authentication` ouvre directement la feuille Apple
 sur iOS : aucune session de navigateur Cognito n’est lancée. L’annulation ferme
-la feuille sans message d’erreur. Google et Apple sur Android/web conservent leur
+la feuille sans message d’erreur. Google hors Android et Apple sur Android/web conservent leur
 parcours navigateur avec PKCE. La disponibilité du bouton iOS est vérifiée via
 l’API système, sans repli silencieux vers le navigateur.
 
@@ -143,7 +204,7 @@ La règle est désormais : **une adresse vérifiée appartient à un seul compte
   supprime au lieu de les reprendre. Sinon, celui qui a inscrit l’adresse d’autrui
   garderait le mot de passe que la victime active en confirmant son code
   (pre-hijacking, Sudhodanan & Paverd, MSRC 2022).
-- **Refus.** `PreSignUp_ExternalProvider` (Google partout, Apple Android/web), la
+- **Refus.** `PreSignUp_ExternalProvider` (Google hors Android, Apple Android/web), la
   création Apple native de l’API et `PreSignUp_SignUp` refusent une nouvelle
   identité dont l’adresse a déjà un titulaire. Le trigger lève
   `AUTH_ACCOUNT_EXISTS:<méthodes>` ; Cognito le renvoie dans `error_description`
@@ -226,6 +287,9 @@ média ou artefact n’est ajouté sous `/api/v1/`.
 | `POST /resend-confirmation` | `{email}` → 202 générique |
 | `POST /login` | `{email, password}` → session Cognito et profil ; 409 `AUTH_SOCIAL_ONLY` après refus si le compte n’a pas de mot de passe |
 | `GET /oauth/config` | domaine, client et retour publics du transport choisi |
+| `POST /google/native/challenge` | `{purpose}` → `{client_id, nonce}` ; session cible obligatoire pour `link` |
+| `POST /google/native` | `{identity_token, nonce}` natifs Android → session Cognito mobile et profil |
+| `POST /link/google` | session Cognito mobile, preuve Google native liée au compte → `{status: linked}` |
 | `POST /apple/native` | `{identity_token, authorization_code, nonce}` natifs iOS → session Cognito mobile et profil |
 | `POST /oauth/token` | `{code, code_verifier}` → session Cognito et profil ; retour fixé côté API ; 409 `AUTH_ACCOUNT_EXISTS` + `methods` si l’adresse appartient à un autre compte |
 | `POST /link/start` | session Cognito, `{provider}` → 202 ; intention de liaison de dix minutes |
@@ -270,7 +334,7 @@ Aucune prose fournisseur n’est affichée. Les écrans proposent renvoi, état 
 chargement, résultat, erreurs et retour à la connexion.
 
 La récupération contrôle le statut Cognito : seuls les comptes dont un mot de passe
-a été choisi (locaux confirmés ou à réinitialiser, sans `custom:apple_subject`)
+a été choisi (locaux confirmés ou à réinitialiser, sans `custom:apple_subject` ni `custom:google_subject`)
 peuvent recevoir ce parcours, y compris s’ils sont liés à Google ou Apple. Un
 compte exclusivement social reçoit `AUTH_SOCIAL_ONLY` (décision du 2026-10-20), et
 un code ne peut jamais y créer de mot de passe. Une adresse inconnue reçoit
@@ -280,7 +344,7 @@ Cognito masque les utilisateurs inconnus sur les clients
 endroits décrits dans « Une adresse, un compte ».
 
 Google et Apple restent accessibles depuis l’inscription et la connexion. Les
-boutons lancent `/oauth2/authorize` avec le fournisseur explicite, un état aléatoire
+boutons utilisant le navigateur lancent `/oauth2/authorize` avec le fournisseur explicite, un état aléatoire
 et PKCE S256. Le navigateur mobile est géré par `expo-auth-session`, qui vérifie
 l’état et conserve le vérificateur pendant la demande. Sur iOS, la session est
 privée (`preferEphemeralSession`) : sans partage de cookies avec Safari, iOS
@@ -294,7 +358,9 @@ consentement Google. Sur le web, état,
 vérificateur et date vivent uniquement dans `sessionStorage` pendant au plus dix
 minutes ; le retour les consomme une seule fois, vérifie l’état, efface l’URL puis
 échange le code. Aucun jeton de session ne va dans le stockage du navigateur.
-Les tokens ID Google/Apple natifs et les anciens callbacks maison sont supprimés.
+Les anciens callbacks maison sont supprimés. Les preuves natives Google Android et
+Apple iOS ne sont jamais utilisées comme tokens de session : seule leur validation
+par l’API autorise la création d’une session Cognito.
 Source : [PKCE Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/using-pkce-in-authorization-code.html).
 
 ## Sessions, autorisation et révocation
@@ -434,9 +500,53 @@ Apple, même sans rotation ; ne pas ignorer ce champ, sinon changer la clé dans
 coffre ne la mettrait plus à jour dans Cognito. Le problème des métadonnées calculées
 est documenté dans [l’issue du provider AWS](https://github.com/hashicorp/terraform-provider-aws/issues/4831).
 
-Le retour dans Apple Developer attend encore la connexion du propriétaire à la
-console. Aucun changement n’a été appliqué à prod. Les images applicatives, le web
+À cette date, le retour dans Apple Developer attendait la connexion du propriétaire
+à la console. Ce raccordement a été terminé le 2026-10-26 (section suivante).
+Aucun changement n’a été appliqué à prod. Les images applicatives, le web
 et les binaires mobiles n’ont pas été déployés pendant ce raccordement.
+
+### Apple Android/web : `Invalid web redirect url` (2026-10-26)
+
+Le refus `invalid_request / Invalid web redirect url` a été reproduit avec les
+configurations publiques mobile et web du dev AWS : Cognito redirigeait bien vers
+Apple, mais seul l’ancien retour API était enregistré chez Apple. Le réglage
+Apple Developer a été corrigé et sauvegardé le 2026-10-26, sans nouveau binaire.
+
+Dans **Certificates, Identifiers & Profiles → Identifiers → Services IDs**, ouvrir
+`com.secondbrainlabs.core.signinwithapple`, puis **Sign in with Apple → Configure**.
+Conserver l’association à l’App ID primaire de Deepn et renseigner :
+
+| Champ Apple Developer | Valeur dev |
+| --- | --- |
+| Domains and Subdomains | `deepn-125313707865-dev.auth.eu-west-3.amazoncognito.com` |
+| Return URLs | `https://deepn-125313707865-dev.auth.eu-west-3.amazoncognito.com/oauth2/idpresponse` |
+
+Le champ **Description** du Services ID est **Deepn** depuis le 2026-10-26. Il
+remplace « Second Brain Labs sign in with Apple » sur l’écran Apple du parcours
+navigateur Android/web. Pour modifier ce nom, éditer Description puis valider
+**Continue → Save**. L’identifiant technique du Services ID reste celui ci-dessus.
+Les pages publiques Apple des deux parcours ont été relues après sauvegarde :
+elles contiennent Deepn et plus l’ancien libellé. Aucun nouveau binaire requis.
+
+Valider **Done → Continue → Save**. Le domaine n’a pas de préfixe `https://` ; le
+retour inclut le protocole et le chemin exact. `media-summarizer://auth-callback`
+est le retour de Cognito vers l’app, pas celui d’Apple vers Cognito. Le retour web
+de l’app ne doit pas non plus être enregistré à la place du callback Cognito.
+
+L’ancien domaine API `jji077bi8e.execute-api.eu-west-3.amazonaws.com` et son retour
+`/api/auth/apple/callback`, dont le code a été supprimé lors de la bascule Cognito,
+ont été retirés du Services ID. La relecture après sauvegarde confirme uniquement
+le domaine et le retour Cognito ci-dessus, avec le même App ID primaire.
+
+Vérification réelle après enregistrement, pour les configurations publiques mobile
+et web : Cognito répond 302 vers Apple, qui répond 200 avec la page de connexion
+« Sign in to Apple Account », sans `invalid_request` ni `Invalid web redirect url`.
+Aucune connexion utilisateur complète n’a été exécutée ; elle reste à valider sur
+appareil. Ce réglage concerne le dev ; il devra suivre le domaine effectivement
+déployé si task-528 change le domaine Cognito.
+
+Sources : [configuration Apple des Services IDs](https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web),
+[retour Apple vers Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-social-idp-apple.html).
 
 ## Release dev du 2026-10-18
 
@@ -458,5 +568,5 @@ propriétaire depuis son navigateur.
 
 Le workflow mobile a démarré de nouveaux builds internes Android et iOS avec
 soumission automatique : les empreintes natives ont changé. La configuration du
-retour dans Apple Developer attend toujours la connexion du propriétaire. Prod
-reste inchangé.
+retour dans Apple Developer était encore en attente lors de cette release ; elle
+a été terminée le 2026-10-26 (section précédente). Prod reste inchangé.

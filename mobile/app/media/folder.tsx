@@ -3,7 +3,7 @@ import {
   useResourceSnapshot,
 } from "../../src/contexts/ResourceCacheContext";
 import { resourceKeys } from "../../src/services/resourceCache";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   Text,
   TouchableOpacity,
@@ -28,6 +28,7 @@ import {
   HeaderIconButton,
 } from "../../src/components/ScreenHeader";
 import { FolderPickerView } from "../../src/components/FolderPickerView";
+import { KeyboardViewport, type KeyboardViewportHandle } from "../../src/components/KeyboardViewport";
 import { flattenFolderPaths } from "../../src/lib/folderTree";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useShareIntake } from "../../src/contexts/ShareIntentContext";
@@ -52,6 +53,7 @@ import type { Folder } from "@media-summarizer/core/types/organization";
 export default function FolderScreen() {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const viewportRef = useRef<KeyboardViewportHandle>(null);
   // Copy resolved on render: redraw when the interface language changes.
   useTranslation();
   const router = useRouter();
@@ -82,6 +84,7 @@ export default function FolderScreen() {
   // Fetch folders
   useFocusEffect(
     useCallback(() => {
+      viewportRef.current?.refresh();
       if (!isAuthenticated) return;
 
       const fetchFolders = async () => {
@@ -160,50 +163,52 @@ export default function FolderScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      {/* Header */}
-      <ScreenHeader
-        title={t("folderPicker.title")}
-        titleStyle={styles.headerTitle}
-        leading={
-          <HeaderIconButton
-            icon="arrow-back"
-            onPress={handleBack}
-            accessibilityLabel={t("common.goBack")}
-          />
-        }
-        // Share mode has no action: the header balances the back button on its
-        // own, which is what the hard-coded 88pt placeholder used to attempt.
-        trailing={
-          isShareMode ? undefined : (
-            <TouchableOpacity
-              style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
-              onPress={handleSave}
-              disabled={isSaving}
-              accessibilityLabel={t("folderPicker.saveA11y")}
-              accessibilityRole="button"
-            >
-              {isSaving ? (
-                <ActivityIndicator size="small" color={Colors.primary} />
-              ) : (
-                <Text style={styles.saveBtnText}>{t("common.save")}</Text>
-              )}
-            </TouchableOpacity>
-          )
-        }
-      />
+      <KeyboardViewport ref={viewportRef}>
+        {/* Header */}
+        <ScreenHeader
+          title={t("folderPicker.title")}
+          titleStyle={styles.headerTitle}
+          leading={
+            <HeaderIconButton
+              icon="arrow-back"
+              onPress={handleBack}
+              accessibilityLabel={t("common.goBack")}
+            />
+          }
+          // Share mode has no action: the header balances the back button on its
+          // own, which is what the hard-coded 88pt placeholder used to attempt.
+          trailing={
+            isShareMode ? undefined : (
+              <TouchableOpacity
+                style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}
+                accessibilityLabel={t("folderPicker.saveA11y")}
+                accessibilityRole="button"
+              >
+                {isSaving ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : (
+                  <Text style={styles.saveBtnText}>{t("common.save")}</Text>
+                )}
+              </TouchableOpacity>
+            )
+          }
+        />
 
-      <FolderPickerView
-        folders={folders}
-        selectedId={selectedId}
-        isLoading={isLoading && !cachedFolders.data}
-        busy={isSaving}
-        error={
-          error ?? (cachedFolders.error ? t("folderPicker.loadFailed") : null)
-        }
-        onSelect={handleSelect}
-        onFolderCreated={handleFolderCreated}
-        onCreateFailed={setError}
-      />
+        <FolderPickerView
+          folders={folders}
+          selectedId={selectedId}
+          isLoading={isLoading && !cachedFolders.data}
+          busy={isSaving}
+          error={
+            error ?? (cachedFolders.error ? t("folderPicker.loadFailed") : null)
+          }
+          onSelect={handleSelect}
+          onFolderCreated={handleFolderCreated}
+          onCreateFailed={setError}
+        />
+      </KeyboardViewport>
     </SafeAreaView>
   );
 }

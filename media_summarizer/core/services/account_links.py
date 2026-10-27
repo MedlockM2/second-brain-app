@@ -21,7 +21,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from media_summarizer.core.services import apple_native_auth
+from media_summarizer.core.services import apple_native_auth, google_native_auth, native_cognito
 from media_summarizer.core.services import cognito_auth as cognito
 from media_summarizer.utils import database_async
 from media_summarizer.utils.env import required_env
@@ -76,7 +76,7 @@ async def _retire(user: dict[str, Any]) -> None:
     await _admin("admin_delete_user", Username=user["Username"])
 
 
-async def _link(username: str, provider: str, subject: str) -> None:
+async def link_subject(username: str, provider: str, subject: str) -> None:
     destination = await _admin("admin_get_user", Username=username)
     if destination.get("UserStatus") == "EXTERNAL_PROVIDER":
         attributes = {a["Name"]: a["Value"] for a in destination.get("UserAttributes", [])}
@@ -84,14 +84,21 @@ async def _link(username: str, provider: str, subject: str) -> None:
         target = {"ProviderName": primary["providerName"], "ProviderAttributeValue": primary["userId"]}
     else:
         target = {"ProviderName": "Cognito", "ProviderAttributeValue": username}
-    await _admin(
-        "admin_link_provider_for_user", DestinationUser=target,
-        SourceUser={"ProviderName": provider, "ProviderAttributeName": "Cognito_Subject", "ProviderAttributeValue": subject},
+    attributes = {a["Name"]: a["Value"] for a in destination.get("UserAttributes", [])}
+    already_linked = any(
+        i.get("providerName") == provider and i.get("userId") == subject
+        for i in json.loads(attributes.get("identities", "[]"))
     )
-    if provider == "SignInWithApple":
+    if not already_linked:
+        await _admin(
+            "admin_link_provider_for_user", DestinationUser=target,
+            SourceUser={"ProviderName": provider, "ProviderAttributeName": "Cognito_Subject", "ProviderAttributeValue": subject},
+        )
+    if provider in {"SignInWithApple", "Google"}:
         async with database_async.get_session().resource("dynamodb", region_name=database_async.AWS_REGION) as db:
             table = await db.Table(required_env("APPLE_AUTH_TABLE"))
-            await table.put_item(Item={"pk": apple_native_auth.subject_key(subject), "username": username})
+            key = apple_native_auth.subject_key(subject) if provider == "SignInWithApple" else google_native_auth.subject_key(subject)
+            await table.put_item(Item={"pk": key, "username": username})
 
 
 async def complete_oauth(username: str, web: bool, code: str, verifier: str) -> None:
@@ -105,7 +112,7 @@ async def complete_oauth(username: str, web: bool, code: str, verifier: str) -> 
     provider, subject = identities[0]["providerName"], identities[0]["userId"]
     await _consume(username, provider)
     await _retire(await _admin("admin_get_user", Username=linked))
-    await _link(username, provider, subject)
+    await link_subject(username, provider, subject)
 
 
 async def link_apple(username: str, identity_token: str, authorization_code: str, nonce: str) -> None:
@@ -119,9 +126,20 @@ async def link_apple(username: str, identity_token: str, authorization_code: str
         if mapping["username"] == username:
             return
         raise cognito.refuse("AUTH_PROVIDER_IN_USE", 409)
-    federated = await apple_native_auth.get_user(f"SignInWithApple_{subject}")
+    federated = await native_cognito.get_user(f"SignInWithApple_{subject}")
     if federated is not None:
         if federated["Username"] == username:
             return
         await _retire(federated)
-    await _link(username, "SignInWithApple", subject)
+    await link_subject(username, "SignInWithApple", subject)
+
+
+async def link_google(username: str, identity_token: str, nonce: str) -> None:
+    claims = await google_native_auth.verified_identity(identity_token, nonce, username)
+    subject = claims["sub"]
+    existing = await google_native_auth.owner(subject, claims["email"])
+    if existing is not None:
+        if existing["Username"] == username:
+            return
+        await _retire(existing)
+    await link_subject(username, "Google", subject)

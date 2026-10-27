@@ -9,7 +9,7 @@ import {
   useResourceSnapshot,
 } from "../../src/contexts/ResourceCacheContext";
 import { resourceKeys, mutationOwner } from "../../src/services/resourceCache";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -1120,7 +1120,9 @@ function LibraryState({
       onEndReachedThreshold={0.5}
       data={media}
       keyExtractor={(item) => item.media_item_id}
-      keyboardShouldPersistTaps={editor ? "never" : "handled"}
+      // The inline name must receive taps directly, including a tap that
+      // reopens a dismissed Android keyboard. Outside actions finish it below.
+      keyboardShouldPersistTaps="handled"
       keyboardDismissMode={KEYBOARD_DISMISS_MODE}
       removeClippedSubviews={false}
       renderItem={({ item }) => (
@@ -1738,15 +1740,48 @@ function FolderTile({
   const slotRef = useRef<View>(null);
   const inputRef = useRef<TextInput>(null);
   const editorBoxRef = useRef<View>(null);
+  const laidOutInput = useRef<TextInput | null>(null);
+  const focusFrame = useRef<number | null>(null);
+  const focusVersion = useRef(0);
+  const focusedRequest = useRef<{ input: TextInput; creationId: string; revision: number } | null>(null);
   const screenFocused = useIsFocused();
   const editingId = editor?.id;
+  const creationId = editor?.creationId;
   const editingBusy = editor?.saving;
-  const focusRevision = editor?.focusRevision;
-  useEffect(() => {
-    if (!editingId || editingBusy || !screenFocused) return;
-    inputRef.current?.focus();
-    if (editorBoxRef.current && editingId) onReveal?.(editingId, editorBoxRef.current);
-  }, [editingId, focusRevision, editingBusy, screenFocused, onReveal]);
+  const focusRevision = editor?.focusRevision ?? 0;
+  const requestInputFocus = useCallback(() => {
+    const input = inputRef.current;
+    if (!editingId || !creationId || editingBusy || !screenFocused ||
+      !input || laidOutInput.current !== input) return;
+    if (editorBoxRef.current) onReveal?.(editingId, editorBoxRef.current);
+
+    const previous = focusedRequest.current;
+    // A server id/name update is still the same editing session. Do not select
+    // the text again or reopen a keyboard the user deliberately dismissed.
+    if (previous?.input === input && previous.creationId === creationId &&
+      previous.revision === focusRevision) return;
+    const version = ++focusVersion.current;
+    if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
+    // Start from the input's own layout, then let native attach/layout finish
+    // before asking Android's input method to show. No guessed timeout/retries.
+    focusFrame.current = requestAnimationFrame(() => {
+      focusFrame.current = null;
+      if (version !== focusVersion.current || inputRef.current !== input ||
+        laidOutInput.current !== input) return;
+      focusedRequest.current = { input, creationId, revision: focusRevision };
+      input.focus();
+    });
+  }, [editingId, creationId, focusRevision, editingBusy, screenFocused, onReveal]);
+
+  useLayoutEffect(() => {
+    if (!screenFocused) focusedRequest.current = null;
+    requestInputFocus();
+    return () => {
+      focusVersion.current += 1;
+      if (focusFrame.current !== null) cancelAnimationFrame(focusFrame.current);
+      focusFrame.current = null;
+    };
+  }, [screenFocused, requestInputFocus]);
 
   const longPress = isDefault ? undefined : onLongPress;
 
@@ -1805,6 +1840,12 @@ function FolderTile({
           }}>
             <TextInput
               ref={inputRef}
+              onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                if (width <= 0 || height <= 0) return;
+                laidOutInput.current = inputRef.current;
+                requestInputFocus();
+              }}
               style={[styles.folderName, { borderWidth: 1, borderColor: Colors.primary,
                 borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.xs, minHeight: TouchTarget.minimum }]}
               value={editor.value}

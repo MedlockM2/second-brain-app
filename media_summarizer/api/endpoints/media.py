@@ -2533,7 +2533,7 @@ class RawContentResponse(BaseModel):
         None,
         description=(
             "Translation provenance when the content was translated to the "
-            "user's reading_language (task-192/task-200/task-203): is_translated, "
+            "save's fixed reading_language (task-545): is_translated, "
             "translated_from, target_language, detected_language, "
             "detection_method, translation_pending, translation_status. "
             "translation_status is one of: queued, in_progress, done, failed, null. "
@@ -2575,10 +2575,10 @@ async def get_media_raw_content(
 
     Query Parameters:
         variant: Which body to serve (task-419). Left out, or ``translated``, the
-            answer is what it has always been: the cached translation into the
-            caller's ``reading_language`` when one exists, the source text
-            otherwise. ``original`` serves the source text even when a
-            translation is cached — the "View the original" control of the Reader
+            answer is the cached translation into the language captured on this
+            save, or the source text while that translation is unavailable.
+            Changing the account's preference never changes this target.
+            ``original`` serves the source text even when a translation is cached — the "View the original" control of the Reader
             tab — and resolves no translation, so it neither reads nor arms one.
             Anything else is a 422.
     """
@@ -2607,7 +2607,7 @@ async def get_media_raw_content(
 
         raw = await get_raw_content(
             transcript,
-            reading_language=current_user.reading_language,
+            reading_language=record.reading_language,
             variant=variant,
         )
 

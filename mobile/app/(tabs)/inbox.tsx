@@ -6,6 +6,7 @@ import {
   FlatList,
   ScrollView,
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
 } from "react-native";
@@ -569,7 +570,7 @@ function EmptyState() {
   return (
     <View style={styles.emptyContainer}>
       <Ionicons
-        name="share-outline"
+        name={Platform.OS === "android" ? "share-social-outline" : "share-outline"}
         size={48}
         color={Colors.textMuted}
         style={styles.emptyIcon}

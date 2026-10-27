@@ -113,8 +113,35 @@ different language for this one item (e.g. keeping an English video's original t
 their reading language is French). The value is normalized to a bare lowercase ISO 639-1 code
 (`"fr-FR"` → `"fr"`) and travels to the ingestion worker, which asks the transcript provider for
 that language. If the video has no captions in that language, the provider returns its default
-track, and the reader's full-text translation brings it back to the user's
-`reading_language` when they open it (`GET /api/media/{id}/raw-content`).
+track. The reader and search then use the reading language captured on the
+new library entry, independently of the account preference at any later date.
+The caption-track override does not override that saved reading language.
+
+**The reading language belongs to each save (task-545, owner decision 2026-10-26).**
+Every ingestion entrypoint, uploads and duplicate saves included, captures the
+account's current `reading_language` in its new `user_media` row. It is immutable,
+independent of the source `language` and excluded from the global `media_key`:
+the same content remains shared while two saves may read in different languages.
+Changing the account preference affects subsequent saves only. It translates no
+existing media, preview or artifact, including when these are reopened. An unset
+saved language means source text; reads never fall back to the current profile.
+
+`GET /api/media/{id}/raw-content` resolves the saved language. The source text is
+available through `variant=original`; while a translation is pending or failed,
+the existing response metadata describes that state alongside the source text.
+Translations are still cached once per `(source transcript, target language)`.
+No per-media language-changing action is introduced.
+
+`GET /api/search/transcripts` searches the title, creator and full text indexed
+for each save. The text is the ready translation into that save's fixed language,
+or the source text when already in that language (or no target was captured).
+Foreign source text is never indexed while its translation is pending or failed;
+an unknown source language is likewise not indexed under a declared target.
+The initial index message waits with delayed checks bounded to one hour, and a
+successful translation also wakes all matching saves, including a recovery after
+an earlier failure. A profile change dispatches no index work. Re-saving the same
+link creates a new library id and captures the new preference without deleting the
+previous save. No historical index rebuild or data migration accompanies this rule.
 
 Response (`IngestUrlResponse`):
 ```json
@@ -316,7 +343,7 @@ Request:
 | `difficulty` | `easy`, `medium`, `hard` | `quiz`, `flashcards` | `medium` |
 | `focus` | free text, at most 300 characters once trimmed and its whitespace runs (newlines included) collapsed to one space | `summary_short`, `notes`, `quiz`, `flashcards` | none |
 | `source_ids` | non-empty list of distinct `media_item_id`s of the folder or its subfolders | `summary_short`, `notes`, `quiz`, `flashcards` — **`scope=folder` only** | every source of the folder |
-| `language` | a reading language: `fr`, `en`, `es`, `de`, `it`, `pt`, `nl`, `ja`, `zh`, `ar`, `hi`, or any tag that normalizes to one (`EN-US` is `en`) | `summary_short`, `notes`, `quiz`, `flashcards`, on a media as on a folder | the caller's reading language |
+| `language` | a reading language: `fr`, `en`, `es`, `de`, `it`, `pt`, `nl`, `ja`, `zh`, `ar`, `hi`, or any tag that normalizes to one (`EN-US` is `en`) | `summary_short`, `notes`, `quiz`, `flashcards`, on a media as on a folder | the save's captured language (media); the current account preference (folder) |
 
 - **Defaults are not stored.** An option at its default value, a `focus` that is
   empty once cleaned, and a JSON `null` are dropped before the `artifact_id` is
@@ -356,25 +383,21 @@ Request:
   (`invalid_value`), and when an id is not a media of this folder or its
   subfolders in the caller's library (`not_in_scope`) — checked once the folder is
   listed and before any transcript is read, so nothing is written or debited.
-- **`language` chooses the language the artifact is written in** (task-533), the
-  "Langue" option of the screen. Its default is the caller's reading language,
-  which the service sets when the request names none, so the rule above applies
-  with that default:
-  - **equal to the reading language**, it is the request without the option: same
-    `artifact_id`, same shared generation, and the same translation behaviour as
-    any entry in the reading language — it follows the reader into a new language
-    (§4);
+- **`language` chooses the language the artifact is written in** (task-533).
+  By default it is the language captured on the save for media scope (task-545),
+  or the account's current reading language for folder scope.
+  - **equal to that default**, it is the request without the option: same
+    `artifact_id` and same shared generation;
   - **another language** becomes the output language and is part of the
-    `artifact_id`, and the entry is marked as *pinned*: it is stored with
-    `"language_pinned": true` next to `"language"` in its `parameters`, which the
-    hash covers too. A pinned entry is **never translated** — not when the scope is
-    listed (§4), not when its content is read (§6) — and is read in its own
-    language whatever the reader's language becomes. The marker is set by the
+    `artifact_id`. The entry is stored with `"language_pinned": true` next to
+    `"language"` in `parameters`, and both are hashed. The marker is set by the
     service only: a client sending `language_pinned` gets `unknown_parameter`;
-  - across accounts (task-394), a pinned entry is served to another account
-    pinning the same language over the same content, and never to a request in
-    that language that pins nothing (a native or translated entry of a reader of
-    that language), since the marker is in the shared key.
+  - across accounts (task-394), an explicit pinned language only serves requests
+    pinning the same language over the same content, since the marker is in the
+    shared key.
+
+  Every existing entry stays in its output language, whether pinned or default.
+  Account preference changes never translate entries when listed or opened.
 
   A value that is not a string or does not normalize to a reading language is
   `invalid_value`.
@@ -421,7 +444,7 @@ readable ones, so the id does not move when they land.
 Transcription is the **only** preparation a generation ever waits on. A media in
 a language the user does not read is generated immediately: the corpus is each
 source's original transcript and the output language travels in the prompt, via
-`parameters["language"]` (the requester's reading language, or the language the
+`parameters["language"]` (the scope's default language, or the language the
 request pinned, part of the `artifact_id` hash). Nothing on this endpoint
 translates a transcript, so a foreign media asked for the second it lands starts
 straight away (task-398). The reader's full-text translation
@@ -530,35 +553,17 @@ emitted by the model, which is what tells two entries of the same type apart.
 `sources` is **not** in this response — it is only returned when one entry is
 opened.
 
-**At media scope, this request is also what translates a media's artifacts into the
-caller's reading language** (task-395). The language is part of the `artifact_id`
-hash, so an account reading in another language than the one an artifact was written
-in has no entry of its own — and filling that gap by generating again would re-read
-the whole transcript to rewrite a text of a few hundred words. Instead the existing
-entry is *translated*: a `queued` entry appears in this very response, the client's
-usual poll follows it to `ready`, and the model reads only the finished payload.
+**Listing never translates existing artifacts (task-545).** Changing the
+account's reading language affects subsequent media saves and future folder
+requests; reopening an existing media neither translates nor regenerates its
+artifacts. Its default generation language remains the one captured on the save.
+An explicit artifact-language option remains available in the API (§3).
 
-Three consequences the client can rely on:
-
-- **changing the reading language costs nothing.** `PATCH /api/auth/me` translates
-  nothing; the trigger is *opening* a media, so a library of 500 items translates
-  only what is actually read.
-- **a translation is a new entry, and the original stays.** The history is
-  append-only: both entries are listed, each with its own `artifact_id`, and the
-  original keeps being served to the accounts reading in its language. It also means
-  the tile is answered by the translated entry from then on — `POST /api/artifacts`
-  for that type in that language returns `200 reused`, never a second generation.
-- **reopening translates nothing again.** The translated entry carries exactly the id
-  the reading language computes, so its presence in the page is the whole check.
-- **an entry whose language was pinned is never translated** (task-533). It was asked
-  for in that language, so it stays in it: it is neither translated nor used as the
-  original of a translation, and the reader's default entry of the same type, if any,
-  is the one translated. Telling a pinned entry apart costs a read of the entry,
-  because this listing carries no `parameters`.
-
-`review_blurb` is included, which is what makes the library preview follow the
-reading language too: the translated card is copied onto the library rows whose owner
-reads that language, and onto those only.
+The per-content artifact history remains shared by the same account's saves of
+that content, including entries in different languages. Each entry is immutable.
+`review_blurb` is projected separately onto each save: only a preview whose output
+language matches that save's captured reading language can fill its library card.
+This applies to completion fan-out and to repairing a missing card at read time.
 
 ### 5) GET /api/artifacts/{artifact_id}
 
@@ -614,8 +619,8 @@ history rather than a defect.
 ### 6) GET /api/artifacts/{artifact_id}/content
 
 The stored JSON payload, inlined, in the language the entry was written in. This
-route never arms a translation, for a pinned entry (§3) or any other: translating
-on a reading-language change is the listing's job (§4).
+route never arms a translation, for a pinned entry (§3) or any other. Neither
+listing nor content reads translate entries after a preference change (§4).
 
 `409` while the entry is not `ready`, as a typed refusal whose `error_code` — never
 the message text — says whether the entry is still coming (task-328):

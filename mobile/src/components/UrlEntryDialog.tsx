@@ -18,11 +18,11 @@
  * content and a correction costs one tap rather than a retype.
  */
 
+import { useRef } from "react";
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -37,6 +37,9 @@ import {
 } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardViewport, type KeyboardViewportHandle } from "./KeyboardViewport";
+import { useFocusedInputScroll } from "../hooks/useFocusedInputScroll";
 
 export interface UrlEntryDialogProps {
   visible: boolean;
@@ -64,6 +67,11 @@ export function UrlEntryDialog({
 }: UrlEntryDialogProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const viewportRef = useRef<KeyboardViewportHandle>(null);
+  const inputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const inputScroll = useFocusedInputScroll(scrollRef);
   const canSubmit = value.trim().length > 0;
 
   const handleSubmit = () => {
@@ -77,91 +85,110 @@ export function UrlEntryDialog({
       transparent
       animationType="fade"
       statusBarTranslucent
+      onShow={() => {
+        viewportRef.current?.refresh();
+        inputRef.current?.focus();
+      }}
       onRequestClose={onClose}
     >
       <View style={styles.root}>
-        {/* Scrim. The design system has no scrim token, so this is textMain at
-            35% — the only literal colour in this file, kept in sync with
-            RenameDialog and the context menu. */}
-        <Pressable
-          style={styles.backdrop}
-          onPress={onClose}
-          accessibilityLabel={t("common.dismiss")}
-          accessibilityRole="button"
-        />
-
-        <KeyboardAvoidingView
-          style={styles.centering}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          pointerEvents="box-none"
-        >
-          <View style={styles.card} testID="add-url-dialog">
-            <Text style={styles.title}>{t("addUrl.title")}</Text>
-
-            <TextInput
-              style={styles.input}
-              value={value}
-              onChangeText={onChangeText}
-              placeholder={t("addUrl.placeholder")}
-              placeholderTextColor={Colors.textMuted}
-              autoFocus
-              // A web address is never capitalised, never a word the dictionary
-              // knows, and never one line broken into two.
-              keyboardType="url"
-              textContentType="URL"
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              multiline={false}
-              returnKeyType="go"
-              onSubmitEditing={handleSubmit}
-              // The field is emptied on every opening, so this only ever clears a
-              // paste the user wants to redo.
-              clearButtonMode="while-editing"
-              accessibilityLabel={t("addUrl.title")}
-              testID="add-url-input"
-            />
-
-            {errorMessage ? (
-              <Text style={styles.error} testID="add-url-error">
-                {errorMessage}
-              </Text>
-            ) : (
-              <Text style={styles.hint}>{t("addUrl.hint")}</Text>
-            )}
-
-            <View style={styles.actions}>
+        <KeyboardViewport ref={viewportRef} active={visible}>
+          {(keyboardVisible) => (
+            <ScrollView
+              ref={scrollRef}
+              style={styles.form}
+              contentContainerStyle={[
+                styles.centering,
+                {
+                  paddingTop: insets.top + Spacing.md,
+                  paddingBottom: Spacing.md + (keyboardVisible ? 0 : insets.bottom),
+                },
+              ]}
+              automaticallyAdjustKeyboardInsets={false}
+              automaticallyAdjustContentInsets={false}
+              contentInsetAdjustmentBehavior="never"
+              keyboardShouldPersistTaps="handled"
+              onLayout={inputScroll.reveal}
+              onContentSizeChange={inputScroll.reveal}
+              onScroll={inputScroll.onScroll}
+              scrollEventThrottle={16}
+            >
               <Pressable
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
-                ]}
+                style={styles.backdrop}
                 onPress={onClose}
-                accessibilityLabel={t("common.cancel")}
+                accessibilityLabel={t("common.dismiss")}
                 accessibilityRole="button"
-                testID="add-url-cancel"
-              >
-                <Text style={styles.secondaryLabel}>{t("common.cancel")}</Text>
-              </Pressable>
+              />
+              <View style={styles.card} testID="add-url-dialog">
+                <Text style={styles.title}>{t("addUrl.title")}</Text>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                  !canSubmit && styles.primaryButtonDisabled,
-                ]}
-                onPress={handleSubmit}
-                disabled={!canSubmit}
-                accessibilityLabel={t("addUrl.submit")}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canSubmit }}
-                testID="add-url-submit"
-              >
-                <Text style={styles.primaryLabel}>{t("addUrl.submit")}</Text>
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
+                <TextInput
+                  ref={inputRef}
+                  onFocus={() => inputScroll.focusInput(inputRef.current)}
+                  style={styles.input}
+                  value={value}
+                  onChangeText={onChangeText}
+                  placeholder={t("addUrl.placeholder")}
+                  placeholderTextColor={Colors.textMuted}
+                  // A web address is never capitalised, never a word the dictionary
+                  // knows, and never one line broken into two.
+                  keyboardType="url"
+                  textContentType="URL"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  spellCheck={false}
+                  multiline={false}
+                  returnKeyType="go"
+                  onSubmitEditing={handleSubmit}
+                  // The field is emptied on every opening, so this only ever clears a
+                  // paste the user wants to redo.
+                  clearButtonMode="while-editing"
+                  accessibilityLabel={t("addUrl.title")}
+                  testID="add-url-input"
+                />
+
+                {errorMessage ? (
+                  <Text style={styles.error} testID="add-url-error">
+                    {errorMessage}
+                  </Text>
+                ) : (
+                  <Text style={styles.hint}>{t("addUrl.hint")}</Text>
+                )}
+
+                <View style={styles.actions}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      pressed && styles.secondaryButtonPressed,
+                    ]}
+                    onPress={onClose}
+                    accessibilityLabel={t("common.cancel")}
+                    accessibilityRole="button"
+                    testID="add-url-cancel"
+                  >
+                    <Text style={styles.secondaryLabel}>{t("common.cancel")}</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.primaryButton,
+                      pressed && styles.primaryButtonPressed,
+                      !canSubmit && styles.primaryButtonDisabled,
+                    ]}
+                    onPress={handleSubmit}
+                    disabled={!canSubmit}
+                    accessibilityLabel={t("addUrl.submit")}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canSubmit }}
+                    testID="add-url-submit"
+                  >
+                    <Text style={styles.primaryLabel}>{t("addUrl.submit")}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </KeyboardViewport>
       </View>
     </Modal>
   );
@@ -171,13 +198,14 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
   StyleSheet.create({
     root: {
       flex: 1,
-    },
-    backdrop: {
-      ...StyleSheet.absoluteFillObject,
       backgroundColor: Colors.scrim,
     },
+    form: { flex: 1 },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+    },
     centering: {
-      flex: 1,
+      flexGrow: 1,
       justifyContent: "center",
       paddingHorizontal: Spacing.lg,
     },

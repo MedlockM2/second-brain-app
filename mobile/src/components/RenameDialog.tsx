@@ -20,26 +20,16 @@
  * owns the call.
  */
 
-import {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from "react";
+import { useRef, type RefObject } from "react";
 import {
   ActivityIndicator,
-  Keyboard,
   Modal,
-  Platform,
   ScrollView,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
-  type KeyboardEvent,
-  type KeyboardMetrics,
 } from "react-native";
 import {
   BorderRadius,
@@ -51,6 +41,8 @@ import {
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { t } from "../i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardViewport, type KeyboardViewportHandle } from "./KeyboardViewport";
+import { useFocusedInputScroll } from "../hooks/useFocusedInputScroll";
 
 export interface RenameDialogProps {
   visible: boolean;
@@ -87,25 +79,22 @@ export interface RenameDialogProps {
 
 export function RenameDialog(props: RenameDialogProps): React.JSX.Element {
   const inputRef = useRef<TextInput>(null);
+  const viewportRef = useRef<KeyboardViewportHandle>(null);
   return (
     <Modal
       visible={props.visible}
       transparent
       animationType="none"
       statusBarTranslucent
-      onShow={() => inputRef.current?.focus()}
+      onShow={() => {
+        viewportRef.current?.refresh();
+        inputRef.current?.focus();
+      }}
       onRequestClose={props.isSaving ? undefined : props.onClose}
     >
-      {props.visible ? <NamingForm {...props} inputRef={inputRef} /> : null}
+      {props.visible ? <NamingForm {...props} inputRef={inputRef} viewportRef={viewportRef} /> : null}
     </Modal>
   );
-}
-
-interface ModalViewport {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
 }
 
 /** Follow native keyboard destinations without gating visibility or interaction. */
@@ -122,8 +111,10 @@ function NamingForm({
   submitLabel = t("common.save"),
   testIDPrefix,
   inputRef,
+  viewportRef,
 }: RenameDialogProps & {
   inputRef: RefObject<TextInput | null>;
+  viewportRef: RefObject<KeyboardViewportHandle | null>;
 }): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -133,106 +124,33 @@ function NamingForm({
     if (canSubmit) onSubmit(trimmed);
   };
   const insets = useSafeAreaInsets();
-  const viewportRef = useRef<View>(null);
-  const mounted = useRef(true);
-  const measurement = useRef(0);
-  const [viewport, setViewport] = useState<ModalViewport | null>(null);
-  const [frame, setFrame] = useState<KeyboardMetrics | null>(
-    () => Keyboard.metrics() ?? null,
-  );
-
-  const measure = useCallback(() => {
-    const revision = ++measurement.current;
-    viewportRef.current?.measureInWindow((left, top, width, height) => {
-      if (
-        !mounted.current ||
-        revision !== measurement.current ||
-        !width ||
-        !height
-      )
-        return;
-      setViewport((previous) =>
-        previous?.top === top &&
-        previous.left === left &&
-        previous.width === width &&
-        previous.height === height
-          ? previous
-          : { top, left, width, height },
-      );
-    });
-  }, []);
-  const acceptFrame = useCallback(
-    (next: KeyboardMetrics | null) => {
-      if (!mounted.current) return;
-      setFrame(next);
-      measure();
-    },
-    [measure],
-  );
-
-  // Register before Modal.onShow requests focus, including when a keyboard was
-  // already open in the underlying search field. iOS supplies its destination
-  // before the animation; Android supplies it after native window resizing.
-  useLayoutEffect(() => {
-    mounted.current = true;
-    const show = (event: KeyboardEvent) => acceptFrame(event.endCoordinates);
-    const subscriptions = [
-      Keyboard.addListener("keyboardDidShow", show),
-      Keyboard.addListener("keyboardDidHide", () => acceptFrame(null)),
-    ];
-    if (Platform.OS === "ios")
-      subscriptions.push(
-        Keyboard.addListener("keyboardWillShow", show),
-        Keyboard.addListener("keyboardWillChangeFrame", show),
-        Keyboard.addListener("keyboardWillHide", () => acceptFrame(null)),
-      );
-    return () => {
-      mounted.current = false;
-      measurement.current += 1;
-      subscriptions.forEach((subscription) => subscription.remove());
-    };
-  }, [acceptFrame]);
-
-  const touchesBottom =
-    viewport &&
-    frame &&
-    frame.height > 0 &&
-    frame.screenY <= viewport.top + viewport.height + 1 &&
-    frame.screenY + frame.height >= viewport.top + viewport.height - 1 &&
-    frame.screenX < viewport.left + viewport.width &&
-    frame.screenX + frame.width > viewport.left;
-  // Clip to the keyboard's final top, rather than subtracting its height again
-  // from an Android modal that the OS may already have resized.
-  const targetHeight =
-    viewport
-      ? touchesBottom
-        ? Math.max(0, Math.min(viewport.height, frame.screenY - viewport.top))
-        : viewport.height
-      : null;
+  const scrollRef = useRef<ScrollView>(null);
+  const inputScroll = useFocusedInputScroll(scrollRef);
 
   return (
-    <View
+    <KeyboardViewport
       ref={viewportRef}
       style={styles.root}
-      onLayout={measure}
-      collapsable={false}
     >
-      <View
-        style={targetHeight === null ? styles.form : { height: targetHeight }}
-      >
+      {(keyboardVisible) => (
         <ScrollView
+          ref={scrollRef}
           style={styles.form}
           contentContainerStyle={[
             styles.formContent,
             {
               paddingTop: insets.top + Spacing.lg,
-              paddingBottom: Spacing.md + (touchesBottom ? 0 : insets.bottom),
+              paddingBottom: Spacing.md + (keyboardVisible ? 0 : insets.bottom),
             },
           ]}
           automaticallyAdjustKeyboardInsets={false}
           automaticallyAdjustContentInsets={false}
           contentInsetAdjustmentBehavior="never"
           keyboardShouldPersistTaps="handled"
+          onLayout={inputScroll.reveal}
+          onContentSizeChange={inputScroll.reveal}
+          onScroll={inputScroll.onScroll}
+          scrollEventThrottle={16}
         >
           {/* The root paints the scrim; this transparent target closes the
                 dialog from the space around the card without covering it. */}
@@ -252,6 +170,7 @@ function NamingForm({
 
             <TextInput
               ref={inputRef}
+              onFocus={() => inputScroll.focusInput(inputRef.current)}
               style={styles.input}
               value={value}
               onChangeText={onChangeText}
@@ -309,8 +228,8 @@ function NamingForm({
             </View>
           </View>
         </ScrollView>
-      </View>
-    </View>
+      )}
+    </KeyboardViewport>
   );
 }
 

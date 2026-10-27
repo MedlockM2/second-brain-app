@@ -1,3 +1,4 @@
+import { signInWithGoogleAsync } from "../../modules/google-credential-manager";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
@@ -48,11 +49,11 @@ export class AuthService {
     });
 
     if (!response.ok) {
-      const { message, code } = await parseErrorResponse(
+      const { message, code, details } = await parseErrorResponse(
         response,
         fallbackMessage,
       );
-      throw createHttpError(message, response.status, code);
+      throw createHttpError(message, response.status, code, undefined, details);
     }
 
     return (await response.json()) as T;
@@ -86,6 +87,15 @@ export class AuthService {
       await SessionManager.persistSession(result);
       return result;
     }
+    if (provider === "Google" && Platform.OS === "android") {
+      const proof = await this.googleProof(false);
+      if (!proof) return null;
+      const result = await this.postUnauthenticated<TokenVerificationResponse>(
+        "/api/auth/google/native", proof, "Authentication failed",
+      );
+      await SessionManager.persistSession(result);
+      return result;
+    }
     const grant = await this.authorize(provider);
     if (!grant) return null;
     const result = await this.postUnauthenticated<TokenVerificationResponse>(
@@ -107,6 +117,12 @@ export class AuthService {
       await apiRequest("/api/auth/link/apple", { method: "POST", body: proof });
       return true;
     }
+    if (provider === "Google" && Platform.OS === "android") {
+      const proof = await this.googleProof(true);
+      if (!proof) return false;
+      await apiRequest("/api/auth/link/google", { method: "POST", body: proof });
+      return true;
+    }
     await apiRequest("/api/auth/link/start", { method: "POST", body: { provider } });
     const grant = await this.authorize(provider);
     if (!grant) return false;
@@ -114,7 +130,22 @@ export class AuthService {
     return true;
   }
 
-  /** Hosted UI authorization (Google everywhere, Apple off iOS); null when cancelled. */
+  /** A server nonce binds the native proof to this sign-in or authenticated link. */
+  private static async googleProof(link: boolean): Promise<{ identity_token: string; nonce: string } | null> {
+    type Challenge = { client_id: string; nonce: string };
+    const body = { purpose: link ? "link" : "sign_in" };
+    const challenge = link
+      ? await apiRequest<Challenge>("/api/auth/google/native/challenge", { method: "POST", body })
+      : await this.postUnauthenticated<Challenge>("/api/auth/google/native/challenge", body, "Authentication failed");
+    const outcome = await signInWithGoogleAsync(challenge.client_id, challenge.nonce);
+    if (outcome.type === "cancelled") return null;
+    if (outcome.type === "noGoogleAccount") {
+      throw createHttpError("No Google account available", 400, "AUTH_GOOGLE_NO_ACCOUNT");
+    }
+    return { identity_token: outcome.idToken, nonce: challenge.nonce };
+  }
+
+  /** Hosted UI authorization (Google off Android, Apple off iOS); null when cancelled. */
   private static async authorize(provider: SocialProvider, retried = false): Promise<{ code: string; code_verifier: string } | null> {
     const response = await fetch(`${Config.API_BASE_URL}/api/auth/oauth/config`);
     if (!response.ok) {

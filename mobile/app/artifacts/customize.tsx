@@ -39,8 +39,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -49,7 +47,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   sourceParameters,
@@ -85,6 +83,8 @@ import {
   HeaderIconButton,
   ScreenHeader,
 } from "../../src/components/ScreenHeader";
+import { KeyboardViewport, type KeyboardViewportHandle } from "../../src/components/KeyboardViewport";
+import { useFocusedInputScroll } from "../../src/hooks/useFocusedInputScroll";
 import {
   BorderRadius,
   Spacing,
@@ -224,6 +224,11 @@ function CustomizeForm({
       if (mountedRef.current) setSourceLoading(false);
     }
   }, [scope, scopeId]);
+  const viewportRef = useRef<KeyboardViewportHandle>(null);
+  const promptRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const inputScroll = useFocusedInputScroll(scrollRef);
+  useFocusEffect(useCallback(() => { viewportRef.current?.refresh(); }, []));
   const options = formatOptionsOf(format.type);
   const formatLabel = t(format.labelKey);
   const countSectionLabel = COUNT_SECTION_LABELS[format.type];
@@ -325,10 +330,7 @@ function CustomizeForm({
   ]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardViewport ref={viewportRef}>
       <ScreenHeader
         trailing={
           <HeaderIconButton
@@ -342,10 +344,18 @@ function CustomizeForm({
       />
 
       <ScrollView
+        ref={scrollRef}
         style={styles.flex}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets={false}
+        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior="never"
+        onLayout={inputScroll.reveal}
+        onContentSizeChange={inputScroll.reveal}
+        onScroll={inputScroll.onScroll}
+        scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.titleBlock}>
@@ -416,18 +426,23 @@ function CustomizeForm({
           {t("artifacts.customize.section.prompt")}
         </Text>
         <TextInput
+          ref={promptRef}
           style={[styles.prompt, promptFocused && styles.promptFocused]}
           value={focus}
           onChangeText={setFocus}
           placeholder={t(format.promptHintKey)}
           placeholderTextColor={Colors.textMuted}
           multiline
+          scrollEnabled
           textAlignVertical="top"
           // On the raw text: collapsing its whitespace before sending can only
           // shorten it, so the backend's ceiling is never crossed.
           maxLength={MAX_FOCUS_CHARS}
           editable={!submitting}
-          onFocus={() => setPromptFocused(true)}
+          onFocus={() => {
+            setPromptFocused(true);
+            inputScroll.focusInput(promptRef.current);
+          }}
           onBlur={() => setPromptFocused(false)}
           accessibilityLabel={t("artifacts.customize.section.prompt")}
           accessibilityHint={t(format.promptHintKey)}
@@ -544,7 +559,7 @@ function CustomizeForm({
           )}
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardViewport>
   );
 }
 
@@ -710,6 +725,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     // not shift on focus.
     prompt: {
       minHeight: Spacing.xxl * 2,
+      maxHeight: Typography.body.lineHeight * 6 + Spacing.md * 2,
       paddingHorizontal: Spacing.md,
       paddingTop: Spacing.md,
       paddingBottom: Spacing.md,

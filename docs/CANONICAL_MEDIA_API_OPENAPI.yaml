@@ -706,9 +706,11 @@ components:
             artifact is written in: one of the reading languages fr, en, es, de,
             it, pt, nl, ja, zh, ar, hi, or any tag that normalizes to one of them
             (EN-US is en); anything else is invalid_value. Defaults to
-            the caller's reading language, and naming that language is the request
-            without the option (same artifact id, same shared generation, same
-            translation behaviour). Another language becomes the output language
+            the media save's captured reading language, or the current account
+            preference for a folder (task-545). Naming that default is the request
+            without the option (same artifact id, same shared generation).
+            Existing artifacts are never translated on a profile change, listing
+            or content read. Another language becomes the output language
             and is pinned: the entry is stored with language_pinned true in its
             parameters, both are hashed, and a pinned entry is never translated
             into the reading language, neither when the scope is listed nor when

@@ -3,11 +3,11 @@ id: TASK-526
 title: >-
   Confier l’authentification de Deepn à Amazon Cognito et intégrer la
   récupération de mot de passe
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-16 13:55'
-updated_date: '2026-10-18 02:53'
+updated_date: '2026-10-26 22:32'
 labels:
   - auth
   - mobile
@@ -91,6 +91,8 @@ CLARIFICATION PROPRIÉTAIRE (2026-10-17) : conserver les connexions Google et Ap
 10. Ajustement du point 9 avant implémentation, après lecture des prérequis AWS : USER_AUTH avec Session de confirmation ne supprime les challenges que pour un utilisateur éligible à l’OTP, alors que le pool actuel autorise PASSWORD uniquement. Le correctif utilisera donc la connexion USER_PASSWORD_AUTH existante, sans modifier les modes d’authentification ni Terraform : conserver le formulaire d’origine monté pendant la saisie du code, passer les justificatifs uniquement comme props en mémoire aux composants de vérification, confirmer le code puis ouvrir la session via les couches de session existantes. Aucun mot de passe dans l’URL, l’historique, un stockage web ou un cache global. Conserver une étape de connexion inline uniquement si l’ouverture de session échoue après confirmation, pour permettre de réessayer sans rejouer le code déjà consommé ; une reprise directe de vérification sans formulaire demande le mot de passe dans ce même formulaire. Préserver la destination web initiale, le gate mobile POST_AUTH_ENTRY_POINT et la récupération distincte. Aucun changement backend ni apply nécessaire.
 
 11. Retour UX propriétaire sur récupération et formulaires auth (2026-10-18) : ajouter un contrôle afficher/masquer accessible aux mots de passe de connexion, inscription, vérification reprise et récupération, sur web/mobile. Corriger la mise en page web en plaçant labels et aide hors du conteneur horizontal de saisie (le texte d’aide écrasait le champ). Réduire les consignes à l’action immédiate selon l’étape : e-mail, puis code et nouveau mot de passe ; raccourcir les règles du mot de passe et les confirmations, retirer le préambule fournisseurs. Après réinitialisation, enchaîner vers la session/app comme après vérification, avec reprise inline si la connexion échoue. Garder les contrats et protections Cognito existants, traduire dans les onze langues, vérifier manuellement les champs et le masquage sans soumettre de justificatifs utilisateur, typecheck/lint mobile/web/core et build web sans tests automatisés ; commit Web: done puis push/publication selon l’autorisation existante.
+
+12. Signalement Android du 2026-10-26 : reproduire le refus Apple invalid_request / Invalid web redirect url via les configurations publiques mobile et web ; relever le Services ID et le retour réellement envoyés sans consigner state, code ni secret. Documenter les champs Apple Developer exacts, puis enregistrer le domaine et le callback Cognito dans le Services ID existant dès que la session Apple Developer du propriétaire est accessible. Refaire les deux autorisations publiques pour vérifier la disparition du refus, sans connexion utilisateur au nom du propriétaire. Aucun changement applicatif ni nouveau build prévu pour ce réglage externe.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -145,4 +147,20 @@ Retour UX livré dans ebc9ee27 (Web: done) : composants PasswordField web/native
 Validation : typecheck/lint web, mobile et packages/core réussis ; build web et garde Web: done réussis. Avertissements préexistants : any dans purchaseService.ts et taille du bundle web. Contrôle manuel du navigateur sur le parcours de récupération avec adresse fictive sans compte : étape e-mail puis code, champ pleinement visible, texte d’aide sous le champ, bouton afficher/masquer et état accessible vérifiés, Modifier réouvre l’e-mail et efface code/mot de passe ; les saisies de contrôle ont été vidées. Aucun code de confirmation ni mot de passe soumis, aucune modification de compte, aucun test automatisé ajouté ou exécuté. Aucun changement backend/Terraform. Le réglage du retour Apple reste le point externe en attente de la tâche globale.
 
 Push de la correction UX réalisé sur main (bcec2745). Main Branch Checks vert : https://github.com/MedlockM2/second-brain-app/actions/runs/39091445463. Publication OTA interne Android et iOS réussie, avec contrôle des manifestes et source maps par le workflow : https://github.com/MedlockM2/second-brain-app/actions/runs/39091445447. Web local mis à jour et rendu contrôlé manuellement. Aucun déploiement backend nécessaire. L’état In Progress concerne toujours le réglage externe Apple déjà documenté.
+
+Diagnostic du 2026-10-26 : capture Android lue, invalid_request / Invalid web redirect url. Reproduction réelle depuis GET /api/auth/oauth/config pour mobile et web : HTTP 302 de Cognito vers Apple, client_id com.secondbrainlabs.core.signinwithapple, redirect_uri https://deepn-125313707865-dev.auth.eu-west-3.amazoncognito.com/oauth2/idpresponse ; les deux pages Apple retournent le même refus de redirection. Le deep link mobile est uniquement le retour Cognito vers l’app et n’est pas transmis à Apple. Le raccordement Apple déjà en attente reste bloquant pour Android et web. Console Apple Developer ouverte dans Chrome, mais aucune session connectée ; connexion demandée au propriétaire. Runbook complété avec les valeurs exactes et les étapes de sauvegarde. Aucun secret, cookie, state ou justificatif utilisateur enregistré ; aucun réglage externe modifié à ce stade.
+
+Raccordement Apple terminé le 2026-10-26 après connexion du propriétaire. Services ID com.secondbrainlabs.core.signinwithapple : domaine deepn-125313707865-dev.auth.eu-west-3.amazoncognito.com et retour HTTPS /oauth2/idpresponse sauvegardés ; ancien domaine API et callback /api/auth/apple/callback retirés. Même App ID primaire conservé. Une première sauvegarde avait été refusée pour expiration de session ; après renouvellement de la page, sauvegarde réussie puis relecture du Services ID confirmant seulement les deux URL Cognito. Vérification réelle indépendante pour mobile et web : config publique 200, Cognito 302 vers Apple, page Apple 200 « Sign in to Apple Account », absence de invalid_request et Invalid web redirect url. Le blocage externe qui maintenait TASK-526 In Progress est levé. Runbook aligné, diff --check réussi. Aucun changement applicatif, build, déploiement, test automatisé, login utilisateur complet ni modification de prod pendant cette intervention ; connexion finale sur téléphone laissée au propriétaire.
+
+Ajustement du nom affiché demandé le 2026-10-26 : le libellé de la capture Android correspond exactement à Description du Services ID. Description remplacée par Deepn dans Apple Developer puis Continue / Save, succès confirmé par la liste des Services IDs. Identifiant technique, App ID primaire et retours conservés. Vérification réelle des pages publiques Apple via les deux configurations mobile/web : HTTP 200, Deepn présent, ancien libellé absent et aucun refus de redirection. Runbook complété ; aucun nouveau binaire ni changement applicatif, aucun justificatif utilisateur consigné.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Confie l’authentification utilisateur à Amazon Cognito et raccorde les parcours e-mail/mot de passe, vérification, récupération, Google et Apple sur mobile et web, avec sessions et rattachement des profils applicatifs. Les anciens mécanismes remplacés sont supprimés ; configuration Terraform, droits et procédures externes sont documentés.
+
+Le dernier blocage externe Apple est levé le 2026-10-26 : le Services ID autorise le domaine Cognito dev et /oauth2/idpresponse ; l’ancien callback API est retiré. Sauvegarde et relecture Apple Developer confirmées. Les deux parcours publics mobile/web aboutissent maintenant à la page de connexion Apple en HTTP 200 sans invalid_request / Invalid web redirect url. Documentation mise à jour et diff --check réussi. Les vérifications statiques de la bascule sont consignées dans les notes précédentes ; cette correction de configuration ne nécessite aucun nouveau binaire. Aucune connexion utilisateur complète ni validation sur appareil n’est revendiquée.
+
+Le Services ID Apple porte désormais la description Deepn, qui remplace l’ancien libellé sur le parcours navigateur Android/web. Nom sauvegardé dans Apple Developer et présence de Deepn vérifiée sur les deux pages publiques Apple, sans nouveau binaire.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -46,6 +46,7 @@ import {
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { OrganizationService } from "../services/organizationService";
 import { NewFolderButton } from "./NewFolderButton";
+import { useFocusedInputScroll } from "../hooks/useFocusedInputScroll";
 import type { Folder } from "@media-summarizer/core/types/organization";
 
 export interface FolderPickerViewProps {
@@ -86,6 +87,8 @@ export function FolderPickerView({
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const createInputRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const inputScroll = useFocusedInputScroll(scrollRef);
 
   const [searchText, setSearchText] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -116,7 +119,6 @@ export function FolderPickerView({
   const handleShowCreateInput = useCallback(() => {
     setIsCreating(true);
     setNewFolderName("");
-    setTimeout(() => createInputRef.current?.focus(), 100);
   }, []);
 
   const handleCancelCreate = useCallback(() => {
@@ -276,10 +278,18 @@ export function FolderPickerView({
         </View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          onLayout={inputScroll.reveal}
+          onContentSizeChange={inputScroll.reveal}
+          onScroll={inputScroll.onScroll}
+          scrollEventThrottle={16}
         >
           {showUnsorted && (
             <Pressable
@@ -334,6 +344,8 @@ export function FolderPickerView({
               <Ionicons name="folder-outline" size={24} color={Colors.primary} />
               <TextInput
                 ref={createInputRef}
+                autoFocus
+                onFocus={() => inputScroll.focusInput(createInputRef.current)}
                 style={styles.createInput}
                 placeholder={t("folderPicker.namePlaceholder")}
                 placeholderTextColor={Colors.textMuted}

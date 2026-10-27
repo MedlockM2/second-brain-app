@@ -22,8 +22,8 @@ Translation architecture (task-200, task-414):
   first open it is usually done or in flight -- this path then only reads state.
 - If a cached translation exists in S3, it is returned immediately.
 - If not, the original transcript is returned with translation_pending=true
-  and, when nobody armed it yet (a reading language changed after ingestion, a
-  reader whose save was not part of the ingestion), an async job is dispatched
+  and, when nobody armed it yet (a deduplicated save in another language, or a
+  recoverable dispatch failure), an async job is dispatched
   via SQS to the transcript-translation-worker. Same atomic reservation as the
   ingestion hook, so the two triggers never enqueue the same couple twice.
 - The mobile client polls /raw-content until the translation is ready.
@@ -69,7 +69,7 @@ TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 #: Which body a read of the raw content asks for (task-419).
 #:
 #: ``translated`` is the default and the only behaviour there has ever been: the
-#: cached translation into the reader's ``reading_language`` when one exists, the
+#: cached translation into the save's fixed ``reading_language`` when one exists, the
 #: source text otherwise. ``original`` is always the source text, whatever has
 #: been translated -- what the reader asks for from the "View the original"
 #: control of the Reader tab.
@@ -133,7 +133,7 @@ async def get_raw_content(
         transcript: Where the content's text lives, resolved by content from the
             global ledger. Carries the media's classification and its language
             tag; no job row is read here or below.
-        reading_language: The user's preferred reading language (ISO 639-1),
+        reading_language: The language captured on this save (ISO 639-1),
             if any.
         variant: Which body to serve. ``original`` returns the source text even
             when a translation is cached, and carries no translation metadata.
@@ -467,6 +467,7 @@ async def _resolve_translation(
     # Losing the race (or a reservation error) means someone else owns the couple:
     # report it as queued and let the next poll read the real state.
     outcome = await reserve_and_dispatch_translation(
+        media_key=transcript.media_key,
         transcript_s3_key=transcript_s3_key,
         target_language=normalized_target,
         source_language_hint=source_language_hint,

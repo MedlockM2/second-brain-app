@@ -1,5 +1,5 @@
-# Native iOS Apple sign-in (task-527). Provider proofs are validated by the API;
-# this small trigger consumes one-use grants, links exact Apple subjects and refuses
+# Native provider sign-in (tasks 527, 540). Provider proofs are validated by the API;
+# this small trigger consumes one-use grants, links exact provider subjects and refuses
 # a second account for an address (task-529). The table also holds link intents.
 resource "aws_dynamodb_table" "apple_auth" {
   name         = "${var.project_name}-apple-auth${local.suffix}"
@@ -68,7 +68,7 @@ resource "aws_iam_role_policy" "apple_auth_api" {
   policy = jsonencode({ Version = "2012-10-17", Statement = [
     { Effect = "Allow", Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem"],
     Resource = aws_dynamodb_table.apple_auth.arn },
-    { Effect = "Allow", Action = ["cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword"],
+    { Effect = "Allow", Action = ["cognito-idp:AdminCreateUser", "cognito-idp:AdminSetUserPassword", "cognito-idp:AdminUpdateUserAttributes"],
     Resource = aws_cognito_user_pool.users.arn }
   ] })
 }

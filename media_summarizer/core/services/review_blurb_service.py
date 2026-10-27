@@ -22,7 +22,6 @@ from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArti
 from media_summarizer.core.services.durable_media_service import (
     resolve_content_transcript,
 )
-from media_summarizer.utils import database_async
 from media_summarizer.utils import user_media as user_media_store
 
 logger = logging.getLogger(__name__)
@@ -79,20 +78,13 @@ async def trigger_review_blurb_generation(
     )
 
     try:
-        # The reading language goes straight in, like every user-facing request:
-        # the resolver reads the original transcript and the language only travels
-        # to the model, through ``parameters["language"]`` (task-398). Nothing here
-        # can be deferred over a translation — which matters more on this hook than
-        # anywhere else, since ingestion completes once and there is no retry loop
-        # behind this call. It also keeps the language part of ``artifact_id``, so
-        # changing reading language yields a new blurb rather than silently reusing
-        # the old one — filled by translating this one when the media is opened,
-        # never by reading the transcript again (task-395).
+        # The original transcript feeds the model directly (task-398), with the
+        # language captured on this save. Profile changes never replace its card.
         resolution = await resolve_scope_sources(
             user_id=user_id,
             scope=ArtifactScope.MEDIA,
             scope_id=media_item_id,
-            reading_language=await _reading_language(user_id),
+            reading_language=record.reading_language,
         )
         enforce_scope_ceilings(resolution)
 
@@ -133,16 +125,3 @@ async def trigger_review_blurb_generation(
             "review_blurb: failed to trigger for %s: %s", media_item_id, exc
         )
         return None
-
-
-async def _reading_language(user_id: str) -> Optional[str]:
-    """The owner's reading language, or ``None`` when it cannot be read.
-
-    ``None`` is a valid answer, not a failure: the prompt then tells the model to
-    answer in the language of the sources.
-    """
-    try:
-        user = await database_async.get_user_by_id(user_id)
-    except Exception:
-        return None
-    return getattr(user, "reading_language", None) if user is not None else None

@@ -21,7 +21,7 @@ from media_summarizer.core.models.auth import (
     RegisterRequest,
     TokenType,
 )
-from media_summarizer.core.services import account_links, apple_native_auth
+from media_summarizer.core.services import account_links, apple_native_auth, google_native_auth
 from media_summarizer.core.services import cognito_auth as cognito
 from media_summarizer.utils import database_async
 from media_summarizer.utils.auth_utils import get_refresh_token_expires_at
@@ -56,6 +56,15 @@ class AppleNativeRequest(BaseModel):
     nonce: str = Field(min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
+class GoogleNativeRequest(BaseModel):
+    identity_token: str = Field(min_length=1, max_length=8192)
+    nonce: str = Field(min_length=32, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class GoogleChallengeRequest(BaseModel):
+    purpose: Literal["sign_in", "link"]
+
+
 class LinkStartRequest(BaseModel):
     provider: Literal["Google", "SignInWithApple"]
 
@@ -81,6 +90,31 @@ async def apple_native(body: AppleNativeRequest, request: Request):
         if exc.status_code == 401:
             raise cognito.refuse("AUTH_APPLE_INVALID", 401) from None
         raise
+
+
+@router.post("/google/native/challenge")
+async def google_challenge(body: GoogleChallengeRequest, request: Request):
+    if is_web_session(request):
+        raise cognito.refuse("AUTH_INVALID_REQUEST")
+    username = await session_username(request) if body.purpose == "link" else ""
+    return JSONResponse(await google_native_auth.challenge(username), headers={"Cache-Control": "no-store"})
+
+
+@router.post("/google/native")
+async def google_native(body: GoogleNativeRequest, request: Request):
+    if is_web_session(request):
+        raise cognito.refuse("AUTH_INVALID_REQUEST")
+    tokens = await google_native_auth.sign_in(body.identity_token, body.nonce)
+    return await answer_session(request, tokens, provision=True)
+
+
+@router.post("/link/google")
+async def link_google(body: GoogleNativeRequest, request: Request):
+    if is_web_session(request):
+        raise cognito.refuse("AUTH_INVALID_REQUEST")
+    username = await session_username(request)
+    await account_links.link_google(username, body.identity_token, body.nonce)
+    return {"status": "linked"}
 
 
 @router.post("/link/start", status_code=202)
@@ -354,9 +388,9 @@ async def update_current_user(
 ):
     """Update the current user's preferences (reading language, device time zone).
 
-    The reading language is rate-limited to one change per month, per account —
-    it is the only preference here whose move costs money, since it re-translates
-    every media the reader opens next. Setting a first language is not a change
+    The reading language is rate-limited to one change per month, per account.
+    This changes the default for future saves only (task-545), never the language
+    captured on existing media or artifacts. Setting a first language is not a change
     and is never refused; a second move inside the window answers 429 with
     ``reading_language_change_too_soon`` and the date the guard lifts.
     """

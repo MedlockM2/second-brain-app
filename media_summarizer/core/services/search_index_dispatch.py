@@ -16,16 +16,16 @@ row, so records pointing at a deleted save come back as dead hits with no title,
 no cover and no possible action.
 
 Indexing a deduplicated save costs one ``save_objects`` over a transcript that
-already exists in S3: no re-extraction, no provider call, no LLM, no quota.
+already exists in S3. A new reading language may require one shared translation;
+no content is re-extracted.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from typing import Optional
 
-from media_summarizer.utils import sqs
+from media_summarizer.utils import sqs, user_media
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
@@ -38,10 +38,6 @@ async def enqueue_transcript_indexing(
     *,
     media_item_id: Optional[str],
     user_id: Optional[str],
-    transcription_s3_key: Optional[str],
-    title: Optional[str] = None,
-    creator_name: Optional[str] = None,
-    source_platform: Optional[str] = None,
     job_id: Optional[str] = None,
 ) -> bool:
     """Ask the indexing worker to index one save's transcript. Never raises.
@@ -54,17 +50,16 @@ async def enqueue_transcript_indexing(
     Returns whether a message was sent. Failure is logged and swallowed: neither
     a completion event nor a user's save may be lost because a search record
     could not be scheduled. The enqueue is skipped, with a structured log, when
-    the transcript key, the library id or the owner is missing -- the worker
-    needs all three and would only log the same thing later.
+    the library id or owner is missing. The worker resolves the content and
+    language from the durable row, never from a queued copy of the source text.
     """
-    if not transcription_s3_key or not user_id or not media_item_id:
+    if not user_id or not media_item_id:
         log_event(
             logger,
             logging.WARNING,
             "search_indexing.skipped",
-            "Skipped search indexing enqueue: missing transcription_s3_key, media_item_id or user_id",
+            "Skipped search indexing enqueue: missing media_item_id or user_id",
             job_id=job_id,
-            has_transcription_s3_key=bool(transcription_s3_key),
             has_media_item_id=bool(media_item_id),
             has_user_id=bool(user_id),
         )
@@ -76,11 +71,6 @@ async def enqueue_transcript_indexing(
             message_body={
                 "media_item_id": media_item_id,
                 "user_id": user_id,
-                "transcription_s3_key": transcription_s3_key,
-                "title": title,
-                "creator_name": creator_name,
-                "source_platform": source_platform,
-                "created_at": int(time.time()),
             },
         )
     except Exception as exc:  # noqa: BLE001 - indexing never fails its caller
@@ -97,3 +87,21 @@ async def enqueue_transcript_indexing(
         return False
 
     return True
+
+
+async def enqueue_translated_content_indexing(
+    *, media_key: str, reading_language: str,
+) -> None:
+    """Wake every save waiting for a shared translation, including later retries.
+
+    Raises on dispatch failure so the translation message can be retried after
+    its text is stored. Each initial indexing message also waits independently,
+    covering a new save not yet visible in the cross-account GSI.
+    """
+    for record in await user_media.list_by_media_key(media_key):
+        if record.reading_language != reading_language:
+            continue
+        if not await enqueue_transcript_indexing(
+            user_id=record.user_id, media_item_id=record.media_item_id,
+        ):
+            raise RuntimeError("Could not dispatch translated-content indexing")

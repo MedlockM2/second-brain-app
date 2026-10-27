@@ -41,7 +41,7 @@ import type {
   ChatMessage,
   ChatSource,
 } from "@media-summarizer/core/types/chat";
-import { useChatKeyboardLayout } from "../../hooks/useChatKeyboardLayout";
+import { useKeyboardViewport } from "../../hooks/useKeyboardViewport";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread, type ChatThreadProps } from "./ChatThread";
 export interface ChatConversationModalProps {
@@ -93,7 +93,7 @@ export function ChatConversationModal(
   const inputRef = useRef<TextInput>(null);
   const scrollRef = useRef<ScrollView>(null);
   const keyboardViewport = useRef<View>(null);
-  const keyboard = useChatKeyboardLayout(keyboardViewport);
+  const keyboard = useKeyboardViewport(keyboardViewport, props.visible);
   const focusRequested = useRef(false);
   const followBottom = useRef(props.scrollTarget === "bottom");
   const [awayFromBottom, setAwayFromBottom] = useState(false);
@@ -215,6 +215,7 @@ export function ChatConversationModal(
       statusBarTranslucent
       navigationBarTranslucent
       onShow={() => {
+        keyboard.refresh();
         // A single focus destination: do not compete with the input's native
         // first responder while its keyboard is opening.
         if (props.focusOnOpen && !props.historyOpen) {

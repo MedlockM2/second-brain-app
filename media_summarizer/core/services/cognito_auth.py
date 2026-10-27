@@ -184,15 +184,19 @@ async def purge_unconfirmed(holders: list[dict[str, Any]]) -> None:
 
 
 def has_password(holder: dict[str, Any]) -> bool:
-    """A password the person chose. Native Apple profiles carry a random one nobody knows."""
-    return not holder["attributes"].get("custom:apple_subject") and holder["UserStatus"] in {"CONFIRMED", "RESET_REQUIRED"}
+    """A password the person chose. Native social profiles carry a random one nobody knows."""
+    return (
+        not any(holder["attributes"].get(f"custom:{provider}_subject") for provider in ("apple", "google"))
+        and holder["UserStatus"] in {"CONFIRMED", "RESET_REQUIRED"}
+    )
 
 
 def sign_in_methods(holder: dict[str, Any]) -> list[str]:
     attributes = holder["attributes"]
     methods = {"password"} if has_password(holder) else set()
-    if attributes.get("custom:apple_subject"):
-        methods.add("apple")
+    for provider in ("apple", "google"):
+        if attributes.get(f"custom:{provider}_subject"):
+            methods.add(provider)
     methods.update(PROVIDER_METHODS.get(i.get("providerName"), "") for i in json.loads(attributes.get("identities", "[]")))
     return [m for m in METHOD_ORDER if m in methods]
 
@@ -239,15 +243,16 @@ async def delete_identity(username: str) -> None:
         async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as cognito:
             user = await cognito.admin_get_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=username)
             attributes = {a["Name"]: a["Value"] for a in user["UserAttributes"]}
-            subjects = [attributes["custom:apple_subject"]] if attributes.get("custom:apple_subject") else []
-            subjects += [i["userId"] for i in json.loads(attributes.get("identities", "[]"))
-                         if i.get("providerName") == "SignInWithApple"]
+            subjects = {(provider, attributes[f"custom:{provider}_subject"])
+                        for provider in ("apple", "google") if attributes.get(f"custom:{provider}_subject")}
+            subjects.update((PROVIDER_METHODS[i["providerName"]], i["userId"])
+                            for i in json.loads(attributes.get("identities", "[]")) if i.get("providerName") in PROVIDER_METHODS)
             async with database_async.get_session().resource("dynamodb", region_name=database_async.AWS_REGION) as db:
                 table = await db.Table(required_env("APPLE_AUTH_TABLE"))
-                for subject in set(subjects):
+                for provider, subject in subjects:
                     try:
                         await table.delete_item(
-                            Key={"pk": "apple#" + hashlib.sha256(subject.encode()).hexdigest()},
+                            Key={"pk": provider + "#" + hashlib.sha256(subject.encode()).hexdigest()},
                             ConditionExpression="#u = :u", ExpressionAttributeNames={"#u": "username"},
                             ExpressionAttributeValues={":u": user["Username"]},
                         )

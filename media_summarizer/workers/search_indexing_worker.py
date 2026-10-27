@@ -1,15 +1,8 @@
-"""
-Search indexing worker -- indexes transcripts in Algolia after transcription completes.
+"""Index each save's fixed reading-language text, once it is available.
 
-Consumes messages from SEARCH_INDEXING_QUEUE containing:
-- media_item_id: job/media identifier
-- user_id: owner of the media
-- transcription_s3_key: S3 key of the transcript to index
-- title: (optional) media title
-- source_platform: (optional) platform source
-
-On receipt, downloads the transcript from S3 and indexes it in the shared
-Algolia index with user_id attribute for multi-tenant isolation.
+Messages carry only user_id and media_item_id. The durable row selects the
+language and the content ledger selects the source. Foreign source text is
+never published while its translation is pending or failed.
 """
 
 from __future__ import annotations
@@ -18,10 +11,13 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import Any, Dict
 
 from media_summarizer.core.services import search_indexing
-from media_summarizer.utils import s3, sqs
+from media_summarizer.core.services.durable_media_service import resolve_content_transcript
+from media_summarizer.core.services.raw_content_service import get_raw_content
+from media_summarizer.utils import sqs
 from media_summarizer.utils import user_media as user_media_store
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import (
@@ -33,7 +29,8 @@ from media_summarizer.utils.logging_config import (
 logger = logging.getLogger(__name__)
 
 SEARCH_INDEXING_QUEUE = required_env("SEARCH_INDEXING_QUEUE")
-TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
+TRANSLATION_POLL_SECONDS = 15
+TRANSLATION_MAX_WAIT_SECONDS = 3600
 
 # Backoff
 TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
@@ -44,19 +41,13 @@ async def process_indexing_message(message: Dict[str, Any]) -> None:
     """
     Process a single search indexing message.
 
-    Downloads the transcript from S3 and indexes it in Algolia.
+    Resolve the fixed reading-language text, then publish it in Algolia.
     """
     body = json.loads(message.get("Body", "{}"))
 
     media_item_id = body.get("media_item_id")
     user_id = body.get("user_id")
-    transcription_s3_key = body.get("transcription_s3_key")
-    title = body.get("title")
-    creator_name = body.get("creator_name")
-    source_platform = body.get("source_platform")
-    created_at = body.get("created_at")
-
-    if not all([media_item_id, user_id, transcription_s3_key]):
+    if not media_item_id or not user_id:
         logger.error(
             f"Missing required fields in search indexing message: {body}"
         )
@@ -73,18 +64,6 @@ async def process_indexing_message(message: Dict[str, Any]) -> None:
             "Downloading transcript for search indexing",
             media_item_id=media_item_id,
         )
-
-        # Download transcript from S3
-        transcript_bytes = await s3.download_file_to_memory(
-            bucket=TRANSCRIPT_BUCKET, key=transcription_s3_key
-        )
-        transcript_text = transcript_bytes.decode("utf-8", errors="replace")
-
-        if not transcript_text.strip():
-            logger.warning(
-                f"Empty transcript for media_item_id={media_item_id}, skipping indexing"
-            )
-            return
 
         # The save may be gone: this message is written when transcription ends and
         # read minutes later, and in between the user can have deleted the item --
@@ -106,15 +85,47 @@ async def process_indexing_message(message: Dict[str, Any]) -> None:
             )
             return
 
-        # Index in Algolia (synchronous call, acceptable for worker context)
+        transcript = await resolve_content_transcript(record)
+        if transcript is None:
+            raise RuntimeError("Content transcript unavailable for search indexing")
+        raw = await get_raw_content(transcript, reading_language=record.reading_language)
+        translation = raw.translation or {}
+        if translation.get("translation_pending"):
+            # Requeue an inexpensive check without spending Lambda time waiting,
+            # or consuming SQS's delivery attempts for a normal translation wait.
+            started = body.get("translation_wait_started_at") or int(time.time())
+            if time.time() - started >= TRANSLATION_MAX_WAIT_SECONDS:
+                raise RuntimeError("Translation did not become ready for search indexing")
+            await sqs.send_message(
+                queue_name=SEARCH_INDEXING_QUEUE,
+                message_body={**body, "translation_wait_started_at": started},
+                delay_seconds=TRANSLATION_POLL_SECONDS,
+            )
+            return
+        if record.reading_language and not (
+            translation.get("is_translated")
+            or translation.get("detected_language") == record.reading_language
+        ):
+            # Failed/unknown translations do not make foreign source text searchable.
+            # A later successful translation wakes this save through its worker.
+            log_event(
+                logger, logging.INFO, "search_indexing.translation_unavailable",
+                "Skipped search indexing: reading-language text is unavailable",
+                media_item_id=media_item_id,
+            )
+            return
+
+        # Recheck deletion after the S3/state reads, before publishing a hit.
+        if await user_media_store.get_user_media(user_id, media_item_id) is None:
+            return
         search_indexing.index_transcript(
             user_id=user_id,
             media_item_id=media_item_id,
-            transcript_text=transcript_text,
-            title=title,
-            creator_name=creator_name,
-            source_platform=source_platform,
-            created_at=created_at,
+            transcript_text=raw.content,
+            title=record.title,
+            creator_name=record.creator_name,
+            source_platform=record.source_platform,
+            created_at=int(record.saved_at.timestamp()),
         )
 
         log_event(

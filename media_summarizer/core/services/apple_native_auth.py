@@ -19,6 +19,7 @@ import jwt
 from botocore.exceptions import ClientError
 
 from media_summarizer.core.services import cognito_auth as cognito
+from media_summarizer.core.services import native_cognito
 from media_summarizer.utils import database_async
 from media_summarizer.utils.env import required_env
 
@@ -83,16 +84,6 @@ async def redeem_code(code: str, nonce: str, subject: str) -> None:
         raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
 
 
-async def get_user(username: str) -> dict[str, Any] | None:
-    try:
-        async with database_async.get_session().client("cognito-idp", region_name=database_async.AWS_REGION) as client:
-            return await client.admin_get_user(UserPoolId=required_env("COGNITO_USER_POOL_ID"), Username=username)
-    except ClientError as exc:
-        if exc.response["Error"]["Code"] == "UserNotFoundException":
-            return None
-        raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
-
-
 def _attributes(user: dict[str, Any]) -> dict[str, str]:
     return {a["Name"]: a["Value"] for a in user.get("UserAttributes", [])}
 
@@ -112,7 +103,7 @@ async def apple_username(claims: dict[str, Any]) -> str:
     async with database_async.get_session().resource("dynamodb", region_name=database_async.AWS_REGION) as db:
         table = await db.Table(required_env("APPLE_AUTH_TABLE"))
         mapping = (await table.get_item(Key={"pk": subject_key(subject)}, ConsistentRead=True)).get("Item")
-        user = await get_user(mapping["username"] if mapping else f"SignInWithApple_{subject}")
+        user = await native_cognito.get_user(mapping["username"] if mapping else f"SignInWithApple_{subject}")
         if user is not None and not _is_apple_user(user, subject):
             raise cognito.refuse("AUTH_APPLE_INVALID", 401)
         if user is None:
@@ -132,12 +123,12 @@ async def apple_username(claims: dict[str, Any]) -> str:
                                         {"Name": "email_verified", "Value": "true"},
                                         {"Name": "custom:apple_subject", "Value": subject}],
                     )
-                user = await get_user(created["User"]["Username"])
+                user = await native_cognito.get_user(created["User"]["Username"])
             except ClientError as exc:
                 if exc.response["Error"]["Code"] not in {"UsernameExistsException", "AliasExistsException"}:
                     raise cognito.refuse("AUTH_UNAVAILABLE", 503) from None
                 # A concurrent creation is safe only with the same Apple subject.
-                user = await get_user(claims["email"])
+                user = await native_cognito.get_user(claims["email"])
                 if user is None or _attributes(user).get("custom:apple_subject") != subject:
                     raise cognito.account_exists(cognito.confirmed(await cognito.account_holders(claims["email"]))) from None
         if user is None or not _is_apple_user(user, subject):
@@ -158,27 +149,4 @@ async def sign_in(identity_token: str, authorization_code: str, nonce: str) -> d
     claims = await verified_identity(identity_token, nonce)
     await redeem_code(authorization_code, nonce, claims["sub"])
     username = await apple_username(claims)
-    app_client = cognito.client_id(False)
-    challenge = await cognito.call(
-        "initiate_auth", ClientId=app_client, AuthFlow="CUSTOM_AUTH", AuthParameters={"USERNAME": username},
-    )
-    if challenge.get("ChallengeName") != "CUSTOM_CHALLENGE" or not challenge.get("Session"):
-        raise cognito.refuse("AUTH_UNAVAILABLE", 503)
-    challenge_nonce = challenge.get("ChallengeParameters", {}).get("nonce")
-    if not challenge_nonce:
-        raise cognito.refuse("AUTH_UNAVAILABLE", 503)
-    grant = secrets.token_urlsafe(48)
-    async with database_async.get_session().resource("dynamodb", region_name=database_async.AWS_REGION) as db:
-        table = await db.Table(required_env("APPLE_AUTH_TABLE"))
-        await table.put_item(Item={
-            "pk": "grant#" + hashlib.sha256(grant.encode()).hexdigest(),
-            "username": username, "client_id": app_client, "challenge": challenge_nonce,
-            "expires_at": int(time.time()) + 90,
-        })
-    result = await cognito.call(
-        "respond_to_auth_challenge", ClientId=app_client, ChallengeName="CUSTOM_CHALLENGE", Session=challenge["Session"],
-        ChallengeResponses={"USERNAME": username, "ANSWER": grant},
-    )
-    if not result.get("AuthenticationResult"):
-        raise cognito.refuse("AUTH_APPLE_INVALID", 401)
-    return result["AuthenticationResult"]
+    return await native_cognito.session(username)

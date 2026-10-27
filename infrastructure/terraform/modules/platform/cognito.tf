@@ -63,6 +63,18 @@ resource "aws_cognito_user_pool" "users" {
       max_length = 255
     }
   }
+  # Android Credential Manager users have no user-chosen password. Admin-only,
+  # like apple_subject; never add this attribute to client write_attributes.
+  schema {
+    name                = "google_subject"
+    attribute_data_type = "String"
+    required            = false
+    mutable             = true
+    string_attribute_constraints {
+      min_length = 1
+      max_length = 255
+    }
+  }
   # Only AdminUpdateUserAttributes may attach a fixture. Clients cannot write it.
   schema {
     name                = "app_user_id"

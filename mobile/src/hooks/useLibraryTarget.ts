@@ -3,6 +3,7 @@ import { Keyboard, type FlatList, type View } from "react-native";
 import { useIsFocused } from "expo-router";
 import { TAB_BAR_CLEARANCE } from "../constants/tabBar";
 import { Spacing } from "../constants/theme";
+import { getKeyboardViewportHeight } from "../lib/keyboardViewport";
 
 type Measured = Pick<View, "measureInWindow">;
 
@@ -38,17 +39,17 @@ export function useLibraryTarget<T>(
       const node = current.editingId && field.current?.id === id
         ? field.current.node : slots.current.get(id);
       if (!node) return;
-      viewport.current?.measureInWindow((_x, top, _w, height) => {
+      viewport.current?.measureInWindow((x, top, width, height) => {
         if (version !== revision.current) return;
         const keyboard = geometry.current;
-        const overlap = keyboard ? Math.max(0, top + height - keyboard.screenY) : 0;
+        const visibleHeight = getKeyboardViewportHeight({ x, y: top, width, height }, keyboard);
+        const overlap = height - visibleHeight;
         // Reserve scroll range first; onContentSizeChange remeasures after commit.
         if (committedSpace.current !== overlap) {
           setBottomSpace(overlap);
           return;
         }
-        const bottom = Math.min(top + height - (overlap ? 0 : TAB_BAR_CLEARANCE),
-          keyboard?.screenY ?? Infinity) - Spacing.md;
+        const bottom = top + visibleHeight - (overlap ? 0 : TAB_BAR_CLEARANCE) - Spacing.md;
         node.measureInWindow((_nx, y, _nw, h) => {
           if (version !== revision.current || height <= 0 || h <= 0) return;
           const delta = h > bottom - top - topClearance ? y - top - topClearance
