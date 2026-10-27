@@ -588,7 +588,7 @@ export const de: Catalog = {
   "folders.childCount.one": "{count} Ordner",
   "folders.childCount.other": "{count} Ordner",
   "media.tab.reader": "Lesen",
-  "media.tab.ai": "KI",
+  "media.tab.ai": "Notizbuch",
   "media.sectionsA11y": "Medienbereiche",
   "media.loadFailed": "Die Mediendetails konnten nicht geladen werden.",
   "media.retryA11y": "Mediendetails erneut laden",
@@ -611,7 +611,7 @@ export const de: Catalog = {
   "media.openSourceA11y": "Auf {host} öffnen",
   "media.readingProgressA11y": "Lesefortschritt",
   "folder.tab.sources": "Quellen",
-  "folder.tab.ai": "KI",
+  "folder.tab.ai": "Notizbuch",
   "folder.sectionsA11y": "Bereiche des Ordners",
   "folder.loadFailed":
     "Dieser Ordner konnte nicht geladen werden. Bitte versuche es erneut.",

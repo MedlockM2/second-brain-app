@@ -697,7 +697,7 @@ export const en = {
   "folders.childCount.other": "{count} folders",
   // --- Media detail ---
   "media.tab.reader": "Reader",
-  "media.tab.ai": "AI",
+  "media.tab.ai": "Notebook",
   "media.sectionsA11y": "Media sections",
   "media.loadFailed": "Unable to load media details.",
   "media.retryA11y": "Retry loading media details",
@@ -722,7 +722,7 @@ export const en = {
 
   // --- Folder detail ---
   "folder.tab.sources": "Sources",
-  "folder.tab.ai": "AI",
+  "folder.tab.ai": "Notebook",
   "folder.sectionsA11y": "Folder sections",
   "folder.loadFailed": "Unable to load this folder. Please try again.",
   "folder.retryA11y": "Retry loading folder",

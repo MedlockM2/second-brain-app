@@ -604,7 +604,7 @@ export const fr: Catalog = {
   "folders.childCount.one": "{count} dossier",
   "folders.childCount.other": "{count} dossiers",
   "media.tab.reader": "Lecture",
-  "media.tab.ai": "IA",
+  "media.tab.ai": "Cahier",
   "media.sectionsA11y": "Sections du média",
   "media.loadFailed": "Impossible de charger les détails du média.",
   "media.retryA11y": "Réessayer de charger les détails du média",
@@ -628,7 +628,7 @@ export const fr: Catalog = {
   "media.openSourceA11y": "Ouvrir sur {host}",
   "media.readingProgressA11y": "Progression de la lecture",
   "folder.tab.sources": "Sources",
-  "folder.tab.ai": "IA",
+  "folder.tab.ai": "Cahier",
   "folder.sectionsA11y": "Sections du dossier",
   "folder.loadFailed":
     "Impossible de charger ce dossier. Veuillez réessayer.",

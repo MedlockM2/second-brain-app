@@ -580,7 +580,7 @@ export const es: Catalog = {
   "folders.childCount.one": "{count} carpeta",
   "folders.childCount.other": "{count} carpetas",
   "media.tab.reader": "Lectura",
-  "media.tab.ai": "IA",
+  "media.tab.ai": "Cuaderno",
   "media.sectionsA11y": "Secciones del medio",
   "media.loadFailed": "No se han podido cargar los detalles del medio.",
   "media.retryA11y": "Reintentar la carga de los detalles del medio",
@@ -603,7 +603,7 @@ export const es: Catalog = {
   "media.openSourceA11y": "Abrir en {host}",
   "media.readingProgressA11y": "Progreso de lectura",
   "folder.tab.sources": "Fuentes",
-  "folder.tab.ai": "IA",
+  "folder.tab.ai": "Cuaderno",
   "folder.sectionsA11y": "Secciones de la carpeta",
   "folder.loadFailed":
     "No se ha podido cargar esta carpeta. Inténtalo de nuevo.",
