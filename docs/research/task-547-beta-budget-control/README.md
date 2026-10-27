@@ -1,13 +1,70 @@
 ---
-owner_decision: pending
+owner_decision: ok
 ---
 
 # Benchmark : contrôle du budget fournisseur de la bêta
 
 ## Owner Validation
 
-**Decision**: _(à remplir par le propriétaire)_
-**Validated at**: _(date ISO à remplir par le propriétaire)_
+**Decision**: *Recommandation acceptée sur le principe (réserver avant l'appel, régulariser après), avec les règles de la section « Décision de l'owner : règles d'implémentation » ci-dessous, qui priment sur les sections 1 à 7 en cas de divergence. Pour chaque appel payant, calculer son coût maximal à partir des métadonnées (durée, pages, tokens) ; au-delà d'une limite par élément, refuser (240 min, 100 pages, sortie plafonnée) ; quand la mesure échoue, réserver le plafond. Retirer ce montant avant l'appel, en une seule écriture conditionnelle. Résultat livré : régulariser sur le coût réel. Pas de résultat livré : tout rendre au testeur ; le coût de l'échec est à la charge de l'opérateur et suivi à part. Les reprises restent limitées. Une panne du compteur refuse le traitement. Tous les chemins payants passent par ce contrôle. L'aperçu et la traduction automatiques sont réservés avec l'import ; sortie de traduction plafonnée à 1,5 fois les tokens envoyés. Un contenu déjà traité pour un autre compte est débité au nouveau compte comme s'il avait été traité pour lui. Le pourcentage affiché est la consommation régularisée, sans les réservations en cours. Aucune remise de capacité manuelle pendant la bêta. Mois calendaire UTC, taux de change fixe en configuration, pas de marge supplémentaire. Recherche Algolia hors enveloppe.*
+**Validated at**: 2026-10-27
+
+## Décision de l'owner : règles d'implémentation
+
+Cette section est la référence de TASK-548 et TASK-549. Elle remplace notamment la recommandation sur l'issue incertaine (§ 4, étape 6), le refus systématique des chemins non bornés (§ 5), l'objectif d'une garantie démontrée, le change (§ 6) et, pour la réutilisation entre comptes, la règle « réutilisation à zéro » de R.2 (§ 6, contenu partagé).
+
+### Principe
+
+1. **Mesurer avant d'appeler.** Pour chaque appel payant, lire les métadonnées qui donnent la quantité facturée (durée, pages, feuilles, tokens) et en déduire le coût maximal au barème versionné.
+2. **Limite par élément.** Au-delà, l'import ou l'action est refusé avec un code typé, comme l'actuel `item_too_long`. Ce n'est pas un refus de budget.
+3. **Mesure impossible : réserver le plafond par élément.** Ne jamais refuser un partage légitime parce que les métadonnées sont illisibles (décision task-250 maintenue) ; ne jamais débiter une valeur provisoire minimale à la place (supprimer la minute provisoire actuelle).
+4. **Admission atomique.** Vérifier le disponible et réserver en une seule écriture DynamoDB conditionnelle. Aujourd'hui, `check_submission_allowed` puis `record_transcription_minutes` sont deux opérations séparées (`quota_enforcer.py`) : c'est la course à fermer.
+5. **Pas de résultat livré, pas de débit.** Résultat livré à l'utilisateur : régulariser sur le coût réel (métriques fournisseur). Échec, timeout, flux coupé, résultat illisible ou non persisté : libérer toute la réservation. Il n'existe pas d'état où le testeur garde une capacité bloquée pour une issue inconnue. Le coût fournisseur de l'échec reste enregistré comme dépense opérateur, séparée du compteur du testeur, et suivi par TASK-552.
+6. **Reprises.** Chaque nouvelle tentative réserve à nouveau ; leur nombre reste borné (configuration existante des workers). Un repli de fournisseur (Unstructured) est une tentative distincte avec sa propre réservation.
+7. **Panne du compteur : refuser.** Le comportement actuel « fail open » de `check_submission_allowed` est supprimé pour la bêta. La lecture des contenus et résultats existants reste accessible.
+8. **Dépassement résiduel accepté.** Un écart entre la mesure amont et la quantité finalement facturée (publicités insérées à la volée dans un podcast, pagination LlamaParse légèrement différente) est régularisé sur le réel, même au-delà de 5 EUR. Il n'est ni masqué ni bloquant ; la prochaine admission est refusée naturellement.
+9. **Couverture.** Aucun chemin payant ne contourne le contrôle (périmètre TASK-549).
+10. **Aperçu et traduction réservés avec l'import.** L'aperçu `review_blurb` et la traduction du texte complet partent seuls après l'import (`review_blurb_service.py`, `ingestion_translation_service.py`) ; ils sont débités comme toute dépense (R.2), ce qui supprime le « no quota is debited » actuel de l'aperçu. À la soumission, la réservation de l'import = coût fournisseur de l'import + aperçu + traduction. La traduction est réservée sauf si la langue du contenu est déjà connue et égale à la langue de lecture ; si elle s'avère inutile, sa part est libérée. Le texte produit est estimé depuis la mesure amont : environ 200 tokens par minute de parole, environ 700 tokens par page ; l'écart avec le texte réel est régularisé (règle 8). Une seule décision pour l'utilisateur : l'import complet est admis, ou refusé dès la soumission. Une traduction relancée plus tard (`/raw-content`, nouvelle langue sur un enregistrement dédupliqué) réserve à ce moment-là ; sans budget, le texte d'origine est affiché, comme pour une traduction en échec.
+11. **Plafond de sortie de la traduction : 1,5 fois les tokens d'entrée envoyés**, passé en `max_completion_tokens` à chaque appel.
+12. **Contenu déjà traité pour un autre compte : débité au nouveau compte.** Quand B enregistre un média déjà traité pour A, B est débité de la valeur régularisée de ce traitement (import, et traduction si elle existe déjà dans sa langue de lecture), comme s'il avait été fait pour lui, même sans nouvel appel fournisseur. Cette règle remplace, pour la réutilisation entre comptes, le « réutilisation sans nouvel appel à zéro » de R.2 ; c'est une marge pour l'opérateur. Le coût valorisé du traitement d'origine doit donc être conservé avec le contenu. Un même compte qui réenregistre un média qu'il détient déjà reste à zéro (task-281). Consultation, lecture et organisation restent gratuites.
+13. **Pourcentage affiché : consommation régularisée seule**, sans les réservations en cours.
+14. **Pas de remise de capacité manuelle** pendant la bêta : la règle 5 couvre le cas d'un échec.
+15. **Change : taux fixe en configuration** (ordre de grandeur 1 EUR = 1,12 USD), modifié à la main si le dollar bouge beaucoup. Pas de flux BCE ni de règle d'ancienneté. Il ne sert qu'à convertir des tarifs en dollars vers le budget en euros.
+
+### Mesure en amont, par type
+
+Constat de l'owner et de l'analyse du 2026-10-27 sur le code actuel.
+
+| Type | Mesurable avant l'appel ? | Comment | Si la mesure échoue | Limite par élément |
+|---|---|---|---|---|
+| **Audio et vidéo transcrits** (podcast, Spotify résolu via PodcastIndex, RSS, upload, YouTube sans sous-titres, audio TikTok/Instagram) | Oui, dans la quasi-totalité des cas | Déjà en place : `audio_quota_gate.gate_audio_transcription` → `audio_duration_probe` (métadonnées connues, sinon en-tête du fichier par requêtes Range, 5 s max ; MP3, M4A, Ogg, WAV, FLAC). Seul point d'entrée de tous les producteurs Deepgram. | Réserver le plafond (240 min ≈ 0,92 EUR) au lieu de la minute provisoire actuelle | 240 min (`max_minutes_per_item`, à reprendre dans la configuration bêta en euros) |
+| **PDF** | Oui, exact | Compter les pages depuis l'objet S3 avant l'envoi à LlamaParse (arbre des pages ; bibliothèque légère type `pypdf`, à ajouter aux dépendances du worker) | Réserver le plafond | 100 pages |
+| **Images** (JPG, PNG, BMP, HEIF) | Oui | 1 page | — | — |
+| **TIFF** | Oui, exact | Nombre de frames via Pillow (déjà en dépendance) | Réserver le plafond | 100 pages |
+| **PPTX** | Oui, exact | Nombre de diapositives = nombre d'entrées `ppt/slides/slideN.xml` de l'archive | Réserver le plafond | 100 pages |
+| **XLSX** | Oui, exact | Nombre de feuilles dans `xl/workbook.xml` ; LlamaParse facture la feuille comme unité | Réserver le plafond | 30 feuilles |
+| **DOCX** | Non, pas de façon fiable | Un DOCX n'a pas de pages avant rendu ; le champ `Pages` de `docProps/app.xml` est souvent absent ou périmé. Ne pas s'en servir comme borne. | Réserver toujours le plafond, régulariser sur les pages facturées | 100 pages |
+| **TXT, MD, RTF** | Sans objet | Aucun fournisseur appelé | — | — |
+| **Repli Unstructured** | Oui | Même nombre de pages que la mesure amont, au tarif Unstructured | Réserver le plafond | Même limite ; repli refusé si le disponible ne suffit pas (import en échec, message clair) |
+| **Génération IA** (résumé, notes, cartes, quiz, dossier ; aperçu automatique réservé avec l'import, règle 10) | Oui | Entrée : tokens de la requête complète (instructions, schéma, corpus) mesurés avant envoi ; sortie : `max_completion_tokens` configuré (32 000 dans `llm_config.py`) | Réserver l'entrée maximale acceptée par le modèle | Entrée et sortie plafonnées |
+| **Chat** | Oui | Corpus + instructions + question + historique transmis, sortie plafonnée | Idem | Idem |
+| **Traduction du texte complet** | Oui, après correction | Réservée avec l'import (règle 10) ; entrée estimée depuis la durée ou les pages, puis mesurée avant l'appel ; **ajouter `max_completion_tokens` = 1,5 × tokens d'entrée**, absent du payload actuel. Réserver au prix du modèle configuré (bascule sur Luna : TASK-556) | Idem | Sortie ≤ 1,5 × entrée |
+| **YouTube (sous-titres), TikTok, Instagram (Apify)** | Oui : prix fixe connu | Un lien accepté par le classifieur (`classifiers.py`) désigne une seule vidéo ou un seul post, et l'input envoyé demande un seul élément ; chaque programme est facturé à l'événement, un résultat par import, sans frais de démarrage ni usage plateforme. Réserver le prix d'un résultat (tableau ci-dessous), régulariser sur les événements facturés du run. Pas de `maxTotalChargeUsd`. | — | Un résultat par run |
+
+### Prix Apify à réserver
+
+Relevés sur les pages publiques des programmes le 2026-10-27. Valeur réservée = prix d'un résultat au plan Free (le plus cher listé) ; utiliser le prix du plan effectivement souscrit quand il change, en le versionnant comme les autres tarifs.
+
+| Média | Programme (défaut de `apify_adapter.py`) | Input envoyé | Prix par résultat | Réservation |
+|---|---|---|---|---|
+| YouTube avec sous-titres | `starvibe/youtube-video-transcript` | `youtube_url` (une URL) | 5,00 USD / 1 000 ; échecs non facturés | 0,005 USD |
+| TikTok | `scrape-creators/best-tiktok-transcripts-scraper` | `videos: [url]` | 1,00 USD / 1 000 | 0,001 USD |
+| Instagram reel | `apify/instagram-reel-scraper` | `resultsLimit: 1`, sans option payante | 2,60 USD / 1 000 (Free), 2,30 (Starter) | 0,0026 USD |
+| Instagram post / carrousel | `apify/instagram-post-scraper` | `resultsLimit: 1`, sans option payante | 2,70 USD / 1 000 (Free), 2,30 (Starter) | 0,0027 USD |
+
+Les options payantes des programmes Instagram (`includeTranscript`, `includeDownloadedVideo`, `includeMusicData`, `dataDetailLevel` détaillé) ne sont pas demandées : la transcription d'un reel passe par Deepgram et suit la ligne audio, l'OCR des images d'un carrousel suit sa propre ligne. Ne pas en activer une sans ajouter son prix ici. Si l'identifiant de programme configuré dans Secrets Manager diffère du défaut, relever son prix avant de le réserver.
+
+Les forfaits gratuits partagés (LlamaParse, Apify) sont valorisés comme des dépenses réelles : ils deviendront payants après la mise en production.
 
 ## Recommendation
 

@@ -4,12 +4,13 @@ title: Faire passer les traitements fournisseurs par le contrôle budgétaire co
 status: To Do
 assignee: []
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-26 22:22'
+updated_date: '2026-10-27 16:44'
 labels:
   - backend
   - feature
 dependencies:
   - TASK-548
+  - TASK-556
 documentation:
   - docs/research/pricing-challenge/README.md
   - docs/research/task-547-beta-budget-control/README.md
@@ -45,6 +46,6 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 - [ ] #1 Chaque chemin fournisseur actuellement accessible est relié au contrôle commun avant dépense et au règlement approprié : transcription, collectes, parsing, aperçus, traductions, générations média/dossier et chat ; la cartographie de couverture est documentée.
 - [ ] #2 Les déclenchements automatiques, reprises et fournisseurs de repli utilisent les règles de la décision validée ; aucun échec de lecture de solde ou coût non bornable ne contourne la protection retenue.
 - [ ] #3 Les quantités facturées, tarifs de modèle et cache et règles d’attribution sont câblés sans double comptage ; les métriques manquantes, doublons et appels partagés suivent explicitement la décision du benchmark.
-- [ ] #4 Les anciens débits en minutes remplacés sont retirés des chemins concernés, sans ancien chemin de secours, double écriture ou migration de fixtures ; les opérations sans nouvel appel fournisseur restent hors débit.
+- [ ] #4 Les anciens débits en minutes remplacés sont retirés des chemins concernés, sans ancien chemin de secours, double écriture ou migration de fixtures ; les opérations sans nouvel appel fournisseur restent hors débit, sauf l'enregistrement par un autre compte d'un contenu déjà traité, débité selon la règle 12 de la décision TASK-547.
 - [ ] #5 La documentation de couverture et des limites résiduelles est à jour ; Ruff et mypy passent sur les fichiers backend modifiés, sans ajout de tests automatisés ni exigence de vérification après déploiement.
 <!-- AC:END -->
