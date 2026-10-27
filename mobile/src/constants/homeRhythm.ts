@@ -12,10 +12,14 @@ import { Spacing } from "./theme";
  * pill (absent without a trial) was not there.
  *
  * It lives in its own module because three files declare it: the screen, for the
- * review card and both `TileRow`s, and the two notices that only ever render at
- * the top of it (`FreeTrialNotice`, `MinutesWarningBanner`). Importing the same
- * constant is what keeps a later edit to one of them from quietly desynchronising
- * the head of the screen from its body. It is an alias of `Spacing.lg`, never a
- * value of its own.
+ * review card, both `TileRow`s, the empty state and the room kept above the
+ * floating buttons (the column's last block), and the two notices that only ever
+ * render at the top of it (`FreeTrialNotice`, `MinutesWarningBanner`). Importing
+ * the same constant is what keeps a later edit to one of them from quietly
+ * desynchronising the head of the screen from its body. It is an alias of
+ * `Spacing.lg`, never a value of its own.
+ *
+ * The screen centres the column in its viewport, and this same gap at both ends
+ * (under the safe area, above the buttons) is what makes that centring symmetric.
  */
 export const HOME_BLOCK_GAP = Spacing.lg;
