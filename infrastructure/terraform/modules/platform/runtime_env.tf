@@ -82,18 +82,18 @@ locals {
   # S3 buckets
   # -------------------------------------------------------------------------
   bucket_names = {
-    AUDIO_BUCKET            = aws_s3_bucket.audio.bucket
-    TRANSCRIPT_BUCKET       = aws_s3_bucket.transcripts.bucket
-    SUMMARY_BUCKET          = aws_s3_bucket.summaries.bucket
-    SUMMARY_SHORT_BUCKET    = aws_s3_bucket.summary_short.bucket
-    NOTES_BUCKET            = aws_s3_bucket.notes.bucket
-    FLASHCARDS_BUCKET       = aws_s3_bucket.flashcards.bucket
-    QUIZ_BUCKET             = aws_s3_bucket.quiz.bucket
-    REVIEW_BLURB_BUCKET     = aws_s3_bucket.review_blurb.bucket
-    DOCUMENT_BUCKET         = aws_s3_bucket.documents.bucket
-    ARCHIVE_BUCKET          = aws_s3_bucket.archives.bucket
-    BUG_REPORTS_BUCKET      = aws_s3_bucket.bug_reports.bucket
-    COVERS_BUCKET           = aws_s3_bucket.covers.bucket
+    AUDIO_BUCKET         = aws_s3_bucket.audio.bucket
+    TRANSCRIPT_BUCKET    = aws_s3_bucket.transcripts.bucket
+    SUMMARY_BUCKET       = aws_s3_bucket.summaries.bucket
+    SUMMARY_SHORT_BUCKET = aws_s3_bucket.summary_short.bucket
+    NOTES_BUCKET         = aws_s3_bucket.notes.bucket
+    FLASHCARDS_BUCKET    = aws_s3_bucket.flashcards.bucket
+    QUIZ_BUCKET          = aws_s3_bucket.quiz.bucket
+    REVIEW_BLURB_BUCKET  = aws_s3_bucket.review_blurb.bucket
+    DOCUMENT_BUCKET      = aws_s3_bucket.documents.bucket
+    ARCHIVE_BUCKET       = aws_s3_bucket.archives.bucket
+    BUG_REPORTS_BUCKET   = aws_s3_bucket.bug_reports.bucket
+    COVERS_BUCKET        = aws_s3_bucket.covers.bucket
   }
 
   # -------------------------------------------------------------------------
