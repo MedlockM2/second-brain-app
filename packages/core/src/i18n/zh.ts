@@ -119,7 +119,6 @@ export const zh: Catalog = {
   "artifacts.processing": "处理中…",
   "artifacts.panel.generateHeading": "生成",
   "artifacts.panel.retryA11y": "重新加载已生成的内容",
-  "artifacts.panel.empty": "还没有生成任何内容。请在上方选择一种形式来创建。",
   "artifacts.customize.title.summaryShort": "自定义摘要",
   "artifacts.customize.title.notes": "自定义学习笔记",
   "artifacts.customize.title.flashcards": "自定义记忆卡",

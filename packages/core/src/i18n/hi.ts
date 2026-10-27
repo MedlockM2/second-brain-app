@@ -129,7 +129,6 @@ export const hi: Catalog = {
   "artifacts.processing": "प्रोसेस हो रहा है…",
   "artifacts.panel.generateHeading": "बनाएँ",
   "artifacts.panel.retryA11y": "बनाई गई सामग्री फिर से लोड करें",
-  "artifacts.panel.empty": "अभी तक कुछ नहीं बनाया गया। बनाने के लिए ऊपर से कोई प्रारूप चुनें।",
   "artifacts.customize.title.summaryShort": "सारांश को अनुकूलित करें",
   "artifacts.customize.title.notes": "अध्ययन नोट्स को अनुकूलित करें",
   "artifacts.customize.title.flashcards": "फ़्लैशकार्ड को अनुकूलित करें",

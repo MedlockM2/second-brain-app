@@ -150,8 +150,6 @@ export const fr: Catalog = {
   "artifacts.processing": "Traitement…",
   "artifacts.panel.generateHeading": "Générer",
   "artifacts.panel.retryA11y": "Réessayer de charger le contenu généré",
-  "artifacts.panel.empty":
-    "Rien de généré pour l'instant. Choisissez un format ci-dessus pour commencer.",
   "artifacts.customize.title.summaryShort": "Personnaliser le résumé",
   "artifacts.customize.title.notes": "Personnaliser les notes de cours",
   "artifacts.customize.title.flashcards": "Personnaliser les cartes mémo",

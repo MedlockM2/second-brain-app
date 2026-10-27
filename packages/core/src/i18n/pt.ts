@@ -129,7 +129,6 @@ export const pt: Catalog = {
   "artifacts.processing": "A processar…",
   "artifacts.panel.generateHeading": "Gerar",
   "artifacts.panel.retryA11y": "Tentar carregar novamente o conteúdo gerado",
-  "artifacts.panel.empty": "Ainda não foi gerado nada. Escolha um formato acima para criar um.",
   "artifacts.customize.title.summaryShort": "Personalizar o resumo",
   "artifacts.customize.title.notes": "Personalizar os apontamentos",
   "artifacts.customize.title.flashcards": "Personalizar os cartões de memória",

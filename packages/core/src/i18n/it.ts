@@ -129,7 +129,6 @@ export const it: Catalog = {
   "artifacts.processing": "Elaborazione…",
   "artifacts.panel.generateHeading": "Genera",
   "artifacts.panel.retryA11y": "Riprova a caricare i contenuti generati",
-  "artifacts.panel.empty": "Non è stato generato ancora nulla. Scegli un formato qui sopra per crearne uno.",
   "artifacts.customize.title.summaryShort": "Personalizza il riassunto",
   "artifacts.customize.title.notes": "Personalizza gli appunti",
   "artifacts.customize.title.flashcards": "Personalizza le flashcard",

@@ -136,8 +136,6 @@ export const es: Catalog = {
   "artifacts.processing": "Procesando…",
   "artifacts.panel.generateHeading": "Generar",
   "artifacts.panel.retryA11y": "Reintentar la carga del contenido generado",
-  "artifacts.panel.empty":
-    "Aún no hay nada generado. Elige un formato arriba para crear uno.",
   "artifacts.customize.title.summaryShort": "Personalizar el resumen",
   "artifacts.customize.title.notes": "Personalizar los apuntes",
   "artifacts.customize.title.flashcards": "Personalizar las tarjetas de memoria",

@@ -178,13 +178,7 @@ export function ArtifactsPanel({
             <Text style={styles.retryButtonText}>{t("common.retry")}</Text>
           </Pressable>
         </View>
-      ) : history.length === 0 && pending.length === 0 ? (
-        <View style={styles.inlineState} testID={`${scope}-ai-history-empty`}>
-          <Text style={styles.inlineStateText}>
-            {t("artifacts.panel.empty")}
-          </Text>
-        </View>
-      ) : (
+      ) : settled.length === 0 ? null : (
         <View>
           {settled.map((artifact) => (
             <ArtifactRow

@@ -128,7 +128,6 @@ export const ar: Catalog = {
   "artifacts.processing": "جارٍ المعالجة…",
   "artifacts.panel.generateHeading": "إنشاء",
   "artifacts.panel.retryA11y": "إعادة تحميل المحتوى المُنشأ",
-  "artifacts.panel.empty": "لم يتم إنشاء أي شيء بعد. اختر صيغة من الأعلى لإنشاء واحدة.",
   "artifacts.customize.title.summaryShort": "تخصيص الملخّص",
   "artifacts.customize.title.notes": "تخصيص الملاحظات الدراسية",
   "artifacts.customize.title.flashcards": "تخصيص بطاقات المراجعة",

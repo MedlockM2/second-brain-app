@@ -207,8 +207,6 @@ export const en = {
   "artifacts.processing": "Processing...",
   "artifacts.panel.generateHeading": "Generate",
   "artifacts.panel.retryA11y": "Retry loading generated content",
-  "artifacts.panel.empty":
-    "Nothing generated yet. Pick a format above to create one.",
   // The "Personnaliser" screen asked before each generation (task-535): one
   // title and one prompt hint per format, the format's own options, and the
   // marker of the value a tap on Generate keeps.

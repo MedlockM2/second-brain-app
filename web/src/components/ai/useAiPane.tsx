@@ -356,9 +356,7 @@ export function useAiPane({
         </div>
       ) : history === null ? (
         <p className="small muted">{t("common.loading")}</p>
-      ) : entries.length === 0 && pending.length === 0 ? (
-        <p className="small muted">{t("artifacts.panel.empty")}</p>
-      ) : (
+      ) : settled.length === 0 ? null : (
         <div className="art-list">
           {settled.map((artifact) => (
             <ArtifactRow

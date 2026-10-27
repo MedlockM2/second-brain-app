@@ -137,8 +137,6 @@ export const de: Catalog = {
   "artifacts.processing": "Wird verarbeitet …",
   "artifacts.panel.generateHeading": "Erstellen",
   "artifacts.panel.retryA11y": "Erstellte Inhalte erneut laden",
-  "artifacts.panel.empty":
-    "Noch nichts erstellt. Wähle oben ein Format, um etwas zu erstellen.",
   "artifacts.customize.title.summaryShort": "Zusammenfassung anpassen",
   "artifacts.customize.title.notes": "Lernnotizen anpassen",
   "artifacts.customize.title.flashcards": "Lernkarten anpassen",

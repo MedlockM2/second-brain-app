@@ -128,7 +128,6 @@ export const ja: Catalog = {
   "artifacts.processing": "処理中…",
   "artifacts.panel.generateHeading": "生成",
   "artifacts.panel.retryA11y": "生成されたコンテンツを再読み込み",
-  "artifacts.panel.empty": "まだ何も生成されていません。上の形式を選んで作成してください。",
   "artifacts.customize.title.summaryShort": "要約をカスタマイズ",
   "artifacts.customize.title.notes": "学習ノートをカスタマイズ",
   "artifacts.customize.title.flashcards": "単語カードをカスタマイズ",

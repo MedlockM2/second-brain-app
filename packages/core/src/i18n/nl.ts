@@ -129,7 +129,6 @@ export const nl: Catalog = {
   "artifacts.processing": "Verwerken…",
   "artifacts.panel.generateHeading": "Genereren",
   "artifacts.panel.retryA11y": "Gegenereerde inhoud opnieuw laden",
-  "artifacts.panel.empty": "Nog niets gegenereerd. Kies hierboven een formaat om er een te maken.",
   "artifacts.customize.title.summaryShort": "Samenvatting aanpassen",
   "artifacts.customize.title.notes": "Studienotities aanpassen",
   "artifacts.customize.title.flashcards": "Flashcards aanpassen",
