@@ -2,6 +2,7 @@ import { tCount } from "@media-summarizer/core/i18n/runtime";
 import { getRelativeTime } from "@media-summarizer/core/i18n/relativeTime";
 import { focusHighlightSegments, parseHighlightSnippet } from "@media-summarizer/core/media/highlightSnippet";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
+import { searchPassageFromSnippet } from "@media-summarizer/core/media/searchPassage";
 import type { SearchHit, SearchTranscriptsResponse } from "@media-summarizer/core/types/search";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -13,6 +14,7 @@ import { MediaActions } from "../components/media/MediaActions";
 import { useI18n } from "../i18n/I18nProvider";
 import { useFolders } from "../media/useFolders";
 import { folderPath, mediaPath } from "../routes";
+import type { MediaPageState } from "./MediaPage";
 
 /**
  * /search?q= — full-text search from the bar (owner's mockup, capture 03): the
@@ -209,9 +211,13 @@ function HitCard({ hit }: { hit: SearchHit }) {
       </div>
     </>
   );
+  // The page opens on the passage the excerpt quotes; a hit on the title alone
+  // has none and opens at the top.
+  const passage = searchPassageFromSnippet(snippet);
+  const state: MediaPageState | undefined = passage ? { passage } : undefined;
   // A hit the index kept after its media was deleted opens nothing.
   return hit.in_library ? (
-    <Link to={mediaPath(hit.media_item_id)} className="mcard" title={title}>
+    <Link to={mediaPath(hit.media_item_id)} state={state} className="mcard" title={title}>
       {body}
     </Link>
   ) : (

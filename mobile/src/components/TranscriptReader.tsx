@@ -10,6 +10,10 @@
  * The title row can carry one control, `translationToggle`: on a media served
  * translated, the way back to what was actually said (task-419).
  *
+ * Opened from a search hit, the body also finds the passage the hit quoted,
+ * highlights its matched words and reports where they landed (`passageFocus`,
+ * see `SearchPassage`), so the page can open on them.
+ *
  * Memoised because its parent re-renders as the page scrolls past the points
  * where the collapsed bar and its tabs appear, and this is the one subtree whose
  * size grows with the source: a long transcript is hundreds of `Text` nodes that
@@ -17,7 +21,13 @@
  */
 
 import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
+import { locateSearchPassage } from "@media-summarizer/core/media/searchPassage";
 import { MarkdownBody } from "./MarkdownBody";
+import {
+  PassageMarks,
+  useSearchPassageAnchor,
+  type SearchPassageFocus,
+} from "./SearchPassage";
 import React, { memo, useMemo } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -87,6 +97,11 @@ export type TranscriptTranslationToggle = {
   onToggle: () => void;
 };
 
+/** A paragraph as it is drawn: its speaker label, then its text. */
+function paragraphText(paragraph: TranscriptParagraph): string {
+  return paragraph.speaker ? `${paragraph.speaker}: ${paragraph.text}` : paragraph.text;
+}
+
 /**
  * Splits the API's plain-text transcript into renderable paragraphs.
  *
@@ -124,6 +139,8 @@ interface TranscriptReaderProps {
    * body on screen is not a translation and there is nothing to switch to.
    */
   translationToggle: TranscriptTranslationToggle | null;
+  /** The search passage to highlight and report, or nothing outside a search. */
+  passageFocus?: SearchPassageFocus | null;
 }
 
 export const TranscriptReader = memo(function TranscriptReader({
@@ -133,6 +150,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   onRetry,
   onCheckTranslation,
   translationToggle,
+  passageFocus,
 }: TranscriptReaderProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -190,6 +208,7 @@ export const TranscriptReader = memo(function TranscriptReader({
           state={content}
           onRetry={onRetry}
           onCheckTranslation={onCheckTranslation}
+          passageFocus={passageFocus}
         />
       ) : (
         <View style={styles.statusRow}>
@@ -273,12 +292,36 @@ function TranslationToggle({
  * A leading "Speaker N:" prefix is optional per paragraph (it only appears when
  * Deepgram diarization is enabled) and is rendered as a nested Text so the label
  * reflows with the body copy instead of becoming its own block.
+ *
+ * The search passage is looked for paragraph by paragraph, as they are drawn:
+ * its matched words are highlighted wherever they fall, and the paragraph holding
+ * the first one is the anchor the page measures.
  */
-function TranscriptBody({ content }: { content: string }) {
+function TranscriptBody({
+  content,
+  passageFocus,
+}: {
+  content: string;
+  passageFocus?: SearchPassageFocus | null;
+}) {
   const styles = useThemedStyles(makeStyles);
   const paragraphs = useMemo(() => splitTranscriptParagraphs(content), [content]);
   const structured = useMemo(() => hasStructuredMarkdown(content), [content]);
-  if (structured) return <MarkdownBody text={content} transcript />;
+  const passage = passageFocus?.passage ?? null;
+  const located = useMemo(
+    () =>
+      passage && !structured
+        ? locateSearchPassage(paragraphs.map(paragraphText), passage)
+        : null,
+    [passage, structured, paragraphs],
+  );
+  const anchor = useSearchPassageAnchor(
+    passageFocus,
+    located?.anchor.offset ?? null,
+  );
+  if (structured) {
+    return <MarkdownBody text={content} transcript passageFocus={passageFocus} />;
+  }
 
   if (paragraphs.length === 0) {
     return null;
@@ -286,21 +329,33 @@ function TranscriptBody({ content }: { content: string }) {
 
   return (
     <View style={styles.body}>
-      {paragraphs.map((paragraph, index) => (
-        <Text
-          key={index}
-          selectable
-          style={[
-            styles.paragraph,
-            index === paragraphs.length - 1 && styles.paragraphLast,
-          ]}
-        >
-          {paragraph.speaker ? (
-            <Text style={styles.speaker}>{paragraph.speaker}: </Text>
-          ) : null}
-          {paragraph.text}
-        </Text>
-      ))}
+      {paragraphs.map((paragraph, index) => {
+        const marks = located?.marks.filter((mark) => mark.unit === index) ?? [];
+        return (
+          <Text
+            key={index}
+            selectable
+            style={[
+              styles.paragraph,
+              index === paragraphs.length - 1 && styles.paragraphLast,
+            ]}
+            {...(located?.anchor.unit === index ? anchor : {})}
+          >
+            {paragraph.speaker ? (
+              <Text style={styles.speaker}>{paragraph.speaker}: </Text>
+            ) : null}
+            {marks.length > 0 ? (
+              <PassageMarks
+                text={paragraph.text}
+                marks={marks}
+                shift={paragraphText(paragraph).length - paragraph.text.length}
+              />
+            ) : (
+              paragraph.text
+            )}
+          </Text>
+        );
+      })}
     </View>
   );
 }
@@ -309,17 +364,19 @@ function TranscriptContent({
   state,
   onRetry,
   onCheckTranslation,
+  passageFocus,
 }: {
   state: TranscriptContentState;
   onRetry: () => void;
   onCheckTranslation: () => void;
+  passageFocus?: SearchPassageFocus | null;
 }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   if (state.status === "ready") {
     return (
       <View>
-        <TranscriptBody content={state.content} />
+        <TranscriptBody content={state.content} passageFocus={passageFocus} />
       </View>
     );
   }
@@ -337,7 +394,7 @@ function TranscriptContent({
             {t("transcript.translating")}
           </Text>
         </View>
-        <TranscriptBody content={state.content} />
+        <TranscriptBody content={state.content} passageFocus={passageFocus} />
       </View>
     );
   }
@@ -374,7 +431,7 @@ function TranscriptContent({
             </Text>
           </Pressable>
         </View>
-        <TranscriptBody content={state.content} />
+        <TranscriptBody content={state.content} passageFocus={passageFocus} />
       </View>
     );
   }
@@ -393,7 +450,7 @@ function TranscriptContent({
             {t("transcript.translationFailed")}
           </Text>
         </View>
-        <TranscriptBody content={state.content} />
+        <TranscriptBody content={state.content} passageFocus={passageFocus} />
       </View>
     );
   }

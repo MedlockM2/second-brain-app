@@ -434,6 +434,9 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .snippet { margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--text-subtle); }
 mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; }
 [data-theme="dark"] mark { background: #5c4a12; color: #ffe9a8; }
+/* The words a search result quoted, in the reader it opened, for a few seconds (useSearchPassage). */
+::highlight(search-passage) { background-color: #fff0b3; color: #1c1b1a; }
+[data-theme="dark"] ::highlight(search-passage) { background-color: #5c4a12; color: #ffe9a8; }
 .mgrid.one { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
 .mcard-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .mcard-row > .mcard { flex: 1; }

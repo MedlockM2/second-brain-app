@@ -37,7 +37,7 @@ import { getRelativeTime } from "../lib/relativeTime";
 import {
   focusHighlightSegments,
   parseHighlightSnippet,
-} from "../lib/highlightSnippet";
+} from "@media-summarizer/core/media/highlightSnippet";
 
 /**
  * Uniform media row for a vertical library list: the cover, the media type and

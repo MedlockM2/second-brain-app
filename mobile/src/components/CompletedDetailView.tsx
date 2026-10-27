@@ -97,7 +97,9 @@ import {
   resolveSourcePreviewState,
   type SourcePreviewState,
 } from "./SourcePreview";
-import { Spacing, type Theme } from "../constants/theme";
+import type { SearchPassageFocus, SearchPassageTarget } from "./SearchPassage";
+import { SEARCH_PASSAGE_HIGHLIGHT_MS } from "@media-summarizer/core/media/searchPassage";
+import { Spacing, Typography, type Theme } from "../constants/theme";
 import { useTheme, useThemedStyles } from "../contexts/ThemeContext";
 import { LOCALE_ENDONYMS, t } from "../i18n";
 import { isSupportedLocale } from "@media-summarizer/core/i18n/locales";
@@ -183,6 +185,13 @@ const PREVIEW_POLL_MAX_ATTEMPTS = 20;
  * on every frame to update a number nobody is listening to.
  */
 const PROGRESS_ANNOUNCE_STEP = 10;
+
+/**
+ * Room left above the line of a search passage once the page is brought to it:
+ * two lines of the text, so the match is read in its sentence rather than glued
+ * under the collapsed bar.
+ */
+const PASSAGE_LEAD = Typography.body.lineHeight * 2;
 
 /**
  * The language of the text, as the translation switch names it.
@@ -282,6 +291,13 @@ export interface CompletedDetailViewProps {
    * the screen.
    */
   translationBudgets?: TranslationBudgets;
+  /**
+   * The excerpt of the search hit the page was opened from
+   * (`searchPassageFromSnippet`). The Reader opens on the passage it quotes,
+   * with its matched words highlighted for a few seconds, instead of at the top
+   * of the text. Absent everywhere else, where the page opens at the top.
+   */
+  passage?: string | null;
 }
 
 export function CompletedDetailView({
@@ -291,6 +307,7 @@ export function CompletedDetailView({
   underStatusBar = true,
   translationBudgets,
   processingNotice,
+  passage,
 }: CompletedDetailViewProps): React.JSX.Element {
   // `mode` for the status bar glyphs below, which are a prop rather than a
   // style and so cannot come from the sheet.
@@ -881,6 +898,69 @@ export function CompletedDetailView({
     return () => scrollY.removeListener(listener);
   }, [scrollY]);
 
+  // --- The search passage the page was opened on ---
+  //
+  // The Reader finds the passage in the text it draws and reports where its
+  // first match landed; the page measures that against its scroll content and
+  // jumps there, just under the collapsed bar. It keeps doing so while what is
+  // above settles — a cover, the preview, a notice can still change height after
+  // the text is drawn — and stops for good the moment the reader drags: from
+  // then on the scroll is theirs. The highlight goes a few seconds after the
+  // passage first shows; a passage the text does not hold (a media read in
+  // translation) is never reported, and the page simply stays at the top.
+  const [focusPassage, setFocusPassage] = useState<string | null>(passage ?? null);
+  const [passageShown, setPassageShown] = useState(false);
+  const passageTargetRef = useRef<SearchPassageTarget | null>(null);
+  const followPassageRef = useRef(true);
+  const scrollContentRef = useRef<View>(null);
+  const scrollExtentRef = useRef({ content: 0, viewport: 0 });
+
+  const alignPassage = useCallback(() => {
+    const target = passageTargetRef.current;
+    const content = scrollContentRef.current;
+    if (!target || !content || !followPassageRef.current) return;
+    target.node.measureLayout(
+      content,
+      (_x, y) => {
+        if (!followPassageRef.current) return;
+        const { content: contentSize, viewport } = scrollExtentRef.current;
+        const wanted = y + target.offsetY - barHeight - PASSAGE_LEAD;
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, Math.min(wanted, contentSize - viewport)),
+          animated: false,
+        });
+      },
+      () => {},
+    );
+  }, [barHeight]);
+
+  const handlePassageLayout = useCallback(
+    (target: SearchPassageTarget) => {
+      passageTargetRef.current = target;
+      setPassageShown(true);
+      alignPassage();
+    },
+    [alignPassage],
+  );
+
+  useEffect(() => {
+    if (!passageShown) return undefined;
+    const timer = setTimeout(() => {
+      followPassageRef.current = false;
+      passageTargetRef.current = null;
+      setFocusPassage(null);
+    }, SEARCH_PASSAGE_HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [passageShown]);
+
+  const passageFocus = useMemo<SearchPassageFocus | null>(
+    () =>
+      focusPassage
+        ? { passage: focusPassage, onLayout: handlePassageLayout }
+        : null,
+    [focusPassage, handlePassageLayout],
+  );
+
   // A tab picked from the collapsed bar — the only segment on screen once it is
   // shown, the page's own having slid under it — opens at its own top, right
   // under the bar, rather than wherever a deep offset lands in content of another length. From
@@ -888,6 +968,7 @@ export function CompletedDetailView({
   const handleTabChange = useCallback(
     (key: MediaDetailTabKey) => {
       setActiveTab(key);
+      followPassageRef.current = false;
       if (barVisible && barShownAt !== null) {
         scrollRef.current?.scrollTo({ y: barShownAt, animated: false });
       }
@@ -907,33 +988,45 @@ export function CompletedDetailView({
   const statusBarStyle =
     (cover && bandUnderStatusBar) || mode === "dark" ? "light" : "dark";
 
+  const refreshNotice = (
+    <ResourceRefreshNotice
+      error={
+        cachedDetail.error ??
+        cachedText.error ??
+        (original.shown ? cachedOriginal.error : null)
+      }
+      onRetry={() => {
+        void MediaService.getMediaStatus(media_item.media_item_id).catch(
+          () => {},
+        );
+        void refreshRawContent();
+        if (original.shown)
+          void MediaService.getRawContent(media_item.media_item_id, {
+            variant: "original",
+          }).catch(() => {});
+      }}
+    />
+  );
+  const readerProps = {
+    transcript: media_item.transcript,
+    processingStatus: processing_job.status,
+    content: readerContent,
+    onRetry: fetchRawContent,
+    onCheckTranslation: translationRefresh.rearm,
+    translationToggle,
+  };
+  // Drawn twice: on the page, which is where the search passage is shown, and as
+  // the chat's view of its source, which never carries it.
   const transcript = (
     <>
-      <ResourceRefreshNotice
-        error={
-          cachedDetail.error ??
-          cachedText.error ??
-          (original.shown ? cachedOriginal.error : null)
-        }
-        onRetry={() => {
-          void MediaService.getMediaStatus(media_item.media_item_id).catch(
-            () => {},
-          );
-          void refreshRawContent();
-          if (original.shown)
-            void MediaService.getRawContent(media_item.media_item_id, {
-              variant: "original",
-            }).catch(() => {});
-        }}
-      />
-      <TranscriptReader
-        transcript={media_item.transcript}
-        processingStatus={processing_job.status}
-        content={readerContent}
-        onRetry={fetchRawContent}
-        onCheckTranslation={translationRefresh.rearm}
-        translationToggle={translationToggle}
-      />
+      {refreshNotice}
+      <TranscriptReader {...readerProps} passageFocus={passageFocus} />
+    </>
+  );
+  const chatTranscript = (
+    <>
+      {refreshNotice}
+      <TranscriptReader {...readerProps} />
     </>
   );
 
@@ -966,16 +1059,28 @@ export function CompletedDetailView({
 
       <Animated.ScrollView
         ref={scrollRef}
+        // Typed by RN as a non-null `RefObject`, which React 19's `useRef`
+        // never returns; the scroll view only ever writes to it.
+        innerViewRef={scrollContentRef as React.RefObject<View>}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        onLayout={(event: LayoutChangeEvent) =>
-          setViewportHeight(event.nativeEvent.layout.height)
-        }
-        onContentSizeChange={(_width: number, height: number) =>
-          setContentHeight(height)
-        }
+        onScrollBeginDrag={() => {
+          followPassageRef.current = false;
+        }}
+        // Both extents bound how far down the search passage can be brought, and
+        // any height change above it moves it: each one re-aligns it.
+        onLayout={(event: LayoutChangeEvent) => {
+          scrollExtentRef.current.viewport = event.nativeEvent.layout.height;
+          setViewportHeight(event.nativeEvent.layout.height);
+          alignPassage();
+        }}
+        onContentSizeChange={(_width: number, height: number) => {
+          scrollExtentRef.current.content = height;
+          setContentHeight(height);
+          alignPassage();
+        }}
         // One axis per drag, which is what makes this page swipeable when the
         // Digest nests it in its horizontal carousel: a drag that starts sideways
         // is not half-absorbed here as a diagonal scroll before the carousel
@@ -1057,7 +1162,7 @@ export function CompletedDetailView({
           imageUrl={coverUrl}
           mediaTypeIcon={mediaTypeIcon}
           sourceReady={mediaReady}
-          sourceContent={<View style={styles.chatSource}>{transcript}</View>}
+          sourceContent={<View style={styles.chatSource}>{chatTranscript}</View>}
           getSourceOffset={() =>
             Math.max(
               0,
