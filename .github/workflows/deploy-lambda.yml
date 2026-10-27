@@ -114,6 +114,17 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Public base images have a separate login from our private push registry.
+      # ECR Public token issuance is in us-east-1; this step-local override leaves
+      # the build destination and Lambda deployment region unchanged.
+      - name: Authenticate public base-image pulls
+        uses: aws-actions/amazon-ecr-login@v2
+        env:
+          AWS_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+        with:
+          registry-type: public
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -177,6 +188,17 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      # Public base images have a separate login from our private push registry.
+      # ECR Public token issuance is in us-east-1; this step-local override leaves
+      # the build destination and Lambda deployment region unchanged.
+      - name: Authenticate public base-image pulls
+        uses: aws-actions/amazon-ecr-login@v2
+        env:
+          AWS_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+        with:
+          registry-type: public
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -266,6 +288,17 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      # Public base images have a separate login from our private push registry.
+      # ECR Public token issuance is in us-east-1; this step-local override leaves
+      # the build destination and Lambda deployment region unchanged.
+      - name: Authenticate public base-image pulls
+        uses: aws-actions/amazon-ecr-login@v2
+        env:
+          AWS_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+        with:
+          registry-type: public
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
