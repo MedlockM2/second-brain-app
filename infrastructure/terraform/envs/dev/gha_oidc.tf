@@ -149,6 +149,15 @@ data "aws_iam_policy_document" "gha_deploy" {
     resources = ["*"]
   }
 
+  # Authenticate base-image pulls instead of sharing GitHub runners' anonymous
+  # ECR Public quota. No public image publishing permissions are needed.
+  statement {
+    sid       = "EcrPublicAuth"
+    effect    = "Allow"
+    actions   = ["ecr-public:GetAuthorizationToken", "sts:GetServiceBearerToken"]
+    resources = ["*"]
+  }
+
   # dev is where images are BUILT, so unlike prod this role pushes. The shared
   # repository is IMMUTABLE except for the two *-latest bootstrap tags, so a push
   # cannot rewrite an existing api-<sha> or worker-<sha> digest.
