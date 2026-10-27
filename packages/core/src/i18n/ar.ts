@@ -607,6 +607,8 @@ export const ar: Catalog = {
   "artifact.regenerateA11y": "إعادة إنشاء هذا المحتوى",
   "artifact.regenerating": "جارٍ البدء...",
   "artifact.regenerationQueued": "أُعيد بدء الإنشاء. عُد بعد قليل.",
+  "artifact.importance.core": "أساسي",
+  "artifact.importance.supporting": "تكميلي",
   "artifact.section.keyPoints": "النقاط الأساسية",
   "artifact.section.takeaway": "الخلاصة",
   "artifact.section.quotes": "اقتباسات لافتة",

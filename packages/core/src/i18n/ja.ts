@@ -596,6 +596,8 @@ export const ja: Catalog = {
   "artifact.regenerating": "開始中...",
   "artifact.regenerationQueued":
     "生成を再開しました。少し経ってから戻ってきてください。",
+  "artifact.importance.core": "重要",
+  "artifact.importance.supporting": "補足",
   "artifact.section.keyPoints": "要点",
   "artifact.section.takeaway": "まとめ",
   "artifact.section.quotes": "注目の引用",

@@ -826,6 +826,8 @@ export const en = {
   "artifact.regenerating": "Starting...",
   "artifact.regenerationQueued":
     "Generation restarted. Come back in a moment.",
+  "artifact.importance.core": "Core",
+  "artifact.importance.supporting": "Supporting",
   "artifact.section.keyPoints": "Key points",
   "artifact.section.takeaway": "Takeaway",
   "artifact.section.quotes": "Notable quotes",

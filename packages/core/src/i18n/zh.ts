@@ -585,6 +585,8 @@ export const zh: Catalog = {
   "artifact.regenerateA11y": "重新生成此内容",
   "artifact.regenerating": "正在启动...",
   "artifact.regenerationQueued": "已重新开始生成，请稍后再回来查看。",
+  "artifact.importance.core": "核心",
+  "artifact.importance.supporting": "辅助",
   "artifact.section.keyPoints": "要点",
   "artifact.section.takeaway": "结论",
   "artifact.section.quotes": "值得留意的引述",

@@ -712,6 +712,8 @@ export const de: Catalog = {
   "artifact.regenerating": "Wird gestartet...",
   "artifact.regenerationQueued":
     "Erstellung neu gestartet. Schau in einem Moment wieder vorbei.",
+  "artifact.importance.core": "Zentral",
+  "artifact.importance.supporting": "Ergänzend",
   "artifact.section.keyPoints": "Kernpunkte",
   "artifact.section.takeaway": "Fazit",
   "artifact.section.quotes": "Bemerkenswerte Zitate",

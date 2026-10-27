@@ -41,6 +41,7 @@ from media_summarizer.core.services.artifact_service import (
     resolve_source_selection,
 )
 from media_summarizer.utils import s3
+from media_summarizer.utils.language_codes import normalize_language_code
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
 
 router = APIRouter()
@@ -190,6 +191,9 @@ class ArtifactContentResponse(BaseModel):
     scope: str
     scope_id: str
     status: str
+    language: Optional[str] = Field(
+        ..., description="Stored output language of this generation, independent of the profile"
+    )
     content: Dict[str, Any] = Field(
         ..., description="Parsed JSON content of the artifact (summary, notes, quiz, flashcards)"
     )
@@ -776,6 +780,7 @@ async def get_artifact_content(
             scope=record.scope.value,
             scope_id=record.scope_id,
             status=record.status.value,
+            language=normalize_language_code(record.parameters.get("language")),
             content=content,
         )
 

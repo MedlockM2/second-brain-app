@@ -103,22 +103,45 @@ export function tCount(
   count: number,
   params?: TranslationParams,
 ): string {
+  return translateCount(activeLocale, activeCatalog, key, count, params);
+}
+
+/** A content-local translator; never installs or changes the interface locale. */
+export function createTranslator(locale: SupportedLocale, catalog: Catalog) {
+  return {
+    t: (key: TranslationKey, params?: TranslationParams): string =>
+      interpolate(catalog[key] ?? en[key], params),
+    tCount: (
+      key: PluralKey,
+      count: number,
+      params?: TranslationParams,
+    ): string => translateCount(locale, catalog, key, count, params),
+  };
+}
+
+function translateCount(
+  locale: SupportedLocale,
+  catalog: Catalog,
+  key: PluralKey,
+  count: number,
+  params?: TranslationParams,
+): string {
   let category: Intl.LDMLPluralRule = count === 1 ? "one" : "other";
   try {
-    category = new Intl.PluralRules(activeLocale).select(count);
+    category = new Intl.PluralRules(locale).select(count);
   } catch {
     // An engine without the locale data still gets a grammatical English-style
     // choice rather than a crash on a screen that only wanted to show a number.
   }
 
   const template =
-    activeCatalog[`${key}.${category}`] ??
-    activeCatalog[`${key}.other`] ??
+    catalog[`${key}.${category}`] ??
+    catalog[`${key}.other`] ??
     en[`${key}.other` as TranslationKey] ??
     key;
 
   return interpolate(template, {
-    count: formatNumber(count),
+    count: formatNumberForLocale(locale, count),
     ...params,
   });
 }
@@ -128,8 +151,16 @@ export function formatNumber(
   value: number,
   options?: Intl.NumberFormatOptions,
 ): string {
+  return formatNumberForLocale(activeLocale, value, options);
+}
+
+function formatNumberForLocale(
+  locale: SupportedLocale,
+  value: number,
+  options?: Intl.NumberFormatOptions,
+): string {
   try {
-    return new Intl.NumberFormat(activeLocale, options).format(value);
+    return new Intl.NumberFormat(locale, options).format(value);
   } catch {
     return String(value);
   }

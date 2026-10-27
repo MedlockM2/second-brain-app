@@ -615,6 +615,8 @@ export const nl: Catalog = {
   "artifact.regenerating": "Starten...",
   "artifact.regenerationQueued":
     "Genereren opnieuw gestart. Kom straks terug.",
+  "artifact.importance.core": "Essentieel",
+  "artifact.importance.supporting": "Aanvullend",
   "artifact.section.keyPoints": "Kernpunten",
   "artifact.section.takeaway": "Om te onthouden",
   "artifact.section.quotes": "Opvallende citaten",

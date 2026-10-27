@@ -50,7 +50,11 @@ import {
   useThemeColors,
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
-import { t, tCount, useTranslation, type TranslationKey } from "../../src/i18n";
+import {
+  artifactTranslator,
+  type ArtifactTranslator,
+} from "@media-summarizer/core/artifacts/i18n";
+import { t, useTranslation, type TranslationKey } from "../../src/i18n";
 
 /**
  * Artifact detail screen.
@@ -79,6 +83,7 @@ type LoadState =
       status: "ready";
       type: ArtifactKind;
       payload: ArtifactPayload;
+      language: string | null;
       sourceTitle: string | null;
     }
   | { status: "error"; message: string }
@@ -144,6 +149,7 @@ export default function ArtifactDetailScreen() {
         status: "ready",
         type: normalizeArtifactKind(snapshot.data.artifact_type),
         payload: snapshot.data.content as ArtifactPayload,
+        language: snapshot.data.language,
         sourceTitle: pickSourceTitle(snapshot.data.content as ArtifactPayload),
       }
     : block?.kind === "failed"
@@ -406,6 +412,7 @@ export default function ArtifactDetailScreen() {
             <ArtifactBody
               type={state.type}
               payload={state.payload}
+              labels={artifactTranslator(state.language)}
               onQuizQuestionChange={scrollToArtifactBody}
               onQuizFinish={handleBack}
             />
@@ -421,28 +428,31 @@ export default function ArtifactDetailScreen() {
 function ArtifactBody({
   type,
   payload,
+  labels,
   onQuizQuestionChange,
   onQuizFinish,
 }: {
   type: ArtifactKind;
   payload: ArtifactPayload;
+  labels: ArtifactTranslator;
   onQuizQuestionChange: () => void;
   onQuizFinish: () => void;
 }) {
   const content = (payload?.content ?? {}) as Record<string, unknown>;
 
   if (type === "summary_short" || type === "summary") {
-    return <SummaryShortBody content={content} />;
+    return <SummaryShortBody content={content} labels={labels} />;
   }
   if (type === "notes") {
-    return <NotesBody content={content} />;
+    return <NotesBody content={content} labels={labels} />;
   }
   if (type === "flashcards") {
-    return <FlashcardsBody content={content} />;
+    return <FlashcardsBody content={content} labels={labels} />;
   }
   return (
     <QuizBody
       content={content}
+      labels={labels}
       onQuestionChange={onQuizQuestionChange}
       onFinish={onQuizFinish}
     />
@@ -451,7 +461,13 @@ function ArtifactBody({
 
 // --- Summary (short) ---
 
-function SummaryShortBody({ content }: { content: Record<string, unknown> }) {
+function SummaryShortBody({
+  content,
+  labels,
+}: {
+  content: Record<string, unknown>;
+  labels: ArtifactTranslator;
+}) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const headline = pickString(content, ["title"]);
@@ -462,12 +478,12 @@ function SummaryShortBody({ content }: { content: Record<string, unknown> }) {
     <View>
       {headline ? <Text style={styles.summaryHeadline}>{headline}</Text> : null}
       {keyPoints && keyPoints.length > 0 ? (
-        <Section title={t("artifact.section.keyPoints")}>
+        <Section title={labels.t("artifact.section.keyPoints")}>
           <Bullets items={keyPoints} />
         </Section>
       ) : null}
       {takeaway ? (
-        <Section title={t("artifact.section.takeaway")}>
+        <Section title={labels.t("artifact.section.takeaway")}>
           <View style={styles.takeawayCard}>
             <Ionicons
               name="bulb-outline"
@@ -485,7 +501,13 @@ function SummaryShortBody({ content }: { content: Record<string, unknown> }) {
 
 // --- Notes ---
 
-function NotesBody({ content }: { content: Record<string, unknown> }) {
+function NotesBody({
+  content,
+  labels,
+}: {
+  content: Record<string, unknown>;
+  labels: ArtifactTranslator;
+}) {
   const styles = useThemedStyles(makeStyles);
   // Who, what, why, in two or three sentences: an introduction, so it reads
   // first and carries no section title.
@@ -508,12 +530,12 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
         </Section>
       ) : null}
       {objectives && objectives.length > 0 ? (
-        <Section title={t("artifact.section.objectives")}>
+        <Section title={labels.t("artifact.section.objectives")}>
           <Bullets items={objectives} />
         </Section>
       ) : null}
       {concepts && concepts.length > 0 ? (
-        <Section title={t("artifact.section.concepts")}>
+        <Section title={labels.t("artifact.section.concepts")}>
           {concepts.map((c, i) => (
             <View key={`concept-${i}`} style={styles.conceptCard}>
               <View style={styles.conceptHeader}>
@@ -537,7 +559,13 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
                           : null,
                       ]}
                     >
-                      {c.importance.toUpperCase()}
+                      {labels
+                        .t(
+                          c.importance.toLowerCase() === "core"
+                            ? "artifact.importance.core"
+                            : "artifact.importance.supporting",
+                        )
+                        .toUpperCase()}
                     </Text>
                   </View>
                 ) : null}
@@ -548,12 +576,12 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
         </Section>
       ) : null}
       {keyPoints && keyPoints.length > 0 ? (
-        <Section title={t("artifact.section.keyPoints")}>
+        <Section title={labels.t("artifact.section.keyPoints")}>
           <Bullets items={keyPoints} />
         </Section>
       ) : null}
       {quotes && quotes.length > 0 ? (
-        <Section title={t("artifact.section.quotes")}>
+        <Section title={labels.t("artifact.section.quotes")}>
           {quotes.map((q, i) => (
             <View key={`quote-${i}`} style={styles.quoteCard}>
               <Text style={styles.quoteMark}>“</Text>
@@ -566,12 +594,12 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
         </Section>
       ) : null}
       {actionItems && actionItems.length > 0 ? (
-        <Section title={t("artifact.section.actionItems")}>
+        <Section title={labels.t("artifact.section.actionItems")}>
           <Bullets items={actionItems} variant="check" />
         </Section>
       ) : null}
       {glossary && glossary.length > 0 ? (
-        <Section title={t("artifact.section.glossary")}>
+        <Section title={labels.t("artifact.section.glossary")}>
           {glossary.map((g, i) => (
             <View key={`glossary-${i}`} style={styles.glossaryRow}>
               <Text style={styles.glossaryTerm}>{g.term}</Text>
@@ -586,7 +614,13 @@ function NotesBody({ content }: { content: Record<string, unknown> }) {
 
 // --- Flashcards (revealable) ---
 
-function FlashcardsBody({ content }: { content: Record<string, unknown> }) {
+function FlashcardsBody({
+  content,
+  labels,
+}: {
+  content: Record<string, unknown>;
+  labels: ArtifactTranslator;
+}) {
   const styles = useThemedStyles(makeStyles);
   const cards = pickFlashcardArray(content);
   if (!cards || cards.length === 0) {
@@ -598,15 +632,28 @@ function FlashcardsBody({ content }: { content: Record<string, unknown> }) {
   }
 
   return (
-    <Section title={tCount("artifact.cardCount", cards.length)}>
+    <Section title={labels.tCount("artifact.cardCount", cards.length)}>
       {cards.map((card, i) => (
-        <FlashcardCard key={`card-${i}`} index={i + 1} card={card} />
+        <FlashcardCard
+          key={`card-${i}`}
+          index={i + 1}
+          card={card}
+          labels={labels}
+        />
       ))}
     </Section>
   );
 }
 
-function FlashcardCard({ index, card }: { index: number; card: Flashcard }) {
+function FlashcardCard({
+  index,
+  card,
+  labels,
+}: {
+  index: number;
+  card: Flashcard;
+  labels: ArtifactTranslator;
+}) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const [revealed, setRevealed] = useState(false);
@@ -630,10 +677,10 @@ function FlashcardCard({ index, card }: { index: number; card: Flashcard }) {
           color={Colors.textMuted}
         />
       </View>
-      <Text style={styles.flashcardLabel}>{t("artifact.question")}</Text>
+      <Text style={styles.flashcardLabel}>{labels.t("artifact.question")}</Text>
       <Text style={styles.flashcardQuestion}>{card.question}</Text>
       <View style={styles.flashcardDivider} />
-      <Text style={styles.flashcardLabel}>{t("artifact.answer")}</Text>
+      <Text style={styles.flashcardLabel}>{labels.t("artifact.answer")}</Text>
       {revealed ? (
         <Text style={styles.flashcardAnswer}>{card.answer}</Text>
       ) : (
@@ -647,10 +694,12 @@ function FlashcardCard({ index, card }: { index: number; card: Flashcard }) {
 
 function QuizBody({
   content,
+  labels,
   onQuestionChange,
   onFinish,
 }: {
   content: Record<string, unknown>;
+  labels: ArtifactTranslator;
   onQuestionChange: () => void;
   /** "Done" on the last question: leave the quiz for wherever it was opened from. */
   onFinish: () => void;
@@ -692,7 +741,10 @@ function QuizBody({
     <View style={styles.quizBody}>
       <View style={styles.quizProgressHeader}>
         <Text style={styles.quizProgressLabel}>
-          {`Question ${currentIndex + 1} / ${questions.length}`}
+          {labels.t("artifact.questionPosition", {
+            index: currentIndex + 1,
+            total: questions.length,
+          })}
         </Text>
       </View>
       <View
@@ -703,7 +755,7 @@ function QuizBody({
           min: 1,
           max: questions.length,
           now: currentIndex + 1,
-          text: t("artifact.questionPosition", {
+          text: labels.t("artifact.questionPosition", {
             index: currentIndex + 1,
             total: questions.length,
           }),
@@ -715,6 +767,7 @@ function QuizBody({
 
       <QuizQuestionCard
         key={`q-${currentIndex}`}
+        labels={labels}
         question={currentQuestion}
         picked={picked}
         onPick={setPicked}
@@ -751,10 +804,12 @@ function QuizBody({
 
 function QuizQuestionCard({
   question,
+  labels,
   picked,
   onPick,
 }: {
   question: QuizQuestion;
+  labels: ArtifactTranslator;
   picked: string | null;
   onPick: (label: string) => void;
 }) {
@@ -838,7 +893,7 @@ function QuizQuestionCard({
       {answered ? (
         <View style={styles.quizExplanation}>
           <Text style={styles.quizExplanationLabel}>
-            {t("artifact.explanation")}
+            {labels.t("artifact.explanation")}
           </Text>
           <Text style={styles.quizExplanationText}>{question.explanation}</Text>
         </View>

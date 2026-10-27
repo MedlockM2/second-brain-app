@@ -548,6 +548,7 @@ function OpenArtifact({
       <ArtifactBody
         type={content.artifact_type}
         payload={content.content}
+        language={content.language}
         onFinish={onClose}
       />
     </article>

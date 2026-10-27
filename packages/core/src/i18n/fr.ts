@@ -730,6 +730,8 @@ export const fr: Catalog = {
   "artifact.regenerating": "Lancement...",
   "artifact.regenerationQueued":
     "Génération relancée. Revenez dans un instant.",
+  "artifact.importance.core": "Essentiel",
+  "artifact.importance.supporting": "Complémentaire",
   "artifact.section.keyPoints": "Points clés",
   "artifact.section.takeaway": "À retenir",
   "artifact.section.quotes": "Citations marquantes",

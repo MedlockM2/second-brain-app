@@ -615,6 +615,8 @@ export const hi: Catalog = {
   "artifact.regenerating": "शुरू हो रहा है...",
   "artifact.regenerationQueued":
     "बनाना फिर से शुरू हुआ। कुछ देर बाद वापस आएँ।",
+  "artifact.importance.core": "मुख्य",
+  "artifact.importance.supporting": "पूरक",
   "artifact.section.keyPoints": "मुख्य बिंदु",
   "artifact.section.takeaway": "निचोड़",
   "artifact.section.quotes": "उल्लेखनीय उद्धरण",

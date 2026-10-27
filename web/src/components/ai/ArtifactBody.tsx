@@ -11,7 +11,10 @@ import {
   type Flashcard,
   type QuizQuestion,
 } from "@media-summarizer/core/artifacts/content";
-import { tCount } from "@media-summarizer/core/i18n/runtime";
+import {
+  artifactTranslator,
+  type ArtifactTranslator,
+} from "@media-summarizer/core/artifacts/i18n";
 import { useState, type ReactNode } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon } from "../Icon";
@@ -22,18 +25,35 @@ import { Icon } from "../Icon";
  * the widened AI pane. `payload` is the envelope `GET /api/artifacts/:id/content`
  * returns; anything the model wrote that does not fit is dropped, not shown raw.
  */
-export function ArtifactBody({ type, payload, onFinish }: { type: string; payload: unknown; onFinish: () => void }) {
+export function ArtifactBody({
+  type,
+  payload,
+  language,
+  onFinish,
+}: {
+  type: string;
+  payload: unknown;
+  language: string | null;
+  onFinish: () => void;
+}) {
   const content = artifactContent(payload);
+  const labels = artifactTranslator(language);
   switch (normalizeArtifactKind(type)) {
     case "summary_short":
     case "summary":
-      return <SummaryShort content={content} />;
+      return <SummaryShort content={content} labels={labels} />;
     case "notes":
-      return <Notes content={content} />;
+      return <Notes content={content} labels={labels} />;
     case "flashcards":
-      return <Flashcards cards={pickFlashcardArray(content)} />;
+      return <Flashcards cards={pickFlashcardArray(content)} labels={labels} />;
     default:
-      return <Quiz questions={pickQuizQuestions(content)} onFinish={onFinish} />;
+      return (
+        <Quiz
+          questions={pickQuizQuestions(content)}
+          labels={labels}
+          onFinish={onFinish}
+        />
+      );
   }
 }
 
@@ -61,19 +81,24 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
-function SummaryShort({ content }: { content: Record<string, unknown> }) {
-  const { t } = useI18n();
+function SummaryShort({
+  content,
+  labels,
+}: {
+  content: Record<string, unknown>;
+  labels: ArtifactTranslator;
+}) {
   const keyPoints = pickStringArray(content, ["key_points"]);
   const takeaway = pickString(content, ["takeaway"]);
   return (
     <>
       {keyPoints && (
-        <Section title={t("artifact.section.keyPoints")}>
+        <Section title={labels.t("artifact.section.keyPoints")}>
           <Bullets items={keyPoints} />
         </Section>
       )}
       {takeaway && (
-        <Section title={t("artifact.section.takeaway")}>
+        <Section title={labels.t("artifact.section.takeaway")}>
           <div className="callout" style={{ marginBottom: 0 }}>
             <p style={{ marginTop: 0 }}>{takeaway}</p>
           </div>
@@ -83,8 +108,13 @@ function SummaryShort({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function Notes({ content }: { content: Record<string, unknown> }) {
-  const { t } = useI18n();
+function Notes({
+  content,
+  labels,
+}: {
+  content: Record<string, unknown>;
+  labels: ArtifactTranslator;
+}) {
   // An introduction (who, what, why): it reads first, under the title, with no
   // section title of its own.
   const context = pickString(content, ["context"]);
@@ -103,19 +133,31 @@ function Notes({ content }: { content: Record<string, unknown> }) {
         </Section>
       )}
       {objectives && (
-        <Section title={t("artifact.section.objectives")}>
+        <Section title={labels.t("artifact.section.objectives")}>
           <Bullets items={objectives} />
         </Section>
       )}
       {concepts && (
-        <Section title={t("artifact.section.concepts")}>
+        <Section title={labels.t("artifact.section.concepts")}>
           {concepts.map((concept, i) => (
             <div key={i} className="art-card">
               <div className="q" style={{ marginTop: 0 }}>
                 {concept.term}
                 {concept.importance && (
-                  <span className={concept.importance.toLowerCase() === "core" ? "importance core" : "importance"}>
-                    {concept.importance.toUpperCase()}
+                  <span
+                    className={
+                      concept.importance.toLowerCase() === "core"
+                        ? "importance core"
+                        : "importance"
+                    }
+                  >
+                    {labels
+                      .t(
+                        concept.importance.toLowerCase() === "core"
+                          ? "artifact.importance.core"
+                          : "artifact.importance.supporting",
+                      )
+                      .toUpperCase()}
                   </span>
                 )}
               </div>
@@ -125,23 +167,28 @@ function Notes({ content }: { content: Record<string, unknown> }) {
         </Section>
       )}
       {keyPoints && (
-        <Section title={t("artifact.section.keyPoints")}>
+        <Section title={labels.t("artifact.section.keyPoints")}>
           <Bullets items={keyPoints} />
         </Section>
       )}
       {quotes && (
-        <Section title={t("artifact.section.quotes")}>
+        <Section title={labels.t("artifact.section.quotes")}>
           {quotes.map((quote, i) => (
             <blockquote key={i} className="quote">
               {quote.text}
-              {quote.sourceRef && <span className="small muted"> — {quote.sourceRef}</span>}
+              {quote.sourceRef && (
+                <span className="small muted"> — {quote.sourceRef}</span>
+              )}
             </blockquote>
           ))}
         </Section>
       )}
       {actionItems && (
-        <Section title={t("artifact.section.actionItems")}>
-          <ul className="bullets" style={{ listStyle: "none", paddingInlineStart: 0 }}>
+        <Section title={labels.t("artifact.section.actionItems")}>
+          <ul
+            className="bullets"
+            style={{ listStyle: "none", paddingInlineStart: 0 }}
+          >
             {actionItems.map((item, i) => (
               <li key={i} className="row" style={{ alignItems: "flex-start" }}>
                 <Icon name="checkmark-circle" size={18} />
@@ -152,7 +199,7 @@ function Notes({ content }: { content: Record<string, unknown> }) {
         </Section>
       )}
       {glossary && (
-        <Section title={t("artifact.section.glossary")}>
+        <Section title={labels.t("artifact.section.glossary")}>
           <dl style={{ margin: 0 }}>
             {glossary.map((entry, i) => (
               <div key={i} style={{ marginBottom: 8 }}>
@@ -169,38 +216,59 @@ function Notes({ content }: { content: Record<string, unknown> }) {
   );
 }
 
-function Flashcards({ cards }: { cards: Flashcard[] | null }) {
+function Flashcards({
+  cards,
+  labels,
+}: {
+  cards: Flashcard[] | null;
+  labels: ArtifactTranslator;
+}) {
   const { t } = useI18n();
   if (!cards) return <p className="subtle">{t("artifact.noFlashcards")}</p>;
   return (
-    <Section title={tCount("artifact.cardCount", cards.length)}>
+    <Section title={labels.tCount("artifact.cardCount", cards.length)}>
       {cards.map((card, i) => (
-        <FlashcardCard key={i} card={card} />
+        <FlashcardCard key={i} card={card} labels={labels} />
       ))}
     </Section>
   );
 }
 
-function FlashcardCard({ card }: { card: Flashcard }) {
+function FlashcardCard({
+  card,
+  labels,
+}: {
+  card: Flashcard;
+  labels: ArtifactTranslator;
+}) {
   const { t, tw } = useI18n();
   const [revealed, setRevealed] = useState(false);
   return (
     <div className="art-card">
-      <div className="caps">{t("artifact.question")}</div>
+      <div className="caps">{labels.t("artifact.question")}</div>
       <div className="q">{card.question}</div>
       {revealed ? (
         <>
           <div className="caps" style={{ marginTop: 12 }}>
-            {t("artifact.answer")}
+            {labels.t("artifact.answer")}
           </div>
           <div>{card.answer}</div>
-          <button type="button" className="chip-btn" style={{ marginTop: 12 }} onClick={() => setRevealed(false)}>
+          <button
+            type="button"
+            className="chip-btn"
+            style={{ marginTop: 12 }}
+            onClick={() => setRevealed(false)}
+          >
             <Icon name="eye-off-outline" size={14} />
             {t("artifact.hideAnswer")}
           </button>
         </>
       ) : (
-        <button type="button" className="chip-btn" onClick={() => setRevealed(true)}>
+        <button
+          type="button"
+          className="chip-btn"
+          onClick={() => setRevealed(true)}
+        >
           <Icon name="eye-outline" size={14} />
           {tw("artifact.showAnswer")}
         </button>
@@ -214,7 +282,15 @@ function FlashcardCard({ card }: { card: Flashcard }) {
  * "Done" closes it and hands the reader back to the history (the mobile does the
  * same since 8c3bdfee): no terminal state that reads like a button.
  */
-function Quiz({ questions, onFinish }: { questions: QuizQuestion[] | null; onFinish: () => void }) {
+function Quiz({
+  questions,
+  labels,
+  onFinish,
+}: {
+  questions: QuizQuestion[] | null;
+  labels: ArtifactTranslator;
+  onFinish: () => void;
+}) {
   const { t } = useI18n();
   const [index, setIndex] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
@@ -234,7 +310,12 @@ function Quiz({ questions, onFinish }: { questions: QuizQuestion[] | null; onFin
 
   return (
     <div>
-      <div className="small muted">{t("artifact.questionPosition", { index: index + 1, total: questions.length })}</div>
+      <div className="small muted">
+        {labels.t("artifact.questionPosition", {
+          index: index + 1,
+          total: questions.length,
+        })}
+      </div>
       <div
         className="quiz-progress"
         role="progressbar"
@@ -250,8 +331,14 @@ function Quiz({ questions, onFinish }: { questions: QuizQuestion[] | null; onFin
           {question.question}
         </div>
         {question.options.map((option) => {
-          const correct = option.label.toUpperCase() === question.correct_answer;
-          const state = answered && correct ? "right" : answered && picked === option.label ? "wrong" : "";
+          const correct =
+            option.label.toUpperCase() === question.correct_answer;
+          const state =
+            answered && correct
+              ? "right"
+              : answered && picked === option.label
+                ? "wrong"
+                : "";
           return (
             <button
               key={option.label}
@@ -270,7 +357,7 @@ function Quiz({ questions, onFinish }: { questions: QuizQuestion[] | null; onFin
         })}
         {answered && (
           <div style={{ marginTop: 8 }}>
-            <div className="caps">{t("artifact.explanation")}</div>
+            <div className="caps">{labels.t("artifact.explanation")}</div>
             <p style={{ margin: "4px 0 0" }}>{question.explanation}</p>
           </div>
         )}

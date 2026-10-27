@@ -132,6 +132,8 @@ export interface ArtifactContentResponse {
   scope: ArtifactScope;
   scope_id: string;
   status: ArtifactStatus;
+  /** Immutable output language captured at generation, independent of the profile. */
+  language: string | null;
   /** Parsed JSON payload (shape depends on artifact_type). */
   content: Record<string, unknown>;
 }

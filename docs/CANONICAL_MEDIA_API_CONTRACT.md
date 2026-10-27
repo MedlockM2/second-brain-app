@@ -665,6 +665,7 @@ own id (`generation_outcome: "retried"`) and debits nothing extra.
   "scope": "media",
   "scope_id": "med_01JQ8X8J5S3H3CXX8V70M9M3K7",
   "status": "ready",
+  "language": "fr",
   "content": {
     "artifact_id": "art_01JQ8ZNOTES...",
     "artifact_type": "notes",
@@ -718,6 +719,14 @@ own id (`generation_outcome: "retried"`) and debits nothing extra.
   }
 }
 ```
+
+The content response's top-level `language` is the immutable output language
+from the entry's stored generation parameters (nullable when no target was set).
+It is independent of the source languages in the S3 envelope and of the current
+profile or interface language. Mobile and web use it for the artifact template's
+section headings, question/answer labels and counts, with the reference English
+catalogue when no supported target is available. Navigation and error messages
+keep the interface language. No regeneration or S3 rewrite is needed.
 
 Every content schema carries a `title` (3-80 characters) emitted by the model.
 `notes.notable_quotes` is a list of `{text, source_ref}` where `source_ref` is

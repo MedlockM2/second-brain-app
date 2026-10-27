@@ -615,6 +615,8 @@ export const pt: Catalog = {
   "artifact.regenerating": "A iniciar...",
   "artifact.regenerationQueued":
     "Geração reiniciada. Volte dentro de um momento.",
+  "artifact.importance.core": "Essencial",
+  "artifact.importance.supporting": "Complementar",
   "artifact.section.keyPoints": "Pontos-chave",
   "artifact.section.takeaway": "A reter",
   "artifact.section.quotes": "Citações marcantes",
