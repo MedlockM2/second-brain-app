@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-28 11:00'
-updated_date: '2026-10-28 11:00'
+updated_date: '2026-10-28 14:07'
 labels:
   - benchmark
   - backend
@@ -48,8 +48,14 @@ Recherche uniquement : aucune modification de compte, de paiement ni de code. Au
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le README couvre chaque fournisseur appelé par le code actuel (OpenAI, Deepgram, LlamaParse, Unstructured, Apify, API X) avec volume gratuit, comportement à l'épuisement, moyens de paiement au-delà et limites de dépense, sources primaires datées.
-- [ ] #2 Pour chaque fournisseur, le README dit si la bascule automatique du gratuit vers un crédit provisionné est possible et, si non, l'alternative la plus proche.
-- [ ] #3 La recommandation sépare les actions de compte à faire par l'owner et les changements de code (provider_pools, repli sur 402, comptes Apify), sans les exécuter.
-- [ ] #4 Le README comporte Recommendation et Owner Validation avec owner_decision: pending.
+- [x] #1 Le README couvre chaque fournisseur appelé par le code actuel (OpenAI, Deepgram, LlamaParse, Unstructured, Apify, API X) avec volume gratuit, comportement à l'épuisement, moyens de paiement au-delà et limites de dépense, sources primaires datées.
+- [x] #2 Pour chaque fournisseur, le README dit si la bascule automatique du gratuit vers un crédit provisionné est possible et, si non, l'alternative la plus proche.
+- [x] #3 La recommandation sépare les actions de compte à faire par l'owner et les changements de code (provider_pools, repli sur 402, comptes Apify), sans les exécuter.
+- [x] #4 Le README comporte Recommendation et Owner Validation avec owner_decision: pending.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+README produit : docs/research/task-557-provider-free-tier-then-paid/README.md (owner_decision: pending). Sources primaires consultées le 2026-10-28 (OpenAI help/rate-limits, Deepgram pricing/errors, LlamaParse billing/pricing, Unstructured pricing/billing, Apify pricing/billing/subscriptions, X API pricing). Constat : bascule automatique possible par configuration chez OpenAI (recharge auto), Deepgram (auto-reload), Unstructured (carte), X (auto-recharge, pas de gratuit) ; impossible sur les plans Free de LlamaParse (402) et d'Apify (blocage), qui exigent un plan payant (Starter). Le code coupe aujourd'hui Apify à 90 % du gratuit (provider_pool_guard.spend_allowed) : recommandation de retirer provider_pools une fois les comptes basculés. Regrouper Apify sur un compte = configuration seule (un token par plateforme dans le secret). Non vérifiable sans console : soldes, moyens de paiement, allocation Unstructured unique ou mensuelle, code HTTP X à solde nul. Aucun compte, paiement ni code modifié ; aucun test.
+<!-- SECTION:NOTES:END -->
