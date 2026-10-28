@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-28 15:52'
-updated_date: '2026-10-28 18:16'
+updated_date: '2026-10-28 22:46'
 labels:
   - backend
   - feature
@@ -73,6 +73,8 @@ Mobile et web affichent les échecs sur leur ligne, avec icône, texte, raison t
 Validation : Ruff et mypy sur media_summarizer (217 fichiers), TypeScript et ESLint sur mobile, packages/core et web ; seul avertissement préexistant purchaseService.ts:136. Terraform validate dev passe. OpenAPI YAML lu et 112 références locales résolues, six opérations canoniques documentées. Aucun test automatisé ajouté ni application exécutée localement.
 
 PRÉREQUISITE OWNER : après fusion/push et déploiement du backend et de la projection GSI, constater sur dev les générations et débits distincts, la relance même entrée et la suppression. Cette vérification déployée ne constitue pas un AC réalisable depuis le worktree.
+
+Audit final après TASK-561 : le worker revérifie le statut et la révision après la lecture suivant le claim, pour ne jamais adopter la révision d’une relance plus récente. Sur mobile, un refus de relance relit la cause et les actions ; sur web, la ligne actualisée prime sur une ancienne erreur de lecture du contenu. Budget épuisé ou sources devenues invalides retirent ainsi Relancer dès actualisation, tout en gardant Supprimer. Parité mobile/web conservée.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
