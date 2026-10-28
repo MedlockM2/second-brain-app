@@ -111,8 +111,6 @@ to a log and the answer carries a code or a neutral sentence.
 | `auth.py` reading language | `Supported: ['ar', 'de', …]`, a Python list repr | comma-joined |
 | `health.py` | `Service unhealthy: <boto exception>` | "Service unhealthy" |
 | `feeds.py` `_raise_service_error` | `exc.message`, up to an expat `SAXParseException` naming a line and column in someone else's XML | one neutral sentence per `FeedServiceError`, code on the wire |
-| `podcast_search.py` × 12, `podcasts.py` × 2 | French prose, `str(e)`, "Erreur lors de la recherche dans Podcast Index" | English, no exception text, no provider name |
-| `podcast_search.py` insufficient credits | French fallback sentence, taken from the submission's own `message` field | `{"error_code": "INSUFFICIENT_MINUTES"}` → `error.outOfMinutes` |
 
 ## Left as they are, and why
 

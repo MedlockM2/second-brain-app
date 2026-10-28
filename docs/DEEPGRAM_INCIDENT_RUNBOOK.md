@@ -46,7 +46,7 @@ Actions:
 1. Inspect sample DLQ messages for root cause categories.
 2. Fix configuration or external dependency.
 3. Replay only validated messages from `deepgram-transcription-dlq` to `deepgram-transcription-queue`.
-4. Confirm success events are emitted and watcher jobs finalize correctly.
+4. Confirm success events are emitted and the submitting import settles and saved media becomes readable.
 
 ## Validation Checklist
 - New jobs move from `downloading` -> `transcribing` -> terminal status.

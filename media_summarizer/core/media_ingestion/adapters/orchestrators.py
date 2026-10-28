@@ -1117,7 +1117,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         avoid freezing the link. Since task-399 a `failed` row owns nothing and the
         next submission writes over it, so both causes take the same path -- and
         the failure event is published either way, which is what ends the artifact
-        waits and the watchers that a released reservation used to leave hanging.
+        waits instead of leaving dependent generations hanging.
         """
         if resolved.raw_text is None:
             return await self._fail_unreadable_article(
@@ -1228,8 +1228,8 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         # spinner into the localized failed tile the reader already knows.
         await database_async.update_processing_job(job)
 
-        # Closes the content ledger on `failed`, ends the artifact waits and marks
-        # the watchers. The next save of this URL takes the row over and reads the
+        # Closes the content ledger on `failed` and ends the artifact waits.
+        # The next save of this URL takes the row over and reads the
         # page again, whatever the cause was (task-399).
         await sqs.send_message(
             queue_name=DEFAULT_EPISODE_COMPLETED_EVENTS_QUEUE,

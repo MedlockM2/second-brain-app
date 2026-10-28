@@ -53,12 +53,11 @@
    - `media_summarizer/workers/transcription/deepgram_worker.py`
 2. Intégration PodcastIndex:
    - `media_summarizer/utils/podcast_index.py`
-   - endpoints actuels `media_summarizer/api/endpoints/podcast_search.py`
-3. Idempotence + fan-out:
-   - `media_summarizer/core/services/episode_submission.py`
-   - `media_summarizer/utils/episode_idempotence.py`
-   - `media_summarizer/utils/episode_watchers.py`
-   - cible produit: conserver les primitives utiles et supprimer les branches legacy de compatibilité runtime.
+   - résolveurs de liens `media_summarizer/workers/podcast_platform_resolvers.py`
+3. Identité et finalisation durables:
+   - `media_summarizer/utils/media_idempotence.py`
+   - `media_summarizer/workers/events/media_completed_worker.py`
+   - bibliothèque persistante `user_media`, indexation et aperçus par sauvegarde.
 4. Génération LLM d'artefacts:
    - `media_summarizer/workers/summarization/summarization_worker.py`
    - socle d'artefacts textuels existant à étendre selon le backlog V1 (`task-64`, `task-68`, `task-71`, `task-72`)
@@ -420,9 +419,7 @@ Retirer l'envoi email de contenu tout en conservant un workflow job cohérent.
    - conserver idempotence/fan-out technique si utile,
    - supprimer obligations de notification email.
 4. Garder seulement les emails nécessaires au compte (ex: vérification email/auth), si requis produit.
-5. Supprimer les chemins legacy restants autour de `episode_submission.py`/`episode_guid`:
-   - migrer tous les appelants sur le modèle canonique `media_key`,
-   - retirer les fallback runtime de compatibilité.
+5. Conserver une identité canonique unique `media_key`, sans fallback d’identité historique.
 
 ### 7.4 Variables d'Environnement
 ```bash
@@ -605,7 +602,7 @@ MOBILE_RELEASE_CHANNEL=internal
 ### Base acquise (déjà terminée)
 - `task-13`: retrait Spotify sync/playlist tracking.
 - `task-14`: découplage finalisation jobs vs email de contenu.
-- `task-15`: migration identité `media_key` pour idempotence/watchers.
+- `task-15`: identité de contenu canonique `media_key`.
 - `task-16`: extraction utilitaires de matching podcast.
 - `task-17`: garde duplicate per-user en modèle `media_key`.
 
@@ -720,10 +717,10 @@ Objectif: qualité opérationnelle, sécurité et maîtrise des coûts.
 - [ ] Pipeline `download_worker` réutilisé.
 - [ ] Pipeline `transcription/deepgram_worker.py` réutilisé.
 - [ ] `podcast_index.py` réutilisé.
+- [ ] Aucun fallback d’identité historique actif en cible.
 - [ ] Logique de matching podcast extraite depuis `playlist_sync.py` / `tosum_sync.py`.
 - [ ] `summarization_worker.py` réutilisé/étendu pour les résumés V1.
 - [ ] `quiz/worker.py` retiré du scope V1 si `task-71` est exécutée.
-- [ ] Aucun fallback runtime legacy (`episode_guid` / compatibilité `episode_submission.py`) actif en cible.
 
 ### Checklist Suppressions Demandées
 - [x] Spotify playlists tracking retiré backend/frontend/infra. (`task-13` Done)

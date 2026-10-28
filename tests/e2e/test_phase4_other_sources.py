@@ -60,39 +60,6 @@ async def test_youtube_ingestion(
     )
 
 
-async def _submit_podcast_and_wait(
-    http_client: httpx.AsyncClient,
-    auth_headers: Dict[str, str],
-    podcast_url: str,
-    timeout_s: float = 60,
-) -> str:
-    """Submit a podcast URL via /api/podcasts/submit, then poll /api/media/{id}.
-
-    The podcasts/submit endpoint exercises the full pipeline:
-    URL → PodcastIndex resolver → audio_url enclosure → Deepgram → artifacts.
-    Returns job_id (== media_item_id).
-    """
-    resp = await http_client.post(
-        "/api/podcasts/submit",
-        json={"podcast_url": podcast_url},
-        headers=auth_headers,
-    )
-    resp.raise_for_status()
-    job_id = resp.json()["job_id"]
-    body = await poll_until(
-        client=http_client,
-        url=f"/api/media/{job_id}",
-        headers=auth_headers,
-        predicate=lambda b: b.get("status") in ("completed", "failed"),
-        timeout_s=timeout_s,
-        interval_s=5,
-    )
-    assert body.get("status") == "completed", (
-        f"podcast ingestion stayed in {body.get('status')}: {body}"
-    )
-    return job_id
-
-
 @pytest.mark.e2e
 async def test_podcast_via_direct_audio_url(
     http_client: httpx.AsyncClient,
@@ -122,7 +89,7 @@ async def test_podcast_via_podcastindex(
 ) -> None:
     """End-to-end podcast pipeline:
 
-      Apple Podcasts EPISODE URL → /api/podcasts/submit → PodcastIndex
+      Apple Podcasts EPISODE URL → /api/media/ingest-url → PodcastIndex
       resolver → audio enclosure URL → Deepgram → completed.
 
     Fixture is an episode-level URL (with `?i=<episode_id>`). Show-level
@@ -135,10 +102,11 @@ async def test_podcast_via_podcastindex(
     # French podcast episode "Pépite — Ils ont le bracelet, ils mangent tout"
     # show_id=369369012, episode_id=1000771893347 — owner-provided fixture
     # 2026-06-09. Stable URL pattern (Apple Podcasts URLs are immutable).
-    await _submit_podcast_and_wait(
+    await _ingest_and_wait(
         http_client,
         auth_headers,
         "https://podcasts.apple.com/fr/podcast/p%C3%A9pite-ils-ont-le-bracelet-ils-mangent-tout-az-d%C3%A9teste/id369369012?i=1000771893347",
+        timeout_s=60,
     )
 
 

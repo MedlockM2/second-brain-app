@@ -156,7 +156,6 @@ async def purge_account(user_id: str) -> PurgeReport:
     inventory = await _collect_inventory(user_id)
     await _purge_artifacts(user_id, inventory, report)
     await _purge_media_objects(user_id, inventory, report)
-    await _purge_media_watchers(user_id, inventory, report)
     await _purge_processing_jobs(inventory, report)
     report.add("user_media_rows", await user_media.delete_all_for_user(user_id))
 
@@ -199,7 +198,7 @@ class _Inventory:
     """Everything the purge has to know before it starts deleting.
 
     Collected up front because the deletion order destroys the very rows the
-    later steps need to find their targets: artifacts, watchers and content-level
+    later steps need to find their targets: artifacts and content-level
     objects are all reached through ``media_key``, which lives on rows this purge
     removes.
     """
@@ -423,29 +422,6 @@ async def _purge_bug_report_attachments(
 # ---------------------------------------------------------------------------
 # DynamoDB
 # ---------------------------------------------------------------------------
-
-
-async def _purge_media_watchers(
-    user_id: str,
-    inventory: _Inventory,
-    report: PurgeReport,
-) -> None:
-    """Remove the user from the watcher rows of every media they submitted.
-
-    ``media_watchers`` is partitioned by ``media_key`` with the user id as sort
-    key, so the user's rows are only reachable through the media keys collected
-    before the jobs and library rows were deleted.
-    """
-    if not inventory.media_keys:
-        return
-    keys = [
-        {"media_key": media_key, "user_id": user_id}
-        for media_key in sorted(inventory.media_keys)
-    ]
-    report.add(
-        "media_watcher_rows_deleted",
-        await _delete_items(required_env("MEDIA_WATCHERS_TABLE"), keys),
-    )
 
 
 async def _purge_processing_jobs(inventory: _Inventory, report: PurgeReport) -> None:

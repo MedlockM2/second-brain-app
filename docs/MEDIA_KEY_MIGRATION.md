@@ -1,44 +1,34 @@
-# Media Key Migration Notes
+# Canonical media identity
 
-This document describes the canonical runtime identity model for ingestion and
-completion: URL-derived `media_key`.
+URL-derived `media_key` identifies content; `media_item_id` identifies a saved
+library row owned by a user. They are different identities.
 
-## Canonical Tables
+## Canonical tables
 
-- `media_idempotence` (PK: `media_key`)
-- `media_watchers` (PK: `media_key`, SK: `user_id`)
-- `user_media` (PK: `user_id`, SK: `media_item_id`) — durable per-user library row,
-  the source of truth for ownership since task-220. Replaces the removed
-  `user_media_submissions` pointer table.
+- `media_idempotence` (PK: `media_key`) stores the content transcript and its
+  terminal processing outcome.
+- `user_media` (PK: `user_id`, SK: `media_item_id`) is the durable source of
+  library ownership and organization. Every successful save creates a fresh row.
 
-## Runtime Behavior
+## Runtime behavior
 
-- New submissions compute `media_key` from canonicalized URL and write to
-  `media_idempotence` / `media_watchers`.
-- Queue and event payloads carry `media_key` as identity.
-- Success finalization is driven by processing events (`episode_completion_status`)
-  and updates watcher jobs directly to terminal states; it is no longer coupled
-  to completion-content emails.
-- Email worker has been removed. Completion is fully decoupled from notifications.
-- A `media_idempotence` row deduplicates only while it owns its content:
-  `reserved` (a job is in flight) and `processed` (the transcript exists) are
-  reused, `failed` is not. A submission landing on a `failed` row takes the row
-  over with its own job and re-reads the source. Before task-399 the reservation
-  refused to write over a `failed` row, so a single bad fetch — an anti-robot 405
-  — was a permanent verdict on that URL for every account that would ever share
-  it.
+New saves enter through the canonical media ingestion API. A completed content
+transcript can be reused with the beta budget value attached to it. An import
+whose content is still being processed proceeds independently under its own
+processing job and budget; it does not wait on another account's job.
 
-## Environment Variables
+Queue/event payloads carry `media_key` and `canonical_job_id`. Completion events
+close the content ledger and settle the submitting import's budget. The consumer
+prepares indexing and previews for saved library rows, arms the submitter's
+translations and queues that import's ready notification. Artifact requests
+waiting for the text are resumed from their own entries. Failures close the
+import budget and end dependent artifact waits.
 
-- `MEDIA_IDEMPOTENCE_TABLE`
-- `MEDIA_WATCHERS_TABLE`
-- `USER_MEDIA_TABLE`
+A failed content row can be reclaimed by a later import. No old table alias,
+episode-guid fallback or data migration is required in this pre-production app.
 
-No default is provided for any of them: since task-237 the runtime fails fast
-when a table name is missing from the environment.
+## Configuration
 
-## Deployment Sequence
-
-1. Apply Terraform to create canonical `media_*` tables.
-2. Deploy application version that reads/writes only canonical media-key tables.
-3. Remove legacy episode-guid table references from runtime configuration.
+`MEDIA_IDEMPOTENCE_TABLE` and `USER_MEDIA_TABLE` are supplied by Terraform.
+Neither has a guessed default. Apply the infrastructure and deploy application
+changes together through the normal owner release workflow.

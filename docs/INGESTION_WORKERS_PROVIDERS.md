@@ -587,7 +587,6 @@ Ref: `document_parsing/worker.py::process_document_parsing_message` (lines 230�
 **Worker files**:
 - `POST /api/media/ingest-url` with `.mp3`/`.m4a`/etc. → `media_summarizer/api/endpoints/media.py:355` enqueues to `deepgram-transcription-queue` directly
 - `POST /api/media/upload-audio` (file upload) → S3 staging then enqueue to Deepgram with a pre-signed URL
-- `POST /api/podcasts/submit` (user-pasted audio URL) → `media_summarizer/api/endpoints/podcasts.py:255` enqueues to Deepgram
 - All consume `media_summarizer/workers/transcription/deepgram_worker.py`
 
 ### Primary path
@@ -667,7 +666,7 @@ triggers ask for a translated transcript, both through the same atomic reservati
 
 - **At ingestion (task-414)** — the completion-events consumer, once the
   transcript is uploaded and the job completed, arms the translation into the
-  reading language of the submitter and of every watcher
+  captured reading languages of the submitting account’s saves
   (`ingestion_translation_service.arm_transcript_translations`), so a foreign media
   is translated before anyone opens it. Enqueue only: nothing waits on it.
 - **At read time, as a fallback** — `GET /api/media/{id}/raw-content` (cache miss
@@ -699,7 +698,7 @@ after the ingestion job is already completed, and only enqueues.
         |              -> job completed -> [episode-completed-events]
         |
         +--> media_completed_worker (task-414, proactive)
-        |        1. reading language of submitter + watchers (deduplicated)
+        |        1. captured reading languages of the submitting account (deduplicated)
         |        2. detect language (source tag, else one S3 read + langdetect)
         |        3. reserve + enqueue [transcript-translation-queue]
         |
@@ -973,7 +972,7 @@ Which `MediaFailureCode` each worker can emit:
 | `x_ingestion_worker.py` | `MEDIA_UNAVAILABLE`, `POST_TEXT_EMPTY`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`, `PROVIDER_TIMED_OUT`, `PROVIDER_RESULT_INVALID`, `PROVIDER_AUTH_FAILED`, `PROVIDER_CREDITS_DEPLETED`, `PROVIDER_CONFIG_ERROR`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
 | `document_parsing/worker.py` | `DOCUMENT_PARSE_FAILED` |
 | `apify_orchestration.py` (callback backstop) | `PROVIDER_TIMED_OUT` |
-| Beta budget refusals (task-549): `audio_quota_gate.py`, `deepgram_worker.py`, `document_parsing/worker.py`, `apify_orchestration.py` (through `ingestion_failures`), `x_ingestion_worker.py`, `instagram_ingestion_worker.py`, `media_submission.py` | `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE`, `BUDGET_UNAVAILABLE` |
+| Beta budget refusals (task-549): `audio_quota_gate.py`, `deepgram_worker.py`, `document_parsing/worker.py`, `apify_orchestration.py` (through `ingestion_failures`), `x_ingestion_worker.py`, `instagram_ingestion_worker.py` | `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE`, `BUDGET_UNAVAILABLE` |
 | `core/media_ingestion/adapters/orchestrators.py` | `SUBMISSION_FAILED` |
 
 Adding a member to `MediaFailureCode` requires an entry in `ERROR_CODE_MESSAGES`
@@ -1035,7 +1034,6 @@ The `media_summarizer/utils/deepgram_dispatch.py` helper centralises the SQS pay
 | Orchestrator: generic `audio_url` fallback | `pull_with_push_fallback` | `orchestrators.py` (generic audio_url branch) |
 | PodcastIndex resolution worker | `pull` | `podcastindex_resolution_worker.py` |
 | RSS feed poll worker (audio item) | `pull` | `rss_feed_poll_worker.py` |
-| `POST /api/podcasts/submit` (user-pasted audio URL) | `pull_with_push_fallback` | `api/endpoints/podcasts.py` |
 | `POST /api/media/ingest-url` (audio source platform) | `pull_with_push_fallback` | `api/endpoints/media.py` |
 | `POST /api/media/upload-audio` (S3 pre-signed URL) | `pull` | `api/endpoints/media.py` |
 
