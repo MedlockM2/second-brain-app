@@ -58,9 +58,15 @@ only reliable end of a token's life besides deleting the account.
 
 It is deleted, never marked: there is no `purge_at`, no `deleted_at` and no TTL
 on the table, which is what keeps `scripts/check_purge_at_writers.py` satisfied.
-`USER_PUSH_TOKENS_TABLE` is listed in `_USER_PARTITION_TABLES` of
-`core/services/account_deletion_service.py`, so §4 empties it with everything
-else — a deleted account leaves no addressable device behind.
+Account deletion calls `push_token_db.delete_all_for_user` from
+`core/services/account_deletion_service.py`. It removes the account registrations
+and their authoritative rows in the reserved `__push_token_owners__` partition.
+Ownership is removed only if it still belongs to the erased account; a phone
+subsequently registered to another account stays registered to that account.
+The stale sweep uses the same conditional deletion, additionally checking
+`last_seen_at` so a concurrent registration survives. Superseded account rows
+are not destinations and expire through that sweep; they confer no ownership.
+No ownerless registration is delivered: the next app launch registers its owner.
 
 ## 3. User deletion of one item
 

@@ -8,12 +8,11 @@ Both answer 204. Nothing is echoed back, deliberately: the only thing the server
 could return is the token the client just sent, and a response body carrying it
 is one more place it can be logged by an intermediary.
 
-**The DELETE is not optional.** A device is registered under the account that was
-signed in when it launched. Without a sign-out unregistration, a second account
-signing in on the same phone would leave the token registered under *both*, and
-the first account's Digest notification would land on a screen the second account
-is looking at. The mobile client calls it from ``AuthContext.logout``, before the
-session is torn down, because it needs the session to authenticate.
+**POST assigns the token exclusively to the current account.** DELETE on
+sign-out promptly releases it, but cannot be the uniqueness guarantee: sign-out
+may happen offline or after a process restart that lost the token memo. The
+server checks authoritative ownership at delivery, even if another account's
+registration row survived. A delayed DELETE never removes another owner's token.
 """
 
 from __future__ import annotations

@@ -1,9 +1,11 @@
 # Device registrations for Digest push notifications (task-369).
 #
-# One row per device: PK user_id, SK push_token. The composite key is what makes
-# "one person, several phones" work without a secondary index — the send path
-# queries the partition, and a token is deleted by its exact key when Expo
-# reports the device is gone.
+# Account registrations: PK user_id, SK push_token. Several phones per account
+# are listed by querying its partition. The reserved __push_token_owners__
+# partition holds the sole current owner of each token; registration updates both
+# rows in one transaction, and delivery checks that owner with a strong read.
+# This prevents a phone from receiving pushes for two accounts after a switch.
+# No extra table or index is needed.
 #
 # No TTL attribute, deliberately. Staleness here is not "this row expired at a
 # time we knew in advance": a device goes quiet when the app is uninstalled, and
@@ -13,8 +15,8 @@
 # check_purge_at_writers.py) against writing purge_at where it does not belong,
 # and this table is one of those places.
 #
-# Deletion of an account takes its rows with it, via _USER_PARTITION_TABLES in
-# core/services/account_deletion_service.py.
+# Sign-out, staleness and account deletion use utils/push_token_db.py to remove
+# account and owner rows together without unregistering a subsequent owner.
 
 resource "aws_dynamodb_table" "user_push_tokens" {
   name         = "user_push_tokens${local.suffix}"
