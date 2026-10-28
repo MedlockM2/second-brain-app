@@ -1,51 +1,8 @@
-"""
-Artifact generation: scope resolution, reuse of what already exists, storage.
+"""Scope resolution, generation and storage of AI artifacts.
 
-Both scopes go through one mechanism (task-269 decision, strategy S1): a media
-artifact is a folder artifact whose ``sources`` has one element. A request
-resolves the scope's sources, checks the ceilings, writes **one immutable history
-entry** and enqueues **one** SQS message per artifact type.
-
-One rule decides whether anything is generated at all (task-316 owner decision):
-**an existing artifact is reused as soon as the set of sources behind it is
-identical, and a generation only happens when that set differs.** The
-``artifact_id`` is a hash of (user, scope, scope_id, type, parameters, sorted
-source ids) with no time component, so finding the artifact that already answers a
-request is a single ``GetItem`` with no time bound and no lock table. A media item
-has exactly one source and that set never changes, so "one generation per type
-per media" follows from the same rule with no special case; a folder can
-legitimately produce a new entry, and only once its sources have changed.
-
-The history stays append-only: a different source set writes a new entry next to
-the older ones, and nothing is ever overwritten or invalidated. The single
-exception is an entry that *failed* — it holds no artifact to reuse, so a request
-for the same key reclaims it and generates again rather than being barred forever
-by one transient provider error.
-
-Since task-394 that rule crosses accounts for a **media** scope: everything the id
-hashes except ``user_id`` is already content identity — ``effective_scope_id`` is
-the deduplicated ``media_key`` and the source ids are content ids — so two accounts
-asking for the same type, in the same language, over the same content were paying
-for two generations of identical text. They no longer do, and the request is served
-by two rows instead of one:
-
-- a **shared generation**, keyed on the content alone
-  (:func:`build_shared_artifact_id`) and indexed under a scope key no account can
-  produce (``@content#media#…``). It is what the worker generates into and what owns
-  the S3 object. Exactly one exists per (content, type, parameters);
-- a **pointer**, one per account that asked, keyed exactly as before
-  (:func:`build_artifact_id`) and carrying ``shared_artifact_id``. It is the only
-  row the API addresses, so a listing still shows an account nothing but what it
-  asked for.
-
-Two consequences, both deliberate. The quota no longer depends on whether a
-generation ran: it is debited whenever an account gains an entry, and the avoided
-provider call accrues to the operator rather than as free allowance to whoever
-happened to ask second. And a scope that is *not* content-addressed keeps a single
-per-account row with no indirection at all: a folder artifact (its scope id is a
-folder id, owned by one account) and an artifact over a user-uploaded file (whose
-content id is built around its owner and declares it — see
-:func:`mutualizes_generation`).
+Each user request owns a fresh history entry and a fresh generation. Explicit
+retries keep that entry, its options and its creation date, with a new revision.
+Only the automatic review_blurb keeps content-addressed, cross-account reuse.
 """
 
 from __future__ import annotations
@@ -60,6 +17,7 @@ from decimal import Decimal
 from enum import Enum
 from io import BytesIO
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -177,8 +135,7 @@ _OPTIONS_OF_EVERY_TYPE = frozenset({artifact_options.FOCUS, artifact_options.LAN
 
 # Which customisation option each requestable type accepts (task-531). A type absent
 # from this table — an internal one — accepts none. An option sent for a type it
-# does not apply to is refused rather than ignored: ignoring it would still hash it,
-# so `count` on a set of notes would buy a second, identical set of notes.
+# does not apply to is refused rather than silently ignored.
 OPTIONS_BY_ARTIFACT_TYPE: Dict[MediaArtifactType, frozenset[str]] = {
     MediaArtifactType.SUMMARY_SHORT: _OPTIONS_OF_EVERY_TYPE | {artifact_options.LENGTH},
     MediaArtifactType.NOTES: _OPTIONS_OF_EVERY_TYPE,
@@ -189,7 +146,7 @@ OPTIONS_BY_ARTIFACT_TYPE: Dict[MediaArtifactType, frozenset[str]] = {
 }
 
 # The enumerated options: the values each one takes, and the default that is
-# dropped before the hash.
+# omitted from stored options.
 _ENUMERATED_OPTIONS: Dict[str, Tuple[type[Enum], Enum]] = {
     artifact_options.LENGTH: (
         artifact_options.SummaryLength,
@@ -205,8 +162,7 @@ _ENUMERATED_OPTIONS: Dict[str, Tuple[type[Enum], Enum]] = {
 #: The key of `parameters` that restricts a folder request to some of its sources
 #: (task-532). A scope option rather than a generation option: it is validated by
 #: :func:`resolve_source_selection` and applied by :func:`resolve_scope_sources`, and
-#: it never reaches the stored ``parameters`` — the sources it selects are hashed
-#: already, as the source ids of the entry.
+#: it is stored separately as selected_source_ids for resumption and retry.
 SOURCE_IDS_PARAMETER = "source_ids"
 
 #: ``reason`` of an ``invalid_artifact_parameters`` refusal.
@@ -372,13 +328,7 @@ def _artifact_scope(value: Any) -> ArtifactScope:
 
 
 def normalize_artifact_parameters(value: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """The canonical form of a request's parameters, on the way in *and* back out.
-
-    Idempotent, and total over what DynamoDB hands back: a number stored here
-    returns as a ``Decimal``, which ``_stable_json`` cannot serialise. Converting it
-    is what lets a deferred request recompute its own id from the stored entry and
-    land on the same hash (task-360).
-    """
+    """Canonical stored options, converting DynamoDB decimals to JSON numbers."""
 
     def _normalize(node: Any) -> Any:
         if isinstance(node, dict):
@@ -398,32 +348,11 @@ def resolve_request_options(
     artifact_type: Any,
     parameters: Optional[Dict[str, Any]],
 ) -> Dict[str, str]:
-    """A client's ``parameters``, validated and reduced to what changes the artifact.
+    """Validate a type's options and omit explicit defaults.
 
-    The options of task-531 (``length``, ``count``, ``difficulty``, ``focus``) and the
-    ``language`` of task-533 are checked against the type asked for: an unknown key, a
-    key the client may not set, an option the type does not take, or a value outside
-    its list is refused with :class:`ArtifactParametersInvalidError`. A JSON ``null``
-    reads as an absent key.
-
-    What comes back holds **no default**, and that is the half of this function the
-    ids rely on. An option at its default value, like a ``focus`` that is empty once
-    its whitespace is cleaned, is dropped, so a request spelling out every default
-    hashes to the same ``artifact_id`` and the same shared id as a request with no
-    options at all — every entry generated before the options existed keeps
-    answering, and so does the cross-account reuse of task-394.
-
-    The one default this function cannot see is the language's, which is the
-    reader's: ``language`` comes back normalized to its ISO 639-1 code, and
-    :func:`plan_artifact_generation`, which holds the reading language, drops it when
-    it names that language and pins it otherwise.
-
-    An unknown type is the 400 of :class:`ArtifactTypeNotEnabledError`, raised here
-    first so that a request naming no real type is not judged on its options.
-
-    ``source_ids`` is skipped, for every type alike: it is not a generation option
-    and is judged by :func:`resolve_source_selection`. Leaving it out of what comes
-    back is what keeps it out of the hash (task-532).
+    The output language is resolved separately against the scope default. Source
+    selection is validated by resolve_source_selection and stored separately.
+    This normalization never merges user requests.
     """
     resolved_type = _artifact_type(artifact_type)
     accepted = OPTIONS_BY_ARTIFACT_TYPE.get(resolved_type, frozenset())
@@ -563,22 +492,7 @@ def _generation_parameters(
     options: Optional[Dict[str, str]],
     output_language: Optional[str],
 ) -> Dict[str, Any]:
-    """An entry's ``parameters``: the request's options plus the language it is written in.
-
-    The reading language is the default output language and the only one most
-    entries carry (task-398). A request may name another (task-533), and there are
-    exactly two outcomes, decided here because this is where both are known:
-
-    - **the language it names is the reading language.** It is the default, so it is
-      dropped like any other default: the material is the one a request without the
-      option hashes, hence the same ``artifact_id``, the same shared id, and the same
-      translation behaviour when the reader changes language later;
-    - **it names another one.** That language becomes the output language and the
-      entry is marked :data:`~artifact_options.LANGUAGE_PINNED`. Both are hashed, so
-      the entry is a different id from the translation or the native generation in
-      that language a reader of it would get, and its shared generation only ever
-      answers another request pinning the same language.
-    """
+    """Stored options and resolved output language, with an explicit pin marker."""
     parameters: Dict[str, Any] = dict(options or {})
     requested_language = parameters.pop(artifact_options.LANGUAGE, None)
     if requested_language and requested_language != output_language:
@@ -586,29 +500,16 @@ def _generation_parameters(
         parameters[artifact_options.LANGUAGE_PINNED] = True
     elif output_language:
         # No source text is translated for the output language, the prompt asks for
-        # it (task-398). It is part of the hash, so reading in another language is
-        # another artifact.
+        # it (task-398). It stays the language of every attempt on this entry.
         parameters[artifact_options.LANGUAGE] = output_language
     return normalize_artifact_parameters(parameters)
 
 
 def request_parameters_of(record: MediaArtifactRecord) -> Dict[str, Any]:
-    """The ``parameters`` of a ``POST /artifacts`` that asks for this very entry again.
+    """Expose stored options in request vocabulary for inspection.
 
-    What a client sends to rerun a failed entry without asking its user anything
-    (task-535): the failed entry's key is the hash of what its request carried, so
-    a rerun has to carry the same thing to land on it (``retried``) rather than on
-    the entry at the defaults. It is the stored ``parameters`` read back in the
-    request's vocabulary, which differs in two places:
-
-    - the output **language** is sent only when the request pinned it. Otherwise it
-      is the reading language the service sets by itself, and echoing it would pin
-      it — a different id — the day the reader changes language;
-    - the **sources** a folder request chose are not in ``parameters`` at all
-      (task-532) but in ``selected_source_ids``, and go back as ``source_ids``.
-
-    An option is never at its default here, since none is stored, so an entry at
-    the defaults answers ``{}``.
+    Defaults and the implicit output language are omitted. Selected folder rows
+    appear as source_ids. Explicit retries read the record directly on the server.
     """
     stored = record.parameters or {}
     parameters: Dict[str, Any] = {
@@ -667,7 +568,7 @@ def get_generator_version(artifact_type: MediaArtifactType) -> str:
         # can show ~65 -- half of them came back clipped mid-word. v3 states the
         # lengths the card can actually render and drops the audience line, which
         # the owner found told them nothing the hook did not. Note that a bump
-        # regenerates nothing on its own: `build_artifact_id` deliberately excludes
+        # regenerates nothing on its own: `build_review_blurb_id` deliberately excludes
         # the generator version, so old blurbs have to be purged explicitly.
         MediaArtifactType.REVIEW_BLURB: "prompt-v3",
     }
@@ -697,8 +598,9 @@ def build_artifact_storage_key(
     *,
     artifact_id: str,
     artifact_type: MediaArtifactType,
+    generation_revision: int,
 ) -> str:
-    return f"{artifact_type.value}/{artifact_id}.json"
+    return f"{artifact_type.value}/{artifact_id}/{generation_revision}.json"
 
 
 def _allowed_artifact_types() -> set[MediaArtifactType]:
@@ -715,7 +617,7 @@ def _allowed_artifact_types() -> set[MediaArtifactType]:
     return allowed or set(GENERATABLE_ARTIFACT_TYPES)
 
 
-def build_artifact_id(
+def build_review_blurb_id(
     *,
     user_id: str,
     scope: ArtifactScope,
@@ -724,38 +626,7 @@ def build_artifact_id(
     parameters: Dict[str, Any],
     source_media_item_ids: List[str],
 ) -> str:
-    """Deterministic id of **one account's entry** — the whole of the reuse mechanism.
-
-    The key is *what this user asked for*: owner, scope, artifact type, parameters,
-    and the sorted set of sources behind it. Two requests from the same account
-    collide exactly when its existing entry already answers the second one, and that
-    collision is what makes reuse a single ``GetItem``.
-
-    Deliberately *not* in the hash:
-
-    - **Time.** There is no window and no expiry. The same request an hour or a
-      month later resolves to the same id, which is what "generate once per media"
-      means concretely.
-    - **``generator_version``.** It is recorded on the entry for traceability, but
-      keying on it would hand out one fresh generation per prompt bump — the exact
-      thing the owner's decision rules out. The corollary is deliberate: bumping a
-      prompt does **not** invalidate anything already generated.
-
-    ``parameters`` carries the generation options a request set away from their
-    defaults (task-531) — another length, another count, a focus — so a different
-    option set is a different entry, and a request at the defaults is the entry a
-    request with no options computes.
-
-    ``parameters`` also carries the output language: two languages are distinct
-    immutable entries. A media defaults to the language captured on its save;
-    folders default to the current account preference. An explicit request for
-    another language retains its ``language_pinned`` marker (task-533).
-
-    ``user_id`` stays in it, and stays first: this id is what the account's own
-    listing and detail routes address, so it must be unguessable from another
-    account's request. What is *generated* is keyed without it — see
-    :func:`build_shared_artifact_id`.
-    """
+    """Stable identity of one account's automatic preview; never a user request."""
     material = "|".join(
         [
             user_id,
@@ -769,7 +640,7 @@ def build_artifact_id(
     return f"art_{_sha256_text(material)[:32]}"
 
 
-def build_shared_artifact_id(
+def build_shared_review_blurb_id(
     *,
     scope: ArtifactScope,
     scope_id: str,
@@ -777,18 +648,7 @@ def build_shared_artifact_id(
     parameters: Dict[str, Any],
     source_media_item_ids: List[str],
 ) -> str:
-    """Deterministic id of **the generation itself** — the same material minus the owner.
-
-    Two accounts asking for the same type, in the same language, over the same
-    content land on this one id, which is what makes the second request cost no
-    provider call (task-394). Nothing else about the material changes, so the
-    properties of :func:`build_artifact_id` carry over unchanged: no time, no
-    ``generator_version``, and the language still part of the key.
-
-    The ``shared_`` prefix has no code behind it and is not parsed anywhere. It is
-    there so a row in the table can be told apart from an account's entry by looking
-    at it, which is what a purge or an incident investigation actually does.
-    """
+    """Stable shared preview identity, preserving same-language content reuse."""
     material = "|".join(
         [
             scope.value,
@@ -891,8 +751,8 @@ class PendingSource:
     """One source whose transcript is coming but is not there yet.
 
     Carries the same two ids as a resolved source, because both are needed and for
-    different things: ``content_id`` (the deduplicated ``media_key``) enters the
-    ``artifact_id`` hash, so a waiting entry keys on the sources it *expects*;
+    different things: ``content_id`` (the deduplicated ``media_key``) is stored for
+    direct comparison when a waiting entry's sources become readable;
     ``media_item_id`` is the library row a completion event resolves to, so a
     waiting entry can be matched against the media that just became readable.
     """
@@ -1385,8 +1245,7 @@ async def refresh_listed_artifact(
     ``scope-index`` projection carries neither ``awaiting_expires_at`` nor
     ``shared_artifact_id``, so the two things that can have happened since — its wait
     expired, or the generation it points at finished — are only readable on the base
-    row. That read is the price of the poll, and it is bounded: at most one in-flight
-    entry per artifact type per scope.
+    row. The extra reads are bounded by the requested history page size.
 
     Never fatal: a listing that cannot refresh an entry still shows the history.
     """
@@ -1400,6 +1259,9 @@ async def refresh_listed_artifact(
         ended = await _end_overdue_wait(record)
         if ended is not None:
             return ended
+        if record.awaiting_expires_at is None and record.artifact_type not in INTERNAL_ARTIFACT_TYPES:
+            await _bounded_internal_status(record)
+            return await media_artifacts.get_media_artifact_by_id(record.artifact_id) or record
         return await resolve_through_shared_generation(record)
     except Exception as exc:  # noqa: BLE001 - a listing must still answer
         logger.warning(
@@ -1422,11 +1284,9 @@ async def _end_overdue_wait(
         return None
     if not await media_artifacts.fail_awaiting_artifact(
         artifact_id=record.artifact_id,
+        generation_revision=record.generation_revision,
         error_code=ERROR_CODE_PREPARATION_TIMEOUT,
-        error_message=(
-            "The sources of this generation were still being prepared "
-            "when the request expired."
-        ),
+        error_message=("The sources of this generation were still being prepared when the request expired."),
     ):
         return None
     log_event(
@@ -1442,6 +1302,7 @@ async def _end_overdue_wait(
         update={
             "status": MediaArtifactStatus.FAILED,
             "error_code": ERROR_CODE_PREPARATION_TIMEOUT,
+            "retryable": True,
             "awaiting_expires_at": None,
             "completed_at": now,
             "updated_at": now,
@@ -1472,6 +1333,8 @@ async def resolve_through_shared_generation(
     and one with no ``shared_artifact_id`` at all *is* its own generation — every
     folder artifact, and every artifact over a user-uploaded file.
     """
+    if pointer.artifact_type != MediaArtifactType.REVIEW_BLURB:
+        return pointer
     if pointer.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
         return pointer
     if pointer.awaiting_expires_at is not None:
@@ -1666,11 +1529,10 @@ async def _bounded_internal_status(
     try:
         ended = await media_artifacts.fail_stalled_artifact(
             artifact_id=full.artifact_id,
+            generation_revision=full.generation_revision,
             stale_before=stale_before,
             error_code=ERROR_CODE_GENERATION_STALLED,
-            error_message=(
-                "This generation stopped reporting and its entry was ended."
-            ),
+            error_message=("This generation stopped reporting and its entry was ended."),
         )
         if not ended:
             # Something wrote to the entry between the read and the write: it is
@@ -1721,7 +1583,7 @@ async def get_media_artifact_record(
     record = await media_artifacts.get_media_artifact_by_id(artifact_id)
     if record is None or record.is_shared_generation:
         return None
-    return await resolve_through_shared_generation(record)
+    return await refresh_listed_artifact(record)
 
 
 # ---------------------------------------------------------------------------
@@ -1730,21 +1592,7 @@ async def get_media_artifact_record(
 
 
 class ArtifactGenerationOutcome(str, Enum):
-    """What a committed request actually did. Four cases, never conflated.
-
-    ``REUSED`` and ``COLLAPSED`` both mean "no generation was started", but they are
-    not the same fact and the caller must be able to tell them apart: one is a
-    generation that already covered these sources, the other is the second of two
-    taps racing on the same write.
-
-    Since task-394 the outcome no longer decides the debit. A reuse across accounts
-    still hands an artifact to an account that did not have one, so it is charged;
-    what the mutualization saves is the provider call, and that saving is the
-    operator's. Only two things consume nothing: an entry this account already holds,
-    and a collapse (the request that won the write is the one charged). The endpoint
-    reads that off ``ArtifactGenerationPlan.already_owned`` and off the debit's
-    idempotency token, not off this value.
-    """
+    """Internal planner outcomes; public user creation exposes only CREATED."""
 
     #: A new entry was written and a generation enqueued for it.
     CREATED = "created"
@@ -1758,20 +1606,7 @@ class ArtifactGenerationOutcome(str, Enum):
 
 
 class ArtifactGenerationPlan:
-    """Everything decided before anything is written.
-
-    Split in two on purpose: the quota must be checked *after* the ownership verdict
-    (an account already holding the entry it asks for must not be charged twice) and
-    *before* the write (a denied request leaves no entry). Planning and committing as
-    separate steps is what lets the endpoint express that order without an extra read
-    (task-269 §10.3).
-
-    Two records, because a media artifact is generated once per content and held once
-    per account (task-394): ``entry`` is the row this account gets, ``generation`` is
-    the row the worker generates into. For a folder artifact, and for an artifact over
-    a user-uploaded file, they are the *same object* — there is nothing to share, so
-    there is no indirection.
-    """
+    """A fresh user entry or the reuse decision for an internal preview."""
 
     def __init__(
         self,
@@ -1827,32 +1662,10 @@ async def plan_artifact_generation(
     resolution: ScopeResolution,
     options: Optional[Dict[str, str]] = None,
 ) -> ArtifactGenerationPlan:
-    """Decide whether anything has to be generated, and what has to be written.
+    """Plan a fresh user generation, or reuse the automatic review preview.
 
-    ``options`` is what :func:`resolve_request_options` returned — validated, with no
-    default left in it but the language — and the output language is settled here
-    against the reading language (:func:`_generation_parameters`, task-533). The
-    result is the entry's ``parameters``, so it is what both ids hash.
-
-    Two lookups, in this order, and both without any time bound — the ids are
-    derived from the sources alone, so what they find was generated over exactly
-    these sources, whenever that happened:
-
-    1. **the account's own entry.** Found and not failed, it *is* the answer: nothing
-       is written and nothing is charged.
-    2. **the shared generation for this content** (media scope, content not
-       account-scoped). Found and not failed, the account gets an entry pointing at
-       it — mirrored if it is already terminal, in flight if it is still running —
-       and the provider is not called a second time (task-394).
-
-    Only a *failed* row is not an answer, on either side, and it is reclaimed
-    instead.
-
-    A resolution that still has sources in preparation writes the account's entry
-    under the same id — the id hashes the sources the artifact *will* read, not the
-    ones already readable — and arms no generation at all (task-360). The wait is the
-    account's, so its deadline and its ``preparation`` snapshot live on its own row;
-    a shared generation is only ever armed once every source is readable.
+    Stored options describe this entry; user requests never compare options with
+    any previous request. Source identities are stored separately for resumption.
     """
     if not ARTIFACT_GENERATION_ENABLED:
         raise ArtifactGenerationDisabledError("Artifact generation is disabled.")
@@ -1894,16 +1707,48 @@ async def plan_artifact_generation(
         options=options, output_language=resolution.output_language
     )
 
+    if resolved_type != MediaArtifactType.REVIEW_BLURB:
+        now = _now_utc()
+        entry = MediaArtifactRecord(
+            artifact_id=f"art_{uuid4().hex}",
+            user_id=user_id,
+            scope=resolved_scope,
+            scope_id=scope_id,
+            scope_key=build_scope_key(user_id=user_id, scope=resolved_scope, scope_id=content_scope_id or scope_id),
+            artifact_type=resolved_type,
+            parameters=normalized_parameters,
+            generator_version=get_generator_version(resolved_type),
+            source_content_ids=resolution.expected_source_ids,
+            source_count=len(resolution.expected_source_ids),
+            sources=resolution.snapshot(),
+            selected_source_ids=resolution.selected_source_ids,
+            created_at=now,
+            updated_at=now,
+            awaiting_expires_at=now + timedelta(seconds=AWAITING_SOURCES_TIMEOUT_SECONDS) if resolution.is_awaiting else None,
+        )
+        if resolution.is_awaiting:
+            _log_awaiting(entry, resolution=resolution)
+        # Every request owns a fresh entry and its generation. Only the internal
+        # preview proceeds into the content-addressed reuse path below.
+        return ArtifactGenerationPlan(
+            entry=entry,
+            generation=entry,
+            awaits_sources=resolution.is_awaiting,
+            message=None
+            if resolution.is_awaiting
+            else build_generation_message(
+                record=entry,
+                resolution=resolution,
+                content_scope_id=content_scope_id or scope_id,
+            ),
+        )
+
     generator_version = get_generator_version(resolved_type)
     effective_scope_id = content_scope_id or scope_id
-    # Sources still in preparation are hashed in like readable ones: they are part
-    # of what this artifact will have read, and leaving them out would give the
-    # deferred request one id and the generation that follows another — two
-    # entries, two debits (task-360).
     source_ids = resolution.expected_source_ids
     now = _now_utc()
 
-    artifact_id = build_artifact_id(
+    artifact_id = build_review_blurb_id(
         user_id=user_id,
         scope=resolved_scope,
         scope_id=effective_scope_id,
@@ -1913,20 +1758,6 @@ async def plan_artifact_generation(
     )
 
     existing = await media_artifacts.get_media_artifact_by_id(artifact_id)
-    if existing is not None and _is_awaiting_overdue(existing, now=now):
-        # The wait behind this id ran out and nobody has ended it yet (the sweep
-        # runs on read, and this request may be the first read since). End it here
-        # so the request in hand starts a fresh wait instead of being answered by a
-        # dead one.
-        if await media_artifacts.fail_awaiting_artifact(
-            artifact_id=existing.artifact_id,
-            error_code=ERROR_CODE_PREPARATION_TIMEOUT,
-            error_message=(
-                "The sources of this generation were still being prepared when the "
-                "request expired."
-            ),
-        ):
-            existing = await media_artifacts.get_media_artifact_by_id(artifact_id)
     if existing is not None and existing.status != MediaArtifactStatus.FAILED:
         log_event(
             logger,
@@ -1958,23 +1789,11 @@ async def plan_artifact_generation(
         generator_version=generator_version,
         source_count=len(source_ids),
         sources=resolution.snapshot(),
-        # Not hashed — the selected sources already are, as `source_ids` above — but
-        # kept, so a resumed wait re-resolves the part of the folder that was asked
-        # for (task-532).
-        selected_source_ids=resolution.selected_source_ids,
         # A reclaimed entry keeps its original position in the history: the GSI
         # sorts on `created_at`, and a retry is the same generation attempted
         # again, not a later one.
         created_at=existing.created_at if existing is not None else now,
         updated_at=now,
-        # The deadline is stored rather than derived from `created_at`, which a
-        # reclaimed entry inherits from the attempt before: a retried request would
-        # otherwise be born already expired.
-        awaiting_expires_at=(
-            now + timedelta(seconds=AWAITING_SOURCES_TIMEOUT_SECONDS)
-            if resolution.is_awaiting
-            else None
-        ),
     )
     entry_reclaims_failed = existing is not None
 
@@ -1982,13 +1801,6 @@ async def plan_artifact_generation(
         scope=resolved_scope, content_scope_id=effective_scope_id
     ):
         # Nothing to share: this row *is* the generation, exactly as before task-394.
-        if resolution.is_awaiting:
-            _log_awaiting(entry, resolution=resolution)
-            return ArtifactGenerationPlan(
-                entry=entry,
-                entry_reclaims_failed=entry_reclaims_failed,
-                awaits_sources=True,
-            )
         return ArtifactGenerationPlan(
             entry=entry,
             entry_reclaims_failed=entry_reclaims_failed,
@@ -2000,7 +1812,7 @@ async def plan_artifact_generation(
             ),
         )
 
-    shared_id = build_shared_artifact_id(
+    shared_id = build_shared_review_blurb_id(
         scope=resolved_scope,
         scope_id=effective_scope_id,
         artifact_type=resolved_type,
@@ -2033,17 +1845,6 @@ async def plan_artifact_generation(
         )
         return ArtifactGenerationPlan(
             entry=served, entry_reclaims_failed=entry_reclaims_failed
-        )
-
-    if resolution.is_awaiting:
-        # No generation is armed while a source is still being prepared, so the
-        # account's own row carries the wait. Its expected ``shared_artifact_id`` is
-        # stored all the same: that is what the resume verifies before arming.
-        _log_awaiting(entry, resolution=resolution)
-        return ArtifactGenerationPlan(
-            entry=entry,
-            entry_reclaims_failed=entry_reclaims_failed,
-            awaits_sources=True,
         )
 
     shared = build_shared_generation_record(
@@ -2172,6 +1973,7 @@ def build_generation_message(
     effective_scope_id = content_scope_id
     return {
         "artifact_id": record.artifact_id,
+        "generation_revision": record.generation_revision,
         "user_id": record.user_id,
         "scope": record.scope.value,
         "scope_id": record.scope_id,
@@ -2217,30 +2019,11 @@ def build_generation_message(
 async def commit_artifact_generation(
     plan: ArtifactGenerationPlan,
 ) -> Tuple[MediaArtifactRecord, ArtifactGenerationOutcome]:
-    """Write what the plan decided, and enqueue the generation if it armed one.
+    """Persist and enqueue a new entry, or commit the internal preview reuse plan.
 
-    Two writes for a media artifact, in this order and for this reason: the **shared
-    generation** first, because its conditional write is the exactly-once gate for the
-    provider call — across accounts, not just across two taps of one thumb — and then
-    the account's **entry**, which is what the API hands back. Losing the first means
-    somebody else's request is generating what this one needs, so this one enqueues
-    nothing and its entry is adapted to what actually exists. Losing the second means
-    a concurrent identical request from the same account already wrote it.
-
-    The order also fails safe: an entry written with no generation behind it would be
-    a spinner nobody ends, whereas a generation written with no entry behind it is a
-    row the next request for that content adopts.
-
-    The outcome is the caller's contract. ``REUSED`` means no generation was armed
-    because one already covers these sources — the account still gains an entry, and
-    is still charged for it (task-394). ``COLLAPSED`` means this request lost the
-    write of its own entry to an identical concurrent one. ``RETRIED`` reruns under the
-    same entry id, so a caller keying its debit on ``artifact_id`` charges once, not
-    once per attempt.
-
-    A waiting plan writes the entry and stops there: it is ``queued``, it is what the
-    history and the tile read, and the generation is armed once its last source
-    becomes readable, from ``artifact_wait_service`` (task-360).
+    User entries are opaque and independent. Only the automatic preview can
+    arm/adopt a shared generation or reclaim its deterministic failed key.
+    A waiting user entry is persisted now and enqueued by the preparation hook.
     """
     if plan.owned is not None:
         # Already held. Resolved before being handed back, so a request repeated
@@ -2294,12 +2077,15 @@ async def commit_artifact_generation(
         except Exception as exc:
             await fail_artifact_generation(
                 artifact_id=generation.artifact_id,
+                generation_revision=generation.generation_revision,
                 error_message=f"artifact_enqueue_failed: {exc}",
                 error_code="INTERNAL_ERROR",
             )
             raise
 
     if not entry_written:
+        if entry.artifact_type != MediaArtifactType.REVIEW_BLURB:
+            raise ArtifactServiceError("A fresh artifact identifier was already stored")
         return await _collapsed_onto_existing(entry.artifact_id)
 
     if plan.generation is None:
@@ -2312,7 +2098,7 @@ async def commit_artifact_generation(
         if plan.entry_reclaims_failed
         else ArtifactGenerationOutcome.CREATED
     )
-    if not generation_armed:
+    if not generation_armed and not plan.awaits_sources:
         outcome = ArtifactGenerationOutcome.REUSED
     elif plan.message is not None and generation is not None:
         log_event(
@@ -2332,6 +2118,84 @@ async def commit_artifact_generation(
     return entry, outcome
 
 
+class ArtifactActionConflictError(ArtifactServiceError):
+    """The entry no longer permits the requested history action."""
+
+
+async def retry_artifact_generation(record: MediaArtifactRecord) -> MediaArtifactRecord:
+    """Retry this failed entry with its stored options and original sources."""
+    from media_summarizer.core.services import budget_guard
+
+    if not ARTIFACT_GENERATION_ENABLED:
+        raise ArtifactGenerationDisabledError("Artifact generation is disabled")
+    if record.status != MediaArtifactStatus.FAILED or not record.retryable:
+        raise ArtifactActionConflictError("This entry cannot be retried")
+    try:
+        await budget_guard.precheck(record.user_id)
+        resolution = await resolve_scope_sources(
+            user_id=record.user_id,
+            scope=record.scope,
+            scope_id=record.scope_id,
+            reading_language=record.parameters.get("language"),
+            source_ids=record.selected_source_ids,
+        )
+        enforce_scope_ceilings(resolution)
+        if sorted(record.source_content_ids) != sorted(resolution.expected_source_ids):
+            raise ArtifactScopeEmptyError("The original sources are no longer readable")
+    except budget_guard.BudgetRefusedError as exc:
+        record.error_code = exc.failure_code.value
+        record.error_params = exc.public_params()
+        record.retryable = exc.error_code == "budget_unavailable"
+        await media_artifacts.reclaim_failed_artifact(record, expected_revision=record.generation_revision)
+        raise
+    except (ArtifactParametersInvalidError, ArtifactScopeEmptyError, ArtifactScopeTooLargeError) as exc:
+        record.error_code = "ITEM_TOO_LARGE" if isinstance(exc, ArtifactScopeTooLargeError) else ERROR_CODE_SOURCES_CHANGED
+        record.retryable = False
+        await media_artifacts.reclaim_failed_artifact(record, expected_revision=record.generation_revision)
+        raise ArtifactActionConflictError("The original sources cannot be generated over") from exc
+
+    now = _now_utc()
+    retried = record.model_copy(
+        update={
+            "status": MediaArtifactStatus.QUEUED,
+            "generation_revision": record.generation_revision + 1,
+            "sources": resolution.snapshot(),
+            "source_count": len(resolution.expected_source_ids),
+            "updated_at": now,
+            "completed_at": None,
+            "lease_expires_at": None,
+            "awaiting_expires_at": now + timedelta(seconds=AWAITING_SOURCES_TIMEOUT_SECONDS) if resolution.is_awaiting else None,
+            "error_code": None,
+            "error_message": None,
+            "error_params": {},
+            "retryable": False,
+            "storage": None,
+            "generator_version": get_generator_version(record.artifact_type),
+        }
+    )
+    if not await media_artifacts.reclaim_failed_artifact(retried, expected_revision=record.generation_revision):
+        raise ArtifactActionConflictError("This entry changed before it could be retried")
+    if not resolution.is_awaiting:
+        try:
+            await sqs.send_message(
+                queue_name=get_artifact_queue(retried.artifact_type),
+                message_body=build_generation_message(
+                    record=retried,
+                    resolution=resolution,
+                    content_scope_id=content_scope_id_from_scope_key(record.scope_key),
+                ),
+            )
+        except Exception:
+            await fail_artifact_generation(
+                artifact_id=retried.artifact_id,
+                generation_revision=retried.generation_revision,
+                error_code="INTERNAL_ERROR",
+                error_message="Could not enqueue retry",
+            )
+            raise
+    return retried
+
+
 async def arm_shared_generation(
     *,
     record: MediaArtifactRecord,
@@ -2344,10 +2208,8 @@ async def arm_shared_generation(
     ``attribute_not_exists``, a reclaim on the row still being ``failed``. Whoever
     loses reads back the row that won and generates nothing.
 
-    Public because there are two ways to arm a generation and both must go through
-    this single gate: a request whose sources are readable straight away
-    (:func:`commit_artifact_generation`) and one resumed once its last source landed
-    (``artifact_wait_service``).
+    Used only by commit_artifact_generation for the automatic review preview.
+    User entries own independent generations and never pass through this gate.
     """
     if reclaims_failed:
         if await media_artifacts.reclaim_failed_artifact(record):
@@ -2457,7 +2319,7 @@ def enforce_scope_ceilings(resolution: ScopeResolution) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def claim_artifact_generation(artifact_id: str) -> Optional[MediaArtifactRecord]:
+async def claim_artifact_generation(artifact_id: str, generation_revision: int) -> Optional[MediaArtifactRecord]:
     """Take the generation lease, or return ``None`` to stand down.
 
     ``None`` means the entry is already terminal or another worker owns a live
@@ -2466,6 +2328,7 @@ async def claim_artifact_generation(artifact_id: str) -> Optional[MediaArtifactR
     """
     claimed = await media_artifacts.claim_artifact_generation(
         artifact_id=artifact_id,
+        generation_revision=generation_revision,
         lease_expires_at=_now_utc() + timedelta(seconds=GENERATION_LEASE_SECONDS),
     )
     if not claimed:
@@ -2492,11 +2355,14 @@ async def complete_artifact_generation(
     content: Dict[str, Any],
     title: Optional[str] = None,
     llm_usage: Optional[ArtifactLlmUsage] = None,
+    generation_revision: int,
 ) -> MediaArtifactRecord:
     """Store the content and seal the entry. It is never written again after this."""
     record = await media_artifacts.get_media_artifact_by_id(artifact_id)
     if not record:
         raise ArtifactNotFoundError(f"Artifact {artifact_id} not found.")
+    if record.generation_revision != generation_revision:
+        raise ArtifactServiceError("An earlier generation cannot complete a retried entry")
 
     payload_json = json.dumps(content, indent=2, ensure_ascii=False)
     payload_bytes = payload_json.encode("utf-8")
@@ -2505,6 +2371,7 @@ async def complete_artifact_generation(
         key=build_artifact_storage_key(
             artifact_id=artifact_id,
             artifact_type=record.artifact_type,
+            generation_revision=generation_revision,
         ),
         content_type="application/json",
         content_sha256=_sha256_bytes(payload_bytes),
@@ -2779,15 +2646,38 @@ async def fail_artifact_generation(
     artifact_id: str,
     error_message: str,
     error_code: Optional[str] = None,
+    error_params: Optional[Dict[str, Any]] = None,
+    retryable: Optional[bool] = None,
+    generation_revision: Optional[int] = None,
 ) -> Optional[MediaArtifactRecord]:
     record = await media_artifacts.get_media_artifact_by_id(artifact_id)
     if not record:
         return None
+    if generation_revision is not None and record.generation_revision != generation_revision:
+        return None
+    if record.status not in _IN_FLIGHT_ARTIFACT_STATUSES:
+        return record
 
     now = _now_utc()
     record.status = MediaArtifactStatus.FAILED
     effective_error_code = error_code or "INTERNAL_ERROR"
     record.error_code = effective_error_code
+    record.error_params = error_params or {}
+    record.retryable = (
+        retryable
+        if retryable is not None
+        else effective_error_code
+        in {
+            "INTERNAL_ERROR",
+            "VALIDATION_ERROR",
+            "BUDGET_UNAVAILABLE",
+            "PROVIDER_UNAVAILABLE",
+            "PROVIDER_TIMED_OUT",
+            "PROVIDER_RESULT_INVALID",
+            ERROR_CODE_GENERATION_STALLED,
+            ERROR_CODE_PREPARATION_TIMEOUT,
+        }
+    )
     record.error_message = error_message
     record.lease_expires_at = None
     # A failed entry is never waiting for a source any more: leaving the deadline on

@@ -75,7 +75,7 @@ import { t, useTranslation, type TranslationKey } from "../../src/i18n";
  * `pending` and `failed` are deliberately separate states, because the endpoint
  * separates them (task-328): an entry still being produced resolves on its own
  * and is worth coming back to, whereas a failed one is terminal — refreshing it
- * would ask forever, so that state offers a new generation instead.
+ * would ask forever, so that state offers explicit history actions.
  */
 type LoadState =
   | { status: "loading" }
@@ -92,6 +92,8 @@ type LoadState =
       status: "failed";
       /** What a new generation would name, or `null` when the API did not say. */
       regeneration: ArtifactRegenerationTarget | null;
+      deletion: ArtifactRegenerationTarget | null;
+      reason: string;
       /** Why the last regeneration attempt was refused, or `null`. */
       refusal: string | null;
     };
@@ -153,7 +155,7 @@ export default function ArtifactDetailScreen() {
         sourceTitle: pickSourceTitle(snapshot.data.content as ArtifactPayload),
       }
     : block?.kind === "failed"
-      ? { status: "failed", regeneration: block.regeneration, refusal }
+      ? { status: "failed", regeneration: block.regeneration, deletion: block.deletion, reason: block.reason, refusal }
       : block?.kind === "pending"
         ? { status: "pending", message: t("artifact.pendingBody") }
         : snapshot.error
@@ -208,8 +210,8 @@ export default function ArtifactDetailScreen() {
    * The refusal named the scope, the type and the parameters the entry was asked
    * with, so the request needs nothing this screen would have to guess, and it
    * does not go through the "Personnaliser" screen: it is the same request again
-   * (task-535). The backend reruns the entry under its own id and charges nothing
-   * extra, and it comes back `queued` — which is exactly the `pending` state, so
+   * (task-535). The backend reruns the entry under its own id and charges the new
+   * generation normally, and it comes back `queued` — which is exactly the `pending` state, so
    * the screen stops describing a failure the moment there is something running
    * again.
    */
@@ -219,12 +221,7 @@ export default function ArtifactDetailScreen() {
       regeneratingRef.current = true;
       setRegenerating(true);
       try {
-        await ArtifactService.generateArtifact(
-          target.scope,
-          target.scopeId,
-          target.artifactType,
-          target.parameters,
-        );
+        await ArtifactService.retryArtifact(target.artifactId);
         if (!mountedRef.current) return;
         setRefusal(null);
         void fetchContent();
@@ -240,6 +237,21 @@ export default function ArtifactDetailScreen() {
     },
     [isAuthenticated, fetchContent],
   );
+
+  const handleDelete = useCallback(async (target: ArtifactRegenerationTarget) => {
+    if (regeneratingRef.current) return;
+    regeneratingRef.current = true;
+    setRegenerating(true);
+    try {
+      await ArtifactService.deleteArtifact(target.artifactId, target.scope, target.scopeId);
+      if (mountedRef.current) router.back();
+    } catch (error) {
+      if (mountedRef.current) setRefusal(describeArtifactRefusal(error, { scope: target.scope }));
+    } finally {
+      regeneratingRef.current = false;
+      if (mountedRef.current) setRegenerating(false);
+    }
+  }, [router]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -318,9 +330,7 @@ export default function ArtifactDetailScreen() {
           </Pressable>
         </View>
       ) : state.status === "failed" ? (
-        // Terminal: no Refresh here on purpose. Reading this entry again can only
-        // ever answer the same refusal, so the only way forward is a new
-        // generation — which the API named the scope and the type of.
+        // Explicit actions operate on the failed history entry.
         <View style={styles.centered} testID="artifact-generation-failed">
           <Ionicons
             name="alert-circle"
@@ -332,7 +342,7 @@ export default function ArtifactDetailScreen() {
             {t("artifact.generationFailedTitle")}
           </Text>
           <Text style={styles.failedMessage}>
-            {t("artifact.generationFailedBody")}
+            {state.reason}
           </Text>
           {state.regeneration ? (
             <Pressable
@@ -359,10 +369,17 @@ export default function ArtifactDetailScreen() {
               <Text style={styles.refreshButtonText}>
                 {regenerating
                   ? t("artifact.regenerating")
-                  : t("artifact.regenerate")}
+                  : t("artifacts.row.retry")}
               </Text>
             </Pressable>
           ) : null}
+          {state.deletion && (
+            <Pressable style={styles.refreshButton} disabled={regenerating} accessibilityRole="button"
+              accessibilityState={{ disabled: regenerating }}
+              onPress={() => { if (state.deletion) void handleDelete(state.deletion); }}>
+              <Text style={styles.refreshButtonText}>{t("common.delete")}</Text>
+            </Pressable>
+          )}
           {state.refusal ? (
             <View
               style={styles.refusalBanner}

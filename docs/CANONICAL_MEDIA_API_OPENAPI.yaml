@@ -309,16 +309,11 @@ paths:
       operationId: createArtifact
       tags: [artifacts]
       description: >
-        Request a generation over a media or a folder. The per-media POST route is
-        gone (task-270). `parameters` carries the generation options (task-531)
-        and the output language (task-533); an option at its default is dropped
-        before the artifact id is computed, so a request spelling out every default
-        is the request without options. The language's default is the caller's
-        reading language: another language is pinned on the entry, which is then
-        never translated into the reading language, neither by the scope listing
-        nor by a content read. On a folder, `parameters.source_ids` limits the
-        generation to the chosen sources (task-532); a list naming every source of
-        the folder is the request without it.
+        Every submitted user request creates a fresh entry and a fresh generation,
+        even for identical options and sources. Two submitted taps generate and are
+        billed twice. Options and the resolved output language are stored on the
+        entry, never used to reuse a user generation. Only the backend's automatic
+        review_blurb retains same-language shared reuse and is not requestable here.
       requestBody:
         required: true
         content:
@@ -326,16 +321,8 @@ paths:
             schema:
               $ref: '#/components/schemas/ArtifactCreateRequest'
       responses:
-        '200':
-          description: >
-            An existing entry answers the request (generation_outcome reused or
-            collapsed); nothing was queued.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ArtifactCreateResponse'
         '202':
-          description: A generation was queued (generation_outcome created or retried).
+          description: A fresh entry was created, queued for generation or waiting for sources (generation_outcome created).
           content:
             application/json:
               schema:
@@ -370,19 +357,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CanonicalErrorResponse'
-  /api/media/{media_item_id}/artifacts:
     get:
-      operationId: listMediaArtifacts
+      operationId: listArtifacts
       tags: [artifacts]
       parameters:
-        - name: media_item_id
-          in: path
+        - name: scope
+          in: query
           required: true
-          schema:
-            type: string
+          schema: { type: string, enum: [media, folder] }
+        - name: scope_id
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
       responses:
         '200':
-          description: Artifact list for media item
+          description: Artifact history for the owned media or folder, newest first.
           content:
             application/json:
               schema:
@@ -420,6 +415,88 @@ paths:
           $ref: '#/components/responses/ArtifactNotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+    delete:
+      operationId: deleteArtifact
+      tags: [artifacts]
+      description: Delete the owner's failed entry from server history; internal previews are not addressable.
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Failed entry removed from history.
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '404':
+          $ref: '#/components/responses/ArtifactNotFound'
+        '409':
+          description: artifact_action_conflict; entry changed or is not failed.
+  /api/artifacts/{artifact_id}/retry:
+    post:
+      operationId: retryArtifact
+      tags: [artifacts]
+      description: >
+        Retry the owner's transient failed entry, with stored options and original
+        sources. Same id and creation date, new generation revision, normally billed.
+        No body. Concurrent or disallowed history actions return artifact_action_conflict.
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '202':
+          description: The same entry is queued or waiting for its sources.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactDetailResponse' }
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '404':
+          $ref: '#/components/responses/ArtifactNotFound'
+        '409':
+          description: artifact_action_conflict; entry no longer permits retry.
+        '403':
+          description: Beta budget exhausted or account not entitled.
+        '503':
+          description: Budget or generation service unavailable.
+  /api/artifacts/{artifact_id}/content:
+    get:
+      operationId: getArtifactContent
+      tags: [artifacts]
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Stored artifact envelope and immutable output language.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [artifact_id, artifact_type, scope, scope_id, status, language, content]
+                properties:
+                  artifact_id: { type: string }
+                  artifact_type: { type: string }
+                  scope: { type: string, enum: [media, folder] }
+                  scope_id: { type: string }
+                  status: { type: string, enum: [ready] }
+                  language: { type: [string, 'null'] }
+                  content: { type: object, additionalProperties: true }
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '404':
+          $ref: '#/components/responses/ArtifactNotFound'
+        '409':
+          description: >
+            artifact_not_ready while queued or generating. artifact_failed is terminal
+            until an explicit history action; it carries artifact_id, artifact_error_code,
+            retryable, error_params (including a budget reset date), scope, scope_id and
+            artifact_type. Clients never recreate the failed request through POST /api/artifacts.
 components:
   securitySchemes:
     BearerAuth:
@@ -838,14 +915,9 @@ components:
             scope=folder only, every artifact_type (task-532). The media_item_ids,
             among the folder's and its subfolders' media, the generation is limited
             to; absent or null means every source of the folder. The resolution is
-            restricted before any transcript is read, so the exclusions (a source
-            with no usable text), the waits (a source still being transcribed), the
-            ceilings (scope_too_large, scope_empty), the minutes checked and
-            debited (one per five sources) and the entry's source_count and sources
-            all apply to the chosen sources. Not stored in the entry's parameters and
-            not hashed a second time: the chosen sources enter the artifact id as its
-            source ids, so a list naming every source of the folder gives the same
-            artifact_id as a request without it. Refused with 422
+            restricted before any transcript is read. The selected sources are
+            stored separately for preparation and explicit retry. Every creation
+            still writes a new entry. Refused with 422
             invalid_artifact_parameters on scope=media (not_applicable), as an empty
             list, a non-string or repeated id (invalid_value), or when an id is not a
             media of this folder or its subfolders in the caller's library
@@ -859,16 +931,10 @@ components:
             it, pt, nl, ja, zh, ar, hi, or any tag that normalizes to one of them
             (EN-US is en); anything else is invalid_value. Defaults to
             the media save's captured reading language, or the current account
-            preference for a folder (task-545). Naming that default is the request
-            without the option (same artifact id, same shared generation).
-            Existing artifacts are never translated on a profile change, listing
-            or content read. Another language becomes the output language
-            and is pinned: the entry is stored with language_pinned true in its
-            parameters, both are hashed, and a pinned entry is never translated
-            into the reading language, neither when the scope is listed nor when
-            its content is read. Across accounts (task-394) it only ever serves a
-            request pinning the same language. language_pinned is set by the
-            service, never by a client (unknown_parameter).
+            preference for a folder (task-545). The resolved output language is
+            stored permanently; profile changes never translate existing artifacts.
+            An explicit other language has a server-owned language_pinned marker.
+            Neither language nor options deduplicates user requests.
     ArtifactCreateResponse:
       description: The entry the request answers, plus what the request did.
       allOf:
@@ -878,7 +944,7 @@ components:
           properties:
             generation_outcome:
               type: string
-              enum: [created, retried, reused, collapsed]
+              enum: [created]
     ArtifactRefusal:
       type: object
       required: [detail]
@@ -906,19 +972,35 @@ components:
             max_tokens: { type: integer, description: scope_too_large only. }
     ArtifactListResponse:
       type: object
-      required: [media_item_id, items, count]
+      required: [scope, scope_id, artifacts]
       properties:
-        media_item_id: { type: string }
-        items:
+        scope: { type: string, enum: [media, folder] }
+        scope_id: { type: string }
+        artifacts:
           type: array
           items:
-            $ref: '#/components/schemas/MediaArtifactContract'
-        count:
-          type: integer
-          minimum: 0
+            $ref: '#/components/schemas/ArtifactSummaryResponse'
+        next_cursor: { type: [string, 'null'] }
+    ArtifactSummaryResponse:
+      type: object
+      required: [artifact_id, artifact_type, status, source_count, created_at, error_params, retryable]
+      properties:
+        artifact_id: { type: string }
+        artifact_type: { type: string, enum: [summary_short, quiz, notes, flashcards] }
+        status: { type: string, enum: [queued, generating, ready, failed] }
+        title: { type: [string, 'null'] }
+        source_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        error_code: { type: [string, 'null'] }
+        error_params:
+          type: object
+          additionalProperties: true
+          description: Typed failure figures, including period_end for budget exhaustion.
+        retryable: { type: boolean, description: Only transient failed entries permit retry. }
     ArtifactDetailResponse:
       type: object
-      required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, request_parameters]
+      required: [artifact_id, artifact_type, status, source_count, created_at, scope, scope_id, sources, request_parameters, error_params, retryable]
       properties:
         artifact_id: { type: string }
         artifact_type:
@@ -932,6 +1014,8 @@ components:
         created_at: { type: string }
         completed_at: { type: [string, 'null'] }
         error_code: { type: [string, 'null'] }
+        error_params: { type: object, additionalProperties: true }
+        retryable: { type: boolean }
         scope:
           type: string
           enum: [media, folder]
@@ -950,14 +1034,7 @@ components:
         s3_key: { type: [string, 'null'] }
         request_parameters:
           $ref: '#/components/schemas/ArtifactGenerationOptions'
-          description: >
-            The parameters of a POST /api/artifacts that asks for this entry again
-            (task-535): its options, its language only when the request pinned one,
-            and the sources a folder request chose as source_ids. Empty for an entry
-            at the defaults. A client sends it to rerun a failed entry unchanged; the
-            reading language is never echoed, since sending it back would pin it.
-            Also carried by the 409 artifact_failed refusal of
-            GET /api/artifacts/{artifact_id}/content.
+          description: Stored request options for inspection; explicit retries read them on the server.
     ProcessingJobContract:
       type: object
       required: [job_id, status, progress, created_at, updated_at]

@@ -1,7 +1,7 @@
 """Purge the v1 ``review_blurb`` artifacts so v2 can be generated in their place.
 
 Bumping the ``review_blurb`` generator version regenerates **nothing**:
-``artifact_service.build_artifact_id`` deliberately keeps the generator version out
+``artifact_service.build_review_blurb_id`` deliberately keeps the generator version out
 of the hash, precisely so that a prompt bump does not hand out a fresh generation
 per media. The corollary is that a change of *shape* — v1's prose paragraph to v2's
 triage card — has to be undone by hand before the backfill can do anything.

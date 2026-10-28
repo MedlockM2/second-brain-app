@@ -3,10 +3,11 @@ id: TASK-562
 title: >-
   Générer un nouvel artefact à chaque demande, sans réutilisation, aperçu
   excepté
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-10-28 15:52'
-updated_date: '2026-10-28 16:22'
+updated_date: '2026-10-28 18:15'
 labels:
   - backend
   - feature
@@ -44,10 +45,32 @@ Le comportement réel (une nouvelle génération et un débit à chaque demande)
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Une demande d'artefact (hors review_blurb) crée toujours une nouvelle entrée et met en file une nouvelle génération ; aucun chemin ne renvoie une entrée existante du compte ni une génération d'un autre compte
-- [ ] #2 review_blurb conserve sa réutilisation actuelle, sans changement de comportement
-- [ ] #3 La reprise d'une demande en attente de ses sources fonctionne sans recalcul d'identifiant ; le code de mutualisation et de reprise en place devenu mort est supprimé
-- [ ] #4 Contrat, OpenAPI, types packages/core et clients mobile et web ne présentent plus reused, retried ni collapsed pour ces types ; parité web dans le même commit
-- [ ] #5 ruff et mypy passent sur le backend modifié, et les vérifications TypeScript et lint sur packages/core, mobile et web ; aucun test automatisé ajouté
-- [ ] #6 Un artefact en échec s'affiche sur sa ligne avec icône, texte et raison ; Relancer (même entrée, mêmes options) n'est proposé que pour un échec passager, Supprimer toujours ; supprimer retire l'entrée côté serveur ; parité mobile et web
+- [x] #1 Une demande d'artefact (hors review_blurb) crée toujours une nouvelle entrée et met en file une nouvelle génération ; aucun chemin ne renvoie une entrée existante du compte ni une génération d'un autre compte
+- [x] #2 review_blurb conserve sa réutilisation actuelle, sans changement de comportement
+- [x] #3 La reprise d'une demande en attente de ses sources fonctionne sans recalcul d'identifiant ; le code de mutualisation et de reprise en place devenu mort est supprimé
+- [x] #4 Contrat, OpenAPI, types packages/core et clients mobile et web ne présentent plus reused, retried ni collapsed pour ces types ; parité web dans le même commit
+- [x] #5 ruff et mypy passent sur le backend modifié, et les vérifications TypeScript et lint sur packages/core, mobile et web ; aucun test automatisé ajouté
+- [x] #6 Un artefact en échec s'affiche sur sa ligne avec icône, texte et raison ; Relancer (même entrée, mêmes options) n'est proposé que pour un échec passager, Supprimer toujours ; supprimer retire l'entrée côté serveur ; parité mobile et web
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Séparer l’identité opaque de chaque création utilisateur de l’identité déterministe réservée à review_blurb ; retirer la mutualisation et la comparaison d’options pour les autres types.
+2. Reprendre les générations en attente sous leur entrée existante ; ajouter les actions canoniques de relance conditionnelle et suppression, avec droits/causes d’échec typés.
+3. Rendre les lignes d’échec et leurs actions en place sur mobile et web, mettre à jour les contrats/types/catalogues, vérifier Ruff/mypy/TypeScript/lint puis committer.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Chaque création utilisateur porte un UUID indépendant des options et possède sa génération. La mutualisation, les identités déterministes et la reprise automatique des clés en échec restent réservées à review_blurb ; leur recette est inchangée. La reprise des sources compare directement les identités de contenu enregistrées.
+
+Les actions canoniques POST /api/artifacts/{id}/retry et DELETE /api/artifacts/{id} contrôlent le propriétaire, le statut et la révision. Relancer conserve identifiant, options, sources et created_at, avec une nouvelle révision et une opération budgétaire distincte. Les messages, claims, transitions finales et clés S3 portent la révision pour écarter un ancien worker. La suppression conditionnelle retire le seul historique en échec et ne peut pas supprimer une relance concurrente.
+
+Mobile et web affichent les échecs sur leur ligne, avec icône, texte, raison traduite et erreur éventuelle de l’action en place, sans toast. Relancer est conditionné par retryable ; Supprimer est toujours proposé pour un échec. Budget épuisé et date de remise à zéro, corpus trop grand et sources illisibles interdisent la relance. Même règle dans les écrans de détail. Contrat, OpenAPI et types partagés limitent la création à created ; onze catalogues mis à jour, index scope-index étendu aux causes et actions.
+
+Validation : Ruff et mypy sur media_summarizer (217 fichiers), TypeScript et ESLint sur mobile, packages/core et web ; seul avertissement préexistant purchaseService.ts:136. Terraform validate dev passe. OpenAPI YAML lu et 112 références locales résolues, six opérations canoniques documentées. Aucun test automatisé ajouté ni application exécutée localement.
+
+PRÉREQUISITE OWNER : après fusion/push et déploiement du backend et de la projection GSI, constater sur dev les générations et débits distincts, la relance même entrée et la suppression. Cette vérification déployée ne constitue pas un AC réalisable depuis le worktree.
+<!-- SECTION:NOTES:END -->

@@ -262,6 +262,8 @@ resource "aws_dynamodb_table" "media_artifacts_v1" {
       "source_count",
       "completed_at",
       "error_code",
+      "error_params",
+      "retryable",
     ]
   }
 

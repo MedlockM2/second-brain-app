@@ -1,3 +1,6 @@
+import { useRef, useState } from "react";
+import { artifactFailureMessage } from "@media-summarizer/core/artifacts/failure";
+import { describeArtifactRefusal } from "@media-summarizer/core/artifacts/refusal";
 import { tCount } from "@media-summarizer/core/i18n/runtime";
 import { getRelativeTime } from "@media-summarizer/core/i18n/relativeTime";
 import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
@@ -19,22 +22,35 @@ import { artifactFormatOf } from "./artifactFormats";
  * snapshot, and only a folder says it — a media item is a single source. A
  * click opens it in the pane.
  *
- * A **failed** entry stays in the list, says so in the error colour, and a
- * click asks for the same generation again: the backend reruns a failed entry
- * over the same sources under the same id (`generation_outcome: "retried"`).
+ * A failed entry keeps its place, explains the cause and offers explicit
+ * history actions. Only transient failures offer Retry.
  */
 export function ArtifactRow({
   artifact,
   showSourceCount,
   onOpen,
   onRetry,
+  onDelete,
 }: {
   artifact: ArtifactSummary;
   /** Whether the meta line names the number of sources: a folder's entries do. */
   showSourceCount: boolean;
   onOpen: (artifact: ArtifactSummary) => void;
-  onRetry: (type: ArtifactType) => void;
+  onRetry: (artifact: ArtifactSummary) => Promise<void>;
+  onDelete: (artifact: ArtifactSummary) => Promise<void>;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const act = async (action: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setActionError(null);
+    try { await action(); }
+    catch (error) { setActionError(describeArtifactRefusal(error)); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
   const { t } = useI18n();
   const format = artifactFormatOf(artifact.artifact_type);
   const typeLabel = format ? t(format.labelKey) : artifact.artifact_type;
@@ -46,20 +62,21 @@ export function ArtifactRow({
 
   if (artifact.status === "failed") {
     return (
-      <button
-        type="button"
-        className="art-row err"
-        aria-label={t("artifacts.row.a11yRetry", { type: typeLabel })}
-        onClick={() => onRetry(artifact.artifact_type)}
-      >
+      <div className="art-row err">
         <Icon name="alert-circle-outline" size={24} />
-        <span className="grow">
-          {/* A failed entry has no title of its own: the model never wrote one. */}
-          <span className="t">{typeLabel}</span>
+        <div className="grow">
+          <span className="t">{artifact.title?.trim() || typeLabel}</span>
           <span className="m">{t("artifacts.row.failed")}</span>
-        </span>
-        {chevron}
-      </button>
+          {artifactFailureMessage(artifact) !== t("artifacts.row.failed") && <p className="small">{artifactFailureMessage(artifact)}</p>}
+          <div className="art-actions">
+            {artifact.retryable && <button type="button" className="btn tonal" disabled={busy}
+              onClick={() => void act(() => onRetry(artifact))}>{t("artifacts.row.retry")}</button>}
+            <button type="button" className="btn ghost" disabled={busy}
+              onClick={() => void act(() => onDelete(artifact))}>{t("common.delete")}</button>
+          </div>
+          {actionError && <p className="small" style={{ color: "var(--error)" }} role="alert">{actionError}</p>}
+        </div>
+      </div>
     );
   }
 

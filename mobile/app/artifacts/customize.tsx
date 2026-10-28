@@ -202,7 +202,6 @@ function CustomizeForm({
 }: CustomizeFormProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { readingLanguage } = useUserPreferences();
   const mountedRef = useRef(true);
@@ -286,7 +285,7 @@ function CustomizeForm({
     Keyboard.dismiss();
 
     try {
-      const result = await ArtifactService.generateArtifact(
+      await ArtifactService.generateArtifact(
         scope,
         scopeId,
         format.type,
@@ -295,16 +294,6 @@ function CustomizeForm({
       // Closed meanwhile: the entry is in the list already, and opening an
       // artifact the user walked away from would be a surprise.
       if (!mountedRef.current) return;
-      if (result.generation_outcome === "reused") {
-        const artifactPath = `/artifacts/${result.artifact_id}` as const;
-        if (router.canGoBack()) {
-          router.back();
-          router.push(artifactPath);
-        } else {
-          router.replace(artifactPath);
-        }
-        return;
-      }
       // Still busy on purpose: the screen is leaving, and the button should not
       // flash back to "Generate" under the dismiss animation.
       onClose();
@@ -324,7 +313,6 @@ function CustomizeForm({
     scope,
     scopeId,
     format.type,
-    router,
     onClose,
   ]);
 

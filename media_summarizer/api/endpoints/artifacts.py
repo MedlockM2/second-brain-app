@@ -13,19 +13,19 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
-from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArtifactStatus
-from media_summarizer.core.services import beta_budget, budget_guard, engagement_service
+from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArtifactRecord, MediaArtifactStatus
+from media_summarizer.core.services import budget_guard, engagement_service
 from media_summarizer.core.services.artifact_service import (
     INTERNAL_ARTIFACT_TYPES,
+    ArtifactActionConflictError,
     ArtifactGenerationDisabledError,
-    ArtifactGenerationOutcome,
     ArtifactParametersInvalidError,
     ArtifactScopeEmptyError,
     ArtifactScopeTooLargeError,
@@ -39,9 +39,10 @@ from media_summarizer.core.services.artifact_service import (
     resolve_request_options,
     resolve_scope_sources,
     resolve_source_selection,
+    retry_artifact_generation,
 )
 from media_summarizer.core.services.budget_guard import BudgetRefusedError
-from media_summarizer.utils import s3
+from media_summarizer.utils import media_artifacts, s3
 from media_summarizer.utils.language_codes import normalize_language_code
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
 
@@ -66,16 +67,6 @@ CONTENT_FAILED_ERROR_CODE = "artifact_failed"
 #: reading language, task-533), a selected source that is not in the folder
 #: (task-532) — so a client tells its own bug apart from a contract it misread.
 INVALID_PARAMETERS_ERROR_CODE = "invalid_artifact_parameters"
-
-# One message per outcome: a log line that says "queued" for a reuse would hide
-# exactly the fact this endpoint is now built around.
-_CREATE_LOG_MESSAGES = {
-    ArtifactGenerationOutcome.CREATED: "Artifact generation queued",
-    ArtifactGenerationOutcome.RETRIED: "Failed artifact reclaimed and requeued",
-    ArtifactGenerationOutcome.REUSED: "Existing artifact reused, nothing queued",
-    ArtifactGenerationOutcome.COLLAPSED: "Concurrent identical request collapsed",
-}
-
 
 class ArtifactCreateRequest(BaseModel):
     scope: str = Field(..., description="Scope of the generation: 'media' or 'folder'")
@@ -140,6 +131,8 @@ class ArtifactSummaryResponse(BaseModel):
     created_at: str
     completed_at: Optional[str] = None
     error_code: Optional[str] = None
+    error_params: Dict[str, Any] = Field(default_factory=dict)
+    retryable: bool = False
 
 
 class ArtifactDetailResponse(ArtifactSummaryResponse):
@@ -149,34 +142,14 @@ class ArtifactDetailResponse(ArtifactSummaryResponse):
     s3_key: Optional[str] = None
     request_parameters: Dict[str, Any] = Field(
         default_factory=dict,
-        description=(
-            "The 'parameters' of a POST /api/artifacts that asks for this entry "
-            "again (task-535): its options, its language when the request pinned "
-            "one, its chosen sources as 'source_ids'. Empty for an entry at the "
-            "defaults. What a client sends to rerun a failed entry unchanged."
-        ),
+        description="Stored generation options; retries use them on the server.",
     )
 
 
 class ArtifactCreateResponse(ArtifactDetailResponse):
-    """The answer to a generation request, plus what the request actually did.
+    """Every user creation writes a fresh entry and requests a fresh generation."""
 
-    ``generation_outcome`` exists because the four cases are not interchangeable
-    and a client that only saw the entry could not tell them apart:
-
-    - ``created`` — a generation was queued for these sources.
-    - ``retried`` — a previously failed entry for the same sources was rerun.
-    - ``reused`` — a generation already covered these sources, so nothing was
-      queued. The normal answer for a second request on a media item, for a folder
-      whose sources have not changed, and — since task-394 — for the first request
-      of an account over content another account already generated this artifact
-      for. It says nothing about the allowance: only an entry this account already
-      held consumes none of it.
-    - ``collapsed`` — two concurrent taps, and this one lost the write; the entry
-      returned is the one already in flight.
-    """
-
-    generation_outcome: str
+    generation_outcome: Literal["created"] = "created"
 
 
 class ArtifactListResponse(BaseModel):
@@ -220,6 +193,8 @@ def _summary(record: Any) -> ArtifactSummaryResponse:
         created_at=record.created_at.isoformat(),
         completed_at=record.completed_at.isoformat() if record.completed_at else None,
         error_code=record.error_code,
+        error_params=record.error_params,
+        retryable=record.retryable,
     )
 
 
@@ -276,28 +251,9 @@ async def _assert_scope_owned(
 async def create_artifact(
     payload: ArtifactCreateRequest,
     request: Request,
-    response: Response,
     current_user: AuthUser = Depends(get_current_user),
 ):
-    """Request a generation over a scope.
-
-    Not every request generates: an artifact already covering the same set of
-    sources answers as-is (task-316 owner decision), which is why a media item
-    yields one artifact per type for good and a folder only regenerates once
-    its sources have changed. Since task-394 that also holds *across accounts* for a
-    media scope — the second account to ask for the same type in the same language
-    over the same content is served by the generation the first one paid for.
-
-    What decides the debit is therefore not whether a generation ran, but whether
-    this account gains an entry it did not have. It is charged for an artifact
-    another account's generation answers: the request was honoured, the account now
-    holds the artifact, and the avoided provider call is the operator's saving rather
-    than free allowance. Only an entry the account *already holds* consumes nothing.
-
-    The order of the checks still matters, for the other reason: a denied request must
-    leave no entry, so the quota is checked after planning and before the write
-    (task-269 §10.3).
-    """
+    """Create a fresh entry; each submitted request generates and is billed separately."""
     scope = _parse_scope((payload.scope or "").strip().lower())
     artifact_type = (payload.artifact_type or "").strip().lower()
     scope_id = (payload.scope_id or "").strip()
@@ -343,40 +299,15 @@ async def create_artifact(
             options=options,
         )
 
-        # The budget comes after planning and before the write: an account already
-        # holding this entry asks for nothing new, and a refused request must
-        # leave no entry behind. This only refuses a month with nothing left: the
-        # generation is admitted by the worker, from the request it is about to
-        # send (task-549, rules 1 and 4 of the task-547 decision).
-        if not plan.already_owned:
-            try:
-                await budget_guard.precheck(current_user.id)
-            except BudgetRefusedError as refusal:
-                log_event(
-                    logger,
-                    logging.WARNING,
-                    "artifact.create.budget_refused",
-                    "Artifact generation refused by the beta budget",
-                    error_code=refusal.error_code,
-                )
-                raise HTTPException(
-                    status_code=refusal.http_status,
-                    detail=refusal.error_body(),
-                    headers=refusal.headers(),
-                ) from refusal
-
-        record, outcome = await commit_artifact_generation(plan)
-
-        if outcome in (
-            ArtifactGenerationOutcome.REUSED,
-            ArtifactGenerationOutcome.COLLAPSED,
-        ):
-            # Nothing was queued, so nothing is charged: the generation's provider
-            # call is what the budget pays for, and a reuse makes none (R.2).
-            response.status_code = status.HTTP_200_OK
-            await beta_budget.observe(
-                current_user.id, outcome="reused", operation_id=record.artifact_id, components=["generation"],
-            )
+        try:
+            await budget_guard.precheck(current_user.id)
+        except BudgetRefusedError as refusal:
+            raise HTTPException(
+                status_code=refusal.http_status,
+                detail=refusal.error_body(),
+                headers=refusal.headers(),
+            ) from refusal
+        record, _ = await commit_artifact_generation(plan)
 
         # E1 of task-303: launching a generation is the strongest intent signal the
         # app has, and the wait is precisely when the user needs a way back — so the
@@ -396,15 +327,15 @@ async def create_artifact(
             logger,
             logging.INFO,
             "artifact.create.requested",
-            _CREATE_LOG_MESSAGES[outcome],
+            "Artifact generation requested",
             artifact_id=record.artifact_id,
             artifact_type=artifact_type,
             source_count=record.source_count,
-            generation_outcome=outcome.value,
+            generation_outcome="created",
         )
         return ArtifactCreateResponse(
             **_detail(record).model_dump(),
-            generation_outcome=outcome.value,
+            generation_outcome="created",
         )
 
     except ArtifactTypeNotEnabledError as exc:
@@ -495,6 +426,39 @@ async def create_artifact(
         )
     finally:
         reset_log_context(token)
+
+
+async def _owned_user_artifact(artifact_id: str, user_id: str) -> MediaArtifactRecord:
+    record = await get_media_artifact_record(artifact_id)
+    if record is None or record.user_id != user_id or record.artifact_type in INTERNAL_ARTIFACT_TYPES:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+    await _assert_scope_owned(scope=record.scope, scope_id=record.scope_id, user_id=user_id)
+    return record
+
+
+@router.post("/artifacts/{artifact_id}/retry", response_model=ArtifactDetailResponse, status_code=202)
+async def retry_artifact(artifact_id: str, current_user: AuthUser = Depends(get_current_user)):
+    record = await _owned_user_artifact(artifact_id, current_user.id)
+    try:
+        return _detail(await retry_artifact_generation(record))
+    except BudgetRefusedError as refusal:
+        raise HTTPException(
+            status_code=refusal.http_status,
+            detail=refusal.error_body(),
+            headers=refusal.headers(),
+        ) from refusal
+    except ArtifactActionConflictError as exc:
+        raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"}) from exc
+    except ArtifactGenerationDisabledError as exc:
+        raise HTTPException(status_code=503, detail="Artifact generation is currently disabled") from exc
+
+
+@router.delete("/artifacts/{artifact_id}", status_code=204, response_class=Response)
+async def delete_artifact(artifact_id: str, current_user: AuthUser = Depends(get_current_user)):
+    record = await _owned_user_artifact(artifact_id, current_user.id)
+    if record.status != MediaArtifactStatus.FAILED or not await media_artifacts.delete_failed_artifact(record):
+        raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"})
+    return Response(status_code=204)
 
 
 @router.get("/artifacts", response_model=ArtifactListResponse)
@@ -663,24 +627,17 @@ async def get_artifact_content(
             )
 
         if record.status is MediaArtifactStatus.FAILED:
-            # Terminal, and said as such: nothing is running any more, so telling
-            # the caller to come back once generation completes would describe a
-            # completion that will never happen and keep a client polling an entry
-            # that can only ever answer this. What a new generation needs travels
-            # with the refusal, so the failure state can offer one without a
-            # second round-trip: the scope, the type, and the parameters the entry
-            # was asked with, so that the new request reruns this very entry
-            # instead of the one at the defaults (task-535).
+            # A terminal content refusal carries the explicit history actions' data.
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "error_code": CONTENT_FAILED_ERROR_CODE,
-                    "message": (
-                        "Artifact generation failed and will not resume on its "
-                        "own. Request a new generation for this scope and type."
-                    ),
+                    "message": ("Artifact generation failed and will not resume on its own. Use its history actions."),
                     "status": record.status.value,
                     "artifact_error_code": record.error_code,
+                    "error_params": record.error_params,
+                    "retryable": record.retryable,
+                    "artifact_id": record.artifact_id,
                     "scope": record.scope.value,
                     "scope_id": record.scope_id,
                     "artifact_type": record.artifact_type.value,
