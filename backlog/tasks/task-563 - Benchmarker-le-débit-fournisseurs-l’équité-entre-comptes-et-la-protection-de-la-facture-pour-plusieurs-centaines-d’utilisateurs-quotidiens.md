@@ -3,7 +3,7 @@ id: TASK-563
 title: >-
   Benchmarker le débit fournisseurs, l’équité entre comptes et la protection de
   la facture pour plusieurs centaines d’utilisateurs quotidiens
-status: In Progress
+status: To Do
 assignee:
   - '@codex'
 created_date: '2026-10-28 16:59'
@@ -122,3 +122,9 @@ Scénarios 300/500/1000 DAU : consultation majoritaire, pics de dix minutes, pre
 
 Validation documentaire : front-matter pending, six critères couverts avec table de traçabilité, références locales résolues, CSV de trois scénarios et vingt colonnes, diff sans erreur d’espacement. Aucun code applicatif, compte, paiement, déploiement ou test modifié/exécuté. Le benchmark reste en attente de la décision de l’owner dans le README ; les trois implémentations ne sont pas débloquées.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Recherche livrée et fusionnée dans main : README de décision et CSV chiffré. Les six critères documentaires sont satisfaits. owner_decision reste pending : attente de validation owner, sans démarrage de TASK-564/565/566. Aucun code applicatif, compte ou paiement changé.
+<!-- SECTION:FINAL_SUMMARY:END -->
