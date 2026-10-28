@@ -58,6 +58,14 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-6-luna")
 LLM_REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "medium")
 LLM_MAX_COMPLETION_TOKENS = int(os.environ.get("LLM_MAX_COMPLETION_TOKENS", "32000"))
 
+#: The model's own limits, from the model page (re-read 2026-10-28): a 1 050 000
+#: token window, of which at most 128 000 are output, reasoning included. The beta
+#: budget (task-549) reads them: no output ceiling sent may exceed the first, and a
+#: request whose measured input is above the second is refused as too large rather
+#: than sent. Overridable with the model, never per call.
+LLM_MODEL_MAX_OUTPUT_TOKENS = int(os.environ.get("LLM_MODEL_MAX_OUTPUT_TOKENS", "128000"))
+LLM_MODEL_MAX_INPUT_TOKENS = int(os.environ.get("LLM_MODEL_MAX_INPUT_TOKENS", "922000"))
+
 
 def chat_completion_parameters() -> Dict[str, Any]:
     """The request fields that follow from the model choice, for ``/chat/completions``.

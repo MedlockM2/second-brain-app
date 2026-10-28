@@ -24,6 +24,7 @@ from media_summarizer.api.models.podcast_models import (
 from media_summarizer.api.rate_limit import get_limit_from_env, limiter
 from media_summarizer.core.media_ingestion.title_derivation import derive_stored_title
 from media_summarizer.core.models.auth import AuthUser
+from media_summarizer.core.services.budget_guard import BudgetRefusedError
 from media_summarizer.core.services.episode_submission import submit_episode_for_user
 from media_summarizer.utils import database_async, podcast_index
 from media_summarizer.utils.database_async import get_db
@@ -307,26 +308,18 @@ async def submit_episode_for_processing(
             feed_url=feed_rss_url,
         )
 
-        # Gérer le cas où l'utilisateur n'a pas assez de minutes
-        if (
-            result.get("status") == "skipped"
-            and result.get("reason") == "insufficient_credits"
-        ):
-            # The code, not the submission's own `message`: that field is whatever
-            # the consumption gate wrote, it was French, and the app has one
-            # sentence for an exhausted allowance already (task-397).
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail={
-                    "error_code": "INSUFFICIENT_MINUTES",
-                    "message": "Not enough minutes left to process this episode",
-                },
-            )
-
         return EpisodeSelectionResponse(**result)
 
     except HTTPException:
         raise
+    except BudgetRefusedError as refusal:
+        # The beta budget's typed refusal and its public figures: the app words
+        # the code in the reader's language (task-397, TASK-550).
+        raise HTTPException(
+            status_code=refusal.http_status,
+            detail=refusal.error_body(),
+            headers=refusal.headers(),
+        ) from refusal
     except Exception as e:
         logger.error(f"Error submitting episode: {str(e)}")
         raise HTTPException(

@@ -11,8 +11,9 @@ of docs/research/task-430-chatbot-architecture/README.md). What lives here:
 - **the reading of a refusal**: one parse of the provider's answer through
   ``llm_failure.classify_llm_failure``, raised as ``LlmProviderRefusedError`` when
   the provider declined the call;
-- **the usage and its cost**: ``read_usage`` prices the provider's usage block,
-  ``record_observed_cost`` stores it against the account's period.
+- **the usage**: ``read_usage`` reads the provider's usage block. What a call is
+  charged is not decided here: every caller sends under an attempt of the beta
+  budget and settles it on this usage (``budget_guard``, task-549).
 
 Two modes. ``complete`` buffers the answer: it is what every artifact, the review
 blurb and the re-translation use, and its request is byte-for-byte the one the
@@ -41,7 +42,6 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 import aiohttp
 
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
-from media_summarizer.core.services import quota_enforcer
 from media_summarizer.core.services.llm_config import (
     LLM_MODEL,
     chat_completion_parameters,
@@ -177,28 +177,6 @@ def estimate_usage(
             completion_tokens=completion_tokens,
         ),
         usage_estimated=True,
-    )
-
-
-async def record_observed_cost(
-    user_id: Optional[str],
-    usage: ArtifactLlmUsage,
-    *,
-    idempotency_token: str,
-) -> None:
-    """Store the measured LLM cost against the period, for observability only.
-
-    Nothing gates on this figure -- the minute allowance is what bounds spend --
-    but recording it is how the owner can compare the model's assumptions with the
-    real invoice. ``idempotency_token`` names the unit of work (an artifact, a
-    chat attempt) so a redelivery cannot record twice.
-    """
-    if not user_id or usage.cost_eur <= 0:
-        return
-    await quota_enforcer.record_observed_cost(
-        user_id,
-        cost_eur=usage.cost_eur,
-        idempotency_token=idempotency_token,
     )
 
 

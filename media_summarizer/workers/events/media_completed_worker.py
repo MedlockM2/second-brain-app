@@ -18,6 +18,12 @@ Media completed events consumer -- content ledger close, watcher fan-out, indexi
   of every watcher (task-414), so a foreign media is already translated when it is
   first opened. Enqueue only, through the same atomic reservation as
   ``/raw-content``; the translation runs in ``transcript_translation_worker``.
+- Closes the import on the beta budget (task-549, rule 5 of the task-547
+  decision), since this is where every ingestion path ends: a failed import hands
+  back every attempt it still holds, the provider cost of calls that may have been
+  billed going to the operator's spend; a delivered import settles its
+  fixed-price collections (an Apify run, an X read) and hands back the
+  acquisition steps it reserved and never used.
 
 Search indexing and previews are per save, including repeated saves by one
 account. Notifications remain per account. The index worker waits for the text
@@ -203,6 +209,38 @@ async def _arm_transcript_translations(
         )
 
 
+async def _load_job(canonical_job_id: Optional[str]) -> Any:
+    from media_summarizer.utils import database_async
+
+    if not canonical_job_id:
+        return None
+    try:
+        return await database_async.get_processing_job_by_id(canonical_job_id)
+    except Exception as e:
+        logger.error(f"Failed to load canonical job {canonical_job_id}: {e}")
+        return None
+
+
+async def _close_import_budget(*, canonical_job: Any, media_key: str, delivered: bool) -> None:
+    """Settle or release what the import still holds on the beta budget. Never raises.
+
+    Idempotent like the rest of this consumer: a settled or released attempt is
+    not moved twice, so a redelivered event costs a few reads.
+    """
+    if canonical_job is None or not canonical_job.user_id:
+        return
+    from media_summarizer.core.services import budget_guard
+
+    operation_id = budget_guard.import_operation_id(canonical_job)
+    if delivered:
+        await budget_guard.settle_collections(
+            canonical_job.user_id, operation_id, content_media_key=media_key
+        )
+        await budget_guard.release_unused_acquisition(canonical_job.user_id, operation_id)
+    else:
+        await budget_guard.release_open(canonical_job.user_id, operation_id)
+
+
 async def _resume_waiting_artifacts(media_key: str) -> None:
     """Start the generations that were waiting for this media's text (task-360).
 
@@ -301,6 +339,11 @@ async def process_event(message: Dict[str, Any]) -> None:
             canonical_job_id=canonical_job_id,
             processed=False,
         )
+        await _close_import_budget(
+            canonical_job=await _load_job(canonical_job_id),
+            media_key=media_key,
+            delivered=False,
+        )
         for w in (watchers or []):
             try:
                 await media_watchers.mark_watcher_failed(media_key, w.get("user_id"), reason=failure_reason)
@@ -331,12 +374,8 @@ async def process_event(message: Dict[str, Any]) -> None:
 
     from media_summarizer.utils import database_async
 
-    canonical_job = None
-    if canonical_job_id:
-        try:
-            canonical_job = await database_async.get_processing_job_by_id(canonical_job_id)
-        except Exception as e:
-            logger.error(f"Failed to load canonical job {canonical_job_id}: {e}")
+    canonical_job = await _load_job(canonical_job_id)
+    await _close_import_budget(canonical_job=canonical_job, media_key=media_key, delivered=True)
 
     if canonical_job and canonical_job.user_id:
         # First of the per-content hooks: the translation is the slowest thing a

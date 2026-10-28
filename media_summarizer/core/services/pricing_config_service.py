@@ -205,7 +205,10 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         # billed (measured 2026-10-28).
         "x_api": {"post": {"usd": "0.005"}},
     },
-    # --- How each metered event converts into minutes (benchmark §3.1) ---
+    # --- How each metered event converted into minutes (benchmark §3.1) ---
+    # Nothing is debited from these any more: since task-549 every paid call is
+    # held and settled in euros by the beta budget. Only the pricing endpoint
+    # still exposes them, and TASK-550 removes them from that contract.
     "unit_conversion": {
         # Transcribed audio and video are charged their real length, rounded up.
         "min_minutes_per_transcription": 1,
@@ -259,11 +262,8 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "transcription": {
             "provider": "deepgram",
             "model": "nova-3",
-            # Single source of truth for what a minute costs us: Deepgram Nova-3
-            # pay-as-you-go at $0.0077/min, converted at 0.86 EUR/USD
-            # (https://deepgram.com/pricing, 2026-08-18). Nothing else in the
-            # codebase is allowed to hardcode a per-minute price.
-            "cost_per_minute_eur": 0.00664,
+            # Descriptive only: what a transcription costs is the barème of
+            # `provider_tariffs`, valued by the beta budget (task-549).
         },
         # One model for the chat, every artifact, the blurbs and their
         # re-translation (task-439), and the full-text translation (task-556).

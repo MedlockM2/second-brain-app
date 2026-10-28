@@ -367,8 +367,6 @@ async def process_message(message: dict) -> None:
                 "normalized_url": body.get("normalized_url"),
                 "episode_image": episode_image,
                 "audio_duration_seconds": gate.duration_seconds,
-                "quota_debited_minutes": gate.debited_minutes,
-                "quota_debit_skipped": gate.debit_skipped,
                 "deepgram_mode": "pull",
             },
         )
@@ -383,7 +381,6 @@ async def process_message(message: dict) -> None:
             queue=DEEPGRAM_TRANSCRIPTION_QUEUE,
             transcript_source="deepgram",
             audio_duration_seconds=gate.duration_seconds,
-            quota_debited_minutes=gate.debited_minutes,
         )
     finally:
         reset_log_context(context_token)

@@ -4,7 +4,7 @@ The global content ledger: who owns a content, and where its text lives.
 Canonical schema (MEDIA_IDEMPOTENCE_TABLE, default "media_idempotence"):
 - PK: media_key (S)
 - Attributes: status (reserved|processed|failed), job_id, created_at, updated_at,
-  transcript_s3_key, source_language
+  transcript_s3_key, source_language, budget_value_nano_eur (task-549, rule 12)
 
 `failed` is a *record*, not a lock. `reserved` and `processed` both mean "a job
 owns this content, do not start a second one"; `failed` means the opposite -- the
@@ -59,6 +59,16 @@ ATTR_TRANSCRIPT_S3_KEY = "transcript_s3_key"
 #: rather than on a job row that may belong to somebody else.
 ATTR_SOURCE_LANGUAGE = "source_language"
 
+#: What processing this content cost the account it was processed for, in
+#: nano-euros, settled on the providers' metrics: its collection, transcription or
+#: parsing, and its preview (task-549). Accumulated by every settlement of those
+#: steps, and charged to another account that saves the content once it is
+#: processed (rule 12 of the task-547 decision). The full-text translation keeps
+#: its own value per language, on its translation lock. Written over with the
+#: whole row when a new job takes a `failed` row over, so it only ever describes
+#: the processing that owns the row.
+ATTR_BUDGET_VALUE = "budget_value_nano_eur"
+
 
 def transcript_s3_key_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
     """The transcript location this ledger row names, or ``None``.
@@ -77,6 +87,52 @@ def source_language_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
     if not row:
         return None
     return (str(row.get(ATTR_SOURCE_LANGUAGE) or "")).strip() or None
+
+
+def budget_value_of(row: Optional[Dict[str, Any]]) -> int:
+    """The settled value of the processing this row records, 0 when none was kept."""
+    if not row:
+        return 0
+    try:
+        return max(0, int(row.get(ATTR_BUDGET_VALUE) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def add_budget_value(*, media_key: Optional[str], nano_eur: int) -> bool:
+    """Add a settled step's cost to the value kept with the content (rule 12).
+
+    One atomic ``ADD`` per settlement, so two steps settling at once both count.
+    Conditional on the row existing: an account-scoped upload has no row until its
+    completion write, and is never saved by another account, so there is nothing to
+    keep for it. ``False`` is that normal outcome; an error is logged and swallowed,
+    because the settlement it follows has already moved the tester's counter.
+    """
+    identity_key = (media_key or "").strip()
+    amount = int(nano_eur or 0)
+    if not identity_key or amount <= 0:
+        return False
+    try:
+        session = database_async.get_session()
+        async with session.resource(
+            "dynamodb",
+            region_name=database_async.AWS_REGION,
+        ) as dynamodb:
+            table = await dynamodb.Table(MEDIA_IDEMPOTENCE_TABLE)
+            await table.update_item(
+                Key={"media_key": identity_key},
+                UpdateExpression=f"ADD {ATTR_BUDGET_VALUE} :v SET updated_at = :u",
+                ExpressionAttributeValues={":v": amount, ":u": _now_iso()},
+                ConditionExpression="attribute_exists(media_key)",
+            )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        logger.warning(
+            "Could not add the budget value of media_key=%s: %s", identity_key, exc
+        )
+        return False
+    return True
 
 
 def is_failed_row(row: Optional[Dict[str, Any]]) -> bool:

@@ -1,54 +1,26 @@
 """
-DynamoDB access layer for consumption counters.
+DynamoDB access layer for the shared provider-pool counters.
 
-Only one thing is metered, the minute (see the validated consumption model in
-docs/research/task-287-consumption-model/README.md): a minute of media we pay a
-transcription provider to process, plus the flat conversions of §3.1 (a bought
-caption set, five document pages, five folder sources).
+One table, `user_usage_monthly`, of which one row is still written: the shared row
+keyed on PROVIDER_POOL_USER_ID, which counts provider spend across *all* users for
+the shared free-tier pools of `provider_pool_guard` (Apify results, LlamaParse
+pages), one row per calendar month. Those pools protect the operator's provider
+accounts, not a tester's budget, and their fate is TASK-557's.
 
-One table:
-- user_usage_monthly: the allowance counter, one row per user per billing period
-  PK: user_id (S), SK: period (S)
-  Attributes: minutes_used, cost_eur_estimated (observability only), last_updated,
-              settled_jobs (SS, idempotency tokens of already-applied debits)
+The per-account minute rows this table used to hold (`minutes_used`,
+`cost_eur_estimated`, keyed on a subscription or trial period) are no longer read
+or written: task-549 replaced every minute debit with the beta budget, whose ledger
+is a table of its own (`utils/beta_budget_db.py`). The rows written before it on
+dev gate nothing; account erasure still sweeps them with the account.
 
-  The period is *not* a calendar month: it is the billing window the user's
-  entitlement is in, so the counter empties on the date the app already shows as
-  `period_end`. Two formats, both owned by `quota_enforcer` — this layer only
-  stores what it is given:
-    - `sub:<YYYY-MM-DD>`, the end of the subscription window, so a renewal opens a
-      fresh row on the anniversary;
-    - `trial:<YYYY-MM-DD>`, the day the account was created, so the free trial has
-      exactly one row for its whole length. Keyed on its start rather than its end
-      because a trial never renews: extending `free_trial.duration_days` moves the
-      end date without granting a second allowance.
-
-  The same table carries one shared row keyed on PROVIDER_POOL_USER_ID, which
-  counts provider spend across *all* users for the shared provider pools. That
-  row is keyed on the calendar month, because it tracks provider billing cycles
-  rather than any user's subscription.
-
-  A beta account (task-548) writes its minute debits under the calendar month
-  `YYYY-MM` until TASK-549 routes its calls through the beta budget, whose ledger
-  is a table of its own (`utils/beta_budget_db.py`).
-
-The daily burst-guard table (`user_usage_daily`) was deleted with task-548: the
-beta budget bounds what one account can spend, and nothing read those counters
-for anything else.
-
-All counter increments use atomic ADD operations to avoid race conditions.
-
-`settled_jobs` grows by at most two tokens per transcription (the submission debit
-and the Deepgram settlement). At the highest allowance a full period stays around
-55 kB — well inside the 400 kB DynamoDB item limit — and the item is scoped to a
-single period, so the set resets every billing window.
+All counter increments use atomic ADD operations to avoid race conditions, guarded
+by an idempotency token kept in `settled_jobs`.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any, Dict, Mapping, Optional
 
 from botocore.exceptions import ClientError
@@ -168,57 +140,6 @@ async def _get_item(table_name: str, key: Dict[str, str]) -> Optional[Dict[str, 
         response = await table.get_item(Key=key)
         item = response.get("Item")
         return item if item else None
-
-
-# ---------------------------------------------------------------------------
-# Monthly allowance counter
-# ---------------------------------------------------------------------------
-
-
-async def get_monthly_usage(user_id: str, period: str) -> Dict[str, Any]:
-    """Return the consumption counters of one billing period.
-
-    `cost_eur_estimated` is observability only: it is the measured provider spend
-    of that period and nothing reads it to allow or refuse anything.
-    """
-    item = await _get_item(
-        USER_USAGE_MONTHLY_TABLE, {"user_id": user_id, "period": period}
-    )
-    if item is None:
-        return {"minutes_used": 0, "cost_eur_estimated": 0.0}
-    return {
-        "minutes_used": int(item.get("minutes_used", 0)),
-        "cost_eur_estimated": float(item.get("cost_eur_estimated", 0)),
-    }
-
-
-async def increment_monthly_usage(
-    user_id: str,
-    period: str,
-    *,
-    minutes: int = 0,
-    cost_eur: float = 0.0,
-    idempotency_token: Optional[str] = None,
-) -> bool:
-    """Atomically debit minutes (and record measured cost) for one period.
-
-    Creates the row if it does not exist. Returns True when the counters moved,
-    False when the write was skipped as a duplicate.
-    """
-    additions: Dict[str, Any] = {}
-    if minutes:
-        additions["minutes_used"] = minutes
-    if cost_eur:
-        additions["cost_eur_estimated"] = Decimal(str(round(cost_eur, 4)))
-
-    return await _atomic_add(
-        table_name=USER_USAGE_MONTHLY_TABLE,
-        key={"user_id": user_id, "period": period},
-        additions=additions,
-        set_fields={"last_updated": datetime.now(timezone.utc).isoformat()},
-        idempotency_token=idempotency_token,
-        log_name="quota.monthly_increment_skipped_duplicate",
-    )
 
 
 # ---------------------------------------------------------------------------

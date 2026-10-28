@@ -1,28 +1,32 @@
 """
-Shared gate for every producer that enqueues a transcription (task-250 Layer 1).
+Shared gate for every producer that enqueues a transcription (task-250, task-549).
 
-The producer that resolves the audio URL is the last place where a job can still
-be refused *before* spending provider minutes, and — since the meter follows the
-provider call rather than the URL — it is also the only place allowed to charge
-them. Whatever the media came from (a podcast feed, a YouTube video with no
-captions, a TikTok, an Instagram reel, an uploaded file), if it is about to be
-transcribed it goes through here and it is charged its real length. This module
-holds the sequence they all need — establish the duration, ask the enforcer, debit
-once, fail the job cleanly on refusal — so no producer drifts from it.
+The producer that resolves the audio URL is the last place where an import can
+still be refused *before* Deepgram spends anything. Whatever the media came from —
+a podcast feed, a YouTube-less audio URL, a TikTok without captions, an Instagram
+reel, a shared voice note, an automatic RSS poll — if it is about to be
+transcribed it goes through here. This module holds the sequence they all need, so
+no producer drifts from it:
 
-The contract with the transcription worker is the `quota_debited_minutes` field
-in the SQS payload: whatever this gate debited must be forwarded, so the
-settlement in `deepgram_worker` only applies the difference with the duration
-Deepgram actually billed.
+1. establish the duration (``audio_duration_probe``: known metadata, else the
+   container header over a few Range requests);
+2. admit the import on the beta budget in one conditional write: the
+   transcription bounded by that duration, plus the automatic preview and
+   full-text translation of the import when this operation does not hold them yet
+   (rules 1 and 10 of the task-547 decision). A duration that cannot be read
+   reserves the per-item ceiling, 240 minutes (rule 3); one above it is refused as
+   ``item_too_large`` (rule 2);
+3. on refusal, fail the job with the budget's code and tell the completion
+   pipeline, so the producer only has to return without enqueueing.
 
-Since task-281 the gate also answers a question that comes *before* the quota
-engine: does this user already hold this content? A media already in their
-library -- in any folder at all -- costs them nothing to file again, so the
-gate runs its check as usual and skips only the debit, saying so through
-`AudioGateDecision.debit_skipped`. Producers forward that as
-`quota_debit_skipped` in the SQS payload, which is the second half of the
-contract: without it the settlement would see `quota_debited_minutes == 0` and
-charge the whole real duration, undoing the exemption.
+The contract with the transcription worker is ``audio_duration_seconds`` in the SQS
+payload: the measured duration the reservation was bounded with. The worker
+claims the held attempt, and reserves any further try (a retry, the push-mode
+fallback) from the same figure.
+
+There is no "already held" exemption here any more (task-281 is applied where no
+call is made, in the deduplication path): a transcription that runs is a provider
+call, and every provider call is reserved and charged (R.2).
 """
 
 from __future__ import annotations
@@ -33,18 +37,12 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from media_summarizer.core.models.failure_codes import MediaFailureCode
-from media_summarizer.core.services import audio_duration_probe, quota_enforcer
-from media_summarizer.core.services.durable_media_service import user_holds_media
+from media_summarizer.core.services import audio_duration_probe, beta_budget, budget_guard
+from media_summarizer.core.services.budget_guard import BudgetRefusedError, TextEstimate
 from media_summarizer.utils import database_async, sqs
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
-
-#: The enforcer's refusal code -> what the reader of the refused item is told.
-_QUOTA_FAILURE_CODES: dict[str, MediaFailureCode] = {
-    quota_enforcer.ERROR_OUT_OF_MINUTES: MediaFailureCode.OUT_OF_MINUTES,
-    quota_enforcer.ERROR_ITEM_TOO_LONG: MediaFailureCode.ITEM_TOO_LONG,
-}
 
 
 @dataclass
@@ -52,26 +50,24 @@ class AudioGateDecision:
     """What the gate decided, and what the producer must forward downstream."""
 
     allowed: bool
-    debited_minutes: int = 0
     duration_seconds: int = 0
-    error_code: Optional[str] = None
-    # True when the submission was let through without touching the counters
-    # because the user already holds this content (task-281). Distinct from
-    # `debited_minutes == 0`, which a real debit of zero could also produce, and
-    # the only thing that tells the settlement to stand down.
-    debit_skipped: bool = False
+    refusal: Optional[BudgetRefusedError] = None
+
+    @property
+    def error_code(self) -> Optional[str]:
+        return self.refusal.error_code if self.refusal is not None else None
 
     @property
     def failure_code(self) -> MediaFailureCode:
-        """The failure code to write on the refused job.
+        """The failure code written on the refused job.
 
         The gate runs in a worker, long after the request that produced the item
         is over, so it cannot negotiate a language: it writes a code and the app
-        renders it in the reader's own language. The refusal figures travel typed
-        on the synchronous path (see `QuotaCheckResult`) and are deliberately not
-        repeated here — a code carries no numbers.
+        renders it in the reader's own language.
         """
-        return _QUOTA_FAILURE_CODES.get(self.error_code or "", MediaFailureCode.OUT_OF_MINUTES)
+        if self.refusal is None:
+            return MediaFailureCode.BUDGET_UNAVAILABLE
+        return self.refusal.failure_code
 
 
 async def resolve_audio_duration_seconds(
@@ -86,7 +82,7 @@ async def resolve_audio_duration_seconds(
     Cheapest source first: a duration the platform already told us (feed
     metadata, extractor output), then the local bytes, then an HTTP Range probe
     on the remote URL. Returning 0 is a valid answer and means "accept anyway,
-    debit provisionally, let the settlement fix it".
+    reserve the per-item ceiling, settle on what Deepgram bills".
     """
     if known_duration_seconds and known_duration_seconds > 0:
         return int(known_duration_seconds)
@@ -106,7 +102,7 @@ async def resolve_audio_duration_seconds(
     return 0
 
 
-async def _publish_quota_failure_event(
+async def _publish_failure_event(
     *,
     job_id: str,
     media_key: Optional[str],
@@ -136,7 +132,7 @@ async def _publish_quota_failure_event(
             logger,
             logging.WARNING,
             "event.publish_failed",
-            "Failed to publish quota failure event",
+            "Failed to publish budget refusal event",
             job_id=job_id,
             media_key=media_key,
             exc_info=exc,
@@ -152,136 +148,107 @@ async def gate_audio_transcription(
     audio_url: Optional[str] = None,
     audio_bytes: Optional[bytes] = None,
     known_duration_seconds: int = 0,
-    media_item_id: Optional[str] = None,
-    error_step: str = "quota_enforcement",
+    content_language: Optional[str] = None,
+    error_step: str = "budget_admission",
     probe_budget_seconds: float = audio_duration_probe.DEFAULT_PROBE_BUDGET_SECONDS,
     mark_job_failed: bool = True,
 ) -> AudioGateDecision:
-    """Check the audio quota and debit it once, right before a Deepgram enqueue.
+    """Admit a transcription on the beta budget, right before a Deepgram enqueue.
 
-    On refusal the job is marked failed with the stable quota error code and a
-    failure event is published, so the caller only has to return without
-    enqueueing.
+    The import is held under the operation of the save (``budget_guard.
+    import_operation_id``): the job's library row, or the job itself when it has
+    none. On refusal the job is marked failed with the budget's code and a failure
+    event is published, so the caller only has to return without enqueueing.
 
-    Without a `user_id` there is nobody to charge and nobody to protect: the
-    submission is let through and the anomaly is logged, rather than dropped.
-
-    `media_item_id` identifies the library row of *this* save, which is written
-    before the gate runs; it is excluded from the already-held lookup so a save
-    cannot find itself and exempt itself. It defaults to the pointer the job
-    already carries, so every existing producer gets the check for free.
+    Without a ``user_id`` there is nobody whose budget bounds the call: refused,
+    never let through (rule 9).
     """
     source_platform = getattr(job, "source_platform", None)
-
-    if not user_id:
-        log_event(
-            logger,
-            logging.WARNING,
-            "quota.gate_skipped_no_user",
-            "No user_id available for the transcription gate; submission allowed",
-            job_id=job_id,
-            source_platform=source_platform,
-        )
-        return AudioGateDecision(allowed=True)
-
-    # The question that decides whether this save costs the user anything
-    # (task-281): a media already in their library -- in any folder at all --
-    # is free to file again. Per user and per content, and deliberately
-    # unrelated to the global idempotence reservation, which keeps answering the
-    # other question, whether the pipeline still has work to do.
-    current_media_item_id = media_item_id or getattr(job, "media_item_id", None)
-    already_held = bool(media_key) and await user_holds_media(
-        user_id=user_id,
-        media_key=media_key or "",
-        exclude_media_item_id=current_media_item_id,
-    )
-
     duration_seconds = await resolve_audio_duration_seconds(
         known_duration_seconds=known_duration_seconds,
         audio_bytes=audio_bytes,
         audio_url=audio_url,
         probe_budget_seconds=probe_budget_seconds,
     )
+    operation_id = budget_guard.import_operation_id(job) or job_id
+    measured = float(duration_seconds) if duration_seconds > 0 else None
 
-    # The check still runs for a free save. Free means the user is not charged,
-    # not that the pipeline below is free to spend an unbounded number of
-    # provider minutes for someone already out of them: this gate is the last
-    # point where that spend can still be refused.
-    gate = await quota_enforcer.gate_transcription(
-        user_id=user_id,
-        job_id=job_id,
-        duration_seconds=duration_seconds,
-        debit=not already_held,
-    )
-
-    if gate.allowed:
+    try:
+        await budget_guard.admit_import(
+            user_id or "",
+            operation_id=operation_id,
+            acquisition=lambda ctx: [beta_budget.transcription_line(ctx, duration_seconds=measured)],
+            text=TextEstimate(duration_seconds=measured),
+            media_item_id=getattr(job, "media_item_id", None),
+            content_language=content_language,
+        )
+    except BudgetRefusedError as refusal:
+        decision = AudioGateDecision(allowed=False, duration_seconds=duration_seconds, refusal=refusal)
         log_event(
             logger,
             logging.INFO,
-            "quota.audio_gate_already_held" if already_held else "quota.audio_gate_passed",
-            "User already holds this media; the save is free"
-            if already_held
-            else "Audio quota gate passed",
+            "budget.audio_gate_refused",
+            "Transcription refused by the beta budget before any provider spend",
             job_id=job_id,
             user_id=user_id,
-            media_key=media_key,
-            media_item_id=current_media_item_id,
             source_platform=source_platform,
             duration_seconds=duration_seconds,
-            debited_minutes=gate.debited_minutes,
-            provisional=gate.provisional,
+            error_code=refusal.error_code,
         )
-        return AudioGateDecision(
-            allowed=True,
-            debited_minutes=gate.debited_minutes,
-            duration_seconds=duration_seconds,
-            debit_skipped=already_held,
-        )
-
-    decision = AudioGateDecision(
-        allowed=False,
-        duration_seconds=duration_seconds,
-        error_code=gate.error_code,
-    )
+        if mark_job_failed:
+            await _fail_job(
+                job=job,
+                job_id=job_id,
+                media_key=media_key,
+                decision=decision,
+                error_step=error_step,
+            )
+        return decision
 
     log_event(
         logger,
         logging.INFO,
-        "quota.audio_gate_refused",
-        "Audio quota gate refused the submission before any provider spend",
+        "budget.audio_gate_admitted",
+        "Transcription admitted on the beta budget",
         job_id=job_id,
         user_id=user_id,
+        media_key=media_key,
+        operation_id=operation_id,
         source_platform=source_platform,
         duration_seconds=duration_seconds,
-        error_code=gate.error_code,
+        measured=measured is not None,
     )
+    return AudioGateDecision(allowed=True, duration_seconds=duration_seconds)
 
-    if mark_job_failed:
-        try:
-            target_job = job or await database_async.get_processing_job_by_id(job_id)
-            if target_job:
-                target_job.mark_failed(
-                    error_code=decision.failure_code,
-                    error_step=error_step,
-                    error_metadata={
-                        "reason": gate.error_code or quota_enforcer.ERROR_OUT_OF_MINUTES,
-                        "duration_seconds": duration_seconds,
-                    },
-                )
-                await database_async.update_processing_job(target_job)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.WARNING,
-                "quota.gate_job_update_failed",
-                "Could not mark the job failed after a quota refusal",
-                job_id=job_id,
-                exc_info=exc,
+
+async def _fail_job(
+    *,
+    job: Any,
+    job_id: str,
+    media_key: Optional[str],
+    decision: AudioGateDecision,
+    error_step: str,
+) -> None:
+    reason = decision.error_code or decision.failure_code.value
+    try:
+        target_job = job or await database_async.get_processing_job_by_id(job_id)
+        if target_job:
+            target_job.mark_failed(
+                error_code=decision.failure_code,
+                error_step=error_step,
+                error_metadata={
+                    "reason": reason,
+                    "duration_seconds": decision.duration_seconds,
+                },
             )
-        await _publish_quota_failure_event(
+            await database_async.update_processing_job(target_job)
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "budget.gate_job_update_failed",
+            "Could not mark the job failed after a budget refusal",
             job_id=job_id,
-            media_key=media_key,
-            reason=gate.error_code or quota_enforcer.ERROR_OUT_OF_MINUTES,
+            exc_info=exc,
         )
-
-    return decision
+    await _publish_failure_event(job_id=job_id, media_key=media_key, reason=reason)

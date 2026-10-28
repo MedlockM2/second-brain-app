@@ -75,7 +75,7 @@ from media_summarizer.core.media_ingestion.source_description import (
 )
 from media_summarizer.core.media_ingestion.title_derivation import select_title
 from media_summarizer.core.models.failure_codes import MediaFailureCode
-from media_summarizer.core.services import quota_enforcer
+from media_summarizer.core.services import budget_guard
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
     group_caption_lines,
@@ -916,16 +916,16 @@ async def process_youtube_message(message_body: Dict[str, Any]) -> Dict[str, Any
     if not await apify_orchestration.complete_callback(job):
         return {"mode": "apify_callback_ignored", "job_id": job_id}
 
-    # Captions bought from Apify: a flat unit whatever the video length
-    # (task-287). Charged here, after the callback claim, because this is
-    # where the provider actually delivered -- a run that failed or a
-    # duplicate callback costs the user nothing.
-    apify_user_id = message_body.get("user_id")
-    if apify_user_id:
-        await quota_enforcer.record_captions_purchase(
-            apify_user_id,
-            idempotency_token=quota_enforcer.gate_token(job_id),
-        )
+    # Captions bought from Apify: one result at the actor's price, whatever the
+    # video length. Settled here, after the callback claim, because this is
+    # where the provider actually delivered (task-549); a run that failed is
+    # released by the completion pipeline, and a duplicate callback never
+    # reaches this line.
+    await budget_guard.settle_collections(
+        job.user_id or message_body.get("user_id"),
+        budget_guard.import_operation_id(job),
+        content_media_key=job.media_key or message_body.get("media_key"),
+    )
 
     await _publish_success_event(
         job_id=job_id,

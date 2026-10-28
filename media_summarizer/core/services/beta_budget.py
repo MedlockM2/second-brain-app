@@ -29,9 +29,10 @@ What this module owns, and nothing else does:
    :func:`claim_send`, :func:`settle`, :func:`release`, :func:`release_expired` and
    :func:`charge_reuse`.
 
-What it does not do: route every provider path through these functions (TASK-549),
-expose the state to the apps (TASK-550, TASK-551), report on it (TASK-552), or
-refresh the exchange rate (TASK-559).
+What it does not do: decide, per provider path, when to reserve, claim, settle or
+release — that routing is ``core/services/budget_guard.py`` (task-549) — expose the
+state to the apps (TASK-550, TASK-551), report on it (TASK-552), or refresh the
+exchange rate (TASK-559).
 
 **The tester's capacity and the provider's bill are two different ledgers.** A
 release hands the hold back to the tester; it never erases the spend: when the
@@ -68,6 +69,7 @@ from media_summarizer.core.models.beta_budget import (
     ReservationLine,
 )
 from media_summarizer.core.services import pricing_config_service
+from media_summarizer.core.services.llm_config import LLM_MODEL_MAX_OUTPUT_TOKENS
 from media_summarizer.utils import beta_budget_db
 from media_summarizer.utils.beta_budget_db import (
     AVAILABLE,
@@ -579,9 +581,13 @@ def translation_max_completion_tokens(ctx: PricingContext, input_tokens: int) ->
     """``max_completion_tokens`` of a full-text translation: 1.5 × its input (rule 11).
 
     Sent with every translation call, and the same figure its reservation is
-    bounded with, so the bound and the provider's ceiling cannot disagree.
+    bounded with, so the bound and the provider's ceiling cannot disagree. Never
+    above the model's own output maximum (128 000 tokens on Luna, reasoning
+    included): past about 85 300 input tokens the ratio would ask for a ceiling the
+    provider refuses, so the model maximum is sent and reserved instead (task-549).
     """
-    return max(1, ceil(Decimal(max(0, input_tokens)) * ctx.formula.translation_output_ratio))
+    ratio_ceiling = max(1, ceil(Decimal(max(0, input_tokens)) * ctx.formula.translation_output_ratio))
+    return min(ratio_ceiling, LLM_MODEL_MAX_OUTPUT_TOKENS)
 
 
 def translation_line(
@@ -1411,3 +1417,8 @@ async def list_operation_attempts(user_id: str, operation_id: str) -> List[Budge
     """Every attempt of one operation, all components and tries."""
     items = await beta_budget_db.query_prefix(user_id, f"{ATTEMPT_SK_PREFIX}{operation_id}:")
     return [_attempt_from_item(item) for item in items]
+
+
+async def get_attempt(user_id: str, attempt: str) -> Optional[BudgetAttempt]:
+    """One attempt, read strongly consistent, or None when it does not exist."""
+    return await _read_attempt(user_id, attempt)

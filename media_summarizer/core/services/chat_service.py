@@ -1,6 +1,5 @@
-"""Conversations of the chat: open, list, read, delete (task-461); send a turn,
-stop it, and refund a turn that never answered (task-462); seal a lost turn
-(task-470).
+"""Conversations of the chat: open, list, read, delete (task-461); send a turn and
+stop it (task-462); seal a lost turn (task-470).
 
 Owner decision: docs/research/task-430-chatbot-architecture/README.md, Owner
 Validation. Point 1: a multi-turn chat over **one media or one folder**, with a
@@ -16,6 +15,15 @@ The scope is resolved exactly as an artifact's is -- ``resolve_scope_sources``
 then ``enforce_scope_ceilings`` -- so a folder covers its descendants like the
 Sources tab, the corpus ceilings are the artifacts' own (Decision point 8 keeps
 them), and the refusals are the ones the app already words.
+
+**Beta budget** (task-549): a turn is admitted on the budget when it is accepted —
+one conditional write holding the bound of its first provider call under the
+operation ``chat:<turn_id>`` — and refused before any write when the month does
+not cover it. The worker sends under that attempt and settles it on the provider's
+usage once text was shown; a turn that ends with nothing shown hands it back
+(rule 5 of the task-547 decision), which replaces the minute refund of
+2026-10-10. A turn sealed here — a failed dispatch, a lost turn — releases every
+attempt it still holds.
 """
 
 from __future__ import annotations
@@ -42,12 +50,12 @@ from media_summarizer.core.models.chat import (
     scope_activity_prefix,
 )
 from media_summarizer.core.models.media_artifact import ArtifactSource
-from media_summarizer.core.services import chat_prompt, quota_enforcer
+from media_summarizer.core.services import budget_guard, chat_prompt
 from media_summarizer.core.services.artifact_service import (
     enforce_scope_ceilings,
     resolve_scope_sources,
 )
-from media_summarizer.core.services.quota_enforcer import QuotaCheckResult
+from media_summarizer.core.services.budget_guard import BudgetRefusedError
 from media_summarizer.utils import chat_db, sqs
 from media_summarizer.utils.chat_db import ChatMessage, TurnNotAcceptedError
 from media_summarizer.utils.env import required_env
@@ -123,12 +131,12 @@ class ChatGenerationStaleError(ChatServiceError):
     error_code = "generation_stale"
 
 
-class ChatQuotaRefusedError(Exception):
-    """The minute allowance refused the turn: the existing refusal, as is."""
+class ChatBudgetRefusedError(Exception):
+    """The beta budget refused the turn: its typed refusal, as is."""
 
-    def __init__(self, result: QuotaCheckResult) -> None:
-        super().__init__(result.error_code)
-        self.result = result
+    def __init__(self, refusal: BudgetRefusedError) -> None:
+        super().__init__(refusal.error_code)
+        self.refusal = refusal
 
 
 @dataclass(frozen=True)
@@ -324,8 +332,9 @@ async def seal_if_lost(attempt: ChatAttempt) -> bool:
     """Seal the attempt's turn if the lost-turn rule says it is lost.
 
     The rule is ``core/models/chat.is_attempt_lost``; the conditional write is
-    ``chat_db.seal_lost_attempt``. A turn sealed ``failed`` is refunded here, like
-    every unanswered turn. ``True`` when this call sealed it.
+    ``chat_db.seal_lost_attempt``. Whatever it is sealed as, nothing more will be
+    sent for it: every budget attempt it still holds is released. ``True`` when
+    this call sealed it.
     """
     if not is_attempt_lost(attempt):
         return False
@@ -344,12 +353,7 @@ async def seal_if_lost(attempt: ChatAttempt) -> bool:
         attempt_status=attempt.status.value,
         status=status.value,
     )
-    if status == ChatTurnStatus.FAILED:
-        message = await chat_db.get_assistant_message(
-            attempt.user_id, attempt.conversation_id, attempt.turn_index
-        )
-        if message is not None:
-            await refund_unanswered_turn(user_id=attempt.user_id, message=message)
+    await release_turn_budget(user_id=attempt.user_id, turn_id=attempt.turn_id)
     return True
 
 
@@ -416,10 +420,6 @@ class AcceptedChatTurn:
     turn_index: int
     attempt_id: str
     status: ChatTurnStatus
-    #: Minutes this request debited: 0 when the turn was already charged (a
-    #: replay) or the debit failed. Kept when the send then failed: the refund
-    #: credited them back.
-    minutes_debited: int
     #: ``True`` when the request was a retry of a turn already accepted.
     replayed: bool
 
@@ -430,14 +430,10 @@ def turn_id_for_request(*, user_id: str, conversation_id: str, client_request_id
     A phone that lost the answer to its request sends it again with the same
     ``client_request_id``. Deriving the turn id from it is what lets the retry be
     recognised as the turn it already created -- and answered with it, without a
-    second turn or a second debit -- instead of being taken for a new question.
+    second turn or a second admission -- instead of being taken for a new question.
     """
     material = f"{user_id}|{conversation_id}|{client_request_id}"
     return f"tn_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:32]}"
-
-
-def _readable_source_count(conversation: ChatConversation) -> int:
-    return sum(1 for source in conversation.source_snapshot.sources if not source.excluded)
 
 
 async def _replayed_turn(
@@ -452,50 +448,6 @@ async def _replayed_turn(
     return latest if latest is not None and latest.turn_id == turn_id else None
 
 
-async def _debit_turn(
-    *,
-    user_id: str,
-    conversation: ChatConversation,
-    turn_id: str,
-    turn_index: int,
-) -> int:
-    """Debit the turn under its own token and record the debit on it.
-
-    Idempotent: called again for a replayed request, it finds the token applied
-    and writes nothing -- which also charges a turn whose first request died
-    between its write and its debit.
-    """
-    debit = await quota_enforcer.record_chat_turn(
-        user_id, source_count=_readable_source_count(conversation), turn_id=turn_id
-    )
-    if debit.minutes <= 0:
-        return 0
-    try:
-        await chat_db.record_turn_debit(
-            user_id=user_id,
-            conversation_id=conversation.conversation_id,
-            turn_index=turn_index,
-            period_key=debit.period_key,
-            minutes=debit.minutes,
-            cost_eur=debit.cost_eur,
-        )
-    except Exception as exc:  # noqa: BLE001 - the turn is accepted and charged
-        # Only the refund needs this record: losing it means a turn that later
-        # fails without text is not refunded, never that it is charged twice.
-        log_event(
-            logger,
-            logging.ERROR,
-            "chat.turn_debit_record_failed",
-            "Could not record the debit on the turn; a refund would not find it",
-            user_id=user_id,
-            conversation_id=conversation.conversation_id,
-            turn_id=turn_id,
-            minutes=debit.minutes,
-            exc_info=exc,
-        )
-    return debit.minutes
-
-
 async def _answer_replay(
     *, user_id: str, conversation: ChatConversation, replay: ChatAssistantMessage
 ) -> AcceptedChatTurn:
@@ -504,12 +456,6 @@ async def _answer_replay(
         turn_index=replay.turn_index,
         attempt_id=replay.attempt_id,
         status=replay.status,
-        minutes_debited=await _debit_turn(
-            user_id=user_id,
-            conversation=conversation,
-            turn_id=replay.turn_id,
-            turn_index=replay.turn_index,
-        ),
         replayed=True,
     )
 
@@ -521,22 +467,22 @@ async def send_turn(
     question: str,
     client_request_id: str,
 ) -> AcceptedChatTurn:
-    """Accept a turn, in the order the checks must run, and debit it once.
+    """Accept a turn, in the order the checks must run, and admit it once.
 
     1. The ceilings, as typed refusals: question length, turns per conversation,
        one turn in flight per account.
     2. The context budget of this turn (``chat_prompt``): refused, never cut.
-    3. The minute allowance, checked before any write; a refusal debits nothing.
+    3. The beta budget: the turn's first call is admitted in one conditional
+       write, under the logical turn's operation, before the turn is written; a
+       refusal writes nothing (:class:`ChatBudgetRefusedError`), and a counter
+       that cannot be read refuses too (rule 7). A retried request finds its
+       admission and holds nothing twice.
     4. One transaction writes the turn, its question, its attempt and the
-       account's in-flight marker.
-    5. The debit, after the write and under the logical turn's token, so a failed
-       write leaves no debit and a retry or a network resume never debits again.
-       It is best-effort like every debit: if it fails, the turn still runs and the
-       account is simply not charged for it. When it is applied, its period and
-       amount are written on the turn for a possible refund.
-    6. The message to the chat queue (:func:`_dispatch_turn`). If the send fails,
-       the turn is sealed ``failed`` / ``dispatch_failed`` and refunded, and the
-       route still answers with it: the app reads it back failed and offers a retry
+       account's in-flight marker. If it is not accepted, the admission is
+       released.
+    5. The message to the chat queue (:func:`_dispatch_turn`). If the send fails,
+       the turn is sealed ``failed`` / ``dispatch_failed``, its admission released,
+       and the route still answers with it: the app reads it back failed and offers a retry
        under a new ``client_request_id``. An error response would make the app
        replay the same id, which only finds the same failed turn.
 
@@ -587,14 +533,15 @@ async def send_turn(
             max_tokens=chat_prompt.CONTEXT_BUDGET_TOKENS,
         )
 
-    quota = await quota_enforcer.check_submission_allowed(
-        user_id,
-        minutes_needed=await quota_enforcer.minutes_for_chat_turn(
-            _readable_source_count(conversation)
-        ),
-    )
-    if not quota.allowed:
-        raise ChatQuotaRefusedError(quota)
+    try:
+        ctx = await budget_guard.pricing()
+        await budget_guard.admit(
+            user_id,
+            operation_id=budget_guard.chat_turn_operation_id(turn_id),
+            lines=[budget_guard.chat_turn_admission_line(ctx, estimated_input_tokens=estimated_tokens)],
+        )
+    except BudgetRefusedError as refusal:
+        raise ChatBudgetRefusedError(refusal) from refusal
 
     try:
         accepted = await chat_db.accept_turn(
@@ -605,6 +552,8 @@ async def send_turn(
             turn_id=turn_id,
         )
     except TurnNotAcceptedError as exc:
+        if exc.reason in ("conversation_not_found", "turn_in_progress", "account_turn_in_flight"):
+            await release_turn_budget(user_id=user_id, turn_id=turn_id)
         if exc.reason == "conversation_not_found":
             raise ChatConversationNotFoundError() from exc
         if exc.reason in ("turn_in_progress", "account_turn_in_flight"):
@@ -619,21 +568,15 @@ async def send_turn(
         )
         if replay is not None and refreshed is not None:
             return await _answer_replay(user_id=user_id, conversation=refreshed, replay=replay)
+        await release_turn_budget(user_id=user_id, turn_id=turn_id)
         raise ChatTurnCountChangedError() from exc
 
-    minutes = await _debit_turn(
-        user_id=user_id,
-        conversation=conversation,
-        turn_id=turn_id,
-        turn_index=accepted.answer.turn_index,
-    )
     status = await _dispatch_turn(accepted.attempt)
     return AcceptedChatTurn(
         turn_id=accepted.answer.turn_id,
         turn_index=accepted.answer.turn_index,
         attempt_id=accepted.attempt.attempt_id,
         status=status,
-        minutes_debited=minutes,
         replayed=False,
     )
 
@@ -682,11 +625,7 @@ async def _dispatch_turn(attempt: ChatAttempt) -> ChatTurnStatus:
             attempt.user_id, attempt.conversation_id, attempt.turn_index
         )
         return message.status if message is not None else ChatTurnStatus.FAILED
-    message = await chat_db.get_assistant_message(
-        attempt.user_id, attempt.conversation_id, attempt.turn_index
-    )
-    if message is not None:
-        await refund_unanswered_turn(user_id=attempt.user_id, message=message)
+    await release_turn_budget(user_id=attempt.user_id, turn_id=attempt.turn_id)
     return ChatTurnStatus.FAILED
 
 
@@ -725,33 +664,15 @@ async def stop_turn(
         raise ChatGenerationStaleError()
 
 
-def is_refundable(message: ChatAssistantMessage) -> bool:
-    """**The refund rule**: a turn sealed ``failed`` with no visible text.
+async def release_turn_budget(*, user_id: str, turn_id: str) -> int:
+    """Hand back every budget attempt a turn still holds. Never raises.
 
-    A turn that showed text -- completed, interrupted, or failed after part of its
-    answer was read -- consumed what it was charged for and is not refunded.
+    For a turn that will not be answered by its worker: a failed dispatch, a lost
+    turn. A held attempt was never sent; a ``sending`` one may have been billed
+    and is recorded at its bound as the operator's spend (rule 5).
     """
-    return message.status == ChatTurnStatus.FAILED and not (message.text or "").strip()
-
-
-async def refund_unanswered_turn(*, user_id: str, message: ChatAssistantMessage) -> int:
-    """Refund a sealed turn if the rule says so, from the debit it recorded.
-
-    For the callers that seal a turn ``failed`` -- the chat worker (task-463), a
-    failed send and a lost turn (task-470) -- right after the seal returned
-    ``True``. A turn with no recorded debit (none applied, or its record was lost)
-    is not refunded. Idempotent: the refund has its own token.
-    """
-    if not is_refundable(message):
-        return 0
-    if not message.quota_period_key or not message.quota_minutes_debited:
-        return 0
-    return await quota_enforcer.refund_chat_turn(
-        user_id,
-        turn_id=message.turn_id,
-        period_key=message.quota_period_key,
-        minutes=message.quota_minutes_debited,
-        cost_eur=message.quota_cost_eur or 0.0,
+    return await budget_guard.release_open(
+        user_id, budget_guard.chat_turn_operation_id(turn_id)
     )
 
 
@@ -762,7 +683,7 @@ __all__ = [
     "ChatConversationFullError",
     "ChatGenerationStaleError",
     "ChatQuestionTooLongError",
-    "ChatQuotaRefusedError",
+    "ChatBudgetRefusedError",
     "ChatTurnCountChangedError",
     "ChatTurnInFlightError",
     "ChatConversationNotFoundError",
@@ -774,9 +695,8 @@ __all__ = [
     "delete_conversation",
     "get_conversation_view",
     "list_conversations",
-    "is_refundable",
     "open_conversation",
-    "refund_unanswered_turn",
+    "release_turn_budget",
     "seal_if_lost",
     "send_turn",
     "stop_turn",

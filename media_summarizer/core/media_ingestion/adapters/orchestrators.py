@@ -28,11 +28,13 @@ from media_summarizer.core.models import (
     ProcessingJob,
     UserMediaStatus,
 )
-from media_summarizer.core.services import audio_quota_gate, quota_enforcer
+from media_summarizer.core.services import audio_quota_gate, budget_guard
+from media_summarizer.core.services.budget_guard import BudgetRefusedError
 from media_summarizer.core.services.durable_media_service import (
+    charge_reused_content,
     finalize_deduplicated_save,
     save_media_for_user,
-    user_holds_media,
+    withdraw_refused_save,
 )
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
@@ -239,123 +241,32 @@ def _library_status_from_duplicate(
     return UserMediaStatus.PROCESSING
 
 
-# Transcription providers that are paid by the minute. Only Deepgram is metered by
-# length: native subtitles, Apify transcripts and shared text produce a transcript
-# without spending a single minute of anyone's allowance.
-_AUDIO_BILLED_TRANSCRIPTION_PROVIDERS = frozenset({"deepgram"})
-
-
-def _audio_seconds_billed_by(job: Any) -> Optional[int]:
-    """Seconds of audio the content's transcription established, or None.
-
-    None means "this content was not metered in audio minutes" -- an article, a
-    document, a video with native subtitles, or a job that never reached a
-    terminal transcription. 0 means it was, but its length is unknown.
-
-    Reads `audio_duration_seconds`, the length of the audio Deepgram processed --
-    the same key `durable_media_service.media_duration_seconds` displays. How long
-    the call took is not in this metadata (it is `job.transcription_duration`).
-    """
-    transcription = getattr(job, "transcription_metadata", None) or {}
-    provider = str(transcription.get("provider") or "").strip().lower()
-    if provider not in _AUDIO_BILLED_TRANSCRIPTION_PROVIDERS:
-        return None
-
-    extraction = getattr(job, "extraction_metadata", None) or {}
-    for source in (transcription, extraction):
-        try:
-            seconds = int(float(source.get("audio_duration_seconds") or 0))
-        except (TypeError, ValueError):
-            continue
-        if seconds > 0:
-            return seconds
-    return 0
-
-
-async def _debit_deduplicated_audio_save(
-    *,
-    user_id: str,
-    media_key: str,
-    media_item_id: str,
-    content_job: Optional[ProcessingJob],
+async def _admit_text_import(
+    *, job: ProcessingJob, text: str, content_language: Optional[str]
 ) -> None:
-    """Charge a user's *first* save of content somebody else already processed.
+    """Admit an import whose text is already in hand, before it is stored.
 
-    The pipeline being skipped is not the same statement as the save being free.
-    Global deduplication is a provider-cost optimisation shared by everybody; the
-    minute allowance measures how much audio and video *this user* takes in, so
-    their first copy of a media is charged like any other -- and every copy after
-    that is free, because they already hold it (task-281). The alternative, giving
-    a media away to everyone but whoever saved it first, is arbitrary from the
-    user's seat and trivially gamed.
-
-    Debited outside the gate on purpose: there is no provider spend left to
-    refuse here, so refusing the save would cost the user their library entry to
-    protect a bill nobody is about to pay. Going past the allowance is the
-    settlement's existing overrun policy -- the counter stays true and the *next*
-    real import is the one that gets refused.
-
-    The idempotency token is the save's own library id, so a retried or
-    redelivered submission charges it at most once, and two different saves of
-    the same content by the same user never share a token.
-
-    ``content_job`` is ``None`` when the job behind the content is gone or could
-    not be read: there is then no duration to charge and nothing is debited. A
-    quota read never fails a save.
+    No provider is paid to read an article or a shared text, but its automatic
+    preview and full-text translation are (rule 10 of the task-547 decision): they
+    are reserved here, from the text itself, so the whole import is admitted or
+    refused at submission. A refusal withdraws the library row and reaches the
+    endpoint as :class:`BudgetRefusedError`; the job is recorded as failed by the
+    submission's own error path.
     """
-    if await user_holds_media(
-        user_id=user_id,
-        media_key=media_key,
-        exclude_media_item_id=media_item_id,
-    ):
-        log_event(
-            logger,
-            logging.INFO,
-            "quota.audio_gate_already_held",
-            "User already holds this deduplicated media; the save is free",
-            user_id=user_id,
-            media_key=media_key,
-            media_item_id=media_item_id,
+    try:
+        await budget_guard.admit_import(
+            job.user_id or "",
+            operation_id=budget_guard.import_operation_id(job),
+            text=budget_guard.TextEstimate(text_bytes=len(text.encode("utf-8"))),
+            media_item_id=job.media_item_id,
+            content_language=content_language,
         )
-        return
-
-    if content_job is None:
-        log_event(
-            logger,
-            logging.WARNING,
-            "quota.duplicate_debit_skipped",
-            "No content job behind a deduplicated save; nothing to debit",
-            user_id=user_id,
-            media_key=media_key,
-            media_item_id=media_item_id,
-        )
-        return
-
-    audio_seconds = _audio_seconds_billed_by(content_job)
-    if audio_seconds is None:
-        # Nothing was transcribed for this content, so there is nothing to charge:
-        # articles, documents, captioned videos and shared text are unlimited.
-        return
-
-    debited = await quota_enforcer.record_transcription_minutes(
-        user_id=user_id,
-        # 0 seconds means "transcribed, length unknown": one provisional minute,
-        # like the gate does when a duration probe comes back empty.
-        minutes=quota_enforcer.minutes_for_seconds(audio_seconds) or 1,
-        idempotency_token=quota_enforcer.gate_token(media_item_id),
-    )
-    log_event(
-        logger,
-        logging.INFO,
-        "quota.duplicate_first_save_debited",
-        "First save of globally deduplicated audio content debited",
-        user_id=user_id,
-        media_key=media_key,
-        media_item_id=media_item_id,
-        content_job_id=content_job.id,
-        audio_duration_seconds=audio_seconds,
-        debited_minutes=debited,
-    )
+    except BudgetRefusedError:
+        if job.media_item_id:
+            await withdraw_refused_save(
+                user_id=job.user_id or "", media_item_id=job.media_item_id
+            )
+        raise
 
 
 async def _build_duplicate_outcome(
@@ -375,10 +286,10 @@ async def _build_duplicate_outcome(
     per user (task-218 §4.3).
 
     The content job is read once here and handed to everything below, because
-    three of them need it and it is the authority on what the reused content is:
-    the quota debit reads its audio length, the status resolution reads its
-    pipeline state, and the finalisation copies its title, creator and cover onto
-    the new row before submitting the transcript for indexing.
+    two of them need it and it is the authority on what the reused content is:
+    the status resolution reads its pipeline state, and the finalisation copies its
+    title, creator and cover onto the new row before submitting the transcript for
+    indexing. The budget charge reads the value kept on the ledger row instead.
     """
     existing_job_id = existing.get("job_id")
     if not existing_job_id:
@@ -393,11 +304,11 @@ async def _build_duplicate_outcome(
         content_job_id=content_job_id,
         content=content,
     )
-    await _debit_deduplicated_audio_save(
+    await charge_reused_content(
         user_id=user_id,
         media_key=resolved.media_key,
         media_item_id=durable_media_item_id,
-        content_job=content.job,
+        ledger_row=existing,
     )
     owned_job_id = await finalize_deduplicated_save(
         user_id=user_id,
@@ -473,7 +384,8 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         For all commands (IngestUrlCommand and IngestSharedContentCommand):
         - Creates the durable library row, carrying the requested folder_id.
           Organization lives there and nowhere else (task-220).
-        - Allocates a minute hold for quota enforcement.
+        - Charges a save of content processed for another account (rule 12); the
+          paid steps of a new import are admitted by the worker that makes them.
         - Routes to appropriate worker queues based on media family and type.
         - Handles direct transcription for shared text and Apify social video transcripts.
         - Manages idempotence via media_key deduplication.
@@ -645,6 +557,9 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     resolved.raw_text,
                     source=resolved.source_platform.value,
                 )
+                await _admit_text_import(
+                    job=job, text=transcript_text, content_language=None
+                )
                 transcription_metadata: Dict[str, Any] = {
                     "provider": "apify_native",
                     "language": "unknown",
@@ -698,6 +613,9 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     resolved.raw_text,
                     source=resolved.source_platform.value,
                 )
+                await _admit_text_import(
+                    job=job, text=transcript_text, content_language=None
+                )
                 transcription_metadata = _shared_text_transcription_metadata(
                     transcript_text
                 )
@@ -743,8 +661,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             elif resolved.audio_s3_key:
                 # Staged audio (WhatsApp voice notes and friends). The endpoint
                 # had the bytes in hand and probed the real duration, so this is
-                # the single place where the audio quota gets debited for this
-                # path (task-250 Layer 1).
+                # where the import is admitted on the beta budget (task-549).
                 gate = await audio_quota_gate.gate_audio_transcription(
                     job_id=job.id,
                     user_id=command.user.user_id,
@@ -778,8 +695,6 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                                 "content_size_bytes"
                             ),
                             "audio_duration_seconds": gate.duration_seconds,
-                            "quota_debited_minutes": gate.debited_minutes,
-                            "quota_debit_skipped": gate.debit_skipped,
                             "deepgram_mode": "pull",
                         },
                     )
@@ -796,11 +711,10 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                         source_platform=resolved.source_platform.value,
                         transcript_source="deepgram",
                         audio_s3_key=resolved.audio_s3_key,
-                        quota_debited_minutes=gate.debited_minutes,
                     )
                 else:
-                    # The gate already marked the job failed with the stable
-                    # quota error code; just stop the pipeline here.
+                    # The gate already marked the job failed with the budget's
+                    # code; just stop the pipeline here.
                     await episode_idempotence.mark_failed(
                         media_key=resolved.media_key,
                         job_id=job.id,
@@ -834,8 +748,6 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                             "episode_title": title,
                             "podcast_title": title,
                             "audio_duration_seconds": gate.duration_seconds,
-                            "quota_debited_minutes": gate.debited_minutes,
-                            "quota_debit_skipped": gate.debit_skipped,
                             "deepgram_mode": "pull_with_push_fallback",
                         },
                     )
@@ -852,7 +764,6 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                         source_platform=resolved.source_platform.value,
                         transcript_source="deepgram",
                         audio_duration_seconds=gate.duration_seconds,
-                        quota_debited_minutes=gate.debited_minutes,
                     )
                 else:
                     await episode_idempotence.mark_failed(
@@ -1112,7 +1023,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                         exc_info=release_exc,
                     )
 
-            if isinstance(exc, OrchestrationError):
+            if isinstance(exc, (OrchestrationError, BudgetRefusedError)):
                 raise
             raise OrchestrationError(
                 f"Failed to orchestrate media submission for key '{resolved.media_key}': {exc}"
@@ -1160,6 +1071,11 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             extraction_metadata.get("final_url")
             or extraction_metadata.get("requested_url")
             or resolved.normalized_url
+        )
+        await _admit_text_import(
+            job=job,
+            text=transcript_text,
+            content_language=extraction_metadata.get("language"),
         )
         transcription_metadata: Dict[str, Any] = {
             "provider": resolved.metadata.get("transcript_provider")

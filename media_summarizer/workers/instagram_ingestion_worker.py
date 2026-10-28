@@ -14,8 +14,7 @@ Pipeline:
 - For reels: enqueues a Deepgram transcription job pointing at the resolved
   audio URL (or video URL fallback) with deepgram_mode="push" -- Instagram CDNs
   block Deepgram's pull, so the Deepgram worker downloads the bytes and posts
-  them itself. Carries the derived title (task-266) and the Instagram quota
-  category, and nothing descriptive: the caption stays on the job, under
+  them itself. Carries the derived title (task-266), and nothing descriptive: the caption stays on the job, under
   extraction_metadata.resolver_metadata.caption, which is where the artifact
   corpus reads it (task-383).
 - Image posts (single and carousel): every image of the post is downloaded on the
@@ -72,11 +71,20 @@ from media_summarizer.core.ports.document_parser import (
     ParseErrorCode,
     ParseResult,
 )
-from media_summarizer.core.services import audio_quota_gate, cover_capture
+from media_summarizer.core.services import (
+    audio_quota_gate,
+    beta_budget,
+    budget_guard,
+    cover_capture,
+)
+from media_summarizer.core.services.budget_guard import BudgetRefusedError, TextEstimate
+from media_summarizer.core.services.document_measure import DocumentUnits
 from media_summarizer.core.services.document_parsing_service import (
     IMAGE_FORMATS,
+    BudgetedParse,
+    ParseBudget,
     parse_document_with_fallback,
-    record_document_consumption,
+    record_document_pool_spend,
 )
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
@@ -165,6 +173,9 @@ class _PostImageText:
     #: Distinguishes a sunset (POST_TEXT_EMPTY) from a chain that broke
     #: (DOCUMENT_PARSE_FAILED).
     only_empty_results: bool = True
+    #: The parses that delivered text, their attempts still open: settled once
+    #: the transcript is stored (task-549).
+    delivered: List[BudgetedParse] = field(default_factory=list)
 
 
 def _now_iso_utc() -> str:
@@ -277,7 +288,37 @@ async def _download_image(*, url: str, file_path: str) -> bool:
         return False
 
 
-async def _parse_post_images(*, job_id: str, image_urls: List[str]) -> _PostImageText:
+def _image_part(index: int) -> str:
+    """The budget part of one image of a post: each is parsed, and paid, on its own."""
+    return f"image{index}"
+
+
+async def _admit_image_post(*, job: ProcessingJob, user_id: str, image_count: int) -> None:
+    """Second admission of a photo post, once the run said how many images it has.
+
+    Rule 10 and « réservation en deux temps » of the task-547 decision: the Apify
+    run was admitted alone; now that the image count is known, one page per image
+    is reserved, with the post's preview and translation, in one write. Raises
+    ``BudgetRefusedError``: the import fails, nothing more is sent, and the Apify
+    price stays the operator's spend.
+    """
+    await budget_guard.admit_import(
+        user_id or job.user_id or "",
+        operation_id=budget_guard.import_operation_id(job),
+        acquisition=lambda ctx: [
+            beta_budget.document_line(
+                ctx, provider="llamaparse", unit="page", count=1, part=_image_part(index)
+            )
+            for index in range(1, image_count + 1)
+        ],
+        text=TextEstimate(page_count=image_count, document=True),
+        media_item_id=job.media_item_id,
+    )
+
+
+async def _parse_post_images(
+    *, job: ProcessingJob, job_id: str, user_id: str, image_urls: List[str]
+) -> _PostImageText:
     """OCR every image of a post, in carousel order, through the shared chain.
 
     The download happens **here**, on the Apify callback, and never later: the
@@ -319,14 +360,28 @@ async def _parse_post_images(*, job_id: str, image_urls: List[str]) -> _PostImag
                 continue
 
             try:
-                result = await parse_document_with_fallback(
+                parsed = await parse_document_with_fallback(
                     file_path=file_path,
                     file_name=file_name,
                     document_format=document_format,
+                    budget=ParseBudget(
+                        user_id=user_id or job.user_id or "",
+                        operation_id=budget_guard.import_operation_id(job),
+                        units=DocumentUnits("page", 1),
+                        content_media_key=job.media_key,
+                        part=_image_part(index),
+                    ),
                 )
+            except BaseException:
+                # Refused (or failed) mid-post: the parses already delivered go
+                # back to the tester with the rest of the import.
+                for done in outcome.delivered:
+                    await done.release()
+                raise
             finally:
                 if os.path.exists(file_path):
                     os.remove(file_path)
+            result = parsed.outcome
 
             if isinstance(result, ParseError):
                 # "No text in this picture" is what both providers return for a
@@ -347,6 +402,7 @@ async def _parse_post_images(*, job_id: str, image_urls: List[str]) -> _PostImag
                 continue
 
             assert isinstance(result, ParseResult)
+            outcome.delivered.append(parsed)
             outcome.images_parsed += 1
             outcome.document_format = document_format
             if result.provider == "llamaparse":
@@ -476,10 +532,12 @@ async def _complete_image_post(
     3. **Neither.** Terminal failure, under the code that says which of the two
        happened.
 
-    No quota gate is added on this path. `check_submission_allowed` already ran when
-    the user shared the link, and the pages only exist once the providers have
-    answered: like the document path (`document_parsing/worker.py`), the spend is
-    *recorded* after the fact, never authorized here.
+    The images are admitted on the beta budget before the first is parsed, one
+    page each, with the post's preview and translation (:func:`_admit_image_post`);
+    a refusal fails the import. Each image delivered is settled on its billed
+    page once the transcript is stored; an image that never reached a provider
+    (an unreachable slide, the time budget spent) is released by the completion
+    pipeline, which closes every step of the import still held.
     """
     resolver_metadata = resolved.metadata or {}
     resolved_content_type = resolver_metadata.get("instagram_content_type")
@@ -512,17 +570,28 @@ async def _complete_image_post(
     if cover_locator:
         job.media_image = cover_locator
 
-    started = time.monotonic()
-    parsed = await _parse_post_images(job_id=job_id, image_urls=image_urls)
+    try:
+        await _admit_image_post(
+            job=job,
+            user_id=user_id,
+            image_count=min(len(image_urls), INSTAGRAM_IMAGE_PARSE_MAX_IMAGES),
+        )
+        started = time.monotonic()
+        parsed = await _parse_post_images(
+            job=job, job_id=job_id, user_id=user_id, image_urls=image_urls
+        )
+    except BudgetRefusedError as refusal:
+        raise InstagramIngestionError(
+            refusal.failure_code,
+            details=refusal.error_code,
+            instagram_content_type=resolved_content_type,
+        ) from refusal
     parse_duration = int(time.monotonic() - started)
 
-    # N images is N pages: the same purchase as an upload of N photos, so the same
-    # meter (one minute per five pages) and the same LlamaParse pool. Both writes
-    # are keyed on the job id, so a re-claimed callback cannot debit twice, and a
-    # counter failure never fails an ingestion that worked.
+    # N images is N pages of the shared LlamaParse pool, keyed on the job id so a
+    # re-claimed callback cannot count twice (the operator's pool, TASK-557).
     if parsed.images_parsed:
-        await record_document_consumption(
-            user_id=user_id or job.user_id,
+        await record_document_pool_spend(
             job_id=job_id,
             document_format=parsed.document_format,
             page_count=parsed.images_parsed,
@@ -549,6 +618,11 @@ async def _complete_image_post(
             image_count=len(image_urls),
             images_parsed=parsed.images_parsed,
         )
+        # The OCR found nothing usable: the caption is the text, and the parses
+        # that answered with some delivered nothing (rule 5).
+        for done in parsed.delivered:
+            await done.release()
+        parsed.delivered = []
     else:
         # Nothing readable and nothing written: the two ways that happens get the
         # two codes the app already words. `only_empty_results` means the providers
@@ -565,7 +639,12 @@ async def _complete_image_post(
             images_parsed=parsed.images_parsed,
         )
 
-    transcript_s3_key = await _upload_image_transcript(job_id, transcript_text)
+    try:
+        transcript_s3_key = await _upload_image_transcript(job_id, transcript_text)
+    except BaseException:
+        for done in parsed.delivered:
+            await done.release()
+        raise
     transcription_metadata = {
         "provider": provider,
         "source": transcript_source,
@@ -595,6 +674,11 @@ async def _complete_image_post(
             return {"job_id": job_id, "routed_to": "duplicate_callback"}
     else:
         await database_async.update_processing_job(job)
+
+    # The text is stored on its job: each image that delivered it is charged the
+    # page its provider billed.
+    for done in parsed.delivered:
+        await done.settle()
 
     await sqs.send_message(
         queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
@@ -760,6 +844,10 @@ async def process_instagram_message(message_body: Dict[str, Any]) -> Dict[str, A
                     ),
                     queue_name=INSTAGRAM_INGESTION_QUEUE,
                     context=stored_context,
+                    # The audio length or the image count is only known once
+                    # the run has answered: the preview and the translation are
+                    # admitted then, with the transcription or the OCR.
+                    defer_automatic=True,
                 )
             except apify_adapter.ApifyAdapterError as adapter_exc:
                 raise InstagramIngestionError(
@@ -888,8 +976,6 @@ async def process_instagram_message(message_body: Dict[str, Any]) -> Dict[str, A
             episode_title=job.title or message_body.get("episode_title"),
             podcast_title=job.title or message_body.get("podcast_title"),
             audio_duration_seconds=gate.duration_seconds or audio_duration_seconds,
-            quota_debited_minutes=gate.debited_minutes,
-            quota_debit_skipped=gate.debit_skipped,
             resolver_key=resolved.resolver_key,
         )
 

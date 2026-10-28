@@ -271,6 +271,113 @@ async def user_holds_media(
     )
 
 
+async def charge_reused_content(
+    *,
+    user_id: str,
+    media_key: str,
+    media_item_id: str,
+    ledger_row: Optional[Dict[str, Any]],
+) -> None:
+    """Charge a save of content another account already had processed (rule 12).
+
+    The pipeline being skipped is not the same statement as the save being free:
+    an account saving a media processed for somebody else is debited the settled
+    value of that processing (its collection, transcription or parsing), as if it
+    had been done for it, without any provider call — and its translation into this
+    save's reading language when one already exists (rule 12 of the task-547
+    decision, ``budget_guard.charge_content_reuse``). The preview is not part of
+    that value: this save gets its own, generated and charged under its own scope
+    by ``finalize_deduplicated_save``.
+
+    Free when this account already holds the content, in any folder (task-281):
+    re-filing is organising, not processing.
+
+    Refused like a new processing when the month does not cover the value: the row
+    this save created is withdrawn and :class:`BudgetRefusedError` reaches the
+    endpoint, which answers with the typed refusal. The value is charged once per
+    save: the operation is the save's own library id. ``ledger_row`` is the
+    content's ``media_idempotence`` row, which keeps that value.
+    """
+    # Imported here so that the library reads, which load this module everywhere,
+    # do not load the budget ledger with it.
+    from media_summarizer.core.services import budget_guard
+    from media_summarizer.core.services.budget_guard import BudgetRefusedError
+
+    if await user_holds_media(
+        user_id=user_id,
+        media_key=media_key,
+        exclude_media_item_id=media_item_id,
+    ):
+        log_event(
+            logger,
+            logging.INFO,
+            "budget.reuse_already_held",
+            "User already holds this deduplicated media; the save is free",
+            user_id=user_id,
+            media_key=media_key,
+            media_item_id=media_item_id,
+        )
+        return
+
+    reading_language: Optional[str] = None
+    try:
+        record = await user_media_store.get_user_media(user_id, media_item_id)
+        reading_language = record.reading_language if record is not None else None
+    except Exception as exc:  # noqa: BLE001 - the import value still applies
+        log_event(
+            logger,
+            logging.WARNING,
+            "budget.reuse_language_unreadable",
+            "Library row unreadable; the reuse is charged its import only",
+            user_id=user_id,
+            media_item_id=media_item_id,
+            error_type=type(exc).__name__,
+        )
+
+    try:
+        charged = await budget_guard.charge_content_reuse(
+            user_id,
+            media_item_id=media_item_id,
+            ledger_row=ledger_row,
+            reading_language=reading_language,
+        )
+    except BudgetRefusedError:
+        await withdraw_refused_save(user_id=user_id, media_item_id=media_item_id)
+        raise
+    log_event(
+        logger,
+        logging.INFO,
+        "budget.reuse_charged",
+        "Save of content processed for another account charged its value",
+        user_id=user_id,
+        media_key=media_key,
+        media_item_id=media_item_id,
+        charged_nano_eur=charged,
+    )
+
+
+async def withdraw_refused_save(*, user_id: str, media_item_id: str) -> None:
+    """Take back the library row of a save the budget refused. Best effort.
+
+    The row is written before the content is known to be a duplicate (task-218
+    §4.3); a refused save must not leave it behind as an entry the user never got.
+    """
+    try:
+        await user_media_store.mark_deleted(
+            user_id=user_id, media_item_id=media_item_id, grace_days=0
+        )
+    except Exception as exc:  # noqa: BLE001 - the refusal still reaches the client
+        log_event(
+            logger,
+            logging.WARNING,
+            "budget.refused_save_withdraw_failed",
+            "Could not withdraw the library row of a refused save",
+            user_id=user_id,
+            media_item_id=media_item_id,
+            error_type=type(exc).__name__,
+        )
+
+
 def media_duration_seconds(job: ProcessingJob) -> Optional[float]:
     """The media's own length as the pipeline established it, or None.
 

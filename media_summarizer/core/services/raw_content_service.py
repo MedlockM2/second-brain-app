@@ -46,6 +46,7 @@ from media_summarizer.core.services.transcript_formatting import (
 )
 from media_summarizer.core.services.transcript_translation import (
     TranslationDispatchOutcome,
+    TranslationPayer,
     build_translated_transcript_key,
     detect_language,
     normalize_language_tag,
@@ -107,6 +108,7 @@ async def get_raw_content(
     transcript: ContentTranscript,
     reading_language: Optional[str] = None,
     variant: RawContentVariant = DEFAULT_RAW_CONTENT_VARIANT,
+    payer: Optional[TranslationPayer] = None,
 ) -> RawContentResponse:
     """
     Retrieve and format the raw content for a media item.
@@ -137,6 +139,9 @@ async def get_raw_content(
             if any.
         variant: Which body to serve. ``original`` returns the source text even
             when a translation is cached, and carries no translation metadata.
+        payer: The save whose read asks for a missing translation: its account
+            is charged the translation's calls (task-549, rule 10 — "une
+            traduction relancée plus tard réserve à ce moment-là").
 
     Returns:
         RawContentResponse with formatted content.
@@ -202,6 +207,7 @@ async def get_raw_content(
             raw_text=raw_text,
             reading_language=reading_language,
             source_platform=source_platform,
+            payer=payer,
         )
         # If a cached translation was found, use it
         if translation_metadata and translation_metadata.get("is_translated"):
@@ -263,6 +269,7 @@ async def _resolve_translation(
     raw_text: str,
     reading_language: str,
     source_platform: str,
+    payer: Optional[TranslationPayer],
 ) -> dict:
     """Resolve translation status without any synchronous LLM call.
 
@@ -474,6 +481,7 @@ async def _resolve_translation(
         source=source_platform or None,
         job_id=transcript.job_id,
         trigger="raw_content",
+        payer=payer,
         allow_done_retry=retry_missing_done_translation,
     )
     if outcome == TranslationDispatchOutcome.DISPATCH_FAILED:

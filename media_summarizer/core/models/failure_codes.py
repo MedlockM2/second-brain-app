@@ -71,11 +71,16 @@ class MediaFailureCode(str, Enum):
     #: A missing token, an unset actor id: the deployment is incomplete.
     PROVIDER_CONFIG_ERROR = "PROVIDER_CONFIG_ERROR"
 
-    # --- The user's own allowance -------------------------------------------
-    #: No transcription minutes left on the plan.
-    OUT_OF_MINUTES = "OUT_OF_MINUTES"
-    #: A single item longer than the plan allows in one go.
-    ITEM_TOO_LONG = "ITEM_TOO_LONG"
+    # --- The user's own budget (beta budget control, task-549) --------------
+    #: This month's budget does not cover the processing (or the beta formula is
+    #: closed and grants none). Renewed on the first of the next month UTC.
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+    #: One item is above its per-item limit (240 audio minutes, 100 pages, 30
+    #: sheets). Not a budget refusal: a new month does not change it.
+    ITEM_TOO_LARGE = "ITEM_TOO_LARGE"
+    #: The budget counter could not be read or written, so the processing was
+    #: refused rather than let through (rule 7 of the task-547 decision).
+    BUDGET_UNAVAILABLE = "BUDGET_UNAVAILABLE"
 
     # --- Ours, and only ours ------------------------------------------------
     #: A queue message we could not act on (missing job, malformed body).

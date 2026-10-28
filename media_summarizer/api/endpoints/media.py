@@ -82,25 +82,26 @@ from media_summarizer.core.models.user_media import (
     UserMediaRecord,
     UserMediaStatus,
 )
-from media_summarizer.core.ports.document_parser import DocumentFormat, is_text_format
+from media_summarizer.core.ports.document_parser import DocumentFormat
 from media_summarizer.core.services import (
     audio_duration_probe,
+    beta_budget,
+    budget_guard,
     cover_capture,
     folder_service,
     media_deletion_service,
     media_rename_service,
     media_search_service,
-    quota_enforcer,
 )
 from media_summarizer.core.services.artifact_service import (
     resolve_internal_review_blurb,
 )
+from media_summarizer.core.services.budget_guard import BudgetRefusedError, TextEstimate
 from media_summarizer.core.services.durable_media_service import (
     media_duration_seconds,
     resolve_content_transcript,
     resolve_pipeline_job,
     save_media_for_user,
-    user_holds_media,
 )
 from media_summarizer.core.services.media_identity import (
     UploadedFileKind,
@@ -111,7 +112,6 @@ from media_summarizer.core.services.media_search_service import (
     SearchFilters,
     SortDirection,
 )
-from media_summarizer.core.services.quota_enforcer import check_submission_allowed
 from media_summarizer.core.services.raw_content_service import (
     DEFAULT_RAW_CONTENT_VARIANT,
     RawContentNotAvailableError,
@@ -119,6 +119,7 @@ from media_summarizer.core.services.raw_content_service import (
     get_raw_content,
 )
 from media_summarizer.core.services.short_url_resolver import resolve_tiktok_short_link
+from media_summarizer.core.services.transcript_translation import TranslationPayer
 from media_summarizer.utils import database_async, s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.language_codes import normalize_language_code
@@ -556,6 +557,39 @@ async def _probe_staged_audio_duration(staged: StagedUpload) -> int:
         http_method="GET",
     )
     return await audio_duration_probe.probe_duration_seconds_from_url(probe_url) or 0
+
+
+def _budget_refusal(refusal: BudgetRefusedError) -> HTTPException:
+    """A beta budget refusal as the API answers it: its code and public figures.
+
+    Never a sentence, never an amount: the app words the code in the reader's
+    language and shows a percentage (TASK-550, TASK-551).
+    """
+    return HTTPException(
+        status_code=refusal.http_status,
+        detail=refusal.error_body(),
+        headers=refusal.headers(),
+    )
+
+
+async def _precheck_budget(user_id: str) -> None:
+    """Refuse a new paid processing at once when the month has nothing left.
+
+    The atomic admission happens where the provider call is bounded (task-549,
+    rule 4 of the task-547 decision); this is the answer a submission gets when
+    nothing could be admitted anyway, or when the counter cannot be read (rule 7).
+    """
+    try:
+        await budget_guard.precheck(user_id)
+    except BudgetRefusedError as refusal:
+        log_event(
+            logger,
+            logging.INFO,
+            "budget.submission_refused",
+            "Submission refused by the beta budget",
+            error_code=refusal.error_code,
+        )
+        raise _budget_refusal(refusal) from refusal
 
 
 async def _resolve_media_organization(
@@ -1394,18 +1428,13 @@ async def ingest_url(
         # Best effort: an unresolvable link is submitted as-is.
         url = await resolve_tiktok_short_link(url)
 
-        # Consumption check before processing. Submitting a URL costs nothing by
+        # Budget check before processing. Submitting a URL costs nothing by
         # itself: what a link costs is decided by the provider call it ends up
         # making, and only the worker that resolves it knows whether there is
-        # anything to transcribe and how long it is. So this check only answers
-        # "is this user entitled at all" -- the debit happens downstream.
-        quota_result = await check_submission_allowed(user.id)
-        if not quota_result.allowed:
-            raise HTTPException(
-                status_code=quota_result.http_status,
-                detail=quota_result.error_body(),
-                headers={"X-Quota-Error-Code": quota_result.error_code or ""},
-            )
+        # anything to transcribe and how long it is. So this only refuses a month
+        # with nothing left -- the import is admitted downstream, before its first
+        # paid call (task-549).
+        await _precheck_budget(user.id)
 
         # Transcript language (task-216): the user's reading_language preference
         # (task-190) is the default; an explicit payload value overrides it for
@@ -1432,8 +1461,9 @@ async def ingest_url(
         use_case = build_default_ingest_url_use_case()
         outcome = await use_case.execute(command)
 
-        # No minutes are charged here whatever the platform: this submission has
-        # not made a provider call yet.
+        # Nothing is charged here whatever the platform, unless this save reused
+        # content another account had processed (rule 12, charged by the
+        # orchestrator): this submission has not made a provider call yet.
 
         log_event(
             logger,
@@ -1456,6 +1486,11 @@ async def ingest_url(
 
     except HTTPException:
         raise
+    except BudgetRefusedError as refusal:
+        # A save of content another account processed, or an article whose
+        # preview and translation the month does not cover: refused like a new
+        # processing, its library row withdrawn by the orchestrator.
+        raise _budget_refusal(refusal)
     except InvalidUrlError as exc:
         log_event(
             logger,
@@ -1638,24 +1673,12 @@ async def upload_document(
             folder_id=payload.folder_id,
         )
 
-        # Consumption check before processing. A document costs a minute per five
-        # pages and the page count only exists after the parse, so the cheapest
-        # honest figure here is the minimum any document costs: one minute. The
-        # parsing worker charges the real page count.
-        #
-        # A text file is the exception, and asking for a minute it will never
-        # spend would refuse a free import to a user with an empty balance: it has
-        # no pages and no provider behind it, so nothing is needed here either.
-        quota_result = await check_submission_allowed(
-            user.id,
-            minutes_needed=0 if is_text_format(file_name) else 1,
-        )
-        if not quota_result.allowed:
-            raise HTTPException(
-                status_code=quota_result.http_status,
-                detail=quota_result.error_body(),
-                headers={"X-Quota-Error-Code": quota_result.error_code or ""},
-            )
+        # Budget check before processing. The pages are counted in the file by the
+        # parsing worker, which admits the import from them before LlamaParse is
+        # called (task-549); this only refuses a month with nothing left. A text
+        # file pays no parser, but its preview and translation are still paid
+        # calls, so it is checked like any other import.
+        await _precheck_budget(user.id)
 
         # Content identity of this document: the fingerprint of its bytes, inside
         # this account (task-393). Neither the file's name nor its size is in it --
@@ -1822,24 +1845,15 @@ async def upload_audio(
             folder_id=payload.folder_id,
         )
 
-        # Consumption check. The file is already in S3, so its real duration is read
-        # from the container over a presigned GET — a couple of Range requests, not a
-        # download. This is still the one path that knows the length up front, which
-        # is what makes the "too long for one import" refusal possible before
-        # anything is committed. A container we cannot parse yields 0, which means
-        # "accept, debit one provisional minute, settle after transcription".
+        # The file is already in S3, so its real duration is read from the
+        # container over a presigned GET — a couple of Range requests, not a
+        # download. This is the one path that knows the length up front, so the
+        # import is admitted on the beta budget in this request, below, once its
+        # library row exists: refused before anything is queued, and "too long
+        # for one import" refused as such. A container we cannot parse yields 0,
+        # which reserves the per-item ceiling (rule 3 of the task-547 decision).
+        await _precheck_budget(user.id)
         upload_duration_seconds = await _probe_staged_audio_duration(staged)
-        upload_minutes = quota_enforcer.minutes_for_seconds(upload_duration_seconds)
-        quota_result = await check_submission_allowed(
-            user.id,
-            minutes_needed=upload_minutes or 1,
-        )
-        if not quota_result.allowed:
-            raise HTTPException(
-                status_code=quota_result.http_status,
-                detail=quota_result.error_body(),
-                headers={"X-Quota-Error-Code": quota_result.error_code or ""},
-            )
 
         # Same content-key convention as the document upload: the fingerprint of
         # the bytes, scoped to this account (task-393). The library id is
@@ -1893,6 +1907,28 @@ async def upload_audio(
         )
         job.media_item_id = durable_media_item_id
 
+        # One conditional write for the whole import: the transcription bounded by
+        # the measured duration, its preview and its translation (rules 4 and 10).
+        # The operation is the library row, the one the worker claims under.
+        measured_seconds = float(upload_duration_seconds) if upload_duration_seconds > 0 else None
+        try:
+            await budget_guard.admit_import(
+                user.id,
+                operation_id=durable_media_item_id,
+                acquisition=lambda ctx: [
+                    beta_budget.transcription_line(ctx, duration_seconds=measured_seconds)
+                ],
+                text=TextEstimate(duration_seconds=measured_seconds),
+                media_item_id=durable_media_item_id,
+            )
+        except BudgetRefusedError as refusal:
+            from media_summarizer.utils import user_media as user_media_store
+
+            await user_media_store.mark_deleted(
+                user_id=user.id, media_item_id=durable_media_item_id, grace_days=0
+            )
+            raise _budget_refusal(refusal) from refusal
+
         job = await database_async.create_processing_job(job)
 
         # Move the uploaded object to the job-scoped key the transcription worker
@@ -1908,38 +1944,6 @@ async def upload_audio(
             expiration=AUDIO_PRESIGNED_URL_EXPIRATION,
             http_method="GET",
         )
-
-        # Re-uploading a file already in the library is the same save twice: the
-        # content key is per user and per file, so an identical upload costs the
-        # user nothing again (task-281). The row created just above is excluded,
-        # otherwise every upload would find itself and never be debited.
-        already_held = await user_holds_media(
-            user_id=user.id,
-            media_key=media_key,
-            exclude_media_item_id=durable_media_item_id,
-        )
-
-        # Debit the minutes now that the job exists, exactly once for this job id.
-        # The transcription worker will settle the difference with the duration
-        # Deepgram bills, so an unparsable container still ends up counted
-        # correctly and a parsable one is not counted twice.
-        debited_minutes = 0
-        if already_held:
-            log_event(
-                logger,
-                logging.INFO,
-                "quota.audio_gate_already_held",
-                "User already holds this audio file; the upload is free",
-                user_id=user.id,
-                media_item_id=durable_media_item_id,
-                job_id=job.id,
-            )
-        else:
-            debited_minutes = await quota_enforcer.record_transcription_minutes(
-                user.id,
-                minutes=upload_minutes or 1,
-                idempotency_token=quota_enforcer.gate_token(job.id),
-            )
 
         # Enqueue transcription message with the pre-signed URL.
         #
@@ -1961,8 +1965,6 @@ async def upload_audio(
                 "audio_s3_key": audio_s3_key,
                 "original_name": file_name,
                 "audio_duration_seconds": upload_duration_seconds,
-                "quota_debited_minutes": debited_minutes,
-                "quota_debit_skipped": already_held,
                 "deepgram_mode": "pull",
             },
         )
@@ -2161,25 +2163,13 @@ async def ingest_shared_content(
             # there, so there is nothing left to check here.
             content_hash = staged.content_fingerprint
 
-            # Consumption check. The duration comes from the container over a
-            # presigned GET, so the refusal below stays exact. The debit itself
-            # happens once in the ingestion orchestrator, where the job id exists;
-            # this check is only here to answer the share sheet with a real HTTP
-            # error instead of a job that fails a second later.
+            # The duration comes from the container over a presigned GET. The
+            # import is admitted on the beta budget in the ingestion orchestrator,
+            # where its job exists (``audio_quota_gate``); this check is only here
+            # to answer the share sheet with a real HTTP error when the month has
+            # nothing left, instead of a job that fails a second later.
+            await _precheck_budget(current_user.id)
             shared_audio_duration_seconds = await _probe_staged_audio_duration(staged)
-            quota_result = await check_submission_allowed(
-                current_user.id,
-                minutes_needed=(
-                    quota_enforcer.minutes_for_seconds(shared_audio_duration_seconds)
-                    or 1
-                ),
-            )
-            if not quota_result.allowed:
-                raise HTTPException(
-                    status_code=quota_result.http_status,
-                    detail=quota_result.error_body(),
-                    headers={"X-Quota-Error-Code": quota_result.error_code or ""},
-                )
 
             # Move the object to the content-addressed key the ingestion
             # orchestrator hands to the transcription worker. Server-side copy.
@@ -2246,6 +2236,8 @@ async def ingest_shared_content(
 
     except HTTPException:
         raise
+    except BudgetRefusedError as refusal:
+        raise _budget_refusal(refusal)
     except ResolutionError as exc:
         log_event(
             logger,
@@ -2594,6 +2586,8 @@ async def get_media_raw_content(
             transcript,
             reading_language=record.reading_language,
             variant=variant,
+            # A missing translation this read asks for is charged to this save.
+            payer=TranslationPayer(user_id=current_user.id, operation_id=media_item_id),
         )
 
         log_event(

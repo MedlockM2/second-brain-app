@@ -41,8 +41,6 @@ async def enqueue_deepgram_transcription(
     episode_title: Optional[str] = None,
     podcast_title: Optional[str] = None,
     audio_duration_seconds: int = 0,
-    quota_debited_minutes: int = 0,
-    quota_debit_skipped: bool = False,
     content_mime_type: Optional[str] = None,
     original_name: Optional[str] = None,
     resolver_key: Optional[str] = None,
@@ -54,20 +52,12 @@ async def enqueue_deepgram_transcription(
     logs a warning and silently falls back to ``pull`` when the field is
     missing, which masks bugs.
 
-    ``quota_debited_minutes`` is how many minutes the producer already debited at
-    its quota gate. The worker settles the difference with Deepgram's own
-    duration, so a producer that omits it makes the user pay the whole real
-    duration a second time.
-
-    ``quota_debit_skipped`` says the gate deliberately debited nothing because the
-    user already holds this content (task-281). It is not the same statement as
-    ``quota_debited_minutes == 0``: the worker settles the full billed duration
-    against a zero debit, so an exempt save that omits this flag ends up charged
-    exactly what the exemption was meant to spare it.
-
-    Every message that reaches Deepgram is metered in minutes, whatever the
-    platform the audio came from: the meter follows the provider call, not the
-    URL (task-287). There is no per-platform opt-out.
+    ``audio_duration_seconds`` is the duration the producer's budget gate
+    (``audio_quota_gate``) admitted the import with: the worker claims the attempt
+    that gate held, and bounds any further try (a retry, the push fallback) with the
+    same figure — 0 when it could not be measured, which reserves the per-item
+    ceiling. Every message that reaches Deepgram is a paid call held on the beta
+    budget, whatever the platform the audio came from (task-549).
 
     Nothing descriptive belongs in this payload. The Instagram producer used to
     pass the caption and a comments block; the Deepgram worker never read either,
@@ -81,8 +71,6 @@ async def enqueue_deepgram_transcription(
         "deepgram_mode": deepgram_mode,
         "source_platform": source_platform,
         "audio_duration_seconds": audio_duration_seconds,
-        "quota_debited_minutes": quota_debited_minutes,
-        "quota_debit_skipped": quota_debit_skipped,
     }
     optional_fields = {
         "media_key": media_key,

@@ -78,6 +78,12 @@ _APIFY_FAILURE_CODES: Dict[str, MediaFailureCode] = {
     "apify_invalid_json": MediaFailureCode.PROVIDER_RESULT_INVALID,
     "apify_invalid_run": MediaFailureCode.PROVIDER_RESULT_INVALID,
     "apify_invalid_dataset": MediaFailureCode.PROVIDER_RESULT_INVALID,
+    # The beta budget refused the run before it started (task-549): the codes of
+    # `budget_guard.BudgetRefusedError`, carried by `apify_orchestration`.
+    "budget_exhausted": MediaFailureCode.BUDGET_EXHAUSTED,
+    "not_entitled": MediaFailureCode.BUDGET_EXHAUSTED,
+    "item_too_large": MediaFailureCode.ITEM_TOO_LARGE,
+    "budget_unavailable": MediaFailureCode.BUDGET_UNAVAILABLE,
 }
 
 
