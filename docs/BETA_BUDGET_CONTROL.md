@@ -51,8 +51,15 @@ holds since 2026-10-05) gets every other key from the defaults, leaf by leaf
 (`_merge_defaults`).
 
 `eur_usd_rate` holds `usd_per_eur` (seeded `"1.1188"`, ECB, 26 October 2026) and
-`published_on`. TASK-559 updates it every working day and leaves the last rate in
-place on failure. An unusable stored value falls back to the seed and logs
+`published_on`. The Lambda `media-summarizer-worker-ecb-rate-<env>` refreshes it
+every working day at 15:30 UTC from the ECB daily file (task-559,
+`workers/ecb_rate_refresh.py`, `lambda_ecb_rate.tf`): the row is updated only when
+the publication date moves forward (a top-level `published_on` attribute carries the
+condition), so a rerun, a weekend or a holiday changes nothing, and a failed read
+writes nothing and logs `fx.ecb_refresh_failed` — the last rate stays in place. Its
+role may update that single row and nothing else. A rate edited by hand must update
+the top-level `published_on` as well, or the next refresh compares against the old
+date. An unusable stored value falls back to the seed and logs
 `beta_budget.fx_rate_unreadable`. The rate is never a reason to refuse a call (rule 15).
 
 `provider_tariffs` is the versioned barème in USD, at normal prices: promotional
