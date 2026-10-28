@@ -84,6 +84,7 @@ async def _record_content_outcome(
     processed: bool,
     transcription_s3_key: Optional[str] = None,
     source_language: Optional[str] = None,
+    value_operation_id: Optional[str] = None,
 ) -> None:
     """Close the global content ledger for this media (task-390).
 
@@ -112,6 +113,7 @@ async def _record_content_outcome(
                 job_id=canonical_job_id,
                 transcript_s3_key=transcription_s3_key,
                 source_language=source_language,
+                value_operation_id=value_operation_id,
             )
         else:
             await media_idempotence.mark_failed(
@@ -356,12 +358,17 @@ async def process_event(message: Dict[str, Any]) -> None:
     # a save landing while this event is being handled reads the ledger first,
     # and it must find "processed" -- with the transcript location on it -- rather
     # than a reservation it would wait on.
+    from media_summarizer.core.services.budget_guard import import_operation_id
+
+    canonical_job = await _load_job(canonical_job_id)
     await _record_content_outcome(
         media_key=media_key,
         canonical_job_id=canonical_job_id,
         processed=True,
         transcription_s3_key=transcription_s3_key,
         source_language=_event_source_language(body.get("transcription_metadata")),
+        # The processing whose value rule 12 charges, if its text is the one kept.
+        value_operation_id=import_operation_id(canonical_job) if canonical_job else None,
     )
 
     # -------------------------------------------------------------------------
@@ -374,7 +381,6 @@ async def process_event(message: Dict[str, Any]) -> None:
 
     from media_summarizer.utils import database_async
 
-    canonical_job = await _load_job(canonical_job_id)
     await _close_import_budget(canonical_job=canonical_job, media_key=media_key, delivered=True)
 
     if canonical_job and canonical_job.user_id:

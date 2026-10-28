@@ -34,6 +34,7 @@ from media_summarizer.core.services.durable_media_service import (
     charge_reused_content,
     finalize_deduplicated_save,
     save_media_for_user,
+    user_holds_media,
     withdraw_refused_save,
 )
 from media_summarizer.core.services.transcript_formatting import (
@@ -241,6 +242,42 @@ def _library_status_from_duplicate(
     return UserMediaStatus.PROCESSING
 
 
+async def _processed_in_parallel(
+    *,
+    user_id: str,
+    media_key: str,
+    media_item_id: str,
+    existing: Dict[str, Any],
+) -> bool:
+    """Whether this save must run a processing of its own rather than reuse one.
+
+    True when the content is still being processed — its ledger row is
+    ``reserved`` by a job that has not reached a terminal state — for an account
+    other than this one. Content processed in the past is reused (rule 12), and an
+    account saving again a media it already holds keeps waiting on its own
+    processing for free (task-281).
+    """
+    if str(existing.get("status") or "").lower() != "reserved":
+        return False
+    content = await _load_content_job(str(existing["job_id"]), media_key=media_key)
+    if content.job is not None and content.job.user_id == user_id:
+        return False
+    if await user_holds_media(
+        user_id=user_id, media_key=media_key, exclude_media_item_id=media_item_id
+    ):
+        return False
+    status = await _resolve_duplicate_status(
+        media_key=media_key,
+        ledger_status=existing.get("status"),
+        content_job_id=str(existing["job_id"]),
+        content=content,
+    )
+    return status not in (
+        ProcessingLifecycleStatus.READY_FOR_ARTIFACTS,
+        ProcessingLifecycleStatus.COMPLETED,
+    )
+
+
 async def _admit_text_import(
     *, job: ProcessingJob, text: str, content_language: Optional[str]
 ) -> None:
@@ -442,6 +479,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         )
 
         existing = await episode_idempotence.already_processed(media_key=resolved.media_key)
+        parallel = False
         if episode_idempotence.is_failed_row(existing):
             # A failed ledger row is a record of an attempt, not a verdict on the
             # URL. Reusing the job behind it is what made one anti-robot 405 fail
@@ -460,6 +498,29 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                 media_type=resolved.media_type.value,
                 source_platform=resolved.source_platform.value,
             )
+        elif existing and existing.get("job_id") and await _processed_in_parallel(
+            user_id=command.user.user_id,
+            media_key=resolved.media_key,
+            media_item_id=durable_media_item_id,
+            existing=existing,
+        ):
+            # Being processed right now for another account: this save gets a
+            # processing of its own instead of waiting on that one (owner decision
+            # of 2026-10-28). It falls through to a new job, without the ledger
+            # reservation the other job holds; the first of the two to succeed
+            # provides the content's text (`media_idempotence._record_terminal_status`).
+            log_event(
+                logger,
+                logging.INFO,
+                "media.ingest.processed_in_parallel",
+                "Content in flight for another account; processing it again for this save",
+                job_id=existing.get("job_id"),
+                media_item_id=durable_media_item_id,
+                media_key=resolved.media_key,
+                resolver_key=resolved.resolver_key,
+            )
+            existing = None
+            parallel = True
         elif existing and existing.get("job_id"):
             log_event(
                 logger,
@@ -478,6 +539,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                 existing=existing,
                 durable_media_item_id=durable_media_item_id,
             )
+
 
         job = ProcessingJob(
             user_id=command.user.user_id,
@@ -523,7 +585,12 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                         duplicate = await episode_idempotence.already_processed(
                             media_key=resolved.media_key
                         )
-            if not reservation_created:
+            # A parallel save goes on without the reservation, unless the other
+            # processing finished in between: its result is then reused (rule 12).
+            finished_meanwhile = bool(
+                duplicate and str(duplicate.get("status") or "").lower() == "processed"
+            )
+            if not reservation_created and (not parallel or finished_meanwhile):
                 if duplicate:
                     return await _build_duplicate_outcome(
                         user_id=command.user.user_id,

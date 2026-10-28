@@ -247,7 +247,9 @@ class BudgetCall:
         if consumed and self.content_media_key and self.component.value in IMPORT_VALUE_COMPONENTS:
             from media_summarizer.utils import media_idempotence
 
-            await media_idempotence.add_budget_value(media_key=self.content_media_key, nano_eur=consumed)
+            await media_idempotence.add_budget_value(
+                media_key=self.content_media_key, operation_id=self.operation_id, nano_eur=consumed
+            )
         return consumed
 
     async def release(

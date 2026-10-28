@@ -4,7 +4,7 @@ title: Faire passer les traitements fournisseurs par le contrôle budgétaire co
 status: To Do
 assignee: []
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-28 15:52'
+updated_date: '2026-10-28 16:24'
 labels:
   - backend
   - feature
@@ -112,6 +112,8 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 - Règle 12 : Bob paie l'acquisition, plus l'aperçu et la traduction d'Alice lorsqu'ils existent dans sa langue de lecture, car ce sont eux qu'il reçoit. La valeur de l'aperçu est conservée par langue sur la ligne du contenu (`media_idempotence.preview_value_<langue>`, écrite par le worker d'artefacts au règlement). Dans une autre langue, l'aperçu et la traduction sont générés pour Bob et payés au réel.
 - Sauvegarde pendant le traitement d'un autre compte : en attente de décision (voir la réponse à l'owner).
 - Artefacts régénérés à chaque demande, aperçu excepté : à traiter dans une tâche dédiée.
+
+**Sauvegarde pendant le traitement d'un autre compte (décision de l'owner du 2026-10-28).** Le traitement est relancé pour la nouvelle sauvegarde, comme un import normal réservé et payé au réel, sans attendre l'autre traitement (`orchestrators._processed_in_parallel`). Le premier traitement qui réussit fournit le texte : l'écriture `processed` du registre passe désormais sur toute ligne qui n'est pas encore `processed`, tandis que `failed` reste réservé au job nommé. Chaque traitement garde sa propre valeur (`budget_value_<operation_id>`), et la règle 12 facture celle du traitement dont le texte a été retenu (`value_operation_id`). Si l'autre traitement se termine entre les deux lectures, le résultat est réutilisé. Le chemin `media_submission` / watchers n'est pas modifié ici : c'est une surface que rien n'appelle, supprimée par TASK-561.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
