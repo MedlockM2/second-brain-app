@@ -1,9 +1,10 @@
 ---
 id: TASK-556
 title: Passer la traduction du texte complet des médias sur GPT-6 Luna
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-27 16:21'
+updated_date: '2026-10-28 12:09'
 labels:
   - backend
   - llm
