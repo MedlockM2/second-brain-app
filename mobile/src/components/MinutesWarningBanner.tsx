@@ -12,7 +12,7 @@ import {
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { HOME_BLOCK_GAP } from "../constants/homeRhythm";
 import { usePurchases } from "../contexts/PurchasesContext";
-import { formatResetDate, getUsageRatio } from "../lib/subscriptionDisplay";
+import { capacityLines } from "@media-summarizer/core/budget/presentation";
 import { UsageWarningDismissal } from "../lib/usageWarningDismissal";
 import { t } from "../i18n";
 
@@ -47,9 +47,8 @@ export function MinutesWarningBanner(): React.JSX.Element | null {
     return null;
   }
 
-  const usedPercent = Math.round(getUsageRatio(entitlementStatus) * 100);
-  const resetDate = formatResetDate(resetsAt);
-  const message = `${t("budget.consumed")}: ${usedPercent}%. ${resetDate ? `${t("subscription.resetLabel.resets")}: ${resetDate}` : ""}`;
+  const lines = capacityLines(entitlementStatus.budget);
+  const message = lines[lines.length - 1];
 
   const handleDismiss = (): void => {
     setIsDismissed(true);

@@ -2,6 +2,7 @@ import { extractUrlFromText } from "@media-summarizer/core/media/urlValidation";
 import { useRef, useState, type DragEvent } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { addFile, addLink, addNote } from "../media/ingest";
+import { BudgetForecastNotice } from "./BudgetForecastNotice";
 import { Icon } from "./Icon";
 
 /**
@@ -148,6 +149,8 @@ export function AddSourceDialog({
           </>
         )}
 
+        <p className="small subtle">{t("budget.automatic")}</p>
+        <BudgetForecastNotice request={file && /\.(pdf|docx|pptx|xlsx|jpg|jpeg|png|tiff|tif|bmp|heif|heic)$/i.test(file.name) ? { operation: "document_import", document_unit: /\.xlsx$/i.test(file.name) ? "sheet" : "page", ...(/\.(jpg|jpeg|png|bmp|heif|heic)$/i.test(file.name) ? { document_units: 1 } : {}) } : file && /\.(mp3|m4a|wav|ogg|flac|mp4)$/i.test(file.name) ? { operation: "audio_import" } : null} />
         {error && (
           <div className="banner-err" role="alert">
             <Icon name="alert-circle-outline" size={18} />

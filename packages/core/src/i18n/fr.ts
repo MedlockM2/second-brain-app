@@ -15,6 +15,15 @@ import type { Catalog } from "./runtime";
  * `media.tab.reader` is the reading mode of a source, not the Reader tier.
  */
 export const fr: Catalog = {
+  "budget.forecastOver": "Cette réservation estimée dépasse la capacité actuellement disponible.",
+  "budget.available": "{percent} disponibles",
+  "budget.reserved": "{percent} réservés aux traitements en cours",
+  "budget.uses": "Imports, aperçus, traductions, créations IA et chat consomment de la capacité. Lire, ranger et ouvrir des résultats existants n’en consomment pas.",
+  "budget.forecast": "Réservation estimée : jusqu’à {percent}. La consommation finale dépend du traitement réalisé.",
+  "budget.forecastUnavailable": "Estimation indisponible. La capacité sera vérifiée avant le traitement.",
+  "budget.automatic": "Préparer une source peut aussi générer son aperçu et traduire son texte.",
+  "budget.warning": "{percent} consommés. La capacité se renouvelle le {date}.",
+
   "budget.title": "Traitement indisponible",
   "budget.exhausted": "La capacité du mois ne permet pas ce traitement.",
   "budget.exhaustedUntil": "La capacité se renouvelle le {date}. Lecture et rangement restent accessibles.",

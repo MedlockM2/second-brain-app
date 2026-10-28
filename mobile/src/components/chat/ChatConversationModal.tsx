@@ -42,6 +42,7 @@ import type {
   ChatSource,
 } from "@media-summarizer/core/types/chat";
 import { useKeyboardViewport } from "../../hooks/useKeyboardViewport";
+import { BudgetForecastNotice } from "../BudgetForecastNotice";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread, type ChatThreadProps } from "./ChatThread";
 export interface ChatConversationModalProps {
@@ -58,6 +59,7 @@ export interface ChatConversationModalProps {
   waiting: boolean;
   generating: boolean;
   sending: boolean;
+  conversationId?: string;
   draft: string;
   onChangeDraft: (value: string) => void;
   onSend: () => void;
@@ -449,6 +451,7 @@ export function ChatConversationModal(
               },
             ]}
           >
+            {props.draft.trim() && !props.generating ? <BudgetForecastNotice request={props.conversationId ? { operation: "chat_turn", conversation_id: props.conversationId, question: props.draft } : null} /> : null}
             <ChatComposer
               ref={inputRef}
               value={props.draft}

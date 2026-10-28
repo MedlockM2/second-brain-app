@@ -1,3 +1,4 @@
+import { artifactForecast } from "@media-summarizer/core/api/entitlements";
 import {
   DEFAULT_COUNT,
   DEFAULT_DIFFICULTY,
@@ -33,6 +34,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../../api";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useSession } from "../../session/SessionProvider";
+import { BudgetForecastNotice } from "../BudgetForecastNotice";
 import { Icon } from "../Icon";
 import type { ArtifactFormat } from "./artifactFormats";
 import { describeArtifactRefusal } from "@media-summarizer/core/artifacts/refusal";
@@ -123,24 +125,20 @@ export function CustomizeArtifact({
     };
   }, [scope, scopeId, attempt]);
 
+  const parameters: ArtifactGenerationParameters = {
+    focus,
+    ...(sources ? sourceParameters(scope, sources, selected, language || null, readingLanguage) : {}),
+  };
+  if (options.includes("length")) parameters.length = length;
+  if (options.includes("count")) parameters.count = count;
+  if (options.includes("difficulty")) parameters.difficulty = difficulty;
+
   const submit = async () => {
     if (busy.current || !sources || !selected.size || sourceError) return;
     busy.current = true;
     setSubmitting(true);
     setRefusal(null);
-    const parameters: ArtifactGenerationParameters = {
-      focus,
-      ...sourceParameters(
-        scope,
-        sources,
-        selected,
-        language || null,
-        readingLanguage,
-      ),
-    };
-    if (options.includes("length")) parameters.length = length;
-    if (options.includes("count")) parameters.count = count;
-    if (options.includes("difficulty")) parameters.difficulty = difficulty;
+
     try {
       await onGenerate(withoutDefaults(parameters));
     } catch (error) {
@@ -344,6 +342,7 @@ export function CustomizeArtifact({
           ))}
         </select>
       </label>
+      <BudgetForecastNotice request={sources && selected.size && !sourceError ? artifactForecast(scope, scopeId, format.type, parameters) : null} />
       {refusal && (
         <div className="banner-err" role="alert">
           {refusal}

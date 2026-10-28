@@ -1,3 +1,4 @@
+import { capacityLines } from "@media-summarizer/core/budget/presentation";
 import React from "react";
 import {
   View,
@@ -187,9 +188,10 @@ function CardBody({
       </View>
 
       <UsageBar entitlement={entitlement} />
+      {capacityLines(entitlement.budget).map((line) => <Text key={line} style={styles.hintText}>{line}</Text>)}
 
       <Text style={styles.hintText}>
-        {t("budget.rule")}
+        {t("budget.uses")}
       </Text>
     </View>
   );

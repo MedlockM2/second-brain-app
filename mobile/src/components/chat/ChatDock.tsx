@@ -229,6 +229,7 @@ export function ChatDock({
           waiting={generating && !session.streamingText}
           generating={generating}
           sending={sending}
+          conversationId={conversation?.conversation_id}
           draft={draft}
           onChangeDraft={setDraft}
           onSend={() => void ask(draft)}

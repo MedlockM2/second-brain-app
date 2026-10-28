@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Portuguese catalogue. See `en` for the reference wording and the key layout. */
 export const pt: Catalog = {
+  "budget.forecastOver": "Esta reserva estimada excede a capacidade atualmente disponível.",
+  "budget.available": "{percent} disponível",
+  "budget.reserved": "{percent} reservado para operações em curso",
+  "budget.uses": "Importações, pré-visualizações, traduções, criações de IA e chat consomem capacidade. Ler, organizar e abrir resultados existentes não.",
+  "budget.forecast": "Reserva estimada: até {percent}. O consumo final depende do processamento realizado.",
+  "budget.forecastUnavailable": "Estimativa indisponível. A capacidade será verificada antes do processamento.",
+  "budget.automatic": "Preparar uma fonte também pode gerar a sua pré-visualização e traduzir o seu texto.",
+  "budget.warning": "{percent} consumido. A capacidade renova-se em {date}.",
+
   "budget.title": "Processamento indisponível",
   "budget.exhausted": "A capacidade deste mês não cobre esta operação.",
   "budget.exhaustedUntil": "A capacidade renova-se em {date}. Ler e organizar continuam disponíveis.",

@@ -1,6 +1,6 @@
 """Public capacity, never prices or currency amounts (TASK-550)."""
 
-from typing import Dict, Literal, Optional, Union
+from typing import Any, Dict, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +37,12 @@ class ForecastRequest(BaseModel):
     # Complete request, including instructions, schema and (for chat) history.
     input_tokens: Optional[int] = Field(default=None, gt=0)
     include_translation: bool = True
+    scope: Optional[Literal["media", "folder"]] = None
+    scope_id: Optional[str] = Field(default=None, max_length=256)
+    artifact_type: Optional[Literal["summary_short", "notes", "flashcards", "quiz"]] = None
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+    conversation_id: Optional[str] = Field(default=None, max_length=256)
+    question: Optional[str] = Field(default=None, max_length=64000)
 
 
 class BudgetForecast(BaseModel):

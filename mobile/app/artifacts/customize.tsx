@@ -35,7 +35,9 @@
  * Sources and language are added under these options by task-536.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { artifactForecast } from "@media-summarizer/core/api/entitlements";
+import { BudgetForecastNotice } from "../../src/components/BudgetForecastNotice";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -256,6 +258,18 @@ function CustomizeForm({
     return () => clearTimeout(timer);
   }, [loadSources]);
 
+  // Only the options this format takes: any other is a 422.
+  const parameters = useMemo<ArtifactGenerationParameters>(() => {
+    const value: ArtifactGenerationParameters = {
+      focus,
+      ...(sources ? sourceParameters(scope, sources, selected, language, readingLanguage) : {}),
+    };
+    if (options.includes("length")) value.length = length;
+    if (options.includes("count")) value.count = count;
+    if (options.includes("difficulty")) value.difficulty = difficulty;
+    return value;
+  }, [focus, sources, scope, selected, language, readingLanguage, options, length, count, difficulty]);
+
   const handleGenerate = useCallback(async () => {
     if (
       !isAuthenticated ||
@@ -270,15 +284,6 @@ function CustomizeForm({
     setSubmitting(true);
     setRefusal(null);
     Keyboard.dismiss();
-
-    // Only the options this format takes: any other is a 422.
-    const parameters: ArtifactGenerationParameters = {
-      focus,
-      ...sourceParameters(scope, sources, selected, language, readingLanguage),
-    };
-    if (options.includes("length")) parameters.length = length;
-    if (options.includes("count")) parameters.count = count;
-    if (options.includes("difficulty")) parameters.difficulty = difficulty;
 
     try {
       const result = await ArtifactService.generateArtifact(
@@ -310,18 +315,12 @@ function CustomizeForm({
       setRefusal(describeArtifactRefusal(err, { scope }));
     }
   }, [
+    parameters,
     isAuthenticated,
     sourceLoading,
     sourceError,
     sources,
     selected,
-    language,
-    readingLanguage,
-    options,
-    focus,
-    length,
-    count,
-    difficulty,
     scope,
     scopeId,
     format.type,
@@ -512,6 +511,7 @@ function CustomizeForm({
       </ScrollView>
 
       <View style={styles.footer}>
+        <BudgetForecastNotice request={sources && selected.size && !sourceError ? artifactForecast(scope, scopeId, format.type, parameters) : null} />
         {refusal ? (
           <View
             style={styles.refusalBanner}

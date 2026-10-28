@@ -12,6 +12,7 @@
  * and every gesture it triggers presents its own surface right after.
  */
 
+import { BudgetForecastNotice } from "./BudgetForecastNotice";
 import { useRef } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -101,6 +102,8 @@ export function AddSourceSheet({
         >
           <View style={styles.handle} />
           <Text style={styles.title}>{t("addSource.title")}</Text>
+          <Text style={styles.rowDescription}>{t("budget.automatic")}</Text>
+          <BudgetForecastNotice />
 
           <SourceRow
             icon="link-outline"

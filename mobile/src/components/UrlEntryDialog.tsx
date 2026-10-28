@@ -18,6 +18,7 @@
  * content and a correction costs one tap rather than a retype.
  */
 
+import { BudgetForecastNotice } from "./BudgetForecastNotice";
 import { useRef } from "react";
 import {
   Modal,
@@ -147,6 +148,7 @@ export function UrlEntryDialog({
                   testID="add-url-input"
                 />
 
+                <BudgetForecastNotice />
                 {errorMessage ? (
                   <Text style={styles.error} testID="add-url-error">
                     {errorMessage}

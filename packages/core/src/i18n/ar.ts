@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Arabic catalogue. See `en` for the reference wording and the key layout. */
 export const ar: Catalog = {
+  "budget.forecastOver": "يتجاوز هذا الحجز المقدّر السعة المتاحة حاليًا.",
+  "budget.available": "{percent} متاحة",
+  "budget.reserved": "{percent} محجوزة للعمليات الجارية",
+  "budget.uses": "تستهلك عمليات الاستيراد والمعاينة والترجمة وإنشاء الذكاء الاصطناعي والمحادثة سعة. لا تستهلك القراءة والتنظيم وفتح النتائج الموجودة سعة.",
+  "budget.forecast": "الحجز المقدّر: حتى {percent}. يعتمد الاستهلاك النهائي على المعالجة المنفذة.",
+  "budget.forecastUnavailable": "التقدير غير متاح. ستُفحص السعة قبل بدء المعالجة.",
+  "budget.automatic": "قد يتضمن إعداد المصدر إنشاء معاينته وترجمة نصه أيضًا.",
+  "budget.warning": "تم استهلاك {percent}. تتجدد السعة في {date}.",
+
   "budget.title": "المعالجة غير متاحة",
   "budget.exhausted": "سعة هذا الشهر لا تكفي لهذه العملية.",
   "budget.exhaustedUntil": "تتجدد السعة في {date}. تبقى القراءة والتنظيم متاحين.",
