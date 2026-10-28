@@ -19,7 +19,7 @@ So this adapter implements `DocumentParserPort` without a network call:
 
 `page_count` is `0` on purpose and is not a missing value: a text file has no
 pages, and the worker reads that zero to charge nothing rather than inventing the
-single page every other format has (see `quota_enforcer.record_text_file_parse`).
+single page every other format has (see `document_parsing_service`, task-380).
 """
 
 from __future__ import annotations

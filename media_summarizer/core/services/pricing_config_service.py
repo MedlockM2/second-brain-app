@@ -3,7 +3,11 @@ Pricing configuration service with in-memory cache (TTL ~5 minutes).
 
 Reads all pricing/quota parameters from DynamoDB pricing_config table.
 On first load, seeds default values derived from the validated consumption model
-(docs/research/task-287-consumption-model/README.md, owner_decision: ok).
+(docs/research/task-287-consumption-model/README.md, owner_decision: ok) for the
+commercial tiers, and from the beta budget decision (R.1–R.2 of
+docs/research/pricing-challenge/README.md, implementation rules of
+docs/research/task-547-beta-budget-control/README.md) for the beta formula, its
+exchange rate and its barème (`beta_access`, `eur_usd_rate`, `provider_tariffs`).
 
 The service is stateless-safe: multiple processes will each maintain their own
 cache but share the same DynamoDB source of truth. Changes propagate within
@@ -37,6 +41,10 @@ _cache_loaded_at: float = 0.0
 # §3.1 of the benchmark for the conversion table. An Instagram photo post is no
 # longer one of them since task-384: its images go through the document parser we
 # pay for, so they are billed at `document_pages_per_minute` like any page.
+#
+# The beta formula (`beta_access`) is not a minute allowance: it is a budget in
+# euros of provider usage, held and settled by `beta_budget` (task-548), and it
+# reads none of the minute figures below.
 #
 # These are seeded into DynamoDB if the table is empty on first read.
 # ---------------------------------------------------------------------------
@@ -89,20 +97,23 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "minutes_per_month": 300,
         "max_minutes_per_item": 180,
     },
-    # --- Beta regime (task-429) ---
-    # Nothing is purchasable while the app is in beta, so every account is served
-    # the widest allowance the `tiers` catalogue holds — whatever its creation
-    # date and whatever it has bought — and the app hides every route to the
-    # paywall. Consumption keeps being counted period by period: measuring what
-    # testers really use is the reason the regime exists, and those figures are
-    # what the next pricing model will be built from.
+    # --- Beta formula (task-429, budget of task-548) ---
+    # Nothing is purchasable while the app is in beta, and the app hides every
+    # route to the paywall. The beta is its own formula, **independent of the
+    # commercial `tiers` and of any subscription**: every account, whatever its
+    # creation date and whatever it has bought, gets a budget of provider usage
+    # valued at normal prices (owner decision R.1–R.2 of
+    # docs/research/pricing-challenge/README.md, and the implementation rules of
+    # docs/research/task-547-beta-budget-control/README.md). Read by
+    # `beta_budget.beta_formula`, and by nothing that reads `tiers`.
     #
     # `enabled` is True in the defaults rather than per environment because the
     # beta is a state of the *product*, not of a deployment: an environment whose
-    # table has no block must behave like the beta, not start metering. The end
-    # date is unknown until the owner announces the start, hence `None`; it is
-    # filled in the table afterwards, which needs no build and no deploy (see
-    # docs/V1_LAUNCH_PLAN.md § « Phase de beta »).
+    # table has no block must behave like the beta. The end date is unknown until
+    # the owner announces the start, hence `None`; it is filled in the table
+    # afterwards, which needs no build and no deploy (see docs/V1_LAUNCH_PLAN.md
+    # § « Phase de beta »). A stored block holding only `enabled` and `ends_at` gets
+    # every other key below from `_merge_defaults`.
     #
     # When the beta ends, this block and every line that reads it are **deleted**,
     # here and in `pricing_config-dev` / `pricing_config-prod` — a key dropped from
@@ -111,6 +122,90 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "enabled": True,
         # ISO 8601 instant the beta closes, or None while it is open-ended.
         "ends_at": None,
+        # 5 EUR of provider usage per account and per month, outside fixed
+        # infrastructure. Considered permissive enough by the owner: not to be
+        # re-calibrated here. Strings, not floats, so money is read exactly.
+        "monthly_budget_eur": "5",
+        # Fixed by the decision and the only behaviour implemented: the calendar
+        # month in UTC, each month starting from the full budget with nothing
+        # carried over. Stated so the block describes the formula whole; another
+        # value is logged (`beta_budget.config_unsupported`) and ignored.
+        "period": "calendar_month_utc",
+        "carry_over": False,
+        # Above these one item is refused as `item_too_large`, which is not a
+        # budget refusal; when the measurement fails, the limit itself is
+        # reserved (rules 2-3 of the task-547 decision).
+        "item_limits": {
+            "audio_minutes": 240,
+            "document_pages": 100,
+            "spreadsheet_sheets": 30,
+        },
+        # A full-text translation sends `max_completion_tokens` = 1.5 x its input
+        # tokens, and is bounded with the same figure (rule 11).
+        "translation_output_ratio": "1.5",
+        # Text an import will produce, estimated from its upstream measure, to
+        # reserve its blurb and its translation with it (rule 10).
+        "estimated_text_tokens_per_audio_minute": 200,
+        "estimated_text_tokens_per_document_page": 700,
+        # Backstop: an attempt still open this long after its admission has no
+        # worker left to close it, and its hold goes back to the tester. Above the
+        # longest legitimate import chain (docs/BETA_BUDGET_CONTROL.md §3.5).
+        "hold_expiry_minutes": 360,
+    },
+    # --- EUR/USD exchange rate of the beta budget (rule 15 of task-547) ---
+    # ECB reference rate, USD per EUR, with its publication date. Converts the
+    # dollar tariffs below into the euro budget, and nothing else: no call is ever
+    # refused because of it. Each reservation records the rate it was computed
+    # with. Seeded with the 26 October 2026 rate; kept up to date every working day
+    # by TASK-559, which leaves the last rate in place when the ECB file fails.
+    "eur_usd_rate": {
+        "usd_per_eur": "1.1188",
+        "published_on": "2026-10-26",
+        "source": "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml",
+    },
+    # --- Versioned barème of the beta budget (R.2.1, task-547 decision) ---
+    # Normal public prices in USD, promotional credits and free volumes ignored:
+    # an LLM call paid by a sign-up credit consumes the same budget as after it
+    # runs out. Read 2026-10-26 (Deepgram, LlamaParse, Unstructured, OpenAI) and
+    # 2026-10-27/28 (Apify programmes, X API). Bump `version` with any price: every
+    # reservation records the version it was bounded with.
+    "provider_tariffs": {
+        "version": "2026-10-28",
+        "currency": "USD",
+        # Nova-3 pre-recorded, monolingual batch, per minute, billed to the second.
+        "deepgram": {"nova-3": {"per_minute": "0.0043"}},
+        # Cost-effective mode: 3 provider credits per page at 1.25 USD per 1 000
+        # credits; a spreadsheet sheet is 1 credit.
+        "llamaparse": {"page": {"usd": "0.00375"}, "sheet": {"usd": "0.00125"}},
+        # The fallback parser, a distinct attempt with its own reservation, priced
+        # on the same count as the upstream measure (pages, or the sheets of a
+        # spreadsheet) at its page price.
+        "unstructured": {"page": {"usd": "0.015"}, "sheet": {"usd": "0.015"}},
+        # USD per 1M tokens, Standard processing. Above the threshold the long rows
+        # apply to the whole request. A model with no cache-write price bills
+        # written tokens as fresh input.
+        "openai": {
+            "gpt-6-luna": {
+                "long_context_threshold": 272000,
+                "short": {"input": "0.10", "cached_input": "0.01", "cache_write": "0.125", "output": "0.50"},
+                "long": {"input": "0.20", "cached_input": "0.02", "cache_write": "0.25", "output": "0.75"},
+            },
+            "gpt-5-nano": {
+                "short": {"input": "0.05", "cached_input": "0.005", "output": "0.40"},
+            },
+        },
+        # Price of one result, Free plan (the dearest listed), keyed by the default
+        # actor ids of `apify_adapter.py`. An actor configured with another id must
+        # get its own price here before it is reserved.
+        "apify": {
+            "starvibe~youtube-video-transcript": {"per_result": "0.005"},
+            "scrape-creators~best-tiktok-transcripts-scraper": {"per_result": "0.001"},
+            "apify~instagram-reel-scraper": {"per_result": "0.0026"},
+            "apify~instagram-post-scraper": {"per_result": "0.0027"},
+        },
+        # One post read through the X API v2; author and media expansions are not
+        # billed (measured 2026-10-28).
+        "x_api": {"post": {"usd": "0.005"}},
     },
     # --- How each metered event converts into minutes (benchmark §3.1) ---
     "unit_conversion": {
@@ -137,23 +232,10 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
     "usage_gauge": {
         "warning_threshold_pct": 80,
     },
-    # --- Safety-net layer 2: invisible burst guards (benchmark §3.3) ---
-    # Not a user-visible allowance and never a refusal reason: these bound how fast
-    # a single account can burn through infrastructure in one day. Every size sits
-    # far above the heaviest measured usage, so a normal user cannot reach them, and
-    # crossing one only emits `quota.burst_guard_tripped` for the owner to look at.
-    "burst_guards": {
-        "minutes_per_day": 150,
-        "items_per_day": 60,
-        "documents_per_day": 40,
-        "document_pages_per_day": 400,
-        # A chat turn counts as a generation (task-462). Three conversations of 20
-        # turns plus the five artifact types already make 65 in a day, so 50 would
-        # flag ordinary use; 120 keeps the guard an order of magnitude signal
-        # (task-430 README §9.4).
-        "generations_per_day": 120,
-    },
-    # --- Safety-net layer 3: shared provider pools (benchmark §3.3) ---
+    # --- Shared provider pools (benchmark §3.3) ---
+    # The daily burst guards that sat here were deleted with task-548: the beta
+    # budget bounds what one account can spend, so a log-only daily signal no
+    # longer protects anything (rule 16 of the task-547 decision).
     # Apify credit and LlamaParse credits are *fixed monthly pools shared by every
     # user*, so no per-user cap can protect them. Capacities are expressed in the
     # unit each provider bills, counted across all users, and the percentages are
@@ -233,8 +315,9 @@ def _merge_defaults(defaults: Any, stored: Any) -> Any:
     Seeding only happens when the table is *empty*, so a key added to the
     defaults after the first seed would otherwise never reach an environment
     whose table is already populated — and a quota whose key is missing reads as
-    0, i.e. no limit at all. That is how `minutes_per_month` and `burst_guards`
-    would have been silently inert on dev.
+    0, i.e. no limit at all. That is how `minutes_per_month` would have been
+    silently inert on dev, and it is what gives a `beta_access` block stored with
+    only `enabled` and `ends_at` the budget keys of the defaults.
 
     A stored value always wins, including a stored 0: the point is to fill gaps,
     never to override what the owner has set in DynamoDB.

@@ -44,9 +44,20 @@ Not allowed:
    page is its text and not its address (task-392). What the orchestrator persists
    is always `resolved.media_key`.
 5. submit persistence/pipeline through `SubmissionOrchestratorPort`
-6. **count the accepted submission** via `quota_enforcer.record_submitted_item` (daily burst guard only — no minutes are charged here)
+
+No minutes are charged at submission on this path: they are charged where the
+provider call is made.
 
 ## Consumption enforcement (task-288, per the validated model of task-287)
+
+**The beta is not metered in minutes.** While `beta_access` is open, every account
+is on the beta formula: a budget of 5 EUR of provider usage per calendar month UTC,
+reserved before each paid call and settled on its real cost by
+`core/services/beta_budget.py` (task-548). Its attribution reads `beta_access`
+only, never `tiers`. A beta account is refused on its per-item limit and on its
+budget, never on minutes. Reference: `docs/BETA_BUDGET_CONTROL.md`. Routing every
+paid call through that budget is TASK-549, which also removes the minute debits
+described below.
 
 **One unit is metered: the minute.** A minute is a minute of media we pay a transcription provider to process, plus three flat conversions — a bought caption set counts 1, five document pages count 1, five sources of a folder generation count 1. Everything else (articles, web pages, TikToks, single-item AI generations) is unlimited and costs nothing. An Instagram photo post is *not* in that free list since task-384: its slides go through the paid document parser, so they are billed at the document rate, five images to the minute, by the same `record_document_parse` an upload uses.
 
@@ -60,12 +71,13 @@ The check has exactly two refusals, and the difference is whether upgrading fixe
 
 Both carry a product-copy `message` with the figures inline, which the app displays verbatim.
 
-Three safety-net layers, one of them visible:
+Two safety-net layers, one of them visible:
 1. the allowance itself — minutes x `cost_per_minute_eur` is always a fraction of the tier's net revenue, so no per-user euro ceiling is needed;
-2. `burst_guards` — invisible daily counters (minutes, items, documents, pages, generations) that **never refuse anything** and only emit `quota.burst_guard_tripped` for the owner;
-3. `provider_pool_guard` — Apify credit and LlamaParse credits are platform-wide monthly pools, so they are counted across all users and degrade (alarm at 60%, stop at 90%) independently of any per-user allowance.
+2. `provider_pool_guard` — Apify credit and LlamaParse credits are platform-wide monthly pools, so they are counted across all users and degrade (alarm at 60%, stop at 90%) independently of any per-user allowance.
 
-Counters live in DynamoDB tables `user_usage_monthly` (PK: user_id, SK: the billing period — never the calendar month, but the window the entitlement runs on: `sub:<YYYY-MM-DD>` for a subscription's anniversary window, `trial:<YYYY-MM-DD>` for the single non-renewing window of a free trial) and `user_usage_daily` (PK: user_id, SK: YYYY-MM-DD), written with atomic ADD plus a per-write idempotency token so a redelivered SQS message cannot debit twice.
+The invisible daily burst guards (`burst_guards`, table `user_usage_daily`) were deleted with task-548: they only ever logged, and the beta budget now bounds what one account can spend.
+
+Counters live in the DynamoDB table `user_usage_monthly` (PK: user_id, SK: the billing period — the window the entitlement runs on: `sub:<YYYY-MM-DD>` for a subscription's anniversary window, `trial:<YYYY-MM-DD>` for the single non-renewing window of a free trial, the calendar month `YYYY-MM` for a beta account until TASK-549), written with atomic ADD plus a per-write idempotency token so a redelivered SQS message cannot debit twice.
 
 ## URL classification and routing policy (task-21)
 

@@ -19,9 +19,7 @@ from media_summarizer.core.services.durable_media_service import (
 from media_summarizer.core.services.quota_enforcer import (
     check_submission_allowed,
     gate_token,
-    item_token,
     minutes_for_seconds,
-    record_submitted_item,
     record_transcription_minutes,
 )
 from media_summarizer.utils import (
@@ -204,7 +202,6 @@ async def submit_media_for_user(
         minutes=episode_minutes or 1,
         idempotency_token=gate_token(created_job.id),
     )
-    await record_submitted_item(user.id, idempotency_token=item_token(created_job.id))
 
     # Enqueue to deepgram transcription queue (direct path, no download worker needed)
     await sqs.send_message(

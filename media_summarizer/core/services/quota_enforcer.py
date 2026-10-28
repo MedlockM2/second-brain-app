@@ -19,20 +19,25 @@ document parse, the folder generation). That is what makes "the same import
 charged twice" and "a transcription nobody charged" unrepresentable rather than
 merely fixed.
 
-Three layers protect the margin (see docs/research/task-287-consumption-model):
+Two layers protect the margin of a commercial plan (see
+docs/research/task-287-consumption-model):
 1. the visible allowance itself — minutes x 0.00664 EUR is always a fraction of
    the tier's net revenue, so no per-user euro ceiling is needed;
-2. invisible daily burst guards, which never refuse anything and only tell the
-   owner an account is worth a look;
-3. the shared provider pools, in `provider_pool_guard` — Apify credit and
+2. the shared provider pools, in `provider_pool_guard` — Apify credit and
    LlamaParse credits are platform-wide and no per-user allowance can protect them.
+The invisible daily burst guards that used to sit between the two were deleted
+with task-548: the beta budget bounds what one account can spend.
 
-One temporary regime sits on top of all of it: while `beta_access` is open
-(task-429) every account is served the widest allowance the catalogue holds,
-because nothing is purchasable before the stores. It raises the allowance and
-nothing else — the counters, the debits and the burst guards are untouched, since
-what the testers really consume is what the next pricing model will be built on.
-Both the block and every line reading it are deleted when the beta ends.
+**The beta is not a plan of this catalogue.** While `beta_access` is open every
+account is on the beta formula (task-429, budget of task-548): 5 EUR of provider
+usage per calendar month UTC, held before each paid call and settled on its real
+cost by `beta_budget`. Its attribution reads the `beta_access` block only — never
+`tiers`, never a subscription row, never the free trial — and it carries no minute
+allowance: the only minute figure a beta snapshot holds is the per-item audio limit
+of the formula. Routing every provider call through the budget is TASK-549; until
+then the minute debits below keep writing their counters, and nothing refuses a
+beta account on minutes. Both the block and every line reading it are deleted when
+the beta ends.
 """
 
 from __future__ import annotations
@@ -43,7 +48,7 @@ from datetime import datetime, timedelta, timezone
 from math import ceil
 from typing import Any, Dict, Mapping, Optional, Tuple, TypeGuard
 
-from media_summarizer.core.services import pricing_config_service
+from media_summarizer.core.services import beta_budget, pricing_config_service
 from media_summarizer.utils import quota_usage_db
 
 logger = logging.getLogger(__name__)
@@ -86,8 +91,8 @@ class QuotaCheckResult:
     error_code: Optional[str] = None  # stable machine-readable code
     # Figures the client needs to word the refusal. Keys are per error code:
     # `out_of_minutes` -> has_plan, and when a plan exists minutes_needed,
-    # minutes_remaining, period_end (ISO 8601, or absent) and beta_access
-    # (true, or absent);
+    # minutes_remaining and period_end (ISO 8601, or absent). A beta account is
+    # never refused on minutes: its budget refusals belong to `beta_budget`;
     # `item_too_long` -> minutes_needed, max_minutes_per_item.
     params: Dict[str, Any] = field(default_factory=dict)
     http_status: int = 200
@@ -138,9 +143,11 @@ class EntitlementSnapshot:
     auto_renew: Optional[bool] = None
     is_entitled: bool = False
     is_free_trial: bool = False
-    # Whether the figures below are the beta regime's rather than a plan's or a
-    # trial's (task-429). The app reads it to hide every route to the paywall and
-    # to stop announcing a trial that is not what grants the access.
+    # Whether the account is on the beta formula rather than a plan or a trial
+    # (task-429, task-548). The app reads it to hide every route to the paywall and
+    # to stop announcing a trial that is not what grants the access. A beta
+    # snapshot carries no minute allowance (`minutes_included` is 0): the formula is
+    # a budget in euros held by `beta_budget`.
     is_beta_access: bool = False
     minutes_included: int = 0
     minutes_used: int = 0
@@ -154,7 +161,6 @@ class EntitlementSnapshot:
     period_key: str = ""
     period_end: Optional[datetime] = None
     warning_threshold_pct: int = 80
-    daily_usage: Dict[str, int] = field(default_factory=dict)
 
     @property
     def minutes_remaining(self) -> int:
@@ -214,23 +220,6 @@ async def minutes_for_document_pages(page_count: int) -> int:
     return max(1, ceil(max(1, page_count) / pages_per_minute))
 
 
-async def minutes_for_text_file() -> int:
-    """Minutes charged for a text file (.txt, .md, .rtf): zero (task-380).
-
-    Read straight off the configuration rather than through `_conversion`, which
-    floors every value at one: zero is a legitimate *price* here, not a missing
-    figure, because no provider is called at all -- the worker decodes the bytes
-    itself. Still read from the config, so the paywall's cost table and the debit
-    below can never state two different prices.
-    """
-    config = await pricing_config_service.get_pricing_config()
-    value = (config.get("unit_conversion", {}) or {}).get("text_file_minutes", 0)
-    try:
-        return max(0, int(value))
-    except (TypeError, ValueError):
-        return 0
-
-
 async def minutes_for_folder_sources(source_count: int) -> int:
     """Minutes charged for a generation over a folder: one per five sources.
 
@@ -272,19 +261,6 @@ def _trial_period_key(window: TrialWindow) -> str:
     — there, a new window is precisely what a new allowance means.
     """
     return f"trial:{window[0].strftime('%Y-%m-%d')}"
-
-
-def _next_month_start(now: datetime) -> datetime:
-    """First instant of next month — the reset date of a period with no anniversary."""
-    return now.replace(
-        year=now.year + 1 if now.month == 12 else now.year,
-        month=1 if now.month == 12 else now.month + 1,
-        day=1,
-        hour=0,
-        minute=0,
-        second=0,
-        microsecond=0,
-    )
 
 
 def _entitles(sub: Any, now: datetime) -> bool:
@@ -385,10 +361,8 @@ def _read_allowance(*sources: Mapping[str, Any]) -> Allowance:
 def _allowance_rank(allowance: Allowance) -> Tuple[int, int]:
     """How wide an allowance is, as a sortable pair: minutes first, then the cap.
 
-    The one ordering the module uses whenever two entitlements compete — the rows
-    a user holds in `_active_subscription`, the tiers of the catalogue in
-    `_widest_tier` — so "the larger allowance" means the same thing in both and
-    neither ranks anything by name.
+    The ordering `_active_subscription` uses when the rows one user holds compete,
+    so "the larger allowance" never ranks anything by name.
     """
     return (allowance.minutes_included, allowance.max_minutes_per_item)
 
@@ -409,24 +383,6 @@ def _config_tier(tiers: Mapping[str, Any], subscription_tier: str) -> Optional[s
 def _tier_allowance(tiers: Mapping[str, Any], tier: Optional[str]) -> Allowance:
     """What one pricing config tier grants; empty when the config has no such tier."""
     return _read_allowance(tiers.get(tier or "", {}) or {})
-
-
-def _widest_tier(tiers: Mapping[str, Any]) -> Optional[str]:
-    """The tier carrying the widest allowance in the catalogue, or None when it is empty.
-
-    Chosen by `_allowance_rank`, exactly as `_active_subscription` chooses between
-    the rows one user holds, and never by a tier id written here: the owner moving
-    an allowance, renaming a tier or adding one moves this answer with it, and the
-    choice stays right when the catalogue is restated in credits instead of
-    minutes. The tier key breaks ties, so the order is total and the answer does
-    not depend on how DynamoDB happened to serialise the map.
-    """
-    if not tiers:
-        return None
-    return max(
-        tiers,
-        key=lambda tier: (*_allowance_rank(_tier_allowance(tiers, tier)), tier),
-    )
 
 
 def _trial_allowance(config: Mapping[str, Any], tiers: Mapping[str, Any]) -> Allowance:
@@ -516,58 +472,6 @@ async def _free_trial_window(
     return user.created_at, user.created_at + timedelta(days=duration_days)
 
 
-def _parse_instant(raw: Any) -> Optional[datetime]:
-    """An ISO 8601 instant from the configuration, as an aware UTC datetime, or None.
-
-    `Z` is spelled out as an offset because `fromisoformat` only learned to read
-    it in 3.11 and this runs on 3.10, and a value with no offset is read as UTC:
-    this field is typed by hand, and `2027-01-15` is a shape an owner writes.
-    """
-    if not isinstance(raw, str):
-        return None
-    text = raw.strip()
-    if not text:
-        return None
-    if text[-1] in ("Z", "z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-
-
-def _is_beta_open(config: Mapping[str, Any], now: datetime) -> bool:
-    """Whether the beta regime is in force at `now` (task-429).
-
-    Open while `beta_access.enabled` says so and the end date it may carry is
-    still ahead. The date is optional because the beta was decided before its
-    start was announced: the block ships enabled and open-ended, and the owner
-    writes the closing instant into `pricing_config-<env>` when the three months
-    are dated — no build, no deploy.
-
-    An end date that cannot be read leaves the beta **open**, loudly. A typo must
-    not be able to take every tester's allowance away in silence, which is exactly
-    what reading an unusable date as "already over" would do.
-    """
-    beta = config.get("beta_access", {}) or {}
-    if not beta.get("enabled"):
-        return False
-
-    raw = beta.get("ends_at")
-    if raw is None or raw == "":
-        return True
-
-    ends_at = _parse_instant(raw)
-    if ends_at is None:
-        logger.error(
-            "quota.beta_access_ends_at_unreadable",
-            extra={"ends_at": str(raw)},
-        )
-        return True
-    return now < ends_at
-
-
 def _is_free_trial_active(
     window: Optional[TrialWindow], now: datetime
 ) -> TypeGuard[TrialWindow]:
@@ -625,54 +529,19 @@ async def _subscriber_allowance(
     return paid, None
 
 
-async def get_entitlement_snapshot(
+async def _plan_snapshot(
     user_id: str,
+    config: Mapping[str, Any],
     *,
-    with_usage: bool = True,
-) -> EntitlementSnapshot:
-    """Resolve tier, allowance and consumption for one user.
+    now: datetime,
+    warning_pct: int,
+) -> Optional[EntitlementSnapshot]:
+    """The snapshot of a subscription or a running trial, or None when there is neither.
 
-    The billing period is never the calendar month: it is the window the user's
-    entitlement actually runs on, so the counter row is keyed on the same
-    `period_end` the app shows and nothing rolls over. For a subscription that is
-    its renewal window, emptying on the anniversary; for a free trial it is the
-    single window that opens at the account's creation and closes
-    `free_trial.duration_days` later, so one trial grants one allowance and
-    crossing a month boundary refills nothing.
-
-    A running trial is not cancelled by buying a plan: for a subscriber the
-    allowance is `max(trial, paid)` until the window closes — see
-    `_subscriber_allowance`, which holds that rule — while the period, the tier and
-    the status stay the subscription's.
-
-    While the beta regime is open (task-429) the allowance is the widest tier's
-    for **every** account, whatever its creation date and whatever it has bought,
-    and `is_beta_access` says so. Only the allowance moves: the period, the
-    counter row and every debit behind them are the ones the account would have
-    had anyway, because the figures the beta produces are what the next pricing
-    model will be sized from.
-
-    `with_usage=False` skips reading the counter row, for callers that only need
-    to know which row to write to.
+    Only reached when the beta formula is closed: this is the commercial catalogue's
+    path, and the beta's never goes through it.
     """
-    config = await pricing_config_service.get_pricing_config()
     tiers = config.get("tiers", {}) or {}
-    warning_pct = int(
-        (config.get("usage_gauge", {}) or {}).get("warning_threshold_pct", 80) or 80
-    )
-    now = datetime.now(timezone.utc)
-    unentitled = EntitlementSnapshot(
-        user_id=user_id,
-        period_key=now.strftime("%Y-%m"),
-        warning_threshold_pct=warning_pct,
-    )
-
-    # The tier the beta hands out, or None when the regime is closed — which is
-    # also what an empty catalogue gives, since there is then no allowance to
-    # grant and none may be invented.
-    beta_tier = _widest_tier(tiers) if _is_beta_open(config, now) else None
-    beta = _tier_allowance(tiers, beta_tier)
-
     trial = _trial_allowance(config, tiers)
     subscription = await _active_subscription(user_id, tiers)
 
@@ -693,94 +562,113 @@ async def get_entitlement_snapshot(
                     "config_tiers": sorted(tiers),
                 },
             )
-            # Under the beta the drift is still a thing to fix, but not a reason
-            # to refuse this account's imports: the regime grants the widest
-            # allowance to everyone, and "everyone" cannot have an exception whose
-            # cause is a catalogue the user has no part in.
-            if beta_tier is None:
-                return unentitled
+            return None
 
-        paid = _tier_allowance(tiers, tier)
-        if beta_tier is None:
-            allowance, trial_raises_until = await _subscriber_allowance(
-                user_id,
-                config,
-                paid=paid,
-                trial=trial,
-                now=now,
-            )
-        else:
-            # `raised_by`, not the beta's figures outright, so the regime can only
-            # ever add — a plan ahead on one axis keeps that axis. The trial is not
-            # consulted at all: it cannot be wider than the widest tier, and the
-            # beta is what replaces it for the duration, which also spares the
-            # user-row read `_subscriber_allowance` would pay for.
-            allowance, trial_raises_until = paid.raised_by(beta), None
-
-        period_end = subscription.current_period_end
-        period_key = (
-            f"sub:{period_end.strftime('%Y-%m-%d')}"
-            if period_end
-            else now.strftime("%Y-%m")
+        allowance, trial_raises_until = await _subscriber_allowance(
+            user_id,
+            config,
+            paid=_tier_allowance(tiers, tier),
+            trial=trial,
+            now=now,
         )
-        snapshot = EntitlementSnapshot(
+        period_end = subscription.current_period_end
+        return EntitlementSnapshot(
             user_id=user_id,
-            # Which tier the *figures* come from, which under the beta is the
-            # widest one rather than the plan — `subscription_tier` below keeps
-            # naming what the user actually bought.
-            tier=beta_tier or tier,
+            tier=tier,
             subscription_tier=subscription_tier,
             subscription_status=subscription.status.value,
             auto_renew=subscription.auto_renew_status,
             is_entitled=True,
-            is_beta_access=beta_tier is not None,
             minutes_included=allowance.minutes_included,
             max_minutes_per_item=allowance.max_minutes_per_item,
             trial_raises_allowance_until=trial_raises_until,
-            period_key=period_key,
-            period_end=period_end or _next_month_start(now),
+            period_key=(
+                f"sub:{period_end.strftime('%Y-%m-%d')}" if period_end else now.strftime("%Y-%m")
+            ),
+            period_end=period_end or beta_budget.next_period_start(now),
             warning_threshold_pct=warning_pct,
         )
-    elif beta_tier is not None:
-        # No plan and the beta is open: the widest allowance, on the period of an
-        # entitlement with no anniversary of its own — the calendar month. So the
-        # counter empties monthly and the owner reads one figure per month per
-        # account, which is the measurement the regime exists for.
-        #
-        # The trial window is not read, and that is the point of this branch
-        # sitting above it: during the beta there is no trial running out, nothing
-        # on any screen counts one down, and an account whose trial expired weeks
-        # ago is served exactly like one created today.
+
+    trial_window = await _free_trial_window(user_id, config)
+    if not _is_free_trial_active(trial_window, now):
+        return None
+    free_trial = config.get("free_trial", {}) or {}
+    return EntitlementSnapshot(
+        user_id=user_id,
+        tier=str(free_trial.get("tier", "") or "") or None,
+        subscription_tier=None,
+        subscription_status="free_trial",
+        is_entitled=True,
+        is_free_trial=True,
+        minutes_included=trial.minutes_included,
+        max_minutes_per_item=trial.max_minutes_per_item,
+        period_key=_trial_period_key(trial_window),
+        period_end=trial_window[1],
+        warning_threshold_pct=warning_pct,
+    )
+
+
+async def get_entitlement_snapshot(
+    user_id: str,
+    *,
+    with_usage: bool = True,
+) -> EntitlementSnapshot:
+    """Resolve tier, allowance and consumption for one user.
+
+    The billing period is never the calendar month: it is the window the user's
+    entitlement actually runs on, so the counter row is keyed on the same
+    `period_end` the app shows and nothing rolls over. For a subscription that is
+    its renewal window, emptying on the anniversary; for a free trial it is the
+    single window that opens at the account's creation and closes
+    `free_trial.duration_days` later, so one trial grants one allowance and
+    crossing a month boundary refills nothing.
+
+    A running trial is not cancelled by buying a plan: for a subscriber the
+    allowance is `max(trial, paid)` until the window closes — see
+    `_subscriber_allowance`, which holds that rule — while the period, the tier and
+    the status stay the subscription's.
+
+    While the beta formula is open (`beta_access`, task-429 and task-548), **every**
+    account is on it, whatever its creation date and whatever it has bought, and
+    nothing else is consulted: no tier of the catalogue, no subscription row, no
+    trial window. The snapshot then says `is_beta_access`, has no tier, no minute
+    allowance, the formula's per-item audio limit, and the formula's period — the
+    calendar month UTC, whose next first instant is `period_end`. The budget itself
+    is held by `beta_budget`, not here.
+
+    `with_usage=False` skips reading the counter row, for callers that only need
+    to know which row to write to.
+    """
+    config = await pricing_config_service.get_pricing_config()
+    warning_pct = int(
+        (config.get("usage_gauge", {}) or {}).get("warning_threshold_pct", 80) or 80
+    )
+    now = datetime.now(timezone.utc)
+
+    formula = beta_budget.beta_formula(config)
+    if formula.is_open(now):
+        # The beta formula's own attribution path: built from `beta_access` alone,
+        # so moving, renaming or removing a commercial tier cannot change what a
+        # tester gets, and a test-store subscription cannot either.
         snapshot = EntitlementSnapshot(
             user_id=user_id,
-            tier=beta_tier,
             subscription_status=BETA_STATUS,
             is_entitled=True,
             is_beta_access=True,
-            minutes_included=beta.minutes_included,
-            max_minutes_per_item=beta.max_minutes_per_item,
-            period_key=now.strftime("%Y-%m"),
-            period_end=_next_month_start(now),
+            max_minutes_per_item=formula.item_limits.audio_minutes,
+            period_key=beta_budget.period_key(now),
+            period_end=beta_budget.next_period_start(now),
             warning_threshold_pct=warning_pct,
         )
     else:
-        trial_window = await _free_trial_window(user_id, config)
-        if not _is_free_trial_active(trial_window, now):
-            return unentitled
-        free_trial = config.get("free_trial", {}) or {}
-        snapshot = EntitlementSnapshot(
-            user_id=user_id,
-            tier=str(free_trial.get("tier", "") or "") or None,
-            subscription_tier=None,
-            subscription_status="free_trial",
-            is_entitled=True,
-            is_free_trial=True,
-            minutes_included=trial.minutes_included,
-            max_minutes_per_item=trial.max_minutes_per_item,
-            period_key=_trial_period_key(trial_window),
-            period_end=trial_window[1],
-            warning_threshold_pct=warning_pct,
-        )
+        snapshot_or_none = await _plan_snapshot(user_id, config, now=now, warning_pct=warning_pct)
+        if snapshot_or_none is None:
+            return EntitlementSnapshot(
+                user_id=user_id,
+                period_key=now.strftime("%Y-%m"),
+                warning_threshold_pct=warning_pct,
+            )
+        snapshot = snapshot_or_none
 
     if with_usage:
         usage = await quota_usage_db.get_monthly_usage(user_id, snapshot.period_key)
@@ -818,19 +706,6 @@ def _period_end_param(period_end: Optional[datetime]) -> Dict[str, Any]:
     return {} if period_end is None else {"period_end": period_end.isoformat()}
 
 
-def _beta_access_param(snapshot: EntitlementSnapshot) -> Dict[str, Any]:
-    """The one fact that changes what a refusal may propose, or nothing.
-
-    Present only while the beta regime is in force, the way `period_end` is
-    present only when it is known. The app words the refusal from the body it
-    received — so this is what stops the sentence ending on "upgrade to process
-    this now" and what keeps the paywall out of a screen where there is nothing
-    to buy. Sent with the figures rather than read from a second endpoint, so the
-    wording cannot disagree with the check that produced it.
-    """
-    return {"beta_access": True} if snapshot.is_beta_access else {}
-
-
 # ---------------------------------------------------------------------------
 # Checks
 # ---------------------------------------------------------------------------
@@ -856,9 +731,7 @@ async def check_submission_allowed(
     """
     try:
         snapshot = await get_entitlement_snapshot(user_id)
-        result = evaluate_submission(snapshot, minutes_needed=minutes_needed)
-        await _note_burst_guards(snapshot, minutes_needed=minutes_needed)
-        return result
+        return evaluate_submission(snapshot, minutes_needed=minutes_needed)
     except Exception as exc:
         logger.error(
             "quota.check_failed_open",
@@ -906,6 +779,13 @@ def evaluate_submission(
             http_status=413,
         )
 
+    if snapshot.is_beta_access:
+        # The beta formula has no minute allowance to run down: what bounds a
+        # tester's spend is the budget `beta_budget` holds before each paid call
+        # (TASK-549 routes every call through it). The per-item limit above is the
+        # formula's own, and still applies.
+        return QuotaCheckResult.ok()
+
     if minutes_needed > snapshot.minutes_remaining:
         return QuotaCheckResult.denied(
             error_code=ERROR_OUT_OF_MINUTES,
@@ -914,7 +794,6 @@ def evaluate_submission(
                 "minutes_needed": minutes_needed,
                 "minutes_remaining": snapshot.minutes_remaining,
                 **_period_end_param(snapshot.period_end),
-                **_beta_access_param(snapshot),
             },
             http_status=403,
         )
@@ -944,9 +823,7 @@ async def check_generation_allowed(
             if scope == "folder"
             else 0
         )
-        result = evaluate_submission(snapshot, minutes_needed=minutes_needed)
-        await _note_burst_guards(snapshot, minutes_needed=minutes_needed, generations=1)
-        return result
+        return evaluate_submission(snapshot, minutes_needed=minutes_needed)
     except Exception as exc:
         logger.error(
             "quota.generation_check_failed_open",
@@ -960,70 +837,6 @@ async def check_generation_allowed(
             exc_info=exc,
         )
         return QuotaCheckResult.ok()
-
-
-# ---------------------------------------------------------------------------
-# Safety-net layer 2: invisible burst guards
-# ---------------------------------------------------------------------------
-
-
-async def _note_burst_guards(
-    snapshot: EntitlementSnapshot,
-    *,
-    minutes_needed: int = 0,
-    documents: int = 0,
-    document_pages: int = 0,
-    generations: int = 0,
-) -> None:
-    """Log — never refuse — when one account moves faster than any real user.
-
-    These guards exist so a scripted account cannot burn a month of Lambda,
-    LlamaParse pages or SQS traffic in an afternoon while staying inside its
-    minute allowance. Every size sits an order of magnitude above the heaviest
-    measured usage, so tripping one is a signal for the owner, not a limit the
-    product talks about.
-    """
-    try:
-        config = await pricing_config_service.get_pricing_config()
-        guards = config.get("burst_guards", {}) or {}
-        if not guards:
-            return
-
-        daily = await quota_usage_db.get_daily_usage(snapshot.user_id)
-        snapshot.daily_usage = daily
-
-        projected = {
-            "minutes_per_day": daily.get("minutes", 0) + max(0, minutes_needed),
-            "items_per_day": daily.get("items", 0) + 1,
-            "documents_per_day": daily.get("documents", 0) + max(0, documents),
-            "document_pages_per_day": daily.get("document_pages", 0)
-            + max(0, document_pages),
-            "generations_per_day": daily.get("generations", 0) + max(0, generations),
-        }
-
-        for guard_name, projected_value in projected.items():
-            limit = int(guards.get(guard_name, 0) or 0)
-            if limit > 0 and projected_value > limit:
-                logger.warning(
-                    "quota.burst_guard_tripped",
-                    extra={
-                        "user_id": snapshot.user_id,
-                        "tier": snapshot.tier,
-                        "guard": guard_name,
-                        "limit": limit,
-                        "projected": projected_value,
-                    },
-                )
-    except Exception as exc:
-        # A guard is an observation. It must never be the reason a submission fails.
-        logger.warning(
-            "quota.burst_guard_check_failed",
-            extra={
-                "user_id": snapshot.user_id,
-                "error": str(exc),
-                "error_type": type(exc).__name__,
-            },
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -1041,30 +854,16 @@ def settlement_token(job_id: str) -> str:
     return f"{job_id}:settle"
 
 
-def item_token(job_id: str) -> str:
-    """Idempotency token of the daily item count for a submission.
-
-    Distinct from `gate_token` because both writes land in the same daily row: a
-    submission that debits minutes at the API would otherwise see its item count
-    swallowed as an already-applied token.
-    """
-    return f"{job_id}:item"
-
-
 async def _debit(
     user_id: str,
     *,
     minutes: int,
     idempotency_token: str,
     kind: str,
-    documents: int = 0,
-    document_pages: int = 0,
-    generations: int = 0,
-    items: int = 0,
     period_key: Optional[str] = None,
     unit_cost: Optional[float] = None,
 ) -> int:
-    """Charge `minutes` once for `idempotency_token` and feed the burst counters.
+    """Charge `minutes` once for `idempotency_token`.
 
     `period_key` and `unit_cost`, when given, are the period row and the price of
     a minute the caller already resolved -- a caller that must remember where and
@@ -1080,26 +879,16 @@ async def _debit(
     applied, or when the write failed).
     """
     minutes = max(0, int(minutes))
+    if minutes <= 0:
+        return 0
     try:
-        applied = True
-        if minutes > 0:
-            if unit_cost is None:
-                unit_cost = await cost_eur_per_minute()
-            applied = await quota_usage_db.increment_monthly_usage(
-                user_id,
-                period_key or await resolve_period_key(user_id),
-                minutes=minutes,
-                cost_eur=round(minutes * unit_cost, 4),
-                idempotency_token=idempotency_token,
-            )
-
-        await quota_usage_db.increment_daily_usage(
+        if unit_cost is None:
+            unit_cost = await cost_eur_per_minute()
+        applied = await quota_usage_db.increment_monthly_usage(
             user_id,
+            period_key or await resolve_period_key(user_id),
             minutes=minutes,
-            items=items,
-            documents=documents,
-            document_pages=document_pages,
-            generations=generations,
+            cost_eur=round(minutes * unit_cost, 4),
             idempotency_token=idempotency_token,
         )
     except Exception as exc:
@@ -1182,27 +971,6 @@ async def record_document_parse(
         minutes=await minutes_for_document_pages(pages),
         idempotency_token=idempotency_token,
         kind="document",
-        documents=1,
-        document_pages=pages,
-    )
-
-
-async def record_text_file_parse(user_id: str, *, idempotency_token: str) -> int:
-    """Count a decoded text file, and charge what it costs -- nothing (task-380).
-
-    A `.txt`, `.md` or `.rtf` reaches the document worker like any other file, but
-    it has no page to price and no provider call behind it, so
-    `record_document_parse` cannot serve: its `max(1, page_count)` would bill a
-    page that does not exist. The import is still *counted* against the daily
-    document guard, which is what bounds how fast one account can push files
-    through the pipeline.
-    """
-    return await _debit(
-        user_id,
-        minutes=await minutes_for_text_file(),
-        idempotency_token=idempotency_token,
-        kind="text_file",
-        documents=1,
     )
 
 
@@ -1222,7 +990,6 @@ async def record_generation(
         minutes=minutes,
         idempotency_token=idempotency_token,
         kind=f"generation:{scope}",
-        generations=1,
     )
 
 
@@ -1285,7 +1052,6 @@ async def record_chat_turn(
         minutes=minutes,
         idempotency_token=chat_turn_token(turn_id),
         kind="chat_turn",
-        generations=1,
         period_key=period_key,
         unit_cost=unit_cost,
     )
@@ -1313,9 +1079,8 @@ async def refund_chat_turn(
 
     The credit lands on ``period_key``, the row the debit was written to, with the
     minutes and cost the turn recorded -- not the current period, not today's price.
-    Applied once under :func:`chat_turn_refund_token`. The daily burst counters are
-    not credited back: they measure activity, and the turn did happen. Best-effort
-    like `_debit`: a failed write is logged, it does not fail the seal.
+    Applied once under :func:`chat_turn_refund_token`. Best-effort like `_debit`: a
+    failed write is logged, it does not fail the seal.
 
     Returns the minutes credited (0 when there was nothing to credit, the refund was
     already applied, or the write failed).
@@ -1364,25 +1129,6 @@ async def refund_chat_turn(
         },
     )
     return minutes
-
-
-async def record_submitted_item(user_id: str, *, idempotency_token: str) -> None:
-    """Count one accepted submission against the daily item guard.
-
-    Minutes are never charged here: they are charged where the provider call is
-    made, which for a link is a worker, minutes later. This is the only place the
-    daily item counter moves, so a submission is counted exactly once whatever
-    path it later takes -- including the free paths (articles, web pages, clips
-    with captions) that never reach a debit at all, which is precisely what this
-    invisible guard is there to bound.
-    """
-    await _debit(
-        user_id,
-        minutes=0,
-        idempotency_token=idempotency_token,
-        kind="submitted_item",
-        items=1,
-    )
 
 
 async def record_observed_cost(

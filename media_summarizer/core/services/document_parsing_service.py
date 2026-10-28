@@ -200,8 +200,8 @@ async def record_document_consumption(
     message or a re-claimed Apify callback cannot debit twice.
 
     A text file takes the other branch: it has no pages to price and cost no
-    provider call, so it is *counted* as an import and charged zero minutes
-    rather than rounded up to the single page every other format has (task-380).
+    provider call, so it is charged nothing rather than rounded up to the single
+    page every other format has (task-380).
 
     ``llamaparse_pages`` exists for a source parsed one file at a time: an
     Instagram carousel can have some of its images read by LlamaParse and the rest
@@ -211,20 +211,6 @@ async def record_document_consumption(
     single uploaded document means.
     """
     if document_format in TEXT_FORMATS:
-        if not user_id:
-            return
-        await quota_enforcer.record_text_file_parse(
-            user_id,
-            idempotency_token=quota_enforcer.gate_token(job_id),
-        )
-        log_event(
-            logger,
-            logging.INFO,
-            "quota.text_file_counted",
-            "Text file counted as an import; no minutes charged",
-            job_id=job_id,
-            document_format=document_format.value,
-        )
         return
 
     pages = max(1, int(page_count or 1))
