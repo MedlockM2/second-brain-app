@@ -3,11 +3,11 @@ id: TASK-547
 title: >-
   Benchmarker le contrôle permettant de respecter le budget fournisseur de la
   bêta
-status: To Do
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-26 22:20'
-updated_date: '2026-10-26 23:02'
+updated_date: '2026-10-28 11:19'
 labels:
   - benchmark
   - backend
@@ -60,6 +60,8 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 
 <!-- SECTION:NOTES:BEGIN -->
 Recherche initiale produite dans docs/research/task-547-beta-budget-control/README.md. Inventaire du checkout et des décisions R.1–R.2, sources primaires consultées le 26 octobre 2026, comparaison et protocole conditionnel relus le 27 octobre. Les bornes manquantes (acteurs, pagination, rétention, change) sont explicites ; aucun appel payant ni code modifié. Recommandation en attente de validation propriétaire ; owner_decision: pending, TASK-548 reste bloquée.
+
+2026-10-28 : owner_decision: ok (validée le 2026-10-27) dans docs/research/task-547-beta-budget-control/README.md ; benchmark clos, TASK-548 débloquée.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
