@@ -34,7 +34,7 @@ Every caller resolves the source through the content ledger.
 
 Beta budget (task-549, rule 10 of the task-547 decision): each language is charged
 to the first save that reads in it — the submitter's import first, which reserved
-the translation with its acquisition, then the watchers' saves, which reserve it
+the translation with its acquisition, then other saved rows, which reserve it
 when the call is made. When the submitter's own translation turns out unnecessary
 (the text is already in its language, its language cannot be established, or
 another save already owns that translation), the part its import reserved is

@@ -68,7 +68,7 @@ Operational behavior now implemented in runtime:
 - ceilings are 25 sources and 120 000 estimated tokens; beyond them the API refuses and never truncates
 
 `task-23` purges legacy ingestion/completion compatibility from active canonical paths:
-- canonical runtime idempotence/watchers use `media_key` only (no legacy episode-guid fallback reads/writes)
+- canonical runtime content identity uses `media_key` only (no legacy episode-guid fallback reads/writes)
 - worker completion events and fan-out finalization rely on `media_key`/`canonical_job_id` identity only
 - legacy episode-guid table/env references are removed from canonical runtime config and migration docs
 
@@ -1342,16 +1342,14 @@ HTTP mapping rules:
 - Processing is idempotent for equivalent normalized URLs; saving is intentionally
   non-idempotent and creates a fresh library row on every successful request.
 - Every user artifact creation writes a fresh opaque entry and requests a separately billed generation. Only explicit transient-failure retry keeps that entry and its options; only automatic review previews retain content-addressed reuse.
-- A **provider call** is made only when `(scope, media_key, artifact_type, parameters, sorted source ids)` — the same material without the user — has no live generation yet. So an account can gain an entry (and be debited for it) without any model being called, and one generation of one content is what every account's entry over that content reads. Artifacts over a user-uploaded file are outside this rule: their content identity is account-scoped, so they are never served to another account.
+- Shared provider generations are reserved for the internal automatic review preview. User-requested artifacts always own independent generations, even across accounts or identical options. Upload content identity remains account-scoped.
 - Timestamps use ISO-8601 UTC strings.
 - `request_id` must be returned in error payload and response header.
 
 ## Relationship to existing runtime APIs
 
-Current runtime still exposes legacy paths:
-- `/api/podcast-search/*`
-- `/api/jobs/*`
-
-These legacy paths are not the canonical target contract and must not drive new mobile share-first implementation once canonical endpoints are implemented. As of 2026-08-18 neither has a single caller left in `mobile/` — the constraint has held, and what remains is backend surface nothing consumes. `/api/episodes/my-episodes` was listed here too and no longer exists; its router is not mounted.
-
-The paths named above carry no active mobile callers and exist only to prevent breaking pre-existing API integrations (unlikely given zero shipped clients). Whether they should exist at all is out of scope of this API harmonization; that is a separate product decision.
+The diagnostic `/api/jobs/*` routes remain available. They are not the canonical
+media/library contract and do not define new share-first media or artifact APIs.
+New media and artifact endpoints belong under `/api/media/*` and `/api/artifacts/*`.
+Podcast links use the same `POST /api/media/ingest-url` entry point as other URLs;
+PodcastIndex is an internal resolution dependency, with no podcast search API.

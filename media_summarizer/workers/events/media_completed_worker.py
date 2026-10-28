@@ -1,5 +1,5 @@
 """
-Media completed events consumer -- content ledger close, watcher fan-out, indexing.
+Media completed events consumer -- content ledger close, per-save preparation, indexing.
 
 - Consumes events from EPISODE_COMPLETED_EVENTS_QUEUE (episode-completed-events-<env>)
 - Canonical event_type: episode_completion_status (with status: success/failure)
@@ -8,14 +8,13 @@ Media completed events consumer -- content ledger close, watcher fan-out, indexi
   media_key is no longer in flight and can move it to processed/failed. Without
   that write the ledger stays at ``reserved`` and every later save of the same
   URL is parked in ``pending`` for ever (task-390).
-- For each media key, fetches watchers and marks their processing state
 - Announces the readable media to every user who saved it, with one push
   notification each (task-405): a processing that finishes while the app is closed
   has no other way to reach the person who asked for it. Success only — a failure
   returns early below, and a save that could not be processed is news the user
   finds in the app, not an interruption. Email notifications stay disabled.
-- Arms the full-text translation into the reading language of the submitter and
-  of every watcher (task-414), so a foreign media is already translated when it is
+- Arms the full-text translation into the reading language of the submitter
+  (task-414), so a foreign media is already translated when it is
   first opened. Enqueue only, through the same atomic reservation as
   ``/raw-content``; the translation runs in ``transcript_translation_worker``.
 - Closes the import on the beta budget (task-549, rule 5 of the task-547
@@ -43,7 +42,7 @@ from media_summarizer.core.services.push_notification_dispatch import (
 from media_summarizer.core.services.search_index_dispatch import (
     enqueue_transcript_indexing,
 )
-from media_summarizer.utils import media_idempotence, media_watchers, sqs, user_media
+from media_summarizer.utils import media_idempotence, sqs, user_media
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
@@ -102,8 +101,8 @@ async def _record_content_outcome(
 
     Deliberately not swallowed: a ledger that cannot be closed is the bug this
     call exists to fix, so the event stays on the queue and is redelivered. The
-    work below it is idempotent (the same Algolia objectIDs, an already-marked
-    watcher, an already-provisioned blurb), so a redelivery costs a repeat, not a
+    work below it is idempotent (the same Algolia objectIDs and an
+    already-provisioned blurb), so a redelivery costs a repeat, not a
     corruption.
     """
     try:
@@ -141,8 +140,8 @@ async def _trigger_review_blurb(
     """Best-effort queueing of the internal ``review_blurb`` artifact (task-323).
 
     Called at the same two points as search indexing, for the same reason: this is
-    where a media item is known to be readable, and both the submitting user and
-    each watcher own a distinct library row that needs its own blurb.
+    where the content is known to be readable. Each saved library row needs its
+    own blurb.
 
     Swallows everything. The blurb is a convenience on the triage screen; a failure
     here must not stop the SQS message from being deleted and replay the whole
@@ -172,23 +171,17 @@ async def _arm_transcript_translations(
     *,
     canonical_job: Any,
     transcription_s3_key: Optional[str],
-    watchers: Optional[list],
 ) -> None:
     """Start the full-text translation now rather than at first read (task-414).
 
     Called here, not in the ingestion workers, for the reason task-203 removed the
     prewarm from them: the job this event reports on is already completed, so
-    nothing the translation takes can hold it up. The accounts are the submitter
-    and every watcher, i.e. everyone whose save this ingestion answers; the
-    transcript key is the canonical job's, the one ``/raw-content`` reads for all
-    of them.
+    nothing the translation takes can hold it up. Each independent processing
+    arms the submitting account's translation against the content transcript.
 
     Swallows everything: ``/raw-content`` still arms whatever this missed, and a
     completion event must not be replayed because a translation could not start.
     """
-    user_ids = [canonical_job.user_id] + [
-        w.get("user_id") for w in (watchers or []) if w.get("user_id")
-    ]
     try:
         from media_summarizer.core.services.ingestion_translation_service import (
             arm_transcript_translations,
@@ -196,7 +189,7 @@ async def _arm_transcript_translations(
 
         await arm_transcript_translations(
             job=canonical_job,
-            user_ids=user_ids,
+            user_ids=[canonical_job.user_id],
             transcript_s3_key=transcription_s3_key,
         )
     except Exception as exc:
@@ -247,8 +240,8 @@ async def _resume_waiting_artifacts(media_key: str) -> None:
     """Start the generations that were waiting for this media's text (task-360).
 
     The end of an ingestion is one of the two join points a deferred artifact
-    request resumes from. It is keyed on ``media_key``, not on a watcher, because
-    that is what a waiting entry names — one call covers every user who saved this
+    request resumes from. It is keyed on ``media_key`` because that is what a
+    waiting entry names — one call covers every user who saved this
     content and every folder that contains it.
 
     Swallows everything by contract: the resume service already logs per entry, and
@@ -306,7 +299,7 @@ async def _fail_waiting_artifacts(media_key: str, *, reason: str) -> None:
 async def process_event(message: Dict[str, Any]) -> None:
     body = json.loads(message.get("Body", "{}"))
     # One accepted spelling, not a family of them: everything below runs once per
-    # accepted message -- the ledger close, the watcher fan-out, the indexing and
+    # accepted message -- the ledger close, per-save preparation, the indexing and
     # the "ready" notification -- so a producer publishing the same completion under
     # a second accepted name is a second run of all four, one push each.
     event_type = body.get("event_type")
@@ -323,12 +316,7 @@ async def process_event(message: Dict[str, Any]) -> None:
         logger.error(f"Missing media_key in event: {body}")
         return
 
-    # Fetch watchers
-    watchers = await media_watchers.list_watchers(media_key)
-    if not watchers:
-        logger.info(f"No watchers for media key {media_key}")
-
-    # Handle failure events: mark all watchers as failed and return early
+    # A failed processing closes its budget and ends dependent artifact waits.
     if status == "failure":
         # `reason` is what every producer of a failure event publishes: the
         # `CODE:reason_token` pair from `IngestionFailure.reason`. Reading
@@ -346,11 +334,6 @@ async def process_event(message: Dict[str, Any]) -> None:
             media_key=media_key,
             delivered=False,
         )
-        for w in (watchers or []):
-            try:
-                await media_watchers.mark_watcher_failed(media_key, w.get("user_id"), reason=failure_reason)
-            except Exception as e:
-                logger.error(f"Failed to mark watcher {w.get('user_id')} as failed: {e}")
         await _fail_waiting_artifacts(media_key, reason=failure_reason)
         return
 
@@ -375,11 +358,8 @@ async def process_event(message: Dict[str, Any]) -> None:
     # Per-save indexing/preview preparation and per-user notifications
     # -------------------------------------------------------------------------
     # The canonical_job_id identifies the processing job that produced this
-    # completion event. Its user_id is the submitting user who must always be
-    # indexed, regardless of whether watchers exist.
-    notified_user_ids: set = set()
-
-    from media_summarizer.utils import database_async
+    # completion event. Its submitting account is read consistently so a fresh
+    # save cannot be missed while the cross-account index catches up.
 
     await _close_import_budget(canonical_job=canonical_job, media_key=media_key, delivered=True)
 
@@ -389,14 +369,13 @@ async def process_event(message: Dict[str, Any]) -> None:
         await _arm_transcript_translations(
             canonical_job=canonical_job,
             transcription_s3_key=transcription_s3_key,
-            watchers=watchers,
         )
 
     # Every save needs its own index and preview, even when the same account
-    # saved twice while ingestion ran. Watchers and notifications are per user.
+    # saved twice while ingestion ran. Notifications are per account.
     # Read known users' partitions consistently; the cross-user GSI can lag a
     # just-created save. Its processing job is not the identity of that save.
-    known_users = {w.get("user_id") for w in (watchers or []) if w.get("user_id")}
+    known_users = set()
     if canonical_job and canonical_job.user_id:
         known_users.add(canonical_job.user_id)
     saves = {
@@ -424,7 +403,6 @@ async def process_event(message: Dict[str, Any]) -> None:
             media_item_id=canonical_job.media_item_id,
             media_type=canonical_job.media_type,
         )
-        notified_user_ids.add(canonical_job.user_id)
     elif not canonical_job_id:
         log_event(
             logger,
@@ -434,75 +412,7 @@ async def process_event(message: Dict[str, Any]) -> None:
             media_key=media_key,
         )
 
-    # -------------------------------------------------------------------------
-    # Watcher fan-out
-    # -------------------------------------------------------------------------
-    if not watchers:
-        # No watcher does not mean no waiting artifact: the entry hangs off the
-        # library row, not off the watcher table.
-        await _resume_waiting_artifacts(media_key)
-        return
-
-    # Fan-out
-    for w in watchers:
-        try:
-            job_id = w.get("job_id")
-            job = None
-
-            # Update processing job status
-            try:
-                job = await database_async.get_processing_job_by_id(job_id)
-                if job:
-                    job.mark_completed()
-                    await database_async.update_processing_job(job)
-                    logger.info(f"Updated processing job {job_id}")
-            except Exception as e:
-                logger.error(f"Failed to update processing job {job_id}: {e}")
-
-            # Mark watcher as processed. Deduplication of the fan-out itself: the
-            # notification below is deduplicated separately, by `notified_user_ids`.
-            try:
-                await media_watchers.mark_watcher_processed(media_key, w.get("user_id"))
-                logger.info(f"Marked watcher {w.get('user_id')} as processed for media key {media_key}")
-            except Exception as mark_error:
-                logger.error(f"Failed to mark watcher processed for {w.get('user_id')} on {media_key}: {mark_error}")
-                await media_watchers.mark_watcher_failed(
-                    media_key,
-                    w.get("user_id"),
-                    reason=f"mark_processed_failed: {str(mark_error)}"
-                )
-                continue
-
-            logger.info(f"Successfully processed watcher {w.get('user_id')} for media key {media_key}")
-
-            # Notifications remain per user; indexing above is per save.
-            watcher_user_id = (getattr(job, "user_id", None) if job else None) or w.get("user_id")
-            if watcher_user_id and watcher_user_id not in notified_user_ids:
-                # One notification per person, not per content: this user saved the
-                # media themselves and their own library row is what a tap opens.
-                # The dedup set is what stops the submitter being told twice when
-                # they are also a watcher of the same content.
-                await enqueue_media_ready_notification(
-                    user_id=watcher_user_id,
-                    media_item_id=(
-                        getattr(job, "media_item_id", None) if job else None
-                    ),
-                    # This watcher's own job, not the canonical one: same content,
-                    # but the category is read from the row that belongs to the
-                    # person being told about it.
-                    media_type=(getattr(job, "media_type", None) if job else None),
-                )
-                notified_user_ids.add(watcher_user_id)
-
-        except Exception as e:
-            logger.error(f"Error processing watcher {w.get('user_id')} for {media_key}: {e}")
-            try:
-                await media_watchers.mark_watcher_failed(media_key, w.get("user_id"), reason=str(e))
-            except Exception:
-                pass
-
-    # Last, and after the loop on purpose: the resume re-resolves the scope, which
-    # reads the jobs this loop has just marked completed.
+    # Resume after per-save preparation; the source text is now durable.
     await _resume_waiting_artifacts(media_key)
 
 

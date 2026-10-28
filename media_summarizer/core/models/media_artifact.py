@@ -73,9 +73,8 @@ def build_scope_key(*, user_id: str, scope: "ArtifactScope | str", scope_id: str
     what replaces the old ownership check, which resolved the artifact's media
     item — impossible for a folder artifact, which has no media.
 
-    It no longer isolates the generated *content*, which is deliberately shared
-    between accounts for a media scope (task-394): what a user sees is what they
-    asked for, and what the provider is paid for is one generation per content.
+    Only automatic review previews can share a generation across accounts.
+    User-requested artifacts own their independent generation under this scope.
     """
     scope_value = scope.value if isinstance(scope, ArtifactScope) else str(scope)
     return f"{user_id}#{scope_value}#{scope_id}"

@@ -164,7 +164,6 @@ module = [
     "media_summarizer.core.services.bug_report_service",
     "media_summarizer.core.services.tag_service",
     "media_summarizer.core.services.artifact_service",
-    "media_summarizer.core.services.media_submission",
     "media_summarizer.core.services.__init__",
 ]
 disable_error_code = ["var-annotated", "annotation-unchecked", "no-redef", "union-attr", "attr-defined", "return-value", "arg-type", "assignment"]

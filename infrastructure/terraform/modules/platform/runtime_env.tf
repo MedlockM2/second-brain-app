@@ -20,7 +20,6 @@ locals {
     USER_MEDIA_TABLE              = aws_dynamodb_table.user_media_v1.name
     MEDIA_ARTIFACTS_TABLE         = aws_dynamodb_table.media_artifacts_v1.name
     TRANSLATION_IDEMPOTENCE_TABLE = aws_dynamodb_table.translation_idempotence_v1.name
-    MEDIA_WATCHERS_TABLE          = aws_dynamodb_table.media_watchers_v1.name
     USER_FOLDERS_TABLE            = aws_dynamodb_table.user_folders_v1.name
     PRICING_CONFIG_TABLE          = aws_dynamodb_table.pricing_config_v1.name
     USER_DIGESTS_TABLE            = aws_dynamodb_table.user_digests_v1.name

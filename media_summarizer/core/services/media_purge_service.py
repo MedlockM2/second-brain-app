@@ -38,7 +38,7 @@ Where each key a job carries lands, and why (task-432)
 ------------------------------------------------------
 - ``transcription_s3_key`` — **content**. The text of the content, written once:
   the second save of a public media runs no job at all and reads this exact object
-  (``media_submission``, ``finalize_deduplicated_save``). Its translations are
+  (``finalize_deduplicated_save``). Its translations are
   derived keys of the same object (``<stem>.translated.<lang>.<ext>``) and their
   locks are fingerprinted on the source key, so both follow it.
 - ``audio_s3_key`` — **content**. Same reasoning one step earlier in the pipeline:

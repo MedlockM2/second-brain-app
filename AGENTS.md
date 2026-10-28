@@ -38,8 +38,8 @@ Read `README.md` for project overview and V1 scope. Read `docs/CANONICAL_MEDIA_A
 - New media/artifact endpoints under `/api/v1/` — the canonical ones are `/api/media/*` and
   `/api/artifacts/*`, and nothing new belongs beside the legacy paths listed in
   `docs/CANONICAL_MEDIA_API_CONTRACT.md`, "Relationship to existing runtime APIs". Note this is
-  a ban on *adding* there, not on editing: `/api/v1/` also hosts eight live routers (`auth`,
-  `auth_social`, `health`, `jobs`, `podcasts`, `podcast-search`, `entitlements`, `feedback`)
+  a ban on *adding* there, not on editing: `/api/v1/` also hosts six live routers (`auth`,
+  `auth_social`, `health`, `jobs`, `entitlements`, `feedback`)
   which are modified like any other code. `entitlements.py` in particular was created with
   RevenueCat and is the app's only source of consumption state. Until 2026-08-18 this line read
   "`/api/v1/` endpoints" flat, which read as off-limits-by-prefix and made task-288 look like a

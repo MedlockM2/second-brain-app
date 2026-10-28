@@ -792,7 +792,7 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         )
 
     # Exactly one event, and published once the job holds its final state: the
-    # consumer closes the content ledger, fans out to watchers, indexes and sends
+    # consumer closes the content ledger, prepares saved media, indexes and sends
     # the "ready" notification from it, so a second message repeats all four --
     # a second push included. Algolia indexing is enqueued by that consumer.
     await sqs.send_message(

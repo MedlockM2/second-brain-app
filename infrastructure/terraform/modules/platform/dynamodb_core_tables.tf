@@ -342,48 +342,9 @@ output "auth_tokens_table_name" {
   description = "Auth tokens table name"
 }
 
-# Media watchers table (pending notifications fan-out)
-# Renamed from legacy "episode_watchers" (episode_guid PK) to align with
-# media_summarizer/utils/media_watchers.py which uses media_key as the
-# canonical identity key for all media types (podcasts, docs, videos, etc.).
-resource "aws_dynamodb_table" "media_watchers_v1" {
-  name         = "media_watchers${local.suffix}"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "media_key"
-  range_key    = "user_id"
-
-  attribute {
-    name = "media_key"
-    type = "S"
-  }
-  attribute {
-    name = "user_id"
-    type = "S"
-  }
-
-  tags = {
-    Name = "media_watchers${local.suffix}"
-  }
-
-  point_in_time_recovery {
-    enabled = true
-  }
-
-  deletion_protection_enabled = true
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
 output "media_idempotence_table_name" {
   value       = aws_dynamodb_table.media_idempotence_v1.name
   description = "Media idempotence table name"
-}
-
-output "media_watchers_table_name" {
-  value       = aws_dynamodb_table.media_watchers_v1.name
-  description = "Media watchers table name"
 }
 
 # User folders table (hierarchical media organization)

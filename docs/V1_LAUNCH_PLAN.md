@@ -1125,7 +1125,6 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
 - **task-135** — Provision queue Instagram manquante en Terraform ✅
 - **task-136** — Fix Algolia API key corrompue par commentaire trailing dans Secrets Manager ✅
 - **task-137** — Fix Deepgram worker : floats → Decimal pour DynamoDB ✅
-- **task-138** — Fix `/api/podcasts/submit` : classification plateforme au lieu de `source_platform=rss` hardcodé ✅
 - **task-139** — Fix fallback Deepgram sur CDN URLs bloquées par politiques IP source ✅
 - **task-140** — Benchmark TikTok extraction strategies given Lambda IP blocking ✅
 - **task-141** — Audit workers + application du fix `mark_extracting`/`episode_url` à Instagram ✅
@@ -1140,7 +1139,6 @@ Phase 4 a déclenché une cascade de fixes infra/backend :
 - **task-151** — E2E document LlamaParse → Unstructured fallback ✅
 - **task-152** — E2E Deepgram pull→push fallback, ensuite retiré/ajusté par `task-158` ✅
 - **task-153** — Fix Instagram Apify resolver : `APIFY_INSTAGRAM_API_TOKEN` manquant ✅
-- **task-154** — Provision table `media_watchers` manquante ✅
 - **task-155** — Fix PodcastIndex credentials non chargés par Lambda ✅
 - **task-156** — Fix Instagram Apify input field `directUrls` ✅
 - **task-157** — Fix matching Apple Podcasts `?i=` vers épisodes PodcastIndex ✅
