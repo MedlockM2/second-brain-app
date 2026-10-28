@@ -1,11 +1,11 @@
 ---
 id: TASK-550
 title: 'Exposer la consommation, les prévisions et les refus de la formule bêta'
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-28 17:38'
+updated_date: '2026-10-28 17:39'
 labels:
   - backend
   - mobile
@@ -71,5 +71,5 @@ Validation : Ruff propre, mypy propre sur 215 fichiers, typecheck/lint core/mobi
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Contrat budgétaire bêta avec prévision indicative et refus typés, sans jauge publique en minutes. Clients mobile/web adaptés. Ruff, mypy, TypeScript, lint et OpenAPI vérifiés ; à passer Done après merge.
+Contrat budgétaire bêta avec prévision indicative et refus typés, sans jauge publique en minutes. Clients mobile/web adaptés ; vérifications Ruff, mypy, TypeScript, lint et OpenAPI réussies. Implémentation fbd4816b fusionnée dans main.
 <!-- SECTION:FINAL_SUMMARY:END -->
