@@ -46,13 +46,16 @@ async def get_entitlements_status(
     own. The app should say so before the day comes rather than let the user watch
     their minutes disappear.
 
-    `is_beta_access` says the figures are the beta regime's (task-429): the widest
-    allowance in the catalogue, granted to every account because nothing is
-    purchasable before the stores. It is what the app reads to hide every route to
-    the paywall and to stop naming a free trial, which is not what grants the
-    access while the regime is open. No end date travels with it on purpose — the
-    beta does not end on a date the user has to plan around, and the app has
-    nothing to count down.
+    `is_beta_access` says the account is on the beta formula (task-429, task-548):
+    a budget of provider usage held by `beta_budget`, granted to every account
+    because nothing is purchasable before the stores, and independent of the
+    commercial catalogue. It is what the app reads to hide every route to the
+    paywall and to stop naming a free trial, which is not what grants the access
+    while the formula is open. A beta account has no minute allowance, so its
+    `minutes_included` is 0 and `max_minutes_per_item` is the formula's per-item
+    audio limit; its budget state is exposed by TASK-550. No end date travels with
+    it on purpose — the beta does not end on a date the user has to plan around,
+    and the app has nothing to count down.
     """
     try:
         snapshot = await quota_enforcer.get_entitlement_snapshot(current_user.id)

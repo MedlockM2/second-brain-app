@@ -114,6 +114,8 @@ CHILD_TABLES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("processing_jobs", "gsi", ("id",)),
     ("user_folders", "gsi", ("id",)),
     ("user_usage_monthly", "pk", ("user_id", "period")),
+    # Beta budget ledger (task-548): month counters and attempts of the account.
+    ("beta_budget", "pk", ("user_id", "sk")),
 )
 
 #: media_artifacts rows are reached through the `scope-index` GSI, whose hash key

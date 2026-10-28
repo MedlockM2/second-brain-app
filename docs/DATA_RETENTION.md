@@ -47,8 +47,14 @@ explanation.
 | `chat` conversations, messages, attempts | **indefinite** | the user deleting the conversation, or account deletion (§4). No TTL (task-430 Decision point 3) |
 | `chat` fragments | **1 day** after their write | TTL on `fragment_expires_at`, the only TTL attribute of the table; the final answer is kept on the message. Schema: `docs/CHAT_DATA_MODEL.md` |
 | `user_push_tokens` | **90 days** since the device last registered, refreshed on every launch | the daily sweep in `workers/digest/scheduler.py`, Expo answering `DeviceNotRegistered`, sign-out, or account deletion (§4) |
+| `beta_budget` month counters | **400 days** after the end of their month | TTL on `ttl_epoch`, or account deletion (§4). Schema: `docs/BETA_BUDGET_CONTROL.md` |
+| `beta_budget` attempts | **400 days** after their close; **no TTL while open** | TTL on `ttl_epoch`, written only by the close, or account deletion (§4). An open attempt is closed by its worker or the 6-hour backstop, never by expiry |
 
-`user_push_tokens` is the one store partitioned by `user_id` that carries a
+`beta_budget` carries a clock too, and it does not bend the rule in §1 either: it
+is accounting about provider calls, not library data, and its clock only runs on
+items whose life is over (a past month, a closed attempt).
+
+`user_push_tokens` is the other store partitioned by `user_id` that carries a
 clock, and the rule in §1 is not being bent: a push token is **device** data, not
 library data. It says which handset to interrupt, it is a credential — whoever
 holds it can push to that device — and a phone that has been wiped never tells

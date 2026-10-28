@@ -69,6 +69,21 @@ de 2 crédits par import et les générations incluses dans ce forfait.*
      réservations, les API et les interfaces backend, mobile et web feront l'objet de l'étape
      suivante. Le runtime existant compte encore en minutes ; les valeurs ci-dessous ne sont
      pas présentées comme déjà appliquées ou déployées.
+   - **Formule bêta autonome (mise à jour du 2026-10-28, task-548).** La bêta n'hérite plus
+     de l'allocation du palier commercial le plus élevé : c'est une formule propre,
+     indépendante du catalogue `tiers` et des abonnements, décrite par le bloc `beta_access`
+     de `pricing_config` (5 € par compte, mois calendaire UTC, sans report, limites par
+     élément). Le protocole de réservation et de régularisation est celui validé par l'owner
+     le 2026-10-27 dans `docs/research/task-547-beta-budget-control/README.md`, qui prime sur
+     les sections 1 à 7 de ce benchmark. **Livré par task-548 :** la configuration, le taux
+     BCE en clé de configuration, le barème versionné, le registre DynamoDB
+     `beta_budget-<env>` et ses transitions (`docs/BETA_BUDGET_CONTROL.md`), et le chemin
+     d'attribution de la bêta. **Restent à livrer :** le branchement de chaque traitement
+     payant et le retrait des débits en minutes (task-549), l'exposition du pourcentage et
+     des refus (task-550), l'affichage mobile et web (task-551), le suivi et les alertes
+     (task-552), la mise à jour quotidienne du taux (task-559). Les vérifications après
+     déploiement relèvent de la checklist owner de task-440. Tant que task-549 n'est pas
+     livrée, aucun traitement ne réserve encore sur le budget.
 
 **Encore ouvert** : suppression du palier à 3 € (Q2), recharge consommable (Q3), commission rendue
 ou encaissée (Q4), prix et allocation du palier haut (§ 2.8), numéro de tâche du répertoire (Q9).
@@ -264,6 +279,18 @@ Cette livraison ne définit ni son protocole ni le traitement des réservations 
 des échecs ou des métriques manquantes : ces points appartiennent à l'étape d'implémentation.
 **La présente référence ne démontre donc pas encore un plafond de facture garanti à 5 €.**
 
+**Mise à jour du 2026-10-28 (task-548).** Ces points sont désormais tranchés par la décision
+de l'owner du 2026-10-27 (`docs/research/task-547-beta-budget-control/README.md`, section
+« Décision de l'owner : règles d'implémentation ») et implémentés dans le socle commun
+(`docs/BETA_BUDGET_CONTROL.md`) : coût maximal mesuré avant l'appel et réservé en une seule
+écriture conditionnelle, plafond par élément réservé quand la mesure échoue, régularisation
+sur le coût réel quand un résultat est livré, réservation entièrement rendue au testeur sinon,
+le coût de l'échec restant une dépense opérateur suivie à part, refus si le compteur est en
+panne, pourcentage calculé sur la seule consommation régularisée. La formule bêta est
+autonome : elle ne lit ni le catalogue `tiers` ni les abonnements. Le plafond démontré reste
+celui de la consommation valorisée au barème et au taux versionnés, pas celui d'une facture
+bancaire en euros.
+
 ### R.2 Le barème de consommation bêta
 
 **Référence cible arrêtée le 2026-10-26.** Les lignes ci-dessous remplacent le forfait par import,
@@ -280,6 +307,13 @@ la ligne à appliquer ; un changement de mode exige de revoir cette référence.
 ≈ 0,893814801573114 EUR.** Les calculs ci-dessous utilisent ce quotient, pas sa version arrondie
 à 0,893815. Le taux 0,86 encore présent dans le code n'est pas utilisé pour ces exemples.
 Source : [flux quotidien BCE](https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml).
+
+*Mise à jour du 2026-10-28 (task-548) :* le contrôle budgétaire ne fige pas ce taux. Il
+lit la clé `eur_usd_rate` de `pricing_config` (taux et date de publication, valeur de départ
+1,1188 au 26 octobre 2026), mise à jour chaque jour ouvré par task-559 ; chaque réservation
+enregistre le taux avec lequel elle a été calculée. Les tarifs de cette section sont la
+version `2026-10-28` de la clé `provider_tariffs`, complétée des prix Apify et de l'API X
+relevés par task-547.
 
 | Traitement fournisseur | Tarif USD de référence | Conversion indicative EUR | Source primaire |
 |---|---|---|---|
@@ -417,6 +451,16 @@ Vérifications complémentaires :
 - **Le runtime reste inchangé dans cette livraison** : compteur en minutes et allocation bêta
   actuelle encore en place, réservations et nouvelles interfaces à implémenter ensuite. Cette
   étape ne valide ni les allocations après bêta ni les offres, annuels ou recharges de R.3.
+- *Mise à jour du 2026-10-28 (task-548) :* la bêta n'a plus d'allocation en minutes. Le
+  socle de réservation et de régularisation est livré, avec son registre et sa
+  configuration ; le branchement des traitements, l'exposition et l'interface restent à
+  livrer (task-549 à task-552). Pour la réutilisation **entre comptes**, la règle 12 de la
+  décision task-547 remplace le « réutiliser un résultat sans nouvel appel fournisseur ne
+  crée pas de nouvelle consommation » de l'Owner Validation et de R.1 : un compte qui
+  enregistre un contenu déjà traité pour un autre est débité de la valeur régularisée de ce
+  traitement. Un même compte qui réenregistre un média qu'il détient déjà reste à zéro, et
+  ouvrir ou relire un résultat déjà disponible reste à 0 € (ligne « Réutilisation »
+  ci-dessus).
 
 ### R.3 La grille de paliers
 

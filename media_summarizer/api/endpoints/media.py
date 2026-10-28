@@ -1433,12 +1433,7 @@ async def ingest_url(
         outcome = await use_case.execute(command)
 
         # No minutes are charged here whatever the platform: this submission has
-        # not made a provider call yet. All that is recorded is the item itself,
-        # for the invisible daily burst guard.
-        await quota_enforcer.record_submitted_item(
-            user.id,
-            idempotency_token=quota_enforcer.item_token(outcome.media_item_id),
-        )
+        # not made a provider call yet.
 
         log_event(
             logger,
@@ -1743,12 +1738,7 @@ async def upload_document(
         )
 
         # The minutes this document costs are charged by the parsing worker, which
-        # is the only place the page count exists. Here we only count the item for
-        # the invisible daily burst guard.
-        await quota_enforcer.record_submitted_item(
-            user.id,
-            idempotency_token=quota_enforcer.item_token(job.id),
-        )
+        # is the only place the page count exists.
 
         log_event(
             logger,
@@ -1950,11 +1940,6 @@ async def upload_audio(
                 minutes=upload_minutes or 1,
                 idempotency_token=quota_enforcer.gate_token(job.id),
             )
-
-        await quota_enforcer.record_submitted_item(
-            user.id,
-            idempotency_token=quota_enforcer.item_token(job.id),
-        )
 
         # Enqueue transcription message with the pre-signed URL.
         #

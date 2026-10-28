@@ -156,7 +156,8 @@ async def get_public_pricing():
 async def get_admin_pricing(request: Request):
     """
     Admin endpoint: returns the full pricing config including internal params
-    (unit conversions, burst guards, provider pools, provider config).
+    (unit conversions, the beta formula, its exchange rate and barème, provider
+    pools, provider config).
     Protected by admin secret.
     """
     _verify_admin_secret(request)
@@ -185,7 +186,7 @@ async def update_admin_pricing(
     {
         "updates": {
             "tiers": { ... updated tier definitions ... },
-            "burst_guards": { ... }
+            "provider_tariffs": { ... }
         }
     }
 

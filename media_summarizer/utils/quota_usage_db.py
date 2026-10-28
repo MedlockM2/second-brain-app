@@ -6,7 +6,7 @@ docs/research/task-287-consumption-model/README.md): a minute of media we pay a
 transcription provider to process, plus the flat conversions of §3.1 (a bought
 caption set, five document pages, five folder sources).
 
-Two tables:
+One table:
 - user_usage_monthly: the allowance counter, one row per user per billing period
   PK: user_id (S), SK: period (S)
   Attributes: minutes_used, cost_eur_estimated (observability only), last_updated,
@@ -24,14 +24,17 @@ Two tables:
       end date without granting a second allowance.
 
   The same table carries one shared row keyed on PROVIDER_POOL_USER_ID, which
-  counts provider spend across *all* users for safety-net layer 3. That row is
-  keyed on the calendar month, because it tracks provider billing cycles rather
-  than any user's subscription.
+  counts provider spend across *all* users for the shared provider pools. That
+  row is keyed on the calendar month, because it tracks provider billing cycles
+  rather than any user's subscription.
 
-- user_usage_daily: the invisible burst guards of safety-net layer 2
-  PK: user_id (S), SK: date (S, format YYYY-MM-DD)
-  Attributes: minutes, items, documents, document_pages, generations
-  TTL: ttl_epoch (auto-expire after 3 days)
+  A beta account (task-548) writes its minute debits under the calendar month
+  `YYYY-MM` until TASK-549 routes its calls through the beta budget, whose ledger
+  is a table of its own (`utils/beta_budget_db.py`).
+
+The daily burst-guard table (`user_usage_daily`) was deleted with task-548: the
+beta budget bounds what one account can spend, and nothing read those counters
+for anything else.
 
 All counter increments use atomic ADD operations to avoid race conditions.
 
@@ -44,7 +47,7 @@ single period, so the set resets every billing window.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Mapping, Optional
 
@@ -56,23 +59,12 @@ from media_summarizer.utils.env import required_env
 logger = logging.getLogger(__name__)
 
 USER_USAGE_MONTHLY_TABLE = required_env("USER_USAGE_MONTHLY_TABLE")
-USER_USAGE_DAILY_TABLE = required_env("USER_USAGE_DAILY_TABLE")
 
 # Reserved partition of the monthly table holding platform-wide provider spend.
 # Not a user id, and it can never collide with one: user ids are UUIDs.
 PROVIDER_POOL_USER_ID = "__provider_pools__"
 
-# Daily burst-guard counters (layer 2). Keys are the keyword arguments callers
-# pass, values are the DynamoDB attribute names.
-_DAILY_COUNTERS: Mapping[str, str] = {
-    "minutes": "minutes",
-    "items": "items",
-    "documents": "documents",
-    "document_pages": "document_pages",
-    "generations": "generations",
-}
-
-# Platform-wide provider pool counters (layer 3).
+# Platform-wide provider pool counters.
 _POOL_COUNTERS: Mapping[str, str] = {
     "apify_results": "apify_results",
     "llamaparse_pages": "llamaparse_pages",
@@ -82,16 +74,6 @@ _POOL_COUNTERS: Mapping[str, str] = {
 def _current_month() -> str:
     """Return the current calendar month in YYYY-MM format."""
     return datetime.now(timezone.utc).strftime("%Y-%m")
-
-
-def _current_date() -> str:
-    """Return current date string in YYYY-MM-DD format."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-
-def _daily_ttl_epoch() -> int:
-    """Return TTL epoch (3 days from now) for daily records auto-cleanup."""
-    return int((datetime.now(timezone.utc) + timedelta(days=3)).timestamp())
 
 
 async def _atomic_add(
@@ -240,67 +222,7 @@ async def increment_monthly_usage(
 
 
 # ---------------------------------------------------------------------------
-# Daily burst guards (safety-net layer 2)
-# ---------------------------------------------------------------------------
-
-
-async def get_daily_usage(user_id: str, date: Optional[str] = None) -> Dict[str, int]:
-    """Return today's burst-guard counters (0 when nothing was recorded)."""
-    if date is None:
-        date = _current_date()
-
-    item = await _get_item(USER_USAGE_DAILY_TABLE, {"user_id": user_id, "date": date})
-    if item is None:
-        return {name: 0 for name in _DAILY_COUNTERS}
-    return {
-        name: int(item.get(attribute, 0))
-        for name, attribute in _DAILY_COUNTERS.items()
-    }
-
-
-async def increment_daily_usage(
-    user_id: str,
-    *,
-    minutes: int = 0,
-    items: int = 0,
-    documents: int = 0,
-    document_pages: int = 0,
-    generations: int = 0,
-    date: Optional[str] = None,
-    idempotency_token: Optional[str] = None,
-) -> bool:
-    """Atomically increment today's burst-guard counters.
-
-    Creates the row if it does not exist and sets its TTL. These counters never
-    refuse anything on their own — `quota_enforcer` only reads them to decide
-    whether an account is worth the owner's attention.
-    """
-    if date is None:
-        date = _current_date()
-
-    provided = {
-        "minutes": minutes,
-        "items": items,
-        "documents": documents,
-        "document_pages": document_pages,
-        "generations": generations,
-    }
-    additions = {
-        _DAILY_COUNTERS[name]: value for name, value in provided.items() if value
-    }
-
-    return await _atomic_add(
-        table_name=USER_USAGE_DAILY_TABLE,
-        key={"user_id": user_id, "date": date},
-        additions=additions,
-        set_fields={"ttl_epoch": _daily_ttl_epoch()},
-        idempotency_token=idempotency_token,
-        log_name="quota.daily_increment_skipped_duplicate",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Shared provider pools (safety-net layer 3)
+# Shared provider pools
 # ---------------------------------------------------------------------------
 
 

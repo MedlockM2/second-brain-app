@@ -16,11 +16,7 @@ from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.api.rate_limit import get_limit_from_env, limiter
 from media_summarizer.core.models import ProcessingJob
 from media_summarizer.core.models.auth import AuthUser
-from media_summarizer.core.services.quota_enforcer import (
-    check_submission_allowed,
-    item_token,
-    record_submitted_item,
-)
+from media_summarizer.core.services.quota_enforcer import check_submission_allowed
 from media_summarizer.utils import database_async, podcast_index, sqs
 from media_summarizer.utils.database_async import get_db
 from media_summarizer.utils.env import required_env
@@ -267,9 +263,7 @@ async def submit_podcast_for_processing(
             )
 
         # The minutes are charged by the transcription settlement, which is the
-        # only place this path ever learns the real duration. Only the item is
-        # counted here, for the invisible daily burst guard.
-        await record_submitted_item(user.id, idempotency_token=item_token(job.id))
+        # only place this path ever learns the real duration.
 
         return {"job_id": job.id, "status": job.status.value}
     except HTTPException:

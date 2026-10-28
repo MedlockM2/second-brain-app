@@ -29,7 +29,7 @@ locals {
     FOLLOWS_TABLE                 = aws_dynamodb_table.follows.name
     FEED_FORECASTS_TABLE          = aws_dynamodb_table.feed_forecasts.name
     USER_USAGE_MONTHLY_TABLE      = aws_dynamodb_table.user_usage_monthly.name
-    USER_USAGE_DAILY_TABLE        = aws_dynamodb_table.user_usage_daily.name
+    BETA_BUDGET_TABLE             = aws_dynamodb_table.beta_budget.name
     REVENUCAT_EVENTS_TABLE        = aws_dynamodb_table.revenucat_events.name
     BUG_REPORTS_TABLE             = aws_dynamodb_table.bug_reports.name
     USER_RSS_FEEDS_TABLE          = aws_dynamodb_table.user_rss_feeds.name

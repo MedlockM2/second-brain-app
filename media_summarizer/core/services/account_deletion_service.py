@@ -100,7 +100,11 @@ _JOB_CONCURRENCY = 8
 # is the bug this shape exists to make obvious.
 _USER_PARTITION_TABLES: Tuple[Tuple[str, Optional[str]], ...] = (
     ("USER_USAGE_MONTHLY_TABLE", "period"),
-    ("USER_USAGE_DAILY_TABLE", "date"),
+    # The beta budget ledger (task-548): the account's month counters and every
+    # attempt it reserved, open or closed, under one partition. An attempt still
+    # open when the account goes is erased with the rest: a worker settling it
+    # later finds no attempt and writes nothing (`beta_budget.settle` -> missing).
+    ("BETA_BUDGET_TABLE", "sk"),
     ("USER_DIGESTS_TABLE", "digest_key"),
     ("USER_DIGEST_SETTINGS_TABLE", None),
     ("FOLLOWS_TABLE", "feed_id"),
