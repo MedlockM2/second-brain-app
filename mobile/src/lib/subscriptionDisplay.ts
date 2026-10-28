@@ -141,7 +141,6 @@ export function getStatusNote(subscriptionStatus: string | null): string | null 
  * but a bar wider than its track is a rendering bug, not a message.
  */
 export function getUsageRatio(entitlement: EntitlementStatus): number {
-  if (entitlement.minutes_included <= 0) return 0;
-  const ratio = entitlement.minutes_used / entitlement.minutes_included;
+  const ratio = (entitlement.budget.consumed_percent ?? 0) / 100;
   return Math.min(1, Math.max(0, ratio));
 }

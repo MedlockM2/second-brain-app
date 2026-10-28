@@ -21,10 +21,7 @@ export function describeArtifactRefusal(
   const code = httpError?.code ?? httpError?.quotaErrorCode;
   const isFolder = options?.scope === "folder";
 
-  // A generation over a single item is free, so only a folder can ever run
-  // into the minute allowance. The backend sentence already carries the figures
-  // (how many minutes this needs, how many are left, when they reset), so it is
-  // repeated verbatim instead of being flattened into a generic quota line.
+  // Media and folder calls use the same typed beta budget refusals.
   const quotaCode = getQuotaErrorCode(err);
   if (quotaCode) {
     return getQuotaErrorMessage(err, quotaCode);

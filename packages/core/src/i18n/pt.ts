@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Portuguese catalogue. See `en` for the reference wording and the key layout. */
 export const pt: Catalog = {
+  "budget.title": "Processamento indisponível",
+  "budget.exhausted": "A capacidade deste mês não cobre esta operação.",
+  "budget.exhaustedUntil": "A capacidade renova-se em {date}. Ler e organizar continuam disponíveis.",
+  "budget.tooLarge": "Este elemento excede o limite de processamento.",
+  "budget.unavailable": "Processamento temporariamente indisponível. Tenta novamente mais tarde.",
+  "budget.closed": "O acesso ao processamento beta está fechado.",
+
+  "budget.consumed": "Capacidade consumida",
+  "budget.rule": "Apenas consumo apurado. As operações em curso reservam capacidade até ao custo final. Ler e organizar continuam disponíveis.",
   "folders.untitled": "Pasta sem título",
   "folders.duplicateTitle": "Nome já utilizado",
   "folders.duplicateMessage": "Já existe uma pasta com este nome aqui. Escolhe outro nome.",

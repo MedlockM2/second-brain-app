@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Dutch catalogue. See `en` for the reference wording and the key layout. */
 export const nl: Catalog = {
+  "budget.title": "Verwerking niet beschikbaar",
+  "budget.exhausted": "De capaciteit van deze maand is onvoldoende voor deze bewerking.",
+  "budget.exhaustedUntil": "De capaciteit wordt op {date} vernieuwd. Lezen en ordenen blijven beschikbaar.",
+  "budget.tooLarge": "Dit item overschrijdt de verwerkingslimiet.",
+  "budget.unavailable": "Verwerking is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+  "budget.closed": "De toegang tot bètaverwerking is gesloten.",
+
+  "budget.consumed": "Verbruikte capaciteit",
+  "budget.rule": "Alleen definitief verbruik. Lopende bewerkingen reserveren capaciteit tot de uiteindelijke kosten bekend zijn. Lezen en ordenen blijven beschikbaar.",
   "folders.untitled": "Naamloze map",
   "folders.duplicateTitle": "Naam al in gebruik",
   "folders.duplicateMessage": "Hier bestaat al een map met deze naam. Kies een andere naam.",

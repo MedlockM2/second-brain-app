@@ -13,6 +13,15 @@
  * categories (Arabic has six) simply declares them alongside.
  */
 export const en = {
+  "budget.title": "Processing unavailable",
+  "budget.exhausted": "This month’s capacity cannot cover this operation.",
+  "budget.exhaustedUntil": "Capacity renews on {date}. Reading and organising remain available.",
+  "budget.tooLarge": "This item exceeds the processing limit.",
+  "budget.unavailable": "Processing is temporarily unavailable. Try again later.",
+  "budget.closed": "Beta processing access is closed.",
+
+  "budget.consumed": "Capacity used",
+  "budget.rule": "Settled usage only. Pending operations reserve capacity until their final cost is known. Reading and organising remain available.",
   "folders.untitled": "Untitled folder",
   "folders.duplicateTitle": "Name already used",
   "folders.duplicateMessage": "A folder already has this name here. Choose another name.",

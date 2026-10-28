@@ -95,8 +95,9 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
   PROVIDER_AUTH_FAILED: "mediaError.serviceUnavailable",
   PROVIDER_CREDITS_DEPLETED: "mediaError.serviceUnavailable",
   PROVIDER_CONFIG_ERROR: "mediaError.serviceUnavailable",
-  OUT_OF_MINUTES: OUT_OF_MINUTES,
-  ITEM_TOO_LONG: "mediaError.itemTooLong",
+  BUDGET_EXHAUSTED: "budget.exhausted",
+  ITEM_TOO_LARGE: "budget.tooLarge",
+  BUDGET_UNAVAILABLE: "budget.unavailable",
   INVALID_JOB_MESSAGE: "mediaError.internal",
   SUBMISSION_FAILED: "mediaError.internal",
   UNEXPECTED_ERROR: "mediaError.internal",
@@ -124,7 +125,7 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
  *
  * - `MEDIA_UNAVAILABLE`, `GEO_RESTRICTED`, `AGE_RESTRICTED` — the source *is*
  *   supported; this particular item is out of reach.
- * - `OUT_OF_MINUTES`, `ITEM_TOO_LONG` — the reader's own allowance. There is
+ * - `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE`, `BUDGET_UNAVAILABLE` — the reader's own allowance. There is
  *   nothing to add support for.
  * - the seven `PROVIDER_*` codes, `INVALID_JOB_MESSAGE`, `SUBMISSION_FAILED`,
  *   `UNEXPECTED_ERROR` — a passing outage, our budget or our bug. A retry may be

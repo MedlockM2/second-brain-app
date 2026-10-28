@@ -73,6 +73,72 @@ Operational behavior now implemented in runtime:
 
 ## Canonical endpoints
 
+### Beta capacity (TASK-550)
+
+`GET /api/entitlements/status` is the authenticated source for both clients.
+It returns `user_id`, `subscription_tier`, `subscription_status`, `is_active`,
+`is_free_trial`, `is_beta_access`, `auto_renew_status`, and `budget`:
+
+```json
+{
+  "state": "available",
+  "consumed_percent": 25.5,
+  "reserved_percent": 10,
+  "available_percent": 64.5,
+  "open_operations": 2,
+  "open_reservations": 3,
+  "warning_threshold_percent": 80,
+  "resets_at": "2026-11-01T00:00:00+00:00"
+}
+```
+
+This is a projection of `beta_budget`, never a conversion of minutes. Consumed
+means settled usage only, excluding open reservations; it can exceed 100 after
+a provider overrun. Available subtracts both settled usage and reservations and
+is floored at zero. A release returns its reservation, without erasing operator
+spend or increasing consumed usage. No prices, currency amounts or purchase
+suggestions travel to the apps. All minute gauge fields and their aliases are
+removed. `state` is `available`, `exhausted`, `unavailable` or `closed`; numeric
+fields are null for the last two, never a fictitious zero/full allowance. The
+reset is the first instant of the next UTC calendar month, without carry-over;
+on a closed formula this date does not promise renewed access.
+Warnings use the backend's `warning_threshold_percent`, applied to settled usage.
+
+Counts describe all still-open operations/attempts, including previous-month
+work whose holds stay in its original month. The counter is strongly consistent;
+counts use the sparse open-attempt index and are eventually consistent. They are
+not a transactionally frozen snapshot and never authorize an operation.
+
+`POST /api/entitlements/forecast` is authenticated and read-only. Its request has
+`operation` (`audio_import`, `document_import`, `generation`, `chat_turn`), and
+the known metadata: positive `duration_seconds`; positive `document_units` with
+`document_unit: page|sheet`; or positive `input_tokens` for the **complete** LLM
+request including instructions, schema and history. `include_translation`
+defaults to true for imports; false is appropriate only when no translation is
+needed. Unknown quantities reserve the configured ceiling in the estimate.
+Models, prices, output ceilings, conversion and component rounding come from
+the same builders as actual admission; callers cannot supply a price or model.
+Imports include the automatic preview and translation. Sheet text uses the
+document text ceiling. This estimate covers the named path, not an arbitrary
+URL's unknown collector/fallback chain or a prediction of actual billed tokens.
+For paths whose metadata/route is not yet known, clients must display no forecast.
+
+The response has `state: estimated|refused|unavailable`, nullable
+`reservation_percent`, `available_percent`, `fits_available`, nullable `refusal`,
+`params` and `resets_at`. A known estimate can have `fits_available: false` and
+`refusal: budget_exhausted`. Unknown pricing/counter state is `unavailable`, with
+null figures, never zero. Per-item excess is `refused/item_too_large`. This is
+an advisory reservation bound, not final consumption or an admission guarantee:
+no provider call or hold is created. Only the later conditional ledger write
+admits work; final provider metrics settle it and release unused capacity.
+
+All synchronous budget refusals carry `X-Quota-Error-Code` and a structured
+`detail` with `error_code`: `budget_exhausted` (403, optional `period_end`),
+`item_too_large` (413, `quantity`, `measured`, `limit`), `budget_unavailable` (503),
+or `not_entitled` (403). They are shared typed client errors, not reasons to buy
+a subscription. Asynchronous jobs carry the corresponding uppercase failure
+codes. Reading, organising and consulting available results remain accessible.
+
 1. `POST /api/media/ingest-url`
 2. `GET /api/media/{media_item_id}`
 3. `POST /api/artifacts`
@@ -372,7 +438,7 @@ Request:
   applies to that part of the folder alone: a chosen source still being
   transcribed is waited on, a chosen source with no usable text is listed as
   excluded, the ceilings (`scope_too_large`, `scope_empty`) count the chosen
-  sources, the minutes checked and debited are one per five chosen sources, and the
+  sources, provider calls reserve and settle the common beta budget, and the
   entry's `source_count` and `sources` describe the subset. `source_ids` itself is
   **not stored in `parameters` and not hashed a second time**: the chosen sources
   enter the `artifact_id` as its source ids, like any source set. So a list naming
@@ -469,7 +535,7 @@ Typed refusals:
 | `parameters` holds a key or a value the type cannot take, or a `source_ids` the folder cannot satisfy | `422` | `invalid_artifact_parameters` | no |
 | No source at all in the scope, or every source definitively unusable | `422` | `scope_empty` | no |
 | More than 25 sources, or more than 120 000 estimated tokens | `422` | `scope_too_large` | no |
-| Out of minutes (folder scope only) | `403` | `out_of_minutes` | next period, or on upgrade |
+| Budget cannot cover a paid operation | `403` | `budget_exhausted` | after reservations release or the next UTC month |
 | Artifact type disabled | `400` | — | no |
 | Generation disabled globally | `503` | — | no |
 
@@ -504,11 +570,10 @@ are both gone. A source still being prepared is waited on rather than refused
 (task-360), and a source in a foreign language is read as it is (task-398), so no
 generation can be blocked by the state of a translation.
 
-A generation over a **single item** is free — its LLM cost is already inside what
-the item cost to ingest — so `out_of_minutes` can only ever come back on
-`scope=folder`, where the cost scales with the sources behind it (one minute per
-five sources, counted on the chosen sources when the request sets `source_ids`).
-Its `message` names the figures and the app shows it verbatim.
+Every paid generation, media and folder alike, reserves the common beta budget
+before its provider call and settles on the actual usage (TASK-549). Reused
+stored artifacts invoke no provider. A budget refusal uses the typed contract
+above; clients render its code and parameters through their shared catalogues.
 
 ### 4) GET /api/artifacts?scope=&scope_id=
 

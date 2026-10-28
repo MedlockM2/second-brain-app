@@ -37,7 +37,7 @@ export function FreeTrialNotice(): React.JSX.Element | null {
     return null;
   }
 
-  const message = buildTrialMessage(entitlementStatus.resets_at);
+  const message = buildTrialMessage(entitlementStatus.budget.resets_at);
 
   return (
     <View style={styles.row}>

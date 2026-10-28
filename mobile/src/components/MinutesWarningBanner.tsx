@@ -16,30 +16,17 @@ import { formatResetDate, getUsageRatio } from "../lib/subscriptionDisplay";
 import { UsageWarningDismissal } from "../lib/usageWarningDismissal";
 import { t } from "../i18n";
 
-/**
- * The one warning the app gives before the wall: an inline notice, at the top of
- * the inbox, when most of the period's minutes are spent.
- *
- * The threshold belongs to the backend (`usage_gauge.warning_threshold_pct` in
- * `pricing_config`), which is why this reads `warning_threshold_reached` instead of
- * comparing numbers itself: the percentage the user is told about and the
- * percentage that triggered the notice are then the same one.
- *
- * Deliberately not a modal and never repeated once dismissed — it carries no
- * decision, only the two facts that let the user make one (how much is left, what
- * happens on the date) plus a way to see the plans.
- *
- * The link to the plans is the only part the beta regime removes (task-429): the
- * two facts stay, because knowing the allowance is running out is as useful to a
- * tester as to a subscriber — there is just nothing to buy about it.
- */
+/** Inline warning on settled usage; reservations are not consumption. */
 export function MinutesWarningBanner(): React.JSX.Element | null {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { entitlementStatus, isBetaAccess } = usePurchases();
-  const resetsAt = entitlementStatus?.resets_at ?? null;
-  const shouldWarn = entitlementStatus?.warning_threshold_reached === true;
+  const resetsAt = entitlementStatus?.budget.resets_at ?? null;
+  const capacity = entitlementStatus?.budget;
+  const shouldWarn = capacity?.consumed_percent != null
+    && capacity.warning_threshold_percent != null
+    && capacity.consumed_percent >= capacity.warning_threshold_percent;
 
   // Starts hidden: the dismissal is on disk, and flashing the banner for one
   // frame before reading it would defeat "not repeated".
@@ -62,11 +49,7 @@ export function MinutesWarningBanner(): React.JSX.Element | null {
 
   const usedPercent = Math.round(getUsageRatio(entitlementStatus) * 100);
   const resetDate = formatResetDate(resetsAt);
-  const message = buildMessage(
-    usedPercent,
-    resetDate,
-    entitlementStatus.is_free_trial,
-  );
+  const message = `${t("budget.consumed")}: ${usedPercent}%. ${resetDate ? `${t("subscription.resetLabel.resets")}: ${resetDate}` : ""}`;
 
   const handleDismiss = (): void => {
     setIsDismissed(true);
@@ -103,33 +86,6 @@ export function MinutesWarningBanner(): React.JSX.Element | null {
       </Pressable>
     </View>
   );
-}
-
-/**
- * The banner's sentence. A trial allowance is a single window that never
- * refills (task-300), so telling a trial user their minutes "reset on" that
- * date was false on this surface too — the date is when the trial closes, and
- * the wording now says which of the two it is.
- */
-function buildMessage(
-  usedPercent: number,
-  resetDate: string | null,
-  isFreeTrial: boolean,
-): string {
-  // Each case is one whole sentence in the catalogue rather than a stem the
-  // code glues a clause onto: the two halves do not keep their order, or even
-  // their boundary, once translated.
-  if (resetDate === null) {
-    return isFreeTrial
-      ? t("quota.warning.trial", { percent: usedPercent })
-      : t("quota.warning.monthly", { percent: usedPercent });
-  }
-  return isFreeTrial
-    ? t("quota.warning.trialWithDate", { percent: usedPercent, date: resetDate })
-    : t("quota.warning.monthlyWithDate", {
-        percent: usedPercent,
-        date: resetDate,
-      });
 }
 
 const makeStyles = ({ colors: Colors }: Theme) =>

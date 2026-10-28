@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Hindi catalogue. See `en` for the reference wording and the key layout. */
 export const hi: Catalog = {
+  "budget.title": "प्रक्रिया उपलब्ध नहीं है",
+  "budget.exhausted": "इस महीने की क्षमता इस प्रक्रिया के लिए पर्याप्त नहीं है।",
+  "budget.exhaustedUntil": "क्षमता {date} को नवीनीकृत होगी। पढ़ना और व्यवस्थित करना उपलब्ध रहता है।",
+  "budget.tooLarge": "यह सामग्री प्रक्रिया की सीमा से अधिक है।",
+  "budget.unavailable": "प्रक्रिया अस्थायी रूप से उपलब्ध नहीं है। बाद में फिर प्रयास करें।",
+  "budget.closed": "बीटा प्रक्रिया की पहुँच बंद है।",
+
+  "budget.consumed": "इस्तेमाल की गई क्षमता",
+  "budget.rule": "केवल अंतिम उपयोग। जारी प्रक्रियाएँ अंतिम लागत ज्ञात होने तक क्षमता आरक्षित रखती हैं। पढ़ना और व्यवस्थित करना उपलब्ध रहता है।",
   "folders.untitled": "बिना शीर्षक वाला फ़ोल्डर",
   "folders.duplicateTitle": "नाम पहले से उपयोग में है",
   "folders.duplicateMessage": "यहाँ इस नाम का फ़ोल्डर पहले से मौजूद है। दूसरा नाम चुनें।",

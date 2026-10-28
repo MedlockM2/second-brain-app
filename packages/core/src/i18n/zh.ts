@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Chinese catalogue. See `en` for the reference wording and the key layout. */
 export const zh: Catalog = {
+  "budget.title": "无法处理",
+  "budget.exhausted": "本月容量不足以执行此操作。",
+  "budget.exhaustedUntil": "容量将于{date}更新。阅读和整理仍可使用。",
+  "budget.tooLarge": "此项目超过处理上限。",
+  "budget.unavailable": "处理暂时不可用，请稍后重试。",
+  "budget.closed": "测试版处理权限已关闭。",
+
+  "budget.consumed": "已用容量",
+  "budget.rule": "仅包含已结算用量。处理中的操作会预留容量，直到最终费用确定。阅读和整理仍可使用。",
   "folders.untitled": "未命名文件夹",
   "folders.duplicateTitle": "名称已被使用",
   "folders.duplicateMessage": "此处已有同名文件夹。请选择其他名称。",

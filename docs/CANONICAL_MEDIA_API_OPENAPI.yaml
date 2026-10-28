@@ -10,6 +10,41 @@ servers:
 security:
   - BearerAuth: []
 paths:
+  /api/entitlements/status:
+    get:
+      operationId: getEntitlementsStatus
+      tags: [entitlements]
+      responses:
+        '200':
+          description: Authenticated capacity from the common beta ledger; no minute fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementStatus'
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+  /api/entitlements/forecast:
+    post:
+      operationId: forecastBudget
+      tags: [entitlements]
+      description: Read-only reservation estimate. No hold or provider call; actual admission remains atomic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetForecastRequest'
+      responses:
+        '200':
+          description: An estimate, a per-item refusal, or explicit unavailable state with null figures
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetForecast'
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '422':
+          $ref: '#/components/responses/ValidationError'
   /api/media/ingest-url:
     post:
       operationId: ingestMediaUrl
@@ -314,7 +349,7 @@ paths:
         '401':
           $ref: '#/components/responses/SessionExpired'
         '403':
-          description: out_of_minutes (folder scope only).
+          description: budget_exhausted or not_entitled; typed budget refusal, without monetary amounts.
           content:
             application/json:
               schema:
@@ -392,6 +427,104 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    BudgetState:
+      type: object
+      required: [state, consumed_percent, reserved_percent, available_percent, open_operations, open_reservations, warning_threshold_percent, resets_at]
+      properties:
+        state:
+          type: string
+          enum: [available, exhausted, unavailable, closed]
+        consumed_percent:
+          type: [number, 'null']
+          description: Settled consumption only; can exceed 100 after an overrun
+        reserved_percent:
+          type: [number, 'null']
+          description: Current-month holds, not settled consumption
+        warning_threshold_percent:
+          type: [number, 'null']
+          description: Backend configuration threshold, applied to settled consumption only
+        available_percent:
+          type: [number, 'null']
+          minimum: 0
+        open_operations:
+          type: [integer, 'null']
+          minimum: 0
+        open_reservations:
+          type: [integer, 'null']
+          minimum: 0
+        resets_at:
+          type: string
+          format: date-time
+          description: Next UTC calendar month; no carry-over or promise that a closed formula reopens
+    EntitlementStatus:
+      type: object
+      required: [user_id, subscription_tier, subscription_status, is_active, is_free_trial, is_beta_access, auto_renew_status, budget]
+      properties:
+        user_id:
+          type: string
+        subscription_tier:
+          type: [string, 'null']
+        subscription_status:
+          type: [string, 'null']
+        is_active:
+          type: boolean
+        is_free_trial:
+          type: boolean
+        is_beta_access:
+          type: boolean
+        auto_renew_status:
+          type: [boolean, 'null']
+        budget:
+          $ref: '#/components/schemas/BudgetState'
+    BudgetForecastRequest:
+      type: object
+      required: [operation]
+      properties:
+        operation:
+          type: string
+          enum: [audio_import, document_import, generation, chat_turn]
+        duration_seconds:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+        document_units:
+          type: [integer, 'null']
+          minimum: 1
+        document_unit:
+          type: string
+          enum: [page, sheet]
+          default: page
+        input_tokens:
+          type: [integer, 'null']
+          minimum: 1
+          description: Complete LLM request including instructions, schema and chat history
+        include_translation:
+          type: boolean
+          default: true
+    BudgetForecast:
+      type: object
+      required: [state, reservation_percent, available_percent, fits_available, refusal, params, resets_at]
+      properties:
+        state:
+          type: string
+          enum: [estimated, unavailable, refused]
+        reservation_percent:
+          type: [number, 'null']
+          description: Advisory reservation bound, never final consumption or an admission guarantee
+        available_percent:
+          type: [number, 'null']
+          minimum: 0
+        fits_available:
+          type: [boolean, 'null']
+        refusal:
+          type: [string, 'null']
+          enum: [budget_exhausted, item_too_large, budget_unavailable, not_entitled, null]
+        params:
+          type: object
+          additionalProperties:
+            type: [string, integer]
+        resets_at:
+          type: string
+          format: date-time
     IngestUrlRequest:
       type: object
       required: [url]

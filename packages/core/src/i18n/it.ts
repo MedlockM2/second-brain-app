@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Italian catalogue. See `en` for the reference wording and the key layout. */
 export const it: Catalog = {
+  "budget.title": "Elaborazione non disponibile",
+  "budget.exhausted": "La capacità di questo mese non copre questa operazione.",
+  "budget.exhaustedUntil": "La capacità si rinnova il {date}. Lettura e organizzazione restano disponibili.",
+  "budget.tooLarge": "Questo elemento supera il limite di elaborazione.",
+  "budget.unavailable": "Elaborazione temporaneamente non disponibile. Riprova più tardi.",
+  "budget.closed": "L’accesso all’elaborazione beta è chiuso.",
+
+  "budget.consumed": "Capacità consumata",
+  "budget.rule": "Solo consumo definitivo. Le operazioni in corso riservano capacità fino al costo finale. Lettura e organizzazione restano disponibili.",
   "folders.untitled": "Cartella senza titolo",
   "folders.duplicateTitle": "Nome già utilizzato",
   "folders.duplicateMessage": "Qui esiste già una cartella con questo nome. Scegli un altro nome.",

@@ -115,7 +115,7 @@ export interface ChatTurnAccepted extends ChatGeneration {
 
 /**
  * Typed refusals of the chat routes (`detail.error_code`), besides the quota
- * refusals `out_of_minutes` / `item_too_long` every consuming route shares.
+ * refusals `budget_exhausted` / `item_too_large` / `budget_unavailable` every consuming route shares.
  */
 export type ChatErrorCode =
   | "invalid_scope"

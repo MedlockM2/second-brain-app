@@ -22,45 +22,8 @@ import {
 import { useAuth } from "./AuthContext";
 import { apiRequest } from "../services/apiClient";
 
-/**
- * What `GET /api/entitlements/status` returns: the caller's own state, and
- * nothing about what a plan costs or includes — that is `GET /api/pricing`,
- * read by `src/services/pricingService.ts`. The endpoint used to append an
- * `offerings_config` / `minutes_legend` pair for callers without a plan, which
- * this app declared and never read; it is gone (task-299).
- *
- * Minutes are the only metered unit, so the gauge is one number over one total.
- * `resets_at` is the end of the period it describes: the renewal anniversary on
- * a subscription, the trial's close during the free trial, after which nothing
- * refills at all.
- */
-export interface EntitlementStatus {
-  user_id: string;
-  subscription_tier: "S" | "M" | "L" | null;
-  subscription_status: string | null;
-  is_active: boolean;
-  is_free_trial: boolean;
-  /**
-   * The beta regime is what grants the access (task-429): the widest allowance
-   * the backend catalogue holds, served to every account because nothing is
-   * purchasable before the stores. Read through `isBetaAccess` below rather than
-   * directly, so a screen cannot forget what a missing payload means.
-   */
-  is_beta_access: boolean;
-  auto_renew_status: boolean | null;
-  /** Minutes the plan includes for the current period. */
-  minutes_included: number;
-  /** Minutes already spent in the current period. */
-  minutes_used: number;
-  /** Minutes left, never negative. */
-  minutes_remaining: number;
-  /** Longest single import this plan accepts, in minutes. */
-  max_minutes_per_item: number;
-  /** When the allowance refills. Nothing rolls over. */
-  resets_at: string | null;
-  /** Backend-owned threshold (80%): time to warn the user. */
-  warning_threshold_reached: boolean;
-}
+import type { EntitlementStatus } from "@media-summarizer/core/types/entitlements";
+export type { EntitlementStatus } from "@media-summarizer/core/types/entitlements";
 
 interface PurchasesContextValue {
   /** Whether RevenueCat has been initialized */
