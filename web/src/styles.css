@@ -546,3 +546,5 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .customize-source { display: flex; align-items: center; gap: 12px; padding-block: 8px; min-height: 48px; }
 .customize-source img { width: 64px; height: 44px; object-fit: cover; border-radius: var(--r-sm); }
 .customize-source-title { display: block; overflow-wrap: anywhere; font-size: 14px; }
+
+.art-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

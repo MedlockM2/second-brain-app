@@ -1,22 +1,6 @@
-/**
- * Why `GET /api/artifacts/:id/content` had nothing to hand back.
- *
- * The endpoint answers `409` in two very different situations, and the difference
- * is read off the refusal's `error_code` — never off its message text, which is
- * English prose meant for a log (task-328):
- *
- * - `artifact_not_ready` — the entry is `queued` or `generating`. It resolves on
- *   its own, so coming back to it is legitimate.
- * - `artifact_failed` — the entry is `failed`, which is **terminal**: no worker
- *   will pick it up again, so anything that keeps asking asks forever. The
- *   refusal carries the scope, the type and the parameters a new generation
- *   needs, which is what lets the failure state offer one without a second
- *   round-trip — one that reruns this very entry, options included (task-535).
- */
-
+import { artifactFailureMessage } from "@media-summarizer/core/artifacts/failure";
 import type { HttpError } from "@media-summarizer/core/api/httpError";
 import type {
-  ArtifactGenerationParameters,
   ArtifactScope,
 } from "@media-summarizer/core/types/artifacts";
 import type { ArtifactType } from "@media-summarizer/core/types/media";
@@ -26,16 +10,12 @@ export interface ArtifactRegenerationTarget {
   scope: ArtifactScope;
   scopeId: string;
   artifactType: ArtifactType;
-  /**
-   * What the failed entry was asked with (`request_parameters`). Sent again, so
-   * the rerun lands on that entry rather than on the one at the defaults.
-   */
-  parameters: ArtifactGenerationParameters;
+  artifactId: string;
 }
 
 export type ArtifactContentBlock =
   | { kind: "pending" }
-  | { kind: "failed"; regeneration: ArtifactRegenerationTarget | null };
+  | { kind: "failed"; regeneration: ArtifactRegenerationTarget | null; deletion: ArtifactRegenerationTarget | null; reason: string };
 
 /**
  * The types a user may ask for. Not a defensive list: `media_artifacts-dev`
@@ -55,6 +35,7 @@ const ARTIFACT_TYPES: readonly ArtifactType[] = [
 function readRegenerationTarget(
   details: Record<string, unknown>,
 ): ArtifactRegenerationTarget | null {
+  if (typeof details.artifact_id !== "string") return null;
   const scope = details.scope;
   const scopeId = details.scope_id;
   const artifactType = details.artifact_type;
@@ -66,16 +47,7 @@ function readRegenerationTarget(
   ) {
     return null;
   }
-  const parameters = details.request_parameters;
-  return {
-    scope,
-    scopeId,
-    artifactType: artifactType as ArtifactType,
-    parameters:
-      parameters && typeof parameters === "object" && !Array.isArray(parameters)
-        ? (parameters as ArtifactGenerationParameters)
-        : {},
-  };
+  return { scope, scopeId, artifactType: artifactType as ArtifactType, artifactId: details.artifact_id };
 }
 
 /**
@@ -94,7 +66,15 @@ export function readArtifactContentBlock(
 
   const details = httpError.details ?? {};
   if (httpError.code === "artifact_failed") {
-    return { kind: "failed", regeneration: readRegenerationTarget(details) };
+    const target = readRegenerationTarget(details);
+    return {
+      kind: "failed", regeneration: details.retryable === true ? target : null, deletion: target,
+      reason: artifactFailureMessage({
+        error_code: typeof details.artifact_error_code === "string" ? details.artifact_error_code : null,
+        error_params: details.error_params && typeof details.error_params === "object"
+          ? details.error_params as Record<string, unknown> : {},
+      }),
+    };
   }
   return { kind: "pending" };
 }

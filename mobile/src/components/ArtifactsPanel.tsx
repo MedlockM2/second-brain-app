@@ -88,10 +88,9 @@ export function ArtifactsPanel({
     historyLoading,
     historyError,
     refreshHistory,
-    pendingTypes,
-    refusal,
     customize,
     retry,
+    remove,
     openArtifact,
   } = artifacts;
 
@@ -101,14 +100,7 @@ export function ArtifactsPanel({
   const settled = history
     .filter((artifact) => !isInFlight(artifact))
     .sort(newestFirst);
-  // A request whose entry is already in flight needs no row of its own: it
-  // will answer that very entry (`collapsed`). This is also what keeps a row
-  // from showing twice in the frame between the POST answering and the
-  // request leaving `pendingTypes`.
-  const pending = pendingTypes.filter(
-    (type) => !inFlight.some((artifact) => artifact.artifact_type === type),
-  );
-  const hasGenerating = pending.length > 0 || inFlight.length > 0;
+  const hasGenerating = inFlight.length > 0;
 
   return (
     <View style={styles.panel}>
@@ -127,30 +119,12 @@ export function ArtifactsPanel({
         ))}
       </View>
 
-      {refusal ? (
-        <View style={styles.refusalBanner} testID={`${scope}-ai-refusal`}>
-          <Ionicons
-            name="information-circle-outline"
-            size={18}
-            color={Colors.error}
-          />
-          <Text style={styles.refusalText}>{refusal}</Text>
-        </View>
-      ) : null}
-
       {history.length > 0 && historyError ? (
         <ResourceRefreshNotice message={historyError} onRetry={refreshHistory} />
       ) : null}
 
       {hasGenerating ? (
         <View style={styles.generatingList}>
-          {pending.map((type) => (
-            <ArtifactGeneratingRow
-              key={`pending-${type}`}
-              type={type}
-              testID={`artifact-generating-${type}`}
-            />
-          ))}
           {inFlight.map((artifact) => (
             <ArtifactGeneratingRow
               key={artifact.artifact_id}
@@ -187,6 +161,7 @@ export function ArtifactsPanel({
               showSourceCount={scope === "folder"}
               onOpen={openArtifact}
               onRetry={retry}
+              onDelete={remove}
             />
           ))}
         </View>

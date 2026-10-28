@@ -28,11 +28,8 @@ Exactly-once is the conditional write in ``claim_awaiting_artifact``: the end of
 an ingestion and the last two sources of a folder landing together both reach
 here, and only the caller that clears ``awaiting_expires_at`` sends the message.
 
-A media entry is a *pointer* since task-394, so resuming it is two claims and not
-one: its own wait, then the one generation of that content. Both can be lost, and
-losing the second is the interesting case — another account asked for the same
-artifact over readable sources while this one waited, so the wait ends on a
-generation that already exists and no provider call is made.
+Each waiting user entry owns its generation. The internal review_blurb never
+waits for sources and retains its separate content-addressed reuse path.
 """
 
 from __future__ import annotations
@@ -113,6 +110,7 @@ async def fail_artifacts_awaiting_media(
         try:
             if await media_artifacts.fail_awaiting_artifact(
                 artifact_id=record.artifact_id,
+                generation_revision=record.generation_revision,
                 error_code=error_code,
                 error_message=error_message,
             ):
@@ -140,23 +138,18 @@ async def fail_artifacts_awaiting_media(
 async def _resume_one(record: MediaArtifactRecord) -> bool:
     """Re-resolve one waiting entry's scope and start it if everything is readable.
 
-    Returns whether a *generation* was started — so ``False`` covers both "still
-    waiting on something else" and "an existing generation of this content already
-    answers it", which are different facts but the same absence of a provider call.
+    Returns False when another source is pending, the wait failed, or another
+    completion event already claimed it.
     """
     try:
         resolution = await artifact_service.resolve_scope_sources(
             user_id=record.user_id,
             scope=record.scope,
             scope_id=record.scope_id,
-            # The language the entry is written in, read back off it: the requester's
-            # reading language at the time, or the one its request pinned (task-533).
-            # Using the profile's current language instead would resolve a different
-            # corpus than the one the id was computed over. The id itself is recomputed
-            # below from the stored `parameters`, pin marker included.
+            # Keep the request's output language rather than the current profile.
             reading_language=_reading_language(record),
             # The part of the folder the request chose, for the same reason: the
-            # whole folder is another source set, hence another id (task-532).
+            # whole folder is another source set.
             source_ids=record.selected_source_ids,
         )
     except artifact_service.ArtifactParametersInvalidError as exc:
@@ -198,29 +191,11 @@ async def _resume_one(record: MediaArtifactRecord) -> bool:
         return False
 
     content_scope_id = content_scope_id_from_scope_key(record.scope_key)
-    parameters = artifact_service.normalize_artifact_parameters(record.parameters)
-    expected_id = artifact_service.build_artifact_id(
-        user_id=record.user_id,
-        scope=record.scope,
-        scope_id=content_scope_id,
-        artifact_type=record.artifact_type,
-        # Through the same normalizer the request went through, so the two hashes
-        # are computed over byte-identical material.
-        parameters=parameters,
-        source_media_item_ids=resolution.expected_source_ids,
-    )
-    if expected_id != record.artifact_id:
-        # The source set the request was accepted over is not the one that came
-        # out. Generating anyway would store an artifact under an id that no
-        # longer describes it, so the next identical request would regenerate and
-        # be charged again — the reuse rule keys on exactly this equality.
+    if sorted(record.source_content_ids) != sorted(resolution.expected_source_ids):
         await _fail(
             record,
             error_code=artifact_service.ERROR_CODE_SOURCES_CHANGED,
-            error_message=(
-                "The sources of this generation changed while it was waiting for "
-                "them to be prepared. Ask again to generate over the current ones."
-            ),
+            error_message="The sources changed while this generation was waiting.",
         )
         return False
 
@@ -231,33 +206,15 @@ async def _resume_one(record: MediaArtifactRecord) -> bool:
     # the claim is lost.
     if not await media_artifacts.claim_awaiting_artifact(
         artifact_id=record.artifact_id,
-        sources=[
-            source.model_dump(exclude_none=True) for source in resolution.snapshot()
-        ],
+        generation_revision=record.generation_revision,
+        sources=[source.model_dump(exclude_none=True) for source in resolution.snapshot()],
         source_count=len(resolution.sources),
     ):
         # Another event resumed it, or its deadline ended it first.
         return False
 
-    generation = record
-    if record.shared_artifact_id:
-        # A media artifact over content this account did not upload: the entry is a
-        # pointer, and what has to be armed is the one generation of that content
-        # (task-394). Between the request and now, another account may have asked for
-        # the very same thing without waiting — in which case there is nothing left
-        # to generate.
-        generation, armed = await _arm_shared_generation(
-            record=record,
-            resolution=resolution,
-            content_scope_id=content_scope_id,
-            parameters=parameters,
-        )
-        if not armed:
-            await _adopt_existing_generation(record, shared=generation)
-            return False
-
     message = artifact_service.build_generation_message(
-        record=generation,
+        record=record,
         resolution=resolution,
         content_scope_id=content_scope_id,
     )
@@ -268,10 +225,10 @@ async def _resume_one(record: MediaArtifactRecord) -> bool:
         )
     except Exception as exc:
         # The entry no longer carries a deadline, so nothing would ever pick it up
-        # again: it has to be failed here rather than left `queued` for good. Failing
-        # the *generation* is what the pointer reads its verdict off.
+        # again: it has to fail here rather than stay queued indefinitely.
         await artifact_service.fail_artifact_generation(
-            artifact_id=generation.artifact_id,
+            artifact_id=record.artifact_id,
+            generation_revision=record.generation_revision,
             error_message=f"artifact_resume_enqueue_failed: {exc}",
             error_code="INTERNAL_ERROR",
         )
@@ -283,83 +240,12 @@ async def _resume_one(record: MediaArtifactRecord) -> bool:
         "artifact.resumed",
         "Artifact generation started: the sources it was waiting for are readable",
         artifact_id=record.artifact_id,
-        shared_artifact_id=record.shared_artifact_id,
         artifact_type=record.artifact_type.value,
         scope=record.scope.value,
         scope_id=record.scope_id,
         source_count=len(resolution.sources),
     )
     return True
-
-
-async def _arm_shared_generation(
-    *,
-    record: MediaArtifactRecord,
-    resolution: artifact_service.ScopeResolution,
-    content_scope_id: str,
-    parameters: Dict[str, Any],
-) -> tuple[MediaArtifactRecord, bool]:
-    """Claim the one generation of this content for a resumed entry, or find its owner.
-
-    The shared id is recomputed rather than read off the entry: the id equality check
-    above already proved the material is the one the request was accepted over, so
-    deriving it here keeps a single definition of what the generation is keyed on.
-    """
-    shared_id = artifact_service.build_shared_artifact_id(
-        scope=record.scope,
-        scope_id=content_scope_id,
-        artifact_type=record.artifact_type,
-        parameters=parameters,
-        source_media_item_ids=resolution.expected_source_ids,
-    )
-    existing = await media_artifacts.get_media_artifact_by_id(shared_id)
-    if existing is not None and existing.status != MediaArtifactStatus.FAILED:
-        return existing, False
-
-    return await artifact_service.arm_shared_generation(
-        record=artifact_service.build_shared_generation_record(
-            shared_artifact_id=shared_id,
-            user_id=record.user_id,
-            scope=record.scope,
-            scope_id=record.scope_id,
-            content_scope_id=content_scope_id,
-            artifact_type=record.artifact_type,
-            parameters=parameters,
-            generator_version=record.generator_version,
-            sources=resolution.snapshot(),
-            source_count=len(resolution.sources),
-            created_at=existing.created_at if existing is not None else None,
-        ),
-        reclaims_failed=existing is not None,
-    )
-
-
-async def _adopt_existing_generation(
-    record: MediaArtifactRecord,
-    *,
-    shared: MediaArtifactRecord,
-) -> None:
-    """The wait is over and somebody else's generation already answers it.
-
-    Nothing is enqueued: the entry keeps pointing at that generation and is resolved
-    through it on read — mirrored on the spot if it has already finished, reported as
-    ``generating`` while it runs. The in-memory deadline is dropped first because the
-    claim above has already removed it from the row.
-    """
-    await artifact_service.resolve_through_shared_generation(
-        record.model_copy(update={"awaiting_expires_at": None})
-    )
-    log_event(
-        logger,
-        logging.INFO,
-        "artifact.resume_reused",
-        "Wait ended on an existing generation of this content: nothing queued",
-        artifact_id=record.artifact_id,
-        shared_artifact_id=shared.artifact_id,
-        artifact_type=record.artifact_type.value,
-        artifact_status=shared.status.value,
-        scope_id=record.scope_id,
-    )
 
 
 async def _fail(
@@ -370,6 +256,7 @@ async def _fail(
 ) -> None:
     if await media_artifacts.fail_awaiting_artifact(
         artifact_id=record.artifact_id,
+        generation_revision=record.generation_revision,
         error_code=error_code,
         error_message=error_message,
     ):

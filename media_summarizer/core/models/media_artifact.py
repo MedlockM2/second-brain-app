@@ -1,30 +1,8 @@
-"""
-Canonical internal model for AI artifacts.
+"""Artifact history entries and automatic review previews.
 
-One record type serves both scopes (task-269/270): a media artifact is a
-folder artifact with a single source. The record is an **append-only history
-entry** — once it reaches ``ready`` it is never modified again. There is no
-staleness flag, no expiry, no automatic regeneration.
-
-An entry is also the permanent answer for its source set: ``artifact_id`` is
-derived from the sources, so asking again for the same type over the same set
-returns this very record instead of generating a second one. A media therefore
-gets one artifact per type and per ``parameters`` — its source set never changes.
-A folder gets a new entry only when its contents changed, which is why the
-gap between an entry's ``sources`` snapshot and the folder's current contents
-*is* the history rather than a defect to repair.
-
-Since task-394 a media-scoped artifact is generated **once per content**, not once
-per account, and the same record type plays two roles:
-
-- a **shared generation** — the row the worker generates into, keyed on the content
-  alone (no ``user_id`` in its ``artifact_id``) and indexed under a scope key no
-  account can produce (:data:`CONTENT_SCOPE_OWNER`). It owns the S3 object;
-- a **pointer** — one row per account that asked, keyed exactly as before, carrying
-  ``shared_artifact_id``. It is what a listing returns, so an account keeps seeing
-  only what it asked for.
-
-A folder artifact has neither role: it stays a single per-account row.
+User requests have opaque identities. A failed entry stays in history until its
+owner explicitly retries or deletes it. Only review_blurb uses shared generation
+rows and per-account pointers for same-language content reuse.
 """
 
 from __future__ import annotations
@@ -180,12 +158,12 @@ class ArtifactLlmUsage(BaseModel):
 
 
 class MediaArtifactRecord(BaseModel):
-    # Deterministic, derived from (user, scope, scope_id, type, parameters,
-    # sorted source ids) by ``artifact_service.build_artifact_id`` — never random,
-    # and carrying no time component: the same request always lands on this id.
-    # A shared generation drops the user from that material
-    # (``build_shared_artifact_id``), which is the whole of cross-account reuse.
+    # Opaque for user entries; deterministic only for automatic review previews.
     artifact_id: str
+    # Frozen content identities are compared directly when a waiting request
+    # resumes. User-requested IDs never encode sources or generation options.
+    source_content_ids: List[str] = Field(default_factory=list)
+    generation_revision: int = 0
     #: Who this row belongs to. On a **pointer** it is the account that asked, and
     #: the only thing ownership is checked against. On a **shared generation** it is
     #: merely the account whose request triggered it — kept for cost attribution and
@@ -206,19 +184,13 @@ class MediaArtifactRecord(BaseModel):
     status: MediaArtifactStatus = MediaArtifactStatus.QUEUED
     parameters: Dict[str, Any] = Field(default_factory=dict)
     # Traceability only — which prompt produced this content. Deliberately absent
-    # from ``artifact_id``, so bumping a prompt does not hand back a right to
-    # regenerate what is already generated.
+    # from preview identity, preserving automatic preview reuse after prompt updates.
     generator_version: str
     title: Optional[str] = None
     source_count: int = 0
     sources: List[ArtifactSource] = Field(default_factory=list)
-    #: The library rows a folder request restricted itself to (``parameters.source_ids``,
-    #: task-532), sorted. ``None`` when the request covered the whole folder — which
-    #: includes a list naming every source of it — so such an entry is the very row a
-    #: request without the option writes. Never hashed: the selection enters the
-    #: ``artifact_id`` through the source ids it resolved to, like any source set.
-    #: It is stored for one reader, the resume of a waiting entry, which has to
-    #: re-resolve the sources the request was accepted over and not the whole folder.
+    #: The library rows selected by a folder request, reused by preparation and
+    #: explicit retry. None means every source in that folder at request time.
     selected_source_ids: Optional[List[str]] = None
     storage: Optional[ArtifactStorageRef] = None
     llm_usage: Optional[ArtifactLlmUsage] = None
@@ -233,6 +205,8 @@ class MediaArtifactRecord(BaseModel):
     # becomes a ``failed`` entry instead of a spinner nobody ends.
     awaiting_expires_at: Optional[datetime] = None
     error_code: Optional[str] = None
+    error_params: Dict[str, Any] = Field(default_factory=dict)
+    retryable: bool = False
     error_message: Optional[str] = None
     created_at: datetime = Field(default_factory=_now_utc)
     updated_at: datetime = Field(default_factory=_now_utc)
@@ -251,6 +225,10 @@ class MediaArtifactRecord(BaseModel):
     def to_dynamodb_item(self) -> Dict[str, Any]:
         item: Dict[str, Any] = {
             "artifact_id": self.artifact_id,
+            "source_content_ids": self.source_content_ids,
+            "generation_revision": self.generation_revision,
+            "retryable": self.retryable,
+            "error_params": self.error_params,
             "user_id": self.user_id,
             "scope": self.scope.value,
             "scope_id": self.scope_id,
@@ -260,9 +238,7 @@ class MediaArtifactRecord(BaseModel):
             "parameters": self.parameters,
             "generator_version": self.generator_version,
             "source_count": self.source_count,
-            "sources": [
-                source.model_dump(exclude_none=True) for source in self.sources
-            ],
+            "sources": [source.model_dump(exclude_none=True) for source in self.sources],
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

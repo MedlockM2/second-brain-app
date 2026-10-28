@@ -1,3 +1,4 @@
+import { artifactFailureMessage } from "@media-summarizer/core/artifacts/failure";
 import type { HttpError } from "@media-summarizer/core/api/httpError";
 import { withoutDefaults } from "@media-summarizer/core/artifacts/options";
 import { CustomizeArtifact } from "./CustomizeArtifact";
@@ -47,15 +48,13 @@ import {
  *   generating;
  * - a tile opens the customization form; accepted requests return to the
  *   generating row, while typed refusals keep the chosen options visible;
- * - a generation the scope already holds over the same sources comes back
- *   `reused` and queues nothing: that entry opens, the only useful thing the
- *   click can still do;
+ * - every submitted creation owns a fresh generation, even over the same sources;
+ * - transient failure retries and explicit deletion operate on the existing row;
  * - a refusal is worded from its code (`describeArtifactRefusal`).
  *
  * The tiles carry no state at all: a generation in progress is a row of the
  * list, so a format can be asked for again whatever its last entry says, and
- * there is no "can this type be generated?" question — asking again over the
- * same sources opens what exists, asking over different ones adds an entry.
+ * every accepted creation adds an entry.
  */
 const POLL_MS = 3_000;
 
@@ -150,8 +149,6 @@ export function useAiPane({
         setHistory((current) =>
           mergeArtifactIntoHistory(current ?? [], created),
         );
-        if (created.generation_outcome === "reused")
-          setOpenId(created.artifact_id);
         return created;
       } catch (error) {
         if (propagate) throw error;
@@ -167,31 +164,18 @@ export function useAiPane({
     [scope, scopeId],
   );
 
-  const retry = async (
-    artifact: ArtifactSummary,
-    knownParameters?: ArtifactGenerationParameters,
-  ) => {
+  const retry = async (artifact: ArtifactSummary): Promise<void> => {
     try {
-      const parameters =
-        knownParameters ??
-        (
-          await apiRequest<ArtifactDetail>(
-            `/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`,
-          )
-        ).request_parameters;
-      // A missing contract field is a load failure, never permission to ask for
-      // a different artifact at the defaults.
-      if (
-        !parameters ||
-        typeof parameters !== "object" ||
-        Array.isArray(parameters)
-      )
-        throw new Error("Missing artifact request parameters");
-      return await generate(artifact.artifact_type, parameters);
-    } catch (error) {
-      setRefusal(describeArtifactRefusal(error, { scope }));
-      return null;
-    }
+      const retried = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}/retry`, { method: "POST" });
+      setHistory(current => mergeArtifactIntoHistory(current ?? [], retried));
+    } finally { void loadHistory(); }
+  };
+  const remove = async (artifact: ArtifactSummary): Promise<void> => {
+    try {
+      await apiRequest<void>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`, { method: "DELETE" });
+      setHistory(current => (current ?? []).filter(entry => entry.artifact_id !== artifact.artifact_id));
+      if (openId === artifact.artifact_id) setOpenId(null);
+    } finally { void loadHistory(); }
   };
 
   const open =
@@ -272,11 +256,14 @@ export function useAiPane({
             artifact={open}
             showSourceCount={showSourceCount}
             onClose={() => setOpenId(null)}
+            onDelete={async () => {
+              try { await remove(open); }
+              catch (error) { setRefusal(describeArtifactRefusal(error, { scope })); }
+            }}
             refusal={refusal}
-            onRegenerate={async (parameters) => {
-              const created = await retry(open, parameters);
-              if (created) setOpenId(created.artifact_id);
-              return Boolean(created);
+            onRegenerate={async () => {
+              try { await retry(open); return true; }
+              catch (error) { setRefusal(describeArtifactRefusal(error, { scope })); return false; }
             }}
           />
         ),
@@ -291,9 +278,7 @@ export function useAiPane({
   const settled = entries
     .filter((artifact) => !isInFlight(artifact))
     .sort(newestFirst);
-  // A request whose format already has an entry in flight needs no row of its
-  // own: it will answer that very entry (`collapsed`). This also keeps a row from
-  // showing twice between the POST answering and the request leaving `requests`.
+  // The response already inserted its real row before the request marker clears.
   const pending = requests.filter(
     (type) => !inFlight.some((artifact) => artifact.artifact_type === type),
   );
@@ -364,7 +349,8 @@ export function useAiPane({
               artifact={artifact}
               showSourceCount={showSourceCount}
               onOpen={(entry) => setOpenId(entry.artifact_id)}
-              onRetry={() => void retry(artifact)}
+              onRetry={retry}
+              onDelete={remove}
             />
           ))}
         </div>
@@ -392,22 +378,23 @@ function whenLabel(artifact: ArtifactSummary): string {
 
 /**
  * One artifact, read in the widened pane. Its content is fetched once it is
- * ready. An entry opened before that — a `reused` answer can name a generation
- * still running — is pending until the history poll moves it on, and one that
- * fails offers a new generation instead of a refresh that would never end.
+ * ready. An entry opened before that stays pending until the history poll moves
+ * it on. A transient failure offers an explicit retry on the same entry.
  */
 function OpenArtifact({
   artifact,
   showSourceCount,
   onClose,
   onRegenerate,
+  onDelete,
   refusal,
 }: {
   artifact: ArtifactSummary;
   showSourceCount: boolean;
   /** Back to the list: a finished quiz hands the reader back to it. */
   onClose: () => void;
-  onRegenerate: (parameters?: ArtifactGenerationParameters) => Promise<boolean>;
+  onRegenerate: () => Promise<boolean>;
+  onDelete: () => Promise<void>;
   refusal: string | null;
 }) {
   const { t } = useI18n();
@@ -465,13 +452,16 @@ function OpenArtifact({
           <div style={{ fontWeight: 600 }}>
             {t("artifact.generationFailedTitle")}
           </div>
-          <p className="small subtle">{t("artifact.generationFailedBody")}</p>
+          <p className="small subtle">{artifactFailureMessage(contentError?.code === "artifact_failed" ? {
+            error_code: contentError.details?.artifact_error_code as string | null,
+            error_params: contentError.details?.error_params as Record<string, unknown> ?? {},
+          } : artifact)}</p>
           {refusal && (
             <div className="banner-err" role="alert">
               {refusal}
             </div>
           )}
-          <button
+          {(contentError?.details?.retryable ?? artifact.retryable) === true && (          <button
             type="button"
             className="btn primary"
             style={{ marginTop: 12 }}
@@ -479,14 +469,7 @@ function OpenArtifact({
             aria-label={t("artifact.regenerateA11y")}
             onClick={async () => {
               setRegenerating(true);
-              const parameters = contentError?.details?.request_parameters;
-              const accepted = await onRegenerate(
-                parameters &&
-                  typeof parameters === "object" &&
-                  !Array.isArray(parameters)
-                  ? (parameters as ArtifactGenerationParameters)
-                  : undefined,
-              );
+              const accepted = await onRegenerate();
               if (accepted) {
                 setContentError(null);
                 setContent(null);
@@ -497,8 +480,13 @@ function OpenArtifact({
           >
             {regenerating
               ? t("artifact.regenerating")
-              : t("artifact.regenerate")}
+              : t("artifacts.row.retry")}
+          </button>)}
+          <button type="button" className="btn ghost" disabled={regenerating}
+            onClick={async () => { setRegenerating(true); await onDelete(); setRegenerating(false); }}>
+            {t("common.delete")}
           </button>
+
         </div>
       </div>
     );

@@ -35,18 +35,11 @@ def _now_iso() -> str:
 
 
 class ArtifactAlreadyExistsError(Exception):
-    """A record with this deterministic ``artifact_id`` is already stored."""
+    """A record with this ``artifact_id`` is already stored."""
 
 
 async def create_media_artifact(record: MediaArtifactRecord) -> MediaArtifactRecord:
-    """Write a new history entry, refusing to overwrite an existing one.
-
-    The conditional write is what makes two concurrent taps one generation: they
-    compute the same ``artifact_id``, so the loser raises
-    :class:`ArtifactAlreadyExistsError` and the caller hands back the winner. It is
-    also the guard behind permanent reuse — an id that already exists is never
-    written a second time from this path.
-    """
+    """Write a new entry; a collision never overwrites an existing row."""
     session = database_async.get_session()
     try:
         async with session.resource(
@@ -65,18 +58,8 @@ async def create_media_artifact(record: MediaArtifactRecord) -> MediaArtifactRec
         raise
 
 
-async def reclaim_failed_artifact(record: MediaArtifactRecord) -> bool:
-    """Rerun a failed entry in place, or refuse.
-
-    The ``artifact_id`` no longer carries a time component, so a failed entry
-    would otherwise bar its key forever: one transient provider error and that
-    artifact type could never be generated again over those sources. Reclaiming
-    replaces the row with a fresh ``queued`` one under the same id — the history
-    keeps one entry per (sources, type) rather than a trail of failures.
-
-    Returns ``False`` when the row is no longer ``failed``, which means a
-    concurrent request already reclaimed it and owns the generation.
-    """
+async def reclaim_failed_artifact(record: MediaArtifactRecord, *, expected_revision: Optional[int] = None) -> bool:
+    """Replace a failed row conditionally, preserving concurrent history actions."""
     session = database_async.get_session()
     try:
         async with session.resource(
@@ -86,9 +69,13 @@ async def reclaim_failed_artifact(record: MediaArtifactRecord) -> bool:
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
             await table.put_item(
                 Item=record.to_dynamodb_item(),
-                ConditionExpression="attribute_exists(artifact_id) AND #st = :failed",
+                ConditionExpression="attribute_exists(artifact_id) AND #st = :failed"
+                + (" AND generation_revision = :revision" if expected_revision is not None else ""),
                 ExpressionAttributeNames={"#st": "status"},
-                ExpressionAttributeValues={":failed": "failed"},
+                ExpressionAttributeValues={
+                    ":failed": "failed",
+                    **({":revision": expected_revision} if expected_revision is not None else {}),
+                },
             )
             return True
     except ClientError as exc:
@@ -144,7 +131,17 @@ async def update_media_artifact(record: MediaArtifactRecord) -> MediaArtifactRec
         region_name=database_async.AWS_REGION,
     ) as dynamodb:
         table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
-        await table.put_item(Item=record.to_dynamodb_item())
+        await table.put_item(
+            Item=record.to_dynamodb_item(),
+            ConditionExpression="attribute_exists(artifact_id) AND generation_revision = :revision AND "
+            + ("#st = :generating" if record.status.value == "ready" else "#st IN (:generating, :queued)"),
+            ExpressionAttributeNames={"#st": "status"},
+            ExpressionAttributeValues={
+                ":revision": record.generation_revision,
+                ":generating": "generating",
+                **({":queued": "queued"} if record.status.value != "ready" else {}),
+            },
+        )
         return record
 
 
@@ -152,6 +149,7 @@ async def claim_artifact_generation(
     *,
     artifact_id: str,
     lease_expires_at: datetime,
+    generation_revision: int,
 ) -> bool:
     """Move an entry to ``generating`` and take a lease on it, or refuse.
 
@@ -171,11 +169,10 @@ async def claim_artifact_generation(
             await table.update_item(
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=(
-                    "SET #st = :generating, lease_expires_at = :lease, "
-                    "updated_at = :now REMOVE error_code, error_message"
+                    "SET #st = :generating, lease_expires_at = :lease, updated_at = :now REMOVE error_code, error_message"
                 ),
                 ConditionExpression=(
-                    "attribute_exists(artifact_id) AND ("
+                    "attribute_exists(artifact_id) AND generation_revision = :revision AND ("
                     "#st = :queued OR ("
                     "#st = :generating AND ("
                     "attribute_not_exists(lease_expires_at) OR lease_expires_at < :now"
@@ -186,6 +183,7 @@ async def claim_artifact_generation(
                     ":generating": "generating",
                     ":queued": "queued",
                     ":lease": lease_expires_at.isoformat(),
+                    ":revision": generation_revision,
                     ":now": now_iso,
                 },
             )
@@ -199,6 +197,7 @@ async def claim_artifact_generation(
 async def claim_awaiting_artifact(
     *,
     artifact_id: str,
+    generation_revision: Optional[int] = None,
     sources: List[Dict[str, Any]],
     source_count: int,
 ) -> bool:
@@ -223,16 +222,12 @@ async def claim_awaiting_artifact(
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
             await table.update_item(
                 Key={"artifact_id": artifact_id},
-                UpdateExpression=(
-                    "SET sources = :sources, source_count = :count, "
-                    "updated_at = :now REMOVE awaiting_expires_at"
-                ),
-                ConditionExpression=(
-                    "attribute_exists(artifact_id) AND #st = :queued "
-                    "AND attribute_exists(awaiting_expires_at)"
-                ),
+                UpdateExpression=("SET sources = :sources, source_count = :count, updated_at = :now REMOVE awaiting_expires_at"),
+                ConditionExpression=("attribute_exists(artifact_id) AND #st = :queued AND attribute_exists(awaiting_expires_at)")
+                + (" AND generation_revision = :revision" if generation_revision is not None else ""),
                 ExpressionAttributeNames={"#st": "status"},
                 ExpressionAttributeValues={
+                    **({":revision": generation_revision} if generation_revision is not None else {}),
                     ":sources": sources,
                     ":count": source_count,
                     ":queued": "queued",
@@ -249,6 +244,7 @@ async def claim_awaiting_artifact(
 async def fail_awaiting_artifact(
     *,
     artifact_id: str,
+    generation_revision: Optional[int] = None,
     error_code: str,
     error_message: str,
 ) -> bool:
@@ -272,15 +268,16 @@ async def fail_awaiting_artifact(
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=(
                     "SET #st = :failed, error_code = :code, error_message = :msg, "
-                    "updated_at = :now, completed_at = :now "
+                    "updated_at = :now, completed_at = :now, retryable = :retryable "
                     "REMOVE awaiting_expires_at, lease_expires_at"
                 ),
-                ConditionExpression=(
-                    "attribute_exists(artifact_id) AND #st = :queued "
-                    "AND attribute_exists(awaiting_expires_at)"
-                ),
+                ConditionExpression=("attribute_exists(artifact_id) AND #st = :queued AND attribute_exists(awaiting_expires_at)")
+                + (" AND generation_revision = :revision" if generation_revision is not None else "")
+                + (" AND awaiting_expires_at <= :now" if error_code == "sources_preparation_timeout" else ""),
                 ExpressionAttributeNames={"#st": "status"},
                 ExpressionAttributeValues={
+                    **({":revision": generation_revision} if generation_revision is not None else {}),
+                    ":retryable": error_code in {"generation_stalled", "sources_preparation_timeout"},
                     ":failed": "failed",
                     ":queued": "queued",
                     ":code": error_code,
@@ -298,6 +295,7 @@ async def fail_awaiting_artifact(
 async def fail_stalled_artifact(
     *,
     artifact_id: str,
+    generation_revision: Optional[int] = None,
     stale_before: datetime,
     error_code: str,
     error_message: str,
@@ -331,16 +329,17 @@ async def fail_stalled_artifact(
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=(
                     "SET #st = :failed, error_code = :code, error_message = :msg, "
-                    "updated_at = :now, completed_at = :now "
+                    "updated_at = :now, completed_at = :now, retryable = :retryable "
                     "REMOVE awaiting_expires_at, lease_expires_at"
                 ),
                 ConditionExpression=(
-                    "attribute_exists(artifact_id) "
-                    "AND (#st = :queued OR #st = :generating) "
-                    "AND updated_at < :stale_before"
-                ),
+                    "attribute_exists(artifact_id) AND (#st = :queued OR #st = :generating) AND updated_at < :stale_before"
+                )
+                + (" AND generation_revision = :revision" if generation_revision is not None else ""),
                 ExpressionAttributeNames={"#st": "status"},
                 ExpressionAttributeValues={
+                    **({":revision": generation_revision} if generation_revision is not None else {}),
+                    ":retryable": error_code in {"generation_stalled", "sources_preparation_timeout"},
                     ":failed": "failed",
                     ":queued": "queued",
                     ":generating": "generating",
@@ -422,6 +421,25 @@ async def delete_media_artifact(artifact_id: str) -> None:
     ) as dynamodb:
         table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
         await table.delete_item(Key={"artifact_id": artifact_id})
+
+
+async def delete_failed_artifact(record: MediaArtifactRecord) -> bool:
+    """Remove this failed revision, refusing a concurrent retry."""
+    session = database_async.get_session()
+    try:
+        async with session.resource("dynamodb", region_name=database_async.AWS_REGION) as dynamodb:
+            table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
+            await table.delete_item(
+                Key={"artifact_id": record.artifact_id},
+                ConditionExpression="#st = :failed AND generation_revision = :revision",
+                ExpressionAttributeNames={"#st": "status"},
+                ExpressionAttributeValues={":failed": "failed", ":revision": record.generation_revision},
+            )
+            return True
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        raise
 
 
 async def list_artifacts_by_scope(

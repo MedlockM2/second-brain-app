@@ -42,22 +42,7 @@ export type {
  * scope, never one per artifact type.
  */
 export class ArtifactService {
-  /**
-   * Request a generation over a scope.
-   * POST /api/artifacts
-   *
-   * A request whose sources already produced an artifact answers that artifact
-   * instead of generating a second one, so this call is safe to fire twice: it
-   * comes back with `generation_outcome: "reused"` and the entry the account
-   * already holds, which consumes nothing. Note that `reused` alone does not mean
-   * free — it also answers the first request of this account over content someone
-   * else already generated for, and that one is charged.
-   *
-   * `parameters` are the options of the "Personnaliser" screen (task-535), or the
-   * `request_parameters` of a failed entry being rerun. Whatever sits at its
-   * default is left out, and no `parameters` at all are sent when nothing is
-   * left: the request is then, byte for byte, the one at the defaults.
-   */
+  /** Create a fresh entry. Two submitted requests generate and are billed twice. */
   static async generateArtifact(
     scope: ArtifactScope,
     scopeId: string,
@@ -76,11 +61,40 @@ export class ArtifactService {
         ...(Object.keys(sent).length > 0 ? { parameters: sent } : {}),
       } satisfies GenerateArtifactRequest,
     });
+    this.storeMutation(result, owner, language, scope, scopeId);
+    return result;
+  }
+
+  static async retryArtifact(artifactId: string): Promise<ArtifactDetail> {
+    const owner = mutationOwner();
+    const language = resourceSession().language;
+    const result = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(artifactId)}/retry`, { method: "POST" });
+    this.storeMutation(result, owner, language, result.scope, result.scope_id);
+    return result;
+  }
+
+  static async deleteArtifact(artifactId: string, scope: ArtifactScope, scopeId: string): Promise<void> {
+    const owner = mutationOwner();
+    const language = resourceSession().language;
+    await apiRequest<void>(`/api/artifacts/${encodeURIComponent(artifactId)}`, { method: "DELETE" });
+    if (resourceSession().cache !== owner) return;
+    owner.remove(key => (key[0] === "artifact" || key[0] === "artifact-body") && key[1] === artifactId);
+    const key = resourceKeys.artifacts(scope, scopeId, 50, null, language);
+    const page = owner.snapshot<ArtifactListResponse>(key).data;
+    if (page) owner.set(key, { ...page, artifacts: page.artifacts.filter(entry => entry.artifact_id !== artifactId) });
+    owner.invalidate(key => key[0] === "artifact-list" && key[1] === scope && key[2] === scopeId);
+    homeChanged(owner);
+  }
+
+  private static storeMutation(
+    result: ArtifactDetail, owner: ReturnType<typeof mutationOwner>, language: string | null,
+    scope: ArtifactScope, scopeId: string,
+  ): void {
     if (
       resourceSession().cache !== owner ||
       resourceSession().language !== language
     )
-      return result;
+      return;
     if (result.status !== "ready")
       owner.remove(
         (key) => key[0] === "artifact-body" && key[1] === result.artifact_id,
@@ -102,7 +116,6 @@ export class ArtifactService {
           key[2] === scopeId) ||
         (key[0] === "artifact" && key[1] === result.artifact_id),
     );
-    return result;
   }
 
   /**

@@ -39,10 +39,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from media_summarizer.core.models.artifact_options import ArtifactOptions
-from media_summarizer.core.models.beta_budget import Component, MeasuredCost
+from media_summarizer.core.models.beta_budget import BudgetRefusal, Component, MeasuredCost
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage, MediaArtifactType
-from media_summarizer.core.services import budget_guard, llm_client, llm_corpus
+from media_summarizer.core.services import beta_budget, budget_guard, llm_client, llm_corpus
 from media_summarizer.core.services.artifact_service import (
+    ERROR_CODE_SOURCES_CHANGED,
     MAX_FOLDER_CORPUS_TOKENS,
     claim_artifact_generation,
     complete_artifact_generation,
@@ -94,7 +95,7 @@ def _budget_step(artifact_type: MediaArtifactType, body: Dict[str, Any], artifac
     """
     if artifact_type == MediaArtifactType.REVIEW_BLURB:
         return Component.REVIEW_BLURB, str(body.get("scope_id") or artifact_id)
-    return Component.GENERATION, f"artifact:{artifact_id}"
+    return Component.GENERATION, f"artifact:{artifact_id}:{body['generation_revision']}"
 
 
 async def _keep_preview_value(body: Dict[str, Any], consumed: int) -> None:
@@ -233,7 +234,7 @@ async def process_message(message: Dict[str, Any]) -> None:
         # The lease is what absorbs at-least-once delivery: an entry already
         # terminal, or held by a live worker, is not generated a second time.
         # Standing down here costs one DynamoDB write and saves one LLM call.
-        claimed = await claim_artifact_generation(artifact_id)
+        claimed = await claim_artifact_generation(artifact_id, int(body["generation_revision"]))
         if claimed is None:
             log_event(
                 logger,
@@ -245,7 +246,25 @@ async def process_message(message: Dict[str, Any]) -> None:
             )
             return
 
-        corpus_sources = await llm_corpus.download_transcripts(sources)
+        try:
+            corpus_sources = await llm_corpus.download_transcripts(sources)
+        except Exception as exc:
+            cause = exc.__cause__ or exc
+            response = getattr(cause, "response", {})
+            code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
+            if not isinstance(cause, FileNotFoundError) and code not in {"NoSuchKey", "NoSuchVersion", "404"}:
+                raise
+            await fail_artifact_generation(
+                artifact_id=artifact_id, generation_revision=claimed.generation_revision,
+                error_code=ERROR_CODE_SOURCES_CHANGED, error_message="An original source no longer exists", retryable=False,
+            )
+            return
+        if any(not source["text"].strip() for source in corpus_sources):
+            await fail_artifact_generation(
+                artifact_id=artifact_id, generation_revision=claimed.generation_revision,
+                error_code=ERROR_CODE_SOURCES_CHANGED, error_message="An original source is no longer readable", retryable=False,
+            )
+            return
 
         # Second ceiling check, on the text actually downloaded: the API measured
         # the corpus before the transcripts were read, and a source can have grown
@@ -255,13 +274,17 @@ async def process_message(message: Dict[str, Any]) -> None:
             llm_corpus.corpus_byte_length(corpus_sources)
         )
         if estimated_tokens > MAX_FOLDER_CORPUS_TOKENS:
-            raise ValueError(
-                f"corpus_too_large: {estimated_tokens} estimated tokens exceeds "
-                f"{MAX_FOLDER_CORPUS_TOKENS}"
+            raise BudgetRefusedError(
+                BudgetRefusal.ITEM_TOO_LARGE,
+                {
+                    "quantity": "corpus_tokens",
+                    "measured": estimated_tokens,
+                    "limit": MAX_FOLDER_CORPUS_TOKENS,
+                },
             )
 
         # The options travel in `parameters` without their defaults (the request
-        # dropped them before hashing); reading them here fills the defaults back in.
+        # omitted explicit defaults); reading them here fills the defaults back in.
         prompt = generator.build_prompt(
             corpus_sources,
             language=language,
@@ -316,6 +339,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 content=envelope,
                 title=artifact_title,
                 llm_usage=llm_usage,
+                generation_revision=claimed.generation_revision,
             )
         except BaseException:
             # An answer was billed but no artifact reached the user (rule 5).
@@ -335,6 +359,16 @@ async def process_message(message: Dict[str, Any]) -> None:
             artifact_id=artifact_id,
         )
     except BudgetRefusedError as refusal:
+        if not refusal.observed:
+            refusal.observed = True
+            await beta_budget.observe(
+                str(body.get("user_id") or ""),
+                outcome="refused",
+                operation_id=str(artifact_id),
+                components=["generation"],
+                refusal=refusal.refusal.value,
+                params=refusal.params,
+            )
         # Nothing was sent: the entry fails with the budget's code and the message
         # is acknowledged, a redelivery would get the same answer this month.
         log_event(
@@ -350,6 +384,8 @@ async def process_message(message: Dict[str, Any]) -> None:
                 artifact_id=artifact_id,
                 error_message=refusal.error_code,
                 error_code=refusal.failure_code.value,
+                error_params=refusal.public_params(),
+                generation_revision=int(body["generation_revision"]),
             )
     except Exception as exc:
         # Determine error code for validation errors
@@ -388,6 +424,8 @@ async def process_message(message: Dict[str, Any]) -> None:
                 artifact_id=artifact_id,
                 error_message=str(exc),
                 error_code=error_code,
+                generation_revision=int(body["generation_revision"]),
+                retryable=getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT) != LLMFailureKind.PERMANENT,
             )
 
         # The retry axis, read off the exception rather than re-derived from its

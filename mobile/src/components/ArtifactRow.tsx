@@ -1,24 +1,6 @@
-/**
- * One settled entry of the AI tab's list: a generated artifact, or a
- * generation that failed (task-534). An entry still in flight is drawn by
- * `ArtifactGeneratingRow` instead.
- *
- * A **ready** entry reads as the mockup's row: the format's icon in its ink,
- * the title the model wrote, then "Type · N sources · date". The source count
- * is the entry's own snapshot, never a count of the folder as it stands now,
- * and only a folder says it — a media item is a single source. A tap opens it.
- *
- * A **failed** entry stays in the list, says so in the error colour, and a tap
- * asks for the same generation again, with the options it was asked with and
- * without the "Personnaliser" screen: the backend reruns a failed entry over
- * the same sources under the same id (`generation_outcome: "retried"`).
- *
- * The rows are flat, on the page itself: the gap between them and the tonal
- * step to the card of a generation in progress do the sectioning, with no rule
- * between entries ("No-Line rule").
- */
-
-import React from "react";
+import React, { useRef, useState } from "react";
+import { artifactFailureMessage } from "@media-summarizer/core/artifacts/failure";
+import { describeArtifactRefusal } from "../lib/artifactRefusal";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -39,7 +21,8 @@ interface ArtifactRowProps {
   /** Whether the meta line names the number of sources: a folder's entries do. */
   showSourceCount: boolean;
   onOpen: (artifact: ArtifactSummary) => void;
-  onRetry: (artifact: ArtifactSummary) => void;
+  onRetry: (artifact: ArtifactSummary) => Promise<void>;
+  onDelete: (artifact: ArtifactSummary) => Promise<void>;
 }
 
 export function ArtifactRow({
@@ -47,7 +30,20 @@ export function ArtifactRow({
   showSourceCount,
   onOpen,
   onRetry,
+  onDelete,
 }: ArtifactRowProps): React.JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  const act = async (action: () => Promise<void>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setActionError(null);
+    try { await action(); }
+    catch (error) { setActionError(describeArtifactRefusal(error)); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const format = artifactFormatOf(artifact.artifact_type);
@@ -56,25 +52,29 @@ export function ArtifactRow({
 
   if (failed) {
     return (
-      <Pressable
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-        onPress={() => onRetry(artifact)}
-        testID={`artifact-history-row-${artifact.artifact_id}`}
-        accessibilityLabel={t("artifacts.row.a11yRetry", { type: typeLabel })}
-        accessibilityRole="button"
-      >
+      <View style={styles.row} testID={`artifact-history-row-${artifact.artifact_id}`}>
         <Ionicons name="alert-circle-outline" size={24} color={Colors.error} />
         <View style={styles.textColumn}>
-          {/* A failed entry has no title of its own: the model never wrote one. */}
-          <Text style={styles.title} numberOfLines={2}>
-            {typeLabel}
-          </Text>
-          <Text style={[styles.meta, styles.metaFailed]} numberOfLines={2}>
-            {t("artifacts.row.failed")}
-          </Text>
+          <Text style={styles.title}>{artifact.title?.trim() || typeLabel}</Text>
+          <Text style={[styles.meta, styles.metaFailed]}>{t("artifacts.row.failed")}</Text>
+          {artifactFailureMessage(artifact) !== t("artifacts.row.failed") && (
+            <Text style={styles.meta}>{artifactFailureMessage(artifact)}</Text>
+          )}
+          <View style={styles.actions}>
+            {artifact.retryable && (
+              <Pressable style={styles.action} disabled={busy} accessibilityRole="button"
+                accessibilityState={{ disabled: busy }} onPress={() => void act(() => onRetry(artifact))}>
+                <Text style={styles.actionText}>{t("artifacts.row.retry")}</Text>
+              </Pressable>
+            )}
+            <Pressable style={styles.action} disabled={busy} accessibilityRole="button"
+              accessibilityState={{ disabled: busy }} onPress={() => void act(() => onDelete(artifact))}>
+              <Text style={styles.actionText}>{t("common.delete")}</Text>
+            </Pressable>
+          </View>
+          {actionError && <Text style={styles.metaFailed} accessibilityRole="alert">{actionError}</Text>}
         </View>
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-      </Pressable>
+      </View>
     );
   }
 
@@ -131,6 +131,9 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     // The press feedback every other row of the app gives (inbox digest card,
     // the folder and media lists).
+    actions: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.md },
+    action: { minHeight: TouchTarget.comfortable, justifyContent: "center", paddingHorizontal: Spacing.sm },
+    actionText: { color: Colors.primary, fontSize: Typography.body.fontSize, fontWeight: "600" },
     rowPressed: {
       transform: [{ scale: 0.98 }],
       opacity: 0.9,

@@ -58,8 +58,9 @@ Operational behavior now implemented in runtime:
 - one set of routes under `/api/artifacts` serves a single media (`scope="media"`) and a folder (`scope="folder"`); the per-media routes are gone, with no alias
 - a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=` — or only the sources the request chose among them (`parameters.source_ids`, §3, task-532)
 - every generation writes a **new immutable entry** carrying a snapshot of the sources it read; nothing is overwritten, nothing is invalidated, and adding or removing a media from a folder changes no existing entry
-- an existing entry is reused **permanently** (task-322): the `artifact_id` is a hash of (user, scope, scope_id, type, parameters, sorted source ids) with no time component, so a request whose source set already produced an artifact returns that artifact, whatever the delay, without a second generation and without debiting quota. A media therefore gets one artifact per type and per `parameters` — the output language (the reading language, or the one the request pinned, task-533) plus the generation options set away from their defaults (§3, task-531); a folder regenerates only when its contents, or the sources chosen among them, changed. The generator version is recorded on the entry but excluded from the key, so bumping a prompt does not reopen a right to regenerate
-- **a media-scoped generation is paid for once per content, not once per account** (task-394). Under each account's entry sits a *shared generation* keyed on the content alone — the same hash minus the user — so the second account to ask for the same type in the same language over the same content is served by the generation the first one paid for, with no provider call. It applies to every media-scope type, `review_blurb` included, and to folder scope not at all. Two things it deliberately does not change: **the listing** (an account still sees only the entries it asked for; a shared generation is indexed under a scope key no account can produce and is not addressable through the API), and **the quota** (an account is debited whether or not a generation ran, because it gains an artifact either way — the avoided provider call is the operator's saving). Artifacts over a **user-uploaded file** are excluded, since the content identity of an upload is itself account-scoped
+- every submitted user request creates an opaque `artifact_id` and its own generation, even for identical options and sources, in the same account or another account (TASK-562). Two close taps that submit two requests produce two generations, both reserved and charged normally
+- only the automatic `review_blurb` retains content-addressed reuse, copies between saves and same-language accounts, and its existing beta budget rule 12; it is not user-requestable or shown in artifact history
+- failures remain in history at their creation position until an explicit action: a transient failure can be retried under the same id and stored options; every failed entry can be deleted
 - ownership is checked by comparing the entry's `user_id`, not by resolving a media item — a folder artifact has none
 - a media-scoped request still accepts a user-owned `media_item_id`, but storage and
   history use `(user_id, media_key)` internally, so the same user's saves of one
@@ -427,13 +428,9 @@ Request:
 | `source_ids` | non-empty list of distinct `media_item_id`s of the folder or its subfolders | `summary_short`, `notes`, `quiz`, `flashcards` — **`scope=folder` only** | every source of the folder |
 | `language` | a reading language: `fr`, `en`, `es`, `de`, `it`, `pt`, `nl`, `ja`, `zh`, `ar`, `hi`, or any tag that normalizes to one (`EN-US` is `en`) | `summary_short`, `notes`, `quiz`, `flashcards`, on a media as on a folder | the save's captured language (media); the current account preference (folder) |
 
-- **Defaults are not stored.** An option at its default value, a `focus` that is
-  empty once cleaned, and a JSON `null` are dropped before the `artifact_id` is
-  computed. A request spelling out every default is therefore *the same request*
-  as one with no `parameters`: same `artifact_id`, same shared generation
-  (task-394), and every artifact generated before the options existed still
-  answers it. Any other option set is a different artifact, generated and debited
-  like any first request.
+- **Defaults are not stored.** An option at its default, an empty cleaned `focus`
+  and JSON `null` are omitted from stored options. This normalization never merges
+  requests: every creation still receives a fresh id and generation.
 - **What each option does.** `length` keeps the summary's schema (`title`,
   `key_points`, `takeaway`) and changes its depth: `short` is the digest format,
   `medium` adds one sentence of explanation to each point, `long` covers the whole
@@ -456,11 +453,9 @@ Request:
   excluded, the ceilings (`scope_too_large`, `scope_empty`) count the chosen
   sources, provider calls reserve and settle the common beta budget, and the
   entry's `source_count` and `sources` describe the subset. `source_ids` itself is
-  **not stored in `parameters` and not hashed a second time**: the chosen sources
-  enter the `artifact_id` as its source ids, like any source set. So a list naming
-  every source of the folder *is* the request without the option — same
-  `artifact_id`, same entry — and two requests choosing the same sources are one
-  artifact. Refused with the `422` below: on `scope=media` (`not_applicable`, a
+  **not stored in `parameters`**: `selected_source_ids` preserves the selection
+  for preparation and explicit retry. Source content identities are stored directly
+  for change detection. Every new request still creates its own entry. Refused with the `422` below: on `scope=media` (`not_applicable`, a
   media has one source), as an empty list, a non-string id or a repeated id
   (`invalid_value`), and when an id is not a media of this folder or its
   subfolders in the caller's library (`not_in_scope`) — checked once the folder is
@@ -468,15 +463,10 @@ Request:
 - **`language` chooses the language the artifact is written in** (task-533).
   By default it is the language captured on the save for media scope (task-545),
   or the account's current reading language for folder scope.
-  - **equal to that default**, it is the request without the option: same
-    `artifact_id` and same shared generation;
-  - **another language** becomes the output language and is part of the
-    `artifact_id`. The entry is stored with `"language_pinned": true` next to
-    `"language"` in `parameters`, and both are hashed. The marker is set by the
-    service only: a client sending `language_pinned` gets `unknown_parameter`;
-  - across accounts (task-394), an explicit pinned language only serves requests
-    pinning the same language over the same content, since the marker is in the
-    shared key.
+  The entry stores its resolved output language. An explicit different language
+  carries a server-owned `language_pinned` marker; clients cannot set that marker.
+  Language and options describe a generation and never identify or deduplicate a
+  user request.
 
   Every existing entry stays in its output language, whether pinned or default.
   Account preference changes never translate entries when listed or opened.
@@ -488,46 +478,29 @@ Request:
   `invalid_artifact_parameters` below. It is checked before anything is read: no
   entry is written and nothing is debited.
 
-`202` when a generation was queued, `200` when the response is an entry that
-already existed. Response is the shape of `GET /api/artifacts/{artifact_id}` plus
-`generation_outcome`, which names the four cases the caller must be able to tell
-apart:
-
-| `generation_outcome` | Status | Meaning | Quota |
-|---|---|---|---|
-| `created` | `202` | First request for this source set: entry written and queued | debited |
-| `retried` | `202` | The entry for this key had `failed`, so it is reclaimed and queued again | debited (idempotent on `artifact_id`, so a retry of the same id charges nothing extra) |
-| `reused` | `200` | A generation already covers this source set; nothing is queued | **untouched** if the caller already held this entry; **debited** if it was another account's generation that answered (task-394) |
-| `collapsed` | `200` | A concurrent identical request won the conditional write; this one hands back the winner | untouched (the winner is the one charged, under the same `artifact_id`) |
-
-`reused` and `collapsed` are deliberately distinct: the first says "this content
-was already generated, possibly days ago and possibly for somebody else", the
-second says "this was the same tap". Both are logged under their own event
-(`artifact.reused`, `artifact.shared_generation_reused`, `artifact.collapsed`).
-
-The status code says whether a **generation** was started, never whether the quota
-moved. Those became two different questions with cross-account reuse: an account
-being handed an artifact another account paid the provider for gains that artifact,
-so it is charged for it, and the `200` only means no model was called. What is never
-charged twice is an entry the caller already holds.
+The response is always `202`, with the shape of `GET /api/artifacts/{artifact_id}`
+plus `generation_outcome: "created"`. The new entry is either queued for generation
+or waiting for its sources. No existing entry or shared generation answers a user
+creation request. The API prechecks budget availability; the worker reserves and
+settles each provider call under the common beta budget.
 
 **A source still being prepared is not a refusal** (task-360). A request whose
 transcription has not finished is *accepted*: the entry is written `queued`
-exactly like any other, `created` is returned with the same `202`, the quota is
-debited once there and then, and nothing is put on the generation queue yet. The
+exactly like any other, `created` is returned with the same `202`, and nothing is
+put on the generation queue yet. The provider budget is reserved at generation time. The
 end of the ingestion (`media_completed_worker`) is the join point that enqueues
 it, with no second call from the client. So the entry appears in
 `GET /api/artifacts?scope=…` as `queued` from the moment of the tap, survives
 leaving the screen, and turns into `generating` then `ready` by itself. The
 deferred request and the generation that follows it are **one entry and one
-debit**: the `artifact_id` hashes the sources still in preparation in alongside the
-readable ones, so the id does not move when they land.
+generation**: its opaque id stays unchanged when its recorded sources become
+readable. Resumption compares the stored source content identities directly.
 
 Transcription is the **only** preparation a generation ever waits on. A media in
 a language the user does not read is generated immediately: the corpus is each
 source's original transcript and the output language travels in the prompt, via
 `parameters["language"]` (the scope's default language, or the language the
-request pinned, part of the `artifact_id` hash). Nothing on this endpoint
+request pinned, stored on the entry). Nothing on this endpoint
 translates a transcript, so a foreign media asked for the second it lands starts
 straight away (task-398). The reader's full-text translation
 (`GET /api/media/{id}/raw-content`) is a separate, non-blocking path and is
@@ -628,9 +601,11 @@ artifact type.
 }
 ```
 
-These are exactly the attributes the `scope-index` GSI projects: a page costs one
-DynamoDB query, with no read of the base table and no S3 access. `title` is
-emitted by the model, which is what tells two entries of the same type apart.
+The summary also carries `retryable` (boolean) and `error_params` (object),
+including `period_end` for budget exhaustion. These attributes are projected by
+`scope-index`. Terminal entries need no base-table or S3 read; in-flight entries
+are refreshed from the base row for preparation deadlines and abandoned generations.
+`title` is emitted by the model and distinguishes entries of the same type.
 `sources` is **not** in this response — it is only returned when one entry is
 opened.
 
@@ -680,16 +655,10 @@ The same fields plus the scope and the immutable source snapshot:
 }
 ```
 
-`request_parameters` is the `parameters` of a `POST /api/artifacts` (§3) that asks
-for **this entry** again (task-535): its options (`length`, `count`, `difficulty`,
-`focus`), its `language` only when the request pinned one, and the sources a folder
-request chose as `source_ids`. An entry at the defaults answers `{}`. It is what a
-client sends to rerun a `failed` entry without asking its user anything again: the
-entry's id is the hash of what its request carried, so a rerun at the defaults would
-land on another entry. The reading language an entry was written in is deliberately
-not echoed — sent back, it would pin it (§3). The field costs no extra read, since
-it comes off the entry this route already reads; the listing (§4) does not carry
-it, so a client rerunning a failed row of the list reads the entry first.
+`request_parameters` exposes the entry's stored request options for inspection:
+length, count, difficulty, focus, explicitly pinned language and selected folder
+sources. Retry needs no copy of these options from the client: it calls the entry's
+canonical `/retry` action and the server reads them from that entry.
 
 A source with `excluded: true` was in the scope but carried no usable transcript:
 it is recorded rather than dropped, so the entry stays honest about what it could
@@ -720,7 +689,7 @@ the message text — says whether the entry is still coming (task-328):
 {
   "detail": {
     "error_code": "artifact_failed",
-    "message": "Artifact generation failed and will not resume on its own. Request a new generation for this scope and type.",
+    "message": "Artifact generation failed and will not resume on its own. Use its history actions.",
     "status": "failed",
     "artifact_error_code": "LLM_ERROR",
     "scope": "media",
@@ -732,12 +701,32 @@ the message text — says whether the entry is still coming (task-328):
 ```
 
 `artifact_not_ready` resolves on its own, so a client may come back to it.
-`artifact_failed` is **terminal**: no worker will pick the entry up again, and a
-client that keeps polling it polls forever. The refusal therefore carries the
-`scope`, `scope_id`, `artifact_type` and `request_parameters` (§5) a new generation
-needs, so a failure state can offer `POST /api/artifacts` without a second
-round-trip — that request, sent with those `parameters`, reruns the entry under its
-own id (`generation_outcome: "retried"`) and debits nothing extra.
+`artifact_failed` is terminal until an explicit action. Its detail includes
+`artifact_id`, `artifact_error_code`, `error_params` and `retryable`. A client stops
+polling, displays the failure reason on its history row and offers Retry only when
+`retryable` is true. It never recreates the request through POST /api/artifacts.
+
+### Retry and delete a failed artifact (TASK-562)
+
+`POST /api/artifacts/{artifact_id}/retry` has no body. It returns `202` with
+`ArtifactDetailResponse`: the same id, stored options, original sources and
+`created_at`, with an incremented generation revision. Only a transient failed
+entry permits this action. A changed/unreadable source set or an oversized corpus
+makes retry unavailable; budget exhaustion includes its reset date. Each attempt
+reserves and settles normally. It is not free because it uses the same history id.
+
+`DELETE /api/artifacts/{artifact_id}` returns `204` and removes a failed entry from
+the server history. Both actions require the owner of a visible user artifact.
+Unknown, foreign and internal preview ids return `404`; a terminal/in-flight or
+concurrently changed entry that does not permit the action returns `409`
+`artifact_action_conflict`. Retry also exposes the standard beta budget refusals.
+Conditional writes bind actions and worker transitions to a generation revision:
+a stale message cannot claim, finish or recreate a deleted/retried entry.
+
+Mobile and web show an icon, failure text and known cause on the existing row,
+without a toast. Retry and Delete are separate buttons; permanent failures offer
+Delete only. Action errors stay on the row. Budget exhaustion states when capacity
+resets, without promising an inactive subscription will resume.
 
 ```json
 {
@@ -1352,7 +1341,7 @@ HTTP mapping rules:
 - `media_key` must be deterministic from canonical URL normalization.
 - Processing is idempotent for equivalent normalized URLs; saving is intentionally
   non-idempotent and creates a fresh library row on every successful request.
-- Artifact creation writes an entry **only** when `(user, scope, scope_id, artifact_type, parameters, sorted source ids)` has no entry yet (`parameters` being the output language plus the generation options away from their defaults, so a request spelling out every default — the reading language included — is the request without options), or when the entry it has is `failed`. Any other identical request — a double tap or one months later — returns the stored entry, with no new generation and no quota movement. The storage stays an append-only history: a *different* source set writes a new entry next to the older ones, and no request is ever refused for already existing.
+- Every user artifact creation writes a fresh opaque entry and requests a separately billed generation. Only explicit transient-failure retry keeps that entry and its options; only automatic review previews retain content-addressed reuse.
 - A **provider call** is made only when `(scope, media_key, artifact_type, parameters, sorted source ids)` — the same material without the user — has no live generation yet. So an account can gain an entry (and be debited for it) without any model being called, and one generation of one content is what every account's entry over that content reads. Artifacts over a user-uploaded file are outside this rule: their content identity is account-scoped, so they are never served to another account.
 - Timestamps use ISO-8601 UTC strings.
 - `request_id` must be returned in error payload and response header.

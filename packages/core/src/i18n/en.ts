@@ -85,7 +85,12 @@ export const en = {
   // progress, under `artifacts.status.generating`, and the row of a failed
   // one, which a tap relaunches.
   "artifacts.row.generatingMeta": "{type} · A few seconds · you can leave this screen",
-  "artifacts.row.failed": "Generation failed · tap to retry",
+  "artifacts.row.failed": "Generation failed",
+  "artifacts.row.retry": "Retry",
+  "artifacts.failure.sources": "The original sources are no longer readable. Create a new request after updating them.",
+  "artifacts.failure.timeout": "Generation took too long. You can retry.",
+  "artifacts.failure.invalid": "The generated response was unusable. You can retry.",
+  "artifacts.failure.provider": "The generation provider is unavailable. Try again later.",
   "artifacts.row.a11yRetry": "{type}: retry generating",
   // --- Media type badges ---
   "mediaType.podcast": "PODCAST",
