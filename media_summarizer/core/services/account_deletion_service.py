@@ -104,10 +104,6 @@ _USER_PARTITION_TABLES: Tuple[Tuple[str, Optional[str]], ...] = (
     ("USER_DIGESTS_TABLE", "digest_key"),
     ("USER_DIGEST_SETTINGS_TABLE", None),
     ("FOLLOWS_TABLE", "feed_id"),
-    # One row per device registered for Digest notifications. Deleting the
-    # account has to take the push tokens with it, or the devices of a deleted
-    # account stay addressable — device data held with no account left to serve.
-    ("USER_PUSH_TOKENS_TABLE", "push_token"),
     # Every chat item of the account — conversations, messages, attempts,
     # fragments, the in-flight marker — sits in its partition under one sort key
     # (task-457), so the whole chat goes with one partition sweep.
@@ -159,6 +155,12 @@ async def purge_account(user_id: str) -> PurgeReport:
     await _purge_media_watchers(user_id, inventory, report)
     await _purge_processing_jobs(inventory, report)
     report.add("user_media_rows", await user_media.delete_all_for_user(user_id))
+
+    # Push ownership lives outside the account partition and must be released
+    # conditionally, so deleting an old account cannot unregister its next owner.
+    from media_summarizer.utils import push_token_db
+
+    report.add("USER_PUSH_TOKENS_TABLE", await push_token_db.delete_all_for_user(user_id))
 
     for env_var, sort_key in _USER_PARTITION_TABLES:
         table_name = required_env(env_var)

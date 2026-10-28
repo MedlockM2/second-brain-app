@@ -5,6 +5,13 @@ DynamoDB table: ``user_push_tokens``
 - PK: ``user_id`` (S)
 - SK: ``push_token`` (S) — the ``ExponentPushToken[...]`` string itself
 
+The reserved ``__push_token_owners__`` partition holds one ownership row per
+Expo token (``owner_user_id``, ``last_seen_at``), written in the same transaction
+as its account registration. Only that owner's account row is deliverable;
+old account rows are not destinations. Unregistration and account erasure remove
+the ownership conditionally so a subsequent owner's registration survives.
+Ownership rows are internal database records, never parsed as ``PushToken``.
+
 **A push token is device data, not library data.** It therefore does not fall
 under the central retention rule of ``docs/DATA_RETENTION.md`` ("a user's library
 has no retention clock") but under the per-user-table regime, and three things
