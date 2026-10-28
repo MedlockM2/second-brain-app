@@ -267,8 +267,8 @@ class FxRate:
 def fx_rate(config: Mapping[str, Any]) -> FxRate:
     """The current EUR/USD rate (rule 15).
 
-    Kept up to date by TASK-559, which leaves the last rate in place when the ECB
-    file cannot be read. The rate only converts dollar tariffs into the euro budget:
+    Kept up to date by ``workers/ecb_rate_refresh.py`` (task-559), which leaves the
+    last rate in place when the ECB file cannot be read. The rate only converts dollar tariffs into the euro budget:
     an unusable stored value falls back to the seeded rate, loudly, and never
     refuses a call.
     """
