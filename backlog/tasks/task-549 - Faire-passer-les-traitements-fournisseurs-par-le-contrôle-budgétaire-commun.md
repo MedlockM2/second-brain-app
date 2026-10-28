@@ -1,10 +1,10 @@
 ---
 id: TASK-549
 title: Faire passer les traitements fournisseurs par le contrôle budgétaire commun
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-28 16:24'
+updated_date: '2026-10-28 16:33'
 labels:
   - backend
   - feature

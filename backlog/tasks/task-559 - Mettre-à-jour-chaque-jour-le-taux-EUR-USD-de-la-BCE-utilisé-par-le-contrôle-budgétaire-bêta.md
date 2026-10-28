@@ -3,10 +3,10 @@ id: TASK-559
 title: >-
   Mettre à jour chaque jour le taux EUR/USD de la BCE utilisé par le contrôle
   budgétaire bêta
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-28 11:16'
-updated_date: '2026-10-28 14:10'
+updated_date: '2026-10-28 16:33'
 labels:
   - backend
   - infrastructure
