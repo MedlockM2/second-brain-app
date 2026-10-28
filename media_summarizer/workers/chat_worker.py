@@ -13,8 +13,7 @@ Everything else is re-read from the chat table.
 
 **One message, one attempt, one generation.** The attempt is claimed under a lease;
 a duplicate delivery, or an attempt already ended, is acknowledged without calling
-the provider. The turn was debited when it was accepted: nothing here debits. A
-generation is never relaunched (owner amendment of 2026-10-11 under Decision point
+the provider. A generation is never relaunched (owner amendment of 2026-10-11 under Decision point
 4): a message whose attempt is already lost (``core/models/chat.is_attempt_lost``)
 is sealed instead of answered late, and a redelivery that finds its attempt
 ``generating`` under an expired lease -- the previous invocation crashed -- seals
@@ -43,8 +42,16 @@ announces the end, Decision point 3):
 - a provider failure **after** text: ``interrupted`` / ``provider_error`` with the
   partial text -- shown text is never taken back (complement C1.11).
 
-A turn sealed ``failed`` with no visible text is refunded
-(``chat_service.refund_unanswered_turn``, owner decision of 2026-10-10).
+**Beta budget** (task-549). The turn was admitted when it was accepted
+(``chat_service.send_turn``, operation ``chat:<turn_id>``). Every provider call
+is sent under an attempt of that operation: the first claims the admission, each
+retry before any text reserves its own, bounded by the request about to leave
+(rule 6). A turn sealed with visible text — completed, or interrupted after part
+of its answer was read — settles its call on the provider's usage, estimated when
+the stream lost its usage chunk; a turn sealed with nothing shown releases it, the
+tokens billed going to the operator's spend (rule 5). This replaces the minute
+refund of 2026-10-10. A retry the budget refuses fails the turn with the refusal's
+code.
 
 **Redelivery.** The SQS visibility of this queue is set for an interactive turn, not
 the artifacts' 30 minutes. A worker that dies mid-turn leaves its lease to expire;
@@ -63,6 +70,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from media_summarizer.core.models.beta_budget import Component
 from media_summarizer.core.models.chat import (
     ChatAttempt,
     ChatAttemptStatus,
@@ -74,11 +82,19 @@ from media_summarizer.core.models.chat import (
     is_attempt_lost,
 )
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
-from media_summarizer.core.services import chat_prompt, chat_service, llm_client, llm_corpus
+from media_summarizer.core.services import (
+    budget_guard,
+    chat_prompt,
+    chat_service,
+    llm_client,
+    llm_corpus,
+)
+from media_summarizer.core.services.budget_guard import BudgetCall, BudgetRefusedError
 from media_summarizer.core.services.llm_client import LlmStreamInterruptedError
 from media_summarizer.utils import chat_db
 from media_summarizer.utils.llm_failure import (
     LLMFailureKind,
+    LlmProviderRefusedError,
     log_llm_generation_failure,
 )
 from media_summarizer.utils.logging_config import (
@@ -103,12 +119,12 @@ FLUSH_INTERVAL_SECONDS = 0.2
 CANCEL_CHECK_SECONDS = 1.0
 #: Calls to the provider for one attempt when it fails before any text: the first
 #: one and two short retries (Decision point 2). Longer outages are not the
-#: worker's to ride out -- the turn fails, and is refunded.
+#: worker's to ride out -- the turn fails, and its budget is handed back.
 MAX_PROVIDER_CALLS = 3
 RETRY_BACKOFF_SECONDS = (1.0, 3.0)
 #: The longest the worker waits before one retry, ``Retry-After`` included. Past
 #: it the provider is asking for more than an interactive turn can hold (the user
-#: watches a spinner), so the turn fails and is refunded at once instead. Also well
+#: watches a spinner), so the turn fails at once instead, its budget handed back. Also well
 #: under the 30-second lease, which the heartbeat renews during the wait anyway.
 #: With :data:`MAX_PROVIDER_CALLS`, a turn spends at most two such waits retrying.
 MAX_RETRY_WAIT_SECONDS = 10.0
@@ -136,6 +152,10 @@ class _StreamState:
         #: Set when the fence refused a write: the attempt is not ours any more.
         self.fenced_out = False
         self.cancel_requested = False
+        #: The budget operation of the turn, and the call in flight or the last
+        #: one that answered: closed by :func:`_seal`.
+        self.budget_operation = budget_guard.chat_turn_operation_id(attempt.turn_id)
+        self.budget_call: Optional[BudgetCall] = None
 
     async def flush(self) -> bool:
         """Write the buffered text as the next fragment. ``False``: fenced out."""
@@ -249,6 +269,7 @@ async def _seal(
     attempt: ChatAttempt,
     user_id: str,
     conversation_id: str,
+    state: _StreamState,
     status: ChatTurnStatus,
     text: Optional[str] = None,
     cause: Optional[ChatInterruptionCause] = None,
@@ -282,17 +303,26 @@ async def _seal(
         completion_tokens=usage.completion_tokens if usage else None,
         usage_estimated=usage.usage_estimated if usage else None,
     )
-    if usage is not None:
-        await llm_client.record_observed_cost(
-            user_id,
-            usage,
-            idempotency_token=f"chat_cost:{attempt.turn_id}:{attempt.attempt_id}",
-        )
-    if not sealed or status != ChatTurnStatus.FAILED:
+    await _close_budget(state, delivered=sealed and bool((text or "").strip()), usage=usage)
+
+
+async def _close_budget(state: _StreamState, *, delivered: bool, usage: Optional[ArtifactLlmUsage]) -> None:
+    """Settle the turn's call when text was shown, release it otherwise (rule 5)."""
+    call = state.budget_call
+    if call is None:
+        # No request left for this turn: its admission goes back as never sent.
+        await budget_guard.release_held(state.user_id, state.budget_operation, Component.CHAT_TURN)
         return
-    message = await chat_db.get_assistant_message(user_id, conversation_id, attempt.turn_index)
-    if message is not None:
-        await chat_service.refund_unanswered_turn(user_id=user_id, message=message)
+    cost = None
+    if usage is not None:
+        try:
+            cost = await budget_guard.llm_cost(usage)
+        except Exception:  # noqa: BLE001 - the bound stands in for an unpriced usage
+            cost = None
+    if delivered and cost is not None and usage is not None:
+        await call.settle(cost, metric_source=budget_guard.llm_metric_source(usage))
+    elif not delivered:
+        await call.release(operator_cost=cost)
 
 
 async def _stream_with_retries(
@@ -307,6 +337,18 @@ async def _stream_with_retries(
     and :class:`LlmStreamInterruptedError` as is once text was delivered.
     """
     for call in range(MAX_PROVIDER_CALLS):
+        # Each call is a try of its own on the budget (rule 6): the first claims
+        # the turn's admission, a retry reserves its own bound. The chat claim is
+        # the exclusive lease, so the budget's is zero.
+        state.budget_call = await budget_guard.start(
+            state.user_id,
+            operation_id=state.budget_operation,
+            component=Component.CHAT_TURN,
+            line=lambda ctx: budget_guard.llm_call_line(
+                ctx, component=Component.CHAT_TURN, messages=messages
+            ),
+            lease=timedelta(0),
+        )
         try:
             return await llm_client.stream(
                 messages,
@@ -317,12 +359,18 @@ async def _stream_with_retries(
         except LlmStreamInterruptedError:
             raise
         except Exception as exc:
+            # Nothing was shown: this try goes back, at zero when the provider
+            # answered an error, at its bound when the outcome is unknown.
+            await state.budget_call.release(
+                operator_cost=budget_guard.no_cost() if isinstance(exc, LlmProviderRefusedError) else None
+            )
+            state.budget_call = None
             transient = getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT) == LLMFailureKind.TRANSIENT
             if not transient or call == MAX_PROVIDER_CALLS - 1:
                 raise
             retry_after = getattr(exc, "retry_after_seconds", None)
             if retry_after is not None and retry_after > MAX_RETRY_WAIT_SECONDS:
-                # Asked to wait longer than a turn can: fail now, refunded.
+                # Asked to wait longer than a turn can: fail now.
                 log_event(
                     logger,
                     logging.WARNING,
@@ -448,6 +496,7 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
         "attempt": attempt,
         "user_id": user_id,
         "conversation_id": conversation_id,
+        "state": state,
     }
     if attempt.cancel_requested_at is not None:
         # Stopped before it started: nothing was generated, nothing is shown.
@@ -507,6 +556,17 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
             state=state,
             prompt_cache_key=chat_prompt.prompt_cache_key(conversation),
         )
+    except BudgetRefusedError as refusal:
+        # A retry the month no longer covers, or a counter that cannot be read:
+        # nothing was sent under it, and the turn fails with the refusal's code.
+        if state.fenced_out:
+            return
+        await _seal(
+            **seal_kwargs,
+            status=ChatTurnStatus.FAILED,
+            error_code=refusal.error_code,
+        )
+        return
     except LlmStreamInterruptedError as exc:
         log_llm_generation_failure(logger, worker=WORKER_NAME, exc=exc, text_emitted=True)
         if not await state.flush() or state.fenced_out:

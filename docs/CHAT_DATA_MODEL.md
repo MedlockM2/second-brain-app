@@ -115,7 +115,6 @@ Exists from the moment the turn is accepted, with no `text`.
 | `text` | the final answer, set by the seal. A 32,000-token answer is ~130 kB, under the 400 kB item limit |
 | `error_code`, `error_message` | on `failed` or a `provider_error` interruption. Among the codes: `dispatch_failed` (the API could not send the turn to the queue), `generation_lost` (§3.11) |
 | `llm_usage` | `ArtifactLlmUsage` (model, tokens, cache, cost; `usage_estimated` when a stream ended without its usage) |
-| `quota_period_key`, `quota_minutes_debited`, `quota_cost_eur` | the debit applied for the turn, written after it (task-462); what a refund credits back, on that period. Absent when no debit was applied |
 | `created_at`, `started_at`, `completed_at` | |
 
 ### 2.4 Attempt
@@ -166,10 +165,11 @@ Refusal raises `TurnNotAcceptedError` with `conversation_not_found`,
 another conversation) or `turn_count_changed` (read off the conversation's old image,
 `ReturnValuesOnConditionCheckFailure`). `idempotency_token` becomes the
 `ClientRequestToken`: the same request repeated within ten minutes is not written
-twice. Nothing is sent to SQS here: once the transaction and the debit are done,
+twice. Nothing is sent to SQS here: the turn was admitted on the beta budget just
+before (operation `chat:<turn_id>`, task-549), and once the transaction is done
 `chat_service.send_turn` sends `{user_id, conversation_id, turn_id, turn_index,
 attempt_id}` to `CHAT_QUEUE`. If that send fails, the turn is sealed `failed` /
-`dispatch_failed` (§3.7) and refunded, and the route answers with it. A replayed
+`dispatch_failed` (§3.7), its budget released, and the route answers with it. A replayed
 request sends nothing.
 
 ### 3.3 `claim_attempt` — transaction, 3 items
@@ -221,11 +221,12 @@ the stream's terminal event and any notification come after this call and read
 what it wrote (Decision point 3). Sealing from `queued` exists for a turn whose send
 failed or that was lost before a worker claimed it.
 
-### 3.8 `record_turn_debit`
+### 3.8 Budget of a turn
 
-Update of the assistant message, `attribute_exists(sk)`: the period key, minutes
-and cost of the turn's debit, written by the send route once the debit is applied.
-`chat_service.refund_unanswered_turn` reads them back.
+Not in this table: the turn's provider calls are held and settled on the beta
+budget ledger (`docs/BETA_BUDGET_CONTROL.md` §7, operation `chat:<turn_id>`). The
+minute debit record of task-462 (`record_turn_debit`, `quota_*` fields) was removed
+by task-549.
 
 ### 3.9 `delete_conversation`
 
@@ -261,8 +262,8 @@ whose attempt condition is the rule itself — still `queued` with `created_at <
 now - 300 s`, or still `generating` with `lease_expires_at < now - 15 s`. A worker
 renewing its lease at the same moment wins the race.
 
-- no visible text: `failed` / `generation_lost`, then refunded
-  (`refund_unanswered_turn`);
+- no visible text: `failed` / `generation_lost`, then its budget released
+  (`release_turn_budget`);
 - some fragments: `interrupted` / `provider_error`, `error_code =
   generation_lost`, with the text rebuilt from the fragments, so the app shows the
   partial and its retry button unchanged.

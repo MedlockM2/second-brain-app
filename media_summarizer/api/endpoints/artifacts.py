@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
 from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArtifactStatus
-from media_summarizer.core.services import engagement_service, quota_enforcer
+from media_summarizer.core.services import budget_guard, engagement_service
 from media_summarizer.core.services.artifact_service import (
     INTERNAL_ARTIFACT_TYPES,
     ArtifactGenerationDisabledError,
@@ -40,6 +40,7 @@ from media_summarizer.core.services.artifact_service import (
     resolve_scope_sources,
     resolve_source_selection,
 )
+from media_summarizer.core.services.budget_guard import BudgetRefusedError
 from media_summarizer.utils import s3
 from media_summarizer.utils.language_codes import normalize_language_code
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
@@ -342,32 +343,27 @@ async def create_artifact(
             options=options,
         )
 
-        # Quota comes after planning and before the write: an account already
-        # holding this entry must not be charged for it a second time, and a denied
-        # request must leave no entry behind.
+        # The budget comes after planning and before the write: an account already
+        # holding this entry asks for nothing new, and a refused request must
+        # leave no entry behind. This only refuses a month with nothing left: the
+        # generation is admitted by the worker, from the request it is about to
+        # send (task-549, rules 1 and 4 of the task-547 decision).
         if not plan.already_owned:
-            quota_result = await quota_enforcer.check_generation_allowed(
-                current_user.id,
-                scope=scope.value,
-                # Sources still being prepared count: they are what the generation
-                # will read, and the debit below is keyed on the same number
-                # (``record.source_count``). Checking a smaller figure than the one
-                # charged would let a deferred request past a ceiling it exceeds.
-                source_count=len(resolution.expected_source_ids),
-            )
-            if not quota_result.allowed:
+            try:
+                await budget_guard.precheck(current_user.id)
+            except BudgetRefusedError as refusal:
                 log_event(
                     logger,
                     logging.WARNING,
-                    "artifact.create.quota_denied",
-                    "Artifact generation denied by quota",
-                    error_code=quota_result.error_code,
+                    "artifact.create.budget_refused",
+                    "Artifact generation refused by the beta budget",
+                    error_code=refusal.error_code,
                 )
                 raise HTTPException(
-                    status_code=quota_result.http_status,
-                    detail=quota_result.error_body(),
-                    headers={"X-Quota-Error-Code": quota_result.error_code or ""},
-                )
+                    status_code=refusal.http_status,
+                    detail=refusal.error_body(),
+                    headers=refusal.headers(),
+                ) from refusal
 
         record, outcome = await commit_artifact_generation(plan)
 
@@ -375,23 +371,9 @@ async def create_artifact(
             ArtifactGenerationOutcome.REUSED,
             ArtifactGenerationOutcome.COLLAPSED,
         ):
-            # Nothing was queued. The status code says exactly that and nothing about
-            # the debit: a reuse across accounts is charged, it just did not start a
-            # generation.
+            # Nothing was queued, so nothing is charged: the generation's provider
+            # call is what the budget pays for, and a reuse makes none (R.2).
             response.status_code = status.HTTP_200_OK
-
-        if not plan.already_owned:
-            # Charged on every outcome, because on every outcome but this one the
-            # account gains an entry it did not hold. `retried` and `collapsed` cost
-            # nothing extra all the same: the token is the entry id, so the first
-            # attempt's debit — or the concurrent request that won the write — is the
-            # only one that moves a counter.
-            await quota_enforcer.record_generation(
-                current_user.id,
-                scope=scope.value,
-                source_count=record.source_count,
-                idempotency_token=record.artifact_id,
-            )
 
         # E1 of task-303: launching a generation is the strongest intent signal the
         # app has, and the wait is precisely when the user needs a way back — so the

@@ -17,6 +17,7 @@ TASK-551 (show it on mobile and web), TASK-552 (report and alert on it), TASK-55
 |---|---|
 | Formula, rate, barème | `beta_access`, `eur_usd_rate`, `provider_tariffs` in `DEFAULT_PRICING_CONFIG` (`media_summarizer/core/services/pricing_config_service.py`), overridable in `pricing_config-<env>` |
 | Rules (bounds, valuation, transitions) | `media_summarizer/core/services/beta_budget.py` |
+| Routing of every paid path (task-549) | `media_summarizer/core/services/budget_guard.py`; coverage map in §7 |
 | Models | `media_summarizer/core/models/beta_budget.py` |
 | Access layer | `media_summarizer/utils/beta_budget_db.py`: **every** write to the ledger goes through it |
 | Table | `infrastructure/terraform/modules/platform/dynamodb_beta_budget.tf`: `beta_budget-<env>`, env var `BETA_BUDGET_TABLE` |
@@ -42,7 +43,7 @@ account on minutes; its per-item limit still applies.
 | `period` | `"calendar_month_utc"` | The only period implemented. Another value is logged (`beta_budget.config_unsupported`) and ignored. |
 | `carry_over` | `false` | No carry-over: each month's counter starts from the full budget. Same handling as `period`. |
 | `item_limits` | 240 audio minutes, 100 document pages, 30 spreadsheet sheets | Above them, one item is refused as `item_too_large` (rule 2). |
-| `translation_output_ratio` | `"1.5"` | `max_completion_tokens` of a full-text translation, as a multiple of its input tokens (rule 11). |
+| `translation_output_ratio` | `"1.5"` | Output a full-text translation is reserved for, as a multiple of its input tokens (rule 11, amended 2026-10-28: a reservation, never sent as a cap). |
 | `estimated_text_tokens_per_audio_minute`, `estimated_text_tokens_per_document_page` | 200, 700 | Upstream estimate of the text an import produces, to reserve its blurb and translation with it (rule 10). |
 | `hold_expiry_minutes` | 360 | Backstop after which an attempt still open is released (§3.5). |
 
@@ -287,7 +288,7 @@ reserved, never a provisional minimum (rule 3).
 | `document_line(unit="page")` | pages (PDF, images = 1, TIFF frames, PPTX slides, DOCX always unknown) | 100 pages | 100 pages reserved |
 | `document_line(unit="sheet")` | XLSX sheets | 30 sheets | 30 sheets reserved |
 | `llm_line` | complete request tokens, output = `max_completion_tokens` sent | `max_input_tokens` given by the caller | `max_input_tokens` reserved |
-| `translation_line` | input tokens; output = `translation_max_completion_tokens` (1.5 ×) | output ≤ 1.5 × input | estimated with `estimated_text_tokens` at import |
+| `translation_line` | input tokens; output = `translation_output_reserve` (1.5 ×, at most the model's 128 000), an estimate the call is not capped at | — | estimated with `estimated_text_tokens` at import |
 | `apify_line` | one result of the actor | one result per run | n/a (fixed price) |
 | `x_post_line` | one post | one post | n/a (fixed price) |
 
@@ -321,18 +322,15 @@ Not delivered here:
 
 | What | Where |
 |---|---|
-| Routing every paid path through `reserve` / `claim_send` / `settle` / `release` (transcription, collections, parsing, blurbs, translations, generations, chat, retries, fallbacks), sending `max_completion_tokens` on the translation, removing the minute debits, the fail-open of `check_submission_allowed` and the chat refund in minutes, storing the settled value with the content for rule 12 | TASK-549 |
+| Routing every paid path through the control | TASK-549, §7 |
 | The authenticated contract: percentage consumed (from `consumed` only), availability, renewal date, typed refusals (`budget_exhausted`, `item_too_large`, `budget_unavailable`), and the removal of the minute fields | TASK-550 |
 | What mobile and web show | TASK-551 |
 | Reports and alerts on overruns, operator spend, expired holds, refusals | TASK-552 |
 | Daily refresh of `eur_usd_rate` from the ECB file | TASK-559 |
-| Translation on Luna | TASK-556 |
+| Translation on Luna | TASK-556 (done) |
 | Shared free-tier pools (`provider_pools`), outside this control | TASK-557 |
 
-Until TASK-549 is merged, no path calls `reserve`: beta accounts are bounded by the
-per-item limits only, and their minute debits keep writing `user_usage_monthly`
-without refusing anything. Until TASK-550, the entitlements endpoint returns 0
-minutes for a beta account.
+Until TASK-550, the entitlements endpoint returns 0 minutes for a beta account.
 
 **Owner checks after merge and push** (not acceptance criteria of task-548):
 `terraform apply` on dev creates `beta_budget-dev` and stops managing
@@ -345,3 +343,106 @@ apply. Nothing has to be written to `pricing_config-dev`: on 2026-10-28 its
 row. `pricing_config-prod` was not read from the worktree: if it holds a
 `burst_guards` row, delete it there (a key dropped from the defaults survives in
 the table).
+
+## 7. Coverage of the paid paths (task-549)
+
+Every request a provider bills is sent under an attempt of this ledger. The routing
+lives in `core/services/budget_guard.py`; its vocabulary:
+
+- **operation**: what a budget is held for. An import is held under its **library
+  row** (`budget_guard.import_operation_id(job)` = `job.media_item_id`, the job id for
+  an RSS poll with no row), so its acquisition, its preview and its translation are
+  one operation. An artifact is `artifact:<artifact_id>`, a chat turn
+  `chat:<turn_id>`, a reuse charge the saving row. Never a queue message.
+- **admission** (`admit`, `admit_import`): one conditional write holding every line
+  of an operation (rule 4). `admit_import` adds the preview and the translation to
+  the acquisition (rule 10), unless the operation already holds them; the translation
+  is left out when the content's language is known to be the save's reading
+  language.
+- **call** (`start`): the right to send one request. It claims the attempt an
+  admission held, or reserves a new try with its own bound (a retry, a fallback, a
+  step no admission covered: rule 6). A try still `sending` past the caller's lease is
+  released `lost_in_flight`; inside it, `BudgetBusyError` tells the duplicate to stand
+  down. Callers protected by an exclusive claim of their own (artifact lease, chat
+  attempt, translation lock) pass a zero lease.
+- **settle / release** (`BudgetCall`): a result that reached the user is charged its
+  real cost; anything else releases the hold, the provider cost going to
+  `operator_spend` — zero (`no_cost`) when the provider answered an error without
+  processing anything, the measured cost when it billed an unusable answer, the
+  bound when the outcome is unknown (rule 5).
+- **refusals**: `BudgetRefusedError` (`budget_exhausted`, `not_entitled`,
+  `item_too_large`, `budget_unavailable`); a failing ledger or an unreadable pricing
+  configuration refuses (rule 7). A synchronous path answers `403`, `413` or `503`
+  with `{"error_code", "period_end"?, "quantity"?, "measured"?, "limit"?}` and the
+  `X-Quota-Error-Code` header, never an amount; a job refused in a worker is marked
+  failed with `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE` or `BUDGET_UNAVAILABLE`
+  (`MediaFailureCode`), which replace `OUT_OF_MINUTES` and `ITEM_TOO_LONG`.
+- **precheck** (`budget_guard.precheck`): the synchronous answer of a submission when
+  nothing could be admitted (formula closed, month spent, counter unreadable). Not an
+  admission: the atomic one happens where the call is bounded.
+
+### 7.1 Map
+
+| Path | Calls and units | Admitted | Sent / settled / released |
+|---|---|---|---|
+| **Transcription**: podcast (PodcastIndex, Spotify resolved), RSS poll, direct audio URL, shared audio, TikTok and Instagram reel audio, YouTube without captions | Deepgram, seconds of audio, `transcription_line` | `audio_quota_gate.gate_audio_transcription` (every producer), with the duration of `audio_duration_probe`; 240 min reserved when unreadable; above 240 min `item_too_large`. Audio upload (`POST /api/media/upload-audio`) admits in the request, the duration being known (the unused `/api/podcast-search` surface, `media_submission`, is deleted by TASK-561) | `deepgram_worker.TranscriptionBudget`: one try per HTTP request (tenacity removed), up to `DEEPGRAM_API_RETRIES` per delivery; push fallback after a refused pull is its own try. Settled on `metadata.duration` once the transcript is stored on its job; error status → zero; timeout → bound; empty transcript or storage failure → billed duration |
+| `POST /api/podcasts/submit` (no client uses it) | same | not gated before the worker | the worker's `start` reserves the first try itself, at the ceiling when no duration came with the message |
+| **Collections**: YouTube captions, TikTok, Instagram reel and post | Apify, one result, `apify_line` | `apify_orchestration.start_run_for_job` (every run) with the import's preview and translation; Instagram defers them to the second admission (« réservation en deux temps ») | sent under the admission; start error → zero, or bound when Apify may have accepted the run. Settled at the actor's price when the import is delivered (`settle_collections`: YouTube worker, completion consumer); released with the import on failure. A YouTube default-track re-run releases the first run at one result (operator) and is a try of its own |
+| **X post** | X API v2, one post, `x_post_line` | `x_ingestion_worker._start_lookup`, with the preview and the translation from the longest post text | settled at 0.005 USD once stored; error status → zero; timeout → bound; 200 without a usable post → its price |
+| **Parsing**: uploaded document, photo | LlamaParse pages or sheets, `document_line`; Unstructured fallback | `document_parsing/worker._admit_document` from `document_measure` (PDF pages via `pypdf`, TIFF frames, PPTX slides, XLSX sheets, images 1, DOCX always the ceiling) | `document_parsing_service.parse_document_with_fallback`: LlamaParse claims the admission, Unstructured is a new try reserved at its own price (refused → import fails). Settled on the pages billed once the text is stored; parse errors released at zero (refused file, rate limit, credentials) or at the bound |
+| **Instagram carousel OCR** | same, one page per image, `part=image<n>` | `_admit_image_post`, after the Apify run, with the preview and the translation | each image is a try of its own; settled once the post's text is stored; images never parsed released by the completion consumer |
+| **Text without a provider**: article, shared text, `.txt`/`.md`/`.rtf` | none | the preview and the translation only, from the text itself (`orchestrators._admit_text_import`, `_admit_document`) | — |
+| **Preview** (`review_blurb`) | OpenAI, `llm_call_line` (request bytes, output 32 000) | with its import (operation = library row) | `artifact_generator/worker`: claims the import's attempt, or reserves its own (a deduplicated save, a backfill). Released `not_needed` by `review_blurb_service` when no generation is queued (preview exists, copied, impossible) |
+| **Generations** (summary, notes, cards, quiz, folder) | OpenAI, `llm_call_line` | `POST /api/artifacts` prechecks; the worker admits from the request it sends | settled on the usage once the artifact is stored; provider error → zero; other failure → bound; invalid answer → its usage |
+| **Chat** | OpenAI stream, `chat_turn_admission_line` then `llm_call_line` per retry | `chat_service.send_turn`, before the turn is written, from the snapshot estimate turned back into bytes | `chat_worker`: one try per provider call; text shown (completed, stopped, cut, interrupted) → settled on the usage, estimated when the stream lost its usage chunk; nothing shown → released. A failed dispatch or a lost turn releases the operation (`release_turn_budget`) |
+| **Full-text translation** | OpenAI, `translation_call_line`: reserved at 1.5 × input as output; no output ceiling sent, only the model's 128 000 applies | with its import; later, by the save that asks for it (`/raw-content`, the search worker) | the message names its payer (`TranslationPayer`): the first save reading in that language, the submitter's import first. One try per attempt of `_translate_with_retry`; settled once the text is stored, and the settled value written on the translation lock (rule 12); a refusal keeps the original text (transient failure). Unneeded parts released `not_needed` (`ingestion_translation_service`, worker) |
+| **Content another account processed** (rule 12) | none | `durable_media_service.charge_reused_content` on every save of content already processed (URL orchestrator; content still in flight is processed again instead, §7.3) | `charge_reuse`, in one conditional write, of the value kept with the content: `media_idempotence.budget_value_<value_operation_id>` (collection, transcription, parsing of the processing whose text was kept), plus `preview_value_<language>` and the translation lock's value in the save's reading language when they exist — the preview and the translation this save is then given. In another language they are generated for this save and paid on their real calls. Refused → the row is withdrawn and the request answers the refusal. Free when the account already holds the media (task-281) |
+| **Import end** | — | — | `media_completed_worker._close_import_budget`: failure → `release_open`; success → `settle_collections`, `release_unused_acquisition` |
+| Reading, organising, search (Algolia), digest, exports | no provider call | never | free |
+
+### 7.2 What was removed
+
+The minute allowance of task-287 as a meter: the submission check that failed open,
+the debits of transcription, captions, document pages, folder generations and chat
+turns, the settlement after Deepgram, the chat refund, the observed-cost write, the
+per-account rows of `user_usage_monthly`, the `quota_debited_minutes` and
+`quota_debit_skipped` message fields, the `minutes_debited` field of a chat turn and
+its debit record, `OUT_OF_MINUTES` and `ITEM_TOO_LONG`, the provisional minute of an
+unmeasured duration, and `cost_per_minute_eur`. `quota_enforcer` keeps the
+entitlement snapshot only. The minute figures of the entitlements and pricing
+contracts (`unit_conversion`, `minutes_*`) no longer back anything and are removed by
+TASK-550.
+
+### 7.3 Residual limits
+
+- **Saves while a media is being processed.** A save of a media still being
+  processed for another account gets a processing of its own, reserved and paid
+  on its real calls like any import (owner decision of 2026-10-28): nothing waits
+  on the other account's processing, so a failure there does not affect it. The
+  first of the two processings to succeed provides the content's text
+  (`media_idempotence._record_terminal_status`); each keeps its own value
+  (`budget_value_<operation_id>`), and rule 12 later charges the value of the one
+  whose text was kept (`value_operation_id`). The other processing's cost is that
+  account's, as for any import.
+- **Shared generations.** An artifact reused across accounts makes no provider call
+  and is not charged (R.2); before task-549 it was charged in minutes (task-394).
+- **Bounds that are estimates.** The preview and the translation reserved with an
+  import, and the chat turn admitted from its snapshot, are bounded from upstream
+  estimates; the request really sent is settled on its real cost, even past the budget
+  (rule 8). The LLM input bound of every measured call is the request's UTF-8 bytes,
+  never below the tokens billed.
+- **Translation longer than reserved.** The output reserved for a translation
+  (1.5 × its input) is an estimate, not a cap (rule 11 as amended on 2026-10-28):
+  a translation whose reasoning and text exceed it is settled on its real usage,
+  past the reservation if need be (rule 8). Only the model maximum (128 000 output
+  tokens) can cut one; it is then stored as it is and logged
+  (`translation.output_limit_reached`).
+- **Asynchronous refusals.** A URL whose length is only known in its worker (podcast,
+  YouTube, TikTok, Instagram, X) is refused there, after the save: the item shows a
+  failed tile with the budget code instead of an error at submission. The submission
+  itself is refused only when the month has nothing left.
+- **Lost closes.** A settlement or a release that fails (ledger error after the
+  provider answered) leaves the attempt open until the 6-hour backstop releases it at
+  its bound.
+- **Free-tier pools.** `provider_pools` still guards the operator's LlamaParse and
+  Apify accounts in parallel (TASK-557).

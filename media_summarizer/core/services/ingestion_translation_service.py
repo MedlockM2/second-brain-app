@@ -31,18 +31,29 @@ Targets come from the immutable reading language of every saved library row
 (task-545), not from account preferences at completion time. The search worker
 also arms a missing translation when a deduplicated save needs a new language.
 Every caller resolves the source through the content ledger.
+
+Beta budget (task-549, rule 10 of the task-547 decision): each language is charged
+to the first save that reads in it — the submitter's import first, which reserved
+the translation with its acquisition, then the watchers' saves, which reserve it
+when the call is made. When the submitter's own translation turns out unnecessary
+(the text is already in its language, its language cannot be established, or
+another save already owns that translation), the part its import reserved is
+handed back (``not_needed``).
 """
 
 from __future__ import annotations
 
 import logging
 from enum import Enum
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, Optional
 
 from media_summarizer.core.models import ProcessingJob
+from media_summarizer.core.models.beta_budget import Component
+from media_summarizer.core.services import budget_guard
 from media_summarizer.core.services.transcript_translation import (
     TRANSCRIPT_BUCKET,
     TranslationDispatchOutcome,
+    TranslationPayer,
     detect_language,
     job_source_language_hint,
     normalize_language_tag,
@@ -91,11 +102,19 @@ async def arm_transcript_translations(
     must still be deleted.
     """
     key = (getattr(job, "transcription_s3_key", None) or transcript_s3_key or "").strip()
+    submitter = TranslationPayer(
+        user_id=job.user_id or "",
+        operation_id=budget_guard.import_operation_id(job),
+    )
     if not key:
+        await _release_submitter_translation(submitter)
         return {}
 
-    targets = await _reading_languages(user_ids, job.media_key or "")
+    targets = await _reading_languages(
+        user_ids, job.media_key or "", import_save_id=submitter.operation_id
+    )
     if not targets:
+        await _release_submitter_translation(submitter)
         return {}
 
     source_hint = job_source_language_hint(job)
@@ -106,7 +125,8 @@ async def arm_transcript_translations(
     )
 
     results: Dict[str, IngestionTranslationResult] = {}
-    for target in targets:
+    submitter_dispatched = False
+    for target, payer in targets.items():
         if detected_language is None:
             results[target] = IngestionTranslationSkip.LANGUAGE_UNKNOWN
         elif not should_translate(detected_language, target):
@@ -120,7 +140,12 @@ async def arm_transcript_translations(
                 source=source,
                 job_id=getattr(job, "id", None),
                 trigger=TRIGGER_INGESTION,
+                payer=payer,
             )
+            if payer == submitter and results[target] == TranslationDispatchOutcome.ENQUEUED:
+                submitter_dispatched = True
+    if not submitter_dispatched:
+        await _release_submitter_translation(submitter)
 
     log_event(
         logger,
@@ -137,16 +162,35 @@ async def arm_transcript_translations(
     return results
 
 
-async def _reading_languages(user_ids: Iterable[str], media_key: str) -> List[str]:
-    """Languages captured by these saves, including repeated saves by one account."""
-    languages: List[str] = []
+async def _reading_languages(
+    user_ids: Iterable[str], media_key: str, *, import_save_id: str
+) -> Dict[str, TranslationPayer]:
+    """Languages captured by these saves, each with the first save that reads in it.
+
+    In the order of ``user_ids`` — the submitter first, and among its saves the one
+    this ingestion imported (``import_save_id``) — so a language the submitter
+    reads in is charged to the import that reserved it.
+    """
+    languages: Dict[str, TranslationPayer] = {}
     for user_id in dict.fromkeys(u for u in user_ids if u):
         records = await user_media.list_for_user_by_media_key(user_id, media_key)
-        for record in records:
+        for record in sorted(
+            records,
+            key=lambda r: (r.media_item_id != import_save_id, str(r.saved_at or "")),
+        ):
             language = normalize_language_tag(record.reading_language)
             if language and language not in languages:
-                languages.append(language)
+                languages[language] = TranslationPayer(
+                    user_id=user_id, operation_id=record.media_item_id
+                )
     return languages
+
+
+async def _release_submitter_translation(submitter: TranslationPayer) -> None:
+    """The submitter's import reserved a translation no call will use."""
+    await budget_guard.release_held(
+        submitter.user_id, submitter.operation_id, Component.TRANSLATION
+    )
 
 
 async def _detect_transcript_language(

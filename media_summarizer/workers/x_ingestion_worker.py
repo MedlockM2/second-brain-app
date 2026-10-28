@@ -6,6 +6,14 @@ Pipeline:
 - Calls the X API v2 lookup endpoint for a public post
 - Uploads transcript text to S3 and publishes completion events on success
 - Persists transcription/extraction metadata on the processing job
+
+Beta budget (task-549): a post read is billed by X at a fixed price per post
+(0.005 USD, measured on 2026-10-28, see the task-547 decision). The import is
+admitted before the lookup — the read, plus its preview and translation from the
+longest text a post can hold (rule 10) — and the read is sent under the attempt
+that admission held. A post stored on its job settles the read at its price; an
+error status releases it at zero (X bills nothing it refused), a timeout at its
+bound, an answer without a usable post at its price.
 """
 
 from __future__ import annotations
@@ -14,7 +22,7 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any, Dict, Optional
 from urllib.parse import unquote
@@ -29,7 +37,15 @@ from media_summarizer.core.media_ingestion.title_derivation import (
     first_sentence,
     select_title,
 )
+from media_summarizer.core.models.beta_budget import Component
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.services import beta_budget, budget_guard
+from media_summarizer.core.services.budget_guard import (
+    BudgetBusyError,
+    BudgetCall,
+    BudgetRefusedError,
+    TextEstimate,
+)
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
     normalize_transcript_text,
@@ -425,6 +441,53 @@ async def _mark_job_failed(
     await database_async.update_processing_job(job)
 
 
+#: How long a live delivery may hold the right to send the lookup.
+_LOOKUP_LEASE = timedelta(seconds=X_API_TIMEOUT_SECONDS + 60)
+
+#: Lookup failures X answered with a post it billed: the read went through, the
+#: post was not usable.
+_BILLED_FAILURES = frozenset({"x_lookup_missing_data", "x_post_text_empty"})
+#: Lookup failures where the request may have been billed with no answer back.
+_UNKNOWN_FAILURES = frozenset({"x_lookup_timeout", "x_lookup_transport_error"})
+
+
+async def _start_lookup(job: Any) -> BudgetCall:
+    """Admit the import of one post and take the right to read it."""
+    user_id = job.user_id or ""
+    operation_id = budget_guard.import_operation_id(job)
+    try:
+        await budget_guard.admit_import(
+            user_id,
+            operation_id=operation_id,
+            acquisition=lambda ctx: [beta_budget.x_post_line(ctx)],
+            text=TextEstimate(max_tokens=budget_guard.X_POST_TEXT_TOKENS),
+            media_item_id=job.media_item_id,
+        )
+        return await budget_guard.start(
+            user_id,
+            operation_id=operation_id,
+            component=Component.COLLECTION,
+            line=beta_budget.x_post_line,
+            lease=_LOOKUP_LEASE,
+            content_media_key=job.media_key,
+        )
+    except BudgetRefusedError as refusal:
+        raise XIngestionError(refusal.failure_code, details=refusal.error_code) from refusal
+    except BudgetBusyError as busy:
+        raise XIngestionError(
+            MediaFailureCode.PROVIDER_UNAVAILABLE,
+            details="x_lookup_in_flight",
+            retryable=True,
+        ) from busy
+
+
+async def _post_cost() -> Optional[beta_budget.MeasuredCost]:
+    try:
+        return beta_budget.x_cost(await beta_budget.load_pricing_context(), posts=1)
+    except Exception:  # noqa: BLE001 - the bound stands in for the price
+        return None
+
+
 async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
     job_id = (message_body.get("job_id") or "").strip()
     normalized_url = (message_body.get("normalized_url") or "").strip()
@@ -456,7 +519,43 @@ async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
     job.mark_extracting()
     await database_async.update_processing_job(job)
 
-    lookup_result = await _lookup_post(tweet_id)
+    call = await _start_lookup(job)
+    try:
+        lookup_result = await _lookup_post(tweet_id)
+    except XIngestionError as exc:
+        if exc.details in _BILLED_FAILURES:
+            await call.release(operator_cost=await _post_cost())
+        elif exc.details in _UNKNOWN_FAILURES:
+            await call.release()
+        else:
+            await call.release(operator_cost=budget_guard.no_cost())
+        raise
+    except BaseException:
+        await call.release()
+        raise
+    try:
+        stored = await _store_post(job=job, job_id=job_id, normalized_url=normalized_url, lookup_result=lookup_result)
+    except BaseException:
+        await call.release(operator_cost=await _post_cost())
+        raise
+    cost = await _post_cost()
+    if cost is not None:
+        await call.settle(cost, metric_source="fixed_price_delivered")
+    return {
+        "job_id": job_id,
+        "media_key": message_body.get("media_key"),
+        **stored,
+    }
+
+
+async def _store_post(
+    *,
+    job: Any,
+    job_id: str,
+    normalized_url: str,
+    lookup_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Store the post's text on its job; returns what the completion event needs."""
     transcript_text = normalize_transcript_text(str(lookup_result["text"]), source="x")
     transcript_s3_key = await _upload_transcript(job_id, transcript_text)
 
@@ -500,8 +599,6 @@ async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
     await database_async.update_processing_job(job)
 
     return {
-        "job_id": job_id,
-        "media_key": message_body.get("media_key"),
         "transcript_s3_key": transcript_s3_key,
         "transcription_metadata": transcription_metadata,
     }

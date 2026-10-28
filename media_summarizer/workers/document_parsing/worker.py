@@ -6,7 +6,7 @@ parses it via LlamaParse (primary) with fallback to Unstructured API,
 uploads the resulting markdown to the transcript bucket, writes the media's
 cover, and emits a completion event to continue the downstream LLM pipeline.
 
-The chain itself and its meter live in
+The chain itself and its budget live in
 `core/services/document_parsing_service.py`, shared with the Instagram worker
 since task-384: an uploaded photo and the images of an Instagram carousel are the
 same purchase from the same two providers (owner decision on task-90: LlamaParse
@@ -28,6 +28,7 @@ import logging
 import os
 import tempfile
 import time
+from datetime import timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -45,14 +46,19 @@ from media_summarizer.core.ports.document_parser import (
     ParseResult,
 )
 from media_summarizer.core.services import (
+    beta_budget,
+    budget_guard,
     cover_capture,
+    document_measure,
     sheet_preview,
 )
+from media_summarizer.core.services.budget_guard import BudgetRefusedError, TextEstimate
 from media_summarizer.core.services.document_parsing_service import (
     IMAGE_FORMATS,
+    ParseBudget,
     llamaparse,
     parse_document_with_fallback,
-    record_document_consumption,
+    record_document_pool_spend,
 )
 from media_summarizer.utils import database_async, s3, sqs
 from media_summarizer.utils.env import required_env
@@ -81,6 +87,10 @@ DOCUMENT_PARSING_VISIBILITY_TIMEOUT = int(
 # of these to a JPEG while parsing, on the very request `_upload_file` already
 # sends (task-343 §4.1). Their cover is that render, fetched from the finished
 # job. XLSX is deliberately absent -- see `_render_document_page`.
+#: How long a live delivery may hold the right to send one parse: the
+#: visibility timeout that keeps its message from being redelivered.
+_PARSE_LEASE = timedelta(seconds=DOCUMENT_PARSING_VISIBILITY_TIMEOUT)
+
 _PAGINATED_FORMATS = frozenset(
     {
         DocumentFormat.PDF,
@@ -285,14 +295,29 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
                     job.media_image = photo_cover
                     await database_async.update_processing_job(job)
 
-            # Parse with fallback
-            start_time = time.time()
-            result = await parse_document_with_fallback(
-                file_path=local_path,
-                file_name=file_name,
-                document_format=document_format,
-            )
+            # Beta budget (task-549): the import is admitted from the units
+            # measured in the file — the parse, its preview and its translation
+            # (rule 10) — before any provider is called.
+            try:
+                budget = await _admit_document(
+                    job=job,
+                    message_body=message_body,
+                    job_id=str(job_id),
+                    local_path=local_path,
+                    document_format=document_format,
+                )
+                start_time = time.time()
+                parsed = await parse_document_with_fallback(
+                    file_path=local_path,
+                    file_name=file_name,
+                    document_format=document_format,
+                    budget=budget,
+                )
+            except BudgetRefusedError as refusal:
+                await _fail_on_refusal(job=job, job_id=str(job_id), media_key=media_key, refusal=refusal)
+                return
             parse_duration = time.time() - start_time
+            result = parsed.outcome
 
         # Handle result
         if isinstance(result, ParseError):
@@ -313,90 +338,29 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
 
         # Success: upload markdown to transcript bucket
         assert isinstance(result, ParseResult)
-        transcript_s3_key = f"{job_id}.md"
-        markdown_bytes = result.markdown_content.encode("utf-8")
+        try:
+            transcript_s3_key, completion_metadata = await _store_parsed_document(
+                job=job,
+                job_id=str(job_id),
+                document_format=document_format,
+                result=result,
+                parse_duration=parse_duration,
+            )
+        except BaseException:
+            # The text never reached the user: the try goes back to the tester,
+            # the pages it billed to the operator's spend (rule 5).
+            await parsed.release()
+            raise
+        await parsed.settle()
 
-        # The parse is what costs money, and its price is the page count, which
-        # only exists here: this is the single place a document is charged. One
-        # minute per five pages, keyed on the job so a redelivery cannot debit
-        # twice. LlamaParse pages also feed the shared pool of layer 3. A text
-        # file has neither pages nor a provider, and is charged nothing.
-        await record_document_consumption(
-            user_id=message_body.get("user_id"),
+        # LlamaParse pages also feed the shared pool of layer 3, which protects
+        # the operator's account (TASK-557). A text file counts nothing.
+        await record_document_pool_spend(
             job_id=str(job_id),
             document_format=document_format,
             page_count=result.page_count,
             provider=result.provider,
         )
-
-        await s3.upload_file_object(
-            bucket=TRANSCRIPT_BUCKET,
-            key=transcript_s3_key,
-            file_obj=BytesIO(markdown_bytes),
-            content_type="text/markdown",
-            metadata={
-                "content-type": "text/markdown",
-                "job-type": "document-parsing",
-                "parser-provider": result.provider,
-                "page-count": str(result.page_count),
-            },
-        )
-
-        # Update job metadata and mark completed
-        if job:
-            job.set_transcription_location(transcript_s3_key)
-            job.set_processing_duration("transcription", int(parse_duration))
-            job.set_transcription_metadata({
-                "provider": result.provider,
-                "source": "document_upload",
-                "page_count": result.page_count,
-                "parse_duration_seconds": int(parse_duration),
-            })
-            # Imported files take their title from the document metadata
-            # (task-266): what the parser surfaces of it is the leading heading
-            # of the markdown -- LlamaParse renders the document title as `#`,
-            # Unstructured maps its `Title` elements to `##`. Nothing survives
-            # -> the title derived at upload time from the filename, or the
-            # "Document — <date>" / "Photo — <date>" label, stays in place.
-            #
-            # Images are excluded on purpose: their first heading is OCR'd body
-            # text, not a title the file carries, and there is no EXIF/XMP
-            # reader in the runtime to read a real one. A camera photo therefore
-            # keeps the "Photo — <date>" label, which is precisely the owner's
-            # rule for that source.
-            #
-            # A text file gets a second candidate (task-380): a note rarely
-            # carries a markdown heading, and its first line *is* how its author
-            # names it, so the sentence falls back to that. The heading is still
-            # tried first -- `first_sentence` would hand back "# Title" verbatim,
-            # hash marks included.
-            if document_format not in IMAGE_FORMATS:
-                candidates = [first_markdown_heading(result.markdown_content)]
-                if document_format in TEXT_FORMATS:
-                    candidates.append(first_sentence(result.markdown_content))
-                parsed_title = select_title(candidates)
-                if parsed_title:
-                    job.title = parsed_title
-
-            # A document's cover is the render of page 1 (task-344): the
-            # LlamaParse full-page screenshot for a PDF, a DOCX or a PPTX, the
-            # drawn first-sheet grid for a spreadsheet. It can only be built here,
-            # because the render is an output of the parse. Photos are not
-            # captured a second time -- theirs was written before the parse.
-            # Nothing is downloaded from a third party, nothing is billed twice,
-            # and a failure leaves the tile on its media-type glyph.
-            if document_format not in IMAGE_FORMATS:
-                page_cover = await _capture_page_cover(
-                    media_item_id=job.media_item_id,
-                    document_format=document_format,
-                    result=result,
-                )
-                if page_cover:
-                    job.media_image = page_cover
-            job.source_platform = "document"
-            job.media_type = "document"
-            job.mark_completed()
-            await database_async.update_processing_job(job)
 
         # Emit completion event for downstream pipeline
         await sqs.send_message(
@@ -407,13 +371,7 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
                 "media_key": media_key,
                 "canonical_job_id": job_id,
                 "transcription_s3_key": transcript_s3_key,
-                "transcription_metadata": {
-                    "provider": result.provider,
-                    "source": "document_upload",
-                    "page_count": result.page_count,
-                    "parse_duration_seconds": int(parse_duration),
-                    "parsed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                },
+                "transcription_metadata": completion_metadata,
             },
         )
 
@@ -433,6 +391,176 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
 
     finally:
         reset_log_context(context_token)
+
+
+async def _admit_document(
+    *,
+    job: Any,
+    message_body: Dict[str, Any],
+    job_id: str,
+    local_path: str,
+    document_format: DocumentFormat,
+) -> Optional[ParseBudget]:
+    """Admit the import of one uploaded file, and say how its parse is charged.
+
+    A text file is read locally and pays no provider, but its preview and its
+    translation are still admitted from its size (rule 10); it needs no parse
+    budget. Raises ``BudgetRefusedError``.
+    """
+    user_id = str(message_body.get("user_id") or getattr(job, "user_id", None) or "")
+    operation_id = budget_guard.import_operation_id(job) or job_id
+    media_item_id = getattr(job, "media_item_id", None)
+    if document_format in TEXT_FORMATS:
+        await budget_guard.admit_import(
+            user_id,
+            operation_id=operation_id,
+            text=TextEstimate(text_bytes=os.path.getsize(local_path)),
+            media_item_id=media_item_id,
+        )
+        return None
+
+    units = document_measure.measure(local_path, document_format)
+    await budget_guard.admit_import(
+        user_id,
+        operation_id=operation_id,
+        acquisition=lambda ctx: [
+            beta_budget.document_line(ctx, provider="llamaparse", unit=units.unit, count=units.count)
+        ],
+        text=TextEstimate(page_count=units.count, document=True),
+        media_item_id=media_item_id,
+    )
+    return ParseBudget(
+        user_id=user_id,
+        operation_id=operation_id,
+        units=units,
+        content_media_key=message_body.get("media_key") or getattr(job, "media_key", None),
+        lease=_PARSE_LEASE,
+    )
+
+
+async def _fail_on_refusal(
+    *,
+    job: Any,
+    job_id: str,
+    media_key: Optional[str],
+    refusal: BudgetRefusedError,
+) -> None:
+    """The budget refused the parse or its fallback: nothing was sent under it."""
+    log_event(
+        logger,
+        logging.INFO,
+        "budget.document_refused",
+        "Document parsing refused by the beta budget",
+        job_id=job_id,
+        error_code=refusal.error_code,
+    )
+    if job:
+        job.mark_failed(
+            error_code=refusal.failure_code,
+            error_step="budget_admission",
+            error_metadata={"reason": refusal.error_code},
+        )
+        await database_async.update_processing_job(job)
+    await sqs.send_message(
+        queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
+        message_body={
+            "event_type": "episode_completion_status",
+            "status": "failure",
+            "media_key": media_key,
+            "canonical_job_id": job_id,
+            "reason": refusal.error_code,
+        },
+    )
+
+
+async def _store_parsed_document(
+    *,
+    job: Any,
+    job_id: str,
+    document_format: DocumentFormat,
+    result: ParseResult,
+    parse_duration: float,
+) -> tuple[str, Dict[str, Any]]:
+    """Store the parsed text on its job; returns its key and the completion metadata."""
+    transcript_s3_key = f"{job_id}.md"
+    markdown_bytes = result.markdown_content.encode("utf-8")
+
+    await s3.upload_file_object(
+        bucket=TRANSCRIPT_BUCKET,
+        key=transcript_s3_key,
+        file_obj=BytesIO(markdown_bytes),
+        content_type="text/markdown",
+        metadata={
+            "content-type": "text/markdown",
+            "job-type": "document-parsing",
+            "parser-provider": result.provider,
+            "page-count": str(result.page_count),
+        },
+    )
+
+    # Update job metadata and mark completed
+    if job:
+        job.set_transcription_location(transcript_s3_key)
+        job.set_processing_duration("transcription", int(parse_duration))
+        job.set_transcription_metadata({
+            "provider": result.provider,
+            "source": "document_upload",
+            "page_count": result.page_count,
+            "parse_duration_seconds": int(parse_duration),
+        })
+        # Imported files take their title from the document metadata
+        # (task-266): what the parser surfaces of it is the leading heading
+        # of the markdown -- LlamaParse renders the document title as `#`,
+        # Unstructured maps its `Title` elements to `##`. Nothing survives
+        # -> the title derived at upload time from the filename, or the
+        # "Document — <date>" / "Photo — <date>" label, stays in place.
+        #
+        # Images are excluded on purpose: their first heading is OCR'd body
+        # text, not a title the file carries, and there is no EXIF/XMP
+        # reader in the runtime to read a real one. A camera photo therefore
+        # keeps the "Photo — <date>" label, which is precisely the owner's
+        # rule for that source.
+        #
+        # A text file gets a second candidate (task-380): a note rarely
+        # carries a markdown heading, and its first line *is* how its author
+        # names it, so the sentence falls back to that. The heading is still
+        # tried first -- `first_sentence` would hand back "# Title" verbatim,
+        # hash marks included.
+        if document_format not in IMAGE_FORMATS:
+            candidates = [first_markdown_heading(result.markdown_content)]
+            if document_format in TEXT_FORMATS:
+                candidates.append(first_sentence(result.markdown_content))
+            parsed_title = select_title(candidates)
+            if parsed_title:
+                job.title = parsed_title
+
+        # A document's cover is the render of page 1 (task-344): the
+        # LlamaParse full-page screenshot for a PDF, a DOCX or a PPTX, the
+        # drawn first-sheet grid for a spreadsheet. It can only be built here,
+        # because the render is an output of the parse. Photos are not
+        # captured a second time -- theirs was written before the parse.
+        # Nothing is downloaded from a third party, nothing is billed twice,
+        # and a failure leaves the tile on its media-type glyph.
+        if document_format not in IMAGE_FORMATS:
+            page_cover = await _capture_page_cover(
+                media_item_id=job.media_item_id,
+                document_format=document_format,
+                result=result,
+            )
+            if page_cover:
+                job.media_image = page_cover
+        job.source_platform = "document"
+        job.media_type = "document"
+        job.mark_completed()
+        await database_async.update_processing_job(job)
+
+    return transcript_s3_key, {
+        "provider": result.provider,
+        "source": "document_upload",
+        "page_count": result.page_count,
+        "parse_duration_seconds": int(parse_duration),
+        "parsed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
 
 
 async def process_message(message: Dict[str, Any]) -> None:

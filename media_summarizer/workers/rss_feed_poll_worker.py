@@ -116,8 +116,6 @@ async def _route_item_to_pipeline(
                 "normalized_url": audio_url,
                 "source_platform": "rss_feed",
                 "audio_duration_seconds": gate.duration_seconds,
-                "quota_debited_minutes": gate.debited_minutes,
-                "quota_debit_skipped": gate.debit_skipped,
                 "deepgram_mode": "pull",
             },
         )
@@ -130,7 +128,6 @@ async def _route_item_to_pipeline(
             item_type="audio",
             guid=guid,
             audio_duration_seconds=gate.duration_seconds,
-            quota_debited_minutes=gate.debited_minutes,
         )
     else:
         # Route to article extraction

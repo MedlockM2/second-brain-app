@@ -8,6 +8,8 @@ Consumes messages from TRANSCRIPT_TRANSLATION_QUEUE containing:
 - source_language_hint: (optional) reliable source-provided language tag
 - source: (optional) source platform name for logging
 - job_id: (optional) processing job ID for logging context
+- budget_user_id, budget_operation_id: who the provider calls are charged to
+  (``transcript_translation.TranslationPayer``, task-549)
 
 State machine integration (task-203):
 - On start: marks status queued -> in_progress
@@ -29,6 +31,14 @@ The search worker indexes each save once this translated text is available; an
 artifact is generated from the original transcript and asks the model for the
 output language (task-398), so a translation landing here has no generation to
 wake up. A refused translation leaves the foreign text out of search.
+
+Beta budget (task-549): the calls are charged to the payer the message names,
+each one a try of its ``translation`` step (``transcript_translation``). A
+translation that ends without a call — a cache hit, an empty transcript, a text
+already in the target language, a couple another delivery finished — hands back
+the attempt the payer's import may have reserved for it (``not_needed``). The
+settled value of the call that produced the text is written on the lock with
+``done`` (rule 12).
 """
 
 from __future__ import annotations
@@ -38,10 +48,13 @@ import logging
 import time
 from typing import Any, Dict
 
+from media_summarizer.core.models.beta_budget import Component
+from media_summarizer.core.services import budget_guard
 from media_summarizer.core.services.search_index_dispatch import enqueue_translated_content_indexing
 from media_summarizer.core.services.transcript_translation import (
     TRANSCRIPT_BUCKET,
     TranscriptTranslationError,
+    TranslationPayer,
     ensure_translated_transcript,
     persist_detected_language,
 )
@@ -91,6 +104,7 @@ async def process_message(message: Dict[str, Any]) -> None:
     source = body.get("source")
     job_id = body.get("job_id")
     worker_owner_id = message.get("MessageId")
+    payer = TranslationPayer.from_message(body)
 
     token = bind_log_context(
         job_id=job_id,
@@ -132,6 +146,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 transcript_s3_key=transcript_s3_key, target_language=target_language,
             ))
             if lock and lock.status == TranslationStatus.DONE:
+                await _release_unused(payer)
                 await enqueue_translated_content_indexing(
                     media_key=media_key, reading_language=target_language,
                 )
@@ -194,6 +209,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 transcript_s3_key=transcript_s3_key,
                 target_language=target_language,
             )
+            await _release_unused(payer)
             return
 
         transcript_text = raw_bytes.decode("utf-8")
@@ -209,6 +225,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 source_language_hint=source_language_hint,
                 transcript_bucket=TRANSCRIPT_BUCKET,
                 translation_owner_id=worker_owner_id,
+                payer=payer,
             )
         except TranscriptTranslationError as exc:
             # Terminal translation failure after retries exhausted
@@ -305,7 +322,10 @@ async def process_message(message: Dict[str, Any]) -> None:
         await mark_translation_done(
             transcript_s3_key=transcript_s3_key,
             target_language=target_language,
+            budget_value_nano_eur=outcome.budget_value_nano_eur,
         )
+        # A cache hit or a text already in this language made no call.
+        await _release_unused(payer)
 
         await enqueue_translated_content_indexing(
             media_key=media_key, reading_language=target_language,
@@ -349,3 +369,9 @@ async def process_message(message: Dict[str, Any]) -> None:
 
     finally:
         reset_log_context(token)
+
+
+async def _release_unused(payer: TranslationPayer | None) -> None:
+    """Hand back the translation the payer's import reserved, if no call claimed it."""
+    if payer is not None:
+        await budget_guard.release_held(payer.user_id, payer.operation_id, Component.TRANSLATION)

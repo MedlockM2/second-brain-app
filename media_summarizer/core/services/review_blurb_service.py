@@ -7,10 +7,15 @@ imports the artifact service and the library store, nothing else.
 
 It is the only background generation left in the codebase, since the digest stopped
 pre-generating anything (task-366). The chain is ``resolve_scope_sources`` →
-``enforce_scope_ceilings`` → ``plan_artifact_generation`` → ``commit_artifact_generation``,
-and **no quota is debited**: the allowance is spent by what the *user* asks for, and
-the endpoint in ``api/endpoints/artifacts.py`` is the only place that debits it. A
-background artifact nobody requested must not eat into what the user paid for.
+``enforce_scope_ceilings`` → ``plan_artifact_generation`` → ``commit_artifact_generation``.
+
+**The preview is paid for like any other provider call** (task-549, rule 10 of the
+task-547 decision, which replaces the former "no quota is debited"): it is reserved
+with the import that produced the content, under the library row's operation, and
+the artifact worker claims that reservation when it calls the model. When no
+generation is queued for the row — its preview already exists, or is copied from
+the content's existing artifact, or cannot be produced — the reservation is handed
+back here (``not_needed``), so a preview that never runs never holds the budget.
 """
 
 from __future__ import annotations
@@ -18,7 +23,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from media_summarizer.core.models.beta_budget import Component
 from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArtifactType
+from media_summarizer.core.services import budget_guard
 from media_summarizer.core.services.durable_media_service import (
     resolve_content_transcript,
 )
@@ -37,33 +44,46 @@ async def trigger_review_blurb_generation(
     ``None`` when the row cannot produce one — no row, deleted row, no transcript,
     a blurb already there, or a service error. Never raises: every caller is a
     completion hook whose SQS message must still be deleted.
+
+    Whenever no generation is started for the row, the preview its import
+    reserved is released.
     """
+    queued = False
+    try:
+        artifact_id, queued = await _trigger(user_id, media_item_id)
+        return artifact_id
+    finally:
+        if not queued:
+            await budget_guard.release_held(user_id, media_item_id, Component.REVIEW_BLURB)
+
+
+async def _trigger(user_id: str, media_item_id: str) -> tuple[Optional[str], bool]:
     try:
         record = await user_media_store.get_user_media(user_id, media_item_id)
     except Exception as exc:
         logger.warning(
             "review_blurb: cannot read library row %s: %s", media_item_id, exc
         )
-        return None
+        return None, False
 
     if record is None or record.is_deleted:
         logger.debug(
             "review_blurb: no live library row for %s, nothing to generate",
             media_item_id,
         )
-        return None
+        return None, False
 
     # Already provisioned. Checked first so a redelivered completion event, or a
     # backfill re-run, costs one GetItem instead of a scope resolution.
     if record.review_blurb is not None and record.review_blurb.hook.strip():
-        return None
+        return None, False
 
     # The content's own transcript, off the global ledger: a save that reuses the
     # text another account's ingestion produced gets its blurb exactly like the
     # first one, and keeps getting it after that account is erased (task-432).
     if await resolve_content_transcript(record) is None:
         logger.debug("review_blurb: no transcript yet for %s", media_item_id)
-        return None
+        return None, False
 
     from media_summarizer.core.services.artifact_service import (
         ArtifactGenerationOutcome,
@@ -108,6 +128,7 @@ async def trigger_review_blurb_generation(
                 record=artifact,
                 media_item_id=media_item_id,
             )
+            return artifact.artifact_id, False
 
         logger.info(
             "review_blurb: %s for %s (artifact %s)",
@@ -115,7 +136,9 @@ async def trigger_review_blurb_generation(
             media_item_id,
             artifact.artifact_id,
         )
-        return artifact.artifact_id
+        # Created, retried, or collapsed onto a concurrent request that did queue
+        # it: a generation is on its way and will claim the reservation.
+        return artifact.artifact_id, True
     except (
         ArtifactScopeEmptyError,
         ArtifactTranscriptNotReadyError,
@@ -124,4 +147,4 @@ async def trigger_review_blurb_generation(
         logger.warning(
             "review_blurb: failed to trigger for %s: %s", media_item_id, exc
         )
-        return None
+        return None, False

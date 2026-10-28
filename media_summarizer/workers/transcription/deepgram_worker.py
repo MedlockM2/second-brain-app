@@ -7,6 +7,18 @@ Active transcription path:
 - Sends Deepgram a pre-recorded URL payload
 - Uploads transcript to S3
 - Publishes episode completion status events
+
+Beta budget (task-549, rules 5 and 6 of the task-547 decision): every request sent
+to Deepgram is one try of the import's ``transcription`` step. The first claims the
+attempt the producer's gate held (``audio_quota_gate``); a retry after a transient
+answer and the push-mode fallback after a pull the CDN refused each reserve their
+own try, from the duration the gate measured, and are bounded by
+``DEEPGRAM_API_RETRIES`` per delivery and the queue's own redeliveries. A
+transcript stored on its job settles the try on the duration Deepgram reports,
+to the second. Anything else releases it: at zero when Deepgram answered an error
+without processing anything, at the duration it billed when the transcript was
+unusable, at the bound when the request may have been processed but no answer came
+back (a timeout).
 """
 
 from __future__ import annotations
@@ -17,19 +29,20 @@ import logging
 import mimetypes
 import os
 import time
+from datetime import timedelta
 from io import BytesIO
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
 from urllib.parse import urlsplit
 
 import httpx
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
-from media_summarizer.core.services import quota_enforcer
+from media_summarizer.core.models.beta_budget import Component, MeasuredCost
+from media_summarizer.core.services import beta_budget, budget_guard
+from media_summarizer.core.services.budget_guard import (
+    BudgetBusyError,
+    BudgetCall,
+    BudgetRefusedError,
+)
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
     deepgram_transcript_text,
@@ -51,7 +64,12 @@ class NonRetryableDeepgramError(Exception):
     """Raised for non-retryable Deepgram request failures."""
 
 
-class RemoteContentError(NonRetryableDeepgramError):
+class DeepgramRefusedError(NonRetryableDeepgramError):
+    """Deepgram answered an error status, or the request never left: nothing was
+    processed, so nothing was billed (the try is released at zero)."""
+
+
+class RemoteContentError(DeepgramRefusedError):
     """Raised when Deepgram cannot fetch audio from a remote URL (e.g. CDN 403).
 
     This is a subclass of NonRetryableDeepgramError so existing handlers still
@@ -61,7 +79,7 @@ class RemoteContentError(NonRetryableDeepgramError):
 
 
 class RetryableDeepgramError(Exception):
-    """Raised for transient/retryable Deepgram request failures."""
+    """Raised for a transient Deepgram answer (429, 5xx): nothing was processed."""
 
 
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
@@ -169,22 +187,14 @@ async def upload_transcription(transcript_s3_key: str, transcription_text: str) 
     )
 
 
-@retry(
-    reraise=True,
-    stop=stop_after_attempt(DEEPGRAM_API_RETRIES),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type(
-        (RetryableDeepgramError, httpx.TimeoutException, httpx.TransportError)
-    ),
-)
 async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
     if not DEEPGRAM_API_KEY:
-        raise NonRetryableDeepgramError("DEEPGRAM_API_KEY is required")
+        raise DeepgramRefusedError("DEEPGRAM_API_KEY is required")
 
     if not _is_valid_http_url(audio_url):
-        raise NonRetryableDeepgramError("audio_url must be a valid http(s) URL")
+        raise DeepgramRefusedError("audio_url must be a valid http(s) URL")
     if _looks_like_feed_url(audio_url):
-        raise NonRetryableDeepgramError(
+        raise DeepgramRefusedError(
             "audio_url points to an RSS/feed URL; resolve enclosure URL before Deepgram"
         )
 
@@ -195,16 +205,13 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
     }
 
     started = time.time()
-    try:
-        async with httpx.AsyncClient(timeout=DEEPGRAM_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                DEEPGRAM_API_URL,
-                params=query_params,
-                headers=headers,
-                json={"url": audio_url},
-            )
-    except (httpx.TimeoutException, httpx.TransportError):
-        raise
+    async with httpx.AsyncClient(timeout=DEEPGRAM_TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            DEEPGRAM_API_URL,
+            params=query_params,
+            headers=headers,
+            json={"url": audio_url},
+        )
 
     latency_seconds = time.time() - started
     status = response.status_code
@@ -221,7 +228,7 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
                 f"Deepgram remote content fetch blocked "
                 f"(HTTP {status}): {response_text}"
             )
-        raise NonRetryableDeepgramError(
+        raise DeepgramRefusedError(
             f"Deepgram non-retryable HTTP {status}: {response_text}"
         )
     if status == 429 or status >= 500:
@@ -229,7 +236,7 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
             f"Deepgram transient HTTP {status}: {response.text[:500]}"
         )
     if status >= 300:
-        raise NonRetryableDeepgramError(
+        raise DeepgramRefusedError(
             f"Deepgram unexpected HTTP {status}: {response.text[:500]}"
         )
 
@@ -379,14 +386,6 @@ def _resolve_audio_content_type(
     return "application/octet-stream"
 
 
-@retry(
-    reraise=True,
-    stop=stop_after_attempt(DEEPGRAM_API_RETRIES),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type(
-        (RetryableDeepgramError, httpx.TimeoutException, httpx.TransportError)
-    ),
-)
 async def call_deepgram_api_from_bytes(
     *,
     audio_bytes: bytes,
@@ -394,9 +393,9 @@ async def call_deepgram_api_from_bytes(
     job_id: str,
 ) -> Dict[str, Any]:
     if not DEEPGRAM_API_KEY:
-        raise NonRetryableDeepgramError("DEEPGRAM_API_KEY is required")
+        raise DeepgramRefusedError("DEEPGRAM_API_KEY is required")
     if not audio_bytes:
-        raise NonRetryableDeepgramError("audio bytes must be non-empty")
+        raise DeepgramRefusedError("audio bytes must be non-empty")
 
     query_params = _build_deepgram_query_params()
     headers = {
@@ -405,22 +404,19 @@ async def call_deepgram_api_from_bytes(
     }
 
     started = time.time()
-    try:
-        async with httpx.AsyncClient(timeout=DEEPGRAM_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                DEEPGRAM_API_URL,
-                params=query_params,
-                headers=headers,
-                content=audio_bytes,
-            )
-    except (httpx.TimeoutException, httpx.TransportError):
-        raise
+    async with httpx.AsyncClient(timeout=DEEPGRAM_TIMEOUT_SECONDS) as client:
+        response = await client.post(
+            DEEPGRAM_API_URL,
+            params=query_params,
+            headers=headers,
+            content=audio_bytes,
+        )
 
     latency_seconds = time.time() - started
     status = response.status_code
 
     if status in (401, 403, 400, 404, 415, 422):
-        raise NonRetryableDeepgramError(
+        raise DeepgramRefusedError(
             f"Deepgram non-retryable HTTP {status}: {response.text[:500]}"
         )
     if status == 429 or status >= 500:
@@ -428,7 +424,7 @@ async def call_deepgram_api_from_bytes(
             f"Deepgram transient HTTP {status}: {response.text[:500]}"
         )
     if status >= 300:
-        raise NonRetryableDeepgramError(
+        raise DeepgramRefusedError(
             f"Deepgram unexpected HTTP {status}: {response.text[:500]}"
         )
 
@@ -505,94 +501,86 @@ def extract_transcript(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-async def _settle_audio_quota(
-    *,
-    message_body: Dict[str, Any],
-    job: Any,
-    job_id: str,
-    billed_audio_seconds: float,
-) -> None:
-    """Reconcile the minute counter with the duration Deepgram billed.
+#: How long a live delivery may hold the right to send one request: the HTTP
+#: timeout, plus the time to read the answer and close the attempt. A ``sending``
+#: try older than this was left by a delivery that died mid-call.
+_CLAIM_LEASE = timedelta(seconds=DEEPGRAM_TIMEOUT_SECONDS + 120)
 
-    This is the only place in the pipeline that knows the real duration of every
-    transcription, whatever the platform it came from, so it is where consumption
-    is made accurate (task-250 Layer 2). It deliberately does *not* live in the
-    media-completed events consumer, which is fed by an at-least-once queue and is
-    a fan-out join point: a debit belongs where the provider's own answer is read,
-    once per transcription.
 
-    Every message that reaches this worker is a transcription we are paying for,
-    so every message settles. There used to be a `quota_source_platform` opt-out
-    here, which is what let Instagram reels spend Deepgram minutes for free: the
-    meter follows the provider call, and the provider call is this one.
+class TranscriptionBudget:
+    """The import a transcription is charged to, and how each request is reserved.
 
-    Never raises: the user has already been billed by Deepgram, so a counter
-    problem must not fail a transcription that succeeded.
+    The operation is the one the producer's gate admitted the import under
+    (``budget_guard.import_operation_id``); the duration is the figure it measured,
+    which bounds every further try (rule 3: the ceiling when it is unknown).
     """
-    # The gate exempted this save because the user already holds the media
-    # (task-281). Settling here would charge the full billed duration against a
-    # deliberate zero debit, which is the exemption undone one step later.
-    if message_body.get("quota_debit_skipped"):
-        log_event(
-            logger,
-            logging.INFO,
-            "quota.settlement_skipped_already_held",
-            "Save exempted at the gate because the user already holds the media",
-            job_id=job_id,
-            media_key=message_body.get("media_key"),
-            billed_audio_seconds=billed_audio_seconds,
-        )
-        return
 
-    user_id = message_body.get("user_id") or getattr(job, "user_id", None)
-    if not user_id:
-        log_event(
-            logger,
-            logging.WARNING,
-            "quota.settlement_skipped_no_user",
-            "Cannot settle audio minutes: no user_id on the message or the job",
-            job_id=job_id,
-            source_platform=message_body.get("source_platform"),
-        )
-        return
+    def __init__(self, *, message_body: Dict[str, Any], job: Any, job_id: str) -> None:
+        self.user_id = str(message_body.get("user_id") or getattr(job, "user_id", None) or "")
+        self.operation_id = budget_guard.import_operation_id(job) or job_id
+        self.media_key = message_body.get("media_key") or getattr(job, "media_key", None)
+        try:
+            measured = float(message_body.get("audio_duration_seconds") or 0)
+        except (TypeError, ValueError):
+            measured = 0.0
+        self.duration_seconds: Optional[float] = measured if measured > 0 else None
 
-    try:
-        already_debited = int(float(message_body.get("quota_debited_minutes") or 0))
-    except (TypeError, ValueError):
-        already_debited = 0
-
-    try:
-        applied = await quota_enforcer.settle_transcription_minutes(
-            user_id=user_id,
-            job_id=job_id,
-            actual_duration_seconds=billed_audio_seconds,
-            already_debited_minutes=already_debited,
+    async def start(self) -> BudgetCall:
+        """The right to send one Deepgram request (raises ``BudgetRefusedError``)."""
+        return await budget_guard.start(
+            self.user_id,
+            operation_id=self.operation_id,
+            component=Component.TRANSCRIPTION,
+            line=lambda ctx: beta_budget.transcription_line(ctx, duration_seconds=self.duration_seconds),
+            lease=_CLAIM_LEASE,
+            content_media_key=self.media_key,
         )
-    except Exception as exc:
-        log_event(
-            logger,
-            logging.ERROR,
-            "quota.settlement_error",
-            "Audio minutes settlement failed; the transcription is unaffected",
-            job_id=job_id,
-            user_id=user_id,
-            billed_audio_seconds=billed_audio_seconds,
-            exc_info=exc,
-        )
-        return
 
-    log_event(
-        logger,
-        logging.INFO,
-        "quota.settled",
-        "Audio minutes settled from the provider-billed duration",
-        job_id=job_id,
-        user_id=user_id,
-        source_platform=message_body.get("source_platform"),
-        billed_audio_seconds=billed_audio_seconds,
-        already_debited_minutes=already_debited,
-        settled_delta_minutes=applied,
-    )
+    async def send(self, request: Callable[[], Awaitable[Dict[str, Any]]], *, job_id: str) -> Tuple[Dict[str, Any], BudgetCall]:
+        """Send one Deepgram request, each try under its own reservation (rule 6).
+
+        A transient answer (429, 5xx) or a lost connection is retried, at most
+        ``DEEPGRAM_API_RETRIES`` tries per delivery. An error status means Deepgram
+        processed nothing: the try is released at zero. A timeout, or an answer
+        that cannot be read, may have been billed: released at its bound. The
+        returned call is still open, for the caller to settle once the transcript
+        is stored.
+        """
+        for try_index in range(1, DEEPGRAM_API_RETRIES + 1):
+            call = await self.start()
+            try:
+                return await request(), call
+            except (DeepgramRefusedError, RetryableDeepgramError, httpx.ConnectError) as exc:
+                await call.release(operator_cost=budget_guard.no_cost())
+                if isinstance(exc, DeepgramRefusedError) or try_index == DEEPGRAM_API_RETRIES:
+                    raise
+            except (httpx.TimeoutException, httpx.TransportError):
+                await call.release()
+                if try_index == DEEPGRAM_API_RETRIES:
+                    raise
+            except BaseException:
+                await call.release()
+                raise
+            log_event(
+                logger,
+                logging.WARNING,
+                "transcription.retry",
+                "Transient Deepgram failure; retrying under a new reservation",
+                provider="deepgram",
+                job_id=job_id,
+                try_index=try_index,
+            )
+            await asyncio.sleep(min(10, 2 ** (try_index - 1)))
+        raise AssertionError("unreachable")
+
+    async def billed(self, payload: Dict[str, Any]) -> MeasuredCost:
+        """What a delivered or unusable answer cost: the duration Deepgram reports."""
+        try:
+            seconds = float((payload.get("metadata") or {}).get("duration") or 0.0)
+        except (TypeError, ValueError):
+            seconds = 0.0
+        ctx = await beta_budget.load_pricing_context()
+        return beta_budget.transcription_cost(ctx, billed_seconds=seconds, model=DEEPGRAM_MODEL)
 
 
 async def publish_failure_event(
@@ -658,7 +646,9 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
     if not audio_s3_key and job:
         audio_s3_key = getattr(job, "audio_s3_key", None)
 
+    budget = TranscriptionBudget(message_body=message_body, job=job, job_id=job_id)
     deepgram_payload: Dict[str, Any]
+    call: BudgetCall
     deepgram_mode_used: str = requested_mode
     started = time.time()
 
@@ -669,30 +659,37 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
             content_mime_type=message_body.get("content_mime_type"),
             original_name=message_body.get("original_name"),
         )
-        deepgram_payload = await call_deepgram_api_from_bytes(
-            audio_bytes=audio_bytes,
-            content_type=content_type,
+        deepgram_payload, call = await budget.send(
+            lambda: call_deepgram_api_from_bytes(
+                audio_bytes=audio_bytes,
+                content_type=content_type,
+                job_id=job_id,
+            ),
             job_id=job_id,
         )
         deepgram_mode_used = "push"
     elif isinstance(audio_url, str) and audio_url.strip():
+        source_url = audio_url.strip()
         if requested_mode == "push":
             # Producer declared push-mode: skip pull entirely, download and push bytes.
             audio_bytes, content_type = await _download_audio_for_push_fallback(
-                audio_url=audio_url.strip(),
+                audio_url=source_url,
                 job_id=job_id,
             )
-            deepgram_payload = await call_deepgram_api_from_bytes(
-                audio_bytes=audio_bytes,
-                content_type=content_type,
+            deepgram_payload, call = await budget.send(
+                lambda: call_deepgram_api_from_bytes(
+                    audio_bytes=audio_bytes,
+                    content_type=content_type,
+                    job_id=job_id,
+                ),
                 job_id=job_id,
             )
             deepgram_mode_used = "push"
         elif requested_mode == "pull":
             # Producer declared pull-mode: fail loudly on RemoteContentError.
             try:
-                deepgram_payload = await call_deepgram_api(
-                    audio_url=audio_url.strip(),
+                deepgram_payload, call = await budget.send(
+                    lambda: call_deepgram_api(audio_url=source_url, job_id=job_id),
                     job_id=job_id,
                 )
             except RemoteContentError as remote_err:
@@ -701,19 +698,21 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
                     f"(producer declared deepgram_mode='pull' but source CDN "
                     f"blocks Deepgram; update the producer to use 'push' mode). "
                     f"source_platform={message_body.get('source_platform')}, "
-                    f"audio_url={audio_url.strip()[:200]}, "
+                    f"audio_url={source_url[:200]}, "
                     f"original_error={str(remote_err)[:200]}"
                 ) from remote_err
             deepgram_mode_used = "pull"
         else:
             # "pull_with_push_fallback": try pull, fall back to push on CDN block.
+            # The push request is a try of its own, reserved after the pull one
+            # was released at zero (rule 6).
             try:
                 if FORCE_DEEPGRAM_PUSH_MODE:
                     raise RemoteContentError(
                         "Forced push-mode via FORCE_DEEPGRAM_PUSH_MODE=1 (E2E testing)"
                     )
-                deepgram_payload = await call_deepgram_api(
-                    audio_url=audio_url.strip(),
+                deepgram_payload, call = await budget.send(
+                    lambda: call_deepgram_api(audio_url=source_url, job_id=job_id),
                     job_id=job_id,
                 )
                 deepgram_mode_used = "pull"
@@ -726,16 +725,19 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
                     "attempting push-mode fallback (mode=pull_with_push_fallback)",
                     provider="deepgram",
                     job_id=job_id,
-                    audio_url=audio_url.strip(),
+                    audio_url=source_url,
                     original_error=str(remote_err)[:300],
                 )
                 audio_bytes, content_type = await _download_audio_for_push_fallback(
-                    audio_url=audio_url.strip(),
+                    audio_url=source_url,
                     job_id=job_id,
                 )
-                deepgram_payload = await call_deepgram_api_from_bytes(
-                    audio_bytes=audio_bytes,
-                    content_type=content_type,
+                deepgram_payload, call = await budget.send(
+                    lambda: call_deepgram_api_from_bytes(
+                        audio_bytes=audio_bytes,
+                        content_type=content_type,
+                        job_id=job_id,
+                    ),
                     job_id=job_id,
                 )
                 deepgram_mode_used = "push"
@@ -754,22 +756,86 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         )
     transcription_duration = time.time() - started
 
+    # Deepgram has answered and billed what it processed. From here the try is
+    # settled only once the transcript is stored on its job (rule 5); any failure
+    # before that releases it, the billed duration going to the operator's spend.
+    try:
+        billed_cost: Optional[MeasuredCost] = await budget.billed(deepgram_payload)
+    except Exception:  # noqa: BLE001 - the bound stands in for an unreadable barème
+        billed_cost = None
+    try:
+        delivered = await _store_transcript(
+            job=job,
+            job_id=job_id,
+            message_body=message_body,
+            deepgram_payload=deepgram_payload,
+            deepgram_mode_used=deepgram_mode_used,
+            audio_url=audio_url,
+            audio_s3_key=audio_s3_key,
+            transcription_duration=transcription_duration,
+        )
+    except BaseException:
+        await call.release(operator_cost=billed_cost)
+        raise
+    if billed_cost is not None:
+        await call.settle(billed_cost, metric_source="deepgram_metadata_duration")
+    else:
+        # No barème to price the answer with: the try stays open and the ledger's
+        # backstop releases it, the bound recorded as the operator's spend.
+        log_event(
+            logger,
+            logging.ERROR,
+            "budget.transcription_unpriced",
+            "Transcript delivered but its cost could not be priced",
+            job_id=job_id,
+            attempt_id=call.attempt_id,
+        )
+
+    # Exactly one event, and published once the job holds its final state: the
+    # consumer closes the content ledger, fans out to watchers, indexes and sends
+    # the "ready" notification from it, so a second message repeats all four --
+    # a second push included. Algolia indexing is enqueued by that consumer.
+    await sqs.send_message(
+        queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
+        message_body={
+            "event_type": "episode_completion_status",
+            "status": "success",
+            "media_key": message_body.get("media_key"),
+            "canonical_job_id": job_id,
+            "transcription_s3_key": delivered["transcript_s3_key"],
+            "transcription_metadata": delivered["transcription_metadata"],
+        },
+    )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "transcription.completed",
+        "Deepgram transcription completed",
+        provider="deepgram",
+        transcript_source="deepgram",
+        job_id=job_id,
+        media_item_id=job_id,
+    )
+
+
+async def _store_transcript(
+    *,
+    job: Any,
+    job_id: str,
+    message_body: Dict[str, Any],
+    deepgram_payload: Dict[str, Any],
+    deepgram_mode_used: str,
+    audio_url: Any,
+    audio_s3_key: Any,
+    transcription_duration: float,
+) -> Dict[str, Any]:
+    """Read the transcript out of Deepgram's answer and store it on its job."""
+    from media_summarizer.utils import database_async
+
     transcript = extract_transcript(deepgram_payload)
     transcript_text = transcript["text"]
-
-    # --- Consumption settlement ---------------------------------------------
-    # Deepgram has now told us how much audio it billed. Reconcile the user's
-    # counter with that figure before anything else, so a later failure (S3
-    # upload, event publication) cannot lose the debit. The settlement only
-    # applies the delta with what the producer already debited at its gate, and
-    # is idempotent per job, so an SQS redelivery cannot debit twice.
     billed_audio_seconds = float(transcript.get("audio_duration_seconds") or 0.0)
-    await _settle_audio_quota(
-        message_body=message_body,
-        job=job,
-        job_id=job_id,
-        billed_audio_seconds=billed_audio_seconds,
-    )
 
     transcript_s3_key = f"{job_id}.txt"
     await upload_transcription(transcript_s3_key, transcript_text)
@@ -806,32 +872,35 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         job.mark_completed()
         await database_async.update_processing_job(job)
 
-    # Exactly one event, and published once the job holds its final state: the
-    # consumer closes the content ledger, fans out to watchers, indexes and sends
-    # the "ready" notification from it, so a second message repeats all four --
-    # a second push included. Algolia indexing is enqueued by that consumer.
-    await sqs.send_message(
-        queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
-        message_body={
-            "event_type": "episode_completion_status",
-            "status": "success",
-            "media_key": message_body.get("media_key"),
-            "canonical_job_id": job_id,
-            "transcription_s3_key": transcript_s3_key,
-            "transcription_metadata": transcription_metadata,
-        },
-    )
+    return {
+        "transcript_s3_key": transcript_s3_key,
+        "transcription_metadata": transcription_metadata,
+    }
 
-    log_event(
-        logger,
-        logging.INFO,
-        "transcription.completed",
-        "Deepgram transcription completed",
-        provider="deepgram",
-        transcript_source="deepgram",
-        job_id=job_id,
-        media_item_id=job_id,
-    )
+
+async def _fail_job_on_refusal(*, job_id: Optional[str], refusal: BudgetRefusedError) -> None:
+    if not job_id:
+        return
+    from media_summarizer.utils import database_async
+
+    try:
+        job = await database_async.get_processing_job_by_id(job_id)
+        if job:
+            job.mark_failed(
+                error_code=refusal.failure_code,
+                error_step="budget_admission",
+                error_metadata={"reason": refusal.error_code},
+            )
+            await database_async.update_processing_job(job)
+    except Exception as exc:  # noqa: BLE001 - the failure event still closes the import
+        log_event(
+            logger,
+            logging.WARNING,
+            "budget.job_update_failed",
+            "Could not mark the job failed after a budget refusal",
+            job_id=job_id,
+            exc_info=exc,
+        )
 
 
 async def process_message(message: Dict[str, Any]) -> None:
@@ -879,6 +948,27 @@ async def process_message(message: Dict[str, Any]) -> None:
             heartbeat_task = asyncio.create_task(_heartbeat_loop())
 
         await process_deepgram_message(body)
+    except BudgetBusyError:
+        # A duplicate delivery while the one that claimed the request is still
+        # inside its lease: that delivery owns the outcome.
+        log_event(
+            logger,
+            logging.INFO,
+            "budget.transcription_busy",
+            "Another delivery is sending this transcription; acknowledged",
+            job_id=body.get("job_id"),
+        )
+        return
+    except BudgetRefusedError as refusal:
+        # A further try (a retry, the push fallback) the budget does not cover, or
+        # a counter that cannot be read (rule 7): nothing was sent under it.
+        await _fail_job_on_refusal(job_id=body.get("job_id"), refusal=refusal)
+        await publish_failure_event(
+            job_id=body.get("job_id"),
+            media_key=body.get("media_key"),
+            reason=refusal.error_code,
+        )
+        return
     except NonRetryableDeepgramError as e:
         await publish_failure_event(
             job_id=body.get("job_id"),

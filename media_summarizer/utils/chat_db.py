@@ -940,37 +940,6 @@ async def get_turn_in_flight(user_id: str) -> Optional[Dict[str, Any]]:
     return item
 
 
-async def record_turn_debit(
-    *,
-    user_id: str,
-    conversation_id: str,
-    turn_index: int,
-    period_key: str,
-    minutes: int,
-    cost_eur: float,
-) -> None:
-    """Write on the turn the debit that was applied for it (task-462).
-
-    Read back by the refund of a turn that never answered, so it credits exactly
-    what was charged on the period it was charged to.
-    """
-    session = get_session()
-    async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
-        table = await dynamodb.Table(CHAT_TABLE)
-        await table.update_item(
-            Key=_key(user_id, message_sk(conversation_id, turn_index, ChatRole.ASSISTANT)),
-            UpdateExpression=(
-                "SET quota_period_key = :period, quota_minutes_debited = :minutes, quota_cost_eur = :cost"
-            ),
-            ConditionExpression="attribute_exists(sk)",
-            ExpressionAttributeValues={
-                ":period": period_key,
-                ":minutes": minutes,
-                ":cost": Decimal(str(cost_eur)),
-            },
-        )
-
-
 def _usage_item(usage: Optional[ArtifactLlmUsage]) -> Optional[Dict[str, Any]]:
     if usage is None:
         return None

@@ -18,6 +18,14 @@ that flashcards and quizzes live on is still in front of the model. The 300 s
 timeout and the 180 s LLM timeout are unchanged because the number of sequential
 calls per invocation is still one.
 
+Beta budget (task-549): the call is sent under an attempt bounded by the request
+about to leave — its UTF-8 bytes, schema included, and the output ceiling sent
+(``budget_guard.llm_call_line``). The automatic ``review_blurb`` claims the attempt
+its import's admission held (rule 10, operation = the library row); any other
+generation, and a blurb with no admission behind it, reserves its own. An artifact
+stored settles on the provider's usage; a refused, failed or invalid answer
+releases it, the tokens billed going to the operator's spend (rule 5). The artifact
+lease is the exclusive claim, so the budget lease is zero.
 """
 
 from __future__ import annotations
@@ -27,22 +35,29 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Tuple
 
 from media_summarizer.core.models.artifact_options import ArtifactOptions
-from media_summarizer.core.models.media_artifact import MediaArtifactType
-from media_summarizer.core.services import llm_client, llm_corpus
+from media_summarizer.core.models.beta_budget import Component, MeasuredCost
+from media_summarizer.core.models.media_artifact import ArtifactLlmUsage, MediaArtifactType
+from media_summarizer.core.services import budget_guard, llm_client, llm_corpus
 from media_summarizer.core.services.artifact_service import (
     MAX_FOLDER_CORPUS_TOKENS,
     claim_artifact_generation,
     complete_artifact_generation,
     fail_artifact_generation,
 )
+from media_summarizer.core.services.budget_guard import (
+    BudgetBusyError,
+    BudgetCall,
+    BudgetRefusedError,
+)
 from media_summarizer.utils import sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
     LLMFailureKind,
+    LlmProviderRefusedError,
     log_llm_generation_failure,
 )
 from media_summarizer.utils.logging_config import (
@@ -68,6 +83,98 @@ def _strip_code_fences(content: str) -> str:
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
     return cleaned.strip()
+
+
+def _budget_step(artifact_type: MediaArtifactType, body: Dict[str, Any], artifact_id: str) -> Tuple[Component, str]:
+    """The step and operation an artifact's call is charged under.
+
+    The automatic preview belongs to its import: the operation is the library row
+    it is generated for, the one its admission reserved it under (rule 10). Every
+    other artifact is its own operation.
+    """
+    if artifact_type == MediaArtifactType.REVIEW_BLURB:
+        return Component.REVIEW_BLURB, str(body.get("scope_id") or artifact_id)
+    return Component.GENERATION, f"artifact:{artifact_id}"
+
+
+async def _keep_preview_value(body: Dict[str, Any], consumed: int) -> None:
+    """Keep a preview's settled cost with its content, per language (rule 12).
+
+    Another account saving this content in the same reading language is given this
+    preview and charged this value. Best effort: the settlement already happened.
+    """
+    from media_summarizer.utils import media_idempotence
+    from media_summarizer.utils import user_media as user_media_store
+
+    try:
+        record = await user_media_store.get_user_media(
+            str(body.get("user_id") or ""), str(body.get("scope_id") or "")
+        )
+    except Exception:  # noqa: BLE001 - without the row the value is simply not kept
+        return
+    if record is None:
+        return
+    await media_idempotence.record_preview_value(
+        media_key=record.media_key,
+        language=(body.get("parameters") or {}).get("language"),
+        nano_eur=consumed,
+    )
+
+
+async def _usage_cost(usage: Optional[ArtifactLlmUsage]) -> Optional[MeasuredCost]:
+    if usage is None:
+        return None
+    try:
+        return await budget_guard.llm_cost(usage)
+    except Exception:  # noqa: BLE001 - the bound stands in for an unpriced usage
+        return None
+
+
+def _build_envelope(
+    *,
+    generator: Any,
+    schema: Optional[Dict[str, Any]],
+    raw_content: str,
+    llm_usage: ArtifactLlmUsage,
+    body: Dict[str, Any],
+    artifact_id: str,
+    artifact_type: MediaArtifactType,
+    sources: Any,
+) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Validate the model's answer and wrap it as the stored artifact."""
+    if schema is not None:
+        raw_content = generator.unwrap_structured_response(raw_content)
+
+    # Validate
+    validated = generator.validate(raw_content)
+
+    # Build artifact content
+    artifact_content = generator.build_artifact_content(validated, body=body)
+    # The title is the model's, not a derived label: it is what tells two
+    # entries of the same type apart in the history (task-269 §5.4).
+    artifact_title = validated.get("title") if isinstance(validated, dict) else None
+
+    envelope: Dict[str, Any] = {
+        "artifact_id": artifact_id,
+        "artifact_type": artifact_type.value,
+        "scope": body.get("scope"),
+        "scope_id": body.get("scope_id"),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "source_count": len(sources),
+        "sources": [
+            {
+                "media_item_id": source.get("media_item_id"),
+                "title": source.get("title"),
+                "language": source.get("language"),
+                "transcript_s3_key": source.get("transcript_s3_key"),
+            }
+            for source in sources
+        ],
+        "generator_version": body.get("generator_version"),
+        "llm_usage": llm_usage.model_dump(exclude_none=True),
+        "content": artifact_content,
+    }
+    return artifact_title, envelope
 
 
 async def process_message(message: Dict[str, Any]) -> None:
@@ -165,62 +272,85 @@ async def process_message(message: Dict[str, Any]) -> None:
         # generator that has a schema always sends it.
         schema = generator.response_format_schema()
 
-        result = await llm_client.complete(
-            [{"role": "user", "content": prompt}],
-            response_format=schema,
-            prompt_cache_key=prompt_cache_key,
-            artifact_type=artifact_type.value,
+        messages = [{"role": "user", "content": prompt}]
+        component, operation_id = _budget_step(artifact_type, body, artifact_id)
+        call: BudgetCall = await budget_guard.start(
+            str(body.get("user_id") or ""),
+            operation_id=operation_id,
+            component=component,
+            line=lambda ctx: budget_guard.llm_call_line(
+                ctx, component=component, messages=messages, response_format=schema
+            ),
+            lease=timedelta(0),
         )
+        try:
+            result = await llm_client.complete(
+                messages,
+                response_format=schema,
+                prompt_cache_key=prompt_cache_key,
+                artifact_type=artifact_type.value,
+            )
+        except LlmProviderRefusedError:
+            # The provider answered with an error: it billed nothing.
+            await call.release(operator_cost=budget_guard.no_cost())
+            raise
+        except BaseException:
+            await call.release()
+            raise
         raw_content = result.content
         llm_usage = result.usage
+        usage_cost = await _usage_cost(llm_usage)
+        try:
+            artifact_title, envelope = _build_envelope(
+                generator=generator,
+                schema=schema,
+                raw_content=raw_content,
+                llm_usage=llm_usage,
+                body=body,
+                artifact_id=artifact_id,
+                artifact_type=artifact_type,
+                sources=sources,
+            )
+            await complete_artifact_generation(
+                artifact_id=artifact_id,
+                content=envelope,
+                title=artifact_title,
+                llm_usage=llm_usage,
+            )
+        except BaseException:
+            # An answer was billed but no artifact reached the user (rule 5).
+            await call.release(operator_cost=usage_cost)
+            raise
+        if usage_cost is not None:
+            consumed = await call.settle(usage_cost, metric_source=budget_guard.llm_metric_source(llm_usage))
+            if consumed and component == Component.REVIEW_BLURB:
+                await _keep_preview_value(body, consumed)
 
-        if schema is not None:
-            raw_content = generator.unwrap_structured_response(raw_content)
-
-        # Validate
-        validated = generator.validate(raw_content)
-
-        # Build artifact content
-        artifact_content = generator.build_artifact_content(validated, body=body)
-        # The title is the model's, not a derived label: it is what tells two
-        # entries of the same type apart in the history (task-269 §5.4).
-        artifact_title = validated.get("title") if isinstance(validated, dict) else None
-
-        envelope: Dict[str, Any] = {
-            "artifact_id": artifact_id,
-            "artifact_type": artifact_type.value,
-            "scope": body.get("scope"),
-            "scope_id": body.get("scope_id"),
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "source_count": len(sources),
-            "sources": [
-                {
-                    "media_item_id": source.get("media_item_id"),
-                    "title": source.get("title"),
-                    "language": source.get("language"),
-                    "transcript_s3_key": source.get("transcript_s3_key"),
-                }
-                for source in sources
-            ],
-            "generator_version": body.get("generator_version"),
-            "llm_usage": llm_usage.model_dump(exclude_none=True),
-            "content": artifact_content,
-        }
-
-        await complete_artifact_generation(
+    except BudgetBusyError:
+        log_event(
+            logger,
+            logging.INFO,
+            "artifact.budget_busy",
+            "Another delivery is sending this generation; standing down",
             artifact_id=artifact_id,
-            content=envelope,
-            title=artifact_title,
-            llm_usage=llm_usage,
         )
-
-        # Keyed on the artifact, so a redelivery cannot record twice.
-        await llm_client.record_observed_cost(
-            body.get("user_id"),
-            llm_usage,
-            idempotency_token=f"artifact_cost:{artifact_id}",
+    except BudgetRefusedError as refusal:
+        # Nothing was sent: the entry fails with the budget's code and the message
+        # is acknowledged, a redelivery would get the same answer this month.
+        log_event(
+            logger,
+            logging.INFO,
+            "artifact.budget_refused",
+            "Artifact generation refused by the beta budget",
+            artifact_id=artifact_id,
+            error_code=refusal.error_code,
         )
-
+        if artifact_id:
+            await fail_artifact_generation(
+                artifact_id=artifact_id,
+                error_message=refusal.error_code,
+                error_code=refusal.failure_code.value,
+            )
     except Exception as exc:
         # Determine error code for validation errors
         error_code = None

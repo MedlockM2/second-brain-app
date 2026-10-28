@@ -12,15 +12,13 @@ from typing import Any, Dict, Optional
 
 from media_summarizer.core.media_ingestion.media_metadata import select_creator
 from media_summarizer.core.models import ProcessingJob, UserMediaStatus
+from media_summarizer.core.services import beta_budget, budget_guard
+from media_summarizer.core.services.budget_guard import BudgetRefusedError, TextEstimate
 from media_summarizer.core.services.durable_media_service import (
+    charge_reused_content,
     finalize_deduplicated_save,
     save_media_for_user,
-)
-from media_summarizer.core.services.quota_enforcer import (
-    check_submission_allowed,
-    gate_token,
-    minutes_for_seconds,
-    record_transcription_minutes,
+    withdraw_refused_save,
 )
 from media_summarizer.utils import (
     database_async,
@@ -58,21 +56,15 @@ async def submit_media_for_user(
     - If key already processed: create a billing job (summary in app via polling).
     - If key reserved/in progress: return "pending" status (watchers fan-out).
 
-    Returns a dict compatible with MediaItemSelectionResponse.
+    Returns a dict compatible with MediaItemSelectionResponse. Raises
+    ``BudgetRefusedError`` when the beta budget refuses the save (task-549): a
+    month with nothing left, an episode above the per-item limit, a content
+    processed for another account whose value the month does not cover (rule 12).
+    Nothing is left behind then: no library row, no job, no reservation.
     """
-    # 0. Consumption check. This path always ends in a transcription and its
-    # caller already knows the episode length, so the check is exact.
-    episode_minutes = minutes_for_seconds(duration_seconds or 0)
-    quota_result = await check_submission_allowed(
-        user.id,
-        minutes_needed=episode_minutes or 1,
-    )
-    if not quota_result.allowed:
-        return {
-            "status": "skipped",
-            "reason": quota_result.error_code,
-            "params": quota_result.params,
-        }
+    # 0. Budget check: a month with nothing left refuses before anything is
+    # written. The transcription itself is admitted below, once its job exists.
+    await budget_guard.precheck(user.id)
 
     # The durable library row comes first and carries the organization. The
     # default-folder fallback lives in save_media_for_user, so there is a single
@@ -142,6 +134,14 @@ async def submit_media_for_user(
             except Exception:  # noqa: BLE001 - a dead job never fails a save
                 content_job = None
 
+            # Rule 12: the content was processed for another account; this save
+            # is charged its value, or refused like a new processing.
+            await charge_reused_content(
+                user_id=user.id,
+                media_key=media_key,
+                media_item_id=durable_media_item_id,
+                ledger_row=existing,
+            )
             owned_job_id = await finalize_deduplicated_save(
                 user_id=user.id,
                 media_item_id=durable_media_item_id,
@@ -162,7 +162,15 @@ async def submit_media_for_user(
             }
 
         # Not yet processed (reserved / in progress by another job)
-        # Create a "watcher" job for this user and register the watcher.
+        # Create a "watcher" job for this user and register the watcher. Charged
+        # like any save of content another account is processing: the value
+        # settled so far (rule 12).
+        await charge_reused_content(
+            user_id=user.id,
+            media_key=media_key,
+            media_item_id=durable_media_item_id,
+            ledger_row=existing,
+        )
         watcher_job = await database_async.create_processing_job(job)
         try:
             await media_watchers.add_watcher(
@@ -194,14 +202,32 @@ async def submit_media_for_user(
     # Persist update
     await database_async.update_processing_job(created_job)
 
-    # Charge the episode. This path receives the duration from its caller, so the
-    # debit is exact and happens before the enqueue: the transcription worker is
-    # told how many minutes were already charged and only settles the difference.
-    debited_minutes = await record_transcription_minutes(
-        user.id,
-        minutes=episode_minutes or 1,
-        idempotency_token=gate_token(created_job.id),
-    )
+    # Admit the episode. This path receives the duration from its caller, so the
+    # import is admitted in this request, before the enqueue: the transcription,
+    # its preview and its translation, in one conditional write (rules 4 and 10).
+    # The transcription worker claims that attempt and settles it on the
+    # duration Deepgram bills.
+    measured_seconds = float(duration_seconds) if duration_seconds and duration_seconds > 0 else None
+    try:
+        await budget_guard.admit_import(
+            user.id,
+            operation_id=durable_media_item_id,
+            acquisition=lambda ctx: [
+                beta_budget.transcription_line(ctx, duration_seconds=measured_seconds)
+            ],
+            text=TextEstimate(duration_seconds=measured_seconds),
+            media_item_id=durable_media_item_id,
+        )
+    except BudgetRefusedError as refusal:
+        created_job.mark_failed(
+            error_code=refusal.failure_code,
+            error_step="budget_admission",
+            error_metadata={"reason": refusal.error_code},
+        )
+        await database_async.update_processing_job(created_job)
+        await media_idempotence.release_reservation(media_key=media_key, job_id=created_job.id)
+        await withdraw_refused_save(user_id=user.id, media_item_id=durable_media_item_id)
+        raise
 
     # Enqueue to deepgram transcription queue (direct path, no download worker needed)
     await sqs.send_message(
@@ -214,7 +240,6 @@ async def submit_media_for_user(
             "media_title": media_title,
             "source_title": source_title,
             "audio_duration_seconds": duration_seconds,
-            "quota_debited_minutes": debited_minutes,
             "media_key": media_key,
             "media_image": media_image,
             # RSS feed URL for Podcasting 2.0 transcript lookup

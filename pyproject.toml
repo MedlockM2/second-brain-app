@@ -50,6 +50,10 @@ worker = [
     # ever reaching a Lambda. Lift the ceiling by moving the image to the
     # AL2023 base (python:3.12-arm64), not by loosening this line.
     "pillow>=11.0.0,<12.3",
+    # Page count of a PDF before it is sent to LlamaParse (task-549): the beta
+    # budget reserves the parse from the pages measured upstream (rule 1 of the
+    # task-547 decision). Pure Python, no native wheel.
+    "pypdf>=5.0.0",
 ]
 dev = [
     "black>=23.0.0",
@@ -63,6 +67,7 @@ dev = [
     # carries the same ceiling as the worker extra so both resolve to one
     # version in the lock.
     "pillow>=11.0.0,<12.3",
+    "pypdf>=5.0.0",
 ]
 
 [build-system]

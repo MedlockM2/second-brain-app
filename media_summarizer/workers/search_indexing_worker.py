@@ -17,6 +17,7 @@ from typing import Any, Dict
 from media_summarizer.core.services import search_indexing
 from media_summarizer.core.services.durable_media_service import resolve_content_transcript
 from media_summarizer.core.services.raw_content_service import get_raw_content
+from media_summarizer.core.services.transcript_translation import TranslationPayer
 from media_summarizer.utils import sqs
 from media_summarizer.utils import user_media as user_media_store
 from media_summarizer.utils.env import required_env
@@ -88,7 +89,12 @@ async def process_indexing_message(message: Dict[str, Any]) -> None:
         transcript = await resolve_content_transcript(record)
         if transcript is None:
             raise RuntimeError("Content transcript unavailable for search indexing")
-        raw = await get_raw_content(transcript, reading_language=record.reading_language)
+        raw = await get_raw_content(
+            transcript,
+            reading_language=record.reading_language,
+            # The save this indexing serves pays for the translation it arms.
+            payer=TranslationPayer(user_id=user_id, operation_id=media_item_id),
+        )
         translation = raw.translation or {}
         if translation.get("translation_pending"):
             # Requeue an inexpensive check without spending Lambda time waiting,

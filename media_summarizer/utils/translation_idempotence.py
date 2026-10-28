@@ -73,6 +73,7 @@ class TranslationLock:
         error_message: Optional[str] = None,
         worker_owner_id: Optional[str] = None,
         failure_kind: Optional[str] = None,
+        budget_value_nano_eur: Optional[int] = None,
     ) -> None:
         self.translation_fingerprint = translation_fingerprint
         self.transcript_s3_key = transcript_s3_key
@@ -86,6 +87,12 @@ class TranslationLock:
         #: refused for a reason a retry cannot change, so readers must treat this
         #: translation as never coming rather than as pending.
         self.failure_kind = failure_kind
+        #: Set with ``status=done``: what the translation that produced the cached
+        #: text cost its payer, settled on the provider's usage (task-549). An
+        #: account that later saves this content in this reading language is
+        #: charged it (rule 12 of the task-547 decision). Absent when the
+        #: translation was not settled through the beta budget.
+        self.budget_value_nano_eur = budget_value_nano_eur
 
     def to_dynamodb_item(self) -> dict:
         item = {
@@ -116,6 +123,11 @@ class TranslationLock:
             error_message=item.get("error_message"),
             worker_owner_id=item.get("worker_owner_id"),
             failure_kind=item.get("failure_kind"),
+            budget_value_nano_eur=(
+                int(item["budget_value_nano_eur"])
+                if item.get("budget_value_nano_eur") is not None
+                else None
+            ),
         )
 
 
@@ -371,12 +383,34 @@ async def mark_translation_done(
     *,
     transcript_s3_key: str,
     target_language: str,
+    budget_value_nano_eur: Optional[int] = None,
 ) -> None:
-    """Transition to done when translation completes successfully."""
+    """Transition to done when translation completes successfully.
+
+    ``budget_value_nano_eur`` is the settled cost of the call that produced the
+    text, kept with it for rule 12 (task-549). Without one (an empty transcript, a
+    cache hit) the attribute is removed, so a value never outlives the
+    translation it priced.
+    """
     fingerprint = build_translation_fingerprint(
         transcript_s3_key=transcript_s3_key,
         target_language=target_language,
     )
+    values: dict = {
+        ":done": TranslationStatus.DONE,
+        ":now": _now_iso(),
+    }
+    if budget_value_nano_eur is not None:
+        update = (
+            "SET #st = :done, updated_at = :now, budget_value_nano_eur = :value "
+            "REMOVE error_message, worker_owner_id, failure_kind"
+        )
+        values[":value"] = int(budget_value_nano_eur)
+    else:
+        update = (
+            "SET #st = :done, updated_at = :now "
+            "REMOVE error_message, worker_owner_id, failure_kind, budget_value_nano_eur"
+        )
     session = database_async.get_session()
     async with session.resource(
         "dynamodb",
@@ -385,15 +419,9 @@ async def mark_translation_done(
         table = await dynamodb.Table(TRANSLATION_IDEMPOTENCE_TABLE)
         await table.update_item(
             Key={"translation_fingerprint": fingerprint},
-            UpdateExpression=(
-                "SET #st = :done, updated_at = :now "
-                "REMOVE error_message, worker_owner_id, failure_kind"
-            ),
+            UpdateExpression=update,
             ExpressionAttributeNames={"#st": "status"},
-            ExpressionAttributeValues={
-                ":done": TranslationStatus.DONE,
-                ":now": _now_iso(),
-            },
+            ExpressionAttributeValues=values,
         )
 
 

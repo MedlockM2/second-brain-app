@@ -4,7 +4,8 @@ The global content ledger: who owns a content, and where its text lives.
 Canonical schema (MEDIA_IDEMPOTENCE_TABLE, default "media_idempotence"):
 - PK: media_key (S)
 - Attributes: status (reserved|processed|failed), job_id, created_at, updated_at,
-  transcript_s3_key, source_language
+  transcript_s3_key, source_language, value_operation_id,
+  budget_value_<operation_id> and preview_value_<language> (task-549, rule 12)
 
 `failed` is a *record*, not a lock. `reserved` and `processed` both mean "a job
 owns this content, do not start a second one"; `failed` means the opposite -- the
@@ -59,6 +60,22 @@ ATTR_TRANSCRIPT_S3_KEY = "transcript_s3_key"
 #: rather than on a job row that may belong to somebody else.
 ATTR_SOURCE_LANGUAGE = "source_language"
 
+#: What one processing of this content cost the account it ran for, in
+#: nano-euros, settled on the providers' metrics: its collection, transcription or
+#: parsing (task-549). One attribute per processing, ``budget_value_<operation_id>``
+#: (the import operation of ``budget_guard``), accumulated by every settlement of
+#: its steps. Two accounts saving a media while it is being processed each run a
+#: processing of their own (owner decision of 2026-10-28), so their values are kept
+#: apart, and the one charged to a later account (rule 12 of the task-547 decision)
+#: is the value of the processing whose text the content kept:
+#: :data:`ATTR_VALUE_OPERATION`. Preview and translation values are per language
+#: (``preview_value_<language>``, translation lock).
+ATTR_BUDGET_VALUE_PREFIX = "budget_value_"
+
+#: The import operation of the processing whose transcript this row records, set
+#: by the ``processed`` write: the one whose value rule 12 charges.
+ATTR_VALUE_OPERATION = "value_operation_id"
+
 
 def transcript_s3_key_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
     """The transcript location this ledger row names, or ``None``.
@@ -77,6 +94,113 @@ def source_language_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
     if not row:
         return None
     return (str(row.get(ATTR_SOURCE_LANGUAGE) or "")).strip() or None
+
+
+#: Prefix of the settled value of the content's preview in one reading language
+#: (``preview_value_fr``): a preview is generated per language, and another account
+#: saving the content is charged the one in its own language when it exists, since
+#: that is the preview it is given (rule 12). One flat attribute per language, so
+#: each is written with a plain ``SET`` and never overwrites another language's.
+ATTR_PREVIEW_VALUE_PREFIX = "preview_value_"
+
+
+def preview_value_of(row: Optional[Dict[str, Any]], language: Optional[str]) -> int:
+    """The settled value of the content's preview in ``language``, 0 when none."""
+    lang = (language or "").strip().lower()
+    if not row or not lang:
+        return 0
+    try:
+        return max(0, int(row.get(f"{ATTR_PREVIEW_VALUE_PREFIX}{lang}") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def record_preview_value(*, media_key: Optional[str], language: Optional[str], nano_eur: int) -> bool:
+    """Keep the settled cost of the content's preview in ``language`` (rule 12).
+
+    Written once per language (``if_not_exists``): the first preview generated in a
+    language is the one later saves in that language reuse. Conditional on the row
+    existing; an error is logged and swallowed, the settlement already happened.
+    """
+    identity_key = (media_key or "").strip()
+    lang = (language or "").strip().lower()
+    amount = int(nano_eur or 0)
+    if not identity_key or not lang or amount <= 0:
+        return False
+    attribute = f"{ATTR_PREVIEW_VALUE_PREFIX}{lang}"
+    try:
+        session = database_async.get_session()
+        async with session.resource(
+            "dynamodb",
+            region_name=database_async.AWS_REGION,
+        ) as dynamodb:
+            table = await dynamodb.Table(MEDIA_IDEMPOTENCE_TABLE)
+            await table.update_item(
+                Key={"media_key": identity_key},
+                UpdateExpression="SET #p = if_not_exists(#p, :v), updated_at = :u",
+                ExpressionAttributeNames={"#p": attribute},
+                ExpressionAttributeValues={":v": amount, ":u": _now_iso()},
+                ConditionExpression="attribute_exists(media_key)",
+            )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        logger.warning("Could not record the preview value of media_key=%s: %s", identity_key, exc)
+        return False
+    return True
+
+
+def budget_value_of(row: Optional[Dict[str, Any]]) -> int:
+    """The settled value of the processing whose text this row records, 0 when none."""
+    if not row:
+        return 0
+    operation_id = str(row.get(ATTR_VALUE_OPERATION) or "").strip()
+    if not operation_id:
+        return 0
+    try:
+        return max(0, int(row.get(f"{ATTR_BUDGET_VALUE_PREFIX}{operation_id}") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def add_budget_value(*, media_key: Optional[str], operation_id: Optional[str], nano_eur: int) -> bool:
+    """Add a settled step's cost to the value of one processing of the content (rule 12).
+
+    One atomic ``ADD`` per settlement on ``budget_value_<operation_id>``, so two
+    steps settling at once both count, and two processings of the same media never
+    mix their values.
+    Conditional on the row existing: an account-scoped upload has no row until its
+    completion write, and is never saved by another account, so there is nothing to
+    keep for it. ``False`` is that normal outcome; an error is logged and swallowed,
+    because the settlement it follows has already moved the tester's counter.
+    """
+    identity_key = (media_key or "").strip()
+    operation = (operation_id or "").strip()
+    amount = int(nano_eur or 0)
+    if not identity_key or not operation or amount <= 0:
+        return False
+    try:
+        session = database_async.get_session()
+        async with session.resource(
+            "dynamodb",
+            region_name=database_async.AWS_REGION,
+        ) as dynamodb:
+            table = await dynamodb.Table(MEDIA_IDEMPOTENCE_TABLE)
+            await table.update_item(
+                Key={"media_key": identity_key},
+                UpdateExpression="ADD #v :v SET updated_at = :u",
+                ExpressionAttributeNames={"#v": f"{ATTR_BUDGET_VALUE_PREFIX}{operation}"},
+                ExpressionAttributeValues={":v": amount, ":u": _now_iso()},
+                ConditionExpression="attribute_exists(media_key)",
+            )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        logger.warning(
+            "Could not add the budget value of media_key=%s: %s", identity_key, exc
+        )
+        return False
+    return True
 
 
 def is_failed_row(row: Optional[Dict[str, Any]]) -> bool:
@@ -192,8 +316,20 @@ async def _record_terminal_status(
     status: str,
     transcript_s3_key: Optional[str] = None,
     source_language: Optional[str] = None,
+    value_operation_id: Optional[str] = None,
 ) -> bool:
     """Move the ledger row of a content to a terminal status. ``True`` if it moved.
+
+    **The first processing to succeed provides the text** (owner decision of
+    2026-10-28, task-549). A media saved by a second account while another
+    account's processing of it runs is processed again for that account, without
+    a reservation of the row. Whichever of the two succeeds first records its
+    transcript here: ``processed`` is written over any row not yet ``processed``,
+    whatever job it names. Once ``processed``, the row only moves for its own job,
+    and ``failed`` is only ever written by the job the row names — so a second
+    processing never undoes the first, and a failure of the reserving job never
+    hides the other one's success. ``value_operation_id`` names the processing
+    whose value rule 12 charges from then on (``budget_value_of``).
 
     The write is conditional on the row still pointing at the job that reports
     the outcome (or at no job at all, which is how a reservation made before its
@@ -225,6 +361,9 @@ async def _record_terminal_status(
         )
         expr_values[":j"] = job_id
         expr_values[":no_job"] = ""
+        if status == "processed":
+            condition += " OR #st <> :processed"
+            expr_values[":processed"] = "processed"
     else:
         condition = "attribute_exists(media_key)"
 
@@ -234,6 +373,9 @@ async def _record_terminal_status(
     if source_language:
         update += f", {ATTR_SOURCE_LANGUAGE} = :sl"
         expr_values[":sl"] = source_language
+    if value_operation_id:
+        update += f", {ATTR_VALUE_OPERATION} = :vo"
+        expr_values[":vo"] = value_operation_id
 
     try:
         session = database_async.get_session()
@@ -272,6 +414,7 @@ async def mark_processed(
     job_id: Optional[str] = None,
     transcript_s3_key: Optional[str] = None,
     source_language: Optional[str] = None,
+    value_operation_id: Optional[str] = None,
 ) -> bool:
     """Record that this content is processed, and where its text now lives.
 
@@ -293,6 +436,7 @@ async def mark_processed(
         status="processed",
         transcript_s3_key=transcript_s3_key,
         source_language=source_language,
+        value_operation_id=value_operation_id,
     )
 
 

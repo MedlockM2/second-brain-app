@@ -43,6 +43,17 @@ The detection method choice (local ``langdetect`` first, LLM only for the actual
 translation) is justified by the task-189 benchmark: it keeps the no-translation
 path zero-cost and reserves the paid LLM call for transcripts that genuinely need
 to be translated.
+
+**Beta budget** (task-549, rules 6, 10 and 11 of the task-547 decision). Every
+dispatch names its payer (:class:`TranslationPayer`): the account whose import
+reserved the translation, or the account whose save asks for it later. Each call
+to the provider is a try of the payer's ``translation`` step, reserved for the
+request's bytes and 1.5 × its input as output (rule 11 as amended on 2026-10-28:
+a reservation, not a cap — the call carries no output ceiling of its own). A translation stored settles on
+the provider's usage, and that settled value is kept on the translation lock for
+rule 12; a call that failed or whose text could not be stored is released. A try
+the budget refuses ends the translation as a transient failure: the reader is
+shown the original text, as for any failed translation.
 """
 
 from __future__ import annotations
@@ -51,13 +62,18 @@ import asyncio
 import logging
 import os
 import time
+from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
+from media_summarizer.core.models.beta_budget import Component
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
+from media_summarizer.core.services import budget_guard
+from media_summarizer.core.services.budget_guard import BudgetCall, BudgetRefusedError
 from media_summarizer.core.services.llm_client import (
     LlmMessage,
     estimate_usage,
@@ -284,11 +300,46 @@ def _build_system_prompt(*, source_language: str, target_language: str) -> str:
     )
 
 
+@dataclass(frozen=True)
+class TranslationPayer:
+    """Who a translation is charged to, and under which operation of theirs.
+
+    ``operation_id`` is the payer's save (its library row): the import that
+    reserved the translation with its acquisition (rule 10), or the save whose
+    reader asks for it later, which reserves it then.
+    """
+
+    user_id: str
+    operation_id: str
+
+    def to_message(self) -> Dict[str, str]:
+        return {"budget_user_id": self.user_id, "budget_operation_id": self.operation_id}
+
+    @classmethod
+    def from_message(cls, body: Dict[str, Any]) -> Optional["TranslationPayer"]:
+        user_id = str(body.get("budget_user_id") or "").strip()
+        operation_id = str(body.get("budget_operation_id") or "").strip()
+        if not user_id or not operation_id:
+            return None
+        return cls(user_id=user_id, operation_id=operation_id)
+
+
+def _translation_messages(*, transcript: str, source_language: str, target_language: str) -> List[LlmMessage]:
+    return [
+        {
+            "role": "developer",
+            "content": _build_system_prompt(
+                source_language=source_language,
+                target_language=target_language,
+            ),
+        },
+        {"role": "user", "content": transcript},
+    ]
+
+
 async def _call_translation_llm(
     *,
-    transcript: str,
-    source_language: str,
-    target_language: str,
+    messages: List[LlmMessage],
 ) -> Tuple[str, ArtifactLlmUsage]:
     """Call the shared model once. Returns ``(translated_text, usage)``.
 
@@ -300,10 +351,14 @@ async def _call_translation_llm(
     the model documents no ``temperature``; and "with o1 models and newer, use
     developer messages" rather than system messages, hence the ``developer`` role.
 
-    No output ceiling is sent yet: TASK-549 adds the one of task-547 rule 11. The
-    shared ``LLM_MAX_COMPLETION_TOKENS`` is deliberately not reused -- 32 000
-    tokens would cut every translation longer than that -- so until then the
-    model's own maximum applies.
+    No ``max_completion_tokens`` is sent: only the model's own maximum (128 000
+    output tokens, reasoning included) bounds the answer. The owner amended rule 11
+    of the task-547 decision on 2026-10-28: its 1.5 × input is what the call is
+    *reserved* for, never a cap on the generation, which would cut a short text
+    whose reasoning ate the allowance. The shared ``LLM_MAX_COMPLETION_TOKENS`` is
+    not reused either: 32 000 tokens would cut every long translation. An answer
+    the model maximum cut (``finish_reason: length``) is stored as it is and
+    logged.
 
     No chunking. Luna has a 1 050 000-token window and at most 128 000 output
     tokens, reasoning included, which leaves 922 000 for the input: more than
@@ -324,16 +379,6 @@ async def _call_translation_llm(
             refusal_reason=REFUSAL_AUTHENTICATION,
         )
 
-    messages: List[LlmMessage] = [
-        {
-            "role": "developer",
-            "content": _build_system_prompt(
-                source_language=source_language,
-                target_language=target_language,
-            ),
-        },
-        {"role": "user", "content": transcript},
-    ]
     payload: Dict[str, Any] = {
         "model": LLM_MODEL,
         "reasoning_effort": LLM_REASONING_EFFORT,
@@ -366,12 +411,38 @@ async def _call_translation_llm(
                     provider_status=response.status,
                 )
             result = await response.json()
-            content = result["choices"][0]["message"]["content"]
+            choice = result["choices"][0]
+            content = choice["message"]["content"]
             answered_by = result.get("model") or LLM_MODEL
+            if choice.get("finish_reason") == "length":
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "translation.output_limit_reached",
+                    "Translation cut by the model's output maximum; stored as is",
+                )
             usage = result.get("usage")
             if not usage:
                 return content, estimate_usage(messages, content or "", model=answered_by)
             return content, read_usage({**usage, "model": answered_by})
+
+
+async def _start_translation_call(payer: Optional[TranslationPayer], messages: List[LlmMessage]) -> BudgetCall:
+    """Take the right to send one translation call.
+
+    The translation lock is the exclusive claim on this couple, so the budget's
+    lease is zero. Raises ``BudgetRefusedError``: nothing may be sent, and a
+    translation with no payer is refused like a call with no account (rule 9).
+    """
+    if payer is None:
+        raise BudgetRefusedError(budget_guard.BudgetRefusal.BUDGET_UNAVAILABLE)
+    return await budget_guard.start(
+        payer.user_id,
+        operation_id=payer.operation_id,
+        component=Component.TRANSLATION,
+        line=lambda c: budget_guard.translation_call_line(c, messages=messages),
+        lease=timedelta(0),
+    )
 
 
 async def _translate_with_retry(
@@ -379,23 +450,36 @@ async def _translate_with_retry(
     transcript: str,
     source_language: str,
     target_language: str,
-) -> Tuple[str, ArtifactLlmUsage]:
+    payer: Optional[TranslationPayer],
+) -> Tuple[str, ArtifactLlmUsage, BudgetCall]:
     """Translate with exponential backoff, spending it on transient failures only.
 
     The retry budget exists for failures the next second may fix. A permanent one
     -- no credit, rejected key, unknown model -- ends the loop on the first
     answer: repeating it costs a provider call per attempt and cannot change the
     verdict (task-327 AC#2).
+
+    Each attempt is a try of its own on the payer's budget (rule 6): released at
+    zero when the provider answered an error, at its bound otherwise. The call of
+    the attempt that answered is returned open, for the caller to settle once the
+    text is stored. ``BudgetRefusedError`` propagates: nothing more is sent.
     """
+    messages = _translation_messages(
+        transcript=transcript,
+        source_language=source_language,
+        target_language=target_language,
+    )
     last_exc: Optional[Exception] = None
     for attempt in range(1, TRANSLATION_MAX_RETRIES + 1):
+        call = await _start_translation_call(payer, messages)
         try:
-            return await _call_translation_llm(
-                transcript=transcript,
-                source_language=source_language,
-                target_language=target_language,
-            )
-        except Exception as exc:  # noqa: BLE001 - classified below
+            text, usage = await _call_translation_llm(messages=messages)
+            return text, usage, call
+        except BaseException as exc:  # noqa: BLE001 - classified below
+            answered = getattr(exc, "provider_status", None) is not None
+            await call.release(operator_cost=budget_guard.no_cost() if answered else None)
+            if not isinstance(exc, Exception):
+                raise
             last_exc = exc
             failure_kind = getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT)
             if failure_kind == LLMFailureKind.PERMANENT:
@@ -461,6 +545,7 @@ class TranslationOutcome:
         translation_error: Optional[str] = None,
         failure_kind: Optional[str] = None,
         translation_refusal_reason: Optional[str] = None,
+        budget_value_nano_eur: Optional[int] = None,
     ) -> None:
         self.transcript_s3_key = transcript_s3_key
         self.detected_language = detected_language
@@ -476,6 +561,10 @@ class TranslationOutcome:
         # limit). The worker reads it to classify its failure metric, because on
         # this path the failure never surfaces as an exception.
         self.translation_refusal_reason = translation_refusal_reason
+        #: What the call that produced this text was charged, settled on the
+        #: provider's usage: kept on the translation lock for rule 12. None for a
+        #: cache hit, a skip or a failure.
+        self.budget_value_nano_eur = budget_value_nano_eur
 
     def metadata(self) -> Dict[str, Any]:
         """Translation metadata block embedded in the artifact envelope."""
@@ -513,6 +602,7 @@ async def enqueue_translation_job(
     source_language_hint: Optional[str],
     source: Optional[str],
     job_id: Optional[str],
+    payer: Optional[TranslationPayer],
 ) -> None:
     """Dispatch one previously reserved translation to the SQS worker."""
     await sqs.send_message(
@@ -524,6 +614,7 @@ async def enqueue_translation_job(
             "source_language_hint": source_language_hint,
             "source": source,
             "job_id": job_id,
+            **(payer.to_message() if payer is not None else {}),
         },
     )
 
@@ -537,6 +628,7 @@ async def reserve_and_dispatch_translation(
     source: Optional[str],
     job_id: Optional[str],
     trigger: str,
+    payer: Optional[TranslationPayer],
     allow_done_retry: bool = False,
 ) -> TranslationDispatchOutcome:
     """The one gate every translation request goes through (task-203, task-414).
@@ -551,6 +643,7 @@ async def reserve_and_dispatch_translation(
 
     Never raises and never waits on the translation itself: one conditional
     ``PutItem`` and one ``SendMessage``. ``trigger`` only labels the logs.
+    ``payer`` travels with the message: the worker charges its calls to it.
     """
     try:
         reserved = await reserve_translation(
@@ -592,6 +685,7 @@ async def reserve_and_dispatch_translation(
             source_language_hint=source_language_hint,
             source=source,
             job_id=job_id,
+            payer=payer,
         )
     except Exception as exc:
         # Transient by default: an SQS hiccup must leave the couple reservable.
@@ -638,8 +732,12 @@ async def ensure_translated_transcript(
     source_language_hint: Optional[str] = None,
     transcript_bucket: str = TRANSCRIPT_BUCKET,
     translation_owner_id: Optional[str] = None,
+    payer: Optional[TranslationPayer] = None,
 ) -> TranslationOutcome:
     """Common detect+translate step. Source-agnostic.
+
+    ``payer`` is who the provider calls are charged to (task-549); without one, a
+    translation that needs a call is refused and the original text is kept.
 
     - Detects the transcript language (source tag first, then local langdetect).
     - Translates to ``target_language`` only when needed and supported.
@@ -769,10 +867,34 @@ async def ensure_translated_transcript(
     # fall through to synchronous re-translation below (AC#3).
 
     try:
-        translated_text, usage = await _translate_with_retry(
+        translated_text, usage, call = await _translate_with_retry(
             transcript=transcript_text,
             source_language=detected_language,
             target_language=normalized_target,
+            payer=payer,
+        )
+    except BudgetRefusedError as refusal:
+        # The payer's month does not cover the call, or the counter cannot be
+        # read: nothing was sent, and the reader keeps the original text (rule
+        # 10). Transient: a new month, or another reader, may ask again.
+        log_event(
+            logger,
+            logging.INFO,
+            "translation.budget_refused",
+            "Translation refused by the beta budget; original text kept",
+            source=source,
+            target_language=normalized_target,
+            error_code=refusal.error_code,
+        )
+        return TranslationOutcome(
+            transcript_s3_key=transcript_s3_key,
+            detected_language=detected_language,
+            detection_method=detection_method,
+            target_language=normalized_target,
+            is_translated=False,
+            translation_failed=True,
+            translation_error=refusal.error_code,
+            failure_kind=LLMFailureKind.TRANSIENT,
         )
     except TranscriptTranslationError as exc:
         # Documented fallback: pass the ORIGINAL transcript to artifacts and flag
@@ -805,18 +927,32 @@ async def ensure_translated_transcript(
             translation_refusal_reason=exc.refusal_reason,
         )
 
+    try:
+        usage_cost = await budget_guard.llm_cost(usage)
+    except Exception:  # noqa: BLE001 - the bound stands in for an unpriced usage
+        usage_cost = None
     payload_bytes = (translated_text or "").encode("utf-8")
-    await s3.upload_file_object(
-        bucket=transcript_bucket,
-        key=translated_key,
-        file_obj=BytesIO(payload_bytes),
-        content_type="text/plain; charset=utf-8",
-        metadata={
-            "is-translated": "true",
-            "translated-from": detected_language,
-            "target-language": normalized_target,
-            "source-transcript-key": transcript_s3_key,
-        },
+    try:
+        await s3.upload_file_object(
+            bucket=transcript_bucket,
+            key=translated_key,
+            file_obj=BytesIO(payload_bytes),
+            content_type="text/plain; charset=utf-8",
+            metadata={
+                "is-translated": "true",
+                "translated-from": detected_language,
+                "target-language": normalized_target,
+                "source-transcript-key": transcript_s3_key,
+            },
+        )
+    except BaseException:
+        # Billed, never stored: nothing reached a reader (rule 5).
+        await call.release(operator_cost=usage_cost)
+        raise
+    budget_value = (
+        await call.settle(usage_cost, metric_source=budget_guard.llm_metric_source(usage))
+        if usage_cost is not None
+        else None
     )
 
     duration_ms = int((time.monotonic() - started) * 1000)
@@ -847,6 +983,7 @@ async def ensure_translated_transcript(
         detection_method=detection_method,
         target_language=normalized_target,
         is_translated=True,
+        budget_value_nano_eur=budget_value,
     )
 
 

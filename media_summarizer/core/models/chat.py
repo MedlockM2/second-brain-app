@@ -424,13 +424,6 @@ class ChatAssistantMessage(_ChatItem):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     llm_usage: Optional[ArtifactLlmUsage] = None
-    #: The debit of this turn, written once it was applied (task-462): the period
-    #: row it landed on, the minutes and their cost. A refund reads them back so
-    #: it credits exactly what was charged, on the period it was charged to --
-    #: absent when no debit was applied, and then nothing is refunded.
-    quota_period_key: Optional[str] = None
-    quota_minutes_debited: Optional[int] = None
-    quota_cost_eur: Optional[float] = None
     created_at: datetime = Field(default_factory=_now_utc)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None

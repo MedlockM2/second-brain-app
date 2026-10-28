@@ -16,7 +16,8 @@ from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.api.rate_limit import get_limit_from_env, limiter
 from media_summarizer.core.models import ProcessingJob
 from media_summarizer.core.models.auth import AuthUser
-from media_summarizer.core.services.quota_enforcer import check_submission_allowed
+from media_summarizer.core.services import budget_guard
+from media_summarizer.core.services.budget_guard import BudgetRefusedError
 from media_summarizer.utils import database_async, podcast_index, sqs
 from media_summarizer.utils.database_async import get_db
 from media_summarizer.utils.env import required_env
@@ -189,7 +190,7 @@ async def submit_podcast_for_processing(
     """
     Backward-compatible endpoint used by integration tests to submit a podcast by URL.
 
-    Creates a processing job, allocates a minutes hold, then enqueues a message.
+    Creates a processing job after a budget check, then enqueues a message.
     """
     try:
         # Load fresh user (support dict-like overrides in tests)
@@ -209,17 +210,20 @@ async def submit_podcast_for_processing(
                 detail="Authenticated user not found",
             )
 
-        # Consumption check. The episode length is unknown here, so this only
-        # answers "is this user entitled": the minutes are charged downstream,
-        # where the audio is actually sent to a provider.
+        # Budget check. The episode length is unknown here, so this only refuses a
+        # month with nothing left: the transcription is reserved downstream, where
+        # the audio is measured (task-549). A direct audio URL goes to the Deepgram
+        # worker with no gate before it, and that worker reserves it then, at the
+        # per-item ceiling when nothing measured it.
         submitted_url = (payload.podcast_url or "").strip()
-        quota_result = await check_submission_allowed(user.id)
-        if not quota_result.allowed:
+        try:
+            await budget_guard.precheck(user.id)
+        except BudgetRefusedError as refusal:
             raise HTTPException(
-                status_code=quota_result.http_status,
-                detail=quota_result.error_body(),
-                headers={"X-Quota-Error-Code": quota_result.error_code or ""},
-            )
+                status_code=refusal.http_status,
+                detail=refusal.error_body(),
+                headers=refusal.headers(),
+            ) from refusal
 
         # Create job (pending)
         job = ProcessingJob(
@@ -262,8 +266,8 @@ async def submit_podcast_for_processing(
                 message_body=message_body,
             )
 
-        # The minutes are charged by the transcription settlement, which is the
-        # only place this path ever learns the real duration.
+        # The transcription is charged by its settlement, on the duration
+        # Deepgram bills.
 
         return {"job_id": job.id, "status": job.status.value}
     except HTTPException:
