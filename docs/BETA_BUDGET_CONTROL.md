@@ -374,7 +374,9 @@ lives in `core/services/budget_guard.py`; its vocabulary:
 - **operation**: what a budget is held for. An import is held under its **library
   row** (`budget_guard.import_operation_id(job)` = `job.media_item_id`, the job id for
   an RSS poll with no row), so its acquisition, its preview and its translation are
-  one operation. An artifact is `artifact:<artifact_id>`, a chat turn
+  one operation. A user artifact attempt is `artifact:<artifact_id>:<generation_revision>`
+  (TASK-562), so an explicit retry is charged normally under a fresh operation while
+  preserving its history entry. A chat turn is
   `chat:<turn_id>`, a reuse charge the saving row. Never a queue message.
 - **admission** (`admit`, `admit_import`): one conditional write holding every line
   of an operation (rule 4). `admit_import` adds the preview and the translation to
@@ -446,8 +448,11 @@ TASK-550.
   (`budget_value_<operation_id>`), and rule 12 later charges the value of the one
   whose text was kept (`value_operation_id`). The other processing's cost is that
   account's, as for any import.
-- **Shared generations.** An artifact reused across accounts makes no provider call
-  and is not charged (R.2); before task-549 it was charged in minutes (task-394).
+- **User generations and automatic previews (TASK-562).** Every user creation runs
+  its own generation, even for identical options and sources across accounts.
+  Explicit retry of a transient failure keeps the same entry with a new generation
+  revision and a fresh budget operation. Only the automatic `review_blurb` retains
+  same-language reuse and copies, under rule 12; user artifacts have no shared reuse.
 - **Bounds that are estimates.** The preview and the translation reserved with an
   import, and the chat turn admitted from its snapshot, are bounded from upstream
   estimates; the request really sent is settled on its real cost, even past the budget
