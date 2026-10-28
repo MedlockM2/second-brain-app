@@ -265,19 +265,22 @@ Non relevés depuis la date indiquée ; ce fichier ne les déclare pas validés.
 - **Date de début : non fixée.** La V1 est encore en construction ; l'owner annoncera le
   démarrage. Le TestFlight ouvert le 2026-09-02 n'est **pas** le début de la beta.
 - **Durée : trois mois.** Date de fin = date de début + 3 mois.
-- **Régime pendant la beta** (`task-429`) : aucun abonnement souscriptible, toutes les entrées
-  vers le paywall sont masquées, et **tous les comptes**, existants comme nouveaux, reçoivent
-  l'allocation du palier le plus élevé. La consommation reste comptée : elle sert à mesurer l'usage
-  réel pour fixer les allocations du nouveau barème (`docs/research/pricing-challenge/README.md`,
-  question 5).
-- **Le mécanisme** : un bloc `beta_access` dans la pricing config, `{"enabled": bool,
-  "ends_at": str|null}`. Il est **activé sans date de fin** dans les defaults du code
-  (`media_summarizer/core/services/pricing_config_service.py`) et dans `pricing_config-dev`
-  depuis le 2026-10-05. Tant qu'il est actif et que `ends_at`, s'il existe, n'est pas passé,
-  `quota_enforcer` sert à chaque compte l'allocation du palier le plus large du catalogue
-  `tiers` — choisi par comparaison des allocations, donc toujours juste quand le barème
-  passera en crédits — et l'endpoint des entitlements renvoie `is_beta_access: true`, que
-  l'app lit pour masquer le paywall et taire l'essai gratuit.
+- **Régime pendant la beta** (`task-429`, budget `task-548`) : aucun abonnement souscriptible,
+  toutes les entrées vers le paywall sont masquées, et **tous les comptes**, existants comme
+  nouveaux, sont sur la formule bêta autonome : 5 € d'usage fournisseur valorisé au tarif normal,
+  par compte et par mois calendaire UTC, sans report, indépendante du catalogue `tiers` et des
+  abonnements. La bêta n'hérite plus d'aucune allocation commerciale. Socle livré par `task-548`
+  (`docs/BETA_BUDGET_CONTROL.md`) ; restent le branchement des traitements (`task-549`),
+  l'exposition (`task-550`), l'interface (`task-551`), le suivi (`task-552`) et le taux BCE
+  quotidien (`task-559`).
+- **Le mécanisme** : le bloc `beta_access` de la pricing config porte `enabled`, `ends_at` et la
+  formule (budget, période, limites par élément). Il est **activé sans date de fin** dans les
+  defaults du code (`media_summarizer/core/services/pricing_config_service.py`) et dans
+  `pricing_config-dev` depuis le 2026-10-05. Tant qu'il est actif et que `ends_at`, s'il existe,
+  n'est pas passé, `quota_enforcer` attribue la formule bêta à chaque compte sans lire `tiers` ni
+  les abonnements, et l'endpoint des entitlements renvoie `is_beta_access: true`, que l'app lit
+  pour masquer le paywall et taire l'essai gratuit. Un bloc stocké avec seulement `enabled` et
+  `ends_at` reçoit le reste des valeurs par défaut.
 - **Au démarrage** : écrire la date de fin dans `pricing_config-dev` et `pricing_config-prod`.
   Pas de build, pas de déploiement de code ; la config est relue dans les 5 minutes (TTL du
   cache).

@@ -3,10 +3,10 @@ id: TASK-548
 title: >-
   Mettre en place le contrôle budgétaire bêta selon le benchmark validé
   (TASK-547)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-28 12:00'
+updated_date: '2026-10-28 11:55'
 labels:
   - backend
   - feature
@@ -47,7 +47,7 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 - [x] #1 Le chemin d’attribution bêta est indépendant du catalogue commercial et sa configuration décrit le budget de 5 EUR par compte, les périodes mensuelles et l’absence de report selon la décision validée.
 - [x] #2 Le socle de contrôle implémente les réservations, règlements et états de reprise retenus par la décision propriétaire ; les règles de concurrence, de duplication et de passage de période sont documentées et câblées.
 - [x] #3 Les dépenses financières engagées ou constatées sont distinguées des remboursements de capacité utilisateur ; les règles de l’étude empêchant une remise à zéro fictive de la dépense sont présentes dans le socle.
-- [ ] #4 Les schémas, permissions et règles de cycle de vie nécessaires sont livrés ; la référence pricing et le plan de lancement décrivent la formule autonome et distinguent le socle livré de ses branchements et vérifications de release restants.
+- [x] #4 Les schémas, permissions et règles de cycle de vie nécessaires sont livrés ; la référence pricing et le plan de lancement décrivent la formule autonome et distinguent le socle livré de ses branchements et vérifications de release restants.
 - [x] #5 Les vérifications statiques pertinentes passent sur les fichiers modifiés : Ruff/mypy, et terraform validate lorsque l’infrastructure est modifiée ; aucune suite automatisée ou mise en production n’est une condition de livraison.
 <!-- AC:END -->
 
@@ -108,6 +108,8 @@ Implémenté le 2026-10-28 dans un worktree isolé, sur sa propre branche, sans 
 - Après l'`apply` dev, vérifier `beta_budget-dev` (index, PITR, TTL) avec `aws dynamodb describe-table` et `describe-time-to-live` (profil `second-brain-app`, région `eu-west-3`).
 - Supprimer à la main `user_usage_daily-dev`, après `update-table --no-deletion-protection-enabled`. Faire de même en prod à son prochain `apply`.
 - `pricing_config-prod` n'a pas été lu : y supprimer une éventuelle ligne `burst_guards`.
+
+2026-10-28, au merge : AC #4 complété sur main — puces « Régime pendant la beta » et « Le mécanisme » de docs/V1_LAUNCH_PLAN.md réécrites avec le texte proposé ci-dessus (formule autonome, socle task-548, suites task-549 à task-552 et task-559). Owner après push : vérifier beta_budget-dev (describe-table, describe-time-to-live), supprimer user_usage_daily-dev à la main après levée de sa protection, retirer une éventuelle ligne burst_guards de pricing_config-prod ; course possible entre workflows Terraform et image au déploiement (relancer si /api/health/ reste en erreur).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
