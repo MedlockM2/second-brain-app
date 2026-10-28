@@ -1,0 +1,4 @@
+dau,imports_day,llm_calls_day,input_tokens_day_hypothesis,output_tokens_day_hypothesis,capacity_units_day_byte_bound,audio_minutes_day,parse_pages_day,parse_jobs_day,apify_runs_day,x_posts_day,content_usd_day,content_eur_30_days,algolia_requests_30_days,algolia_grow_usd_30_days_excluding_records,evening_capacity_units_per_minute,evening_minimum_drain_build_minutes,library_imports,library_minimum_build_minutes,library_minimum_parse_minutes
+300,120.0,420.0,5100000,816000,33660000,1109.4,192.0,60.0,43.8,6.0,6.60762,177.179657,108000,49.0,1009800,6.31125,360.0,19.3725,18.0
+500,200.0,700.0,8500000,1360000,56100000,1849.0,320.0,100.0,73.0,10.0,11.0127,295.299428,180000,85.0,1683000,10.51875,600.0,32.2875,30.0
+1000,400.0,1400.0,17000000,2720000,112200000,3698.0,640.0,200.0,146.0,20.0,22.0254,590.598856,360000,175.0,3366000,21.0375,1200.0,64.575,60.0
