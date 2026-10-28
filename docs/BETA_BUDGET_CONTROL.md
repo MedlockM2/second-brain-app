@@ -89,8 +89,11 @@ the text order of two instants is their time order.
 | `operator_spend_nano_eur` | Provider cost of attempts that delivered nothing (rule 5): measured, or the reserved bound when no metric came back. Never subtracted from anything. |
 | `period_key`, `created_at`, `updated_at`, `item_type = "period"`, `ttl_epoch` | `ttl_epoch` = start of the next month + 400 days. |
 
-The month's financial spend is `consumed + operator_spend`. `consumed_pct` is
-`consumed / budget × 100`, unrounded, above 100 after an overrun.
+`consumed + operator_spend` is **not** provider spend: `consumed` includes the
+value charged for reused content, which invokes no provider. TASK-552 derives
+provider cost from settled **non-reuse** attempts and released attempts' operator
+cost, with measured/estimated/unknown kept apart (`docs/BETA_BUDGET_REPORTING.md`).
+`consumed_pct` is `consumed / budget × 100`, unrounded, above 100 after an overrun.
 
 ### 2.2 Attempt, `attempt#<operation_id>:<step>:<try>`
 
@@ -117,7 +120,18 @@ starts at 1; `beta_budget.next_try_number` reads the next one from the ledger.
 | `release_reason`, `operator_cost_nano_eur`, `cost_basis`, `operator_cost_usd` | Released attempts: why, and what the operator spent (`measured`, `bound` or `not_sent`). |
 | `source_operation_id` | `reuse` attempts: the operation whose settled value was charged. |
 
-### 2.3 Index
+### 2.3 Observations (TASK-552)
+
+`observation#<UTC instant>#<random id>` records `outcome: refused|reused`,
+`operation_id`, `components`, `automatic`, `period_key`, `created_at`, and
+`ttl_epoch` (creation + 400 days). A refusal adds its typed `refusal` and only
+allowlisted `params`: period end, quantity, measurement, limit and required bound.
+No content, URL, identity, prompt or provider payload is stored. These rows move
+**no** financial amount and are erased with the same account partition. Nested
+gates observe the same refusal exception once; separate retries remain separate
+demand events. Persistence is best-effort and its failure has an alarm contract.
+
+### 2.4 Index
 
 `open-attempts-index` (GSI, `user_id` + `open_since`, projection ALL) is sparse:
 only `held` and `sending` attempts are in it, and every close removes
@@ -265,7 +279,8 @@ AC #3 of task-548 and rule 5. A release gives the tester's capacity back
 release, no settlement and no other write subtracts from them, and there is no
 manual capacity grant during the beta (rule 14). A missing metric never becomes a
 zero cost: a call that may have left is recorded at its bound (`cost_basis = bound`).
-The month's financial spend (`consumed + operator_spend`) therefore only grows.
+Both counters only grow; their sum includes reuse value and must never be
+labelled a second provider bill. The report derives that valuation from attempts.
 
 ### 4.5 A failing ledger refuses
 

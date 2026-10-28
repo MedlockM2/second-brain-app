@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
 from media_summarizer.core.models.media_artifact import ArtifactScope, MediaArtifactStatus
-from media_summarizer.core.services import budget_guard, engagement_service
+from media_summarizer.core.services import beta_budget, budget_guard, engagement_service
 from media_summarizer.core.services.artifact_service import (
     INTERNAL_ARTIFACT_TYPES,
     ArtifactGenerationDisabledError,
@@ -374,6 +374,9 @@ async def create_artifact(
             # Nothing was queued, so nothing is charged: the generation's provider
             # call is what the budget pays for, and a reuse makes none (R.2).
             response.status_code = status.HTTP_200_OK
+            await beta_budget.observe(
+                current_user.id, outcome="reused", operation_id=record.artifact_id, components=["generation"],
+            )
 
         # E1 of task-303: launching a generation is the strongest intent signal the
         # app has, and the wait is precisely when the user needs a way back — so the

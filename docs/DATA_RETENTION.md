@@ -49,6 +49,7 @@ explanation.
 | `user_push_tokens` | **90 days** since the device last registered, refreshed on every launch | the daily sweep in `workers/digest/scheduler.py`, Expo answering `DeviceNotRegistered`, sign-out, or account deletion (§4) |
 | `beta_budget` month counters | **400 days** after the end of their month | TTL on `ttl_epoch`, or account deletion (§4). Schema: `docs/BETA_BUDGET_CONTROL.md` |
 | `beta_budget` attempts | **400 days** after their close; **no TTL while open** | TTL on `ttl_epoch`, written only by the close, or account deletion (§4). An open attempt is closed by its worker or the 6-hour backstop, never by expiry |
+| `beta_budget` refusal/reuse observations | **400 days** after creation | Same partition and account-erasure path, TTL on `ttl_epoch`. No source content, prompt, URL, provider payload or login identity. Private operator exports must stay outside Git; see `docs/BETA_BUDGET_REPORTING.md` |
 
 `beta_budget` carries a clock too, and it does not bend the rule in §1 either: it
 is accounting about provider calls, not library data, and its clock only runs on

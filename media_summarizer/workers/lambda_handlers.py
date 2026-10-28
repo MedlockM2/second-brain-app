@@ -199,3 +199,11 @@ def ecb_rate_refresh_handler(event: dict[str, Any], context: Any) -> dict[str, A
 
     module = importlib.import_module("media_summarizer.workers.ecb_rate_refresh")
     return module.handle_event(event)
+
+
+def budget_audit_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    """Scheduled read-only audit; own role, no runtime secret or provider access."""
+    import importlib
+
+    module = importlib.import_module("media_summarizer.workers.budget_audit")
+    return module.handle_event(event)
