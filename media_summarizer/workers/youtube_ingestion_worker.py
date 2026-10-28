@@ -33,7 +33,7 @@ API -> orchestrator -> SQS -> this worker. The worker only consumes it:
 When the requested language is unavailable for a video, a language-aware actor
 answers ``error_category="language_not_available"``; the worker then retries once
 without ``language`` to get the video's default captions, and the task-192
-pipeline (detection + GPT-5-nano translation) brings the transcript to the user's
+pipeline (detection + LLM translation) brings the transcript to the user's
 reading_language downstream.
 
 Apify actor dialects

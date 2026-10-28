@@ -262,7 +262,7 @@ Three degradation levels on the Apify path, all of them non-fatal:
 | Actor supports `language`, video does **not** have it (`status="error"`, `error_category="language_not_available"`) | Retry **once** without `language` to take the video's default track; `transcription.language_fallback` INFO log | `language_supported=true`, `language_fallback=true` |
 | Configured actor has no `language` input at all (e.g. `scrape-creators`) | Request skipped, video default captions used; `transcription.language_request_unsupported` WARNING log naming the configured and language-aware actor IDs | `language_supported=false` |
 
-In the last two cases the task-192 pipeline (detection + GPT-5-nano translation) brings the transcript to the user's `reading_language`. Requesting a language is therefore a cost optimisation (one saved LLM call), never a correctness requirement.
+In the last two cases the task-192 pipeline (detection + LLM translation) brings the transcript to the user's `reading_language`. Requesting a language is therefore a cost optimisation (one saved LLM call), never a correctness requirement.
 
 Verified live against the Apify API on 2026-08-05 with `starvibe~youtube-video-transcript`: EN video + `language=en` → `en`; same EN video + `language=fr` → real French track; FR video + `language=fr` → `fr`; ES video + `language=es` → `es`; ES video + `language=ja` → `language_not_available`, fallback to the default track. Omitting `language` on that ES video returns Catalan, which is why the language is always sent when known. The same EN video run through the deployed `scrape-creators` actor asking `fr` returns `en` with `language_supported=false`, confirming the degradation path.
 
@@ -708,7 +708,7 @@ after the ingestion job is already completed, and only enqueues.
         |        2. decide translation
         |        3. read lock state; reserve + enqueue only if nobody did
         |
-        +--> transcript-translation worker translates (GPT-5-nano)
+        +--> transcript-translation worker translates (LLM_MODEL, gpt-6-luna)
         |        -> translated transcript in S3
         |
         +--> POST /api/artifacts                (generation)
@@ -722,7 +722,7 @@ after the ingestion job is already completed, and only enqueues.
 |---|---|
 | **Detect** | Prefer a reliable source tag when present (Deepgram `detected_language` / forced `language` stored in `transcription_metadata`, YouTube subtitle language, `<podcast:transcript language>`). Otherwise classify the text locally with **`langdetect`** (free, deterministic via `DetectorFactory.seed=0`). Persists `detected_language` (ISO 639-1) on `transcription_metadata`. |
 | **Decide** | Translate only when `detected_language != reading_language` (user preference from task-190) **and** the target is one of the 11 V1 languages (task-189: FR, EN, ES, DE, IT, PT, NL, JA, ZH, AR, HI). |
-| **Translate** | `gpt-5-nano-2025-08-07` via the existing OpenAI stack (task-189 owner decision). System prompt preserves oral register, paragraphs, timestamps and speaker labels. **No chunking** for V1 (400k-token window). |
+| **Translate** | The shared model of `core/services/llm_config.py` (`LLM_MODEL`, `gpt-6-luna`, Standard processing, `reasoning_effort` = `LLM_REASONING_EFFORT`), since the owner extended the task-72 decision to this step on 2026-10-27 (task-556); it ran on the GPT-5-nano of task-189 before. The task-189 prompt, sent as the `developer` message, preserves oral register, paragraphs, timestamps and speaker labels. **No chunking**: Luna's window is 1 050 000 tokens; what binds first is its 128 000-token output maximum, reasoning included (model page, read 2026-10-28). |
 | **Persist** | Translated transcript written to the same `TRANSCRIPT_BUCKET` under a deterministic key `…​.translated.<target>.<ext>` with S3 metadata `is-translated`, `translated-from`, `target-language`. |
 | **Downstream** | Only the reader: `/raw-content` serves the translated key once it exists. Artifact generation never reads it — it reads the original transcript and gets its output language from `parameters["language"]` (task-398). |
 
@@ -730,7 +730,7 @@ after the ingestion job is already completed, and only enqueues.
 
 Local `langdetect` is preferred over an LLM-based detection prompt because the most
 common path is "content already in the user's language" — local detection keeps that
-path **zero-cost** and reserves the paid GPT-5-nano call for transcripts that genuinely
+path **zero-cost** and reserves the paid LLM call for transcripts that genuinely
 need translating. This matches the task-189 benchmark's explicit guidance.
 
 ### Idempotence
@@ -746,8 +746,10 @@ transcript's sources plus `parameters` (reading language included).
 `translation.completed` / `translation.skipped` / `translation.cache_hit` /
 `translation.failed` structured logs carry: `source`, `detected_language`,
 `target_language`, `detection_method` (`source_tag` | `langdetect` | `unknown`),
-`model`, `prompt_tokens` / `completion_tokens` / `total_tokens`, `duration_ms`,
-`estimated_cost_usd`, and `translated` (bool).
+`model` (on `translation.completed`, the model the provider says answered),
+`prompt_tokens` / `cached_tokens` / `cache_write_tokens` / `completion_tokens`,
+`usage_estimated`, `duration_ms`, `estimated_cost_eur` (priced by `llm_pricing.py`,
+like every other LLM call), and `translated` (bool).
 
 ### Failure handling
 
@@ -759,7 +761,7 @@ translation, so a refused one fails nothing but itself (task-398).
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `TRANSLATION_LLM_MODEL` | `gpt-5-nano-2025-08-07` | Translation model (task-189). |
+| `LLM_MODEL` / `LLM_REASONING_EFFORT` | `gpt-6-luna` / `medium` | The shared model and effort of `llm_config.py` (task-556); there is no translation-specific model. |
 | `TRANSLATION_TIMEOUT_SECONDS` | `180` | Per-call timeout. |
 | `TRANSLATION_MAX_RETRIES` | `3` | Retry attempts before fallback. |
 | `TRANSLATION_BACKOFF_BASE_SECONDS` | `1.0` | Exponential backoff base. |
@@ -918,7 +920,7 @@ Additionally, `ensure_translated_transcript` logs `translation.completed` / `tra
 |---|---|---|
 | `TRANSCRIPT_TRANSLATION_QUEUE` | `transcript-translation-queue` | SQS queue name. |
 | `TRANSCRIPT_BUCKET` | `media-summarizer-transcripts` | S3 bucket for transcripts. |
-| `TRANSLATION_LLM_MODEL` | `gpt-5-nano-2025-08-07` | LLM model. |
+| `LLM_MODEL` / `LLM_REASONING_EFFORT` | `gpt-6-luna` / `medium` | Shared LLM model and effort (`llm_config.py`, task-556). |
 | `TRANSLATION_TIMEOUT_SECONDS` | `180` | Per-LLM-call timeout (shared). |
 | `TRANSLATION_MAX_RETRIES` | `3` | Retry attempts within the worker (shared). |
 | `TRANSLATION_IDEMPOTENCE_TABLE` | `translation_idempotence` | DynamoDB table for state machine (task-203). |
@@ -1173,7 +1175,7 @@ All artifact generation (flashcards, notes, quiz, summary_short) is handled by a
 | `LLM_REASONING_EFFORT` | `medium` | Sent explicitly as `reasoning_effort` (provider default, also what the task-72 models ran at). |
 | `LLM_MAX_COMPLETION_TOKENS` | `32000` | `max_completion_tokens`, reasoning included; the model's maximum is 128 000. Above OpenAI's 25 000 minimum for reasoning models, and kept low because the allowance weighs on the tokens-per-minute limit. Shared by the chat and every artifact. |
 
-No `temperature` is sent: the model page documents no sampling parameter. Every generator with a JSON schema sends it as Structured Outputs. The usage stored on an entry (`llm_usage`) carries the `model` the provider says answered and its `cache_write_tokens`; `llm_pricing.py` prices them at Luna's Standard rates ($0.10 input, $0.01 cached input, $0.125 cache write, $0.50 output per 1M tokens, doubled input/cache and 1.5x output above 272K prompt tokens — https://developers.openai.com/api/docs/pricing, read 2026-10-10). The transcript translation step is **not** covered: it keeps `TRANSLATION_LLM_MODEL` (task-189).
+No `temperature` is sent: the model page documents no sampling parameter. Every generator with a JSON schema sends it as Structured Outputs. The usage stored on an entry (`llm_usage`) carries the `model` the provider says answered and its `cache_write_tokens`; `llm_pricing.py` prices them at Luna's Standard rates ($0.10 input, $0.01 cached input, $0.125 cache write, $0.50 output per 1M tokens, doubled input/cache and 1.5x output above 272K prompt tokens — https://developers.openai.com/api/docs/pricing, read 2026-10-10). Since 2026-10-27 (task-556) the transcript translation step calls the same `LLM_MODEL` with the same `LLM_REASONING_EFFORT`, and its usage is priced by the same `llm_pricing.py`; it does not send `LLM_MAX_COMPLETION_TOKENS`, which would cut any translation longer than 32 000 tokens.
 
 **Runtime settings to retire.** The worker no longer reads `OPENAI_MODEL`, `SUMMARY_SHORT_LLM_MODEL`, `SUMMARY_DETAILED_LLM_MODEL`, `NOTES_LLM_MODEL`, `FLASHCARDS_LLM_MODEL`, `QUIZ_LLM_MODEL`, `LLM_TEMPERATURE` nor the `*_ARTIFACT_GENERATOR_VERSION` overrides. The runtime secret `media-summarizer-runtime-<env>` holds credentials only: the model is not a secret and is set in code, next to its price. `OPENAI_MODEL`, the only one of these keys it still held, was removed from dev and prod on 2026-10-10. The `providers.llm` item of `pricing_config` is descriptive (nothing reads it); neither `pricing_config-dev` nor `pricing_config-prod` stored a `providers` row on 2026-10-10. No data migration: entries generated before keep their own `generator_version`, which names their model.
 
@@ -1219,7 +1221,7 @@ The corpus the chat reads is built by the same `llm_corpus` functions as the art
 | task-175 | JobStatus vocabulary refactor (drop `RSS_RESOLVING` / `DOWNLOADING`, introduce `EXTRACTING`, drop progress percentage) | `backlog/tasks/task-175 - ...md` |
 | task-184 | LlamaParse fallback test seam — replace Lambda env-var toggle with per-request filename sentinel | `backlog/tasks/task-184 - ...md` |
 | task-185 | TikTok IP-block fallback test seam — sentinel URL + migration to Apify TikTok transcript actor | `backlog/tasks/task-185 - ...md` |
-| task-189 | Transcript translation provider selection (GPT-5-nano, 11 V1 languages, no chunking) | `docs/research/task-189-transcript-translation-benchmark/README.md` |
+| task-189 | Transcript translation provider selection (GPT-5-nano, 11 V1 languages, no chunking; model replaced by `gpt-6-luna` on 2026-10-27, task-556) | `docs/research/task-189-transcript-translation-benchmark/README.md` |
 | task-190 | Reading-language user preference (foundation for translation target language) | `backlog/tasks/task-190 - ...md` |
 | task-192 | Common source-agnostic transcript detect+translate step + mobile "Translated from XX" badge | `backlog/tasks/task-192 - ...md` |
 | task-200 | Async transcript translation worker for /raw-content cache miss (removes synchronous LLM from API Gateway path) | `backlog/tasks/task-200 - ...md` |

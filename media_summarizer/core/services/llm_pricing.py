@@ -12,6 +12,11 @@ model that is not listed falls back to the most expensive entry: overestimating 
 the safe direction for a figure the owner reads to decide whether the model holds.
 Only the model of `llm_config` is listed (task-439): a row for a model nothing
 calls is a price nobody re-checks.
+
+The full-text translation of a media is priced here too since it moved to that
+model (task-556), through `llm_client.read_usage`. Its figure is only logged
+(`translation.completed`): a translation is shared by every account that saved
+the media, so it is recorded against none of them.
 """
 
 from __future__ import annotations
@@ -45,7 +50,8 @@ class _ModelPrices(NamedTuple):
 # billed at 1.25x the uncached input rate on GPT-5.6 and later, instead of it, not
 # on top (https://developers.openai.com/api/docs/guides/prompt-caching).
 # Artifacts stay under the threshold -- MAX_FOLDER_CORPUS_TOKENS is 120 000 -- so
-# the long row is there for a request that is not an artifact, such as the chat.
+# the long row is there for a request that is not an artifact, such as the chat or
+# the translation of a very long text.
 _MODEL_PRICES: Dict[str, _ModelPrices] = {
     "gpt-6-luna": _ModelPrices(
         short=_Rates(input=0.10, cached_input=0.01, cache_write=0.125, output=0.50),

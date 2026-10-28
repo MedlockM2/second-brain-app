@@ -297,7 +297,7 @@ def _llm_rates(raw: Mapping[str, Any]) -> LlmRates:
         input=fresh,
         cached_input=_decimal(raw.get("cached_input")) or fresh,
         # A model with no distinct cache-write price bills written tokens as fresh
-        # input (GPT-5-nano in R.2.1).
+        # input (R.2.1).
         cache_write=_decimal(raw.get("cache_write")) or fresh,
         output=_decimal(raw.get("output")) or Decimal(0),
     )
@@ -355,8 +355,8 @@ class Tariffs:
     def llm_rates(self, model: str, input_tokens: int) -> LlmRates:
         """The rates of ``model`` for a request of ``input_tokens``.
 
-        Matched on the longest listed prefix (``gpt-5-nano-2025-08-07`` is
-        ``gpt-5-nano``). Above ``long_context_threshold`` the long-context row
+        Matched on the longest listed prefix, so a dated snapshot name reads the
+        row of its model. Above ``long_context_threshold`` the long-context row
         applies to the **whole** request.
         """
         models = self._family("openai")

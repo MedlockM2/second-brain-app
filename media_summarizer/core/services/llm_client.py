@@ -22,6 +22,12 @@ that asks for it -- the chat -- and reads the provider's server-sent events
 callback, lets the caller stop consuming, and tells a failure *before* the first
 text apart from one *after* it: only the former may be retried (Decision point 2),
 a text already shown is never taken back (Decision point 6).
+
+One call sends its own request: the full-text translation
+(``transcript_translation.py``), which must not carry the shared output ceiling and
+classifies every provider error itself for its retry budget. It still takes its
+model and reasoning effort from ``llm_config`` and prices its usage through
+:func:`read_usage` (task-556).
 """
 
 from __future__ import annotations
