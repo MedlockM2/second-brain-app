@@ -28,9 +28,12 @@ The step, which runs after a transcript is available:
    save's fixed ``reading_language`` (task-545) AND the target is one of the 11 V1
    languages validated in the task-189 benchmark.
 
-3. Translate with GPT-5-nano (task-189 owner decision) using a system prompt that
-   preserves oral register, paragraphs, timestamps and speaker labels. No
-   chunking for V1.
+3. Translate with the shared model of ``core/services/llm_config.py``
+   (``gpt-6-luna``, Standard processing): on 2026-10-27 the owner extended the
+   task-72 decision of 2026-10-10 to this step (task-556), which ran on the
+   GPT-5-nano of task-189 until then. The task-189 prompt preserves oral
+   register, paragraphs, timestamps and speaker labels. No chunking (see
+   :func:`_call_translation_llm` for why one call is enough).
 
 4. Persist the translated transcript in the same S3 bucket/structure as the
    originals, under a deterministic, idempotent key keyed on
@@ -50,10 +53,20 @@ import os
 import time
 from enum import Enum
 from io import BytesIO
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
+from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
+from media_summarizer.core.services.llm_client import (
+    LlmMessage,
+    estimate_usage,
+    read_usage,
+)
+from media_summarizer.core.services.llm_config import (
+    LLM_MODEL,
+    LLM_REASONING_EFFORT,
+)
 from media_summarizer.utils import s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
@@ -81,10 +94,6 @@ LLM_API_URL = os.environ.get(
 )
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# task-189 owner decision: GPT-5-nano via the existing OpenAI stack.
-TRANSLATION_MODEL = os.environ.get(
-    "TRANSLATION_LLM_MODEL", "gpt-5-nano-2025-08-07"
-)
 TRANSLATION_TIMEOUT_SECONDS = int(
     os.environ.get("TRANSLATION_TIMEOUT_SECONDS", "180")
 )
@@ -92,12 +101,6 @@ TRANSLATION_MAX_RETRIES = int(os.environ.get("TRANSLATION_MAX_RETRIES", "3"))
 TRANSLATION_BACKOFF_BASE_SECONDS = float(
     os.environ.get("TRANSLATION_BACKOFF_BASE_SECONDS", "1.0")
 )
-
-# Rough token estimate for observability / cost (4 chars per token, EU avg).
-_CHARS_PER_TOKEN = 4
-# GPT-5-nano pricing per task-189 benchmark (USD per 1M tokens).
-_INPUT_USD_PER_1M = 0.05
-_OUTPUT_USD_PER_1M = 0.40
 
 # 11 V1 languages validated by the task-189 benchmark (ISO 639-1 -> English name).
 V1_LANGUAGE_NAMES: Dict[str, str] = {
@@ -259,7 +262,10 @@ def build_translated_transcript_key(
 
 
 def _build_system_prompt(*, source_language: str, target_language: str) -> str:
-    """Translation system prompt from the task-189 README ("System Prompt")."""
+    """Translation prompt from the task-189 README ("System Prompt").
+
+    Sent as the ``developer`` message: see :func:`_call_translation_llm`.
+    """
     source_name = V1_LANGUAGE_NAMES.get(source_language, source_language)
     target_name = V1_LANGUAGE_NAMES.get(target_language, target_language)
     return (
@@ -283,10 +289,32 @@ async def _call_translation_llm(
     transcript: str,
     source_language: str,
     target_language: str,
-) -> Tuple[str, Dict[str, Any]]:
-    """Call GPT-5-nano once. Returns ``(translated_text, usage)``.
+) -> Tuple[str, ArtifactLlmUsage]:
+    """Call the shared model once. Returns ``(translated_text, usage)``.
 
-    No chunking for V1 (the 400k-token window covers any realistic transcript).
+    The request follows ``llm_config`` (task-556): ``LLM_MODEL`` and
+    ``LLM_REASONING_EFFORT``, Standard processing, no sampling parameter. Checked
+    on 2026-10-28 against https://developers.openai.com/api/docs/models/gpt-6-luna
+    and the Chat Completions reference: Chat Completions is a supported endpoint;
+    ``reasoning_effort`` accepts ``none`` to ``max``, ``medium`` being the default;
+    the model documents no ``temperature``; and "with o1 models and newer, use
+    developer messages" rather than system messages, hence the ``developer`` role.
+
+    No output ceiling is sent yet: TASK-549 adds the one of task-547 rule 11. The
+    shared ``LLM_MAX_COMPLETION_TOKENS`` is deliberately not reused -- 32 000
+    tokens would cut every translation longer than that -- so until then the
+    model's own maximum applies.
+
+    No chunking. Luna has a 1 050 000-token window and at most 128 000 output
+    tokens, reasoning included, which leaves 922 000 for the input: more than
+    240 minutes of audio, a 100-page document or an article (at most 2 MB of
+    HTML) produce. What binds first is the output: a translation is about as long
+    as its source, so a source text much above 100 000 tokens comes back cut
+    (``finish_reason: length``). A text file or a spreadsheet, bounded only by the
+    upload size, can exceed even the window, and the provider then refuses it.
+
+    The usage is priced by ``llm_pricing`` under the model the provider names,
+    like every other call (``llm_client.read_usage``).
     """
     if not OPENAI_API_KEY:
         # No key configured: three attempts would make three identical no-ops.
@@ -296,16 +324,20 @@ async def _call_translation_llm(
             refusal_reason=REFUSAL_AUTHENTICATION,
         )
 
-    system_prompt = _build_system_prompt(
-        source_language=source_language,
-        target_language=target_language,
-    )
+    messages: List[LlmMessage] = [
+        {
+            "role": "developer",
+            "content": _build_system_prompt(
+                source_language=source_language,
+                target_language=target_language,
+            ),
+        },
+        {"role": "user", "content": transcript},
+    ]
     payload: Dict[str, Any] = {
-        "model": TRANSLATION_MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": transcript},
-        ],
+        "model": LLM_MODEL,
+        "reasoning_effort": LLM_REASONING_EFFORT,
+        "messages": messages,
     }
     timeout = aiohttp.ClientTimeout(total=TRANSLATION_TIMEOUT_SECONDS)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -335,8 +367,11 @@ async def _call_translation_llm(
                 )
             result = await response.json()
             content = result["choices"][0]["message"]["content"]
-            usage = result.get("usage") or {}
-            return content, usage
+            answered_by = result.get("model") or LLM_MODEL
+            usage = result.get("usage")
+            if not usage:
+                return content, estimate_usage(messages, content or "", model=answered_by)
+            return content, read_usage({**usage, "model": answered_by})
 
 
 async def _translate_with_retry(
@@ -344,7 +379,7 @@ async def _translate_with_retry(
     transcript: str,
     source_language: str,
     target_language: str,
-) -> Tuple[str, Dict[str, Any]]:
+) -> Tuple[str, ArtifactLlmUsage]:
     """Translate with exponential backoff, spending it on transient failures only.
 
     The retry budget exists for failures the next second may fix. A permanent one
@@ -404,19 +439,6 @@ async def _translate_with_retry(
         refusal_reason=getattr(last_exc, "refusal_reason", None),
         provider_status=getattr(last_exc, "provider_status", None),
     )
-
-
-def _estimate_cost_usd(usage: Dict[str, Any], char_count: int) -> float:
-    """Best-effort cost estimate. Falls back to a char-based token estimate."""
-    prompt_tokens = usage.get("prompt_tokens")
-    completion_tokens = usage.get("completion_tokens")
-    if prompt_tokens is None or completion_tokens is None:
-        approx = max(1, char_count // _CHARS_PER_TOKEN)
-        prompt_tokens = approx
-        completion_tokens = approx
-    input_cost = (prompt_tokens / 1_000_000) * _INPUT_USD_PER_1M
-    output_cost = (completion_tokens / 1_000_000) * _OUTPUT_USD_PER_1M
-    return round(input_cost + output_cost, 6)
 
 
 class TranslationOutcome:
@@ -764,7 +786,7 @@ async def ensure_translated_transcript(
             detected_language=detected_language,
             target_language=normalized_target,
             detection_method=detection_method,
-            model=TRANSLATION_MODEL,
+            model=LLM_MODEL,
             translated=False,
             failure_kind=exc.failure_kind,
             detail=str(exc)[:300],
@@ -798,7 +820,6 @@ async def ensure_translated_transcript(
     )
 
     duration_ms = int((time.monotonic() - started) * 1000)
-    char_count = len(transcript_text or "")
     log_event(
         logger,
         logging.INFO,
@@ -808,12 +829,16 @@ async def ensure_translated_transcript(
         detected_language=detected_language,
         target_language=normalized_target,
         detection_method=detection_method,
-        model=TRANSLATION_MODEL,
-        prompt_tokens=usage.get("prompt_tokens"),
-        completion_tokens=usage.get("completion_tokens"),
-        total_tokens=usage.get("total_tokens"),
+        # The model the provider says answered, which is what the cost is read
+        # against.
+        model=usage.model,
+        prompt_tokens=usage.prompt_tokens,
+        cached_tokens=usage.cached_tokens,
+        cache_write_tokens=usage.cache_write_tokens,
+        completion_tokens=usage.completion_tokens,
+        usage_estimated=usage.usage_estimated,
         duration_ms=duration_ms,
-        estimated_cost_usd=_estimate_cost_usd(usage, char_count),
+        estimated_cost_eur=usage.cost_eur,
         translated=True,
     )
     return TranslationOutcome(

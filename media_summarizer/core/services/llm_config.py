@@ -4,15 +4,23 @@ Owner decision of 2026-10-10: OpenAI ``gpt-6-luna``, Standard processing, for th
 chat, every artifact type, the triage blurb and the re-translation of an existing
 artifact. It replaces the per-type split of task-72 (``gpt-5-nano`` for the short
 summary, ``gpt-5.4-nano`` elsewhere) and widens the choice task-430 had made for the
-chat alone. There is deliberately one variable, not one per type: a per-type knob is
-how the split this module removes came to exist.
+chat alone. On 2026-10-27 the owner extended it to the translation of a media's
+full text for the reader (task-556, ``core/services/transcript_translation.py``),
+which had its own GPT-5-nano setting from task-189 until then. There is
+deliberately one variable, not one per type: a per-type knob is how the split this
+module removes came to exist.
 
-What is *not* governed here: the transcript translation step (task-189, its own
-``TRANSLATION_LLM_MODEL``), which turns a raw transcript into the reading language
-before any artifact exists, and the speech synthesis of the podcast (task-386).
+The full-text translation reads ``LLM_MODEL`` and ``LLM_REASONING_EFFORT`` but not
+``LLM_MAX_COMPLETION_TOKENS``: a translation is as long as its source, so a fixed
+32 000 would cut every long one. Its ceiling is its own, 1.5 times its input under
+task-547 rule 11 (``transcript_translation._call_translation_llm`` says where that
+stands).
+
+What is *not* governed here: the speech synthesis of the podcast (task-386).
 
 Parameters, from https://developers.openai.com/api/docs/models/gpt-6-luna
-(read 2026-10-10):
+(read 2026-10-10; on the re-read of 2026-10-28 for task-556 the reasoning values,
+the 128 000 output maximum and the absence of sampling parameters were unchanged):
 
 - **Reasoning.** ``reasoning_effort`` accepts ``none``, ``low``, ``medium``,
   ``high``, ``xhigh`` and ``max``; ``medium`` is the provider default. It is sent

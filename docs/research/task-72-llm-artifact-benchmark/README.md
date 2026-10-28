@@ -14,6 +14,12 @@ LLM commun au futur chat ; voir aussi la décision de
 benchmark d'avril et ne constituent pas une évaluation comparative de Luna.
 **Validated at**: 2026-10-10
 
+**Extension du 2026-10-27 (task-556).** L'owner étend ce choix à la traduction du texte complet
+d'un média (transcription ou document, pour la lecture), qui appelait jusque-là
+`gpt-5-nano-2025-08-07` (décision task-189). Elle appelle désormais le même `gpt-6-luna` en mode
+Standard, lu dans `media_summarizer/core/services/llm_config.py`, et son coût est calculé par
+`llm_pricing.py`. Ce fait daté s'ajoute à la décision ci-dessus sans la modifier.
+
 ---
 
 # Task 72: LLM Benchmark for Artifact Generation

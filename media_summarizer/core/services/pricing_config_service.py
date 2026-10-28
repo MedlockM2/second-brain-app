@@ -183,15 +183,13 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         "unstructured": {"page": {"usd": "0.015"}, "sheet": {"usd": "0.015"}},
         # USD per 1M tokens, Standard processing. Above the threshold the long rows
         # apply to the whole request. A model with no cache-write price bills
-        # written tokens as fresh input.
+        # written tokens as fresh input. Only `llm_config.LLM_MODEL` is listed:
+        # every LLM call uses it, the full-text translation included (task-556).
         "openai": {
             "gpt-6-luna": {
                 "long_context_threshold": 272000,
                 "short": {"input": "0.10", "cached_input": "0.01", "cache_write": "0.125", "output": "0.50"},
                 "long": {"input": "0.20", "cached_input": "0.02", "cache_write": "0.25", "output": "0.75"},
-            },
-            "gpt-5-nano": {
-                "short": {"input": "0.05", "cached_input": "0.005", "output": "0.40"},
             },
         },
         # Price of one result, Free plan (the dearest listed), keyed by the default
@@ -268,8 +266,9 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
             "cost_per_minute_eur": 0.00664,
         },
         # One model for the chat, every artifact, the blurbs and their
-        # re-translation (task-439). Descriptive only: the model called is
-        # `llm_config.LLM_MODEL`, its price lives in `llm_pricing`.
+        # re-translation (task-439), and the full-text translation (task-556).
+        # Descriptive only: the model called is `llm_config.LLM_MODEL`, its
+        # price lives in `llm_pricing`.
         "llm": {
             "model": "gpt-6-luna",
             "processing": "standard",
