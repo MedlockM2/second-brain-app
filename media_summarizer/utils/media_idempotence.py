@@ -4,7 +4,8 @@ The global content ledger: who owns a content, and where its text lives.
 Canonical schema (MEDIA_IDEMPOTENCE_TABLE, default "media_idempotence"):
 - PK: media_key (S)
 - Attributes: status (reserved|processed|failed), job_id, created_at, updated_at,
-  transcript_s3_key, source_language, budget_value_nano_eur (task-549, rule 12)
+  transcript_s3_key, source_language, budget_value_nano_eur and
+  preview_value_<language> (task-549, rule 12)
 
 `failed` is a *record*, not a lock. `reserved` and `processed` both mean "a job
 owns this content, do not start a second one"; `failed` means the opposite -- the
@@ -87,6 +88,60 @@ def source_language_of(row: Optional[Dict[str, Any]]) -> Optional[str]:
     if not row:
         return None
     return (str(row.get(ATTR_SOURCE_LANGUAGE) or "")).strip() or None
+
+
+#: Prefix of the settled value of the content's preview in one reading language
+#: (``preview_value_fr``): a preview is generated per language, and another account
+#: saving the content is charged the one in its own language when it exists, since
+#: that is the preview it is given (rule 12). One flat attribute per language, so
+#: each is written with a plain ``SET`` and never overwrites another language's.
+ATTR_PREVIEW_VALUE_PREFIX = "preview_value_"
+
+
+def preview_value_of(row: Optional[Dict[str, Any]], language: Optional[str]) -> int:
+    """The settled value of the content's preview in ``language``, 0 when none."""
+    lang = (language or "").strip().lower()
+    if not row or not lang:
+        return 0
+    try:
+        return max(0, int(row.get(f"{ATTR_PREVIEW_VALUE_PREFIX}{lang}") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def record_preview_value(*, media_key: Optional[str], language: Optional[str], nano_eur: int) -> bool:
+    """Keep the settled cost of the content's preview in ``language`` (rule 12).
+
+    Written once per language (``if_not_exists``): the first preview generated in a
+    language is the one later saves in that language reuse. Conditional on the row
+    existing; an error is logged and swallowed, the settlement already happened.
+    """
+    identity_key = (media_key or "").strip()
+    lang = (language or "").strip().lower()
+    amount = int(nano_eur or 0)
+    if not identity_key or not lang or amount <= 0:
+        return False
+    attribute = f"{ATTR_PREVIEW_VALUE_PREFIX}{lang}"
+    try:
+        session = database_async.get_session()
+        async with session.resource(
+            "dynamodb",
+            region_name=database_async.AWS_REGION,
+        ) as dynamodb:
+            table = await dynamodb.Table(MEDIA_IDEMPOTENCE_TABLE)
+            await table.update_item(
+                Key={"media_key": identity_key},
+                UpdateExpression="SET #p = if_not_exists(#p, :v), updated_at = :u",
+                ExpressionAttributeNames={"#p": attribute},
+                ExpressionAttributeValues={":v": amount, ":u": _now_iso()},
+                ConditionExpression="attribute_exists(media_key)",
+            )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        logger.warning("Could not record the preview value of media_key=%s: %s", identity_key, exc)
+        return False
+    return True
 
 
 def budget_value_of(row: Optional[Dict[str, Any]]) -> int:

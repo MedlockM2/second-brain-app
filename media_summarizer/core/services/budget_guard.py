@@ -75,12 +75,11 @@ from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
 
-#: The steps of an import whose settled cost is kept with the content for rule 12:
-#: what another account saving the processed media is charged. The preview is not
-#: among them: a save by another account gets its own preview, generated and
-#: charged under its own scope, or copied for free when the artifact already
-#: exists (``review_blurb_service``); counting the first account's preview in the
-#: value as well would charge that account's call to the second on top of its own.
+#: The steps of an import whose settled cost is accumulated on the content for rule
+#: 12: what another account saving the processed media is charged. The preview and
+#: the translation are kept apart, per reading language, because they are produced
+#: per language: another account is charged the ones that exist in its own language
+#: — the ones it is then given — and pays the real calls of those that do not.
 IMPORT_VALUE_COMPONENTS = frozenset(
     {
         Component.COLLECTION.value,
@@ -814,9 +813,11 @@ async def charge_content_reuse(
 ) -> int:
     """Charge a save of content processed for another account (rule 12).
 
-    The new save is debited the settled value kept with the content — its import,
-    and the translation into this save's reading language when one is already
-    done — as if it had been processed for it, without any provider call. Refused
+    The new save is debited the settled value kept with the content — its
+    acquisition, and the preview and the translation in this save's reading
+    language when they already exist, which this save is then given — as if it
+    had been processed for it, without any provider call. What does not exist yet
+    in its language is generated for it and paid on its real calls. Refused
     like a new processing when the month does not cover it
     (:class:`BudgetRefusedError`). The caller has already established that this
     account does not hold the content yet (task-281: re-filing is free).
@@ -854,6 +855,8 @@ async def charge_content_reuse(
             lock = None
         if lock is not None and lock.status == TranslationStatus.DONE and lock.budget_value_nano_eur:
             value += int(lock.budget_value_nano_eur)
+
+    value += media_idempotence.preview_value_of(dict(ledger_row) if ledger_row else None, language)
 
     if value <= 0:
         return 0
@@ -945,18 +948,18 @@ def chat_turn_admission_line(ctx: PricingContext, *, estimated_input_tokens: int
     )
 
 
-def translation_max_completion_tokens(ctx: PricingContext, messages: Sequence[Mapping[str, Any]]) -> int:
-    """The ``max_completion_tokens`` a full-text translation sends (rule 11).
+def translation_output_reserve(ctx: PricingContext, messages: Sequence[Mapping[str, Any]]) -> int:
+    """Output tokens one full-text translation call is reserved for (rule 11, amended).
 
-    1.5 times the tokens of the request, clamped at the model's output maximum.
-    The tokens are the estimate of the request sent (the provider counts them only
-    after the call); the reservation bounds the input with the byte count instead.
+    1.5 times the estimated tokens of the request. Not sent to the provider: the
+    real output is settled on, even past this reservation (rule 8).
     """
-    return beta_budget.translation_max_completion_tokens(ctx, estimated_input_tokens(messages))
+    return beta_budget.translation_output_reserve(ctx, estimated_input_tokens(messages))
 
 
 def translation_call_line(ctx: PricingContext, *, messages: Sequence[Mapping[str, Any]]) -> ReservationLine:
-    """Bound of one full-text translation call: the request's bytes, then its ceiling."""
+    """Reservation of one full-text translation call: the request's bytes as input,
+    1.5 times its estimated tokens as output (an estimate, not a cap)."""
     input_bound = request_input_tokens(messages)
     if input_bound > LLM_MODEL_MAX_INPUT_TOKENS:
         from media_summarizer.core.models.beta_budget import ItemLimitExceeded
@@ -964,7 +967,7 @@ def translation_call_line(ctx: PricingContext, *, messages: Sequence[Mapping[str
         raise ItemTooLargeError(
             ItemLimitExceeded(quantity="input_tokens", measured=input_bound, limit=LLM_MODEL_MAX_INPUT_TOKENS)
         )
-    output = translation_max_completion_tokens(ctx, messages)
+    output = translation_output_reserve(ctx, messages)
     return ReservationLine(
         component=Component.TRANSLATION,
         kind=ProviderKind.LLM,
@@ -972,6 +975,8 @@ def translation_call_line(ctx: PricingContext, *, messages: Sequence[Mapping[str
         model=LLM_MODEL,
         quantities={"input_tokens": input_bound, "output_tokens": output},
         bound_usd=beta_budget.llm_bound_usd(ctx, model=LLM_MODEL, input_tokens=input_bound, output_tokens=output),
+        # The output is an estimate: the call is not capped at it.
+        measured=False,
     )
 
 

@@ -140,8 +140,9 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
             "document_pages": 100,
             "spreadsheet_sheets": 30,
         },
-        # A full-text translation sends `max_completion_tokens` = 1.5 x its input
-        # tokens, and is bounded with the same figure (rule 11).
+        # The output a full-text translation is reserved for, as a multiple of its
+        # input tokens (rule 11, as amended on 2026-10-28): a reservation estimate,
+        # never sent to the provider. The real output is settled on (rule 8).
         "translation_output_ratio": "1.5",
         # Text an import will produce, estimated from its upstream measure, to
         # reserve its blurb and its translation with it (rule 10).

@@ -283,11 +283,11 @@ async def charge_reused_content(
     The pipeline being skipped is not the same statement as the save being free:
     an account saving a media processed for somebody else is debited the settled
     value of that processing (its collection, transcription or parsing), as if it
-    had been done for it, without any provider call — and its translation into this
-    save's reading language when one already exists (rule 12 of the task-547
-    decision, ``budget_guard.charge_content_reuse``). The preview is not part of
-    that value: this save gets its own, generated and charged under its own scope
-    by ``finalize_deduplicated_save``.
+    had been done for it, without any provider call — plus the preview and the
+    translation in this save's reading language when they already exist, which this
+    save then reuses (rule 12 of the task-547 decision,
+    ``budget_guard.charge_content_reuse``). In another language they do not exist
+    yet: they are generated for this save and paid on their real calls.
 
     Free when this account already holds the content, in any folder (task-281):
     re-filing is organising, not processing.

@@ -4,7 +4,7 @@ title: Faire passer les traitements fournisseurs par le contrôle budgétaire co
 status: To Do
 assignee: []
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-28 14:04'
+updated_date: '2026-10-28 15:52'
 labels:
   - backend
   - feature
@@ -106,6 +106,12 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 - Artefact partagé entre comptes : il ne fait aucun appel fournisseur et n'est donc plus facturé (R.2). Il l'était en minutes avant (task-394). À confirmer.
 - Refus asynchrones : pour une URL dont la durée n'est connue que dans le worker (podcast, YouTube, TikTok, Instagram, X), le refus arrive après la sauvegarde, sous forme de tuile en échec, et non à la soumission. La soumission elle-même n'est refusée que si le mois est épuisé.
 - `POST /api/podcasts/submit` n'a aucun client dans le dépôt. Faut-il le supprimer (tâche de nettoyage séparée) ?
+
+**Corrections de l'owner du 2026-10-28 (après revue).**
+- Règle 11 amendée : 1,5 × l'entrée est la réservation de sortie d'une traduction, plus un plafond. Aucun `max_completion_tokens` n'est envoyé ; seul le maximum du modèle (128 000) s'applique et le dépassement est réglé sur le réel (règle 8). Amendement daté ajouté sous Owner Validation dans `docs/research/task-547-beta-budget-control/README.md`. Renommage : `translation_max_completion_tokens` → `translation_output_reserve`.
+- Règle 12 : Bob paie l'acquisition, plus l'aperçu et la traduction d'Alice lorsqu'ils existent dans sa langue de lecture, car ce sont eux qu'il reçoit. La valeur de l'aperçu est conservée par langue sur la ligne du contenu (`media_idempotence.preview_value_<langue>`, écrite par le worker d'artefacts au règlement). Dans une autre langue, l'aperçu et la traduction sont générés pour Bob et payés au réel.
+- Sauvegarde pendant le traitement d'un autre compte : en attente de décision (voir la réponse à l'owner).
+- Artefacts régénérés à chaque demande, aperçu excepté : à traiter dans une tâche dédiée.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

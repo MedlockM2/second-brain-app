@@ -47,9 +47,9 @@ to be translated.
 **Beta budget** (task-549, rules 6, 10 and 11 of the task-547 decision). Every
 dispatch names its payer (:class:`TranslationPayer`): the account whose import
 reserved the translation, or the account whose save asks for it later. Each call
-to the provider is a try of the payer's ``translation`` step, sent with
-``max_completion_tokens`` = 1.5 × its input (at most the model's 128 000) and
-bounded by that ceiling and the request's bytes. A translation stored settles on
+to the provider is a try of the payer's ``translation`` step, reserved for the
+request's bytes and 1.5 × its input as output (rule 11 as amended on 2026-10-28:
+a reservation, not a cap — the call carries no output ceiling of its own). A translation stored settles on
 the provider's usage, and that settled value is kept on the translation lock for
 rule 12; a call that failed or whose text could not be stored is released. A try
 the budget refuses ends the translation as a transient failure: the reader is
@@ -340,7 +340,6 @@ def _translation_messages(*, transcript: str, source_language: str, target_langu
 async def _call_translation_llm(
     *,
     messages: List[LlmMessage],
-    max_completion_tokens: int,
 ) -> Tuple[str, ArtifactLlmUsage]:
     """Call the shared model once. Returns ``(translated_text, usage)``.
 
@@ -352,13 +351,14 @@ async def _call_translation_llm(
     the model documents no ``temperature``; and "with o1 models and newer, use
     developer messages" rather than system messages, hence the ``developer`` role.
 
-    ``max_completion_tokens`` is rule 11 of the task-547 decision: 1.5 times the
-    tokens of the request, at most the model's 128 000 output tokens (reasoning
-    included), computed by ``budget_guard.translation_max_completion_tokens`` —
-    the same figure the call's reservation is bounded with. The shared
-    ``LLM_MAX_COMPLETION_TOKENS`` is deliberately not reused: 32 000 tokens would
-    cut every translation longer than that. An answer cut by this ceiling
-    (``finish_reason: length``) is stored as it is and logged.
+    No ``max_completion_tokens`` is sent: only the model's own maximum (128 000
+    output tokens, reasoning included) bounds the answer. The owner amended rule 11
+    of the task-547 decision on 2026-10-28: its 1.5 × input is what the call is
+    *reserved* for, never a cap on the generation, which would cut a short text
+    whose reasoning ate the allowance. The shared ``LLM_MAX_COMPLETION_TOKENS`` is
+    not reused either: 32 000 tokens would cut every long translation. An answer
+    the model maximum cut (``finish_reason: length``) is stored as it is and
+    logged.
 
     No chunking. Luna has a 1 050 000-token window and at most 128 000 output
     tokens, reasoning included, which leaves 922 000 for the input: more than
@@ -383,7 +383,6 @@ async def _call_translation_llm(
         "model": LLM_MODEL,
         "reasoning_effort": LLM_REASONING_EFFORT,
         "messages": messages,
-        "max_completion_tokens": max_completion_tokens,
     }
     timeout = aiohttp.ClientTimeout(total=TRANSLATION_TIMEOUT_SECONDS)
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -419,9 +418,8 @@ async def _call_translation_llm(
                 log_event(
                     logger,
                     logging.WARNING,
-                    "translation.output_ceiling_reached",
-                    "Translation cut by its output ceiling (1.5 x input); stored as is",
-                    max_completion_tokens=max_completion_tokens,
+                    "translation.output_limit_reached",
+                    "Translation cut by the model's output maximum; stored as is",
                 )
             usage = result.get("usage")
             if not usage:
@@ -429,8 +427,8 @@ async def _call_translation_llm(
             return content, read_usage({**usage, "model": answered_by})
 
 
-async def _start_translation_call(payer: Optional[TranslationPayer], messages: List[LlmMessage]) -> Tuple[BudgetCall, int]:
-    """Take the right to send one translation call; returns it with its output ceiling.
+async def _start_translation_call(payer: Optional[TranslationPayer], messages: List[LlmMessage]) -> BudgetCall:
+    """Take the right to send one translation call.
 
     The translation lock is the exclusive claim on this couple, so the budget's
     lease is zero. Raises ``BudgetRefusedError``: nothing may be sent, and a
@@ -438,15 +436,13 @@ async def _start_translation_call(payer: Optional[TranslationPayer], messages: L
     """
     if payer is None:
         raise BudgetRefusedError(budget_guard.BudgetRefusal.BUDGET_UNAVAILABLE)
-    ctx = await budget_guard.pricing()
-    call = await budget_guard.start(
+    return await budget_guard.start(
         payer.user_id,
         operation_id=payer.operation_id,
         component=Component.TRANSLATION,
         line=lambda c: budget_guard.translation_call_line(c, messages=messages),
         lease=timedelta(0),
     )
-    return call, budget_guard.translation_max_completion_tokens(ctx, messages)
 
 
 async def _translate_with_retry(
@@ -475,12 +471,9 @@ async def _translate_with_retry(
     )
     last_exc: Optional[Exception] = None
     for attempt in range(1, TRANSLATION_MAX_RETRIES + 1):
-        call, max_completion_tokens = await _start_translation_call(payer, messages)
+        call = await _start_translation_call(payer, messages)
         try:
-            text, usage = await _call_translation_llm(
-                messages=messages,
-                max_completion_tokens=max_completion_tokens,
-            )
+            text, usage = await _call_translation_llm(messages=messages)
             return text, usage, call
         except BaseException as exc:  # noqa: BLE001 - classified below
             answered = getattr(exc, "provider_status", None) is not None

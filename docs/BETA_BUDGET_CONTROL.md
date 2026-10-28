@@ -43,7 +43,7 @@ account on minutes; its per-item limit still applies.
 | `period` | `"calendar_month_utc"` | The only period implemented. Another value is logged (`beta_budget.config_unsupported`) and ignored. |
 | `carry_over` | `false` | No carry-over: each month's counter starts from the full budget. Same handling as `period`. |
 | `item_limits` | 240 audio minutes, 100 document pages, 30 spreadsheet sheets | Above them, one item is refused as `item_too_large` (rule 2). |
-| `translation_output_ratio` | `"1.5"` | `max_completion_tokens` of a full-text translation, as a multiple of its input tokens (rule 11). |
+| `translation_output_ratio` | `"1.5"` | Output a full-text translation is reserved for, as a multiple of its input tokens (rule 11, amended 2026-10-28: a reservation, never sent as a cap). |
 | `estimated_text_tokens_per_audio_minute`, `estimated_text_tokens_per_document_page` | 200, 700 | Upstream estimate of the text an import produces, to reserve its blurb and translation with it (rule 10). |
 | `hold_expiry_minutes` | 360 | Backstop after which an attempt still open is released (§3.5). |
 
@@ -288,7 +288,7 @@ reserved, never a provisional minimum (rule 3).
 | `document_line(unit="page")` | pages (PDF, images = 1, TIFF frames, PPTX slides, DOCX always unknown) | 100 pages | 100 pages reserved |
 | `document_line(unit="sheet")` | XLSX sheets | 30 sheets | 30 sheets reserved |
 | `llm_line` | complete request tokens, output = `max_completion_tokens` sent | `max_input_tokens` given by the caller | `max_input_tokens` reserved |
-| `translation_line` | input tokens; output = `translation_max_completion_tokens` (1.5 ×, at most the model's 128 000) | output ≤ 1.5 × input | estimated with `estimated_text_tokens` at import |
+| `translation_line` | input tokens; output = `translation_output_reserve` (1.5 ×, at most the model's 128 000), an estimate the call is not capped at | — | estimated with `estimated_text_tokens` at import |
 | `apify_line` | one result of the actor | one result per run | n/a (fixed price) |
 | `x_post_line` | one post | one post | n/a (fixed price) |
 
@@ -395,8 +395,8 @@ lives in `core/services/budget_guard.py`; its vocabulary:
 | **Preview** (`review_blurb`) | OpenAI, `llm_call_line` (request bytes, output 32 000) | with its import (operation = library row) | `artifact_generator/worker`: claims the import's attempt, or reserves its own (a deduplicated save, a backfill). Released `not_needed` by `review_blurb_service` when no generation is queued (preview exists, copied, impossible) |
 | **Generations** (summary, notes, cards, quiz, folder) | OpenAI, `llm_call_line` | `POST /api/artifacts` prechecks; the worker admits from the request it sends | settled on the usage once the artifact is stored; provider error → zero; other failure → bound; invalid answer → its usage |
 | **Chat** | OpenAI stream, `chat_turn_admission_line` then `llm_call_line` per retry | `chat_service.send_turn`, before the turn is written, from the snapshot estimate turned back into bytes | `chat_worker`: one try per provider call; text shown (completed, stopped, cut, interrupted) → settled on the usage, estimated when the stream lost its usage chunk; nothing shown → released. A failed dispatch or a lost turn releases the operation (`release_turn_budget`) |
-| **Full-text translation** | OpenAI, `translation_call_line`, `max_completion_tokens` = 1.5 × input, at most 128 000 | with its import; later, by the save that asks for it (`/raw-content`, the search worker) | the message names its payer (`TranslationPayer`): the first save reading in that language, the submitter's import first. One try per attempt of `_translate_with_retry`; settled once the text is stored, and the settled value written on the translation lock (rule 12); a refusal keeps the original text (transient failure). Unneeded parts released `not_needed` (`ingestion_translation_service`, worker) |
-| **Content another account processed** (rule 12) | none | `durable_media_service.charge_reused_content` on every deduplicated save (URL orchestrator, in-app podcast search) | `charge_reuse` of the value kept on `media_idempotence.budget_value_nano_eur` (collection, transcription, parsing) plus the translation lock's value in the save's reading language; refused → the row is withdrawn and the request answers the refusal. Free when the account already holds the media (task-281) |
+| **Full-text translation** | OpenAI, `translation_call_line`: reserved at 1.5 × input as output; no output ceiling sent, only the model's 128 000 applies | with its import; later, by the save that asks for it (`/raw-content`, the search worker) | the message names its payer (`TranslationPayer`): the first save reading in that language, the submitter's import first. One try per attempt of `_translate_with_retry`; settled once the text is stored, and the settled value written on the translation lock (rule 12); a refusal keeps the original text (transient failure). Unneeded parts released `not_needed` (`ingestion_translation_service`, worker) |
+| **Content another account processed** (rule 12) | none | `durable_media_service.charge_reused_content` on every deduplicated save (URL orchestrator, in-app podcast search) | `charge_reuse`, in one conditional write, of the value kept with the content: `media_idempotence.budget_value_nano_eur` (collection, transcription, parsing), plus `preview_value_<language>` and the translation lock's value in the save's reading language when they exist — the preview and the translation this save is then given. In another language they are generated for this save and paid on their real calls. Refused → the row is withdrawn and the request answers the refusal. Free when the account already holds the media (task-281) |
 | **Import end** | — | — | `media_completed_worker._close_import_budget`: failure → `release_open`; success → `settle_collections`, `release_unused_acquisition` |
 | Reading, organising, search (Algolia), digest, exports | no provider call | never | free |
 
@@ -418,10 +418,6 @@ TASK-550.
 - **Watchers.** A save of a media still being processed for another account is
   charged the value settled at that moment (rule 12), usually little or nothing: the
   value is only complete once the processing is.
-- **Preview of a reused content.** The value charged under rule 12 leaves out the
-  first account's preview: the new save gets its own preview, charged when it is
-  generated, or copied for free when the artifact already exists. In the latter case
-  the operator absorbs the preview's cost.
 - **Shared generations.** An artifact reused across accounts makes no provider call
   and is not charged (R.2); before task-549 it was charged in minutes (task-394).
 - **Bounds that are estimates.** The preview and the translation reserved with an
@@ -429,10 +425,12 @@ TASK-550.
   estimates; the request really sent is settled on its real cost, even past the budget
   (rule 8). The LLM input bound of every measured call is the request's UTF-8 bytes,
   never below the tokens billed.
-- **Partial translation.** A translation cut by its 1.5 × ceiling (`finish_reason:
-  length`) is stored and settled as it is, and logged
-  (`translation.output_ceiling_reached`). The ceiling counts reasoning tokens: on a
-  short input it may cut the translation. Not measured on Luna; an owner question.
+- **Translation longer than reserved.** The output reserved for a translation
+  (1.5 × its input) is an estimate, not a cap (rule 11 as amended on 2026-10-28):
+  a translation whose reasoning and text exceed it is settled on its real usage,
+  past the reservation if need be (rule 8). Only the model maximum (128 000 output
+  tokens) can cut one; it is then stored as it is and logged
+  (`translation.output_limit_reached`).
 - **Asynchronous refusals.** A URL whose length is only known in its worker (podcast,
   YouTube, TikTok, Instagram, X) is refused there, after the save: the item shows a
   failed tile with the budget code instead of an error at submission. The submission

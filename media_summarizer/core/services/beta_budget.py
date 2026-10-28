@@ -577,14 +577,15 @@ def llm_line(
     )
 
 
-def translation_max_completion_tokens(ctx: PricingContext, input_tokens: int) -> int:
-    """``max_completion_tokens`` of a full-text translation: 1.5 × its input (rule 11).
+def translation_output_reserve(ctx: PricingContext, input_tokens: int) -> int:
+    """Output tokens a full-text translation is reserved for: 1.5 × its input (rule 11).
 
-    Sent with every translation call, and the same figure its reservation is
-    bounded with, so the bound and the provider's ceiling cannot disagree. Never
-    above the model's own output maximum (128 000 tokens on Luna, reasoning
-    included): past about 85 300 input tokens the ratio would ask for a ceiling the
-    provider refuses, so the model maximum is sent and reserved instead (task-549).
+    A reservation figure only, as the owner amended rule 11 on 2026-10-28: nothing
+    caps the generation at it, the call is not sent a ``max_completion_tokens`` of
+    its own and only the model's output maximum applies. A translation longer than
+    this, reasoning included, is settled on its real usage, past the reservation if
+    need be (rule 8). Never above that model maximum (128 000 tokens on Luna), which
+    the output cannot exceed anyway.
     """
     ratio_ceiling = max(1, ceil(Decimal(max(0, input_tokens)) * ctx.formula.translation_output_ratio))
     return min(ratio_ceiling, LLM_MODEL_MAX_OUTPUT_TOKENS)
@@ -603,7 +604,7 @@ def translation_line(
     :func:`estimated_text_tokens`), or later, when a translation is asked again,
     from the text measured before the call.
     """
-    output = translation_max_completion_tokens(ctx, input_tokens)
+    output = translation_output_reserve(ctx, input_tokens)
     tokens = max(1, input_tokens)
     return ReservationLine(
         component=Component.TRANSLATION,

@@ -97,6 +97,30 @@ def _budget_step(artifact_type: MediaArtifactType, body: Dict[str, Any], artifac
     return Component.GENERATION, f"artifact:{artifact_id}"
 
 
+async def _keep_preview_value(body: Dict[str, Any], consumed: int) -> None:
+    """Keep a preview's settled cost with its content, per language (rule 12).
+
+    Another account saving this content in the same reading language is given this
+    preview and charged this value. Best effort: the settlement already happened.
+    """
+    from media_summarizer.utils import media_idempotence
+    from media_summarizer.utils import user_media as user_media_store
+
+    try:
+        record = await user_media_store.get_user_media(
+            str(body.get("user_id") or ""), str(body.get("scope_id") or "")
+        )
+    except Exception:  # noqa: BLE001 - without the row the value is simply not kept
+        return
+    if record is None:
+        return
+    await media_idempotence.record_preview_value(
+        media_key=record.media_key,
+        language=(body.get("parameters") or {}).get("language"),
+        nano_eur=consumed,
+    )
+
+
 async def _usage_cost(usage: Optional[ArtifactLlmUsage]) -> Optional[MeasuredCost]:
     if usage is None:
         return None
@@ -298,7 +322,9 @@ async def process_message(message: Dict[str, Any]) -> None:
             await call.release(operator_cost=usage_cost)
             raise
         if usage_cost is not None:
-            await call.settle(usage_cost, metric_source=budget_guard.llm_metric_source(llm_usage))
+            consumed = await call.settle(usage_cost, metric_source=budget_guard.llm_metric_source(llm_usage))
+            if consumed and component == Component.REVIEW_BLURB:
+                await _keep_preview_value(body, consumed)
 
     except BudgetBusyError:
         log_event(
