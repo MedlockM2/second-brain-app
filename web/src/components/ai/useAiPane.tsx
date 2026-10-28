@@ -445,6 +445,13 @@ function OpenArtifact({
     artifact.status === "failed" ||
     contentError?.code === "artifact_failed"
   ) {
+    const failure = artifact.status === "failed" ? artifact : {
+      error_code: contentError?.details?.artifact_error_code as string | null,
+      error_params: contentError?.details?.error_params as Record<string, unknown> ?? {},
+    };
+    const retryable = artifact.status === "failed"
+      ? artifact.retryable
+      : contentError?.details?.retryable === true;
     return (
       <div className="state-card" role="alert">
         <Icon name="alert-circle-outline" />
@@ -452,41 +459,41 @@ function OpenArtifact({
           <div style={{ fontWeight: 600 }}>
             {t("artifact.generationFailedTitle")}
           </div>
-          <p className="small subtle">{artifactFailureMessage(contentError?.code === "artifact_failed" ? {
-            error_code: contentError.details?.artifact_error_code as string | null,
-            error_params: contentError.details?.error_params as Record<string, unknown> ?? {},
-          } : artifact)}</p>
-          {refusal && (
-            <div className="banner-err" role="alert">
-              {refusal}
-            </div>
+          <p className="small subtle">{artifactFailureMessage(failure)}</p>
+          {refusal && <div className="banner-err" role="alert">{refusal}</div>}
+          {retryable && (
+            <button
+              type="button"
+              className="btn primary"
+              style={{ marginTop: 12 }}
+              disabled={regenerating}
+              aria-label={t("artifact.regenerateA11y")}
+              onClick={async () => {
+                setRegenerating(true);
+                const accepted = await onRegenerate();
+                if (accepted) {
+                  setContentError(null);
+                  setContent(null);
+                  setFailed(false);
+                }
+                setRegenerating(false);
+              }}
+            >
+              {regenerating ? t("artifact.regenerating") : t("artifacts.row.retry")}
+            </button>
           )}
-          {(contentError?.details?.retryable ?? artifact.retryable) === true && (          <button
+          <button
             type="button"
-            className="btn primary"
-            style={{ marginTop: 12 }}
+            className="btn ghost"
             disabled={regenerating}
-            aria-label={t("artifact.regenerateA11y")}
             onClick={async () => {
               setRegenerating(true);
-              const accepted = await onRegenerate();
-              if (accepted) {
-                setContentError(null);
-                setContent(null);
-                setFailed(false);
-              }
+              await onDelete();
               setRegenerating(false);
             }}
           >
-            {regenerating
-              ? t("artifact.regenerating")
-              : t("artifacts.row.retry")}
-          </button>)}
-          <button type="button" className="btn ghost" disabled={regenerating}
-            onClick={async () => { setRegenerating(true); await onDelete(); setRegenerating(false); }}>
             {t("common.delete")}
           </button>
-
         </div>
       </div>
     );

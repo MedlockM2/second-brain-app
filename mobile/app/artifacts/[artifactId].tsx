@@ -204,17 +204,7 @@ export default function ArtifactDetailScreen() {
     void fetchContent();
   }, [fetchContent]);
 
-  /**
-   * Ask for this artifact again, from the failure state.
-   *
-   * The refusal named the scope, the type and the parameters the entry was asked
-   * with, so the request needs nothing this screen would have to guess, and it
-   * does not go through the "Personnaliser" screen: it is the same request again
-   * (task-535). The backend reruns the entry under its own id and charges the new
-   * generation normally, and it comes back `queued` — which is exactly the `pending` state, so
-   * the screen stops describing a failure the moment there is something running
-   * again.
-   */
+  /** Retry this history entry; the server reads its original options. */
   const handleRegenerate = useCallback(
     async (target: ArtifactRegenerationTarget) => {
       if (!isAuthenticated || regeneratingRef.current) return;
@@ -230,6 +220,8 @@ export default function ArtifactDetailScreen() {
         // A refusal is typed and carries its reason (a quota reached, a source
         // that is not ready): saying it beats leaving the button unanswered.
         setRefusal(describeArtifactRefusal(err, { scope: target.scope }));
+        // A refused retry may have made this entry permanently non-retryable.
+        void fetchContent();
       } finally {
         regeneratingRef.current = false;
         if (mountedRef.current) setRegenerating(false);

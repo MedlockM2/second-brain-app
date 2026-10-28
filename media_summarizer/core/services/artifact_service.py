@@ -2334,7 +2334,9 @@ async def claim_artifact_generation(artifact_id: str, generation_revision: int) 
     if not claimed:
         return None
     record = await media_artifacts.get_media_artifact_by_id(artifact_id)
-    if record is None:
+    # A stalled claim may have been failed and explicitly retried before this
+    # read. Never adopt a later revision on behalf of the old queue message.
+    if record is None or record.generation_revision != generation_revision or record.status != MediaArtifactStatus.GENERATING:
         return None
     log_event(
         logger,
