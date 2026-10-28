@@ -1,7 +1,7 @@
 ---
 id: TASK-551
 title: Rendre les limites bêta compréhensibles sur mobile et web
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-26 22:21'
@@ -74,5 +74,5 @@ Validation : Ruff et mypy backend propres (215 fichiers), typecheck/lint core/mo
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Surfaces bêta mobile/web sur le contrat partagé : jauge, réservations, recharge, usages, seuils backend et prévisions informatives avec onze traductions. Formulaires et lectures restent accessibles. Validation statique Ruff/mypy/TypeScript/lint et OpenAPI effectuée ; à passer Done après merge.
+Surfaces bêta mobile/web avec consommation, réservations, recharge, usages, avertissements backend et prévisions informatives dans les onze langues. Brouillons et lectures préservés. Ruff/mypy/TypeScript/lint/OpenAPI vérifiés ; implémentation 4029b2c1 fusionnée dans main. Vérifications visuelles après déploiement : TASK-440.
 <!-- SECTION:FINAL_SUMMARY:END -->
