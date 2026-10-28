@@ -13,6 +13,15 @@
  * categories (Arabic has six) simply declares them alongside.
  */
 export const en = {
+  "budget.forecastOver": "This estimated reservation exceeds the capacity currently available.",
+  "budget.available": "{percent} available",
+  "budget.reserved": "{percent} reserved for operations in progress",
+  "budget.uses": "Imports, previews, translations, AI creations and chat use capacity. Reading, organising and opening existing results do not.",
+  "budget.forecast": "Estimated reservation: up to {percent}. Final usage depends on the processing performed.",
+  "budget.forecastUnavailable": "Estimate unavailable. Capacity will be checked before processing starts.",
+  "budget.automatic": "Preparing a source can also generate its preview and translate its text.",
+  "budget.warning": "{percent} used. Capacity renews on {date}.",
+
   "budget.title": "Processing unavailable",
   "budget.exhausted": "This month’s capacity cannot cover this operation.",
   "budget.exhaustedUntil": "Capacity renews on {date}. Reading and organising remain available.",

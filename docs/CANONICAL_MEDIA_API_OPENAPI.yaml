@@ -500,6 +500,25 @@ components:
         include_translation:
           type: boolean
           default: true
+        scope:
+          type: [string, 'null']
+          enum: [media, folder, null]
+        scope_id:
+          type: [string, 'null']
+          maxLength: 256
+        artifact_type:
+          type: [string, 'null']
+          enum: [summary_short, notes, flashcards, quiz, null]
+        parameters:
+          type: object
+          description: Same options and source selection as POST /api/artifacts
+          additionalProperties: true
+        conversation_id:
+          type: [string, 'null']
+          maxLength: 256
+        question:
+          type: [string, 'null']
+          maxLength: 64000
     BudgetForecast:
       type: object
       required: [state, reservation_percent, available_percent, fits_available, refusal, params, resets_at]

@@ -290,6 +290,7 @@ function TranscriptText({
       {notice && (
         <p className="small subtle" role="status">
           {notice}
+          {state.status === "translation_pending" ? ` ${t("budget.automatic")}` : ""}
         </p>
       )}
       {structured && <MarkdownView text={content} transcript />}

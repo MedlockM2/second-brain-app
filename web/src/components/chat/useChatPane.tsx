@@ -7,6 +7,7 @@ import { chatClient } from "../../chat/chatClient";
 import { useChat, type ChatState } from "../../chat/useChat";
 import { useI18n } from "../../i18n/I18nProvider";
 import { mediaPath } from "../../routes";
+import { BudgetForecastNotice } from "../BudgetForecastNotice";
 import { Dialog } from "../Dialog";
 import { Icon } from "../Icon";
 import { MarkdownView } from "../MarkdownView";
@@ -155,6 +156,7 @@ export function useChatPane({
             </button>
           </div>
         )}
+        {draft.trim() && !generating ? <BudgetForecastNotice request={state.conversation ? { operation: "chat_turn", conversation_id: state.conversation.conversation_id, question: draft } : null} /> : null}
         <Composer
           value={draft}
           onChange={setDraft}

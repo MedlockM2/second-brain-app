@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Hindi catalogue. See `en` for the reference wording and the key layout. */
 export const hi: Catalog = {
+  "budget.forecastOver": "यह अनुमानित आरक्षण वर्तमान में उपलब्ध क्षमता से अधिक है।",
+  "budget.available": "{percent} उपलब्ध",
+  "budget.reserved": "जारी प्रक्रियाओं के लिए {percent} आरक्षित",
+  "budget.uses": "आयात, पूर्वावलोकन, अनुवाद, AI निर्माण और चैट क्षमता का उपयोग करते हैं। पढ़ना, व्यवस्थित करना और मौजूदा परिणाम खोलना नहीं।",
+  "budget.forecast": "अनुमानित आरक्षण: अधिकतम {percent}। अंतिम उपयोग किए गए कार्य पर निर्भर करता है।",
+  "budget.forecastUnavailable": "अनुमान उपलब्ध नहीं है। प्रक्रिया से पहले क्षमता की जाँच होगी।",
+  "budget.automatic": "स्रोत तैयार करने में उसका पूर्वावलोकन बनाना और पाठ का अनुवाद भी शामिल हो सकता है।",
+  "budget.warning": "{percent} इस्तेमाल। क्षमता {date} को नवीनीकृत होगी।",
+
   "budget.title": "प्रक्रिया उपलब्ध नहीं है",
   "budget.exhausted": "इस महीने की क्षमता इस प्रक्रिया के लिए पर्याप्त नहीं है।",
   "budget.exhaustedUntil": "क्षमता {date} को नवीनीकृत होगी। पढ़ना और व्यवस्थित करना उपलब्ध रहता है।",

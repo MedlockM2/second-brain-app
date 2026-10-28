@@ -1,3 +1,4 @@
+import { capacityLines } from "@media-summarizer/core/budget/presentation";
 import type { EntitlementStatus } from "@media-summarizer/core/types/entitlements";
 import { getFriendlyErrorMessage } from "@media-summarizer/core/errors/friendlyError";
 import { LOCALE_ENDONYMS, SUPPORTED_LOCALES } from "@media-summarizer/core/i18n/locales";
@@ -216,7 +217,7 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
           : "subscription.resetLabel.periodEnds";
   const resets = entitlement.budget.resets_at ? new Date(entitlement.budget.resets_at) : null;
   const ratio = Math.max(0, Math.min(1, (entitlement.budget.consumed_percent ?? 0) / 100));
-  const rule = t("budget.rule");
+  const rule = t("budget.uses");
   return (
     <Pane title={tw("account.planTitle")}>
       {/* No way to a subscription from here while the beta is on (task-429). */}
@@ -236,9 +237,9 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
                   <span className="display">{entitlement.budget.consumed_percent === null ? t("account.plan.unavailable") : `${formatNumber(entitlement.budget.consumed_percent)}%`}</span>
 
                 </div>
-                <div className="gauge">
+                {entitlement.budget.consumed_percent !== null && <div className="gauge">
                   <i style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%` }} />
-                </div>
+                </div>}
               </div>
               <div style={{ textAlign: "end", paddingInlineStart: 24 }}>
                 <div className="caps">{t(resetLabel)}</div>
@@ -247,6 +248,7 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
                 </div>
               </div>
             </div>
+            {capacityLines(entitlement.budget).map((line) => <p key={line} className="small subtle">{line}</p>)}
             <p className="small subtle" style={{ marginBottom: 0 }}>
               {rule}
             </p>

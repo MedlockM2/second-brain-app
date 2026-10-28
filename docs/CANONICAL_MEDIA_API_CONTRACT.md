@@ -118,10 +118,26 @@ defaults to true for imports; false is appropriate only when no translation is
 needed. Unknown quantities reserve the configured ceiling in the estimate.
 Models, prices, output ceilings, conversion and component rounding come from
 the same builders as actual admission; callers cannot supply a price or model.
+For an artifact, callers send `scope`, `scope_id`, `artifact_type`, and
+`parameters` instead of estimating prompt tokens in the app (TASK-551). The server
+checks ownership, resolves the selected sources, reads the text and builds the
+same prompt/schema as the worker, without creating an entry or holding capacity.
+For an existing chat, `conversation_id` and `question` use the account's snapshot
+and history with the same estimator as turn admission. Missing/unready sources
+or a conversation not yet opened give an unavailable estimate. A forecast of a
+new generation is an upper reservation estimate; an existing reusable result can
+cost less, without making this estimate a promise of final consumption.
 Imports include the automatic preview and translation. Sheet text uses the
 document text ceiling. This estimate covers the named path, not an arbitrary
 URL's unknown collector/fallback chain or a prediction of actual billed tokens.
 For paths whose metadata/route is not yet known, clients must display no forecast.
+They explicitly say the estimate is unavailable; they do not display zero or
+disable submission. Informative forecasts appear in the existing import,
+customization and chat surfaces, without adding a confirmation step. Responses
+for older drafts are discarded. Pending translation copy identifies the automatic
+processing while the original remains readable. Account warnings use the configured
+backend threshold; the web's account pane carries its warning (the desktop Home
+has no allowance banner by the owner's layout decision).
 
 The response has `state: estimated|refused|unavailable`, nullable
 `reservation_percent`, `available_percent`, `fits_available`, nullable `refusal`,

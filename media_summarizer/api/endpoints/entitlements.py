@@ -31,4 +31,4 @@ async def get_entitlements_status(current_user=Depends(require_verified_email)):
 @router.post("/entitlements/forecast", response_model=BudgetForecast)
 async def forecast_budget(request: ForecastRequest, current_user=Depends(require_verified_email)):
     """No provider request or reservation: actual admission remains atomic later."""
-    return await budget_capacity.forecast(current_user.id, request)
+    return await budget_capacity.forecast(current_user.id, request, reading_language=current_user.reading_language)

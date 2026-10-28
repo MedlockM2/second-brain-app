@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Chinese catalogue. See `en` for the reference wording and the key layout. */
 export const zh: Catalog = {
+  "budget.forecastOver": "此预计预留量超过当前可用容量。",
+  "budget.available": "可用容量：{percent}",
+  "budget.reserved": "进行中的操作已预留{percent}",
+  "budget.uses": "导入、预览、翻译、AI创建和聊天会消耗容量。阅读、整理和打开已有结果不消耗容量。",
+  "budget.forecast": "预计预留：最多{percent}。最终用量取决于实际执行的处理。",
+  "budget.forecastUnavailable": "暂时无法估算。处理开始前将检查容量。",
+  "budget.automatic": "准备来源时也可能生成预览并翻译其文本。",
+  "budget.warning": "已用{percent}。容量将于{date}更新。",
+
   "budget.title": "无法处理",
   "budget.exhausted": "本月容量不足以执行此操作。",
   "budget.exhaustedUntil": "容量将于{date}更新。阅读和整理仍可使用。",

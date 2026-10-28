@@ -1,10 +1,11 @@
 ---
 id: TASK-551
 title: Rendre les limites bêta compréhensibles sur mobile et web
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-26 22:22'
+updated_date: '2026-10-28 17:45'
 labels:
   - mobile
   - web
@@ -44,9 +45,34 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Mobile et web présentent une consommation bêta en pourcentage, sa date de recharge et une explication des usages ; les écrans ne montrent ni euros, crédits, achat ni compte à rebours d’essai gratuit pendant la bêta.
-- [ ] #2 Les parcours concernés rendent la prévision avant un traitement important et son caractère estimé ou indisponible, sans ajouter de confirmation systématique ni bloquer préventivement les opérations gratuites.
-- [ ] #3 Les avertissements utilisent les seuils du backend et les refus distinguent leurs causes ; la recharge et les actions encore accessibles sont expliquées, les brouillons sont conservés et les chemins d’achat restent masqués.
-- [ ] #4 Lecture, organisation et consultation des contenus et résultats déjà disponibles restent accessibles sans nouvelle dépense ; un traitement payant déclenché depuis une lecture est identifié comme tel et suit les mêmes limites.
-- [ ] #5 La parité mobile/web et les onze catalogues sont livrés ; les vérifications TypeScript/lint de mobile, packages/core et web passent, et les commits mobiles portent Web: done. Les vérifications sur appareil après déploiement sont réservées à task-440.
+- [x] #1 Mobile et web présentent une consommation bêta en pourcentage, sa date de recharge et une explication des usages ; les écrans ne montrent ni euros, crédits, achat ni compte à rebours d’essai gratuit pendant la bêta.
+- [x] #2 Les parcours concernés rendent la prévision avant un traitement important et son caractère estimé ou indisponible, sans ajouter de confirmation systématique ni bloquer préventivement les opérations gratuites.
+- [x] #3 Les avertissements utilisent les seuils du backend et les refus distinguent leurs causes ; la recharge et les actions encore accessibles sont expliquées, les brouillons sont conservés et les chemins d’achat restent masqués.
+- [x] #4 Lecture, organisation et consultation des contenus et résultats déjà disponibles restent accessibles sans nouvelle dépense ; un traitement payant déclenché depuis une lecture est identifié comme tel et suit les mêmes limites.
+- [x] #5 La parité mobile/web et les onze catalogues sont livrés ; les vérifications TypeScript/lint de mobile, packages/core et web passent, et les commits mobiles portent Web: done. Les vérifications sur appareil après déploiement sont réservées à task-440.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Auditer les surfaces Compte/import/IA/chat et leurs équivalents web sur le contrat TASK-550.
+2. Partager la présentation de capacité, prévisions et refus dans core ; afficher les informations dans les parcours sans confirmation supplémentaire ni verrou sur les lectures.
+3. Maintenir les brouillons et les achats masqués, compléter les onze langues, vérifier typecheck/lint et la parité puis committer.
+
+Le raccordement UI complète la prévision backend avec la portée/options de génération et la conversation/question ; réutilisation des résolveurs, prompts et estimateurs existants sans appel fournisseur ni réservation.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Compte mobile/web : consommation régularisée, disponible, réservations distinctes, recharge et usages expliqués. Avertissements fondés sur le seuil backend, avec la même présentation partagée ; le Home web conserve le choix owner sans bannière de minutes.
+Prévisions informatives dans les surfaces import, personnalisation IA et chat ; onze langues. Le serveur mesure le prompt et schéma des sources choisies pour une création, et reprend le calcul d’admission sur l’historique du chat existant. Aucun plan de génération avec effets de bord, aucun appel fournisseur, réservation ou nouvelle conversation créé par une prévision. Métadonnées manquantes et chat non encore ouvert : estimation explicitement indisponible. Les réponses d’anciens brouillons sont ignorées ; aucune confirmation ou désactivation par budget côté client.
+Les formulaires IA gardent leurs options après refus, le chat conserve/restaure son brouillon et les imports conservent leur contexte existant. Les refus restent typés sans achat, la lecture d’origine reste visible pendant la traduction identifiée comme traitement automatique. Une prévision qui dépasse le disponible reste une estimation, pas un refus anticipé.
+Validation : Ruff et mypy backend propres (215 fichiers), typecheck/lint core/mobile/web propres hors avertissement any préexistant de purchaseService.ts ; OpenAPI parsé et 106 références internes résolues. Aucun test automatisé, appel local FastAPI ou lancement local de l’app. Vérifications visuelles sur appareils et AWS après déploiement réservées à TASK-440.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Surfaces bêta mobile/web sur le contrat partagé : jauge, réservations, recharge, usages, seuils backend et prévisions informatives avec onze traductions. Formulaires et lectures restent accessibles. Validation statique Ruff/mypy/TypeScript/lint et OpenAPI effectuée ; à passer Done après merge.
+<!-- SECTION:FINAL_SUMMARY:END -->
