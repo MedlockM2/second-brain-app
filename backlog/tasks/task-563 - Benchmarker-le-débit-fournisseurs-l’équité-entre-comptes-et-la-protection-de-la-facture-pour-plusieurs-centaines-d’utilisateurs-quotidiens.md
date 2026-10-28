@@ -3,10 +3,11 @@ id: TASK-563
 title: >-
   Benchmarker le débit fournisseurs, l’équité entre comptes et la protection de
   la facture pour plusieurs centaines d’utilisateurs quotidiens
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-10-28 16:59'
-updated_date: '2026-10-28 17:00'
+updated_date: '2026-10-28 22:40'
 labels:
   - benchmark
   - backend
@@ -94,10 +95,30 @@ Recherche uniquement : aucun changement de compte, paiement, quota fournisseur, 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le README de recherche inventorie les fournisseurs et chemins actifs, leurs unités et portées de limite, les protections réellement câblées et les lacunes ; sources primaires datées, faits de compte, hypothèses et vérifications owner sont séparés.
-- [ ] #2 La comparaison traite régulation distribuée, priorité interactive, équité et saturation des files, protections de facture et suspension/reprise ; coût, latence, complexité et garanties de chaque option pertinente sont explicités.
-- [ ] #3 Les scénarios 300, 500 et 1 000 utilisateurs quotidiens couvrent usages calmes, pics, imports par lots, longs contenus, chat de dossier et incidents ; les calculs, hypothèses et sensibilités sont documentés sans les présenter comme des mesures.
-- [ ] #4 La recommandation définit les responsabilités des trois implémentations, les contrats d’attente/refus et le cycle capacité-budget-envoi, y compris doublons, crashs, reprises et remboursements ; elle explicite le maintien ou le remplacement proposé de TASK-459.
-- [ ] #5 Le README articule le contrôle livré TASK-548/549 avec TASK-562, TASK-552 et TASK-557/558 ; plafonds ou garanties financiers résiduels, coûts hors enveloppe et actions de console sont documentés sans redéfinir le budget utilisateur.
-- [ ] #6 Le livrable comporte Recommendation et Owner Validation avec owner_decision: pending ; aucune action de compte, dépense de recherche, modification applicative, mise en production ou suite de tests n’est requise pour le livrer.
+- [x] #1 Le README de recherche inventorie les fournisseurs et chemins actifs, leurs unités et portées de limite, les protections réellement câblées et les lacunes ; sources primaires datées, faits de compte, hypothèses et vérifications owner sont séparés.
+- [x] #2 La comparaison traite régulation distribuée, priorité interactive, équité et saturation des files, protections de facture et suspension/reprise ; coût, latence, complexité et garanties de chaque option pertinente sont explicités.
+- [x] #3 Les scénarios 300, 500 et 1 000 utilisateurs quotidiens couvrent usages calmes, pics, imports par lots, longs contenus, chat de dossier et incidents ; les calculs, hypothèses et sensibilités sont documentés sans les présenter comme des mesures.
+- [x] #4 La recommandation définit les responsabilités des trois implémentations, les contrats d’attente/refus et le cycle capacité-budget-envoi, y compris doublons, crashs, reprises et remboursements ; elle explicite le maintien ou le remplacement proposé de TASK-459.
+- [x] #5 Le README articule le contrôle livré TASK-548/549 avec TASK-562, TASK-552 et TASK-557/558 ; plafonds ou garanties financiers résiduels, coûts hors enveloppe et actions de console sont documentés sans redéfinir le budget utilisateur.
+- [x] #6 Le livrable comporte Recommendation et Owner Validation avec owner_decision: pending ; aucune action de compte, dépense de recherche, modification applicative, mise en production ou suite de tests n’est requise pour le livrer.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Auditer les chemins fournisseurs actifs, la concurrence, les reprises et les registres livrés, puis distinguer faits du compte et hypothèses.
+2. Rechercher les sources primaires des fournisseurs et comparer régulation distribuée, équité et protections financières ; chiffrer les scénarios 300/500/1000 utilisateurs et leurs sensibilités.
+3. Produire un README de décision cohérent pour TASK-564/565/566, owner_decision pending, vérifier les références et fusionner le livrable sans débloquer les implémentations avant validation owner.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Recherche seule livrée dans docs/research/task-563-provider-capacity-fairness-operator-safety/README.md (owner_decision pending), calculs reproductibles dans scenarios.csv. Audit sur main 4900df42, après le budget et TASK-562. Sources primaires consultées le 2026-10-28 ; limites publiques, notes de compte historiques, hypothèses et vérifications owner distinguées.
+
+Comparaison de neuf familles de régulation/exécution, politique d’équité et protections financières. Proposition explicitement soumise à validation : remplacer la suffisance M1 de TASK-459 par une admission distribuée DynamoDB et un ordonnancement pondéré, conserver les garde-fous réactifs, étendre le même registre financier, circuits partagés et bornes d’engagement. Contrats et responsabilités de 564/565/566 définis sans les implémenter ; TASK-557/558 gardent plans, recharges et pools, TASK-552 le rapport général.
+
+Scénarios 300/500/1000 DAU : consultation majoritaire, pics de dix minutes, premiers lots de trente imports, podcasts de quatre heures, documents de cent pages/carrousels, chats à gros contexte et échecs répétés ; coûts, unités, concurrence, files et sensibilités chiffrés. L’unité de facturation du repli Unstructured legacy est une lacune à confirmer : la documentation actuelle compte certains fichiers par 100 KB, pas par feuille/image.
+
+Validation documentaire : front-matter pending, six critères couverts avec table de traçabilité, références locales résolues, CSV de trois scénarios et vingt colonnes, diff sans erreur d’espacement. Aucun code applicatif, compte, paiement, déploiement ou test modifié/exécuté. Le benchmark reste en attente de la décision de l’owner dans le README ; les trois implémentations ne sont pas débloquées.
+<!-- SECTION:NOTES:END -->
