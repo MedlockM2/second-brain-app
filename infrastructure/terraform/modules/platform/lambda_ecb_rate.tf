@@ -9,9 +9,8 @@
 #
 # Least privilege, unlike the shared worker role: its own role may only update
 # that single row (dynamodb:LeadingKeys) and write its own logs. It carries no
-# runtime secret and no other table name, which the handler module does not need
-# (media_summarizer/workers/ecb_rate_refresh.py imports none of the app's
-# DynamoDB layer).
+# runtime secret (its environment drops RUNTIME_SECRET_NAME), so its cold start
+# reads nothing from Secrets Manager.
 #
 # Declared outside local.workers like the Digest scheduler: it is not an SQS
 # consumer. CI deploys its image all the same — deploy-lambda.yml discovers the
@@ -107,10 +106,13 @@ resource "aws_lambda_function" "ecb_rate" {
     command = ["media_summarizer.workers.lambda_handlers.ecb_rate_refresh_handler"]
   }
 
+  # The shared names every module of the image requires at import
+  # (media_summarizer/utils/__init__.py loads the DynamoDB layer, which refuses to
+  # start without its table names), minus RUNTIME_SECRET_NAME: without it the cold
+  # start loads no secret, which this role could not read anyway. Names are not
+  # permissions — the role above still reaches one row of one table.
   environment {
-    variables = {
-      PRICING_CONFIG_TABLE = aws_dynamodb_table.pricing_config_v1.name
-    }
+    variables = { for name, value in local.lambda_environment : name => value if name != "RUNTIME_SECRET_NAME" }
   }
 
   depends_on = [aws_cloudwatch_log_group.ecb_rate]

@@ -20,9 +20,10 @@ nothing. A file that cannot be fetched or read writes nothing either: the failur
 is logged and the function returns normally, so the scheduler does not retry into
 the same answer.
 
-Deliberately self-contained — ``boto3`` and ``httpx``, no import of the
-application's DynamoDB layer — so its Lambda needs one table name and an IAM role
-scoped to this single row (``lambda_ecb_rate.tf``).
+Self-contained — ``boto3`` and ``httpx``, no use of the application's DynamoDB
+layer — so its Lambda needs no runtime secret and an IAM role scoped to this single
+row (``lambda_ecb_rate.tf``). It still receives the shared resource names: the
+package imports the DynamoDB layer, which requires them, as soon as it loads.
 """
 
 from __future__ import annotations

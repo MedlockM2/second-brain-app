@@ -190,10 +190,10 @@ def digest_scheduler_handler(event: dict[str, Any], context: Any) -> dict[str, A
 def ecb_rate_refresh_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Daily refresh of the EUR/USD rate of the beta budget (task-559).
 
-    Called by one EventBridge schedule on working days. Its Lambda carries no
-    runtime secret (``RUNTIME_SECRET_NAME`` is not set, so the cold start above
-    loads nothing) and an IAM role scoped to the ``eur_usd_rate`` row of
-    ``pricing_config``: ``lambda_ecb_rate.tf``.
+    Called by one EventBridge schedule on working days. Its Lambda carries the
+    shared resource names but no runtime secret (``RUNTIME_SECRET_NAME`` is left
+    out, so the cold start above loads nothing) and an IAM role scoped to the
+    ``eur_usd_rate`` row of ``pricing_config``: ``lambda_ecb_rate.tf``.
     """
     import importlib
 

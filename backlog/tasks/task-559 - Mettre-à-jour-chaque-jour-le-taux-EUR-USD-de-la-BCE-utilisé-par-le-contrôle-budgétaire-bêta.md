@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-28 11:16'
-updated_date: '2026-10-28 16:33'
+updated_date: '2026-10-28 16:43'
 labels:
   - backend
   - infrastructure
@@ -59,4 +59,6 @@ Le passage effectif de la tâche planifiée se constate après le déploiement s
 Doc : `docs/BETA_BUDGET_CONTROL.md` §1 et la docstring de `beta_budget.fx_rate`. La table du §6 (« Daily refresh… TASK-559 ») n'est pas modifiée ici, pour ne pas entrer en conflit avec la branche task-549, qui réécrit cette section.
 
 **Note owner (pas un AC)** : après `terraform apply` et le déploiement, vérifier le jour ouvré suivant que la ligne `eur_usd_rate` de `pricing_config-dev` porte la date BCE du jour et un attribut `published_on`. Un taux modifié à la main doit aussi mettre à jour cet attribut.
+
+**Correctif après déploiement (2026-10-28).** La première invocation sur dev a échoué à l'import : `media_summarizer/utils/__init__.py` charge la couche DynamoDB, qui exige tous les noms de tables. La Lambda reçoit désormais les noms partagés (`local.lambda_environment`), sauf `RUNTIME_SECRET_NAME` : son démarrage ne lit donc aucun secret, et son rôle reste limité à la ligne `eur_usd_rate`. Le contrôle local initial était trompeur, faute d'un environnement réellement vide. Rien n'avait été écrit : le taux par défaut est resté en place.
 <!-- SECTION:NOTES:END -->
