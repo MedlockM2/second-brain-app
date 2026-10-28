@@ -1,7 +1,10 @@
 # V1 Launch Plan — Deepn
 
 > Plan exhaustif des étapes restantes pour mettre l'application en production.
-> Date de rédaction : 2026-05-19. Dernière mise à jour : **2026-10-10**
+> Date de rédaction : 2026-05-19. Dernière mise à jour : **2026-10-27**
+> (décision owner : validations Apple TestFlight et Google Play requises avant
+> l'ouverture de la bêta aux utilisateurs ; aucune soumission déclenchée).
+> Mise à jour du **2026-10-10** :
 > (Phase 5 close — builds iOS et Android validés sur device, `task-166` ; plus tôt
 > le même jour, `task-456` : réconciliation de la vue de lancement avec la bêta de trois mois,
 > la sortie de bêta, les gates de soumission et le soft launch portés par
@@ -155,7 +158,7 @@ des commits locaux (il n'y en a plus, cf. § « État de vérité »). Le billin
 reste acquis (Phase 6, `task-262`/`238`/`261` `Done`).
 
 Le lancement se lit en **quatre étapes distinctes**, à ne pas confondre : la bêta
-de trois mois, la sortie de bêta, les gates de soumission stores, puis le soft
+de trois mois, la sortie de bêta, les gates de soumission stores en production, puis le soft
 launch. La présence de testeurs en TestFlight et sur la piste interne depuis
 septembre n'est **aucune** de ces étapes. Responsabilité : **owner** = décision,
 appareil physique, console tierce, compte prod ou publication ; **agent** = fichiers
@@ -169,7 +172,37 @@ livrés dans un worktree, sans merge, push, déploiement ni publication.
 | Partage document/image sur device Android (AC #5) | `task-165` | owner | ✅ `Done` le 2026-10-10 |
 | Clôture documentaire de la Phase 5 | `task-166` | agent | ✅ `Done` le 2026-10-10 |
 | Mécanisme de bêta (`beta_access`) | `task-429` | — | ✅ `Done`, actif sans date de fin dans `pricing_config-dev` depuis le 2026-10-05 |
-| Fixer le début, poser `ends_at`, écrire le bloc en prod, ouvrir aux testeurs | `task-441` | owner | Dépend de `task-429` et `task-440`. Début **non fixé** |
+| Validations Apple TestFlight et Google Play avant ouverture de la bêta | Prérequis de `task-441`, détail ci-dessous | owner | À obtenir ; décision du 2026-10-27 |
+| Fixer le début, poser `ends_at`, écrire le bloc en prod, ouvrir aux testeurs | `task-441` | owner | Dépend de `task-429`, `task-440` et des deux validations stores pré-bêta. Début **non fixé** |
+
+**Prérequis stores avant la bêta — décision owner du 2026-10-27.** Obtenir les
+deux validations **avant d'ouvrir la bêta de trois mois aux utilisateurs** :
+
+- [ ] **Apple : TestFlight App Review pour les testeurs externes.** Préparer la
+  build destinée à la bêta, les informations de test et l'accès de démonstration,
+  puis obtenir son approbation pour la distribution TestFlight externe.
+- [ ] **Android : premier examen Google Play.** Terminer la configuration de
+  l'application et de sa fiche (Deepn, icône ambre, descriptions, image de
+  présentation, captures, déclarations et accès pour l'examen), soumettre et
+  obtenir l'approbation pour le canal de test retenu. Vérifier ensuite que les
+  testeurs voient Deepn et l'icône ambre sur le Store, à la place de
+  `com.secondbrainlabs.core (unreviewed)` et de l'icône générique.
+
+Le test interne Android d'une app non entièrement configurée peut techniquement
+commencer sans ce premier examen ; **cette possibilité ne satisfait pas le gate
+pré-bêta choisi ici**, qui exige une identité Deepn validée sur le Store. Au
+2026-10-27, le nom Deepn et l'icône ambre sont enregistrés en brouillon dans Play
+Console ; aucune soumission en examen n'a été effectuée dans cette session.
+
+Ces validations concernent la **distribution bêta**. Elles ne déclenchent pas un
+lancement public et ne remplacent pas la soumission en production de l'étape 3
+(`task-454`). Préparer les éléments nécessaires de `task-450` dès cette étape,
+sans attendre la sortie de bêta ; prévoir le délai d'examen et les éventuelles
+corrections avant de fixer la date d'ouverture.
+
+Références : [Apple — testeurs externes et TestFlight App Review](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers),
+[Google — tests et nom temporaire](https://support.google.com/googleplay/android-developer/answer/9845334?hl=fr),
+[Google — examen et publication](https://support.google.com/googleplay/android-developer/answer/9859654?hl=fr).
 
 #### Étape 2 — Sortie de bêta
 
@@ -196,7 +229,7 @@ livrés dans un worktree, sans merge, push, déploiement ni publication.
 | Fiches et déclarations stores | `task-450` | owner (agent prépare les fichiers) | `task-186`, `task-180`, `task-444` |
 | Branding Google OAuth et audience de production | `task-451` | owner | `task-186`, `task-443` |
 | Éligibilité du compte Play, puis closed testing et accès production | `task-260` → `task-452` | owner | Peut chevaucher la bêta |
-| Soumission iOS et Android, suivi des reviews | `task-454` | owner | `task-447`, `task-449` à `task-453`, `task-166` |
+| Soumission en production iOS et Android, suivi des reviews | `task-454` | owner | `task-447`, `task-449` à `task-453`, `task-166` ; distincte des validations pré-bêta |
 
 Le closed testing Play n'attend plus rien côté code : `task-340` (OTA) est `Done`,
 donc les testeurs ne devront pas réinstaller pendant les 14 jours continus. Le
@@ -230,6 +263,7 @@ Ce qui ne se fait qu'à la main, par l'owner :
 
 - [ ] Run E2E contre AWS dev et digest (`task-440`)
 - [x] AC #5 de `task-165` sur device Android (2026-10-10)
+- [ ] Approbations Apple TestFlight externe et premier examen Google Play obtenues avant l'ouverture de la bêta (décision owner du 2026-10-27, étape 1)
 - [ ] Date de début de bêta et `ends_at` dans dev et prod (`task-441`)
 - [ ] Domaine, DNS, certificats, secrets prod (`task-443`, `task-445`)
 - [ ] Apply Terraform prod et réveil des trois booléens (`task-446`), exercices
@@ -264,6 +298,9 @@ Non relevés depuis la date indiquée ; ce fichier ne les déclare pas validés.
 
 - **Date de début : non fixée.** La V1 est encore en construction ; l'owner annoncera le
   démarrage. Le TestFlight ouvert le 2026-09-02 n'est **pas** le début de la beta.
+- **Avant l'ouverture : validations Apple et Android obtenues**, conformément au
+  gate pré-bêta de l'étape 1 (décision owner du 2026-10-27). L'ouverture attend
+  ces approbations ; les soumissions seront réalisées au moment choisi par l'owner.
 - **Durée : trois mois.** Date de fin = date de début + 3 mois.
 - **Régime pendant la beta** (`task-429`, budget `task-548`) : aucun abonnement souscriptible,
   toutes les entrées vers le paywall sont masquées, et **tous les comptes**, existants comme
@@ -1934,6 +1971,12 @@ macOS). iOS ne redevient donc **jamais** un required check par PR : Android sur
 9. Mesurer cold/warm API, profondeur SQS, DLQ et coût avant ouverture.
 
 ### Phase 10 — Pré-lancement (jour 10+)
+
+Les soumissions ci-dessous visent la **production**. Les validations Apple
+TestFlight externe et Google Play nécessaires à la bêta doivent avoir été
+obtenues **avant son ouverture**, selon l'étape 1 de la vue de lancement ; les
+éléments de fiche et les déclarations nécessaires à ces examens sont donc à
+préparer en amont, sans attendre cette phase.
 
 0. **Appliquer le nom définitif Deepn** (cf. task-186) — l'app utilise actuellement le nom legacy `Media Summarizer` partout (display name, slug Expo, scheme deep link, share extension iOS). À exécuter **avant** la sous-étape 1 ci-dessous : tous les textes Apple App Store Connect (App Information, screenshots) et Google Play Console + Google OAuth Branding consomment le nom marketing définitif. Coût ~30 min en pré-distribution, beaucoup plus élevé une fois publié. Ne touche pas le bundle id `com.secondbrainlabs.core` (figé). Voir `task-186` pour la checklist exacte des 8-9 endroits à mettre à jour.
 
