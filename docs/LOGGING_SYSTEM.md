@@ -79,6 +79,27 @@ The API middleware (`request_id_middleware` in `main.py`) binds `request_id`, `p
 
 ## Stable Event Names
 
+### Beta budget demand and anomalies (TASK-552)
+
+Financial truth stays in `beta_budget` attempts/counters. `beta_budget.observed`
+records a refusal/reuse outcome in logs alongside a best-effort, non-financial
+observation in the same ledger partition. `beta_budget.observation_failed` means
+that durable demand evidence could not be written; it is alarmed, not silently
+treated as zero refusals. No event carries raw content or provider payloads.
+
+`beta_budget.measurement_missing` identifies an estimated settlement or an
+in-flight failure valued at its bound. Existing `beta_budget.overrun`,
+`beta_budget.settle_after_release`, `beta_budget.release_after_settle`,
+`beta_budget.settle_missing`, unavailable/control failures and
+`beta_budget.expiry_sweep_failed` are alarm contracts too. The read-only scheduled
+audit emits `beta_budget.audit_stale`, `beta_budget.audit_failed`, and
+`beta_budget.audit_succeeded`; only the last supplies its completion heartbeat.
+
+Filters, recipients, export instructions, cost definitions and limits:
+`docs/BETA_BUDGET_REPORTING.md`. Filters cover the API and all workers. Private
+exports are never committed or pasted into task notes; cohort membership comes
+from an explicit private manifest, with unclassified accounts kept unknown.
+
 ### API Surface — `media.*`
 
 | Event | Level | Description |

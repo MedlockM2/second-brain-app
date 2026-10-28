@@ -363,6 +363,14 @@ async def get_item(user_id: str, sk: str) -> Optional[Dict[str, Any]]:
     return dict(item) if item else None
 
 
+async def put_observation(item: Mapping[str, Any]) -> None:
+    """Append non-financial evidence in the same account partition and TTL cycle."""
+    session = get_session()
+    async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+        table = await dynamodb.Table(_table())
+        await table.put_item(Item=dict(item), ConditionExpression="attribute_not_exists(sk)")
+
+
 async def query_prefix(user_id: str, prefix: str) -> List[Dict[str, Any]]:
     """Every item of the account whose sort key starts with ``prefix``."""
     items: List[Dict[str, Any]] = []

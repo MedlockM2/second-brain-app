@@ -2,12 +2,14 @@
 # every write: docs/BETA_BUDGET_CONTROL.md. Owner decision:
 # docs/research/task-547-beta-budget-control/README.md.
 #
-# One partition per account (`user_id`), two kinds of item under the sort key
+# One partition per account (`user_id`), financial items under the sort key
 # `sk`: the month counter (`period#YYYY-MM`) and one attempt per paid provider call
 # (`attempt#<operation>:<component>:<try>`). Admission, settlement and release are
 # TransactWriteItems over a counter and its attempts, which the API and worker
 # roles already hold through the environment-suffix match of local.table_arns
 # (Put, Update and ConditionCheckItem); no policy change is needed.
+# TASK-552 also appends non-financial refusal/reuse observations under
+# observation#<timestamp>#<id>, with creation + 400-day TTL and the same erasure.
 #
 # `open-attempts-index` is sparse: only an attempt still `held` or `sending`
 # carries `open_since`, which every close removes. It is what the backstop reads to

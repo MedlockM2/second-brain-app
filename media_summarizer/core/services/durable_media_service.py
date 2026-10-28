@@ -300,7 +300,7 @@ async def charge_reused_content(
     """
     # Imported here so that the library reads, which load this module everywhere,
     # do not load the budget ledger with it.
-    from media_summarizer.core.services import budget_guard
+    from media_summarizer.core.services import beta_budget, budget_guard
     from media_summarizer.core.services.budget_guard import BudgetRefusedError
 
     if await user_holds_media(
@@ -316,6 +316,9 @@ async def charge_reused_content(
             user_id=user_id,
             media_key=media_key,
             media_item_id=media_item_id,
+        )
+        await beta_budget.observe(
+            user_id, outcome="reused", operation_id=media_item_id, components=["refile"],
         )
         return
 

@@ -211,12 +211,6 @@ class PeriodCounter:
             return Decimal(0)
         return Decimal(self.consumed_nano_eur) * 100 / Decimal(self.budget_nano_eur)
 
-    @property
-    def financial_spend_nano_eur(self) -> int:
-        """Provider spend of the month, whoever bears it: tester or operator."""
-        return self.consumed_nano_eur + self.operator_spend_nano_eur
-
-
 @dataclass(frozen=True)
 class BudgetAttempt:
     """One attempt item, as read back from the ledger."""

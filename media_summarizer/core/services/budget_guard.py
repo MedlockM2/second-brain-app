@@ -46,8 +46,9 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from functools import wraps
 from math import ceil
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Set
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, ParamSpec, Sequence, Set, TypeVar
 
 from media_summarizer.core.models.beta_budget import (
     AttemptStatus,
@@ -71,7 +72,7 @@ from media_summarizer.core.services.llm_config import (
 )
 from media_summarizer.core.services.llm_corpus import BYTES_PER_TOKEN
 from media_summarizer.utils.beta_budget_db import LedgerUnavailableError
-from media_summarizer.utils.logging_config import log_event
+from media_summarizer.utils.logging_config import get_log_context, log_event
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +147,7 @@ class BudgetRefusedError(Exception):
         super().__init__(refusal.value)
         self.refusal = refusal
         self.params: Dict[str, Any] = dict(params or {})
+        self.observed = False
 
     @classmethod
     def for_item(cls, exc: ItemTooLargeError) -> "BudgetRefusedError":
@@ -183,6 +185,36 @@ class BudgetBusyError(Exception):
     attempt: the caller sends nothing and acknowledges, the delivery in flight owns
     the outcome.
     """
+
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def _observe_refusals(function: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    """Capture both prechecks and worker refusals, once through nested gates."""
+    @wraps(function)
+    async def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return await function(*args, **kwargs)
+        except BudgetRefusedError as refusal:
+            if not refusal.observed:
+                refusal.observed = True
+                payer = args[0] if args else kwargs.get("user_id")
+                if isinstance(payer, str) and payer:
+                    lines = kwargs.get("lines")
+                    components = [line.component.value for line in lines] if isinstance(lines, (list, tuple)) else []
+                    component = kwargs.get("component")
+                    if isinstance(component, Component):
+                        components.append(component.value)
+                    operation = kwargs.get("operation_id") or kwargs.get("media_item_id")
+                    operation = operation or get_log_context().get("request_id") or function.__name__
+                    await beta_budget.observe(
+                        payer, outcome="refused", operation_id=str(operation), components=components or [function.__name__],
+                        refusal=refusal.refusal.value, params=refusal.params,
+                    )
+            raise
+    return wrapped
 
 
 def _unavailable(event: str, *, user_id: str, operation_id: str, exc: BaseException) -> BudgetRefusedError:
@@ -326,6 +358,7 @@ def _build(ctx: PricingContext, builder: Callable[[PricingContext], Sequence[Res
         raise BudgetRefusedError.for_item(exc) from exc
 
 
+@_observe_refusals
 async def admit(
     user_id: str,
     *,
@@ -445,6 +478,7 @@ def import_translation_line(ctx: PricingContext, *, text_tokens: int) -> Reserva
     )
 
 
+@_observe_refusals
 async def admit_import(
     user_id: str,
     *,
@@ -508,6 +542,7 @@ def _latest(attempts: Iterable[BudgetAttempt], step: str) -> Optional[BudgetAtte
     return max(of_step, key=lambda attempt: attempt.try_number, default=None)
 
 
+@_observe_refusals
 async def start(
     user_id: str,
     *,
@@ -777,6 +812,7 @@ async def settle_collections(user_id: Optional[str], operation_id: Optional[str]
 # ---------------------------------------------------------------------------
 
 
+@_observe_refusals
 async def precheck(user_id: str) -> None:
     """Refuse a new paid processing at once when the month has nothing left.
 
@@ -806,6 +842,7 @@ async def precheck(user_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+@_observe_refusals
 async def charge_content_reuse(
     user_id: str,
     *,
@@ -861,6 +898,7 @@ async def charge_content_reuse(
     value += media_idempotence.preview_value_of(dict(ledger_row) if ledger_row else None, language)
 
     if value <= 0:
+        await beta_budget.observe(user_id, outcome="reused", operation_id=media_item_id, components=["reuse_unvalued"])
         return 0
     source = str((ledger_row or {}).get("job_id") or "")
     admission = await beta_budget.charge_reuse(

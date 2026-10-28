@@ -45,6 +45,7 @@ of a tester's capacity during the beta (rule 14).
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
@@ -1246,6 +1247,9 @@ async def settle(
             consumed_nano_eur=consumed,
             measured=current.measured,
         )
+    if metric_source == "estimated":
+        _log(logging.WARNING, "beta_budget.measurement_missing", "Settled usage was estimated, not measured",
+             user_id=user_id, attempt_id=attempt, period_key=current.period_key)
     _log(
         logging.INFO,
         "beta_budget.settled",
@@ -1343,6 +1347,9 @@ async def release(
             claimed_before=claimed_before,
         )
         if applied:
+            if basis == CostBasis.BOUND:
+                _log(logging.WARNING, "beta_budget.measurement_missing", "Failed call has no provider cost metric",
+                     user_id=user_id, attempt_id=attempt, period_key=current.period_key)
             _log(
                 logging.INFO,
                 "beta_budget.released",
@@ -1423,3 +1430,34 @@ async def list_operation_attempts(user_id: str, operation_id: str) -> List[Budge
 async def get_attempt(user_id: str, attempt: str) -> Optional[BudgetAttempt]:
     """One attempt, read strongly consistent, or None when it does not exist."""
     return await _read_attempt(user_id, attempt)
+
+
+async def observe(
+    user_id: str, *, outcome: str, operation_id: str, components: Sequence[str],
+    refusal: Optional[str] = None, params: Optional[Mapping[str, Any]] = None,
+) -> None:
+    """Best-effort demand evidence, with no financial counter or raw payload.
+
+    Failures stay visible in logs/alarms; unavailable storage can never change an
+    admission outcome. Account deletion erases these rows with the ledger.
+    """
+    now = _now()
+    identifier = f"observation#{_iso(now)}#{uuid.uuid4().hex}"
+    safe = {key: value for key, value in (params or {}).items()
+            if key in {"period_end", "quantity", "measured", "limit", "required_nano_eur"}}
+    item = {
+        "user_id": user_id, "sk": identifier, "item_type": "observation", "outcome": outcome,
+        "operation_id": operation_id, "components": list(components), "period_key": period_key(now),
+        "created_at": _iso(now), "ttl_epoch": _ttl_epoch(now), "params": safe,
+        "automatic": any(c.split(".")[0] in {Component.REVIEW_BLURB.value, Component.TRANSLATION.value} for c in components),
+    }
+    if refusal:
+        item["refusal"] = refusal
+    try:
+        await beta_budget_db.put_observation(item)
+    except Exception as exc:
+        _log(logging.ERROR, "beta_budget.observation_failed", "Demand evidence could not be persisted",
+             user_id=user_id, operation_id=operation_id, outcome=outcome, error_type=type(exc).__name__)
+    _log(logging.INFO, "beta_budget.observed", "Budget demand observed",
+         user_id=user_id, operation_id=operation_id, outcome=outcome, refusal=refusal, period_key=period_key(now),
+         components=list(components), params=safe, automatic=item["automatic"])
