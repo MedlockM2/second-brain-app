@@ -3,11 +3,11 @@ id: TASK-562
 title: >-
   Générer un nouvel artefact à chaque demande, sans réutilisation, aperçu
   excepté
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-28 15:52'
-updated_date: '2026-10-28 18:15'
+updated_date: '2026-10-28 18:16'
 labels:
   - backend
   - feature
@@ -74,3 +74,9 @@ Validation : Ruff et mypy sur media_summarizer (217 fichiers), TypeScript et ESL
 
 PRÉREQUISITE OWNER : après fusion/push et déploiement du backend et de la projection GSI, constater sur dev les générations et débits distincts, la relance même entrée et la suppression. Cette vérification déployée ne constitue pas un AC réalisable depuis le worktree.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Créations utilisateur indépendantes, exception review_blurb préservée. Relance et suppression canoniques des échecs avec contrôles de révision, budget et propriété. Affichage et actions en place sur mobile/web, onze langues, contrat/OpenAPI/types et projection DynamoDB alignés. Ruff, mypy, TypeScript, ESLint, Terraform validate et contrôle de parité passent ; vérification du comportement déployé réservée à l’owner après push. Implémentation 9d22a1c7 fusionnée dans main.
+<!-- SECTION:FINAL_SUMMARY:END -->
