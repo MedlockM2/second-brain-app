@@ -4,7 +4,7 @@ title: >-
   Supprimer l'API podcasts héritée (recherche, submit-episode, /podcasts/submit)
   et le mécanisme watchers, et faire passer le test E2E par
   /api/media/ingest-url
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-28 15:06'
@@ -70,3 +70,9 @@ Validation : scan exhaustif git grep vide sur les noms des mécanismes et routes
 
 PRÉREQUISITE OWNER après push : appliquer Terraform et déployer ; si la protection de suppression empêche le retrait de la table dev, la désactiver et retirer la table selon la note de la description. Le prochain E2E contre dev valide le parcours réel ; ces actions ne sont pas des AC du worktree.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Routes, modèles, services de soumission et suivi hérités retirés sans alias. PodcastIndex conservé pour les résolveurs actifs ; complétion/budget/index/aperçus/traductions/notification canoniques préservés. Scénario podcast E2E existant adapté à ingest-url et au media_item_id, sans run déployé. Documentation et configuration alignées ; scan vide, Ruff, mypy (211 fichiers), Terraform validate et diff propres. Fusionné dans main.
+<!-- SECTION:FINAL_SUMMARY:END -->
