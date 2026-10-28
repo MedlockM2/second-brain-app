@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Arabic catalogue. See `en` for the reference wording and the key layout. */
 export const ar: Catalog = {
+  "budget.title": "المعالجة غير متاحة",
+  "budget.exhausted": "سعة هذا الشهر لا تكفي لهذه العملية.",
+  "budget.exhaustedUntil": "تتجدد السعة في {date}. تبقى القراءة والتنظيم متاحين.",
+  "budget.tooLarge": "يتجاوز هذا العنصر حد المعالجة.",
+  "budget.unavailable": "المعالجة غير متاحة مؤقتًا. حاول لاحقًا.",
+  "budget.closed": "الوصول إلى معالجة النسخة التجريبية مغلق.",
+
+  "budget.consumed": "السعة المستهلكة",
+  "budget.rule": "الاستهلاك النهائي فقط. تحجز العمليات الجارية سعة حتى تتحدد التكلفة النهائية. تبقى القراءة والتنظيم متاحين.",
   "folders.untitled": "مجلد بلا عنوان",
   "folders.duplicateTitle": "الاسم مستخدم بالفعل",
   "folders.duplicateMessage": "يوجد مجلد بهذا الاسم هنا. اختر اسمًا آخر.",

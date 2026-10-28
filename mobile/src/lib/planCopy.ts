@@ -175,14 +175,6 @@ export function buildPlanCards(pricing: PublicPricing): PlanCard[] {
   return (pricing.tiers ?? []).map((tier) => buildPlanCard(tier, trialTierId));
 }
 
-/**
- * How much of the current allowance has to be spent before consumption is worth
- * reasoning from. A quarter: enough that the figure reflects a habit rather than
- * a first evening with the app, low enough that someone halfway through their
- * period still gets advice.
- */
-const USAGE_SIGNAL_RATIO = 0.25;
-
 /** Which plan the screen argues for, why, and what each card is labelled. */
 export interface PlanGuidance {
   /** Tier the screen preselects, or `null` when nothing justifies a choice. */
@@ -193,28 +185,7 @@ export interface PlanGuidance {
   badges: Record<string, string>;
 }
 
-/**
- * Turn what the account has actually consumed into a recommendation.
- *
- * The screen used to preselect the trial's tier for everyone, including people
- * who never had a trial, and showed no reason at all — a card highlighted for
- * reasons the reader cannot see is just a nudge. Every label produced here is a
- * checkable fact instead: minutes the account really spent, an hourly rate
- * computed from the store's own price. Nothing claims popularity, which is not
- * something this app can honestly claim.
- *
- * Two rules shape the pick:
- *
- * - the smallest plan that covers the period's consumption, so the screen is
- *   allowed to argue *down* — recommending the cheapest plan that works is the
- *   part that makes the rest believable;
- * - never below the plan the user is currently living in. Someone three days
- *   into a trial has barely spent anything, and answering "take the cheaper one"
- *   would offer them less than what they are trying.
- *
- * With no consumption recorded there is nothing to reason from, so it returns no
- * line and lets the caller fall back to the trial's tier.
- */
+/** Catalogue price comparisons only; beta capacity is not commercial minutes. */
 export function buildPlanGuidance(
   cards: PlanCard[],
   /** Store price amount per tier id. Only tiers actually purchasable appear. */
@@ -228,76 +199,8 @@ export function buildPlanGuidance(
 
   const isTrial = entitlement?.is_free_trial === true;
   const trialCard = cards.find((card) => card.isTrialTier) ?? null;
-  const used = entitlement?.minutes_used ?? 0;
-  const allowance = entitlement?.minutes_included ?? 0;
-  // Consumption only becomes evidence once there is enough of it. Six minutes
-  // spent trying the app out is noise, and the screen used to turn it into a
-  // firm "Reader is the smallest plan that covers that", badge included —
-  // advice built on a sample that says nothing, offered to someone who has not
-  // yet found out what they would use the app for. Below the threshold there is
-  // no line and no badge, and the selection falls back to the neutral default.
-  const hasUsageSignal = allowance > 0 && used >= allowance * USAGE_SIGNAL_RATIO;
-
-  let recommended: PlanCard | null = null;
-  let recommendationLine: string | null = null;
-
-  if (hasUsageSignal && ranked.length > 0) {
-    const largest = ranked[ranked.length - 1];
-    // Spending the whole allowance is not the same as spending part of it. The
-    // figure stops being a measure of what the user needs and becomes the point
-    // where they were stopped — their real need is *at least* that, and unknown
-    // above it. Recommending the plan that covers it would hand them back the
-    // one that just refused their import, so a capped period looks strictly one
-    // size up instead.
-    const isCapped = used >= allowance;
-
-    if (isCapped) {
-      const nextUp = ranked.find(
-        (card) => (card.minutesPerMonth ?? 0) > allowance,
-      ) ?? null;
-      recommended = nextUp ?? largest;
-      recommendationLine =
-        nextUp === null
-          ? t("plan.rec.cappedLargest", {
-              duration: formatMinutes(allowance),
-              plan: largest.name,
-            })
-          : t("plan.rec.cappedNextUp", {
-              duration: formatMinutes(allowance),
-              plan: nextUp.name,
-            });
-    } else {
-      const covering =
-        ranked.find((card) => (card.minutesPerMonth ?? 0) >= used) ?? null;
-      // The plan being lived in is a floor, never a ceiling.
-      const floor = isTrial && trialCard !== null ? trialCard : null;
-      const floorMinutes = floor?.minutesPerMonth ?? 0;
-
-      if (covering === null) {
-        recommended = largest;
-        recommendationLine = t("plan.rec.overLargest", {
-          duration: formatMinutes(used),
-          plan: largest.name,
-        });
-      } else if ((covering.minutesPerMonth ?? 0) < floorMinutes && floor !== null) {
-        recommended = floor;
-        recommendationLine = t("plan.rec.trialFloor", {
-          duration: formatMinutes(used),
-          plan: floor.name,
-        });
-      } else {
-        recommended = covering;
-        recommendationLine = t("plan.rec.covering", {
-          duration: formatMinutes(used),
-          plan: covering.name,
-        });
-      }
-    }
-  }
-
-  if (recommended !== null) {
-    badges[recommended.id] = t("plan.badge.recommended");
-  }
+  // Beta capacity cannot be converted into commercial minutes.
+  const recommendationLine: string | null = null;
   // A trial tier is worth naming, but only to someone the backend reports as
   // actually being in the trial — a badge for a trial they never had is a lie.
   if (isTrial && trialCard !== null && badges[trialCard.id] === undefined) {
@@ -310,7 +213,7 @@ export function buildPlanGuidance(
   }
 
   return {
-    recommendedTierId: recommended?.id ?? trialCard?.id ?? null,
+    recommendedTierId: trialCard?.id ?? null,
     recommendationLine,
     badges,
   };
@@ -357,7 +260,7 @@ export function buildPaywallReasonLine(
   if (reason === null || entitlement === null) return null;
 
   const isTrial = entitlement.is_free_trial;
-  const resetsOn = formatResetDate(entitlement.resets_at);
+  const resetsOn = formatResetDate(entitlement.budget.resets_at);
 
   if (reason === "out_of_minutes") {
     // A trial allowance is a single window that never refills (task-300), so
@@ -371,13 +274,7 @@ export function buildPaywallReasonLine(
       : t("paywall.reason.outWithDate", { date: resetsOn });
   }
 
-  const left = formatMinutes(entitlement.minutes_remaining);
-  if (isTrial) {
-    return t("paywall.reason.trialLow", { left });
-  }
-  return resetsOn === null
-    ? t("paywall.reason.lowNoDate", { left })
-    : t("paywall.reason.lowWithDate", { left, date: resetsOn });
+  return null;
 }
 
 /**
@@ -635,7 +532,7 @@ export function buildFreeTrialLine(
     trial === null
       ? null
       : (pricing?.tiers.find((tier) => tier.id === trial.tier)?.name ?? null);
-  const endsOn = formatResetDate(entitlement.resets_at);
+  const endsOn = formatResetDate(entitlement.budget.resets_at);
 
   // The access clause is a noun phrase the sentence embeds, and the sentence
   // itself is one of four whole strings rather than a stem with clauses bolted

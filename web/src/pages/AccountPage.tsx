@@ -1,3 +1,4 @@
+import type { EntitlementStatus } from "@media-summarizer/core/types/entitlements";
 import { getFriendlyErrorMessage } from "@media-summarizer/core/errors/friendlyError";
 import { LOCALE_ENDONYMS, SUPPORTED_LOCALES } from "@media-summarizer/core/i18n/locales";
 import { formatDate, formatNumber, type TranslationKey } from "@media-summarizer/core/i18n/runtime";
@@ -32,16 +33,7 @@ import { useTheme, type ThemePreference } from "../theme";
 type Section = "plan" | "reading" | "ui" | "theme" | "extension" | "bug" | "delete";
 const SECTIONS: readonly Section[] = ["plan", "reading", "ui", "theme", "extension", "bug", "delete"];
 
-type Entitlement = {
-  is_active: boolean;
-  is_free_trial: boolean;
-  is_beta_access: boolean;
-  subscription_tier: "S" | "M" | "L" | null;
-  auto_renew_status: boolean | null;
-  minutes_included: number;
-  minutes_remaining: number;
-  resets_at: string | null;
-};
+type Entitlement = EntitlementStatus;
 
 /** Tier names are product names: never translated (the mobile `subscriptionDisplay`). */
 const TIER_LABELS = { S: "Reader", M: "Mix", L: "Audio-Heavy" } as const;
@@ -123,7 +115,7 @@ export function AccountPage() {
             "plan",
             "card-outline",
             tw("account.planTitle"),
-            planName && entitlement ? `${planName} · ${tw("account.minutesLeftShort", { count: formatNumber(entitlement.minutes_remaining) })}` : null,
+            planName && entitlement ? planName : null,
           )}
           <div className="caps acc-cap">{tw("account.settings")}</div>
           {item("reading", "language-outline", t("readingLanguage.title"), readingName || t("account.notSet"))}
@@ -222,9 +214,9 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
         : entitlement.auto_renew_status === false
           ? "subscription.resetLabel.ends"
           : "subscription.resetLabel.periodEnds";
-  const resets = entitlement.resets_at ? new Date(entitlement.resets_at) : null;
-  const ratio = entitlement.minutes_included > 0 ? entitlement.minutes_remaining / entitlement.minutes_included : 0;
-  const rule = t("plan.minutesRule");
+  const resets = entitlement.budget.resets_at ? new Date(entitlement.budget.resets_at) : null;
+  const ratio = Math.max(0, Math.min(1, (entitlement.budget.consumed_percent ?? 0) / 100));
+  const rule = t("budget.rule");
   return (
     <Pane title={tw("account.planTitle")}>
       {/* No way to a subscription from here while the beta is on (task-429). */}
@@ -237,15 +229,12 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
           <>
             <div className="row" style={{ alignItems: "flex-end" }}>
               <div className="grow">
-                <div className="caps">{t("account.plan.minutesLeft")}</div>
+                <div className="caps">{t("budget.consumed")}</div>
                 <div
-                  aria-label={t("account.plan.minutesLeftA11y", {
-                    remaining: formatNumber(entitlement.minutes_remaining),
-                    included: formatNumber(entitlement.minutes_included),
-                  })}
+                  aria-label={t("budget.consumed")}
                 >
-                  <span className="display">{formatNumber(entitlement.minutes_remaining)}</span>
-                  <span className="small muted"> / {formatNumber(entitlement.minutes_included)}</span>
+                  <span className="display">{entitlement.budget.consumed_percent === null ? t("account.plan.unavailable") : `${formatNumber(entitlement.budget.consumed_percent)}%`}</span>
+
                 </div>
                 <div className="gauge">
                   <i style={{ width: `${Math.max(0, Math.min(1, ratio)) * 100}%` }} />
@@ -259,11 +248,7 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
               </div>
             </div>
             <p className="small subtle" style={{ marginBottom: 0 }}>
-              {entitlement.is_beta_access
-                ? t("account.plan.minutesRuleBeta", { rule })
-                : entitlement.is_free_trial
-                  ? t("account.plan.minutesRuleTrial", { rule })
-                  : rule}
+              {rule}
             </p>
           </>
         ) : (

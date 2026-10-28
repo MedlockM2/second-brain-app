@@ -23,39 +23,9 @@ import {
   getTierLabel,
   getUsageRatio,
 } from "../lib/subscriptionDisplay";
-import { minutesRule } from "../lib/planCopy";
-import { t } from "../i18n";
+import { t, formatNumber } from "../i18n";
 
-/**
- * Read-only summary of the subscription state the backend reports on
- * `GET /api/entitlements/status`: tier, minutes left in the period, how much
- * of the allowance is spent, and when it refills.
- *
- * Minutes are the only metered unit (task-287), so the card shows one balance
- * over one total instead of a per-feature breakdown: reading is unlimited on
- * every tier, and a minute is only spent on something we transcribe.
- *
- * The card never gates anything — it only reports. Four states are rendered,
- * and the difference between them matters:
- * - loading (first load, nothing cached yet)
- * - unavailable (`entitlement === null`): the request failed, so the plan is
- *   *unknown*. It is deliberately not rendered as "no plan"/"free tier", which
- *   would be a claim the app cannot back.
- * - no active plan (`is_active === false`): the backend said so, that one is
- *   authoritative.
- * - active: tier, the minutes gauge and the reset date.
- *
- * A free trial is an active state of its own, and it used to be indistinguishable
- * from a purchased plan here: `subscription_tier` is null during a trial, so the
- * heading fell back to "Active plan" and the date to "PERIOD ENDS" (task-301).
- * It now names itself, and names what its date is.
- *
- * Beta access is a fifth state and takes precedence over the four above
- * (task-429). What grants the allowance then is the regime, not a plan and not a
- * trial — so the card names the beta, keeps the gauge, and says nothing about a
- * trial ending: during the beta none is running out, and a countdown to a date
- * that changes nothing is the kind of alarm the app has no business raising.
- */
+/** Read-only settled beta capacity, independent of reservations in flight. */
 interface SubscriptionStatusCardProps {
   /** Backend entitlement payload, `null` while unknown or after a failure. */
   entitlement: EntitlementStatus | null;
@@ -163,9 +133,10 @@ function CardBody({
   const isTrial = entitlement.is_free_trial;
   const tierLabel = getTierLabel(entitlement.subscription_tier);
   const statusNote = getStatusNote(entitlement.subscription_status);
-  const resetDate = formatResetDate(entitlement.resets_at);
+  const resetDate = formatResetDate(entitlement.budget.resets_at);
   const resetDateLabel = getResetDateLabel(entitlement);
-  const minutesRemaining = String(entitlement.minutes_remaining);
+  const consumed = entitlement.budget.consumed_percent;
+  const usage = consumed === null ? t("account.plan.unavailable") : `${formatNumber(consumed)}%`;
   // The trial's own tier is the one the gauge below is measuring, and it is
   // worth naming — but it never becomes the heading, which would read as a plan
   // the user bought. Under the beta there is no chip at all: a plan's status note
@@ -196,12 +167,9 @@ function CardBody({
       <View style={styles.metricRow}>
         <Metric
           testID="account-plan-minutes"
-          value={minutesRemaining}
-          label={t("account.plan.minutesLeft")}
-          accessibilityLabel={t("account.plan.minutesLeftA11y", {
-            remaining: minutesRemaining,
-            included: entitlement.minutes_included,
-          })}
+          value={usage}
+          label={t("budget.consumed")}
+          accessibilityLabel={`${t("budget.consumed")}: ${usage}`}
         />
         <Metric
           testID="account-plan-reset-date"
@@ -220,19 +188,8 @@ function CardBody({
 
       <UsageBar entitlement={entitlement} />
 
-      {/* The sentence the paywall prints under its plan cards, imported rather
-          than re-typed: the two screens explain the meter in the same words or
-          not at all — what the minutes cover, and that articles and web pages
-          cost none of them. A trial allowance is spent once and never refills,
-          which the date above says but the meter rule does not; under the beta
-          the same rule is followed by where the allowance comes from, which is
-          the one thing the heading alone does not explain. */}
       <Text style={styles.hintText}>
-        {isBeta
-          ? t("account.plan.minutesRuleBeta", { rule: minutesRule() })
-          : isTrial
-            ? t("account.plan.minutesRuleTrial", { rule: minutesRule() })
-            : minutesRule()}
+        {t("budget.rule")}
       </Text>
     </View>
   );
@@ -250,7 +207,7 @@ function UsageBar({
   entitlement: EntitlementStatus;
 }): React.JSX.Element | null {
   const styles = useThemedStyles(makeStyles);
-  if (entitlement.minutes_included <= 0) {
+  if (entitlement.budget.consumed_percent === null) {
     return null;
   }
   const usedFraction = getUsageRatio(entitlement);

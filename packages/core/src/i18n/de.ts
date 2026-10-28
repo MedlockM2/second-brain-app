@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** German catalogue. See `en` for the reference wording and the key layout. */
 export const de: Catalog = {
+  "budget.title": "Verarbeitung nicht verfügbar",
+  "budget.exhausted": "Die Kapazität dieses Monats reicht für diesen Vorgang nicht aus.",
+  "budget.exhaustedUntil": "Die Kapazität wird am {date} erneuert. Lesen und Organisieren bleiben verfügbar.",
+  "budget.tooLarge": "Dieses Element überschreitet die Verarbeitungsgrenze.",
+  "budget.unavailable": "Die Verarbeitung ist vorübergehend nicht verfügbar. Versuche es später erneut.",
+  "budget.closed": "Der Zugang zur Beta-Verarbeitung ist geschlossen.",
+
+  "budget.consumed": "Verbrauchte Kapazität",
+  "budget.rule": "Nur abgerechneter Verbrauch. Laufende Vorgänge reservieren Kapazität bis zu den endgültigen Kosten. Lesen und Organisieren bleiben verfügbar.",
   "folders.untitled": "Unbenannter Ordner",
   "folders.duplicateTitle": "Name bereits vergeben",
   "folders.duplicateMessage": "Hier gibt es bereits einen Ordner mit diesem Namen. Wähle einen anderen Namen.",

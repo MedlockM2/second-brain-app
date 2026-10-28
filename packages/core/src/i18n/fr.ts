@@ -15,6 +15,15 @@ import type { Catalog } from "./runtime";
  * `media.tab.reader` is the reading mode of a source, not the Reader tier.
  */
 export const fr: Catalog = {
+  "budget.title": "Traitement indisponible",
+  "budget.exhausted": "La capacité du mois ne permet pas ce traitement.",
+  "budget.exhaustedUntil": "La capacité se renouvelle le {date}. Lecture et rangement restent accessibles.",
+  "budget.tooLarge": "Cet élément dépasse la limite de traitement.",
+  "budget.unavailable": "Le traitement est temporairement indisponible. Réessayez plus tard.",
+  "budget.closed": "L’accès aux traitements bêta est fermé.",
+
+  "budget.consumed": "Capacité consommée",
+  "budget.rule": "Consommation régularisée uniquement. Les traitements en cours réservent de la capacité jusqu’à leur coût final. Lecture et rangement restent accessibles.",
   "folders.untitled": "Dossier sans titre",
   "folders.duplicateTitle": "Nom déjà utilisé",
   "folders.duplicateMessage": "Un dossier porte déjà ce nom ici. Choisissez un autre nom.",

@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Japanese catalogue. See `en` for the reference wording and the key layout. */
 export const ja: Catalog = {
+  "budget.title": "処理を利用できません",
+  "budget.exhausted": "今月の容量ではこの処理を実行できません。",
+  "budget.exhaustedUntil": "容量は{date}に更新されます。閲覧と整理は引き続き利用できます。",
+  "budget.tooLarge": "この項目は処理の上限を超えています。",
+  "budget.unavailable": "処理を一時的に利用できません。後でもう一度お試しください。",
+  "budget.closed": "ベータ版の処理へのアクセスは終了しています。",
+
+  "budget.consumed": "使用済み容量",
+  "budget.rule": "確定した使用量のみ。処理中は最終費用が確定するまで容量を確保します。閲覧と整理は引き続き利用できます。",
   "folders.untitled": "名称未設定フォルダ",
   "folders.duplicateTitle": "使用済みの名前",
   "folders.duplicateMessage": "ここには同じ名前のフォルダがあります。別の名前を入力してください。",

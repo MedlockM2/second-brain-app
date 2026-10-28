@@ -6,7 +6,7 @@ export type HttpError = Error & {
   code?: string;
   /**
    * Raw X-Quota-Error-Code value when the backend refused the request on
-   * consumption grounds (`out_of_minutes` or `item_too_long`).
+   * consumption grounds (typed beta capacity codes).
    */
   quotaErrorCode?: string;
   /**

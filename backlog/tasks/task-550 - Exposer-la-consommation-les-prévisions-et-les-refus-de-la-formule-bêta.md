@@ -1,10 +1,11 @@
 ---
 id: TASK-550
 title: 'Exposer la consommation, les prévisions et les refus de la formule bêta'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@codex'
 created_date: '2026-10-26 22:21'
-updated_date: '2026-10-26 22:30'
+updated_date: '2026-10-28 17:38'
 labels:
   - backend
   - mobile
@@ -44,9 +45,31 @@ Aucune offre commerciale, recharge payante ou facturation à crédits à créer.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le contrat authentifié expose l’état bêta et la consommation en pourcentage, la disponibilité tenant compte des opérations en cours et la date de recharge, à partir du contrôle budgétaire commun plutôt que d’une reconversion des anciennes minutes.
-- [ ] #2 Une prévision exploitable avant traitement important est disponible ; le contrat distingue estimation, réservation et consommation finale et représente explicitement une prévision indisponible, sans la présenter comme zéro.
-- [ ] #3 Les refus typés distinguent budget épuisé, opération trop importante et indisponibilité temporaire ; leurs paramètres permettent des messages traduits cohérents sur mobile et web.
-- [ ] #4 Le contrat canonique, OpenAPI, les types/client partagés et leurs consommateurs utilisent la même interface ; les adaptations nécessaires à leur compilation sont livrées sans attendre la tâche UI, les anciens champs en minutes sont retirés sans alias et aucun nouvel endpoint média/artéfact n’est ajouté sous /api/v1/.
-- [ ] #5 Ruff/mypy et les vérifications TypeScript/lint appropriées de packages/core, mobile et web passent pour les changements concernés ; packages/core ne contient aucune dépendance ou lecture globale interdite par AGENTS.md.
+- [x] #1 Le contrat authentifié expose l’état bêta et la consommation en pourcentage, la disponibilité tenant compte des opérations en cours et la date de recharge, à partir du contrôle budgétaire commun plutôt que d’une reconversion des anciennes minutes.
+- [x] #2 Une prévision exploitable avant traitement important est disponible ; le contrat distingue estimation, réservation et consommation finale et représente explicitement une prévision indisponible, sans la présenter comme zéro.
+- [x] #3 Les refus typés distinguent budget épuisé, opération trop importante et indisponibilité temporaire ; leurs paramètres permettent des messages traduits cohérents sur mobile et web.
+- [x] #4 Le contrat canonique, OpenAPI, les types/client partagés et leurs consommateurs utilisent la même interface ; les adaptations nécessaires à leur compilation sont livrées sans attendre la tâche UI, les anciens champs en minutes sont retirés sans alias et aucun nouvel endpoint média/artéfact n’est ajouté sous /api/v1/.
+- [x] #5 Ruff/mypy et les vérifications TypeScript/lint appropriées de packages/core, mobile et web passent pour les changements concernés ; packages/core ne contient aucune dépendance ou lecture globale interdite par AGENTS.md.
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Exposer un état et une prévision bêta depuis le registre commun, sans écriture de réservation.
+2. Remplacer le contrat minutes et adapter mécaniquement les consommateurs mobile/web et les refus partagés.
+3. Documenter le contrat canonique/OpenAPI ; vérifier Ruff, mypy, TypeScript et lint, puis livrer un commit pour merge.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Contrat livré : pourcentages du registre budgétaire commun, réservations/disponible, opérations en cours et seuil backend ; prévision authentifiée en lecture seule pour audio, document et requête LLM mesurée. Les chiffres indisponibles sont null. Aucune réservation créée par la prévision. Une route inconnue ne reçoit pas de faux coût nul.
+Types et service partagés ; champs publics en minutes supprimés sans alias ; adaptations mobile/web ; refus synchrones et codes de jobs traduits. Les compteurs sont fortement cohérents ; les nombres informatifs viennent de l’index ouvert éventuellement cohérent.
+Validation : Ruff propre, mypy propre sur 215 fichiers, typecheck/lint core/mobile/web passent (un avertissement any préexistant dans purchaseService.ts), OpenAPI parsé avec 106 références internes résolues. Aucun test automatisé ni appel local FastAPI. AWS et appareils après déploiement : checklist owner TASK-440. Présentation détaillée et prévisions dans les parcours : TASK-551.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Contrat budgétaire bêta avec prévision indicative et refus typés, sans jauge publique en minutes. Clients mobile/web adaptés. Ruff, mypy, TypeScript, lint et OpenAPI vérifiés ; à passer Done après merge.
+<!-- SECTION:FINAL_SUMMARY:END -->
