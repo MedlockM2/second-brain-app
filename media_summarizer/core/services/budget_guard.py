@@ -429,7 +429,9 @@ class TextEstimate:
     the page count. With none, the per-item ceiling of the medium is reserved —
     240 minutes of speech, or 100 pages for a document — never a provisional
     minimum (rule 3). ``max_tokens`` replaces the ceiling for a medium with a
-    smaller natural bound (an X post).
+    smaller natural bound (an X post). ``embedded_images`` adds, to a text read
+    from the file, one document page of text per picture the parse may OCR (a
+    DOCX).
     """
 
     text_bytes: Optional[int] = None
@@ -437,10 +439,14 @@ class TextEstimate:
     page_count: Optional[int] = None
     document: bool = False
     max_tokens: Optional[int] = None
+    embedded_images: int = 0
 
     def tokens(self, ctx: PricingContext) -> int:
         if self.text_bytes is not None and self.text_bytes >= 0:
-            return ceil(self.text_bytes / BYTES_PER_TOKEN)
+            return (
+                ceil(self.text_bytes / BYTES_PER_TOKEN)
+                + self.embedded_images * ctx.formula.text_tokens_per_document_page
+            )
         estimated = beta_budget.estimated_text_tokens(
             ctx, duration_seconds=self.duration_seconds, page_count=self.page_count
         )

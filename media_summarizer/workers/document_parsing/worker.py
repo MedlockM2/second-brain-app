@@ -426,7 +426,12 @@ async def _admit_document(
         acquisition=lambda ctx: [
             beta_budget.document_line(ctx, provider="llamaparse", unit=units.unit, count=units.count)
         ],
-        text=TextEstimate(page_count=units.count, document=True),
+        text=TextEstimate(
+            text_bytes=units.text_bytes,
+            embedded_images=units.embedded_images,
+            page_count=units.count,
+            document=True,
+        ),
         media_item_id=media_item_id,
     )
     return ParseBudget(
