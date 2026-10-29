@@ -29,7 +29,7 @@ Proposition d’ensemble :
 5. **Coupe-circuit partagé et plafond d’engagement avant chaque nouvelle dépense**, avec essai de reprise unique et borné. Aucun mécanisme ne prétend annuler rétroactivement un appel déjà parti ou garantir la facture bancaire au centime.
 6. **TASK-564** possède le socle de capacité et les intégrations ; **TASK-565** la discipline d’équité et les parcours d’attente ; **TASK-566** les engagements opérateur, suspensions et reprise. Leurs interfaces sont décrites §6. TASK-552 reste propriétaire du rapport général. TASK-557/558 restent propriétaires des plans, crédits, recharges et anciens `provider_pools`.
 
-La raison du choix n’est pas une moyenne journalière élevée. Dans notre scénario à 1 000 DAU, une rafale de dix minutes représente **3,366 millions d’unités de capacité LLM par minute**, sous l’estimation prudente, pour une cible illustrative Build de 1,6 million. Un premier import de bibliothèque peut prendre plus d’une heure même avec un débit LLM adéquat (§3). Les traitements sans résultat peuvent aussi épuiser la trésorerie alors que les enveloppes des comptes sont remboursées.
+La raison du choix n’est pas une moyenne journalière élevée. Dans notre scénario à 1 000 DAU, une rafale de dix minutes représente **3,366 millions d’unités de capacité LLM par minute**, sous l’estimation prudente, pour une cible de régulation de 8 millions au palier Launch retenu (1,6 million en Build, gardé en comparaison). Un premier import de bibliothèque peut prendre plus d’une heure même avec un débit LLM adéquat (§3). Les traitements sans résultat peuvent aussi épuiser la trésorerie alors que les enveloppes des comptes sont remboursées.
 
 ## 1. Ce qui est réellement câblé
 
@@ -54,6 +54,8 @@ Références locales, relatives au dépôt :
 `lambda_workers.tf` fixe une concurrence ESM de 10 par défaut, `batch_size=1`, pas une concurrence cumulée par fournisseur. Le trafic LLM peut donc venir de **trois** files de dix workers. Les queues utilisent généralement `maxReceiveCount=3`, avec des visibilités différentes. Les décorateurs de `api/rate_limit.py` sont explicitement **sans effet** ; la limite API Gateway par route/stage n’est pas une limite par compte ni par fournisseur. Les variables Redis sont présentes dans `.env.example`, pas raccordées dans `runtime_env.tf` : on ne peut pas déduire de l’exemple qu’un Redis existe en AWS.
 
 Le budget commun réserve les appels, règle les résultats livrés et rend au testeur les échecs, avec coût opérateur mesuré ou borné. Le backstop de six heures n’est pas un mécanisme d’ordonnancement. Les rapports TASK-552 distinguent coût fournisseur et valeur de contenu réutilisé. Les relances manuelles d’artefacts changent désormais de suffixe d’opération ; leur événement doit aussi porter l’identité racine et `retry_reason=explicit` pour que TASK-552 les distingue des nouvelles intentions et des retries internes (`try_number`).
+
+**Décision de l’owner du 2026-10-29 : le palier OpenAI Launch est tenu pour acquis pour ce benchmark et ses implémentations.** L’owner l’atteint par un dépôt de crédits à faire lui-même sur la plateforme OpenAI (cumul de 100 $ de crédits achetés, hors TVA ; tâche TASK-558, checklist des actions de compte). Les plafonds de départ sont ceux de Launch (§8) ; Build reste une simulation de comparaison et le repli si le relèvement n’a pas eu lieu. La console affichait encore Build le 2026-10-29 (Luna : 5 000 RPM / 2 M TPM) ; les valeurs Launch ont été lues le même jour dans le sélecteur de palier de cette page (Luna, gpt-5-nano, gpt-5.4-nano : 10 M TPM, 10 000 RPM, 50 000 IPM ; file batch 1 G TPD), sans que le compte y soit passé. À relire sur la page Limits après le dépôt, badge du compte à « Launch ».
 
 **Faits du compte, datés, non observations présentes :** TASK-459 rapporte Build OpenAI au 11 octobre ; TASK-557 décrit au 28 octobre LlamaParse Free et trois comptes Apify Free distincts. TASK-557 est encore `pending`. Ces notes ne prouvent ni un plan inchangé ni les quotas effectifs aujourd’hui. Aucune clé, console, identité de connexion ou solde courant n’a été lu pour cette recherche. Les alias de portée proposés sont des noms techniques non secrets, jamais un email ou un token.
 
@@ -130,7 +132,7 @@ Ces moyennes restent faibles face au TPM. Elles ne prouvent rien sur une rafale 
 
 ### 3.3 Rafale du soir
 
-Hypothèse : **30 % du travail du jour arrive en dix minutes**. Cible indicative de régulation : 80 % d’un quota Build de 2 M TPM = **1,6 M unités/min**, ou 8 M au palier Launch. Ce n’est pas une annonce de quota du compte.
+Hypothèse : **30 % du travail du jour arrive en dix minutes**. Cible de régulation retenue : 80 % du quota Launch de 10 M TPM = **8 M unités/min** ; pour comparaison, 80 % d’un quota Build de 2 M TPM = 1,6 M. Ce n’est pas une annonce de quota du compte.
 
 | DAU | LLM/min pendant la rafale | Q/min prudent | Drain minimal de toute la rafale, Build | Arriéré après les dix minutes si aucun nouveau travail n’arrive | Drain minimal Launch |
 |---:|---:|---:|---:|---:|---:|
@@ -138,7 +140,7 @@ Hypothèse : **30 % du travail du jour arrive en dix minutes**. Cible indicative
 | 500 | 21 | 1,683 M | 10,52 min | ≥0,52 min | 2,10 min |
 | 1 000 | 42 | 3,366 M | 21,04 min | ≥11,04 min | 4,21 min |
 
-Ce sont **des bornes de débit**, pas les latences de chaque opération. Une fenêtre prudente, l’ordre des étapes, la concurrence et la durée fournisseur augmentent le délai. Si le trafic continue, l’arriéré se résorbe à `capacité − arrivées`, pas à la capacité entière. À 1 000 DAU, le chat représente à lui seul 18 appels/min et 1,6776 M Q/min dans ce modèle prudent : il peut dépasser la cible Build même sans travail de fond. Une priorité ne crée pas la capacité manquante ; certains tours doivent être refusés temporairement avant émission.
+Ce sont **des bornes de débit**, pas les latences de chaque opération. Une fenêtre prudente, l’ordre des étapes, la concurrence et la durée fournisseur augmentent le délai. Si le trafic continue, l’arriéré se résorbe à `capacité − arrivées`, pas à la capacité entière. À 1 000 DAU, le chat représente à lui seul 18 appels/min et 1,6776 M Q/min dans ce modèle prudent : il dépasse la cible Build même sans travail de fond, mais reste sous la cible Launch retenue (8 M). Une priorité ne crée pas la capacité manquante ; certains tours doivent être refusés temporairement avant émission.
 
 À durées hypothétiques de 20 s/appel pour chat/artefact et 45 s/traduction, dix workers servent respectivement 30/30/13,3 appels par minute. Ce ne sont pas des mesures. Le TPM devient ici contraignant avant la concurrence moyenne ; avec une latence ×3, les dix slots ne servent plus que 10/10/4,4 appels/min et deviennent aussi un goulot. Le contrôle doit donc cumuler les deux dimensions.
 
@@ -392,7 +394,7 @@ TASK-557 reste **pending** : ses conclusions sur plans/recharges ne valent pas d
 
 | Paramètre | Proposition / condition |
 |---|---|
-| OpenAI RPM/TPM | Valeur du compte et de chaque portée à confirmer ; simulations Build et Launch, marge initiale 20 %. Aucun `LLM_TPM_LIMIT` n’est ajouté par ce benchmark ; 564 le ferait uniquement après validation remplaçant la décision 459. |
+| OpenAI RPM/TPM | Valeur du compte et de chaque portée à confirmer ; **Launch retenu** (Luna 10 000 RPM / 10 M TPM, lus dans la console le 2026-10-29 en vue du palier ; à relire une fois le compte passé à Launch) ; marge initiale 20 %, soit une cible de 8 M TPM. Le plafond configuré ne suit pas seul le palier du compte (§4.1) : le relever à la main si l’en-tête annonce davantage. Build reste une simulation de comparaison. Aucun `LLM_TPM_LIMIT` n’est ajouté par ce benchmark ; 564 le ferait uniquement après validation remplaçant la décision 459. |
 | Q LLM | Octets réellement sérialisés + sortie maximale applicable comme hypothèse prudente initiale ; corréler headers et tokens réellement facturés, sans déduire le cache de façon supposée. Ne pas baisser 32 000 ou plafonner la traduction pour réduire l’attente. |
 | Jobs Deepgram | Plafond global compatible avec le projet confirmé ; les 10 workers actuels peuvent rester la borne plus petite. Aucune augmentation automatique à la valeur publique 50. |
 | Jobs LlamaParse | 5 tant que Free/Starter est le plan confirmé ; remplacer après constat de compte. Partager entre document et carrousel, pas 5 chacun. |
