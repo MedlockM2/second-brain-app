@@ -6,7 +6,7 @@ owner_decision: pending
 
 ## Owner Validation
 
-**Decision**: *(à remplir par l'owner)*
+**Decision**: je veux que tu recherches aussi quels fournisseurs proposent la fonctionnalité d'un refund automatique (prélèvement automatique via mes coordonnées bancaires) afin qu'on est à se soucier d'alerter sur le % plafond uniquement pour ceux qui ne proposent pas cette fonctionnalité et qui demandent donc un refund manuel de ma part. Regarde la doc en ligne. 
 **Validated at**: *(date)*
 
 ## Recommendation
