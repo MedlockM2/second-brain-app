@@ -26,6 +26,7 @@ from media_summarizer.core.ports.document_parser import (
     ParseError,
     ParseErrorCode,
     ParseResult,
+    is_credit_refusal,
 )
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,13 @@ class UnstructuredResolver(DocumentParserPort):
                 retryable=True,
             )
         except httpx.HTTPStatusError as e:
+            if is_credit_refusal(e.response.status_code, e.response.text):
+                return ParseError(
+                    code=ParseErrorCode.CREDITS_EXHAUSTED,
+                    message=f"Unstructured credits exhausted: {e.response.status_code} - {e.response.text[:200]}",
+                    provider=self.provider_name,
+                    retryable=False,
+                )
             if e.response.status_code == 429:
                 return ParseError(
                     code=ParseErrorCode.RATE_LIMITED,

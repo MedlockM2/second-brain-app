@@ -16,6 +16,7 @@ export const de: Catalog = {
   "budget.exhaustedUntil": "Die Kapazität wird am {date} erneuert. Lesen und Organisieren bleiben verfügbar.",
   "budget.tooLarge": "Dieses Element überschreitet die Verarbeitungsgrenze.",
   "budget.unavailable": "Die Verarbeitung ist vorübergehend nicht verfügbar. Versuche es später erneut.",
+  "budget.suspended": "Dieser Dienst ist vorübergehend pausiert. Deine Bibliothek bleibt verfügbar. Versuche es später erneut.",
   "budget.closed": "Der Zugang zur Beta-Verarbeitung ist geschlossen.",
 
   "budget.consumed": "Verbrauchte Kapazität",

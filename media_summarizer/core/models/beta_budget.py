@@ -73,6 +73,9 @@ class ReleaseReason(str, Enum):
     #: Backstop: still open ``hold_expiry_minutes`` after its admission, with no
     #: worker left to close it (a message lost to a dead-letter queue).
     EXPIRED = "expired"
+    #: The send was refused at the claim because the provider, or all new spend,
+    #: is suspended (TASK-566): the request never left.
+    SUSPENDED = "suspended"
 
 
 class CostBasis(str, Enum):
@@ -99,6 +102,31 @@ class BudgetRefusal(str, Enum):
     BUDGET_UNAVAILABLE = "budget_unavailable"
     #: The beta formula is closed: this control has no budget to grant.
     NOT_ENTITLED = "not_entitled"
+    #: New spend is suspended by the operator control (TASK-566): a provider whose
+    #: circuit is open, an operator ceiling reached, or a manual pause. Nothing in
+    #: the tester's own budget changes; reading what exists is unaffected.
+    PROVIDER_SUSPENDED = "provider_suspended"
+
+
+class ProviderFailure(str, Enum):
+    """What a failed provider call says about the provider, for its circuit (TASK-566).
+
+    Only these failures move a circuit. A failure of one item's content (an
+    unreadable file, a private post) is ``None`` at the call site and never
+    suspends a provider shared by every account.
+    """
+
+    #: The paid allowance is exhausted. Never retried: the same call gets the same
+    #: answer until someone tops the account up. One is enough to suspend.
+    CREDIT_EXHAUSTED = "credit_exhausted"
+    #: The key or the account is refused. Needs an action, like a credit.
+    ACCOUNT_REFUSED = "account_refused"
+    #: A timeout, a lost connection, a 5xx: may pass later. Counted towards an
+    #: incident, and still retried within each worker's bounded tries.
+    TRANSIENT = "transient"
+    #: The provider is pacing us. Capacity, not an incident: never opens a circuit
+    #: (decision 459, kept by TASK-563 Owner Validation point 1).
+    RATE_LIMITED = "rate_limited"
 
 
 class ProviderKind(str, Enum):

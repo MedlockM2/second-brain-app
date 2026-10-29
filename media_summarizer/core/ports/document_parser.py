@@ -110,6 +110,26 @@ class ParseErrorCode(str, Enum):
     AUTHENTICATION_ERROR = "authentication_error"
     NETWORK_ERROR = "network_error"
     INVALID_FILE = "invalid_file"
+    #: The parser's paid allowance is exhausted: never retried, and the first one
+    #: suspends that parser for every account (TASK-566).
+    CREDITS_EXHAUSTED = "credits_exhausted"
+
+
+#: Words a parser's refusal uses when it is about the account's allowance rather
+#: than the request rate. LlamaParse documents its credit refusals as 402 (« No
+#: quota left to create a job », « maximum number of credits for your plan »,
+#: https://developers.llamaindex.ai/llamaparse/general/troubleshooting/); a 429
+#: carrying one of these words is read the same way, so a spent allowance served
+#: as a throttle is not retried as one.
+_CREDIT_MARKERS = ("credit", "quota", "billing", "payment", "plan limit", "usage limit")
+
+
+def is_credit_refusal(status_code: int, body: str) -> bool:
+    """Whether an HTTP error from a parser says its allowance is exhausted."""
+    if status_code == 402:
+        return True
+    text = (body or "").lower()
+    return status_code == 429 and any(marker in text for marker in _CREDIT_MARKERS)
 
 
 @dataclass

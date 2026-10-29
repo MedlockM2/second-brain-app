@@ -228,6 +228,17 @@ async def _lookup_post(tweet_id: str) -> Dict[str, Any]:
             http_status=status_code,
             provider_detail=detail or None,
         )
+    problem = f"{payload.get('type') or ''} {payload.get('title') or ''}".lower()
+    if status_code == 429 and ("usage-capped" in problem or "usagecapexceeded" in problem):
+        # The cap of the app's billing cycle, served as a 429: a spent allowance,
+        # not a window that reopens in fifteen minutes. Never retried (TASK-566).
+        raise XIngestionError(
+            MediaFailureCode.PROVIDER_CREDITS_DEPLETED,
+            details="x_lookup_usage_capped",
+            provider="x_api",
+            http_status=status_code,
+            provider_detail=detail or None,
+        )
     if status_code == 429:
         raise XIngestionError(
             MediaFailureCode.PROVIDER_RATE_LIMITED,
@@ -524,14 +535,14 @@ async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
         lookup_result = await _lookup_post(tweet_id)
     except XIngestionError as exc:
         if exc.details in _BILLED_FAILURES:
-            await call.release(operator_cost=await _post_cost())
+            await call.release_for(exc, operator_cost=await _post_cost())
         elif exc.details in _UNKNOWN_FAILURES:
-            await call.release()
+            await call.release_for(exc)
         else:
-            await call.release(operator_cost=budget_guard.no_cost())
+            await call.release_for(exc, operator_cost=budget_guard.no_cost())
         raise
-    except BaseException:
-        await call.release()
+    except BaseException as exc:
+        await call.release_for(exc)
         raise
     try:
         stored = await _store_post(job=job, job_id=job_id, normalized_url=normalized_url, lookup_result=lookup_result)

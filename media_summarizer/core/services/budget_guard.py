@@ -24,7 +24,9 @@ The vocabulary every caller shares:
   bound (rule 6). A request is never sent without one.
 - **settle / release** (:class:`BudgetCall`) — a delivered result is charged its
   real cost; anything else hands the whole hold back, the provider cost of the
-  failure going to the operator's spend (rule 5).
+  failure going to the operator's spend (rule 5). Both also tell the provider's
+  circuit how the call went (TASK-566, ``core/services/operator_guard.py``): the
+  caller of a release classifies the failure with :func:`failure_of`.
 
 Two rules hold everywhere and are enforced here rather than at each call site:
 
@@ -57,13 +59,14 @@ from media_summarizer.core.models.beta_budget import (
     CloseOutcome,
     Component,
     MeasuredCost,
+    ProviderFailure,
     ProviderKind,
     ReleaseReason,
     ReservationLine,
 )
 from media_summarizer.core.models.failure_codes import MediaFailureCode
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
-from media_summarizer.core.services import beta_budget
+from media_summarizer.core.services import beta_budget, operator_guard
 from media_summarizer.core.services.beta_budget import ItemTooLargeError, PricingContext
 from media_summarizer.core.services.llm_config import (
     LLM_MAX_COMPLETION_TOKENS,
@@ -71,6 +74,7 @@ from media_summarizer.core.services.llm_config import (
     LLM_MODEL_MAX_INPUT_TOKENS,
 )
 from media_summarizer.core.services.llm_corpus import BYTES_PER_TOKEN
+from media_summarizer.core.services.operator_guard import OperatorSuspendedError
 from media_summarizer.utils.beta_budget_db import LedgerUnavailableError
 from media_summarizer.utils.logging_config import get_log_context, log_event
 
@@ -114,6 +118,7 @@ _HTTP_STATUS: Mapping[BudgetRefusal, int] = {
     BudgetRefusal.NOT_ENTITLED: 403,
     BudgetRefusal.ITEM_TOO_LARGE: 413,
     BudgetRefusal.BUDGET_UNAVAILABLE: 503,
+    BudgetRefusal.PROVIDER_SUSPENDED: 503,
 }
 
 #: The failure code a refused job carries. A closed formula grants no budget, so it
@@ -123,11 +128,14 @@ _FAILURE_CODES: Mapping[BudgetRefusal, MediaFailureCode] = {
     BudgetRefusal.NOT_ENTITLED: MediaFailureCode.BUDGET_EXHAUSTED,
     BudgetRefusal.ITEM_TOO_LARGE: MediaFailureCode.ITEM_TOO_LARGE,
     BudgetRefusal.BUDGET_UNAVAILABLE: MediaFailureCode.BUDGET_UNAVAILABLE,
+    BudgetRefusal.PROVIDER_SUSPENDED: MediaFailureCode.PROVIDER_SUSPENDED,
 }
 
 #: The refusal figures a client may read. Amounts are never among them: the tester
 #: sees a percentage, never euros (R.1), so ``required_nano_eur`` stays in the logs.
-_PUBLIC_PARAMS = frozenset({"period_end", "quantity", "measured", "limit"})
+#: Nor is the scope or the reason of a suspension: which provider is down and why
+#: is the operator's business, the reader is told when to try again.
+_PUBLIC_PARAMS = frozenset({"period_end", "quantity", "measured", "limit", "retry_at"})
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +156,10 @@ class BudgetRefusedError(Exception):
         self.refusal = refusal
         self.params: Dict[str, Any] = dict(params or {})
         self.observed = False
+
+    @classmethod
+    def suspended(cls, exc: OperatorSuspendedError) -> "BudgetRefusedError":
+        return cls(BudgetRefusal.PROVIDER_SUSPENDED, exc.params())
 
     @classmethod
     def for_item(cls, exc: ItemTooLargeError) -> "BudgetRefusedError":
@@ -248,6 +260,8 @@ class BudgetCall:
     attempt_id: str
     component: Component
     content_media_key: Optional[str] = None
+    #: The provider of the attempt, whose circuit the outcome is reported to.
+    provider: str = ""
 
     async def settle(self, cost: MeasuredCost, *, metric_source: str) -> Optional[int]:
         """A result reached the user: charge its real cost. Never raises.
@@ -275,6 +289,7 @@ class BudgetCall:
                 error_type=type(exc).__name__,
             )
             return None
+        await operator_guard.record_success(self.provider, self.attempt_id)
         consumed = attempt.consumed_nano_eur if attempt is not None else None
         if consumed and self.content_media_key and self.component.value in IMPORT_VALUE_COMPONENTS:
             from media_summarizer.utils import media_idempotence
@@ -289,6 +304,8 @@ class BudgetCall:
         *,
         reason: ReleaseReason = ReleaseReason.FAILED,
         operator_cost: Optional[MeasuredCost] = None,
+        failure: Optional[ProviderFailure] = None,
+        retry_after_seconds: Optional[float] = None,
     ) -> None:
         """No result reached the user: hand the hold back (rule 5). Never raises.
 
@@ -296,8 +313,27 @@ class BudgetCall:
         is known — zero for an error the provider answered without processing
         anything. Left out for a claimed call, the reserved bound is recorded as
         the operator's spend, because a missing metric is never a zero cost.
+
+        ``failure`` is what the failure says about the provider (:func:`failure_of`),
+        for its circuit; ``None`` for a failure of the item itself.
         """
         await _release_quietly(self.user_id, self.attempt_id, reason=reason, operator_cost=operator_cost)
+        await operator_guard.record_failure(
+            self.provider, self.attempt_id, failure, retry_after_seconds=retry_after_seconds
+        )
+
+    async def release_for(self, exc: BaseException, *, operator_cost: Optional[MeasuredCost] = None) -> None:
+        """Release after ``exc`` was raised around the call, classified for the circuit."""
+        await self.release(
+            operator_cost=operator_cost,
+            failure=failure_of(exc),
+            retry_after_seconds=getattr(exc, "retry_after_seconds", None),
+        )
+
+
+def failure_of(exc: Optional[BaseException]) -> Optional[ProviderFailure]:
+    """What an exception raised around a provider call says about the provider."""
+    return operator_guard.failure_of(exc)
 
 
 def no_cost() -> MeasuredCost:
@@ -570,7 +606,8 @@ async def start(
     left by a delivery that no longer holds that claim.
 
     Raises :class:`BudgetRefusedError` — nothing may be sent — when the budget
-    refuses the new try or the ledger fails.
+    refuses the new try, the provider is suspended (``provider_suspended``, the held
+    attempt released at zero) or the ledger fails.
     """
     if not user_id:
         log_event(
@@ -585,8 +622,8 @@ async def start(
     try:
         latest = _latest(await beta_budget.list_operation_attempts(user_id, operation_id), step)
         if latest is not None and latest.status == AttemptStatus.HELD:
-            if await beta_budget.claim_send(user_id, latest.attempt_id):
-                return _call(user_id, operation_id, latest.attempt_id, component, content_media_key)
+            if await _claim(user_id, operation_id, latest.attempt_id, provider=latest.provider):
+                return _call(user_id, operation_id, latest.attempt_id, component, content_media_key, latest.provider)
             latest = await beta_budget.get_attempt(user_id, latest.attempt_id)
         if latest is not None and latest.status == AttemptStatus.SENDING:
             outcome = await beta_budget.release(
@@ -605,14 +642,39 @@ async def start(
     await admit(user_id, operation_id=operation_id, lines=[reservation], try_number=next_try)
     attempt_id = beta_budget.attempt_id(operation_id, component, next_try, part)
     try:
-        claimed = await beta_budget.claim_send(user_id, attempt_id)
+        claimed = await _claim(user_id, operation_id, attempt_id, provider=reservation.provider)
     except LedgerUnavailableError as exc:
         await _release_quietly(user_id, attempt_id, reason=ReleaseReason.FAILED)
         raise _unavailable("budget_guard.claim_unavailable", user_id=user_id, operation_id=operation_id, exc=exc) from exc
     if not claimed:
         # A concurrent delivery reserved the same try and claimed it first.
         raise BudgetBusyError(attempt_id)
-    return _call(user_id, operation_id, attempt_id, component, content_media_key)
+    return _call(user_id, operation_id, attempt_id, component, content_media_key, reservation.provider)
+
+
+async def _claim(user_id: str, operation_id: str, attempt_id: str, *, provider: str) -> bool:
+    """Claim a held attempt; a suspended provider releases it and refuses (TASK-566).
+
+    The request never left, so the hold goes back to the tester at zero cost; the
+    next delivery reserves a new try, refused at its own claim while the
+    suspension lasts.
+    """
+    try:
+        return await beta_budget.claim_send(user_id, attempt_id, provider=provider)
+    except OperatorSuspendedError as exc:
+        await _release_quietly(user_id, attempt_id, reason=ReleaseReason.SUSPENDED)
+        log_event(
+            logger,
+            logging.WARNING,
+            "budget_guard.send_suspended",
+            "Send refused: the provider is suspended",
+            user_id=user_id,
+            operation_id=operation_id,
+            attempt_id=attempt_id,
+            scope=exc.scope,
+            reason=exc.reason,
+        )
+        raise BudgetRefusedError.suspended(exc) from exc
 
 
 def _call(
@@ -621,6 +683,7 @@ def _call(
     attempt_id: str,
     component: Component,
     content_media_key: Optional[str],
+    provider: str,
 ) -> BudgetCall:
     return BudgetCall(
         user_id=user_id,
@@ -628,6 +691,7 @@ def _call(
         attempt_id=attempt_id,
         component=component,
         content_media_key=content_media_key,
+        provider=provider,
     )
 
 
@@ -801,7 +865,7 @@ async def settle_collections(user_id: Optional[str], operation_id: Optional[str]
             cost = beta_budget.x_cost(ctx, posts=1)
         else:
             continue
-        call = _call(user_id, operation_id, attempt.attempt_id, Component.COLLECTION, content_media_key)
+        call = _call(user_id, operation_id, attempt.attempt_id, Component.COLLECTION, content_media_key, attempt.provider)
         if await call.settle(cost, metric_source="fixed_price_delivered") is not None:
             settled += 1
     return settled
@@ -818,8 +882,9 @@ async def precheck(user_id: str) -> None:
 
     Not an admission — the atomic one happens before the provider call (rule 4) —
     but the answer a submission gets when nothing could be admitted anyway: the
-    beta formula is closed, the month's available amount is spent, or the counter
-    cannot be read (rule 7). Reading, organising and re-filing a media already held
+    beta formula is closed, the month's available amount is spent, all new spend
+    is paused or an operator ceiling is reached (TASK-566), or the counter cannot
+    be read (rule 7). Reading, organising and re-filing a media already held
     never come through here.
     """
     ctx = await pricing()
@@ -835,6 +900,12 @@ async def precheck(user_id: str) -> None:
             BudgetRefusal.BUDGET_EXHAUSTED,
             {"period_end": beta_budget.next_period_start(now).isoformat()},
         )
+    try:
+        await operator_guard.precheck(ctx.operator_limits, now=now)
+    except OperatorSuspendedError as exc:
+        raise BudgetRefusedError.suspended(exc) from exc
+    except LedgerUnavailableError as exc:
+        raise _unavailable("budget_guard.precheck_unavailable", user_id=user_id, operation_id="precheck", exc=exc) from exc
 
 
 # ---------------------------------------------------------------------------

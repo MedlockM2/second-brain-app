@@ -76,6 +76,7 @@ from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Optional
 
+from media_summarizer.core.models.beta_budget import ProviderFailure
 from media_summarizer.utils.logging_config import log_event
 
 
@@ -215,6 +216,16 @@ class LlmProviderRefusedError(RuntimeError):
         self.failure_kind = failure_kind
         self.provider_status = provider_status
         self.retry_after_seconds = retry_after_seconds
+
+    @property
+    def provider_failure(self) -> Optional[ProviderFailure]:
+        """Axis 2 as the operator control reads it (TASK-566): no credit and a
+        refused key suspend OpenAI on the first refusal, a rate limit never does."""
+        return {
+            REFUSAL_QUOTA: ProviderFailure.CREDIT_EXHAUSTED,
+            REFUSAL_AUTHENTICATION: ProviderFailure.ACCOUNT_REFUSED,
+            REFUSAL_RATE_LIMIT: ProviderFailure.RATE_LIMITED,
+        }.get(self.refusal_reason)
 
 
 def parse_retry_after(value: Optional[str], *, now: Optional[datetime] = None) -> Optional[float]:

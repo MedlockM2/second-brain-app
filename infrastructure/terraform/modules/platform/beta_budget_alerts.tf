@@ -23,6 +23,12 @@ locals {
       pattern   = "{ $.event = \"beta_budget.audit_stale\" }"
       threshold = 0
     }
+    # TASK-566: a provider suspended, a send refused by an operator ceiling, a
+    # ceiling unreadable (all new spend paused), a circuit update lost.
+    operator = {
+      pattern   = "{ ($.event = \"operator.suspended\") || ($.event = \"operator.limit_refused\") || ($.event = \"operator.bound_missing\") || ($.event = \"operator.circuit_update_failed\") }"
+      threshold = 0
+    }
   }
   budget_filters = { for pair in setproduct(keys(local.budget_log_groups), keys(local.budget_anomalies)) :
     "${pair[0]}-${pair[1]}" => { source = pair[0], kind = pair[1] }
@@ -49,9 +55,14 @@ resource "aws_iam_role_policy" "budget_audit" {
     Statement = [
       { Effect = "Allow", Action = ["logs:CreateLogStream", "logs:PutLogEvents"], Resource = "${aws_cloudwatch_log_group.budget_audit.arn}:*" },
       { Effect = "Allow", Action = ["dynamodb:Scan"], Resource = [aws_dynamodb_table.beta_budget.arn, "${aws_dynamodb_table.beta_budget.arn}/index/open-attempts-index"] },
+      # TASK-566: the operator partition only, read for its ceilings and circuits.
+      {
+        Effect    = "Allow", Action = ["dynamodb:GetItem", "dynamodb:Query"], Resource = aws_dynamodb_table.beta_budget.arn,
+        Condition = { "ForAllValues:StringEquals" = { "dynamodb:LeadingKeys" = ["operator"] } }
+      },
       {
         Effect    = "Allow", Action = ["dynamodb:GetItem"], Resource = aws_dynamodb_table.pricing_config_v1.arn,
-        Condition = { "ForAllValues:StringEquals" = { "dynamodb:LeadingKeys" = ["beta_access"] } }
+        Condition = { "ForAllValues:StringEquals" = { "dynamodb:LeadingKeys" = ["beta_access", "operator_control"] } }
       }
     ]
   })

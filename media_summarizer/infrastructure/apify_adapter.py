@@ -18,6 +18,8 @@ from urllib.parse import quote
 
 import httpx
 
+from media_summarizer.core.models.beta_budget import ProviderFailure
+
 APIFY_API_BASE_URL = "https://api.apify.com/v2"
 APIFY_REQUEST_TIMEOUT_SECONDS = float(os.environ.get("APIFY_REQUEST_TIMEOUT_SECONDS", "15"))
 APIFY_ACTOR_TIMEOUT_SECONDS = int(os.environ.get("APIFY_ACTOR_TIMEOUT_SECONDS", "600"))
@@ -63,6 +65,22 @@ class ApifyAdapterError(RuntimeError):
         self.code = code
         self.retryable = retryable
         self.detail = detail
+
+    @property
+    def provider_failure(self) -> ProviderFailure | None:
+        """What this failure says about Apify, for its circuit (TASK-566)."""
+        return _PROVIDER_FAILURES.get(self.code)
+
+
+#: A 402 is Apify refusing to run a paid Actor on the credit left, whatever the
+#: wording of its body: one is enough to stop sending it new runs.
+_PROVIDER_FAILURES: dict[str, ProviderFailure] = {
+    "apify_payment_required": ProviderFailure.CREDIT_EXHAUSTED,
+    "apify_auth_error": ProviderFailure.ACCOUNT_REFUSED,
+    "apify_rate_limited": ProviderFailure.RATE_LIMITED,
+    "apify_server_error": ProviderFailure.TRANSIENT,
+    "apify_network_error": ProviderFailure.TRANSIENT,
+}
 
 
 def _normalize_actor_id(actor_id: str) -> str:

@@ -361,8 +361,8 @@ async def _stream_with_retries(
         except Exception as exc:
             # Nothing was shown: this try goes back, at zero when the provider
             # answered an error, at its bound when the outcome is unknown.
-            await state.budget_call.release(
-                operator_cost=budget_guard.no_cost() if isinstance(exc, LlmProviderRefusedError) else None
+            await state.budget_call.release_for(
+                exc, operator_cost=budget_guard.no_cost() if isinstance(exc, LlmProviderRefusedError) else None
             )
             state.budget_call = None
             transient = getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT) == LLMFailureKind.TRANSIENT

@@ -16,6 +16,7 @@ export const ja: Catalog = {
   "budget.exhaustedUntil": "容量は{date}に更新されます。閲覧と整理は引き続き利用できます。",
   "budget.tooLarge": "この項目は処理の上限を超えています。",
   "budget.unavailable": "処理を一時的に利用できません。後でもう一度お試しください。",
+  "budget.suspended": "このサービスは一時停止中です。ライブラリは引き続き利用できます。後でもう一度お試しください。",
   "budget.closed": "ベータ版の処理へのアクセスは終了しています。",
 
   "budget.consumed": "使用済み容量",

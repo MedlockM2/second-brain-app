@@ -477,7 +477,7 @@ async def _translate_with_retry(
             return text, usage, call
         except BaseException as exc:  # noqa: BLE001 - classified below
             answered = getattr(exc, "provider_status", None) is not None
-            await call.release(operator_cost=budget_guard.no_cost() if answered else None)
+            await call.release_for(exc, operator_cost=budget_guard.no_cost() if answered else None)
             if not isinstance(exc, Exception):
                 raise
             last_exc = exc

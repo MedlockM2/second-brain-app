@@ -152,7 +152,8 @@ admits work; final provider metrics settle it and release unused capacity.
 All synchronous budget refusals carry `X-Quota-Error-Code` and a structured
 `detail` with `error_code`: `budget_exhausted` (403, optional `period_end`),
 `item_too_large` (413, `quantity`, `measured`, `limit`), `budget_unavailable` (503),
-or `not_entitled` (403). They are shared typed client errors, not reasons to buy
+`not_entitled` (403), or `provider_suspended` (503, optional `retry_at`: new spend is
+paused by the operator control, `docs/OPERATOR_SPEND_CONTROL.md`). They are shared typed client errors, not reasons to buy
 a subscription. Asynchronous jobs carry the corresponding uppercase failure
 codes. Reading, organising and consulting available results remain accessible.
 
@@ -1046,7 +1047,7 @@ Checks, in this order, before anything is written:
 | 409 | `conversation_full` | `turn_count`, `max_turns` | `MAX_TURNS_PER_CONVERSATION` = 20; the app offers a new conversation on the same scope |
 | 409 | `turn_in_flight` | — | one turn in flight **per account**, all conversations together |
 | 422 | `context_budget_exceeded` | `estimated_tokens`, `max_tokens` | the turn's estimated input — corpus, instructions, full history, question; never the output ceiling — must stay under `CONTEXT_BUDGET_TOKENS` = 272 000 / 1.10 = 247 272, so that even a 10 % under-estimate stays under Luna's 272 000-token price step. Nothing is truncated or summarized: the app offers a new conversation |
-| 403 / 413 / 503 | `budget_exhausted`, `not_entitled` / `item_too_large` / `budget_unavailable` | `period_end`; `quantity`, `measured`, `limit` for `item_too_large` | the beta budget (task-549): the turn's first call is admitted in one conditional write before the turn is written; same body and `X-Quota-Error-Code` header as every other budget refusal. Never an amount. Their client wording is TASK-550/551's |
+| 403 / 413 / 503 | `budget_exhausted`, `not_entitled` / `item_too_large` / `budget_unavailable`, `provider_suspended` | `period_end`; `quantity`, `measured`, `limit` for `item_too_large` | the beta budget (task-549): the turn's first call is admitted in one conditional write before the turn is written; same body and `X-Quota-Error-Code` header as every other budget refusal. Never an amount. Their client wording is TASK-550/551's |
 | 409 | `turn_count_changed` | — | another turn was accepted on this conversation in between: re-read it |
 
 **Price.** A turn costs what its provider calls cost, valued by the beta budget (task-549): the first call is admitted with the turn, bounded by the snapshot's estimated input turned back into bytes and the output ceiling; each retry before any text is a try of its own, bounded by the request it sends. The output ceiling is `LLM_MAX_COMPLETION_TOKENS` of `llm_config` (32 000, shared with the artifacts), not a chat parameter.
@@ -1221,7 +1222,7 @@ Response (`UploadAudioResponse`, `202 Accepted`):
   (`upload_fingerprint_multipart`, `upload_fingerprint_encrypted`, `upload_fingerprint_missing`)
   rather than being keyed on something that does not identify it.
 - A budget refusal carries the `X-Quota-Error-Code` header (`budget_exhausted`, `not_entitled`,
-  `item_too_large` or `budget_unavailable`) and the body `{"error_code", ...figures}`, exactly like
+  `item_too_large`, `budget_unavailable` or `provider_suspended`) and the body `{"error_code", ...figures}`, exactly like
   the URL and shared-content entrypoints. For an audio upload the duration is read from the object
   over a presigned GET (a few Range requests) and the import is admitted in the request, so the
   "too long for one import" refusal still happens before anything is queued (task-549).

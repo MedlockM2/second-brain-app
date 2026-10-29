@@ -211,4 +211,35 @@ def build_report(
         "rows": rows,
         "recharges": recharges,
         "breakdown": [dict(cohort=key[0], provider=key[1], component=key[2], **value) for key, value in sorted(breakdown.items())],
+        "operator": _operator_section(items, first_month=first_month, last_month=last_month),
+    }
+
+
+def _operator_section(items: Sequence[Mapping[str, Any]], *, first_month: str, last_month: str) -> Dict[str, Any]:
+    """The operator partition of TASK-566, as the ledger transactions maintain it.
+
+    All accounts together, whatever the cohort filter: the operator pays fixtures
+    and testers alike. Not recomputed from the attempts, which are the same money.
+    """
+    operator = [item for item in items if item.get("user_id") == "operator"]
+    control = next((item for item in operator if item.get("item_type") == "operator_control"), {})
+    months = [
+        {
+            "month": str(item.get("month_key")),
+            "delivered_nano_eur": int(item.get("delivered_nano_eur", 0)),
+            "failed_nano_eur": int(item.get("failed_nano_eur", 0)),
+            "failed_bound_nano_eur": int(item.get("failed_bound_nano_eur", 0)),
+        }
+        for item in operator
+        if item.get("item_type") == "operator_month" and first_month <= str(item.get("month_key")) <= last_month
+    ]
+    circuits = [
+        {key: item.get(key) for key in ("circuit_scope", "state", "suspension_kind", "suspension_reason", "opened_at", "open_until")}
+        for item in operator
+        if item.get("item_type") == "circuit" and item.get("state") != "closed"
+    ]
+    return {
+        "open_commitments_nano_eur": int(control.get("held_nano_eur", 0)) if control else None,
+        "months": sorted(months, key=lambda month: month["month"]),
+        "suspensions": sorted(circuits, key=lambda circuit: str(circuit.get("circuit_scope"))),
     }

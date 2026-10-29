@@ -4,7 +4,13 @@ import type { BudgetRefusalCode } from "../types/entitlements";
 import { formatDate, t } from "../i18n/runtime";
 
 export type QuotaErrorCode = BudgetRefusalCode;
-const CODES: readonly QuotaErrorCode[] = ["budget_exhausted", "item_too_large", "budget_unavailable", "not_entitled"];
+const CODES: readonly QuotaErrorCode[] = [
+  "budget_exhausted",
+  "item_too_large",
+  "budget_unavailable",
+  "not_entitled",
+  "provider_suspended",
+];
 
 export function getQuotaErrorCode(error: unknown): QuotaErrorCode | null {
   if (!error || typeof error !== "object") return null;
@@ -26,6 +32,7 @@ export function getQuotaErrorMessage(error: unknown, code: QuotaErrorCode): stri
     case "item_too_large": return t("budget.tooLarge");
     case "budget_unavailable": return t("budget.unavailable");
     case "not_entitled": return t("budget.closed");
+    case "provider_suspended": return t("budget.suspended");
     case "budget_exhausted": {
       const end = typeof details.period_end === "string" ? new Date(details.period_end) : null;
       return end && Number.isFinite(end.getTime())

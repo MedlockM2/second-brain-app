@@ -8,6 +8,7 @@ export function artifactFailureMessage(artifact: Pick<ArtifactSummary, "error_co
     case "budget_exhausted": return getQuotaErrorMessage({ details: artifact.error_params }, "budget_exhausted");
     case "budget_unavailable": return getQuotaErrorMessage({}, "budget_unavailable");
     case "not_entitled": return getQuotaErrorMessage({}, "not_entitled");
+    case "provider_suspended": return getQuotaErrorMessage({}, "provider_suspended");
     case "item_too_large": return getQuotaErrorMessage({}, "item_too_large");
     case "sources_changed":
     case "sources_preparation_failed": return t("artifacts.failure.sources");

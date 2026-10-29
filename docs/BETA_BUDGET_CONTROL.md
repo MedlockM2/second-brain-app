@@ -24,6 +24,7 @@ TASK-551 (show it on mobile and web), TASK-552 (report and alert on it), TASK-55
 | Attribution of the beta | `get_entitlement_snapshot` in `media_summarizer/core/services/quota_enforcer.py` |
 | Account erasure | `_USER_PARTITION_TABLES` in `media_summarizer/core/services/account_deletion_service.py` |
 | Retention | `docs/DATA_RETENTION.md` §2 |
+| Operator ceilings and provider circuits (TASK-566) | `media_summarizer/core/services/operator_guard.py`, written in the same transactions as below; reference `docs/OPERATOR_SPEND_CONTROL.md` |
 
 ## 1. The beta formula
 
@@ -174,6 +175,13 @@ quantity is above its limit; `refusal_for_item_limit` turns it into the
 Persisted before the HTTP call, conditional on `status = held`. False means another
 delivery holds the attempt or it is closed: the caller sends nothing under this
 reservation. A ledger failure raises, and the request is not sent either.
+
+Since TASK-566 the same transaction checks the provider's circuit and the manual
+pause (`docs/OPERATOR_SPEND_CONTROL.md` §3). A suspended provider raises
+`OperatorSuspendedError`; `budget_guard` releases the attempt as `suspended` (never
+sent, zero cost) and refuses with `provider_suspended`. Likewise `reserve` adds its
+bound to the operator's open commitments under the operator ceilings (§1 there),
+and `settle` / `release` move it into the operator's spend.
 
 ### 3.3 `settle`: a result reached the user
 

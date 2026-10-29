@@ -3,9 +3,10 @@ id: TASK-566
 title: >-
   Protéger la dépense opérateur et suspendre les appels lors d’incidents
   fournisseurs selon le benchmark validé
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-28 17:00'
+updated_date: '2026-10-29 11:47'
 labels:
   - backend
   - observability
@@ -77,10 +78,29 @@ Retirer le code remplacé sans compatibilité, double chemin ni migration de fix
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Les protections financières et règles de suspension/reprise retenues sont configurées et câblées aux nouvelles dépenses du périmètre validé, y compris reprises, replis et coûts hors enveloppe explicitement retenus.
-- [ ] #2 Le suivi des engagements et dépenses réutilise la source comptable commune ; remboursements, métriques manquantes, réutilisations sans appel et dépenses d’échec suivent la décision sans double comptage ni coût inconnu enregistré comme nul.
-- [ ] #3 Les états de suspension et reprise, leur portée et le sort des appels déjà partis sont câblés ; lecture, organisation et résultats disponibles restent accessibles et les tentatives concurrentes de reprise sont traitées selon la décision.
-- [ ] #4 Les événements et alertes opérationnels alimentent le suivi TASK-552 ; le runbook décrit seuils, garanties et dépassements résiduels, diagnostic, reprise et checklist de console en cohérence avec TASK-557/558.
-- [ ] #5 Les refus nouveaux ont un contrat et un affichage cohérents sur mobile/web ; Ruff/mypy, terraform validate si nécessaire et les contrôles statiques des packages modifiés passent, sans tests automatisés, paiement ou déploiement requis.
-- [ ] #6 Chaque fournisseur payant reconnaît un crédit épuisé comme un état distinct, non réessayé, tandis que les erreurs passagères restent réessayées (Deepgram ajouté ; OpenAI, Apify et X vérifiés) et un seul refus de ce type ouvre le circuit de ce fournisseur.
+- [x] #1 Les protections financières et règles de suspension/reprise retenues sont configurées et câblées aux nouvelles dépenses du périmètre validé, y compris reprises, replis et coûts hors enveloppe explicitement retenus.
+- [x] #2 Le suivi des engagements et dépenses réutilise la source comptable commune ; remboursements, métriques manquantes, réutilisations sans appel et dépenses d’échec suivent la décision sans double comptage ni coût inconnu enregistré comme nul.
+- [x] #3 Les états de suspension et reprise, leur portée et le sort des appels déjà partis sont câblés ; lecture, organisation et résultats disponibles restent accessibles et les tentatives concurrentes de reprise sont traitées selon la décision.
+- [x] #4 Les événements et alertes opérationnels alimentent le suivi TASK-552 ; le runbook décrit seuils, garanties et dépassements résiduels, diagnostic, reprise et checklist de console en cohérence avec TASK-557/558.
+- [x] #5 Les refus nouveaux ont un contrat et un affichage cohérents sur mobile/web ; Ruff/mypy, terraform validate si nécessaire et les contrôles statiques des packages modifiés passent, sans tests automatisés, paiement ou déploiement requis.
+- [x] #6 Chaque fournisseur payant reconnaît un crédit épuisé comme un état distinct, non réessayé, tandis que les erreurs passagères restent réessayées (Deepgram ajouté ; OpenAI, Apify et X vérifiés) et un seul refus de ce type ouvre le circuit de ce fournisseur.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Livré selon Owner Validation de TASK-563 (points 2 à 5). Référence et runbook : docs/OPERATOR_SPEND_CONTROL.md.
+
+- Plafonds opérateur (core/services/operator_guard.py, config pricing_config.operator_control) : C_m 500 EUR/mois (exposition = livré + échecs + engagements ouverts), réserves de pertes 5 EUR/jour et 50 EUR/mois, engagements en vol inclus ; alerte de dérive à 2 EUR par compte actif et par mois. Vérifiés dans la transaction de `reserve` (version des engagements conditionnée). Un plafond illisible met en pause toute nouvelle dépense. Le plus gros engagement unitaire reste possible : aucune opération ne dépasse les 5 EUR du testeur ; le plus gros réel est un import de 240 min (~0,98 EUR).
+- Source unique : partition `operator` de beta_budget-<env> (control / month# / day# / circuit#), mise à jour dans les transactions de reserve, settle et release. Réutilisation sans appel exclue ; remboursement testeur sans effet ; métrique absente = borne (failed_bound), jamais zéro.
+- Circuits par fournisseur, vérifiés atomiquement à held → sending : crédit épuisé ou compte refusé → ouvert sur le premier refus, sans sonde automatique ; 5 échecs transitoires de suite → incident, attente de 30 s doublée jusqu'à 15 min, puis une sonde réelle unique, et fermeture après 3 succès. Rate limit jamais compté. Envoi refusé → tentative libérée `suspended` à coût nul, refus `provider_suspended` (503, PROVIDER_SUSPENDED, réessayable). LlamaParse suspendu → passage direct au repli Unstructured.
+- Crédit épuisé distinct et jamais réessayé : Deepgram 402 (nouveau DeepgramCreditExhaustedError), 401 et clé absente → compte refusé ; LlamaParse/Unstructured 402 ou 429 avec mention de crédit → CREDITS_EXHAUSTED ; X 429 UsageCapExceeded ajouté ; OpenAI (llm_failure), Apify 402 et X 402 vérifiés et raccordés au circuit.
+- Alertes : l'audit planifié publie `operator.spend_level` ; alarmes à 50 % et 80 % de C_m, à 80 % des réserves de pertes, sur la dérive et sur les circuits ouverts (operator_control_alerts.tf) ; anomalie immédiate `budget-operator`. Le rapport TASK-552 gagne une section `operator`. Script owner : scripts/operator_control.py (status / suspend / resume).
+- Clients : code `provider_suspended` et texte `budget.suspended` dans packages/core (11 langues), plus la table mobile.
+
+Vérifié : ruff, mypy et terraform validate passent, tsc passe pour packages/core, mobile et web, eslint passe pour packages/core. Scénarios exécutés contre beta_budget-dev avec un compte synthétique supprimé ensuite : réserve puis règlement, ouverture sur crédit épuisé, incident, sonde après attente, refus d'une seconde sonde, fermeture après 3 succès, réouverture avec attente doublée, refus par la réserve journalière, pause manuelle, refus au lancement libéré à coût nul. Audit exécuté en local contre dev.
+
+Limites restantes (runbook §6) : un coût arrivé après une libération n'est pas ajouté ; Algolia n'est pas valorisé ; le coupe-circuit à 90 % de provider_pools reste du ressort de TASK-557/558.
+
+NOTE OWNER (après merge et push) : appliquer Terraform (operator_control_alerts.tf, lecture de la partition `operator` par le rôle de l'audit), puis lancer `scripts/operator_control.py status` sur dev.
+<!-- SECTION:NOTES:END -->

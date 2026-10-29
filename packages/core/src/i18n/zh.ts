@@ -16,6 +16,7 @@ export const zh: Catalog = {
   "budget.exhaustedUntil": "容量将于{date}更新。阅读和整理仍可使用。",
   "budget.tooLarge": "此项目超过处理上限。",
   "budget.unavailable": "处理暂时不可用，请稍后重试。",
+  "budget.suspended": "此服务暂时暂停。你的资料库仍可使用，请稍后重试。",
   "budget.closed": "测试版处理权限已关闭。",
 
   "budget.consumed": "已用容量",

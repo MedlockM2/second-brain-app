@@ -36,7 +36,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from media_summarizer.core.models.beta_budget import Component, MeasuredCost
+from media_summarizer.core.models.beta_budget import Component, MeasuredCost, ProviderFailure
 from media_summarizer.core.services import beta_budget, budget_guard
 from media_summarizer.core.services.budget_guard import (
     BudgetBusyError,
@@ -78,8 +78,40 @@ class RemoteContentError(DeepgramRefusedError):
     """
 
 
+class DeepgramCreditExhaustedError(DeepgramRefusedError):
+    """Deepgram answered 402: the project has no credit left for a transcription.
+
+    Its own error, apart from the generic refusal (TASK-566): never retried, and the
+    first one suspends new transcriptions until the balance is topped up. Deepgram
+    documents the 402 with ``err_code`` ``ASR_PAYMENT_REQUIRED``
+    (https://developers.deepgram.com/docs/errors); the status alone decides, so a
+    renamed code still classifies.
+    """
+
+    provider_failure = ProviderFailure.CREDIT_EXHAUSTED
+
+
 class RetryableDeepgramError(Exception):
     """Raised for a transient Deepgram answer (429, 5xx): nothing was processed."""
+
+    def __init__(self, message: str, *, status: int) -> None:
+        super().__init__(message)
+        # A 429 is Deepgram pacing the project's concurrency, not an incident.
+        self.provider_failure = ProviderFailure.RATE_LIMITED if status == 429 else ProviderFailure.TRANSIENT
+
+
+class DeepgramAccountRefusedError(DeepgramRefusedError):
+    """Deepgram answered 401: the key is refused. Suspends Deepgram until it changes."""
+
+    provider_failure = ProviderFailure.ACCOUNT_REFUSED
+
+
+def _raise_for_account(status: int, response_text: str) -> None:
+    """The two answers about our Deepgram account rather than about this audio."""
+    if status == 402:
+        raise DeepgramCreditExhaustedError(f"Deepgram credit exhausted (HTTP 402): {response_text[:500]}")
+    if status == 401:
+        raise DeepgramAccountRefusedError(f"Deepgram key refused (HTTP 401): {response_text[:500]}")
 
 
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
@@ -189,7 +221,7 @@ async def upload_transcription(transcript_s3_key: str, transcription_text: str) 
 
 async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
     if not DEEPGRAM_API_KEY:
-        raise DeepgramRefusedError("DEEPGRAM_API_KEY is required")
+        raise DeepgramAccountRefusedError("DEEPGRAM_API_KEY is required")
 
     if not _is_valid_http_url(audio_url):
         raise DeepgramRefusedError("audio_url must be a valid http(s) URL")
@@ -216,6 +248,7 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
     latency_seconds = time.time() - started
     status = response.status_code
 
+    _raise_for_account(status, response.text)
     if status in (401, 403, 400, 404, 415, 422):
         # Detect REMOTE_CONTENT_ERROR: Deepgram could not fetch the audio URL
         # (e.g. source CDN blocks cloud SaaS IPs with HTTP 403).
@@ -233,7 +266,7 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
         )
     if status == 429 or status >= 500:
         raise RetryableDeepgramError(
-            f"Deepgram transient HTTP {status}: {response.text[:500]}"
+            f"Deepgram transient HTTP {status}: {response.text[:500]}", status=status
         )
     if status >= 300:
         raise DeepgramRefusedError(
@@ -393,7 +426,7 @@ async def call_deepgram_api_from_bytes(
     job_id: str,
 ) -> Dict[str, Any]:
     if not DEEPGRAM_API_KEY:
-        raise DeepgramRefusedError("DEEPGRAM_API_KEY is required")
+        raise DeepgramAccountRefusedError("DEEPGRAM_API_KEY is required")
     if not audio_bytes:
         raise DeepgramRefusedError("audio bytes must be non-empty")
 
@@ -415,13 +448,14 @@ async def call_deepgram_api_from_bytes(
     latency_seconds = time.time() - started
     status = response.status_code
 
+    _raise_for_account(status, response.text)
     if status in (401, 403, 400, 404, 415, 422):
         raise DeepgramRefusedError(
             f"Deepgram non-retryable HTTP {status}: {response.text[:500]}"
         )
     if status == 429 or status >= 500:
         raise RetryableDeepgramError(
-            f"Deepgram transient HTTP {status}: {response.text[:500]}"
+            f"Deepgram transient HTTP {status}: {response.text[:500]}", status=status
         )
     if status >= 300:
         raise DeepgramRefusedError(
@@ -551,15 +585,17 @@ class TranscriptionBudget:
             try:
                 return await request(), call
             except (DeepgramRefusedError, RetryableDeepgramError, httpx.ConnectError) as exc:
-                await call.release(operator_cost=budget_guard.no_cost())
+                # A credit refusal is a DeepgramRefusedError: raised at once, never
+                # retried, and it suspends Deepgram for every account (TASK-566).
+                await call.release_for(exc, operator_cost=budget_guard.no_cost())
                 if isinstance(exc, DeepgramRefusedError) or try_index == DEEPGRAM_API_RETRIES:
                     raise
-            except (httpx.TimeoutException, httpx.TransportError):
-                await call.release()
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                await call.release_for(exc)
                 if try_index == DEEPGRAM_API_RETRIES:
                     raise
-            except BaseException:
-                await call.release()
+            except BaseException as exc:
+                await call.release_for(exc)
                 raise
             log_event(
                 logger,

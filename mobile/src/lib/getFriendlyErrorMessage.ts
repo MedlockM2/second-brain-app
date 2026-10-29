@@ -98,6 +98,7 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
   BUDGET_EXHAUSTED: "budget.exhausted",
   ITEM_TOO_LARGE: "budget.tooLarge",
   BUDGET_UNAVAILABLE: "budget.unavailable",
+  PROVIDER_SUSPENDED: "budget.suspended",
   INVALID_JOB_MESSAGE: "mediaError.internal",
   SUBMISSION_FAILED: "mediaError.internal",
   UNEXPECTED_ERROR: "mediaError.internal",
@@ -120,14 +121,14 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
  * sentence — and therefore the only ones the detail screen offers to request
  * support for (task-381).
  *
- * Seven of the twenty-two `MediaFailureCode` members. The fifteen left out are
+ * Seven of the twenty-four `MediaFailureCode` members. The seventeen left out are
  * left out for a reason, and each reason is a different one:
  *
  * - `MEDIA_UNAVAILABLE`, `GEO_RESTRICTED`, `AGE_RESTRICTED` — the source *is*
  *   supported; this particular item is out of reach.
  * - `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE`, `BUDGET_UNAVAILABLE` — the reader's own allowance. There is
  *   nothing to add support for.
- * - the seven `PROVIDER_*` codes, `INVALID_JOB_MESSAGE`, `SUBMISSION_FAILED`,
+ * - the eight `PROVIDER_*` codes, `INVALID_JOB_MESSAGE`, `SUBMISSION_FAILED`,
  *   `UNEXPECTED_ERROR` — a passing outage, our budget or our bug. A retry may be
  *   all it takes.
  *

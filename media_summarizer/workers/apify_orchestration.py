@@ -107,10 +107,10 @@ async def start_run_for_job(
             source_platform=source_platform,
         )
     except apify_adapter.ApifyAdapterError as exc:
-        await call.release(operator_cost=None if exc.code in _MAYBE_STARTED else budget_guard.no_cost())
+        await call.release_for(exc, operator_cost=None if exc.code in _MAYBE_STARTED else budget_guard.no_cost())
         raise
-    except BaseException:
-        await call.release()
+    except BaseException as exc:
+        await call.release_for(exc)
         raise
     now = datetime.now(timezone.utc)
     job.apify_run_id = run.run_id
@@ -185,6 +185,7 @@ async def _release_replaced_run(*, user_id: str, operation_id: str, actor_id: st
                 operation_id=operation_id,
                 attempt_id=attempt.attempt_id,
                 component=Component.COLLECTION,
+                provider=attempt.provider,
             ).release(
                 reason=ReleaseReason.FAILED,
                 operator_cost=beta_budget.apify_cost(ctx, actor_id=actor_id, results=1),

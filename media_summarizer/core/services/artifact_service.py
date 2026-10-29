@@ -2145,7 +2145,7 @@ async def retry_artifact_generation(record: MediaArtifactRecord) -> MediaArtifac
     except budget_guard.BudgetRefusedError as exc:
         record.error_code = exc.failure_code.value
         record.error_params = exc.public_params()
-        record.retryable = exc.error_code == "budget_unavailable"
+        record.retryable = exc.error_code in ("budget_unavailable", "provider_suspended")
         await media_artifacts.reclaim_failed_artifact(record, expected_revision=record.generation_revision)
         raise
     except (ArtifactParametersInvalidError, ArtifactScopeEmptyError, ArtifactScopeTooLargeError) as exc:
@@ -2673,6 +2673,7 @@ async def fail_artifact_generation(
             "INTERNAL_ERROR",
             "VALIDATION_ERROR",
             "BUDGET_UNAVAILABLE",
+            "PROVIDER_SUSPENDED",
             "PROVIDER_UNAVAILABLE",
             "PROVIDER_TIMED_OUT",
             "PROVIDER_RESULT_INVALID",

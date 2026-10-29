@@ -62,8 +62,8 @@ save creates its own durable library row. Content already processed may be reuse
 in-flight processing proceeds independently rather than waiting on another import.
 Podcast links follow `POST /api/media/ingest-url` and the platform resolver.
 
-The typed refusals are `budget_exhausted`, `item_too_large`, `budget_unavailable`
-and `not_entitled`. Clients translate codes and parameters, including the reset
+The typed refusals are `budget_exhausted`, `item_too_large`, `budget_unavailable`,
+`not_entitled` and `provider_suspended` (the operator control of TASK-566). Clients translate codes and parameters, including the reset
 date, through shared catalogs. Reference: `docs/BETA_BUDGET_CONTROL.md`.
 
 ## URL classification and routing policy (task-21)

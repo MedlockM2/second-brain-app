@@ -16,6 +16,7 @@ export const nl: Catalog = {
   "budget.exhaustedUntil": "De capaciteit wordt op {date} vernieuwd. Lezen en ordenen blijven beschikbaar.",
   "budget.tooLarge": "Dit item overschrijdt de verwerkingslimiet.",
   "budget.unavailable": "Verwerking is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+  "budget.suspended": "Deze dienst is tijdelijk gepauzeerd. Je bibliotheek blijft beschikbaar; probeer het later opnieuw.",
   "budget.closed": "De toegang tot bètaverwerking is gesloten.",
 
   "budget.consumed": "Verbruikte capaciteit",

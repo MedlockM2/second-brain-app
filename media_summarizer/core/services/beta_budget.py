@@ -32,7 +32,11 @@ What this module owns, and nothing else does:
 What it does not do: decide, per provider path, when to reserve, claim, settle or
 release — that routing is ``core/services/budget_guard.py`` (task-549) — expose the
 state to the apps (TASK-550, TASK-551), report on it (TASK-552), or refresh the
-exchange rate (TASK-559).
+exchange rate (TASK-559). The operator ceilings and the provider circuits are
+``core/services/operator_guard.py`` (TASK-566): this module only writes them in the
+same transactions as the tester's month — the admission adds its bound to the
+operator's open commitments, the claim checks the provider's circuit, a close moves
+the bound into the operator's spend.
 
 **The tester's capacity and the provider's bill are two different ledgers.** A
 release hands the hold back to the tester; it never erases the spend: when the
@@ -69,8 +73,9 @@ from media_summarizer.core.models.beta_budget import (
     ReleaseReason,
     ReservationLine,
 )
-from media_summarizer.core.services import pricing_config_service
+from media_summarizer.core.services import operator_guard, pricing_config_service
 from media_summarizer.core.services.llm_config import LLM_MODEL_MAX_OUTPUT_TOKENS
+from media_summarizer.core.services.operator_guard import OperatorLimits, OperatorSuspendedError
 from media_summarizer.utils import beta_budget_db
 from media_summarizer.utils.beta_budget_db import (
     AVAILABLE,
@@ -79,6 +84,7 @@ from media_summarizer.utils.beta_budget_db import (
     OPERATOR_SPEND,
     RELEASED,
     LedgerUnavailableError,
+    OperatorClose,
 )
 from media_summarizer.utils.logging_config import log_event
 
@@ -386,6 +392,9 @@ class PricingContext:
     formula: BetaFormula
     fx: FxRate
     tariffs: Tariffs
+    #: The operator ceilings (TASK-566); ``None`` when unreadable, which pauses
+    #: every new spend.
+    operator_limits: Optional[OperatorLimits] = None
 
 
 async def load_pricing_context() -> PricingContext:
@@ -396,6 +405,7 @@ async def load_pricing_context() -> PricingContext:
         formula=beta_formula(config),
         fx=fx_rate(config),
         tariffs=Tariffs(raw_tariffs if isinstance(raw_tariffs, Mapping) else {}),
+        operator_limits=operator_guard.operator_limits(config),
     )
 
 
@@ -442,6 +452,26 @@ def next_period_start(now: datetime) -> datetime:
 
 def _ttl_epoch(instant: datetime) -> int:
     return int((instant + timedelta(days=LEDGER_RETENTION_DAYS)).timestamp())
+
+
+def _operator_close(now: datetime, *, released: int, delivered: int = 0, failed: int = 0, bound: bool = False) -> OperatorClose:
+    """The operator side of a close at ``now``: its spend lands in the month and the
+    day the cost became known, whatever month the tester's hold belongs to."""
+    return OperatorClose(
+        released_nano_eur=released,
+        month_key=operator_guard.month_key(now),
+        day_key=operator_guard.day_key(now),
+        delivered_nano_eur=delivered,
+        failed_nano_eur=failed,
+        failed_bound_nano_eur=failed if bound else 0,
+        month_ttl_epoch=_ttl_epoch(next_period_start(now)),
+        day_ttl_epoch=_ttl_epoch(now + timedelta(days=1)),
+    )
+
+
+def suspended_refusal(exc: OperatorSuspendedError) -> Admission:
+    """The ``provider_suspended`` refusal of an operator control decision."""
+    return Admission.refused(BudgetRefusal.PROVIDER_SUSPENDED, **exc.params())
 
 
 def usd_to_nano_eur(usd: Decimal, usd_per_eur: Decimal) -> int:
@@ -910,8 +940,10 @@ async def reserve(
     nothing more and return the original attempts (``replayed``).
 
     Refuses with ``budget_exhausted`` when the month does not cover the bounds,
-    ``not_entitled`` when the beta formula is closed, and ``budget_unavailable``
-    whenever the ledger cannot be read or written (rule 7: no fail-open).
+    ``not_entitled`` when the beta formula is closed, ``provider_suspended`` when an
+    operator ceiling would be crossed or new spend is paused (TASK-566), and
+    ``budget_unavailable`` whenever the ledger cannot be read or written (rule 7: no
+    fail-open).
     """
     if not lines:
         raise ValueError("an admission needs at least one line")
@@ -979,29 +1011,53 @@ async def reserve(
             }
         )
 
-    try:
-        codes = await beta_budget_db.admit(
-            user_id=user_id,
-            period_key=key,
-            budget_nano_eur=budget,
-            held_nano_eur=total,
-            consumed_nano_eur=0,
-            counter_ttl_epoch=_ttl_epoch(reset_at),
-            attempt_items=items,
-            now_iso=now_iso,
+    # The operator ceilings (TASK-566) add figures of several items, which no
+    # DynamoDB condition can: they are read and checked here, and the admission
+    # commits only if the operator's commitments did not move in between.
+    for operator_try in range(1, operator_guard.ADMISSION_TRIES + 1):
+        try:
+            hold = await operator_guard.admission_hold(total, limits=ctx.operator_limits, now=now)
+            codes = await beta_budget_db.admit(
+                user_id=user_id,
+                period_key=key,
+                budget_nano_eur=budget,
+                held_nano_eur=total,
+                consumed_nano_eur=0,
+                counter_ttl_epoch=_ttl_epoch(reset_at),
+                attempt_items=items,
+                now_iso=now_iso,
+                operator_hold=hold,
+            )
+        except OperatorSuspendedError as exc:
+            return suspended_refusal(exc)
+        except LedgerUnavailableError:
+            _log(
+                logging.ERROR,
+                "beta_budget.unavailable",
+                "Admission refused: ledger unavailable",
+                user_id=user_id,
+                operation_id=operation_id,
+            )
+            return Admission.refused(BudgetRefusal.BUDGET_UNAVAILABLE)
+        operator_moved = (
+            codes is not None
+            and codes[-1] == "ConditionalCheckFailed"
+            and all(code in ("None", "") for code in codes[: len(items) + 1])
         )
-    except LedgerUnavailableError:
-        _log(
-            logging.ERROR,
-            "beta_budget.unavailable",
-            "Admission refused: ledger unavailable",
-            user_id=user_id,
-            operation_id=operation_id,
-        )
-        return Admission.refused(BudgetRefusal.BUDGET_UNAVAILABLE)
+        if not operator_moved:
+            break
+        if operator_try == operator_guard.ADMISSION_TRIES:
+            _log(
+                logging.ERROR,
+                "beta_budget.unavailable",
+                "Admission refused: operator commitments kept moving",
+                user_id=user_id,
+                operation_id=operation_id,
+            )
+            return Admission.refused(BudgetRefusal.BUDGET_UNAVAILABLE)
 
     if codes is not None:
-        if any(code == "ConditionalCheckFailed" for code in codes[1:]):
+        if any(code == "ConditionalCheckFailed" for code in codes[1 : len(items) + 1]):
             return await _replayed(user_id, ids, operation_id)
         _log(
             logging.INFO,
@@ -1126,17 +1182,33 @@ async def charge_reuse(
 # ---------------------------------------------------------------------------
 
 
-async def claim_send(user_id: str, attempt: str, *, now: Optional[datetime] = None) -> bool:
-    """Take the right to send the request of a ``held`` attempt.
+async def claim_send(user_id: str, attempt: str, *, provider: str, now: Optional[datetime] = None) -> bool:
+    """Take the right to send the request of a ``held`` attempt to ``provider``.
 
     Persisted before the HTTP call. False means another delivery holds it or the
     attempt is closed: the caller must not send under this reservation. A retry
     needs a new attempt with its own reservation (rule 6) — after releasing a
     ``sending`` attempt whose lease is over with :data:`ReleaseReason.LOST_IN_FLIGHT`.
-    Raises :class:`LedgerUnavailableError` when the ledger cannot be written; the
-    request is then not sent either.
+
+    The provider's circuit is checked in the same transaction (TASK-566): raises
+    :class:`OperatorSuspendedError` when it refuses the send, the attempt staying
+    ``held`` for the caller to release. Raises :class:`LedgerUnavailableError` when
+    the ledger cannot be written; the request is then not sent either.
     """
-    return await beta_budget_db.claim_send(user_id=user_id, attempt_id=attempt, now_iso=_iso(_utc(now)))
+    now = _utc(now)
+    for _ in range(2):
+        gates = await operator_guard.claim_gates(provider, attempt, now=now)
+        codes = await beta_budget_db.claim_send(
+            user_id=user_id, attempt_id=attempt, now_iso=_iso(now), gates=gates.gates
+        )
+        if codes is None:
+            if gates.probe:
+                operator_guard.log_probe_claimed(provider, attempt)
+            return True
+        if codes[0] == "ConditionalCheckFailed":
+            return False
+        # The circuit moved between its read and the claim: read it again once.
+    raise OperatorSuspendedError(provider, "circuit_changed")
 
 
 async def _closed_outcome(
@@ -1232,6 +1304,7 @@ async def settle(
         },
         counter_add={HELD: -reserved, CONSUMED: consumed, AVAILABLE: reserved - consumed},
         now_iso=_iso(now),
+        operator_close=_operator_close(now, released=reserved, delivered=consumed),
     )
     if not applied:
         return await _closed_outcome(user_id, attempt, AttemptStatus.SETTLED)
@@ -1345,6 +1418,7 @@ async def release(
             counter_add={HELD: -reserved, AVAILABLE: reserved, RELEASED: reserved, OPERATOR_SPEND: spend},
             now_iso=_iso(now),
             claimed_before=claimed_before,
+            operator_close=_operator_close(now, released=reserved, failed=spend, bound=basis == CostBasis.BOUND),
         )
         if applied:
             if basis == CostBasis.BOUND:

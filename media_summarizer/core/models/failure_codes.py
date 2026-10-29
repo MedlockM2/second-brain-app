@@ -81,6 +81,10 @@ class MediaFailureCode(str, Enum):
     #: The budget counter could not be read or written, so the processing was
     #: refused rather than let through (rule 7 of the task-547 decision).
     BUDGET_UNAVAILABLE = "BUDGET_UNAVAILABLE"
+    #: New spend at a provider, or all new spend, is suspended by the operator
+    #: control (TASK-566): an incident, a provider credit to top up, or an
+    #: operator ceiling. Worth another try once the service is back.
+    PROVIDER_SUSPENDED = "PROVIDER_SUSPENDED"
 
     # --- Ours, and only ours ------------------------------------------------
     #: A queue message we could not act on (missing job, malformed body).

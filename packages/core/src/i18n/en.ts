@@ -27,6 +27,7 @@ export const en = {
   "budget.exhaustedUntil": "Capacity renews on {date}. Reading and organising remain available.",
   "budget.tooLarge": "This item exceeds the processing limit.",
   "budget.unavailable": "Processing is temporarily unavailable. Try again later.",
+  "budget.suspended": "This service is paused for now. Your library stays available; try again later.",
   "budget.closed": "Beta processing access is closed.",
 
   "budget.consumed": "Capacity used",

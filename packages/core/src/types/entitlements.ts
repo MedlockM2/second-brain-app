@@ -3,7 +3,9 @@ export type BudgetRefusalCode =
   | "budget_exhausted"
   | "item_too_large"
   | "budget_unavailable"
-  | "not_entitled";
+  | "not_entitled"
+  /** New spend is paused by the operator control (TASK-566); reading is unaffected. */
+  | "provider_suspended";
 
 export interface BudgetState {
   state: "available" | "exhausted" | "unavailable" | "closed";

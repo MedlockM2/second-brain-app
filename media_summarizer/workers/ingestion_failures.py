@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from media_summarizer.core.models.beta_budget import ProviderFailure
 from media_summarizer.core.models.failure_codes import MediaFailureCode
 
 
@@ -44,6 +45,23 @@ class IngestionFailure(Exception):
         # A `None` in the context means "not applicable here", not "null": it is
         # dropped rather than written, since DynamoDB would keep it forever.
         self.context: Dict[str, Any] = {key: value for key, value in context.items() if value is not None}
+
+    @property
+    def provider_failure(self) -> Optional[ProviderFailure]:
+        """What this failure says about the paid provider, for its circuit (TASK-566).
+
+        Only read where the failure comes from a provider call; a source that is
+        down is ``PROVIDER_UNAVAILABLE`` too, but never reaches a circuit.
+        """
+        if self.code == MediaFailureCode.PROVIDER_CREDITS_DEPLETED:
+            return ProviderFailure.CREDIT_EXHAUSTED
+        if self.code == MediaFailureCode.PROVIDER_AUTH_FAILED:
+            return ProviderFailure.ACCOUNT_REFUSED
+        if self.code == MediaFailureCode.PROVIDER_RATE_LIMITED:
+            return ProviderFailure.RATE_LIMITED
+        if self.retryable and self.code in (MediaFailureCode.PROVIDER_UNAVAILABLE, MediaFailureCode.PROVIDER_TIMED_OUT):
+            return ProviderFailure.TRANSIENT
+        return None
 
     @property
     def reason(self) -> str:
@@ -84,6 +102,7 @@ _APIFY_FAILURE_CODES: Dict[str, MediaFailureCode] = {
     "not_entitled": MediaFailureCode.BUDGET_EXHAUSTED,
     "item_too_large": MediaFailureCode.ITEM_TOO_LARGE,
     "budget_unavailable": MediaFailureCode.BUDGET_UNAVAILABLE,
+    "provider_suspended": MediaFailureCode.PROVIDER_SUSPENDED,
 }
 
 

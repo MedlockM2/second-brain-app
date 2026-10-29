@@ -313,12 +313,12 @@ async def process_message(message: Dict[str, Any]) -> None:
                 prompt_cache_key=prompt_cache_key,
                 artifact_type=artifact_type.value,
             )
-        except LlmProviderRefusedError:
+        except LlmProviderRefusedError as exc:
             # The provider answered with an error: it billed nothing.
-            await call.release(operator_cost=budget_guard.no_cost())
+            await call.release_for(exc, operator_cost=budget_guard.no_cost())
             raise
-        except BaseException:
-            await call.release()
+        except BaseException as exc:
+            await call.release_for(exc)
             raise
         raw_content = result.content
         llm_usage = result.usage

@@ -41,7 +41,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
 
-from media_summarizer.core.models.beta_budget import Component
+from media_summarizer.core.models.beta_budget import BudgetRefusal, Component, ProviderFailure
 from media_summarizer.core.ports.document_parser import (
     TEXT_FORMATS,
     DocumentFormat,
@@ -51,7 +51,7 @@ from media_summarizer.core.ports.document_parser import (
     ParseResult,
 )
 from media_summarizer.core.services import beta_budget, budget_guard, provider_pool_guard
-from media_summarizer.core.services.budget_guard import BudgetCall
+from media_summarizer.core.services.budget_guard import BudgetCall, BudgetRefusedError
 from media_summarizer.core.services.document_measure import DocumentUnits
 from media_summarizer.infrastructure.resolvers.llamaparse_resolver import (
     LlamaParseResolver,
@@ -103,8 +103,26 @@ _NOT_BILLED = frozenset(
         ParseErrorCode.FILE_TOO_LARGE,
         ParseErrorCode.AUTHENTICATION_ERROR,
         ParseErrorCode.INVALID_FILE,
+        ParseErrorCode.CREDITS_EXHAUSTED,
     }
 )
+
+#: What a parse error says about the parser, for its circuit (TASK-566). An empty
+#: result, an unreadable file or an unsupported format are about the document.
+_PROVIDER_FAILURES = {
+    ParseErrorCode.CREDITS_EXHAUSTED: ProviderFailure.CREDIT_EXHAUSTED,
+    ParseErrorCode.AUTHENTICATION_ERROR: ProviderFailure.ACCOUNT_REFUSED,
+    ParseErrorCode.RATE_LIMITED: ProviderFailure.RATE_LIMITED,
+    ParseErrorCode.TIMEOUT: ProviderFailure.TRANSIENT,
+    ParseErrorCode.NETWORK_ERROR: ProviderFailure.TRANSIENT,
+}
+
+
+def _provider_failure(error: ParseError) -> Optional[ProviderFailure]:
+    if error.code == ParseErrorCode.API_ERROR:
+        # A 5xx of the parser is retryable; a job the parser failed on is not.
+        return ProviderFailure.TRANSIENT if error.retryable else None
+    return _PROVIDER_FAILURES.get(error.code)
 
 
 @dataclass(frozen=True)
@@ -187,7 +205,15 @@ class BudgetedParse:
 
 
 async def _release_failed(call: BudgetCall, error: ParseError) -> None:
-    await call.release(operator_cost=budget_guard.no_cost() if error.code in _NOT_BILLED else None)
+    await call.release(
+        operator_cost=budget_guard.no_cost() if error.code in _NOT_BILLED else None,
+        failure=_provider_failure(error),
+    )
+
+
+def _suspended_alone(refusal: BudgetRefusedError, provider: str) -> bool:
+    """Whether a refusal suspends only ``provider``, so another parser may still run."""
+    return refusal.refusal == BudgetRefusal.PROVIDER_SUSPENDED and refusal.params.get("scope") == provider
 
 
 async def parse_document_with_fallback(
@@ -237,13 +263,27 @@ async def parse_document_with_fallback(
     if budget is None:
         raise ValueError("a provider parse needs a budget to be charged to")
 
-    # Primary: LlamaParse
-    primary_call = await budget.start("llamaparse")
+    # Primary: LlamaParse. Suspended on its own (its credit is spent, an incident),
+    # the document goes straight to the fallback rather than failing (TASK-566).
     try:
-        primary_result = await llamaparse.parse(file_path, file_name, document_format)
-    except BaseException:
-        await primary_call.release()
-        raise
+        primary_call: Optional[BudgetCall] = await budget.start("llamaparse")
+    except BudgetRefusedError as refusal:
+        if not _suspended_alone(refusal, "llamaparse"):
+            raise
+        primary_call = None
+    if primary_call is None:
+        primary_result: ParseResult | ParseError = ParseError(
+            code=ParseErrorCode.API_ERROR,
+            message="LlamaParse suspended by the operator control",
+            provider="llamaparse",
+            retryable=True,
+        )
+    else:
+        try:
+            primary_result = await llamaparse.parse(file_path, file_name, document_format)
+        except BaseException as exc:
+            await primary_call.release_for(exc)
+            raise
 
     if isinstance(primary_result, ParseResult):
         log_event(
@@ -256,7 +296,8 @@ async def parse_document_with_fallback(
         )
         return BudgetedParse(outcome=primary_result, call=primary_call, units=budget.units)
 
-    await _release_failed(primary_call, primary_result)
+    if primary_call is not None:
+        await _release_failed(primary_call, primary_result)
 
     # Primary failed -- log and attempt fallback
     log_event(
@@ -273,8 +314,8 @@ async def parse_document_with_fallback(
     fallback_call = await budget.start("unstructured")
     try:
         fallback_result = await _unstructured.parse(file_path, file_name, document_format)
-    except BaseException:
-        await fallback_call.release()
+    except BaseException as exc:
+        await fallback_call.release_for(exc)
         raise
 
     if isinstance(fallback_result, ParseResult):

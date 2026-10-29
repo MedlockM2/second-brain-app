@@ -16,6 +16,7 @@ export const ar: Catalog = {
   "budget.exhaustedUntil": "تتجدد السعة في {date}. تبقى القراءة والتنظيم متاحين.",
   "budget.tooLarge": "يتجاوز هذا العنصر حد المعالجة.",
   "budget.unavailable": "المعالجة غير متاحة مؤقتًا. حاول لاحقًا.",
+  "budget.suspended": "هذه الخدمة متوقفة مؤقتًا. تبقى مكتبتك متاحة؛ حاول لاحقًا.",
   "budget.closed": "الوصول إلى معالجة النسخة التجريبية مغلق.",
 
   "budget.consumed": "السعة المستهلكة",

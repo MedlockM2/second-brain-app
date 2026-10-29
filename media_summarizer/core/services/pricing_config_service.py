@@ -153,6 +153,25 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
         # longest legitimate import chain (docs/BETA_BUDGET_CONTROL.md §3.5).
         "hold_expiry_minutes": 360,
     },
+    # --- Operator spend protection (TASK-566) ---
+    # Owner decision: docs/research/task-563-provider-capacity-fairness-operator-safety/
+    # README.md, Owner Validation points 3 and 4. A safety ceiling on what the
+    # operator pays the providers in a calendar month UTC, all accounts together —
+    # deliveries, failures and the bounds of calls still open — not a target
+    # budget: raise it by hand in `pricing_config-<env>` as accounts grow. The
+    # loss reserves bound the spend of calls that delivered nothing, open
+    # commitments included, inside that ceiling. The 50 % and 80 % alerts are the
+    # CloudWatch alarms of `operator_control_alerts.tf`. Runbook:
+    # docs/OPERATOR_SPEND_CONTROL.md. Strings, so money is read exactly.
+    "operator_control": {
+        "monthly_cap_eur": "500",
+        "loss_reserve_daily_eur": "5",
+        "loss_reserve_monthly_eur": "50",
+        # Drift alert: operator spend of the month divided by the accounts active
+        # in it. About 0.6 EUR in the nominal 1 000 DAU scenario of the benchmark
+        # (§3.2); above 2 EUR, each account costs several times what it should.
+        "per_active_account_alert_eur": "2",
+    },
     # --- EUR/USD exchange rate of the beta budget (rule 15 of task-547) ---
     # ECB reference rate, USD per EUR, with its publication date. Converts the
     # dollar tariffs below into the euro budget, and nothing else: no call is ever
