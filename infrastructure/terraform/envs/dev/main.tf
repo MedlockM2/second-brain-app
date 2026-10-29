@@ -57,12 +57,13 @@ module "platform" {
   # the execute-api host, a third party to localhost (task-473).
   web_app_origin = "http://localhost:5173"
 
-  # dev stays cheap: no CloudWatch alarms (43 alarms ≈ $3.30/mo measured) and
-  # unreserved API concurrency. The dashboard and the worker SQS polling stay ON
-  # — dev is the environment actually being worked in, so its ~$3.00/mo
-  # dashboard and live queues are the point. See envs/staging/main.tf for the
-  # mothballed counterpart.
-  enable_alarms = false
+  # dev stays cheap: no CloudWatch alarms (43 alarms ≈ $3.30/mo measured), no
+  # dashboard (~$3.00/mo; CloudTrail showed no console view in 90 days, only
+  # Terraform refreshes) and unreserved API concurrency. The worker SQS polling
+  # stays ON — dev is the environment actually being worked in. See
+  # envs/staging/main.tf for the mothballed counterpart.
+  enable_alarms    = false
+  enable_dashboard = false
 
   alert_email = var.alert_email
 }
