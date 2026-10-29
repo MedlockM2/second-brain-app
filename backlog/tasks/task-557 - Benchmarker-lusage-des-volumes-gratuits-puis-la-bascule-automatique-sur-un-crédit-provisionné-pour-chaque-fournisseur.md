@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-28 11:00'
-updated_date: '2026-10-28 14:07'
+updated_date: '2026-10-29 15:00'
 labels:
   - benchmark
   - backend
@@ -58,4 +58,6 @@ Recherche uniquement : aucune modification de compte, de paiement ni de code. Au
 
 <!-- SECTION:NOTES:BEGIN -->
 README produit : docs/research/task-557-provider-free-tier-then-paid/README.md (owner_decision: pending). Sources primaires consultées le 2026-10-28 (OpenAI help/rate-limits, Deepgram pricing/errors, LlamaParse billing/pricing, Unstructured pricing/billing, Apify pricing/billing/subscriptions, X API pricing). Constat : bascule automatique possible par configuration chez OpenAI (recharge auto), Deepgram (auto-reload), Unstructured (carte), X (auto-recharge, pas de gratuit) ; impossible sur les plans Free de LlamaParse (402) et d'Apify (blocage), qui exigent un plan payant (Starter). Le code coupe aujourd'hui Apify à 90 % du gratuit (provider_pool_guard.spend_allowed) : recommandation de retirer provider_pools une fois les comptes basculés. Regrouper Apify sur un compte = configuration seule (un token par plateforme dans le secret). Non vérifiable sans console : soldes, moyens de paiement, allocation Unstructured unique ou mensuelle, code HTTP X à solde nul. Aucun compte, paiement ni code modifié ; aucun test.
+
+Complément (mode complement, 2026-10-29) : docs/research/task-557-provider-free-tier-then-paid/complement-response-2026-10-29.md répond à complement-request-2026-10-29.md (recharge automatique sur coordonnées bancaires). Trois régimes : prépayé avec recharge automatique sur carte (OpenAI, Deepgram, X), facturé à l'usage sous limite de dépense (Unstructured, LlamaParse et Apify en Starter), blocage sans paiement possible (LlamaParse et Apify en Free). Aucun prélèvement bancaire documenté : carte partout. L'alerte « % du plafond » n'est indispensable que pour le régime C ; l'échec de recharge est couvert par la suspension de TASK-566. La recommandation attend la validation de l'owner.
 <!-- SECTION:NOTES:END -->
