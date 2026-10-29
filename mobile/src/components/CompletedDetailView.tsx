@@ -906,8 +906,10 @@ export function CompletedDetailView({
   // above settles — a cover, the preview, a notice can still change height after
   // the text is drawn — and stops for good the moment the reader drags: from
   // then on the scroll is theirs. The highlight goes a few seconds after the
-  // passage first shows; a passage the text does not hold (a media read in
-  // translation) is never reported, and the page simply stays at the top.
+  // passage first shows. The index holds the text in the reading language, the
+  // one the page opens on, so a translated media finds its passage too; a
+  // passage the text does not hold (a hit on the title alone) is never
+  // reported, and the page simply stays at the top.
   const [focusPassage, setFocusPassage] = useState<string | null>(passage ?? null);
   const [passageShown, setPassageShown] = useState(false);
   const passageTargetRef = useRef<SearchPassageTarget | null>(null);

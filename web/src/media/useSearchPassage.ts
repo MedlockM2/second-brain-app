@@ -26,10 +26,11 @@ function scrollParent(node: HTMLElement): HTMLElement {
  * Markdown alike, with `locateSearchPassage`. The scroll keeps following it while
  * what sits above it settles (the cover, "L'essentiel"), and stops at the first
  * wheel, touch, click or key: from then on the scroll is the reader's. A passage
- * the text does not hold — a media read in translation — changes nothing.
+ * the text does not hold — a hit on the title alone — changes nothing.
  *
- * `text` is the body on screen: the passage is looked for again when it changes,
- * a switch to the original being the one way a translated media can show it.
+ * `text` is the body on screen: the passage is looked for again when it changes.
+ * The index holds the reading language, so a translated media shows the passage
+ * in its translation, and a switch to the original no longer holds it.
  */
 export function useSearchPassage(container: RefObject<HTMLElement | null>, passage: string | null, text: string | null): void {
   const [active, setActive] = useState(true);

@@ -15,9 +15,11 @@
  * digits only, lower-cased, without diacritics — so whatever a rendering adds,
  * drops or re-spaces is out of the comparison.
  *
- * What it cannot find is a passage the reader does not show: a media read in
- * translation is in another language than the one indexed. That answers `null`,
- * and the page opens at the top of the text as it always has.
+ * The index holds each save's text in its reading language, the translation when
+ * there is one, which is the text the reader opens on. What it cannot find is a
+ * passage the reader does not show: a hit on the title alone, or the original of
+ * a translated media once the reader switches to it. That answers `null`, and the
+ * page opens at the top of the text as it always has.
  *
  * Pure string work, shared by the mobile and the web reader; each one highlights
  * and scrolls in its own way from the ranges returned here.
