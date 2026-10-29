@@ -25,6 +25,11 @@ import {
 import { DirectUploadError } from "../services/presignedUpload";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { announceMediaSave } from "../lib/mediaSaveNotice";
+import {
+  beginPendingSave,
+  dropPendingSave,
+  resolvePendingSave,
+} from "../lib/pendingSaves";
 import { addPipelineBreadcrumb } from "../lib/crashReporting";
 import {
   getQuotaErrorCode,
@@ -32,6 +37,7 @@ import {
   type QuotaErrorCode,
 } from "../lib/quotaError";
 import { UploadService } from "../services/uploadService";
+import type { MediaType } from "@media-summarizer/core/types/media";
 import type { SharedFileAttachment } from "@media-summarizer/core/types/sharedContent";
 import { validateSharedNoteText } from "@media-summarizer/core/types/sharedContent";
 import type { LocalUploadFile } from "@media-summarizer/core/types/upload";
@@ -292,6 +298,30 @@ function selectShareIntentFile(
  * link reaching us from the share sheet and from the "+" menu are two different
  * facts about how the product is used.
  */
+/**
+ * What the vignette drawn while a submission is in flight stands for (task-568):
+ * the type and label key the save will most likely carry, so the provisional
+ * tile reads like the one that replaces it.
+ */
+function pendingSaveFor(
+  intake: ShareIntakeState,
+): { mediaType: MediaType; labelKey: string } {
+  switch (intake.contentType) {
+    case "photo":
+      return { mediaType: "document", labelKey: "photo" };
+    case "file":
+      return intake.uploadFile?.kind === "audio"
+        ? { mediaType: "audio", labelKey: "audio_note" }
+        : { mediaType: "document", labelKey: "document" };
+    case "text":
+      return { mediaType: "shared_text", labelKey: "shared_note" };
+    case "audio":
+      return { mediaType: "audio_file", labelKey: "voice_note" };
+    default:
+      return { mediaType: "unknown", labelKey: "saved_item" };
+  }
+}
+
 function sourceAppFor(origin: ShareIntakeOrigin): string {
   if (origin === "url-entry") return "app-url-entry";
   return Platform.OS === "ios" ? "ios-share-extension" : "android-share-intent";
@@ -932,10 +962,14 @@ export function ShareIntentProvider({
   const reportSaveCreated = useCallback(
     (
       reception: ShareSubmissionTracking,
+      pendingSave: string,
       mediaItemId: string,
       submittedFolderId: string | null,
       deduplicated: boolean,
     ) => {
+      // Before the announcement: the re-read it triggers is what hands the
+      // provisional vignette over to the real one.
+      resolvePendingSave(pendingSave, mediaItemId);
       registerSave(mediaItemId, submittedFolderId);
       if (!isShowing(reception)) return;
       setIntake((prev) => ({
@@ -960,7 +994,13 @@ export function ShareIntentProvider({
    * the app having quietly dropped the content.
    */
   const reportSaveFailed = useCallback(
-    (reception: ShareSubmissionTracking, error: unknown, fallback: string) => {
+    (
+      reception: ShareSubmissionTracking,
+      pendingSave: string,
+      error: unknown,
+      fallback: string,
+    ) => {
+      dropPendingSave(pendingSave);
       const { message, quotaErrorCode } = toSubmissionError(error, fallback);
       addPipelineBreadcrumb("save.failed", "Media save failed", {
         message,
@@ -1011,6 +1051,7 @@ export function ShareIntentProvider({
     // whatever the modal is standing in front of when it comes back.
     const reception = trackingRef.current;
     setIntake((prev) => ({ ...prev, status: "submitting" }));
+    const pendingSave = beginPendingSave(pendingSaveFor(intake));
 
     try {
       const response = await MediaService.ingestUrl({
@@ -1019,10 +1060,16 @@ export function ShareIntentProvider({
         folder_id: folderId,
       });
 
-      reportSaveCreated(reception, response.media_item_id, folderId, false);
+      reportSaveCreated(
+        reception,
+        pendingSave,
+        response.media_item_id,
+        folderId,
+        false,
+      );
       return response.media_item_id;
     } catch (error) {
-      reportSaveFailed(reception, error, t("share.saveLinkFailed"));
+      reportSaveFailed(reception, pendingSave, error, t("share.saveLinkFailed"));
       return null;
     }
   }, [
@@ -1057,6 +1104,7 @@ export function ShareIntentProvider({
     const folderId = selectedFolder?.id ?? null;
     const reception = trackingRef.current;
     setIntake((prev) => ({ ...prev, status: "submitting" }));
+    const pendingSave = beginPendingSave(pendingSaveFor(intake));
 
     try {
       const response = isText
@@ -1071,13 +1119,19 @@ export function ShareIntentProvider({
 
       reportSaveCreated(
         reception,
+        pendingSave,
         response.media_item_id,
         folderId,
         response.deduplicated ?? false,
       );
       return response.media_item_id;
     } catch (error) {
-      reportSaveFailed(reception, error, t("share.saveContentFailed"));
+      reportSaveFailed(
+        reception,
+        pendingSave,
+        error,
+        t("share.saveContentFailed"),
+      );
       return null;
     }
   }, [
@@ -1108,14 +1162,26 @@ export function ShareIntentProvider({
     const folderId = selectedFolder?.id ?? null;
     const reception = trackingRef.current;
     setIntake((prev) => ({ ...prev, status: "submitting" }));
+    const pendingSave = beginPendingSave(pendingSaveFor(intake));
 
     try {
       const response = await UploadService.upload(file, { folderId });
 
-      reportSaveCreated(reception, response.media_item_id, folderId, false);
+      reportSaveCreated(
+        reception,
+        pendingSave,
+        response.media_item_id,
+        folderId,
+        false,
+      );
       return response.media_item_id;
     } catch (error) {
-      reportSaveFailed(reception, error, t("share.importFileFailed"));
+      reportSaveFailed(
+        reception,
+        pendingSave,
+        error,
+        t("share.importFileFailed"),
+      );
       return null;
     }
   }, [

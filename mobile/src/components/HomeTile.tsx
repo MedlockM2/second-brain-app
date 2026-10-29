@@ -144,6 +144,11 @@ export type HomeTileItem =
        * alone rather than guessing a value for it.
        */
       status?: string | null;
+      /**
+       * Drawn for an import whose ingestion has not answered yet (task-568): it
+       * looks like any vignette being processed, but there is no media to open.
+       */
+      provisional?: boolean;
     }
   | {
       kind: "folder";
@@ -177,6 +182,7 @@ export function HomeTile({
     <Pressable
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
       onPress={() => onPress(item)}
+      disabled={item.kind === "media" && item.provisional === true}
       accessibilityLabel={describeTile(item)}
       accessibilityRole="button"
     >

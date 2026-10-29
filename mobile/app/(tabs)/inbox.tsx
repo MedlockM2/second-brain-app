@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,11 @@ import { usePurchases } from "../../src/contexts/PurchasesContext";
 import { useMediaList } from "../../src/hooks/useMediaList";
 import { useHomeSections } from "../../src/hooks/useHomeSections";
 import { useProcessingRefresh } from "../../src/hooks/useProcessingRefresh";
+import {
+  settlePendingSaves,
+  usePendingSaves,
+  type PendingSave,
+} from "../../src/lib/pendingSaves";
 import { isProcessingLibraryStatus } from "../../src/components/MediaProcessingSweep";
 import { t, tCount, useTranslation } from "../../src/i18n";
 import { SourceActions } from "../../src/components/SourceActions";
@@ -124,7 +129,16 @@ export default function InboxScreen() {
     refresh: refreshSections,
   } = useHomeSections();
 
-  const recentTiles = useMemo(() => buildRecentlyAdded(items), [items]);
+  const pendingSaves = usePendingSaves();
+  const recentTiles = useMemo(
+    () => buildRecentlyAdded(items, pendingSaves),
+    [items, pendingSaves],
+  );
+
+  // An answered import the list now draws itself needs no stand-in any more.
+  useEffect(() => {
+    settlePendingSaves(new Set(items.map((item) => item.media_item_id)));
+  }, [items, pendingSaves]);
 
   /**
    * Whether a tile of "Recently added" is still being processed.
@@ -137,7 +151,10 @@ export default function InboxScreen() {
   const hasProcessing = useMemo(
     () =>
       recentTiles.some(
-        (tile) => tile.kind === "media" && isProcessingLibraryStatus(tile.status),
+        (tile) =>
+          tile.kind === "media" &&
+          !tile.provisional &&
+          isProcessingLibraryStatus(tile.status),
       ),
     [recentTiles],
   );
@@ -629,30 +646,87 @@ function toEngagementTile(entry: RecentEngagement): HomeTileItem {
  * every filed save into two tiles. They keep their place in "Continue learning",
  * where picking a reading back up is the point.
  */
-function buildRecentlyAdded(media: MediaListItem[]): HomeTileItem[] {
-  const mediaTiles = media
-    .map((item) => ({
-      at: toTimestamp(item.created_at),
-      tile: {
-        kind: "media" as const,
-        id: item.media_item_id,
-        title: item.title ?? null,
-        titleLabelKey: item.title_label_key ?? null,
-        savedAt: item.created_at,
-        creator: item.creator_name ?? null,
-        imageUrl: item.media_image ?? null,
-        cacheKey: `${item.media_item_id}:${item.updated_at}`,
-        mediaType: (item.media_type ?? "unknown") as MediaType,
-        // The row this tile is built from carries the library entry's status, so
-        // an import that failed is marked here as it is in the Library — this is
-        // the first surface a tester looks at after sharing something.
-        status: item.status,
-      },
-    }))
-    .sort((a, b) => b.at - a.at)
-    .map((entry) => entry.tile);
+/**
+ * How far the server's clock may run behind the phone's. A media the list shows
+ * that was saved before an import left cannot be that import.
+ */
+const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
-  return mediaTiles.slice(0, RECENTLY_ADDED_LIMIT);
+/**
+ * The row: the imports still on their way first, newest first, then the list.
+ *
+ * An import is drawn from the moment it leaves (task-568) and gives its place to
+ * the media it created once the list holds it — same position, since it is the
+ * newest, and same React key once its id is known, so the swap is one tile.
+ *
+ * One race is left: a re-read of the list that lands *before* the ingestion's own
+ * answer. The list then shows the save while the stand-in does not yet know its
+ * id, and both would be drawn. So each unanswered import holds back the newest
+ * media the list gained since it left, at most one, until its answer names it.
+ * At worst that is a save made elsewhere hidden for the few seconds the upload
+ * has left.
+ */
+function buildRecentlyAdded(
+  media: MediaListItem[],
+  pendingSaves: readonly PendingSave[],
+): HomeTileItem[] {
+  const listedIds = new Set(media.map((item) => item.media_item_id));
+  const waiting = pendingSaves
+    .filter((save) => !(save.mediaItemId && listedIds.has(save.mediaItemId)))
+    .sort((a, b) => toTimestamp(b.startedAt) - toTimestamp(a.startedAt));
+  const answeredIds = new Set(
+    pendingSaves.flatMap((save) => (save.mediaItemId ? [save.mediaItemId] : [])),
+  );
+  const newestFirst = [...media].sort(
+    (a, b) => toTimestamp(b.created_at) - toTimestamp(a.created_at),
+  );
+  const heldBack = new Set<string>();
+  for (const save of [...waiting].reverse()) {
+    if (save.mediaItemId) continue;
+    const since = toTimestamp(save.startedAt) - CLOCK_SKEW_MS;
+    const claimed = newestFirst.find(
+      (item) =>
+        !save.knownIds.has(item.media_item_id) &&
+        !answeredIds.has(item.media_item_id) &&
+        !heldBack.has(item.media_item_id) &&
+        toTimestamp(item.created_at) >= since,
+    );
+    if (claimed) heldBack.add(claimed.media_item_id);
+  }
+
+  const pendingTiles: HomeTileItem[] = waiting.map((save) => ({
+    kind: "media",
+    id: save.mediaItemId ?? save.key,
+    title: null,
+    titleLabelKey: save.labelKey,
+    savedAt: save.startedAt,
+    creator: null,
+    imageUrl: null,
+    cacheKey: save.key,
+    mediaType: save.mediaType,
+    status: "pending",
+    provisional: save.mediaItemId === null,
+  }));
+
+  const mediaTiles: HomeTileItem[] = newestFirst
+    .filter((item) => !heldBack.has(item.media_item_id))
+    .map((item) => ({
+      kind: "media",
+      id: item.media_item_id,
+      title: item.title ?? null,
+      titleLabelKey: item.title_label_key ?? null,
+      savedAt: item.created_at,
+      creator: item.creator_name ?? null,
+      imageUrl: item.media_image ?? null,
+      cacheKey: `${item.media_item_id}:${item.updated_at}`,
+      mediaType: (item.media_type ?? "unknown") as MediaType,
+      // The row this tile is built from carries the library entry's status, so
+      // an import that failed is marked here as it is in the Library — this is
+      // the first surface a tester looks at after sharing something.
+      status: item.status,
+    }));
+
+  return [...pendingTiles, ...mediaTiles].slice(0, RECENTLY_ADDED_LIMIT);
 }
 
 function toTimestamp(value?: string | null): number {
