@@ -1,10 +1,10 @@
 ---
 id: TASK-567
 title: Activer les alarmes CloudWatch en dev avant le lancement de la bêta
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-29 13:31'
-updated_date: '2026-10-29 13:33'
+updated_date: '2026-10-29 15:30'
 labels:
   - infrastructure
   - terraform
@@ -42,8 +42,14 @@ Après le merge et le push : `terraform apply` en dev avec `-var alert_email=<vo
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `enable_alarms = true` dans `envs/dev/main.tf` ; aucun autre fichier Terraform ne change, à part le commentaire de coût voisin.
-- [ ] #2 `terraform validate` passe pour dev, et `terraform plan` en dev ne fait que créer le topic SNS, les alarmes et éventuellement l'abonnement, sans détruire ni modifier d'autre ressource.
-- [ ] #3 Aucune adresse email ni identité de compte dans le diff ; `alert_email` reste vide par défaut.
-- [ ] #4 `docs/OPERATOR_SPEND_CONTROL.md` décrit le canal d'alerte, l'abonnement et le délai attendu.
+- [x] #1 `enable_alarms = true` dans `envs/dev/main.tf` ; aucun autre fichier Terraform ne change, à part le commentaire de coût voisin.
+- [x] #2 `terraform validate` passe pour dev, et `terraform plan` en dev ne fait que créer le topic SNS, les alarmes et éventuellement l'abonnement, sans détruire ni modifier d'autre ressource.
+- [x] #3 Aucune adresse email ni identité de compte dans le diff ; `alert_email` reste vide par défaut.
+- [x] #4 `docs/OPERATOR_SPEND_CONTROL.md` décrit le canal d'alerte, l'abonnement et le délai attendu.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+`enable_alarms = true` dans `envs/dev/main.tf`, avec le commentaire de coût voisin réécrit. La description de `alert_email`, dans le même fichier, ne dit plus « Unused while enable_alarms = false ». Aucun autre fichier Terraform ne change. `terraform validate` passe. `terraform plan` en dev (AWS_PROFILE=second-brain-app, valeurs Cognito factices passées en env, jamais écrites) donne 104 to add, 4 to change, 0 to destroy. Les créations sont 1 topic SNS, 80 alarmes, 1 alarme composite et 22 filtres de métriques ; sans `alert_email`, aucun abonnement. Aucune des 4 modifications ne vient de cette tâche : `aws_cognito_identity_provider` google/apple et `GOOGLE_NATIVE_CLIENT_ID` de `aws_lambda_function.api` viennent des valeurs factices ; `aws_iam_role_policy.budget_audit` est la lecture de la partition `operator` de TASK-566, encore à appliquer. `docs/OPERATOR_SPEND_CONTROL.md` § 5 décrit le canal (topic `media-summarizer-pipeline-alerts-dev`, email), l'abonnement et sa confirmation, le délai (environ 30 min pour les alarmes de l'audit, 5 min pour `budget-operator`) et la vérification par `set-alarm-state`. Le diff ne contient ni adresse ni identité de compte.
+<!-- SECTION:NOTES:END -->

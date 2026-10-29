@@ -150,6 +150,24 @@ last one is immediate, from every Lambda's logs. All notify the `pipeline_alerts
 SNS topic. The drift alert tells "each account costs more" apart from "more
 accounts": the 500 EUR ceiling alone cannot.
 
+**How an alert reaches the owner.** Alarms are on in dev since TASK-567
+(`enable_alarms = true` in `envs/dev/main.tf`, ≈ 3.30 USD/month). Every alarm in
+the table, and the other pipeline alarms of the module, publish to the SNS topic
+`media-summarizer-pipeline-alerts-dev` on `ALARM` and again on `OK`.
+The topic delivers by email to one address, which is never committed (the
+repository is public):
+
+- **Subscribe**: pass the address on the apply that creates the topic,
+  `terraform apply -var alert_email=<address>` in `envs/dev`, which creates the
+  `pipeline_alerts_email` subscription, then click the confirmation link AWS sends.
+  Until it is confirmed, nothing is delivered. Without `alert_email`, subscribe
+  out-of-band (`aws sns subscribe --protocol email`), and confirm the same way.
+- **Delay**: the five audit-driven alarms reach `ALARM` at the first audit after the
+  threshold is crossed, so within about 30 minutes; `budget-operator` fires within
+  5 minutes of the log line (its period is 300 s).
+- **Check end to end**: `aws cloudwatch set-alarm-state --state-value ALARM` on one
+  operator alarm must produce an email; the next evaluation brings it back to `OK`.
+
 ## 6. Guarantees and residual limits
 
 The control bounds the **new valued authorisations** of every path that goes

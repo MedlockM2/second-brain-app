@@ -57,19 +57,21 @@ module "platform" {
   # the execute-api host, a third party to localhost (task-473).
   web_app_origin = "http://localhost:5173"
 
-  # dev stays cheap: no CloudWatch alarms (43 alarms ≈ $3.30/mo measured), no
-  # dashboard (~$3.00/mo; CloudTrail showed no console view in 90 days, only
-  # Terraform refreshes) and unreserved API concurrency. The worker SQS polling
-  # stays ON — dev is the environment actually being worked in. See
+  # dev hosts the beta, so its alarms are on (≈ $3.30/mo measured): a suspended
+  # provider, a full loss reserve or an approached operator ceiling must reach
+  # the owner without a tester reporting it (task-567). dev otherwise stays
+  # cheap: no dashboard (~$3.00/mo; CloudTrail showed no console view in 90
+  # days, only Terraform refreshes) and unreserved API concurrency. The worker
+  # SQS polling stays ON — dev is the environment actually being worked in. See
   # envs/staging/main.tf for the mothballed counterpart.
-  enable_alarms    = false
+  enable_alarms    = true
   enable_dashboard = false
 
   alert_email = var.alert_email
 }
 
 variable "alert_email" {
-  description = "Address subscribed to the pipeline alerts SNS topic. Unused while enable_alarms = false."
+  description = "Address subscribed to the pipeline alerts SNS topic. Never committed: pass -var alert_email=... on the apply."
   type        = string
   default     = ""
 }
