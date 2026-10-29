@@ -15,7 +15,7 @@ import { resourceKeys } from "../../src/services/resourceCache";
  * readers get the same two moves as the card's increment and decrement actions.
  *
  * One thing about this screen is unusual enough to be spelled out where it
- * happens: the queue is frozen at mount (see `load`).
+ * happens: the queue is frozen from the user's first gesture (see `load`).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -139,6 +139,13 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   });
   const [items, setItems] = useState<MediaListItem[]>(initialQueue.items ?? []);
   const hasQueue = useRef(initialQueue.items !== undefined);
+  /**
+   * Whether the user has touched the queue since the screen opened: moved
+   * between cards, discarded, filed, or opened one to deepen it. Until then the
+   * queue on screen is only the cache's guess and the server's answer may
+   * replace it; from then on it is the user's and stays put (see `load`).
+   */
+  const hasActed = useRef(false);
   const [queueReady, setQueueReady] = useState(initialQueue.items !== undefined);
   const [folders, setFolders] = useResourceState<Folder[]>(
     resourceKeys.folders,
@@ -186,9 +193,13 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
         : Promise.resolve([]);
       const [, page] = await Promise.all([foldersRequest, queueRequest]);
       if (!isMountedRef.current) return;
-      // Revalidation prepares the next visit. Never reshuffle a visible triage
-      // session, including a known empty one, under the user's next tap.
-      if (!hasQueue.current) {
+      // The cached queue is a guess: the page keeps the cards filed or discarded
+      // in the last pass out of it, but an import since only marks it stale, so
+      // it can open empty on media the server already has. As long as the user
+      // has not touched the queue, the server's answer replaces it, back on the
+      // first card. Once they have, it never reshuffles under their next tap and
+      // only prepares the next visit.
+      if (!hasActed.current) {
         commitQueue(page.filter((item) => item.folder_id === defaultId), 0);
         hasQueue.current = true;
         setQueueReady(true);
@@ -212,8 +223,10 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    * refetches in a `useFocusEffect` so several devices stay in step. Here the
    * user comes back from Deepen with a finger already on the card: a refetch
    * would reshuffle the queue and renumber every index under it, and the next
-   * tap would land somewhere else. The queue this screen shows is the queue it
-   * opened with; what the server has meanwhile is next pass's business.
+   * tap would land somewhere else. The mount load's answer replaces the queue
+   * opened from cache only while nothing has been touched yet; after the first
+   * gesture the queue is frozen, and what the server has meanwhile is next
+   * pass's business.
    *
    * Deferred by a tick — a `setState` reached synchronously from an effect
    * cascades a render, and the lint rule that says so is on.
@@ -241,6 +254,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
    * oldest and the last is the newest and nothing lies beyond either.
    */
   const step = useCallback((delta: number) => {
+    hasActed.current = true;
     setActiveIndex((index) =>
       Math.max(0, Math.min(index + delta, itemsRef.current.length - 1)),
     );
@@ -347,6 +361,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   const handleDiscard = useCallback(() => {
     const target = itemsRef.current[activeIndex];
     if (!target) return;
+    hasActed.current = true;
     const index = removeById(target.media_item_id);
     if (index === -1) return;
     void (async () => {
@@ -370,10 +385,12 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   /**
    * Deepen: open the media and come back. Not a decision — the item stays in the
    * queue, and since nothing reloads on focus the same card is under the finger
-   * on return, at the same index.
+   * on return, at the same index — which is also why opening one counts as
+   * touching the queue.
    */
   const handleDeepen = useCallback(() => {
     if (!current) return;
+    hasActed.current = true;
     router.push(`/review/media/${current.media_item_id}`);
   }, [current, router]);
 
@@ -394,6 +411,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   const handleSaved = useCallback(
     (mediaItemId: string) => {
       setSaveTargetId(null);
+      hasActed.current = true;
       removeById(mediaItemId);
     },
     [removeById],

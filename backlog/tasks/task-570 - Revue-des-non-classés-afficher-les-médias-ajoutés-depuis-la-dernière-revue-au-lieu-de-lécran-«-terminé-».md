@@ -3,9 +3,10 @@ id: TASK-570
 title: >-
   Revue des non classés : afficher les médias ajoutés depuis la dernière revue
   au lieu de l'écran « terminé »
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-29 15:37'
+updated_date: '2026-10-29 17:15'
 labels:
   - mobile
 dependencies: []
@@ -45,9 +46,15 @@ Vérification manuelle sur TestFlight ou en simulateur : terminer une revue, ajo
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Dans `mobile/app/review/index.tsx`, quand la revalidation de `load()` répond avant tout geste de l'utilisateur sur la file (navigation, Jeter, Ranger), la file affichée est remplacée par la réponse du serveur (filtrée sur le dossier par défaut) et la carte active revient à l'index 0, y compris quand la file issue du cache était vide
-- [ ] #2 Après le premier geste de l'utilisateur, une réponse de revalidation ne modifie plus la file affichée (comportement actuel conservé)
-- [ ] #3 Le marqueur « l'utilisateur a agi » est posé dans chaque chemin qui modifie la file ou la carte active (navigation tactile, actions d'accessibilité increment/decrement, Jeter, Ranger), et pas seulement dans le rendu
-- [ ] #4 Les commentaires de `load` et de l'effet de montage décrivent la nouvelle règle (file remplacée tant que rien n'a été touché, figée ensuite)
-- [ ] #5 `npm run lint` et `npx tsc --noEmit` passent sans erreur dans `mobile/`
+- [x] #1 Dans `mobile/app/review/index.tsx`, quand la revalidation de `load()` répond avant tout geste de l'utilisateur sur la file (navigation, Jeter, Ranger), la file affichée est remplacée par la réponse du serveur (filtrée sur le dossier par défaut) et la carte active revient à l'index 0, y compris quand la file issue du cache était vide
+- [x] #2 Après le premier geste de l'utilisateur, une réponse de revalidation ne modifie plus la file affichée (comportement actuel conservé)
+- [x] #3 Le marqueur « l'utilisateur a agi » est posé dans chaque chemin qui modifie la file ou la carte active (navigation tactile, actions d'accessibilité increment/decrement, Jeter, Ranger), et pas seulement dans le rendu
+- [x] #4 Les commentaires de `load` et de l'effet de montage décrivent la nouvelle règle (file remplacée tant que rien n'a été touché, figée ensuite)
+- [x] #5 `npm run lint` et `npx tsc --noEmit` passent sans erreur dans `mobile/`
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Un marqueur hasActed (ref) est posé dans step (tap et actions d'accessibilité), Jeter, Ranger (handleSaved) et Approfondir. Tant qu'il est faux, la réponse de load() remplace la file issue du cache et revient à l'index 0, même si le cache était vide ; ensuite la file reste figée. Commentaires d'en-tête, de load et de l'effet de montage mis à jour. npm run lint (0 erreur) et tsc --noEmit passent. Approfondir compte aussi comme geste, pour ne pas changer la carte sous le doigt au retour.
+<!-- SECTION:FINAL_SUMMARY:END -->
