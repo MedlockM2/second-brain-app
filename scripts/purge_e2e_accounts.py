@@ -19,17 +19,15 @@ Anything else is reported as kept and never touched.
 
 Safety:
 - dry run by default; `--apply` is required to delete anything;
-- only the `-dev` and the unsuffixed legacy tables are reachable
-  (`ALLOWED_SUFFIXES`) -- staging and prod cannot be addressed at all;
+- only the `-dev` tables are reachable (`ALLOWED_SUFFIXES`) -- staging and
+  prod cannot be addressed at all;
 - every row that is about to be deleted is dumped to a JSON file first, in the
   low-level DynamoDB format, so `aws dynamodb put-item --item ...` restores it
-  by hand. The unsuffixed `users` table has no PITR: the dump is its only net.
+  by hand.
 
 Usage:
     scripts/purge_e2e_accounts.py                      # dry run on -dev
     scripts/purge_e2e_accounts.py --apply              # purge -dev
-    scripts/purge_e2e_accounts.py --suffix=            # dry run on legacy
-    scripts/purge_e2e_accounts.py --suffix= --apply    # purge legacy
 
     # Note the `=` in `--suffix=-dev`: a value starting with "-" would
     # otherwise be read as another flag.
@@ -72,7 +70,7 @@ E2E_EMAIL_DOMAIN = "@test.local"
 
 #: Environments this script is allowed to address. Staging and prod are not
 #: listed on purpose: a typo must not be able to reach them.
-ALLOWED_SUFFIXES = ("-dev", "")
+ALLOWED_SUFFIXES = ("-dev",)
 
 REGION = "eu-west-3"
 
@@ -235,7 +233,7 @@ def delete_children(
 
 def write_dump(dump_dir: Path, suffix: str, payload: dict[str, Any]) -> Path:
     dump_dir.mkdir(parents=True, exist_ok=True)
-    label = suffix.lstrip("-") or "legacy"
+    label = suffix.lstrip("-")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = dump_dir / f"purge-e2e-{label}-{stamp}.json"
     path.write_text(json.dumps(payload, indent=2, sort_keys=True, default=str))
@@ -248,8 +246,8 @@ def main(argv: list[str] | None = None) -> int:
         "--suffix",
         default="-dev",
         help=(
-            "environment suffix of the tables to sweep: '-dev' (default) or "
-            "'' for the unsuffixed legacy tables. Pass as --suffix=-dev."
+            "environment suffix of the tables to sweep: only '-dev'. "
+            "Pass as --suffix=-dev."
         ),
     )
     parser.add_argument(

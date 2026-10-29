@@ -15,8 +15,7 @@ If the email does not meet these criteria, or if the account does not exist, the
 script exits 0 and prints a notice. This allows teardowns to be unconditional:
 they never fail the test or CI run.
 
-The script sweeps BOTH the `-dev` tables and the unsuffixed legacy tables (until
-task-237 removes them). The deletion order is children first, then the `users`
+The script sweeps the `-dev` tables. The deletion order is children first, then the `users`
 row, so no orphan can survive a partial run.
 
 Usage:
@@ -123,7 +122,6 @@ def main(argv: list[str] | None = None) -> int:
     client = boto3.client("dynamodb", region_name=args.region)
     found_any = False
 
-    # Sweep both -dev and the unsuffixed legacy tables.
     for suffix in ALLOWED_SUFFIXES:
         found = delete_account(client, suffix, email)
         found_any = found_any or found

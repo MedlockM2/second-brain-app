@@ -228,8 +228,8 @@ async def _teardown_user(client: httpx.AsyncClient, user: Dict[str, str]) -> Non
 
     1. ``DELETE /api/account`` (task-224), so a real run exercises the shipped
        deletion flow rather than only the test-side shortcut.
-    2. ``scripts/delete_e2e_account.py`` (task-247), which sweeps both -dev and
-       unsuffixed tables and removes every child row (auth tokens, processing
+    2. ``scripts/delete_e2e_account.py`` (task-247), which sweeps the -dev tables
+       and removes every child row (auth tokens, processing
        jobs, artifacts, folders, submissions, usage counters), reusing the
        same logic as purge_e2e_accounts.py (task-246).
 
@@ -268,8 +268,8 @@ async def _teardown_user(client: httpx.AsyncClient, user: Dict[str, str]) -> Non
             print(f"[e2e]   api DELETE failed: {exc!r}")
             warnings.warn(f"DELETE /api/account raised {exc!r}", stacklevel=2)
 
-    # Guaranteed sweep (task-247): handles both -dev and unsuffixed tables and
-    # removes the child rows the API purge may not have reached.
+    # Guaranteed sweep (task-247): sweeps the -dev tables and removes
+    # the child rows the API purge may not have reached.
     repo_root = Path(__file__).resolve().parents[2]
     script = repo_root / "scripts" / "delete_e2e_account.py"
 
