@@ -32,11 +32,16 @@ export function AuthCodePage({ recovery, credentials, onCancel }: { recovery: bo
   const [email, setEmail] = useState(initialEmail ?? "");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState(credentials?.password ?? "");
+  // Recovery asks for the new password twice, like sign-up.
+  const [confirmation, setConfirmation] = useState("");
+  const [confirmationLeft, setConfirmationLeft] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "signIn">(recovery ? "email" : "code");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TranslationKey | null>(null);
   // A code was just sent on arriving here, by the sign-up or by the "send" of recovery.
   const [resendIn, setResendIn] = useState(recovery ? 0 : RESEND_DELAY_SECONDS);
+  const passwordValid = meetsPasswordPolicy(password);
+  const matches = confirmation.length > 0 && confirmation === password;
   useEffect(() => {
     if (resendIn <= 0) return;
     const timer = window.setTimeout(() => setResendIn((seconds) => seconds - 1), 1000);
@@ -54,6 +59,8 @@ export function AuthCodePage({ recovery, credentials, onCancel }: { recovery: bo
   }
   async function confirm(enteredCode = code) {
     if (busy) return;
+    // A new password is saved only when it meets the policy and both entries are the same.
+    if (recovery && step === "code" && !(passwordValid && matches)) return;
     setBusy(true); setError(null);
     try {
       if (step === "code") {
@@ -61,7 +68,7 @@ export function AuthCodePage({ recovery, credentials, onCancel }: { recovery: bo
           email: email.trim(), code: enteredCode, ...(recovery ? { password } : {}),
         });
         // A failed sign-in retries only the password, never the consumed code.
-        setStep("signIn"); setCode("");
+        setStep("signIn"); setCode(""); setConfirmation("");
       }
       await signIn("/login", { email: email.trim(), password });
       setPassword("");
@@ -117,12 +124,12 @@ export function AuthCodePage({ recovery, credentials, onCancel }: { recovery: bo
 
   // The code step. « Edit » goes back to where the address was typed.
   const edit = recovery
-    ? () => { setStep("email"); setCode(""); setPassword(""); setError(null); }
+    ? () => { setStep("email"); setCode(""); setPassword(""); setConfirmation(""); setConfirmationLeft(false); setError(null); }
     : onCancel;
   const needsPassword = recovery || !credentials;
   const domain = email.trim().split("@")[1]?.toLowerCase() ?? "";
   const mailbox = MAILBOXES.find(([pattern]) => pattern.test(domain));
-  const canSubmit = !busy && code.length === CODE_LENGTH && (recovery ? meetsPasswordPolicy(password) : password.length > 0);
+  const canSubmit = !busy && code.length === CODE_LENGTH && (recovery ? passwordValid && matches : password.length > 0);
   return <AuthSplit>
     <span className="auth-envelope" aria-hidden="true"><Icon name="mail-open-outline" size={24} /></span>
     <h1 className="display auth-title">{t(recovery ? "auth.newPassword" : "auth.codeTitle")}</h1>
@@ -145,6 +152,13 @@ export function AuthCodePage({ recovery, credentials, onCancel }: { recovery: bo
         required value={password} disabled={busy} onChange={(event) => setPassword(event.target.value)}>
         {recovery && <PasswordRules password={password} />}
       </AuthField>}
+      {recovery && <AuthField secure label={t("auth.confirmPassword")} maxLength={256} disabled={busy} required
+        autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)}
+        onBlur={() => setConfirmationLeft(true)}
+        message={matches && passwordValid
+          ? { tone: "success", content: t("auth.passwordsMatch") }
+          : confirmationLeft && confirmation.length > 0 && !matches
+            ? { tone: "error", content: t("auth.passwordsMismatch") } : undefined} />}
       {needsPassword && <button className="btn primary auth-submit" type="submit" disabled={!canSubmit}>
         {t(recovery ? "auth.savePassword" : "auth.confirmCode")}
       </button>}
