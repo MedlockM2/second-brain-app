@@ -9,6 +9,7 @@
 
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { t } from "../i18n";
 import {
   UPLOAD_PICKER_MIME_TYPES,
@@ -131,6 +132,8 @@ export async function capturePhotoToImport(): Promise<LocalImportResult> {
  * No permission is requested: both the iOS PHPicker and the Android photo
  * picker run outside the app and hand back only what the user selected, so
  * asking would add a prompt that grants nothing.
+ *
+ * A PNG is re-encoded before it leaves — see `compressPngAsset`.
  */
 export async function pickPhotoFromLibrary(): Promise<LocalImportResult> {
   let result: ImagePicker.ImagePickerResult;
@@ -148,7 +151,64 @@ export async function pickPhotoFromLibrary(): Promise<LocalImportResult> {
     };
   }
 
+  if (!result.canceled && result.assets?.length) {
+    const asset = await compressPngAsset(result.assets[0]);
+    return toImportResult({ ...result, assets: [asset] });
+  }
   return toImportResult(result);
+}
+
+/**
+ * JPEG quality for a re-encoded gallery PNG. Higher than the camera's 0.8: what
+ * these images mostly are is screenshots — messages, a page — and the OCR reads
+ * them, so text edges are worth the extra bytes.
+ */
+const PNG_REENCODE_QUALITY = 0.9;
+
+function isPngAsset(asset: ImagePicker.ImagePickerAsset): boolean {
+  if (asset.mimeType?.toLowerCase() === "image/png") return true;
+  const name = (asset.fileName ?? asset.uri.split("?")[0]).toLowerCase();
+  return name.endsWith(".png");
+}
+
+/**
+ * A gallery PNG, re-encoded as JPEG at full resolution (task-569).
+ *
+ * iOS ignores the picker's `quality` for a PNG, and an iOS screenshot is a PNG:
+ * a 2.8 MB capture took twenty seconds to upload on a mobile network, long enough
+ * for the owner to re-import it. Only the encoding changes, never the size: the
+ * OCR reads the result. JPEG and HEIC are already compressed and pass through.
+ *
+ * The name follows the format, `IMG_4622.png` becoming `IMG_4622.jpg`, which the
+ * backend still reads as a device name and titles "Photo — <date>". The size is
+ * left unknown: the staging step reads it off the new file.
+ *
+ * Best effort: if the conversion fails, the original goes out as it always did.
+ */
+async function compressPngAsset(
+  asset: ImagePicker.ImagePickerAsset,
+): Promise<ImagePicker.ImagePickerAsset> {
+  if (!isPngAsset(asset)) return asset;
+  try {
+    const image = await ImageManipulator.manipulate(asset.uri).renderAsync();
+    const saved = await image.saveAsync({
+      format: SaveFormat.JPEG,
+      compress: PNG_REENCODE_QUALITY,
+    });
+    const reported = asset.fileName?.trim();
+    return {
+      ...asset,
+      uri: saved.uri,
+      width: saved.width,
+      height: saved.height,
+      mimeType: "image/jpeg",
+      fileName: reported ? `${reported.replace(/\.[^.]*$/, "")}.jpg` : null,
+      fileSize: undefined,
+    };
+  } catch (error) {
+    console.warn("[import] PNG re-encoding failed, sending the original", error);
+    return asset;
+  }
 }
 
 /** Validate the single asset an image picker returned, whatever opened it. */
