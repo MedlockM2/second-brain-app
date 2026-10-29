@@ -3,11 +3,11 @@ id: TASK-563
 title: >-
   Benchmarker le débit fournisseurs, l’équité entre comptes et la protection de
   la facture pour plusieurs centaines d’utilisateurs quotidiens
-status: To Do
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-28 16:59'
-updated_date: '2026-10-28 22:40'
+updated_date: '2026-10-29 11:27'
 labels:
   - benchmark
   - backend
