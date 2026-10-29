@@ -7,7 +7,7 @@ status: To Do
 assignee:
   - owner
 created_date: '2026-10-10 15:13'
-updated_date: '2026-10-26 22:24'
+updated_date: '2026-10-29 13:31'
 labels:
   - v1-launch
   - release
@@ -15,13 +15,13 @@ labels:
 dependencies:
   - TASK-429
   - TASK-440
+  - TASK-567
 documentation:
   - docs/V1_LAUNCH_PLAN.md
   - docs/research/pricing-challenge/README.md
   - docs/research/task-547-beta-budget-control/README.md
 priority: high
 ordinal: 48000
-dispatchable: false
 ---
 
 ## Description
