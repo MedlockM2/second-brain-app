@@ -6,9 +6,10 @@ import { mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveSourcePreviewState } from "@media-summarizer/core/media/sourcePreview";
 import { languageTag, resolveSourceLink, splitTranscriptParagraphs } from "@media-summarizer/core/media/transcript";
 import type { MediaItemContract, SourcePlatform } from "@media-summarizer/core/types/media";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { MediaDetailState } from "../../media/useMediaDetail";
+import { useSearchPassage } from "../../media/useSearchPassage";
 import { useTranscript } from "../../media/useTranscript";
 import { Icon, type IconName } from "../Icon";
 import { ICON_PATHS } from "../icons.generated";
@@ -45,6 +46,9 @@ function processingKey(platform?: SourcePlatform | string) {
  * The reading pane of a media: the cover band (creator and title on glass), the
  * line of facts (source, date, length, language, paragraphs), then "L'essentiel"
  * and the full text — or, while the media is not readable yet, where it stands.
+ *
+ * Opened from a search result, the full text opens on the passage the result
+ * quoted (`passage`, see `useSearchPassage`).
  */
 export function ReadingBody({
   item,
@@ -52,12 +56,15 @@ export function ReadingBody({
   state,
   error,
   onRefresh,
+  passage,
 }: {
   item: MediaItemContract;
   title: string;
   state: MediaDetailState;
   error: string | null;
   onRefresh: () => void;
+  /** The excerpt of the search result the page was opened from (`searchPassageFromSnippet`). */
+  passage: string | null;
 }) {
   const { t, tw } = useI18n();
   const ready = state === "completed";
@@ -68,6 +75,17 @@ export function ReadingBody({
   const sourceLanguage = translation?.translated_from ?? translation?.detected_language ?? item.transcript?.language ?? null;
   const targetLanguage = translation?.target_language ?? null;
   const showingOriginal = translated && original.shown;
+
+  // The body on screen, as `TranscriptText` picks it.
+  const shownText = !ready
+    ? null
+    : showingOriginal && original.content
+      ? original.content
+      : "content" in transcript.state
+        ? transcript.state.content
+        : null;
+  const reader = useRef<HTMLElement>(null);
+  useSearchPassage(reader, passage, shownText);
 
   const link = resolveSourceLink(item.original_url);
   const created = new Date(item.created_at);
@@ -129,7 +147,7 @@ export function ReadingBody({
       {ready && (
         <>
           <Essentials item={item} />
-          <section className="reader" aria-label={t("transcript.heading")}>
+          <section ref={reader} className="reader" aria-label={t("transcript.heading")}>
             <div className="reader-head">
               <h2 className="headline grow">{t("transcript.heading")}</h2>
               {translated && (

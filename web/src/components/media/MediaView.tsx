@@ -23,10 +23,13 @@ export function MediaView({
   mediaId,
   band,
   onDeleted,
+  passage = null,
 }: {
   mediaId: string;
   band?: ReactNode;
   onDeleted: () => void;
+  /** The excerpt of the search result the page was opened from: Reading opens on it. */
+  passage?: string | null;
 }) {
   const { t, tw } = useI18n();
   const detail = useMediaDetail(mediaId);
@@ -108,7 +111,9 @@ export function MediaView({
               onDeleted={onDeleted}
             />
           ),
-          body: <ReadingBody item={item} title={title} state={detail.state} error={detail.error} onRefresh={detail.refresh} />,
+          body: (
+            <ReadingBody item={item} title={title} state={detail.state} error={detail.error} onRefresh={detail.refresh} passage={passage} />
+          ),
         }}
         mid={chat}
         right={ai.spec}

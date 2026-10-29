@@ -16,7 +16,8 @@
  * module for that reason: parsing says what is a match, windowing makes sure the
  * match is among the characters the reader is actually shown.
  *
- * Shared with the web app from here; the mobile app keeps its copy in `mobile/src/lib/highlightSnippet.ts` until a mobile change points it here.
+ * Shared by the mobile and the web app, and read back by `searchPassage.ts`, which
+ * finds a hit's excerpt again in the media's text.
  */
 
 export interface HighlightSegment {

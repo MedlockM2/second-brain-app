@@ -12,11 +12,12 @@ import { t, useTranslation } from "../../src/i18n";
 export default function MediaDetailScreen() {
   const styles = useThemedStyles(makeStyles);
   useTranslation();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `passage`: the excerpt of the search hit this page was opened from, if any.
+  const { id, passage } = useLocalSearchParams<{ id: string; passage?: string }>();
   const router = useRouter();
   const { state, mediaData, fetchError, processingError, processingMessage, refresh } = useMediaDetailPolling(id);
   if (mediaData) {
-    return <CompletedDetailView key={id} mediaData={mediaData}
+    return <CompletedDetailView key={id} mediaData={mediaData} passage={passage}
       onBack={() => router.back()} onDeleted={() => router.back()}
       processingNotice={state === "completed" ? undefined : {
         message: state === "failed" ? (processingError ?? t("media.failedFallback"))

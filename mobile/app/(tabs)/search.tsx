@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { nextFolderName } from "@media-summarizer/core/organization/folderNames";
+import { searchPassageFromSnippet } from "@media-summarizer/core/media/searchPassage";
 import { useLibraryTarget } from "../../src/hooks/useLibraryTarget";
 import { acknowledgeFolderNameError, isFolderNameConflict } from "../../src/lib/folderNameError";
 import { TAB_BAR_CLEARANCE } from "../../src/constants/tabBar";
@@ -490,6 +491,19 @@ export default function SearchScreen() {
     [router],
   );
 
+  // A hit opens its media on the passage its excerpt quotes, not at the top of
+  // the text. A hit on the title alone has no passage and opens like a row.
+  const handleOpenSearchHit = useCallback(
+    (mediaItemId: string) => {
+      const passage = searchPassageFromSnippet(
+        results.find((row) => row.media_item_id === mediaItemId)?.excerpt,
+      );
+      if (!passage) return handleOpenMedia(mediaItemId);
+      router.push({ pathname: "/media/[id]", params: { id: mediaItemId, passage } });
+    },
+    [results, handleOpenMedia, router],
+  );
+
   // Both lists at once, and that is the point: they show the same media, so a
   // deletion confirmed from a search hit must not be undone by clearing the
   // query. Only ever called once the backend has answered — a network failure
@@ -898,7 +912,7 @@ export default function SearchScreen() {
             error={error}
             onRetrySearch={handleRetrySearch}
             query={debouncedQuery}
-            onOpenMedia={handleOpenMedia}
+            onOpenMedia={handleOpenSearchHit}
             onLongPressMedia={mediaActions.open}
           />
         )}
