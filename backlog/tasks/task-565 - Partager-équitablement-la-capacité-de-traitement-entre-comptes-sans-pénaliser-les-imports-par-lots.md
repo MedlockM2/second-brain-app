@@ -30,7 +30,8 @@ references:
   - >-
     backlog/tasks/task-562 -
     Générer-un-nouvel-artefact-à-chaque-demande-sans-réutilisation-aperçu-excepté.md
-priority: high
+priority: low
+dispatchable: false
 type: feature
 ordinal: 171000
 ---
@@ -49,6 +50,10 @@ Appliquer la politique d'équité retenue à l'admission et au traitement des op
 Rendre explicite ce qui est accepté puis mis en attente, ce qui est refusé temporairement et ce qui peut être annulé ou relancé ; borner l'accumulation et l'attente selon la décision. Garder les imports par lots utilisables, les échanges interactifs servis et les comptes peu actifs capables d'avancer. Aucune garantie de délai chiffrée n'est inventée ici.
 
 Les éventuels états de file et actions utilisateur doivent être compréhensibles sur mobile et web, sans clics qui recréent une demande déjà acceptée et sans les confondre avec l'épuisement du budget. Coordonner les contrats avec TASK-550/551 ; cette tâche possède les nouveaux comportements d'attente/équité, pas leur jauge de consommation. Réutiliser les événements existants pour le suivi TASK-552.
+
+## Reportée
+
+Décision de l'owner du 2026-10-29 (README du benchmark, Owner Validation, point 1) : la discipline d'équité n'est pas construit à l'échelle actuelle. Le verrou du front-matter se lève quand l'un des déclencheurs de la décision se produit : environ 300 DAU, ou 429 fournisseur persistants hors incident. Ne pas démarrer avant.
 
 ## Décision à appliquer
 

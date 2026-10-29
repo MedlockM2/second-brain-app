@@ -27,7 +27,8 @@ references:
   - >-
     backlog/tasks/task-552 -
     Produire-un-suivi-exploitable-de-l’usage-des-coûts-et-des-refus-bêta.md
-priority: high
+priority: low
+dispatchable: false
 type: feature
 ordinal: 170000
 ---
@@ -46,6 +47,10 @@ Livrer le contrôle collectif de capacité retenu : périmètres fournisseurs r�
 Distinguer saturation de débit, indisponibilité et épuisement financier. Les temporisations ne doivent ni consommer les reprises comme des appels échoués ni provoquer un second envoi de la même tentative. L'articulation des réservations financières pendant l'attente suit la décision commune. Préserver consultation et résultats déjà disponibles ; le chat garde le comportement interactif borné retenu.
 
 Émettre les événements utiles à TASK-552 et documenter la configuration et le diagnostic ; les limites propres aux comptes qui exigent une console restent dans la checklist owner. Ne pas acheter de capacité ni changer les moyens de paiement de TASK-558.
+
+## Reportée
+
+Décision de l'owner du 2026-10-29 (README du benchmark, Owner Validation, point 1) : le socle de capacité n'est pas construit à l'échelle actuelle. Le verrou du front-matter se lève quand l'un des déclencheurs de la décision se produit : environ 300 DAU, ou 429 fournisseur persistants hors incident. Ne pas démarrer avant.
 
 ## Décision à appliquer
 

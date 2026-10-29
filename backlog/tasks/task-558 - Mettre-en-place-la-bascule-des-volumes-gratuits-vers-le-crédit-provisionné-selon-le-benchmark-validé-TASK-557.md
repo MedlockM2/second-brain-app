@@ -31,6 +31,10 @@ Appliquer dans le code les changements retenus pour que chaque fournisseur conso
 
 La checklist doit inclure, pour OpenAI : **l'owner dépose lui-même des crédits sur la plateforme OpenAI pour passer du palier Build au palier Launch** (seuil de 100 $ de crédits achetés au cumul, par l'organisation ; les factures de Billing history peuvent inclure la TVA, le montant à ajouter se lit sur le bouton « Upgrade tier » de la page Limits). Après le dépôt, il relit la page Limits (Luna : 10 000 RPM / 10 M TPM attendus) et relève à la main les plafonds configurés par TASK-564, qui ne montent pas automatiquement (docs/research/task-563-provider-capacity-fairness-operator-safety/README.md, §4.1 et §8). Ne pas exécuter ce dépôt ni toucher au moyen de paiement.
 
+## À traiter dans ce périmètre
+
+Décision de l'owner du 2026-10-29 : aucun seuil d'arrêt à un pourcentage du crédit gratuit. Supprimer `stop_pct` et la consultation de `spend_allowed` d'Apify avec `provider_pools` ; ne pas l'ajouter à LlamaParse, qui ne la consulte pas aujourd'hui. Un fournisseur dont le crédit est épuisé répond par une erreur que chaque chemin traite (voir TASK-566), pas par une coupure préventive. Garder le décompte des unités consommées tant que l'alarme à 60 % sert encore, sinon le supprimer aussi.
+
 ## Limites
 
 Rien n'est déployé : aucune compatibilité ni double chemin avec les plafonds supprimés. Aucun test automatisé demandé, aucun appel local à FastAPI en guise de preuve. La vérification après déploiement relève de l'owner. Aucun secret ni identifiant de compte dans les fichiers suivis.

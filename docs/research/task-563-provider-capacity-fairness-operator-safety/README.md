@@ -1,5 +1,5 @@
 ---
-owner_decision: pending
+owner_decision: ok
 research_date: 2026-10-28
 audit_base: 4900df42
 ---
@@ -10,9 +10,18 @@ Recherche documentaire et dimensionnement, **sans modification applicative, appe
 
 ## Owner Validation
 
-**Decision**: *(à remplir par l’owner ; la proposition ci-dessous n’est pas une autorisation d’implémentation)*
+**Decision**: *(validée par l’owner le 2026-10-29)*
 
-**Validated at**: *(date)*
+Contexte de l’owner : prêt à financer toute hausse de dépense causée par davantage d’utilisateurs, pas une hausse du coût par utilisateur ; l’enveloppe de 5 EUR par testeur borne déjà ce que chaque compte consomme ; une centaine de DAU est un horizon d’environ un an. OpenAI Launch est tenu pour acquis (dépôt à faire par l’owner, TASK-558).
+
+1. **Décision 459 maintenue pour l’échelle actuelle** : concurrence des workers + Retry-After/gigue restent le contrôle de capacité LLM. La proposition d’admission distribuée (§4, §6) est acceptée comme conception cible mais **reportée** : TASK-564 puis TASK-565 reprennent quand l’un des déclencheurs se produit : environ 300 DAU, ou 429 fournisseur persistants hors incident (alarme du §8.2). Elles reprendront alors avec Launch (§8.1) et les valeurs d’équité du §8.1.
+2. **TASK-566 acceptée seule, sans dépendre de TASK-564** : ses garde-fous se raccordent à `reserve` et à la transition `held → sending` déjà présentes dans `beta_budget_db`, sans permis ni epoch de capacité. Quand 564 reprendra, elle réutilisera ce même point d’accroche (§6.1, étapes 3 et 4).
+3. **Plafond opérateur `C_m` = 500 EUR par mois, plafond de sécurité relevable à la main** (non un budget cible) : alertes à 50 % et 80 %, à relever quand les comptes augmentent. Réserve de pertes issue de la formule du §8.1, soit **5 EUR par jour et 50 EUR par mois**, engagements en vol inclus. Le plus gros engagement unitaire doit rester possible (à vérifier par 566).
+4. **Alerte ajoutée au périmètre de 566** : dépense opérateur divisée par le nombre de comptes actifs sur le mois, avec seuil de dérive à fixer par 566. C’est le signal « chaque utilisateur coûte de plus en plus cher », que le plafond mensuel seul ne distingue pas d’une croissance saine.
+5. **Pas de seuil d’arrêt à pourcentage du crédit gratuit** (`stop_pct`, `provider_pools`). Un fournisseur dont le crédit est épuisé répond par une erreur ; le système doit la reconnaître comme « crédit épuisé », distincte d’une panne ou d’un rate limit, et ne plus lui envoyer de nouvelle dépense jusqu’au renouvellement (TASK-566). Un import qui échoue à ce moment-là est accepté. Constat de code du 2026-10-29 : OpenAI (`utils/llm_failure.py`, quota = permanent, sans réessai) et Apify (`apify_payment_required`) sont déjà traités ; LlamaParse retombe sur Unstructured quelle que soit l’erreur ; Deepgram ne distingue pas encore un 402 (`DeepgramRefusedError` générique).
+6. Les textes d’attente, la durée de dix minutes des holds non envoyés et les paramètres d’équité du §8.1 sont validés comme valeurs de départ pour la reprise de 564/565, pas pour un déploiement immédiat.
+
+**Validated at**: 2026-10-29
 
 Points à accepter ou modifier ensemble : mécanisme de capacité (§4), politique d’équité et d’attente (§5), protection opérateur (§7), paramètres de démarrage (§8). Les trois implémentations doivent lire ce champ et les sections qu’il valide. Aucun changement de compte ou achat n’a été exécuté.
 
