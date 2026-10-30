@@ -318,6 +318,16 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
     },
     plugins: [
       "expo-router",
+      // The picker's plugin adds a microphone permission by default (Android
+      // RECORD_AUDIO, iOS NSMicrophoneUsageDescription with a generic string),
+      // for recording video from the camera. Deepn never records: the camera
+      // takes photos only (`src/lib/localImport.ts`), and picking an existing
+      // video for a bug report needs no microphone. An unused permission with a
+      // vague purpose string is a review rejection waiting to happen (App Store
+      // 5.1.1) and a needless Play declaration, so `false` removes the iOS key
+      // and blocks RECORD_AUDIO. The camera and photo strings stay in
+      // `ios.infoPlist` above.
+      ["expo-image-picker", { microphonePermission: false }],
       "expo-secure-store",
       "expo-apple-authentication",
       "expo-localization",
