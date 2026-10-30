@@ -42,6 +42,7 @@
   .variants .drift { margin:0; }
   .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#5c6880; margin:0 0 4px; }
   .rec { background:#fff7d1; border-radius:12px; padding:14px 18px; max-width:900px; font-size:14px; line-height:1.55; margin-top:18px; }
+  .note { font-size:13px; line-height:1.5; max-width:414px; margin:22px 0 0; color:#3e4257; }
   ul { margin:6px 0 0 18px; padding:0; font-size:14px; line-height:1.6; max-width:900px; }
 </style>
 </head>
@@ -140,6 +141,95 @@
   </div>
 </div>
 
+<h2>Variantes dans le fil : le bandeau défile avec les messages</h2>
+<div class="row">
+  <div>
+    <p class="cap">C1 — en haut du fil · à l'ouverture d'une conversation courte</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Philosophie antique</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="drift"><svg class="i s"><use href="#info"/></svg><div class="body"><div class="msg">Cette conversation ne lit pas les 2 sources ajoutées au dossier depuis son ouverture.</div><div class="act">Nouvelle conversation</div></div></div>
+        <div class="q">Que dit Épictète de ce qui dépend de nous ?</div>
+        <div class="a">Il distingue ce qui dépend de nous — nos jugements, nos désirs, nos aversions — de ce qui n'en dépend pas : le corps, la réputation, les biens <span class="cite">S1</span>. Le trouble vient de ce que l'on confond les deux <span class="cite">S2</span>.</div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">Visible tant qu'on est au début du fil.</p>
+  </div>
+  <div>
+    <p class="cap">C1 — même conversation, longue, rouverte en bas</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Philosophie antique</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">Et la dichotomie du contrôle, chez Marc Aurèle ?</div>
+        <div class="a">Marc Aurèle la reprend sous forme d'exercice quotidien : se rappeler chaque matin ce qui ne dépend pas de soi <span class="cite">S3</span>.</div>
+        <div class="q">Que dit Épictète de ce qui dépend de nous ?</div>
+        <div class="a">Il distingue ce qui dépend de nous — nos jugements, nos désirs, nos aversions — de ce qui n'en dépend pas : le corps, la réputation, les biens <span class="cite">S1</span>. Le trouble vient de ce que l'on confond les deux <span class="cite">S2</span>.</div>
+        <div class="q">Et Sénèque, dans la lettre que je viens d'ajouter ?</div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">Le bandeau est resté tout en haut, hors de l'écran : on ne le voit pas au moment de poser la question.</p>
+  </div>
+</div>
+<div class="row">
+  <div>
+    <p class="cap">C2 — en bas du fil · à l'ouverture (l'app se place en bas)</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Philosophie antique</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">Que dit Épictète de ce qui dépend de nous ?</div>
+        <div class="a">Il distingue ce qui dépend de nous — nos jugements, nos désirs, nos aversions — de ce qui n'en dépend pas : le corps, la réputation, les biens <span class="cite">S1</span>. Le trouble vient de ce que l'on confond les deux <span class="cite">S2</span>.</div>
+        <div class="drift"><svg class="i s"><use href="#info"/></svg><div class="body"><div class="msg">Cette conversation ne lit pas les 2 sources ajoutées au dossier depuis son ouverture.</div><div class="act">Nouvelle conversation</div></div></div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">Visible à l'ouverture et pendant la saisie, juste sous la dernière réponse.</p>
+  </div>
+  <div>
+    <p class="cap">C2 — après avoir remonté pour relire</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Philosophie antique</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">Et la dichotomie du contrôle, chez Marc Aurèle ?</div>
+        <div class="a">Marc Aurèle la reprend sous forme d'exercice quotidien : se rappeler chaque matin ce qui ne dépend pas de soi <span class="cite">S3</span>.</div>
+        <div class="q">Que dit Épictète de ce qui dépend de nous ?</div>
+        <div class="a">Il distingue ce qui dépend de nous — nos jugements, nos désirs, nos aversions — de ce qui n'en dépend pas : le corps, la réputation, les biens <span class="cite">S1</span>. Le trouble vient de ce que l'on confond les deux <span class="cite">S2</span>.</div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">Le bandeau est sorti par le bas : la relecture n'est pas gênée. Il revient dès qu'on redescend.</p>
+  </div>
+</div>
+
 <h2>Les textes</h2>
 <div class="row">
   <div class="variants light">
@@ -154,7 +244,7 @@
   </div>
 </div>
 
-<div class="rec"><strong>Recommandation : A.</strong> Le bandeau décrit la conversation, pas la question en cours : il se lit en arrivant, avant de faire défiler le fil. En B, il s'empilerait au-dessus du champ avec les messages qui y vivent déjà (estimation de budget, refus de quota) et remonterait avec le clavier. Le web reprend le même bandeau en tête du panneau de chat, au même endroit par rapport à l'en-tête du panneau.</div>
+<div class="rec"><strong>Recommandation : A pour ne jamais rater le bandeau, C2 s'il doit s'effacer.</strong> C1 est déconseillée : une longue conversation se rouvre en bas, donc le bandeau n'est pas visible quand on pose la question. Le bandeau décrit la conversation, pas la question en cours : il se lit en arrivant, avant de faire défiler le fil. En B, il s'empilerait au-dessus du champ avec les messages qui y vivent déjà (estimation de budget, refus de quota) et remonterait avec le clavier. Le web reprend le même bandeau en tête du panneau de chat, au même endroit par rapport à l'en-tête du panneau.</div>
 <ul>
   <li>Fond <code>surfaceContainerLow</code>, jamais la teinte d'erreur : rien n'est cassé, la conversation fonctionne.</li>
   <li>« Nouvelle conversation » est un lien souligné de 44 pt de haut. Pendant une génération il est désactivé, comme le bouton de l'en-tête.</li>
