@@ -368,24 +368,14 @@ Welcome to Deepn! In this first release:
 
 ## URLs
 
-**None of these work, and this is what blocks the 1.0 submission.** Checked
-2026-09-02:
+| Field | Value |
+|-------|-------|
+| Privacy Policy URL | https://d3fc24zfw6pew8.cloudfront.net/privacy (published 2026-10-30, prod `www` distribution) |
+| Support URL | none yet: required for the 1.0 version, not for TestFlight. Moves to `www.<domaine>` with the rest at the switch gated by task-454 |
+| Marketing URL | optional, leave empty |
 
-| Field | Value in this table | Reality |
-|-------|--------------------|---------|
-| Support URL | https://mediasummarizer.com/support | `mediasummarizer.com` **has no DNS record at all** |
-| Marketing URL | https://mediasummarizer.com | same — the domain does not resolve |
-| Privacy Policy URL | https://mediasummarizer.com/privacy | same |
-| — | https://secondbrainlabs.com/privacy | resolves, answers **404** |
-| — | https://secondbrainlabs.com/terms | resolves, answers **404** |
-
-Support URL is a required version property and Privacy Policy URL a required App
-Privacy property, so `Add for Review` cannot be satisfied until two pages are actually
-served. The texts already exist in the repo — `docs/compliance/privacy-policy.md` and
-`terms-of-service.md` — they are simply not hosted anywhere, and the app has no in-app
-links to them either (`V1_LAUNCH_PLAN.md` Phase 10). Whatever domain ends up serving
-them has to match the marketing name settled by `task-186`, so decide the name first
-and host once.
+No terms of use page: without a custom EULA, Apple's standard one applies
+(`docs/research/task-357-legal-pages-hosting/README.md`, owner amendment of 2026-10-30).
 
 ## Age Rating
 
@@ -395,28 +385,9 @@ and host once.
 
 ## App Privacy (Data Collection)
 
-| Data Type | Collected | Linked to User | Tracking |
-|-----------|-----------|----------------|----------|
-| Email Address | Yes | Yes | No |
-| User Content (shared URLs) | Yes | Yes | No |
-| Identifiers (user ID) | Yes | Yes | No |
-| Usage Data | Yes | Yes | No |
-| Diagnostics (crash logs) | Yes | No | No |
-
-Purpose: App Functionality, Analytics
+Answer from `docs/compliance/apple-app-privacy.md`, which is checked against the code.
 
 ## Review Notes for Apple
 
-```
-Deepn requires an account to use. A test account will be provided in the review submission.
-
-The app uses a Share Extension to receive URLs from other apps. To test:
-1. Open Safari and navigate to any article or YouTube video
-2. Tap the Share button
-3. Select "Deepn" from the share sheet
-4. The link appears in the app's inbox and processing begins
-
-Audio transcription uses Deepgram (third-party speech-to-text service).
-AI summaries and notes are generated using large language models via our backend API.
-No content is generated on-device.
-```
+For the pre-beta TestFlight review: `pre-beta-review.md`. The 1.0 submission reuses
+those notes and adds the purchases.

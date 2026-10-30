@@ -168,38 +168,18 @@ Start building your second brain today.
 
 ## Data Safety Section
 
-### Data Collection
-
-| Data Type | Collected | Shared | Purpose |
-|-----------|-----------|--------|---------|
-| Personal info (email) | Yes | No | Account management, authentication |
-| App activity (shared URLs, viewing history) | Yes | No | App functionality |
-| App info and performance (crash logs, diagnostics) | Yes | No | Analytics, debugging |
-| Device or other IDs | Yes | No | Analytics, fraud prevention |
-
-### Security Practices
-
-| Practice | Status |
-|----------|--------|
-| Data encrypted in transit | Yes (HTTPS/TLS) |
-| Data can be deleted by user | Yes (account deletion request) |
-| Committed to Play Families Policy | No (not a children's app) |
-| Independent security review | No |
-
-### Data Deletion
-
-Users can request account and data deletion via:
-- In-app: Settings > Account > Delete Account
-- Email: support@mediasummarizer.com
+Answer from `docs/compliance/google-play-data-safety.md`, which is checked against the code.
+Account deletion: in the app (Account tab > Delete Account) and at
+https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account.
 
 ## Contact Details
 
 | Field | Value |
 |-------|-------|
 | Developer Name | Second Brain Labs |
-| Email | support@mediasummarizer.com |
-| Website | https://mediasummarizer.com |
-| Privacy Policy | https://mediasummarizer.com/privacy |
+| Email | deepn.support@gmail.com |
+| Website | none yet (moves to `www.<domaine>` with task-454) |
+| Privacy Policy | https://d3fc24zfw6pew8.cloudfront.net/privacy |
 
 ## Store Listing Contact
 
