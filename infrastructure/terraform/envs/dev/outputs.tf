@@ -48,3 +48,19 @@ output "bucket_names" {
   description = "Map of environment-variable name to S3 bucket name."
   value       = module.platform.bucket_names
 }
+
+# Static pages (privacy policy) -- read by scripts/publish_legal_site.sh.
+output "www_bucket_name" {
+  description = "Bucket holding the static pages served by the www distribution."
+  value       = module.platform.www_bucket_name
+}
+
+output "www_distribution_id" {
+  description = "CloudFront distribution of the static pages."
+  value       = module.platform.www_distribution_id
+}
+
+output "www_base_url" {
+  description = "Public base URL of the static pages."
+  value       = module.platform.www_base_url
+}
