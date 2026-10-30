@@ -17,6 +17,7 @@ import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
 import { MarkdownBody as ChatAnswer } from "../MarkdownBody";
+import { CopyAnswerButton } from "./CopyAnswerButton";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];
@@ -146,6 +147,9 @@ export function ChatThread({
                 <Ionicons name="refresh" size={16} color={Colors.textMain} />
                 <Text style={styles.retryLabel}>{t("chat.thread.retry")}</Text>
               </Pressable>
+            ) : null}
+            {!isLive && text.trim() && (message.status === "completed" || message.status === "interrupted") ? (
+              <CopyAnswerButton text={text} />
             ) : null}
           </View>
         );

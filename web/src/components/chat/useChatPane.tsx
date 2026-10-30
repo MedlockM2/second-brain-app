@@ -12,6 +12,7 @@ import { Dialog } from "../Dialog";
 import { Icon } from "../Icon";
 import { MarkdownView } from "../MarkdownView";
 import { PaneEmpty, type PaneSpec } from "../panes/Panes";
+import { CopyAnswerButton } from "./CopyAnswerButton";
 
 /**
  * The Discussion pane of a media or a folder (owner's mockup, "Média en trois
@@ -264,6 +265,9 @@ function Thread({
                 <Icon name="refresh-outline" size={18} />
                 {t("chat.thread.retry")}
               </button>
+            )}
+            {!live && text.trim() && (message.status === "completed" || message.status === "interrupted") && (
+              <CopyAnswerButton text={text} />
             )}
           </div>
         );
