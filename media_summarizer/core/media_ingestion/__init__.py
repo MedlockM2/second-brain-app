@@ -27,7 +27,6 @@ from .errors import (
     ResolutionError,
     ResolverNotFoundError,
     ResolverRegistrationError,
-    RetryableProviderResolutionError,
     UnsupportedUrlError,
 )
 from .ports import ContentResolverPort, SubmissionOrchestratorPort, UrlClassifierPort
@@ -61,7 +60,6 @@ __all__ = [
     "NonRetryableProviderResolutionError",
     "OrchestrationError",
     "ProcessingLifecycleStatus",
-    "RetryableProviderResolutionError",
     "ResolveContext",
     "ResolvedMedia",
     "ResolutionError",

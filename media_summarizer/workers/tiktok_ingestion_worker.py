@@ -38,6 +38,7 @@ from media_summarizer.core.media_ingestion.source_description import (
 )
 from media_summarizer.core.media_ingestion.title_derivation import select_title
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import IngestionFailure
 from media_summarizer.core.models.processing_job import ProcessingJob
 from media_summarizer.core.services import audio_quota_gate, cover_capture
 from media_summarizer.core.services.transcript_formatting import (
@@ -60,18 +61,14 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
 from media_summarizer.utils.tiktok_limiter import (
     TikTokRateLimitExceeded,
     acquire_tiktok_slot,
 )
 from media_summarizer.workers import apify_orchestration
-from media_summarizer.workers.base_worker import (
-    get_sqs_receive_params,
-    process_message_with_retry,
-)
-from media_summarizer.workers.ingestion_failures import IngestionFailure, apify_failure_code
+from media_summarizer.workers.ingestion_failures import apify_failure_code
+from media_summarizer.workers.sqs_delivery import is_last_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +77,6 @@ TIKTOK_INGESTION_QUEUE = required_env("TIKTOK_INGESTION_QUEUE")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 YTDLP_TIMEOUT_SECONDS = float(os.environ.get("YTDLP_TIMEOUT_SECONDS", "30"))
 TIKTOK_SUBTITLE_FETCH_TIMEOUT_SECONDS = float(os.environ.get("TIKTOK_SUBTITLE_FETCH_TIMEOUT_SECONDS", "20"))
-TIKTOK_WORKER_MAX_RETRIES = max(1, int(os.environ.get("TIKTOK_WORKER_MAX_RETRIES", "3")))
 
 _YTDLP_EXTRACTOR_VERSION = "v1"
 _AUDIO_URL_PROTOCOLS = {
@@ -1252,7 +1248,7 @@ async def process_message(message: Dict[str, Any]) -> None:
         source_platform="tiktok",
     )
 
-    receive_count = int((message.get("Attributes") or {}).get("ApproximateReceiveCount", "1"))
+    last_delivery = is_last_delivery(message)
 
     try:
         result = await process_tiktok_message(body)
@@ -1305,7 +1301,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 fallback_strategy=result.get("fallback_reason", "unknown"),
             )
     except TikTokIngestionError as exc:
-        should_retry = exc.retryable and receive_count < TIKTOK_WORKER_MAX_RETRIES
+        should_retry = exc.retryable and not last_delivery
         if should_retry:
             raise
 
@@ -1342,7 +1338,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             exc_info=exc,
         )
     except Exception as exc:
-        if receive_count < TIKTOK_WORKER_MAX_RETRIES:
+        if not last_delivery:
             raise
 
         final_error = TikTokIngestionError(
@@ -1380,52 +1376,3 @@ async def process_message(message: Dict[str, Any]) -> None:
         )
     finally:
         reset_log_context(context_token)
-
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting TikTok ingestion worker",
-        queue=TIKTOK_INGESTION_QUEUE,
-    )
-    while True:
-        try:
-            receive_params = get_sqs_receive_params(visibility_timeout=360)
-            messages = await sqs.receive_messages(
-                queue_name=TIKTOK_INGESTION_QUEUE,
-                max_messages=receive_params["MaxNumberOfMessages"],
-                wait_time_seconds=receive_params["WaitTimeSeconds"],
-                visibility_timeout=receive_params["VisibilityTimeout"],
-            )
-            if messages:
-                for message in messages:
-                    await process_message_with_retry(
-                        message=message,
-                        processor=process_message,
-                        queue_name=TIKTOK_INGESTION_QUEUE,
-                        max_retries=TIKTOK_WORKER_MAX_RETRIES,
-                        worker_name="tiktok_ingestion",
-                    )
-            else:
-                await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "TikTok ingestion polling failed",
-                queue=TIKTOK_INGESTION_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("tiktok-ingestion-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

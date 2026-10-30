@@ -7,14 +7,12 @@ then forwards the job to `deepgram-transcription-queue`.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
 from io import BytesIO
 
 from media_summarizer.core.media_ingestion.adapters.podcast_resolver_foundation import (
-    DEFAULT_PODCAST_RESOLUTION_FAILED_MESSAGE,
     PodcastResolutionStatus,
     PodcastResolverErrorCode,
     normalize_podcast_source_url,
@@ -22,6 +20,12 @@ from media_summarizer.core.media_ingestion.adapters.podcast_resolver_foundation 
 from media_summarizer.core.media_ingestion.domain import SourcePlatform
 from media_summarizer.core.media_ingestion.media_metadata import select_creator
 from media_summarizer.core.media_ingestion.title_derivation import select_title
+from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import (
+    IngestionFailure,
+    PermanentIngestionFailure,
+    TransientIngestionFailure,
+)
 from media_summarizer.core.services import audio_quota_gate
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
@@ -33,13 +37,8 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
 from media_summarizer.utils.rss_transcript import fetch_rss_transcript
-from media_summarizer.workers.base_worker import (
-    get_sqs_receive_params,
-    process_message_with_retry,
-)
 from media_summarizer.workers.podcast_platform_resolvers import (
     build_worker_podcast_platform_resolver_registry,
 )
@@ -51,9 +50,6 @@ DEEPGRAM_TRANSCRIPTION_QUEUE = required_env("DEEPGRAM_TRANSCRIPTION_QUEUE")
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 PODCASTINDEX_MAX_RETRIES = max(1, int(os.environ.get("PODCASTINDEX_MAX_RETRIES", "3")))
-PODCASTINDEX_WORKER_MAX_RETRIES = max(
-    1, int(os.environ.get("PODCASTINDEX_WORKER_MAX_RETRIES", "3"))
-)
 PODCASTINDEX_EPISODE_CANDIDATES = max(
     1, int(os.environ.get("PODCASTINDEX_EPISODE_CANDIDATES", "50"))
 )
@@ -68,6 +64,27 @@ _PODCAST_PLATFORM_RESOLVER_REGISTRY = build_worker_podcast_platform_resolver_reg
     max_retries=PODCASTINDEX_MAX_RETRIES,
     episode_candidates=PODCASTINDEX_EPISODE_CANDIDATES,
 )
+
+
+#: Every resolver outcome, ranked once: whether another delivery could change
+#: the answer, and the code the app renders when it does not (task-573). An
+#: index that did not answer is the only transient case; everything else is the
+#: same answer on the next delivery.
+_RESOLVER_FAILURES: dict[PodcastResolverErrorCode, tuple[bool, MediaFailureCode]] = {
+    PodcastResolverErrorCode.RESOLUTION_PENDING: (True, MediaFailureCode.PROVIDER_UNAVAILABLE),
+    PodcastResolverErrorCode.UPSTREAM_LOOKUP_FAILED: (True, MediaFailureCode.PROVIDER_UNAVAILABLE),
+    PodcastResolverErrorCode.UNSUPPORTED_PLATFORM: (False, MediaFailureCode.INVALID_JOB_MESSAGE),
+    PodcastResolverErrorCode.PLATFORM_NOT_IMPLEMENTED: (False, MediaFailureCode.INVALID_JOB_MESSAGE),
+    PodcastResolverErrorCode.INVALID_PLATFORM_URL: (False, MediaFailureCode.MEDIA_UNAVAILABLE),
+    PodcastResolverErrorCode.EPISODE_NOT_FOUND: (False, MediaFailureCode.MEDIA_UNAVAILABLE),
+    PodcastResolverErrorCode.AUDIO_URL_NOT_FOUND: (False, MediaFailureCode.NO_TRANSCRIBABLE_MEDIA),
+}
+
+
+def _resolution_failure(error_code: PodcastResolverErrorCode) -> IngestionFailure:
+    retryable, failure_code = _RESOLVER_FAILURES[error_code]
+    failure_type = TransientIngestionFailure if retryable else PermanentIngestionFailure
+    return failure_type(failure_code, details=error_code.value)
 
 
 def _source_platform_from_message_value(value: str) -> SourcePlatform:
@@ -85,7 +102,9 @@ async def _resolve_audio_url(message_body: dict) -> dict:
     )
 
     if not normalized_url:
-        raise ValueError("Missing normalized_url in podcastindex resolution message.")
+        raise PermanentIngestionFailure(
+            MediaFailureCode.INVALID_JOB_MESSAGE, details="missing_normalized_url"
+        )
 
     try:
         descriptor = normalize_podcast_source_url(
@@ -98,28 +117,17 @@ async def _resolve_audio_url(message_body: dict) -> dict:
             if source_platform in _SUPPORTED_WORKER_PODCAST_PLATFORMS
             else PodcastResolverErrorCode.UNSUPPORTED_PLATFORM
         )
-        raise RuntimeError(
-            f"{DEFAULT_PODCAST_RESOLUTION_FAILED_MESSAGE} "
-            f"code={error_code.value}"
-        ) from exc
+        raise _resolution_failure(error_code) from exc
 
     try:
         resolver = _PODCAST_PLATFORM_RESOLVER_REGISTRY.get(descriptor.source_platform)
     except ValueError as exc:
-        raise RuntimeError(
-            f"{DEFAULT_PODCAST_RESOLUTION_FAILED_MESSAGE} "
-            f"code={PodcastResolverErrorCode.UNSUPPORTED_PLATFORM.value}"
-        ) from exc
+        raise _resolution_failure(PodcastResolverErrorCode.UNSUPPORTED_PLATFORM) from exc
 
     outcome = await resolver.resolve(descriptor=descriptor)
     if outcome.status != PodcastResolutionStatus.RESOLVED or not outcome.audio_url:
-        code = (
-            outcome.error_code.value
-            if outcome.error_code
-            else PodcastResolverErrorCode.AUDIO_URL_NOT_FOUND.value
-        )
-        raise RuntimeError(
-            f"{DEFAULT_PODCAST_RESOLUTION_FAILED_MESSAGE} code={code}"
+        raise _resolution_failure(
+            outcome.error_code or PodcastResolverErrorCode.AUDIO_URL_NOT_FOUND
         )
 
     return {
@@ -264,13 +272,10 @@ async def _try_rss_transcript_short_circuit(
 
 
 async def process_message(message: dict) -> None:
-    if message is None:
-        raise ValueError("Message is None")
-
     body = json.loads(message["Body"]) if "Body" in message else message
     job_id = body.get("job_id")
     if not job_id:
-        raise ValueError("Missing required field: job_id")
+        raise PermanentIngestionFailure(MediaFailureCode.INVALID_JOB_MESSAGE, details="missing_job_id")
 
     context_token = bind_log_context(
         job_id=job_id,
@@ -283,7 +288,7 @@ async def process_message(message: dict) -> None:
     try:
         job = await database_async.get_processing_job_by_id(job_id)
         if not job:
-            raise ValueError(f"Job not found for id={job_id}")
+            raise PermanentIngestionFailure(MediaFailureCode.INVALID_JOB_MESSAGE, details="job_not_found")
 
         # Keep extracting stage explicit when this worker starts handling the job.
         if job.status.value == "pending":
@@ -293,7 +298,7 @@ async def process_message(message: dict) -> None:
         resolution = await _resolve_audio_url(body)
         audio_url = resolution.get("audio_url")
         if not audio_url:
-            raise RuntimeError("PodcastIndex resolution returned no audio URL.")
+            raise _resolution_failure(PodcastResolverErrorCode.AUDIO_URL_NOT_FOUND)
 
         # The episode title the index returned, else whatever the job already
         # holds -- never the bare word "Podcast episode", which was the same string
@@ -385,58 +390,3 @@ async def process_message(message: dict) -> None:
     finally:
         reset_log_context(context_token)
 
-
-async def process_messages_batch(messages: list[dict]) -> None:
-    async def process_one(message: dict) -> bool:
-        return await process_message_with_retry(
-            message=message,
-            processor=process_message,
-            queue_name=PODCASTINDEX_RESOLUTION_QUEUE,
-            max_retries=PODCASTINDEX_WORKER_MAX_RETRIES,
-            worker_name="podcastindex-resolution",
-        )
-
-    tasks = [asyncio.create_task(process_one(message)) for message in messages]
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def poll_queue() -> None:
-    while True:
-        try:
-            receive_params = get_sqs_receive_params(visibility_timeout=300)
-            messages = await sqs.receive_messages(
-                queue_name=PODCASTINDEX_RESOLUTION_QUEUE,
-                max_messages=receive_params["MaxNumberOfMessages"],
-                wait_time_seconds=receive_params["WaitTimeSeconds"],
-                visibility_timeout=receive_params["VisibilityTimeout"],
-            )
-            if messages:
-                await process_messages_batch(messages)
-            else:
-                await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "Podcast resolution polling failed",
-                queue=PODCASTINDEX_RESOLUTION_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("podcastindex-resolution-worker")
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting podcast resolution worker",
-        queue=PODCASTINDEX_RESOLUTION_QUEUE,
-    )
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

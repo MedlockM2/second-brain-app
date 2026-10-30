@@ -9,6 +9,11 @@ variable "worker_image_tag" {
 }
 
 locals {
+  # The maxReceiveCount of every queue's redrive policy (sqs.tf), handed to the
+  # workers as SQS_MAX_RECEIVE_COUNT: the Lambda handler fails a job on the
+  # delivery after which SQS dead-letters its message (workers/sqs_delivery.py).
+  worker_max_receive_count = 3
+
   workers = {
     podcastindex_resolution = {
       memory_size = 256
@@ -152,12 +157,13 @@ resource "aws_lambda_function" "worker" {
   # code no longer carries hardcoded defaults, so this block is the only source
   # of resource names at runtime (see runtime_env.tf).
   environment {
-    variables = contains(
-      ["instagram_ingestion", "tiktok_ingestion", "youtube_ingestion"],
-      each.key,
-      ) ? merge(local.lambda_environment, {
+    variables = merge(
+      local.lambda_environment,
+      { SQS_MAX_RECEIVE_COUNT = tostring(local.worker_max_receive_count) },
+      contains(["instagram_ingestion", "tiktok_ingestion", "youtube_ingestion"], each.key) ? {
         APIFY_WEBHOOK_URL = "${aws_apigatewayv2_api.main.api_endpoint}/api/webhooks/apify"
-    }) : local.lambda_environment
+      } : {},
+    )
   }
 
   depends_on = [
@@ -184,6 +190,12 @@ resource "aws_lambda_event_source_mapping" "worker" {
   event_source_arn = each.value.queue_arn
   function_name    = aws_lambda_function.worker[each.key].arn
   batch_size       = 1
+
+  # Without it Lambda ignores the batchItemFailures the handler returns, counts
+  # the batch as a success and deletes every message: a worker's exception was
+  # lost on its first delivery, and the redrive policy only ever saw timeouts
+  # and crashes (task-573).
+  function_response_types = ["ReportBatchItemFailures"]
 
   # Disabling the mapping stops the long-poll without deleting it: an idle
   # environment's 14 mappings issue ~74k SQS Tier-1 requests a day against

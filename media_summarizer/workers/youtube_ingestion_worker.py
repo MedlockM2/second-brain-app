@@ -56,7 +56,6 @@ sent a payload it will reject with a generic 400.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -75,6 +74,7 @@ from media_summarizer.core.media_ingestion.source_description import (
 )
 from media_summarizer.core.media_ingestion.title_derivation import select_title
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import IngestionFailure
 from media_summarizer.core.services import budget_guard
 from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
@@ -93,21 +93,16 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
 from media_summarizer.workers import apify_orchestration
-from media_summarizer.workers.base_worker import (
-    get_sqs_receive_params,
-    process_message_with_retry,
-)
-from media_summarizer.workers.ingestion_failures import IngestionFailure, apify_failure_code
+from media_summarizer.workers.ingestion_failures import apify_failure_code
+from media_summarizer.workers.sqs_delivery import is_last_delivery
 
 logger = logging.getLogger(__name__)
 
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 YOUTUBE_INGESTION_QUEUE = required_env("YOUTUBE_INGESTION_QUEUE")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
-YOUTUBE_WORKER_MAX_RETRIES = 3
 
 _STARVIBE_ACTOR = "starvibe~youtube-video-transcript"
 _SCRAPE_CREATORS_ACTOR = "scrape-creators~best-youtube-transcripts-scraper"
@@ -977,7 +972,7 @@ async def process_message(message: Dict[str, Any]) -> None:
         source_platform="youtube",
     )
 
-    receive_count = int((message.get("Attributes") or {}).get("ApproximateReceiveCount", "1"))
+    last_delivery = is_last_delivery(message)
 
     try:
         result = await process_youtube_message(body)
@@ -1013,7 +1008,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 orchestration_mode=mode,
             )
     except YouTubeIngestionError as exc:
-        should_retry = exc.retryable and receive_count < YOUTUBE_WORKER_MAX_RETRIES
+        should_retry = exc.retryable and not last_delivery
         if should_retry:
             raise
 
@@ -1050,7 +1045,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             exc_info=exc,
         )
     except Exception as exc:
-        if receive_count < YOUTUBE_WORKER_MAX_RETRIES:
+        if not last_delivery:
             raise
 
         final_error = YouTubeIngestionError(
@@ -1089,57 +1084,3 @@ async def process_message(message: Dict[str, Any]) -> None:
         )
     finally:
         reset_log_context(context_token)
-
-
-# ---------------------------------------------------------------------------
-# Queue polling loop
-# ---------------------------------------------------------------------------
-
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting YouTube ingestion worker",
-        queue=YOUTUBE_INGESTION_QUEUE,
-    )
-    while True:
-        try:
-            receive_params = get_sqs_receive_params(visibility_timeout=360)
-            messages = await sqs.receive_messages(
-                queue_name=YOUTUBE_INGESTION_QUEUE,
-                max_messages=receive_params["MaxNumberOfMessages"],
-                wait_time_seconds=receive_params["WaitTimeSeconds"],
-                visibility_timeout=receive_params["VisibilityTimeout"],
-            )
-            if messages:
-                for message in messages:
-                    await process_message_with_retry(
-                        message=message,
-                        processor=process_message,
-                        queue_name=YOUTUBE_INGESTION_QUEUE,
-                        max_retries=YOUTUBE_WORKER_MAX_RETRIES,
-                        worker_name="youtube_ingestion",
-                    )
-            else:
-                await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "YouTube ingestion polling failed",
-                queue=YOUTUBE_INGESTION_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("youtube-ingestion-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

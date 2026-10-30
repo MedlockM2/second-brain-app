@@ -188,7 +188,8 @@ async def process_message(message: Dict[str, Any]) -> None:
                 error_type=type(exc).__name__,
                 detail=str(exc)[:300],
             )
-            # Mark failed -- S3 download failure is terminal for this message
+            # Mark failed, then retried: nothing is billed yet, and the
+            # redelivery reclaims the failed lock under the same message id.
             await mark_translation_failed(
                 transcript_s3_key=transcript_s3_key,
                 target_language=target_language,
@@ -257,7 +258,11 @@ async def process_message(message: Dict[str, Any]) -> None:
             # the internal retry logic already exhausted attempts.
             return
         except Exception as exc:
-            # Unexpected error -- let SQS retry via visibility timeout
+            # Unexpected error, acknowledged rather than retried (task-573): it may
+            # come after chunks the LLM has already translated and billed, and a
+            # redelivery reclaims the failed lock and pays for them again. The
+            # reader's next poll reserves the translation anew, as it does after
+            # any failure that is not permanent.
             log_event(
                 logger,
                 logging.ERROR,
@@ -281,7 +286,7 @@ async def process_message(message: Dict[str, Any]) -> None:
                 target_language=target_language,
                 error_message=f"unexpected: {type(exc).__name__}: {str(exc)[:200]}",
             )
-            raise
+            return
 
         if outcome.translation_failed:
             # The failure kind is what stops the next `/raw-content` poll from

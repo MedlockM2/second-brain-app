@@ -30,10 +30,8 @@ in each save's captured language.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 from typing import Any, Dict, Optional
 
 from media_summarizer.core.services.push_notification_dispatch import (
@@ -42,7 +40,7 @@ from media_summarizer.core.services.push_notification_dispatch import (
 from media_summarizer.core.services.search_index_dispatch import (
     enqueue_transcript_indexing,
 )
-from media_summarizer.utils import media_idempotence, sqs, user_media
+from media_summarizer.utils import media_idempotence, user_media
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
@@ -55,8 +53,6 @@ logger = logging.getLogger(__name__)
 MEDIA_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 
 # Backoff
-TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
-RETRY_DELAY = 0.01 if TEST_MODE else 2
 
 
 def _event_source_language(metadata: Any) -> Optional[str]:
@@ -415,42 +411,3 @@ async def process_event(message: Dict[str, Any]) -> None:
     # Resume after per-save preparation; the source text is now durable.
     await _resume_waiting_artifacts(media_key)
 
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting media-completed-events consumer",
-        queue=MEDIA_COMPLETED_EVENTS_QUEUE,
-    )
-    while True:
-        try:
-            messages = await sqs.receive_messages(
-                queue_name=MEDIA_COMPLETED_EVENTS_QUEUE,
-                max_messages=10,
-                wait_time_seconds=20,
-            )
-            if messages:
-                for m in messages:
-                    try:
-                        await process_event(m)
-                        rh = m.get("ReceiptHandle")
-                        if rh:
-                            await sqs.delete_message(queue_name=MEDIA_COMPLETED_EVENTS_QUEUE, receipt_handle=rh)
-                    except Exception as e:
-                        logger.error(f"Failed to process event: {e}")
-            await asyncio.sleep(1)
-        except Exception as e:
-            logger.error(f"Polling error: {e}")
-            await asyncio.sleep(RETRY_DELAY)
-
-
-async def main() -> None:
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    from media_summarizer.utils.logging_config import setup_logging as _setup_logging
-    _setup_logging("worker-episode-completed")
-    asyncio.run(main())

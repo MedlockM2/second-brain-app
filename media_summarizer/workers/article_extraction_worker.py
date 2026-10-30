@@ -18,15 +18,14 @@ Pipeline:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Dict, Optional
 
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import IngestionFailure
 from media_summarizer.core.ports.article_content import (
     ArticleContent,
     ArticleContentFetcherPort,
@@ -41,13 +40,8 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
-from media_summarizer.workers.base_worker import (
-    get_sqs_receive_params,
-    process_message_with_retry,
-)
-from media_summarizer.workers.ingestion_failures import IngestionFailure
+from media_summarizer.workers.sqs_delivery import is_last_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +49,6 @@ TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 ARTICLE_EXTRACTION_QUEUE = required_env("ARTICLE_EXTRACTION_QUEUE")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 
-ARTICLE_WORKER_MAX_RETRIES = max(
-    1, int(os.environ.get("ARTICLE_WORKER_MAX_RETRIES", "3"))
-)
 
 _content_fetcher: Optional[ArticleContentFetcherPort] = None
 
@@ -299,9 +290,7 @@ async def process_message(message: Dict[str, Any]) -> None:
         transcript_source="article_extractor",
     )
 
-    receive_count = int(
-        (message.get("Attributes") or {}).get("ApproximateReceiveCount", "1")
-    )
+    last_delivery = is_last_delivery(message)
 
     try:
         result = await process_article_message(body)
@@ -321,7 +310,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             media_item_id=result["job_id"],
         )
     except ArticleExtractionError as exc:
-        should_retry = exc.retryable and receive_count < ARTICLE_WORKER_MAX_RETRIES
+        should_retry = exc.retryable and not last_delivery
         if should_retry:
             raise
 
@@ -350,7 +339,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             exc_info=exc,
         )
     except Exception as exc:
-        if receive_count < ARTICLE_WORKER_MAX_RETRIES:
+        if not last_delivery:
             raise
 
         final_error = ArticleExtractionError(
@@ -382,59 +371,3 @@ async def process_message(message: Dict[str, Any]) -> None:
         )
     finally:
         reset_log_context(context_token)
-
-
-async def process_messages_batch(messages: list[Dict[str, Any]]) -> None:
-    async def process_one(message: Dict[str, Any]) -> bool:
-        return await process_message_with_retry(
-            message=message,
-            processor=process_message,
-            queue_name=ARTICLE_EXTRACTION_QUEUE,
-            max_retries=ARTICLE_WORKER_MAX_RETRIES,
-            worker_name="article-extraction",
-        )
-
-    tasks = [asyncio.create_task(process_one(message)) for message in messages]
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting article extraction worker",
-        queue=ARTICLE_EXTRACTION_QUEUE,
-    )
-    while True:
-        try:
-            receive_params = get_sqs_receive_params(visibility_timeout=300)
-            messages = await sqs.receive_messages(
-                queue_name=ARTICLE_EXTRACTION_QUEUE,
-                max_messages=receive_params["MaxNumberOfMessages"],
-                wait_time_seconds=receive_params["WaitTimeSeconds"],
-                visibility_timeout=receive_params["VisibilityTimeout"],
-            )
-            if messages:
-                await process_messages_batch(messages)
-            else:
-                await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "Article extraction polling failed",
-                queue=ARTICLE_EXTRACTION_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("article-extraction-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

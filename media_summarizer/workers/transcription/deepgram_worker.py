@@ -36,7 +36,13 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from media_summarizer.core.models.beta_budget import Component, MeasuredCost, ProviderFailure
+from media_summarizer.core.models.beta_budget import Component, MeasuredCost
+from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import (
+    IngestionFailure,
+    PermanentIngestionFailure,
+    TransientIngestionFailure,
+)
 from media_summarizer.core.services import beta_budget, budget_guard
 from media_summarizer.core.services.budget_guard import (
     BudgetBusyError,
@@ -53,15 +59,13 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
-from media_summarizer.workers.base_worker import process_message_with_retry
 
 logger = logging.getLogger(__name__)
 
 
-class NonRetryableDeepgramError(Exception):
-    """Raised for non-retryable Deepgram request failures."""
+class NonRetryableDeepgramError(PermanentIngestionFailure):
+    """A transcription another delivery would not change: the job fails now (task-573)."""
 
 
 class DeepgramRefusedError(NonRetryableDeepgramError):
@@ -82,45 +86,52 @@ class DeepgramCreditExhaustedError(DeepgramRefusedError):
     """Deepgram answered 402: the project has no credit left for a transcription.
 
     Its own error, apart from the generic refusal (TASK-566): never retried, and the
-    first one suspends new transcriptions until the balance is topped up. Deepgram
-    documents the 402 with ``err_code`` ``ASR_PAYMENT_REQUIRED``
+    first one suspends new transcriptions until the balance is topped up (its code
+    is what ``provider_failure`` reads). Deepgram documents the 402 with
+    ``err_code`` ``ASR_PAYMENT_REQUIRED``
     (https://developers.deepgram.com/docs/errors); the status alone decides, so a
     renamed code still classifies.
     """
 
-    provider_failure = ProviderFailure.CREDIT_EXHAUSTED
+    def __init__(self, **context: Any) -> None:
+        super().__init__(
+            MediaFailureCode.PROVIDER_CREDITS_DEPLETED, details="deepgram_credit_exhausted", **context
+        )
 
 
-class RetryableDeepgramError(Exception):
-    """Raised for a transient Deepgram answer (429, 5xx): nothing was processed."""
+class RetryableDeepgramError(TransientIngestionFailure):
+    """Raised for a transient Deepgram answer (429, 5xx): nothing was processed.
 
-    def __init__(self, message: str, *, status: int) -> None:
-        super().__init__(message)
-        # A 429 is Deepgram pacing the project's concurrency, not an incident.
-        self.provider_failure = ProviderFailure.RATE_LIMITED if status == 429 else ProviderFailure.TRANSIENT
+    A 429 is Deepgram pacing the project's concurrency, not an incident: its code
+    makes ``provider_failure`` read it as a rate limit, a 5xx as transient.
+    """
+
+    def __init__(self, *, status: int, **context: Any) -> None:
+        if status == 429:
+            super().__init__(MediaFailureCode.PROVIDER_RATE_LIMITED, details="deepgram_rate_limited", status=status, **context)
+        else:
+            super().__init__(MediaFailureCode.PROVIDER_UNAVAILABLE, details="deepgram_server_error", status=status, **context)
 
 
 class DeepgramAccountRefusedError(DeepgramRefusedError):
     """Deepgram answered 401: the key is refused. Suspends Deepgram until it changes."""
 
-    provider_failure = ProviderFailure.ACCOUNT_REFUSED
+    def __init__(self, *, details: str, **context: Any) -> None:
+        super().__init__(MediaFailureCode.PROVIDER_AUTH_FAILED, details=details, **context)
 
 
 def _raise_for_account(status: int, response_text: str) -> None:
     """The two answers about our Deepgram account rather than about this audio."""
     if status == 402:
-        raise DeepgramCreditExhaustedError(f"Deepgram credit exhausted (HTTP 402): {response_text[:500]}")
+        raise DeepgramCreditExhaustedError(status=status, provider_detail=response_text[:300])
     if status == 401:
-        raise DeepgramAccountRefusedError(f"Deepgram key refused (HTTP 401): {response_text[:500]}")
+        raise DeepgramAccountRefusedError(details="deepgram_key_refused", status=status, provider_detail=response_text[:300])
 
 
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 AUDIO_BUCKET = required_env("AUDIO_BUCKET")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 DEEPGRAM_TRANSCRIPTION_QUEUE = required_env("DEEPGRAM_TRANSCRIPTION_QUEUE")
-
-# Worker retry handling (SQS-level via base worker)
-WORKER_MAX_RETRIES = int(os.environ.get("DEEPGRAM_WORKER_MAX_RETRIES", "3"))
 
 # Deepgram API configuration
 DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY", "")
@@ -221,14 +232,13 @@ async def upload_transcription(transcript_s3_key: str, transcription_text: str) 
 
 async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
     if not DEEPGRAM_API_KEY:
-        raise DeepgramAccountRefusedError("DEEPGRAM_API_KEY is required")
+        raise DeepgramAccountRefusedError(details="deepgram_api_key_missing")
 
     if not _is_valid_http_url(audio_url):
-        raise DeepgramRefusedError("audio_url must be a valid http(s) URL")
+        raise DeepgramRefusedError(MediaFailureCode.INVALID_JOB_MESSAGE, details="invalid_audio_url")
     if _looks_like_feed_url(audio_url):
-        raise DeepgramRefusedError(
-            "audio_url points to an RSS/feed URL; resolve enclosure URL before Deepgram"
-        )
+        # A feed, not an enclosure: the producer should have resolved it first.
+        raise DeepgramRefusedError(MediaFailureCode.INVALID_JOB_MESSAGE, details="audio_url_is_feed")
 
     query_params = _build_deepgram_query_params()
     headers = {
@@ -258,26 +268,33 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
             status == 400 and "403" in response_text
         ):
             raise RemoteContentError(
-                f"Deepgram remote content fetch blocked "
-                f"(HTTP {status}): {response_text}"
+                MediaFailureCode.MEDIA_UNAVAILABLE,
+                details="deepgram_remote_content_blocked",
+                status=status,
+                provider_detail=response_text[:300],
             )
         raise DeepgramRefusedError(
-            f"Deepgram non-retryable HTTP {status}: {response_text}"
+            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
+            details="deepgram_request_refused",
+            status=status,
+            provider_detail=response_text[:300],
         )
     if status == 429 or status >= 500:
-        raise RetryableDeepgramError(
-            f"Deepgram transient HTTP {status}: {response.text[:500]}", status=status
-        )
+        raise RetryableDeepgramError(status=status, provider_detail=response.text[:300])
     if status >= 300:
         raise DeepgramRefusedError(
-            f"Deepgram unexpected HTTP {status}: {response.text[:500]}"
+            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
+            details="deepgram_unexpected_status",
+            status=status,
+            provider_detail=response.text[:300],
         )
 
     try:
         payload = response.json()
     except json.JSONDecodeError as exc:
+        # Permanent: Deepgram answered 2xx, so the audio may be billed already.
         raise NonRetryableDeepgramError(
-            "Deepgram response is not valid JSON"
+            MediaFailureCode.PROVIDER_RESULT_INVALID, details="deepgram_invalid_json"
         ) from exc
 
     request_id = (payload.get("metadata") or {}).get("request_id")
@@ -319,7 +336,9 @@ async def _download_audio_for_push_fallback(
         Tuple of (audio_bytes, content_type).
 
     Raises:
-        NonRetryableDeepgramError: If the download fails (expired URL, blocked, etc.).
+        NonRetryableDeepgramError: If the source refuses the audio (blocked,
+            expired, empty, too large).
+        TransientIngestionFailure: If the source did not answer in time.
 
     Cost note: This adds Lambda execution time for the download (~1-30s depending
     on file size and network) plus memory usage to hold the full audio in RAM.
@@ -343,30 +362,32 @@ async def _download_audio_for_push_fallback(
             response = await client.get(audio_url)
 
         if response.status_code == 403:
+            # The source CDN blocks Lambda too.
             raise NonRetryableDeepgramError(
-                "Lambda also blocked by source CDN (HTTP 403) "
-                f"for audio URL: {audio_url[:200]}"
+                MediaFailureCode.MEDIA_UNAVAILABLE, details="audio_download_blocked", status=403
             )
         if response.status_code == 404:
             raise NonRetryableDeepgramError(
-                "Audio URL expired or not found (HTTP 404): "
-                f"{audio_url[:200]}"
+                MediaFailureCode.MEDIA_UNAVAILABLE, details="audio_download_not_found", status=404
             )
         if response.status_code >= 400:
             raise NonRetryableDeepgramError(
-                f"Failed to download audio "
-                f"(HTTP {response.status_code}): {audio_url[:200]}"
+                MediaFailureCode.MEDIA_UNAVAILABLE,
+                details="audio_download_failed",
+                status=response.status_code,
             )
 
         audio_bytes = response.content
         if not audio_bytes:
             raise NonRetryableDeepgramError(
-                f"Downloaded audio is empty (0 bytes) from: {audio_url[:200]}"
+                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="audio_download_empty"
             )
         if len(audio_bytes) > _PUSH_MODE_MAX_BYTES:
             raise NonRetryableDeepgramError(
-                f"Audio too large for push-mode fallback "
-                f"({len(audio_bytes)} bytes > {_PUSH_MODE_MAX_BYTES} limit)"
+                MediaFailureCode.ITEM_TOO_LARGE,
+                details="audio_too_large_for_push",
+                audio_size_bytes=len(audio_bytes),
+                limit_bytes=_PUSH_MODE_MAX_BYTES,
             )
 
         # Determine content type from response headers or URL
@@ -389,17 +410,18 @@ async def _download_audio_for_push_fallback(
         )
         return audio_bytes, content_type
 
-    except NonRetryableDeepgramError:
-        raise
-    except httpx.TimeoutException:
-        raise NonRetryableDeepgramError(
-            "Timeout downloading audio for push-mode fallback "
-            f"after {_AUDIO_DOWNLOAD_TIMEOUT}s: {audio_url[:200]}"
-        )
-    except Exception as exc:
-        raise NonRetryableDeepgramError(
-            f"Unexpected error downloading audio for push-mode fallback: "
-            f"{type(exc).__name__}: {str(exc)[:200]}"
+    # Nothing is billed yet: a source that did not answer is worth another delivery.
+    except httpx.TimeoutException as exc:
+        raise TransientIngestionFailure(
+            MediaFailureCode.PROVIDER_TIMED_OUT,
+            details="audio_download_timeout",
+            timeout_seconds=_AUDIO_DOWNLOAD_TIMEOUT,
+        ) from exc
+    except httpx.TransportError as exc:
+        raise TransientIngestionFailure(
+            MediaFailureCode.PROVIDER_UNAVAILABLE,
+            details="audio_download_transport_error",
+            exception_type=type(exc).__name__,
         ) from exc
 
 
@@ -426,9 +448,9 @@ async def call_deepgram_api_from_bytes(
     job_id: str,
 ) -> Dict[str, Any]:
     if not DEEPGRAM_API_KEY:
-        raise DeepgramAccountRefusedError("DEEPGRAM_API_KEY is required")
+        raise DeepgramAccountRefusedError(details="deepgram_api_key_missing")
     if not audio_bytes:
-        raise DeepgramRefusedError("audio bytes must be non-empty")
+        raise DeepgramRefusedError(MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="audio_bytes_empty")
 
     query_params = _build_deepgram_query_params()
     headers = {
@@ -451,22 +473,27 @@ async def call_deepgram_api_from_bytes(
     _raise_for_account(status, response.text)
     if status in (401, 403, 400, 404, 415, 422):
         raise DeepgramRefusedError(
-            f"Deepgram non-retryable HTTP {status}: {response.text[:500]}"
+            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
+            details="deepgram_request_refused",
+            status=status,
+            provider_detail=response.text[:300],
         )
     if status == 429 or status >= 500:
-        raise RetryableDeepgramError(
-            f"Deepgram transient HTTP {status}: {response.text[:500]}", status=status
-        )
+        raise RetryableDeepgramError(status=status, provider_detail=response.text[:300])
     if status >= 300:
         raise DeepgramRefusedError(
-            f"Deepgram unexpected HTTP {status}: {response.text[:500]}"
+            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
+            details="deepgram_unexpected_status",
+            status=status,
+            provider_detail=response.text[:300],
         )
 
     try:
         payload = response.json()
     except json.JSONDecodeError as exc:
+        # Permanent: Deepgram answered 2xx, so the audio may be billed already.
         raise NonRetryableDeepgramError(
-            "Deepgram response is not valid JSON"
+            MediaFailureCode.PROVIDER_RESULT_INVALID, details="deepgram_invalid_json"
         ) from exc
 
     request_id = (payload.get("metadata") or {}).get("request_id")
@@ -505,7 +532,9 @@ def extract_transcript(payload: Dict[str, Any]) -> Dict[str, Any]:
     utterances = results.get("utterances") or []
     transcript_text = deepgram_transcript_text(alt, utterances)
     if not transcript_text:
-        raise NonRetryableDeepgramError("Deepgram transcript is empty")
+        raise NonRetryableDeepgramError(
+            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE, details="deepgram_transcript_empty"
+        )
 
     metadata = payload.get("metadata") or {}
 
@@ -593,7 +622,15 @@ class TranscriptionBudget:
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 await call.release_for(exc)
                 if try_index == DEEPGRAM_API_RETRIES:
-                    raise
+                    # Permanent (task-573): the request left, so Deepgram may have
+                    # processed and billed it; a redelivery would pay for it again.
+                    raise NonRetryableDeepgramError(
+                        MediaFailureCode.PROVIDER_TIMED_OUT
+                        if isinstance(exc, httpx.TimeoutException)
+                        else MediaFailureCode.PROVIDER_UNAVAILABLE,
+                        details="deepgram_request_lost",
+                        exception_type=type(exc).__name__,
+                    ) from exc
             except BaseException as exc:
                 await call.release_for(exc)
                 raise
@@ -645,9 +682,9 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
     audio_s3_key = message_body.get("audio_s3_key")
 
     if not job_id:
-        raise NonRetryableDeepgramError("Missing required fields in transcription message")
+        raise NonRetryableDeepgramError(MediaFailureCode.INVALID_JOB_MESSAGE, details="missing_job_id")
     if not isinstance(job_id, str):
-        raise NonRetryableDeepgramError("Invalid field types in transcription message")
+        raise NonRetryableDeepgramError(MediaFailureCode.INVALID_JOB_MESSAGE, details="invalid_job_id")
 
     # Read explicit deepgram_mode declared by the producer worker.
     # Default to "pull" for backward compatibility with messages already in-flight.
@@ -666,8 +703,9 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         requested_mode = "pull"
     elif requested_mode not in VALID_DEEPGRAM_MODES:
         raise NonRetryableDeepgramError(
-            f"Invalid deepgram_mode '{requested_mode}'; "
-            f"must be one of {VALID_DEEPGRAM_MODES}"
+            MediaFailureCode.INVALID_JOB_MESSAGE,
+            details="invalid_deepgram_mode",
+            deepgram_mode=str(requested_mode),
         )
 
     from media_summarizer.utils import database_async
@@ -729,13 +767,12 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
                     job_id=job_id,
                 )
             except RemoteContentError as remote_err:
+                # The producer declared pull-mode, but the source CDN blocks
+                # Deepgram: the producer should send 'push' for this source.
                 raise NonRetryableDeepgramError(
-                    f"Deepgram pull-mode failed with REMOTE_CONTENT_ERROR "
-                    f"(producer declared deepgram_mode='pull' but source CDN "
-                    f"blocks Deepgram; update the producer to use 'push' mode). "
-                    f"source_platform={message_body.get('source_platform')}, "
-                    f"audio_url={source_url[:200]}, "
-                    f"original_error={str(remote_err)[:200]}"
+                    MediaFailureCode.MEDIA_UNAVAILABLE,
+                    details="deepgram_remote_content_blocked_pull_mode",
+                    source_platform=message_body.get("source_platform"),
                 ) from remote_err
             deepgram_mode_used = "pull"
         else:
@@ -745,7 +782,7 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
             try:
                 if FORCE_DEEPGRAM_PUSH_MODE:
                     raise RemoteContentError(
-                        "Forced push-mode via FORCE_DEEPGRAM_PUSH_MODE=1 (E2E testing)"
+                        MediaFailureCode.MEDIA_UNAVAILABLE, details="forced_push_mode"
                     )
                 deepgram_payload, call = await budget.send(
                     lambda: call_deepgram_api(audio_url=source_url, job_id=job_id),
@@ -762,7 +799,7 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
                     provider="deepgram",
                     job_id=job_id,
                     audio_url=source_url,
-                    original_error=str(remote_err)[:300],
+                    original_error=remote_err.reason,
                 )
                 audio_bytes, content_type = await _download_audio_for_push_fallback(
                     audio_url=source_url,
@@ -787,9 +824,7 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
                     audio_size_bytes=len(audio_bytes),
                 )
     else:
-        raise NonRetryableDeepgramError(
-            "Missing required field: audio_url or audio_s3_key"
-        )
+        raise NonRetryableDeepgramError(MediaFailureCode.INVALID_JOB_MESSAGE, details="missing_audio_source")
     transcription_duration = time.time() - started
 
     # Deepgram has answered and billed what it processed. From here the try is
@@ -810,6 +845,18 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
             audio_s3_key=audio_s3_key,
             transcription_duration=transcription_duration,
         )
+    except IngestionFailure:
+        await call.release(operator_cost=billed_cost)
+        raise
+    except Exception as exc:
+        await call.release(operator_cost=billed_cost)
+        # Permanent (task-573): Deepgram has billed the audio, and a redelivery
+        # would send and pay for the same transcription again.
+        raise NonRetryableDeepgramError(
+            MediaFailureCode.UNEXPECTED_ERROR,
+            details="transcript_store_failed",
+            exception_type=type(exc).__name__,
+        ) from exc
     except BaseException:
         await call.release(operator_cost=billed_cost)
         raise
@@ -1005,48 +1052,6 @@ async def process_message(message: Dict[str, Any]) -> None:
             reason=refusal.error_code,
         )
         return
-    except NonRetryableDeepgramError as e:
-        await publish_failure_event(
-            job_id=body.get("job_id"),
-            media_key=body.get("media_key"),
-            reason=f"deepgram_non_retryable: {e}",
-        )
-        log_event(
-            logger,
-            logging.ERROR,
-            "transcription.failed",
-            "Deepgram transcription failed with non-retryable error",
-            job_id=body.get("job_id"),
-            media_item_id=body.get("job_id"),
-            provider="deepgram",
-            transcript_source="deepgram",
-            error_code="deepgram_non_retryable",
-            detail=str(e),
-        )
-        return
-    except Exception as e:
-        receive_count = int(
-            (message.get("Attributes") or {}).get("ApproximateReceiveCount", "1")
-        )
-        if receive_count >= WORKER_MAX_RETRIES:
-            try:
-                await publish_failure_event(
-                    job_id=body.get("job_id"),
-                    media_key=body.get("media_key"),
-                    reason=f"deepgram_failed_after_retries: {e}",
-                )
-            except Exception as publish_error:
-                log_event(
-                    logger,
-                    logging.WARNING,
-                    "external_call.failed",
-                    "Failed to publish final Deepgram failure event",
-                    provider="sqs",
-                    queue=EPISODE_COMPLETED_EVENTS_QUEUE,
-                    job_id=body.get("job_id"),
-                    exc_info=publish_error,
-                )
-        raise
     finally:
         if "context_token" in locals():
             reset_log_context(context_token)
@@ -1059,52 +1064,3 @@ async def process_message(message: Dict[str, Any]) -> None:
             except Exception:
                 pass
 
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting Deepgram transcription worker",
-        queue=DEEPGRAM_TRANSCRIPTION_QUEUE,
-        provider="deepgram",
-    )
-
-    while True:
-        try:
-            messages = await sqs.receive_messages(
-                queue_name=DEEPGRAM_TRANSCRIPTION_QUEUE,
-                max_messages=1,
-                wait_time_seconds=20,
-                visibility_timeout=DEEPGRAM_VISIBILITY_TIMEOUT,
-            )
-            if messages:
-                for message in messages:
-                    await process_message_with_retry(
-                        message=message,
-                        processor=process_message,
-                        queue_name=DEEPGRAM_TRANSCRIPTION_QUEUE,
-                        max_retries=WORKER_MAX_RETRIES,
-                        worker_name="deepgram_transcription",
-                    )
-            await asyncio.sleep(1)
-        except Exception as e:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "Deepgram queue polling failed",
-                queue=DEEPGRAM_TRANSCRIPTION_QUEUE,
-                provider="deepgram",
-                exc_info=e,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("deepgram-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

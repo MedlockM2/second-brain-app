@@ -30,10 +30,8 @@ lease is the exclusive claim, so the budget lease is zero.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
@@ -54,7 +52,6 @@ from media_summarizer.core.services.budget_guard import (
     BudgetCall,
     BudgetRefusedError,
 )
-from media_summarizer.utils import sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
     LLMFailureKind,
@@ -65,7 +62,6 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
 
 logger = logging.getLogger(__name__)
@@ -437,6 +433,12 @@ async def process_message(message: Dict[str, Any]) -> None:
         # the asymmetry the translation worker has enforced since task-327.
         # Everything else keeps its deliveries: the default is transient, so an
         # unclassified error still gets its three attempts.
+        #
+        # Re-raising is safe after a billed answer too (task-573): the entry was
+        # just failed above, and a redelivery's claim declines a non-GENERATING
+        # entry before any LLM call, so no generation is billed twice. Only a
+        # failure that left the entry GENERATING (the fail write itself failed)
+        # is generated again, once its lease has expired.
         failure_kind = getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT)
         if failure_kind == LLMFailureKind.PERMANENT:
             log_event(
@@ -453,52 +455,3 @@ async def process_message(message: Dict[str, Any]) -> None:
     finally:
         reset_log_context(context_token)
 
-
-async def poll_queue() -> None:
-    """Poll the unified artifact-generator queue."""
-    from media_summarizer.workers.base_worker import process_message_with_retry
-
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting artifact-generator worker queue poller",
-        queue=ARTIFACT_GENERATOR_QUEUE,
-    )
-    while True:
-        try:
-            messages = await sqs.receive_messages(
-                queue_name=ARTIFACT_GENERATOR_QUEUE,
-                max_messages=5,
-                wait_time_seconds=20,
-                visibility_timeout=int(os.environ.get("SQS_VISIBILITY_TIMEOUT", "120")),
-            )
-            if messages:
-                for message in messages:
-                    await process_message_with_retry(
-                        message=message,
-                        processor=process_message,
-                        queue_name=ARTIFACT_GENERATOR_QUEUE,
-                        max_retries=int(os.environ.get("ARTIFACT_GENERATOR_MAX_RETRIES", "3")),
-                        worker_name="artifact-generator-worker",
-                    )
-            await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "Artifact generator worker polling failed",
-                queue=ARTIFACT_GENERATOR_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("artifact-generator-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

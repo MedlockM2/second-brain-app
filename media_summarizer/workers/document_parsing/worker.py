@@ -22,7 +22,6 @@ after it (task-353).
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -39,6 +38,7 @@ from media_summarizer.core.media_ingestion.title_derivation import (
     select_title,
 )
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import PermanentIngestionFailure
 from media_summarizer.core.ports.document_parser import (
     TEXT_FORMATS,
     DocumentFormat,
@@ -66,9 +66,7 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
-from media_summarizer.workers.base_worker import process_message_with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -235,9 +233,8 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
     media_key = message_body.get("media_key")
 
     if not all([job_id, document_s3_key, file_name]):
-        raise ValueError(
-            f"Missing required fields in document parsing message: "
-            f"job_id={job_id}, document_s3_key={document_s3_key}, file_name={file_name}"
+        raise PermanentIngestionFailure(
+            MediaFailureCode.INVALID_JOB_MESSAGE, details="missing_document_fields"
         )
 
     context_token = bind_log_context(job_id=job_id, source_platform="document")
@@ -254,10 +251,10 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
         # Detect format
         document_format = _detect_format(file_name)
         if document_format is None:
-            ext = Path(file_name).suffix
-            raise ValueError(
-                f"Unsupported document format: '{ext}'. "
-                f"Supported: {', '.join(sorted(DocumentFormat.supported_extensions()))}"
+            raise PermanentIngestionFailure(
+                MediaFailureCode.DOCUMENT_PARSE_FAILED,
+                details="unsupported_document_format",
+                extension=Path(file_name).suffix,
             )
 
         # Update job status to extracting (document parsing extracts content)
@@ -276,7 +273,9 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
             )
 
             if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
-                raise ValueError("Downloaded document file is empty or missing")
+                raise PermanentIngestionFailure(
+                    MediaFailureCode.DOCUMENT_PARSE_FAILED, details="document_file_empty"
+                )
 
             # A photo is its own cover, and here it is already on disk -- so the
             # image is written now and mirrored onto the library row by this job
@@ -321,20 +320,24 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
 
         # Handle result
         if isinstance(result, ParseError):
-            # `result.message` is the provider's own English wording: it belongs
-            # in the raised exception (and therefore the logs), never on the job.
-            error_msg = f"Document parsing failed: {result.message}"
-            if job:
-                job.mark_failed(
-                    error_code=MediaFailureCode.DOCUMENT_PARSE_FAILED,
-                    error_step="document_parsing",
-                    error_metadata={
-                        "reason": result.code.value,
-                        "document_format": document_format.value,
-                    },
-                )
-                await database_async.update_processing_job(job)
-            raise RuntimeError(error_msg)
+            # Both parsers have answered: another delivery gets the same result.
+            # The handler fails the job and publishes the failure event
+            # (`sqs_delivery`); `result.message` is the provider's own English
+            # wording, so it goes to the logs only, never on the job.
+            log_event(
+                logger,
+                logging.WARNING,
+                "worker.document_parsing.failed",
+                "Document parsing failed",
+                job_id=job_id,
+                error_code=result.code.value,
+                detail=result.message,
+            )
+            raise PermanentIngestionFailure(
+                MediaFailureCode.DOCUMENT_PARSE_FAILED,
+                details=result.code.value,
+                document_format=document_format.value,
+            )
 
         # Success: upload markdown to transcript bucket
         assert isinstance(result, ParseResult)
@@ -346,9 +349,17 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
                 result=result,
                 parse_duration=parse_duration,
             )
-        except BaseException:
+        except Exception as exc:
             # The text never reached the user: the try goes back to the tester,
-            # the pages it billed to the operator's spend (rule 5).
+            # the pages it billed to the operator's spend (rule 5). Permanent
+            # (task-573): a redelivery would parse and pay for the pages again.
+            await parsed.release()
+            raise PermanentIngestionFailure(
+                MediaFailureCode.UNEXPECTED_ERROR,
+                details="parsed_document_store_failed",
+                exception_type=type(exc).__name__,
+            ) from exc
+        except BaseException:
             await parsed.release()
             raise
         await parsed.settle()
@@ -574,59 +585,15 @@ async def process_message(message: Dict[str, Any]) -> None:
 
     Handles both direct message body (testing) and SQS format (production).
     """
-    if message is None:
-        raise ValueError("Message is None")
-
     if "Body" in message:
         try:
             body = json.loads(message["Body"])
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON in message body: {str(e)}")
+            raise PermanentIngestionFailure(
+                MediaFailureCode.INVALID_JOB_MESSAGE, details="invalid_json_body"
+            ) from e
     else:
         body = message
 
     await process_document_parsing_message(body)
 
-
-async def poll_queue() -> None:
-    """Poll the SQS queue for document parsing messages."""
-    logger.info("Starting document parsing worker - polling queue")
-
-    while True:
-        try:
-            messages = await sqs.receive_messages(
-                queue_name=DOCUMENT_PARSING_QUEUE,
-                max_messages=1,
-                wait_time_seconds=20,
-                visibility_timeout=DOCUMENT_PARSING_VISIBILITY_TIMEOUT,
-            )
-
-            if messages:
-                for message in messages:
-                    await process_message_with_retry(
-                        message=message,
-                        processor=process_message,
-                        queue_name=DOCUMENT_PARSING_QUEUE,
-                        max_retries=3,
-                        worker_name="document_parsing",
-                    )
-
-            await asyncio.sleep(1)
-
-        except Exception as e:
-            logger.error("Error polling document parsing queue: %s", str(e))
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    """Main entry point for the document parsing worker."""
-    logger.info("Starting document parsing worker")
-    logger.info("Document bucket: %s", DOCUMENT_BUCKET)
-    logger.info("Transcript bucket: %s", TRANSCRIPT_BUCKET)
-    logger.info("Queue: %s", DOCUMENT_PARSING_QUEUE)
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    setup_logging("worker-document-parsing")
-    asyncio.run(main())

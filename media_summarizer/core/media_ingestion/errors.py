@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from media_summarizer.core.models.ingestion_failures import PermanentIngestionFailure
+
 DEFAULT_INVALID_URL_MESSAGE = (
     "Invalid URL. Provide a full http(s) URL with a valid host."
 )
@@ -39,12 +41,12 @@ class ResolutionError(MediaIngestionError):
     """Raised when a resolver fails to produce a normalized media payload."""
 
 
-class NonRetryableProviderResolutionError(ResolutionError):
-    """Raised when a provider rejects or cannot resolve the requested content."""
+class NonRetryableProviderResolutionError(ResolutionError, PermanentIngestionFailure):
+    """Raised when a provider rejects or cannot resolve the requested content.
 
-
-class RetryableProviderResolutionError(ResolutionError):
-    """Raised when a provider error may succeed on retry."""
+    A permanent ingestion failure (task-573): it carries the `MediaFailureCode`
+    the job fails with. A retryable resolution is a `TransientIngestionFailure`.
+    """
 
 
 class OrchestrationError(MediaIngestionError):

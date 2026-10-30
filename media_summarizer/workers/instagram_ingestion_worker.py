@@ -29,7 +29,6 @@ Pipeline:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -55,15 +54,13 @@ from media_summarizer.core.media_ingestion.domain import (
     SourcePlatform,
     UserContext,
 )
-from media_summarizer.core.media_ingestion.errors import (
-    NonRetryableProviderResolutionError,
-    RetryableProviderResolutionError,
-)
+from media_summarizer.core.media_ingestion.errors import NonRetryableProviderResolutionError
 from media_summarizer.core.media_ingestion.source_description import (
     SOURCE_DESCRIPTION_IN_TRANSCRIPT_KEY,
     normalize_source_description,
 )
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import IngestionFailure
 from media_summarizer.core.models.processing_job import ProcessingJob
 from media_summarizer.core.ports.document_parser import (
     DocumentFormat,
@@ -105,14 +102,10 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
 from media_summarizer.workers import apify_orchestration
-from media_summarizer.workers.base_worker import (
-    get_sqs_receive_params,
-    process_message_with_retry,
-)
-from media_summarizer.workers.ingestion_failures import IngestionFailure, apify_failure_code
+from media_summarizer.workers.ingestion_failures import apify_failure_code
+from media_summarizer.workers.sqs_delivery import is_last_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +115,6 @@ EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 # Instagram Lambda already had it: the transcript of a photo post lands in the
 # same bucket, under the same key shape, as every other source.
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
-INSTAGRAM_WORKER_MAX_RETRIES = max(1, int(os.environ.get("INSTAGRAM_WORKER_MAX_RETRIES", "3")))
 
 # --- Image-post OCR bounds -------------------------------------------------
 # A carousel holds up to 20 slides and each one is a full provider round-trip
@@ -641,6 +633,16 @@ async def _complete_image_post(
 
     try:
         transcript_s3_key = await _upload_image_transcript(job_id, transcript_text)
+    except Exception as exc:
+        for done in parsed.delivered:
+            await done.release()
+        # Permanent (task-573): the images are parsed and billed, and a
+        # redelivery would parse and pay for every one of them again.
+        raise InstagramIngestionError(
+            MediaFailureCode.UNEXPECTED_ERROR,
+            details="instagram_image_transcript_store_failed",
+            exception_type=type(exc).__name__,
+        ) from exc
     except BaseException:
         for done in parsed.delivered:
             await done.release()
@@ -865,17 +867,10 @@ async def process_instagram_message(message_body: Dict[str, Any]) -> Dict[str, A
                 "routed_to": "apify_webhook",
                 "apify_run_id": run.run_id,
             }
-        except RetryableProviderResolutionError as exc:
-            raise InstagramIngestionError(
-                MediaFailureCode.PROVIDER_UNAVAILABLE,
-                details="resolver_retryable",
-                retryable=True,
-                exception_type=type(exc).__name__,
-            ) from exc
         except NonRetryableProviderResolutionError as exc:
             raise InstagramIngestionError(
-                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA,
-                details="resolver_non_retryable",
+                exc.code,
+                details=exc.details,
                 exception_type=type(exc).__name__,
             ) from exc
 
@@ -1033,12 +1028,12 @@ async def process_message(message: Dict[str, Any]) -> None:
         provider="apify",
     )
 
-    receive_count = int((message.get("Attributes") or {}).get("ApproximateReceiveCount", "1"))
+    last_delivery = is_last_delivery(message)
 
     try:
         await process_instagram_message(body)
     except InstagramIngestionError as exc:
-        should_retry = exc.retryable and receive_count < INSTAGRAM_WORKER_MAX_RETRIES
+        should_retry = exc.retryable and not last_delivery
         if should_retry:
             raise
 
@@ -1066,7 +1061,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             exc_info=exc,
         )
     except Exception as exc:
-        if receive_count < INSTAGRAM_WORKER_MAX_RETRIES:
+        if not last_delivery:
             raise
 
         final_error = InstagramIngestionError(
@@ -1096,52 +1091,3 @@ async def process_message(message: Dict[str, Any]) -> None:
         )
     finally:
         reset_log_context(context_token)
-
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting Instagram ingestion worker",
-        queue=INSTAGRAM_INGESTION_QUEUE,
-    )
-    while True:
-        try:
-            receive_params = get_sqs_receive_params(visibility_timeout=360)
-            messages = await sqs.receive_messages(
-                queue_name=INSTAGRAM_INGESTION_QUEUE,
-                max_messages=receive_params["MaxNumberOfMessages"],
-                wait_time_seconds=receive_params["WaitTimeSeconds"],
-                visibility_timeout=receive_params["VisibilityTimeout"],
-            )
-            if messages:
-                for message in messages:
-                    await process_message_with_retry(
-                        message=message,
-                        processor=process_message,
-                        queue_name=INSTAGRAM_INGESTION_QUEUE,
-                        max_retries=INSTAGRAM_WORKER_MAX_RETRIES,
-                        worker_name="instagram_ingestion",
-                    )
-            else:
-                await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "Instagram ingestion polling failed",
-                queue=INSTAGRAM_INGESTION_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("instagram-ingestion-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

@@ -210,7 +210,9 @@ is fixed.
 ### First Response
 
 - Inspect first few messages to determine if systematic or isolated
-- If isolated bad data: delete DLQ messages, mark jobs as failed
+- If isolated bad data: delete DLQ messages. An ingestion job is already `failed`:
+  the Lambda handler fails it on the delivery that sends its message here, with the
+  exception's code or `UNEXPECTED_ERROR` (`workers/sqs_delivery.py`, task-573)
 - If systematic: fix root cause, then replay messages
 
 ### Replay Procedure

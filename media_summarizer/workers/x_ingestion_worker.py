@@ -18,7 +18,6 @@ bound, an answer without a usable post at its price.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
@@ -39,6 +38,7 @@ from media_summarizer.core.media_ingestion.title_derivation import (
 )
 from media_summarizer.core.models.beta_budget import Component
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.models.ingestion_failures import IngestionFailure
 from media_summarizer.core.services import beta_budget, budget_guard
 from media_summarizer.core.services.budget_guard import (
     BudgetBusyError,
@@ -56,13 +56,8 @@ from media_summarizer.utils.logging_config import (
     bind_log_context,
     log_event,
     reset_log_context,
-    setup_logging,
 )
-from media_summarizer.workers.base_worker import (
-    get_sqs_receive_params,
-    process_message_with_retry,
-)
-from media_summarizer.workers.ingestion_failures import IngestionFailure
+from media_summarizer.workers.sqs_delivery import is_last_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +65,6 @@ TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 X_INGESTION_QUEUE = required_env("X_INGESTION_QUEUE")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
 X_API_TIMEOUT_SECONDS = float(os.environ.get("X_API_TIMEOUT_SECONDS", "20"))
-X_WORKER_MAX_RETRIES = max(1, int(os.environ.get("X_WORKER_MAX_RETRIES", "3")))
 X_API_BASE_URL = os.environ.get("X_API_BASE_URL", "https://api.x.com/2").rstrip("/")
 _RAW_X_BEARER_TOKEN = os.environ.get("X_API_BEARER_TOKEN", "").strip()
 X_API_BEARER_TOKEN = unquote(_RAW_X_BEARER_TOKEN).strip()
@@ -546,6 +540,15 @@ async def process_x_message(message_body: Dict[str, Any]) -> Dict[str, Any]:
         raise
     try:
         stored = await _store_post(job=job, job_id=job_id, normalized_url=normalized_url, lookup_result=lookup_result)
+    except Exception as exc:
+        await call.release(operator_cost=await _post_cost())
+        # Permanent (task-573): X has billed the read, and a redelivery would
+        # send and pay for the same lookup again.
+        raise XIngestionError(
+            MediaFailureCode.UNEXPECTED_ERROR,
+            details="x_post_store_failed",
+            exception_type=type(exc).__name__,
+        ) from exc
     except BaseException:
         await call.release(operator_cost=await _post_cost())
         raise
@@ -641,9 +644,7 @@ async def process_message(message: Dict[str, Any]) -> None:
         transcript_source="x_api_lookup",
     )
 
-    receive_count = int(
-        (message.get("Attributes") or {}).get("ApproximateReceiveCount", "1")
-    )
+    last_delivery = is_last_delivery(message)
 
     try:
         result = await process_x_message(body)
@@ -663,7 +664,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             media_item_id=result["job_id"],
         )
     except XIngestionError as exc:
-        should_retry = exc.retryable and receive_count < X_WORKER_MAX_RETRIES
+        should_retry = exc.retryable and not last_delivery
         if should_retry:
             raise
 
@@ -692,7 +693,7 @@ async def process_message(message: Dict[str, Any]) -> None:
             exc_info=exc,
         )
     except Exception as exc:
-        if receive_count < X_WORKER_MAX_RETRIES:
+        if not last_delivery:
             raise
 
         final_error = XIngestionError(
@@ -724,59 +725,3 @@ async def process_message(message: Dict[str, Any]) -> None:
         )
     finally:
         reset_log_context(context_token)
-
-
-async def process_messages_batch(messages: list[Dict[str, Any]]) -> None:
-    async def process_one(message: Dict[str, Any]) -> bool:
-        return await process_message_with_retry(
-            message=message,
-            processor=process_message,
-            queue_name=X_INGESTION_QUEUE,
-            max_retries=X_WORKER_MAX_RETRIES,
-            worker_name="x-ingestion",
-        )
-
-    tasks = [asyncio.create_task(process_one(message)) for message in messages]
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-
-async def poll_queue() -> None:
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting X ingestion worker",
-        queue=X_INGESTION_QUEUE,
-    )
-    while True:
-        try:
-            receive_params = get_sqs_receive_params(visibility_timeout=300)
-            messages = await sqs.receive_messages(
-                queue_name=X_INGESTION_QUEUE,
-                max_messages=receive_params["MaxNumberOfMessages"],
-                wait_time_seconds=receive_params["WaitTimeSeconds"],
-                visibility_timeout=receive_params["VisibilityTimeout"],
-            )
-            if messages:
-                await process_messages_batch(messages)
-            else:
-                await asyncio.sleep(1)
-        except Exception as exc:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.polling_error",
-                "X ingestion polling failed",
-                queue=X_INGESTION_QUEUE,
-                exc_info=exc,
-            )
-            await asyncio.sleep(5)
-
-
-async def main() -> None:
-    setup_logging("x-ingestion-worker")
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

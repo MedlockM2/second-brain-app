@@ -150,7 +150,6 @@ module = [
     "media_summarizer.workers.transcription.deepgram_worker",
     "media_summarizer.workers.events.media_completed_worker",
     "media_summarizer.workers.document_parsing.worker",
-    "media_summarizer.workers.base_worker",
     "media_summarizer.workers.podcast_platform_resolvers",
     "media_summarizer.workers.artifact_generator.worker",
 ]

@@ -23,10 +23,11 @@ Last verified against codebase: 2026-09-09 (task-383: the author's description i
 11. [Cross-cutting: Transcript Language Detection & Translation](#cross-cutting-transcript-language-detection--translation)
 12. [Transcript Translation Worker (task-200)](#transcript-translation-worker-task-200)
 13. [Cross-cutting: How a failure is written down (task-359)](#cross-cutting-how-a-failure-is-written-down-task-359)
-14. [Cross-cutting: Where the author's description goes (task-383)](#cross-cutting-where-the-authors-description-goes-task-383)
-15. [Cross-cutting: Deepgram Modes](#cross-cutting-deepgram-modes)
-16. [Decision Tree: URL Classification and Routing](#decision-tree-url-classification-and-routing)
-17. [References](#references)
+14. [Cross-cutting: How a failed message is retried (task-573)](#cross-cutting-how-a-failed-message-is-retried-task-573)
+15. [Cross-cutting: Where the author's description goes (task-383)](#cross-cutting-where-the-authors-description-goes-task-383)
+16. [Cross-cutting: Deepgram Modes](#cross-cutting-deepgram-modes)
+17. [Decision Tree: URL Classification and Routing](#decision-tree-url-classification-and-routing)
+18. [References](#references)
 
 ---
 
@@ -131,11 +132,19 @@ Ref: `podcastindex_resolution_worker.py::_try_rss_transcript_short_circuit` (lin
 
 ### Terminal failure mode
 
-- Platform resolver returns a non-resolved outcome → worker raises `RuntimeError` containing the error code
-- Error codes: `INVALID_PLATFORM_URL`, `EPISODE_NOT_FOUND`, `AUDIO_URL_NOT_FOUND`, `UPSTREAM_LOOKUP_FAILED`, `UNSUPPORTED_PLATFORM` (from `PodcastResolverErrorCode`)
-- After SQS max retries (`PODCASTINDEX_WORKER_MAX_RETRIES`, default 3), the job stays in failed state via the base worker's retry handler
+A non-resolved outcome raises the failure its `PodcastResolverErrorCode` is ranked as in `_RESOLVER_FAILURES`; the `reason` token is the resolver code itself. The Lambda handler then fails the job or retries the message ([how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)).
 
-Ref: `podcast_resolver_foundation.py::PodcastResolverErrorCode`, `podcastindex_resolution_worker.py::process_message`
+| `PodcastResolverErrorCode` | Nature | `error_code` |
+|---|---|---|
+| `upstream_lookup_failed` (the index did not answer), `resolution_pending` | transient: retried, the job fails on the last delivery | `PROVIDER_UNAVAILABLE` |
+| `episode_not_found` | permanent: the job fails at once | `MEDIA_UNAVAILABLE` |
+| `invalid_platform_url` | permanent | `MEDIA_UNAVAILABLE` |
+| `audio_url_not_found` | permanent | `NO_TRANSCRIBABLE_MEDIA` |
+| `unsupported_platform`, `platform_not_implemented` | permanent | `INVALID_JOB_MESSAGE` |
+
+A message without `job_id` or `normalized_url`, or naming a job that does not exist, is a permanent `INVALID_JOB_MESSAGE`.
+
+Ref: `podcast_resolver_foundation.py::PodcastResolverErrorCode`, `podcastindex_resolution_worker.py::_RESOLVER_FAILURES`, `podcastindex_resolution_worker.py::process_message`
 
 ### Downstream dependencies
 
@@ -270,7 +279,7 @@ Ref: `youtube_ingestion_worker.py::process_youtube_message`, `youtube_ingestion_
 
 ### Terminal failure mode
 
-- `YouTubeIngestionError` after max retries (`YOUTUBE_WORKER_MAX_RETRIES`, default 3)
+- A permanent `YouTubeIngestionError` at once; a retryable one on the queue's last delivery (`SQS_MAX_RECEIVE_COUNT`, 3) — [how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)
 - Mark job failed (`error_step="youtube_ingestion"`)
 - Publish `episode_completion_status(status=failure)`
 - User-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)); the `reason` values are `ApifyTranscriptFailure` members, unchanged:
@@ -333,13 +342,14 @@ Ref: `instagram_apify_resolver.py::InstagramApifyResolver.resolve`, `instagram_a
 ### Terminal failure mode
 
 - User-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
-  - `NO_TRANSCRIBABLE_MEDIA` ← `resolver_non_retryable` (+`exception_type`), `no_transcript_or_audio_url`
-  - `PROVIDER_UNAVAILABLE` ← `resolver_retryable`, `apify_run_not_succeeded` (both retryable)
+  - `NO_TRANSCRIBABLE_MEDIA` ← `instagram_content_type_unknown`, `instagram_reel_no_result`, `instagram_reel_no_media_url`, `instagram_post_no_result` (the resolver's own codes, carried by `NonRetryableProviderResolutionError`), `no_transcript_or_audio_url`
+  - `MEDIA_UNAVAILABLE` ← `instagram_reel_result_error`
+  - `PROVIDER_UNAVAILABLE` ← `apify_run_not_succeeded` (retryable)
   - `PROVIDER_RESULT_INVALID` ← `apify_result_invalid`
   - `POST_TEXT_EMPTY` / `DOCUMENT_PARSE_FAILED` ← `instagram_image_post_no_text` (photo posts only: the first when the OCR ran and found no text and the post has no caption either, the second when the parsing chain itself failed on every image)
   - `INVALID_JOB_MESSAGE` ← `missing_job_id`, `missing_normalized_url`, `processing_job_not_found`
-  - `UNEXPECTED_ERROR` ← `unexpected_exception`
-- After max retries (`INSTAGRAM_WORKER_MAX_RETRIES`, default 3), the job is marked failed (`error_step="instagram_ingestion"`) and a failure event is published
+  - `UNEXPECTED_ERROR` ← `unexpected_exception`, `instagram_image_transcript_store_failed` (permanent: the images are already parsed and billed)
+- A permanent failure at once, a retryable one on the queue's last delivery (`SQS_MAX_RECEIVE_COUNT`, 3): the job is marked failed (`error_step="instagram_ingestion"`) and a failure event is published — [how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)
 
 Ref: `instagram_ingestion_worker.py::InstagramIngestionError`, `instagram_ingestion_worker.py::process_message`
 
@@ -411,7 +421,7 @@ Provider failures from the post-scraper actor (auth, quota, run not succeeded) u
 
 | Provider/library | Identifier | Extracts | Key env vars |
 |---|---|---|---|
-| yt-dlp | `yt_dlp.YoutubeDL` with `writesubtitles=True`, `subtitleslangs=["all"]` | Native subtitle text (VTT / SRT / JSON) from TikTok CDN | `TIKTOK_INGESTION_QUEUE`, `YTDLP_TIMEOUT_SECONDS`, `TIKTOK_SUBTITLE_FETCH_TIMEOUT_SECONDS`, `TIKTOK_WORKER_MAX_RETRIES` (rate limiter via `tiktok_limiter`) |
+| yt-dlp | `yt_dlp.YoutubeDL` with `writesubtitles=True`, `subtitleslangs=["all"]` | Native subtitle text (VTT / SRT / JSON) from TikTok CDN | `TIKTOK_INGESTION_QUEUE`, `YTDLP_TIMEOUT_SECONDS`, `TIKTOK_SUBTITLE_FETCH_TIMEOUT_SECONDS` (rate limiter via `tiktok_limiter`) |
 
 Workflow:
 1. `tiktok_ingestion_worker` consumes `tiktok-ingestion-queue` and marks the job `EXTRACTING`
@@ -443,7 +453,7 @@ Ref: `tiktok_ingestion_worker.py::process_tiktok_message`, `tiktok_ingestion_wor
 
 ### Terminal failure mode
 
-- `TikTokIngestionError` after max retries (`TIKTOK_WORKER_MAX_RETRIES`, default 3)
+- A permanent `TikTokIngestionError` at once; a retryable one on the queue's last delivery (`SQS_MAX_RECEIVE_COUNT`, 3) — [how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)
 - User-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
   - `MEDIA_UNAVAILABLE` ← `missing_tiktok_id`, `yt_dlp_media_unavailable` (private / deleted)
   - `LIVE_CONTENT_UNSUPPORTED` ← `live_content_not_supported`
@@ -474,7 +484,7 @@ Ref: `tiktok_ingestion_worker.py::_mark_job_failed`, `tiktok_ingestion_worker.py
 
 | Provider/library | Identifier | Extracts | Key env vars |
 |---|---|---|---|
-| X API v2 | `GET /tweets/{tweet_id}` with `tweet.fields=...,note_tweet` and `expansions=author_id` | Tweet text (preferring `note_tweet.text` for long-form), author username/name | `X_API_BEARER_TOKEN`, `X_API_BASE_URL`, `X_API_TIMEOUT_SECONDS`, `X_INGESTION_QUEUE`, `X_WORKER_MAX_RETRIES` |
+| X API v2 | `GET /tweets/{tweet_id}` with `tweet.fields=...,note_tweet` and `expansions=author_id` | Tweet text (preferring `note_tweet.text` for long-form), author username/name | `X_API_BEARER_TOKEN`, `X_API_BASE_URL`, `X_API_TIMEOUT_SECONDS`, `X_INGESTION_QUEUE` |
 
 Workflow:
 1. Receive message with pre-extracted `tweet_id` (set by `XPostResolver` upstream)
@@ -491,7 +501,7 @@ No fallback — failure is terminal. Single provider (X API v2). Video tweets ar
 
 ### Terminal failure mode
 
-- `XIngestionError` after max retries (`X_WORKER_MAX_RETRIES`, default 3)
+- A permanent `XIngestionError` at once; a retryable one on the queue's last delivery (`SQS_MAX_RECEIVE_COUNT`, 3) — [how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573). A post X has answered and billed but that could not be stored fails at once with `UNEXPECTED_ERROR` ← `x_post_store_failed`: a redelivery would pay for the lookup again
 - User-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)); the HTTP status is in `error_metadata`, not in the reason token:
   - `MEDIA_UNAVAILABLE` ← `x_lookup_not_found` (404), `x_lookup_forbidden` (403)
   - `POST_TEXT_EMPTY` ← `x_post_text_empty`
@@ -568,11 +578,11 @@ Ref: `infrastructure/resolvers/unstructured_resolver.py::UnstructuredResolver`
 ### Terminal failure mode
 
 - Both LlamaParse and Unstructured fail → `ParseError` with combined message (`provider="llamaparse+unstructured"`)
-- Mark job failed (`error_code=DOCUMENT_PARSE_FAILED`, `error_step="document_parsing"`, `error_metadata` carrying the parser's `reason` code and the `document_format`). The provider's own wording stays in the raised `RuntimeError`, i.e. in CloudWatch, and is never persisted.
-- Worker raises `RuntimeError` to trigger SQS retry / DLQ
-- After max retries (3): job stays failed
+- The worker raises a permanent failure (`DOCUMENT_PARSE_FAILED`, `reason` = the parser's code, `document_format` in `error_metadata`): both parsers have answered, another delivery gets the same result. The Lambda handler marks the job failed and publishes the failure event ([how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)). The provider's own wording goes to the `worker.document_parsing.failed` log only, never on the job.
+- Also permanent: an unsupported extension or an empty file (`DOCUMENT_PARSE_FAILED`), a malformed message (`INVALID_JOB_MESSAGE`), and a parsed text that could not be stored (`UNEXPECTED_ERROR` ← `parsed_document_store_failed`: the pages are billed, a redelivery would parse them again)
+- Anything else (an S3 download error...) is retried; the job fails with `UNEXPECTED_ERROR` on the last delivery
 
-Ref: `document_parsing/worker.py::process_document_parsing_message` (lines 230–235)
+Ref: `document_parsing/worker.py::process_document_parsing_message`
 
 ### Downstream dependencies
 
@@ -615,10 +625,16 @@ Built into Deepgram mode dispatch (only `pull_with_push_fallback` falls back aut
 
 ### Terminal failure mode
 
-- `NonRetryableDeepgramError`: immediately publishes failure event (no retry)
-  - Causes: empty API key, invalid `audio_url`, RSS/feed URL passed by mistake, empty transcript, HTTP 400/401/403/404/415/422, `RemoteContentError` when producer declared `pull` mode (producer misrouted)
-- `RetryableDeepgramError` after max retries (3): publishes failure event
-  - Causes: HTTP 429 / 5xx, timeout, transport error
+Both error types derive from the common failure classes and carry a `MediaFailureCode`; the Lambda handler fails the job and publishes the failure event ([how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)).
+
+- `NonRetryableDeepgramError` (permanent): the job fails at once
+  - `PROVIDER_AUTH_FAILED` ← `deepgram_api_key_missing`, `deepgram_key_refused` (401); `PROVIDER_CREDITS_DEPLETED` ← `deepgram_credit_exhausted` (402)
+  - `NO_TRANSCRIPT_AVAILABLE` ← `deepgram_request_refused` (400/403/404/415/422), `deepgram_unexpected_status`, `deepgram_transcript_empty`
+  - `MEDIA_UNAVAILABLE` ← `deepgram_remote_content_blocked_pull_mode` (the producer declared `pull` but the CDN blocks Deepgram: producer misrouted), `audio_download_blocked` / `audio_download_not_found` / `audio_download_failed` (push download)
+  - `NO_TRANSCRIBABLE_MEDIA` ← `audio_download_empty`, `audio_bytes_empty`; `ITEM_TOO_LARGE` ← `audio_too_large_for_push`
+  - `INVALID_JOB_MESSAGE` ← `missing_job_id`, `invalid_job_id`, `invalid_deepgram_mode`, `missing_audio_source`, `invalid_audio_url`, `audio_url_is_feed`
+  - After the request left, never retried by SQS because Deepgram may have billed it: `PROVIDER_RESULT_INVALID` ← `deepgram_invalid_json`; `PROVIDER_TIMED_OUT` / `PROVIDER_UNAVAILABLE` ← `deepgram_request_lost` (timeout or transport error on the last in-delivery try); `UNEXPECTED_ERROR` ← `transcript_store_failed`
+- Transient, back to SQS, the job failing on the last delivery: `RetryableDeepgramError` (`PROVIDER_RATE_LIMITED` ← `deepgram_rate_limited` on a 429, `PROVIDER_UNAVAILABLE` ← `deepgram_server_error` on a 5xx: nothing was processed), a connection that never opened, `audio_download_timeout` / `audio_download_transport_error` (push download, nothing billed yet)
 - Test flag: `FORCE_DEEPGRAM_PUSH_MODE=1` simulates a `RemoteContentError` on `pull_with_push_fallback` to exercise the push fallback in E2E
 
 Ref: `transcription/deepgram_worker.py::NonRetryableDeepgramError`, `transcription/deepgram_worker.py::RetryableDeepgramError`, `transcription/deepgram_worker.py::RemoteContentError`
@@ -841,8 +857,11 @@ each enqueued a separate translation job.
 5. On terminal failure (`TranscriptTranslationError` after retries exhausted):
    marks state `-> failed`. Does NOT re-raise (prevents SQS retry of an already-
    exhausted attempt).
-6. On unexpected error: marks state `-> failed` and re-raises (SQS may retry via
-   visibility timeout, but the state machine ensures no thundering herd).
+6. On unexpected error: marks state `-> failed` and does not re-raise either
+   (task-573): the error may come after chunks the LLM already translated and
+   billed, and a redelivery would reclaim the failed lock and pay again. The
+   reader's next `/raw-content` poll reserves the translation anew. Only a failed
+   S3 download of the original, before any LLM call, is re-raised and retried.
 
 ### `/raw-content` contract (task-200, updated task-203, task-419)
 
@@ -939,11 +958,12 @@ defect task-359 fixed (an English sentence reached an `fr-FR` screen).
 
 No worker builds a user-facing sentence any more, and no free-text sentence is
 persisted. `media_summarizer/utils/user_facing_errors.py` — which used to
-pattern-match `str(e)` in `base_worker.py` to *guess* a friendly English line — is
+pattern-match `str(e)` in the former `base_worker.py` retry net to *guess* a friendly English line — is
 deleted; an unclaimed exception is now `UNEXPECTED_ERROR`, full stop.
 
 Every ingestion worker raises a thin subclass of `IngestionFailure`
-(`media_summarizer/workers/ingestion_failures.py`):
+(`media_summarizer/core/models/ingestion_failures.py`), or one of its two fixed
+forms, `PermanentIngestionFailure` and `TransientIngestionFailure`:
 
 ```python
 raise XIngestionError(
@@ -983,7 +1003,56 @@ task-549 replaced `OUT_OF_MINUTES` and `ITEM_TOO_LONG` without their client entr
 which TASK-550 (contract and types) and TASK-551 (wording) deliver; until then they
 read as the generic failure line.
 
-Ref: `core/models/failure_codes.py::MediaFailureCode`, `workers/ingestion_failures.py::IngestionFailure`, `workers/base_worker.py`
+Ref: `core/models/failure_codes.py::MediaFailureCode`, `core/models/ingestion_failures.py::IngestionFailure`, `workers/sqs_delivery.py`
+
+---
+
+## Cross-cutting: How a failed message is retried (task-573)
+
+Every SQS worker runs on Lambda, through `lambda_handlers._build_handler`. There is
+no polling loop: the event source mapping delivers one message per invocation
+(`batch_size = 1`) and declares `function_response_types = ["ReportBatchItemFailures"]`
+(`infrastructure/terraform/modules/platform/lambda_workers.tf`). A message the handler
+lists in `batchItemFailures` comes back after its visibility timeout; any other one
+is deleted. Before task-573 the flag was missing, so Lambda ignored the list and
+deleted every message: an exception was lost on its first delivery and the job
+stayed in progress for ever.
+
+What the handler does with an exception its worker lets escape is decided in one
+place, `workers/sqs_delivery.py::settle_failure`, from the `retryable` attribute of
+`IngestionFailure`:
+
+| Exception | Message | Job (ingestion workers) |
+|---|---|---|
+| permanent (`retryable=False`) | acknowledged | failed at once with the exception's code |
+| transient (`retryable=True`) | back to SQS | failed with the exception's code on the last delivery, then the message goes to the DLQ |
+| anything else | back to SQS | failed with `UNEXPECTED_ERROR` on the last delivery, then DLQ |
+
+The last delivery is `ApproximateReceiveCount ≥ SQS_MAX_RECEIVE_COUNT`. That variable
+is injected by Terraform from `local.worker_max_receive_count` (3), the same local
+every queue's redrive policy reads (`sqs.tf`), so the two cannot drift. The
+ingestion workers that classify their own errors (article, YouTube, TikTok,
+Instagram, X) read the same value through `sqs_delivery.is_last_delivery`.
+
+Failing a job follows the path of failures the workers already handle (the
+unreadable article in `orchestrators.py`): `mark_failed`, `update_processing_job`
+(which mirrors `user_media`, what the app reads), then an
+`episode_completion_status` `failure` event (`media_key`, `canonical_job_id`,
+`reason: CODE:token`) that closes the `media_idempotence` reservation, the import
+budget and the artifact waits. A job already terminal is never rewritten: the
+worker that put it there owns its outcome. Only the eight ingestion handlers fail a
+job (`fails_job=True`); the artifact, chat, translation, indexing, event, RSS and
+push workers own no job, so their messages are retried, then dead-lettered.
+
+**Paid providers.** A retry is a real second call. A failure raised after a paid
+call succeeded is therefore permanent unless the retry is idempotent, and each such
+choice is commented where the error is raised: Deepgram (`transcript_store_failed`,
+`deepgram_invalid_json`, `deepgram_request_lost`), X (`x_post_store_failed`),
+Instagram's image OCR (`instagram_image_transcript_store_failed`), document parsing
+(`parsed_document_store_failed`), the translation worker (unexpected errors are
+acknowledged). The Apify workers are idempotent: a redelivery finds the run on the
+job (`apify_orchestration.start_run_for_job`) or re-reads the same dataset through
+the callback claim. The artifact worker is idempotent through its generation claim.
 
 ---
 
@@ -1205,7 +1274,7 @@ The corpus the chat reads is built by the same `llm_corpus` functions as the art
 
 - **Why it is enough.** The account is on OpenAI's **Build** tier (2 000 000 TPM, 5 000 RPM for `gpt-6-luna`, read by the owner on 2026-10-10), and moves to **Launch** (10 000 000 TPM) by itself as cumulative top-ups reach 100 $. The worst case of the benchmark — 20 simultaneous calls on folders at the corpus ceiling — reaches 152 % of the Build TPM, a load a dozen beta testers do not produce. Growth that would raise the load also raises the tier: at Launch the same worst case is about 30 % of the TPM. A peak that still happens becomes a wait or an uncharged failure, never lost data.
 - **On a 429, the chat** (`workers/chat_worker.py`): the refusal carries `Retry-After` in seconds when the header is present and readable — a number of seconds or an HTTP date (`LlmProviderRefusedError.retry_after_seconds`, parsed by `llm_failure.parse_retry_after`; the classification is unchanged). Before any text, each of the at most two retries waits `max(backoff, Retry-After)` plus random jitter, `Retry-After` being a **minimum**: a refused call counts against the limit too, so retrying earlier deepens the throttle. A `Retry-After` above `MAX_RETRY_WAIT_SECONDS` (10 s, what an interactive turn can hold) is not waited out: the turn is sealed `failed` with `error_code = provider_refused_rate_limit` and its budget released, with no further call. Retries are logged as `chat.provider_retry` (with `retry_after_seconds` and `wait_seconds`), abandoned waits as `chat.provider_retry_abandoned`.
-- **On a 429, the artifacts** (and the re-translation): unchanged. The `TRANSIENT` failure goes back to SQS (`process_message_with_retry`), whose visibility timeout already exceeds any pacing `Retry-After`.
+- **On a 429, the artifacts** (and the re-translation): unchanged. The artifact worker fails the entry and re-raises the `TRANSIENT` failure, which the Lambda handler reports in `batchItemFailures` ([how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)); the redelivery's claim declines the already-failed entry before any LLM call, so nothing is generated or billed twice.
 - **The signal.** The `llm-provider-refused` alarm (`infrastructure/terraform/modules/platform/llm_alerts.tf`, threshold 0) fires on any `llm.generation_failed` carrying a `refusal_reason`, `rate_limit` included, from the artifact, translation and chat workers. No other alarm is added.
 - **When to reopen** (Decision point 5): the alarm fires on `rate_limit` outside an incident, the corpus ceiling rises, or the app opens to the public while the account is still on Build. The documented options are then a shared token bucket in DynamoDB (M2, with a bucket rather than fixed windows) and M5, in `docs/research/task-459-llm-token-rate-control/README.md`.
 

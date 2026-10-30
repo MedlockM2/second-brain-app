@@ -37,6 +37,7 @@ from media_summarizer.core.media_ingestion.title_derivation import (
     first_sentence,
     select_title,
 )
+from media_summarizer.core.models.failure_codes import MediaFailureCode
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,9 @@ def _detect_instagram_content_type(normalized_url: str) -> InstagramContentType:
     for segment in parts:
         if segment in indicators:
             return indicators[segment]
-    raise NonRetryableProviderResolutionError("Unable to determine Instagram content type from URL.")
+    raise NonRetryableProviderResolutionError(
+        MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_content_type_unknown"
+    )
 
 
 def _extract_image_urls_from_post_result(item: dict[str, Any]) -> list[str]:
@@ -237,11 +240,15 @@ class InstagramApifyResolver(ContentResolverPort):
         use ``deepgram_mode="pull_with_push_fallback"``.
         """
         if not results:
-            raise NonRetryableProviderResolutionError("Unable to resolve transcribable media from this Instagram URL.")
+            raise NonRetryableProviderResolutionError(
+                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_reel_no_result"
+            )
 
         item = results[0]
         if item.get("error"):
-            raise NonRetryableProviderResolutionError("Unable to resolve transcribable media from this Instagram URL.")
+            raise NonRetryableProviderResolutionError(
+                MediaFailureCode.MEDIA_UNAVAILABLE, details="instagram_reel_result_error"
+            )
 
         audio_url_raw = item.get("audioUrl")
         video_url_raw = item.get("videoUrl")
@@ -252,7 +259,9 @@ class InstagramApifyResolver(ContentResolverPort):
         # the muxed stream.
         chosen_url = audio_url or video_url
         if not chosen_url:
-            raise NonRetryableProviderResolutionError("Unable to resolve transcribable media from this Instagram URL.")
+            raise NonRetryableProviderResolutionError(
+                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_reel_no_media_url"
+            )
 
         duration_seconds: Optional[float] = None
         raw_duration = item.get("videoDuration") or item.get("duration")
@@ -339,7 +348,9 @@ class InstagramApifyResolver(ContentResolverPort):
         ResolvedMedia type.
         """
         if not results:
-            raise NonRetryableProviderResolutionError("Unable to resolve transcribable media from this Instagram URL.")
+            raise NonRetryableProviderResolutionError(
+                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_post_no_result"
+            )
 
         item = results[0]
         caption = _extract_caption(item)

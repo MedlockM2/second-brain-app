@@ -123,101 +123,6 @@ async def send_message(
         raise
 
 
-async def receive_messages(
-    queue_name: str,
-    max_messages: int = 1,
-    wait_time_seconds: int = 0,
-    visibility_timeout: int = 30
-) -> List[Dict[str, Any]]:
-    """
-    Receive messages from a queue.
-
-    Args:
-        queue_name: Name of the queue
-        max_messages: Maximum number of messages to receive (1-10)
-        wait_time_seconds: Wait time in seconds (0-20)
-        visibility_timeout: Visibility timeout in seconds
-
-    Returns:
-        List of messages
-
-    Raises:
-        Exception: If there's an error receiving messages
-    """
-    queue_url = get_queue_url(queue_name)
-
-    receive_params = {
-        "QueueUrl": queue_url,
-        "MaxNumberOfMessages": max_messages,
-        "WaitTimeSeconds": wait_time_seconds,
-        "VisibilityTimeout": visibility_timeout,
-        "AttributeNames": ["ApproximateReceiveCount"],
-    }
-
-    try:
-        async with session.create_client(
-            'sqs',
-            region_name=AWS_REGION,
-        ) as sqs:
-            response = await sqs.receive_message(**receive_params)
-            messages = response.get("Messages", [])
-            return messages
-    except Exception as e:
-        log_event(
-            logger,
-            logging.ERROR,
-            "external_call.failed",
-            "Failed to receive SQS messages",
-            provider="sqs",
-            queue=queue_name,
-            error_type=type(e).__name__,
-            error_code="SQS_RECEIVE_FAILED",
-        )
-        raise
-
-
-async def delete_message(queue_name: str, receipt_handle: str) -> Dict[str, Any]:
-    """
-    Delete a message from a queue.
-
-    Args:
-        queue_name: Name of the queue
-        receipt_handle: Receipt handle of the message to delete
-
-    Returns:
-        Dict containing the response from SQS
-
-    Raises:
-        Exception: If there's an error deleting the message
-    """
-    queue_url = get_queue_url(queue_name)
-
-    delete_params = {
-        "QueueUrl": queue_url,
-        "ReceiptHandle": receipt_handle
-    }
-
-    try:
-        async with session.create_client(
-            'sqs',
-            region_name=AWS_REGION,
-        ) as sqs:
-            response = await sqs.delete_message(**delete_params)
-            return response
-    except Exception as e:
-        log_event(
-            logger,
-            logging.ERROR,
-            "external_call.failed",
-            "Failed to delete SQS message",
-            provider="sqs",
-            queue=queue_name,
-            error_type=type(e).__name__,
-            error_code="SQS_DELETE_FAILED",
-        )
-        raise
-
-
 async def purge_queue(queue_name: str) -> Dict[str, Any]:
     """
     Purge all messages from a queue.
@@ -371,20 +276,6 @@ async def send_messages_batch(
             error_code="SQS_BATCH_FAILED",
         )
         raise
-
-
-def get_sync_sqs_client():
-    """
-    Get synchronous SQS client for base_worker compatibility.
-
-    Returns:
-        Synchronous boto3 SQS client
-    """
-    import boto3
-    return boto3.client(
-        'sqs',
-        region_name=AWS_REGION,
-    )
 
 
 async def change_message_visibility(

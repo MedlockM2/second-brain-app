@@ -21,7 +21,7 @@ resource "aws_sqs_queue" "rss_resolution" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.rss_resolution_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -49,7 +49,7 @@ resource "aws_sqs_queue" "article_extraction" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.article_extraction_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -77,7 +77,7 @@ resource "aws_sqs_queue" "x_ingestion" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.x_ingestion_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -105,7 +105,7 @@ resource "aws_sqs_queue" "youtube_ingestion" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.youtube_ingestion_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -133,7 +133,7 @@ resource "aws_sqs_queue" "instagram_ingestion" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.instagram_ingestion_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -161,7 +161,7 @@ resource "aws_sqs_queue" "tiktok_ingestion" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.tiktok_ingestion_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -189,7 +189,7 @@ resource "aws_sqs_queue" "deepgram_transcription" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deepgram_transcription_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -218,7 +218,7 @@ resource "aws_sqs_queue" "artifact_generator" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.artifact_generator_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -264,7 +264,7 @@ resource "aws_sqs_queue" "chat" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.chat_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -292,7 +292,7 @@ resource "aws_sqs_queue" "document_parsing" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.document_parsing_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -320,7 +320,7 @@ resource "aws_sqs_queue" "search_indexing" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.search_indexing_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -348,7 +348,7 @@ resource "aws_sqs_queue" "rss_feed_poll" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.rss_feed_poll_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -376,7 +376,7 @@ resource "aws_sqs_queue" "media_completed_events" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.media_completed_events_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -405,7 +405,7 @@ resource "aws_sqs_queue" "transcript_translation" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.transcript_translation_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {
@@ -450,7 +450,7 @@ resource "aws_sqs_queue" "push_notification" {
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.push_notification_dlq.arn
-    maxReceiveCount     = 3
+    maxReceiveCount     = local.worker_max_receive_count
   })
 
   tags = {

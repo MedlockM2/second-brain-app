@@ -7,10 +7,8 @@ never published while its translation is pending or failed.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import os
 import time
 from typing import Any, Dict
 
@@ -34,8 +32,6 @@ TRANSLATION_POLL_SECONDS = 15
 TRANSLATION_MAX_WAIT_SECONDS = 3600
 
 # Backoff
-TEST_MODE = os.environ.get("TEST_MODE", "false").lower() == "true"
-RETRY_DELAY = 0.01 if TEST_MODE else 2
 
 
 async def process_indexing_message(message: Dict[str, Any]) -> None:
@@ -152,49 +148,3 @@ async def process_indexing_message(message: Dict[str, Any]) -> None:
     finally:
         reset_log_context(context_token)
 
-
-async def poll_queue() -> None:
-    """Poll the search indexing SQS queue."""
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "Starting search indexing worker",
-        queue=SEARCH_INDEXING_QUEUE,
-    )
-
-    while True:
-        try:
-            messages = await sqs.receive_messages(
-                queue_name=SEARCH_INDEXING_QUEUE,
-                max_messages=10,
-                wait_time_seconds=20,
-            )
-            if messages:
-                for m in messages:
-                    try:
-                        await process_indexing_message(m)
-                        receipt_handle = m.get("ReceiptHandle")
-                        if receipt_handle:
-                            await sqs.delete_message(
-                                queue_name=SEARCH_INDEXING_QUEUE,
-                                receipt_handle=receipt_handle,
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to process search indexing message: {e}")
-            await asyncio.sleep(1)
-        except Exception as e:
-            logger.error(f"Polling error in search indexing worker: {e}")
-            await asyncio.sleep(RETRY_DELAY)
-
-
-async def main() -> None:
-    """Main entry point for the search indexing worker."""
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    from media_summarizer.utils.logging_config import setup_logging
-
-    setup_logging("worker-search-indexing")
-    asyncio.run(main())

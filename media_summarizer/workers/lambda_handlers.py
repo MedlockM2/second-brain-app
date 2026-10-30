@@ -3,7 +3,8 @@ AWS Lambda handler entrypoints for all SQS-triggered workers.
 
 Each handler receives an SQS event from Lambda event source mapping, iterates
 over the Records, and delegates to the existing per-message processing logic.
-The handler reports batch item failures so Lambda only retries failed messages.
+The handler reports batch item failures so Lambda only retries failed messages;
+``sqs_delivery`` decides which ones, and when a job is failed instead (task-573).
 
 Module-level initialization loads secrets from Secrets Manager (once per cold
 start) so all os.getenv() calls throughout the codebase resolve correctly.
@@ -40,14 +41,34 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _build_handler(worker_module_path: str, process_func_name: str = "process_message"):
+def _build_handler(
+    worker_module_path: str,
+    process_func_name: str = "process_message",
+    *,
+    fails_job: bool = False,
+):
     """
     Build a Lambda handler that processes SQS records using the given worker's
     process_message function.
 
-    The handler supports partial batch responses: it returns batchItemFailures
-    for messages that failed, so Lambda only retries those specific messages.
+    The handler returns a partial batch response: a message listed in
+    batchItemFailures comes back after its visibility timeout, any other one is
+    deleted. Which messages are listed, and when the job fails, is decided by
+    ``sqs_delivery.settle_failure`` from the exception the worker raised.
+    ``fails_job`` is set for the workers whose message carries an ingestion job.
     """
+    worker_name = worker_module_path.removeprefix("media_summarizer.workers.")
+
+    async def deliver(process_fn: Any, message: dict[str, Any]) -> bool:
+        from media_summarizer.workers import sqs_delivery
+
+        try:
+            await process_fn(message)
+        except Exception as exc:
+            return await sqs_delivery.settle_failure(
+                message, exc, worker=worker_name, fails_job=fails_job
+            )
+        return False
 
     def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         import importlib
@@ -69,16 +90,8 @@ def _build_handler(worker_module_path: str, process_func_name: str = "process_me
                 "Attributes": record.get("attributes", {}),
             }
 
-            try:
-                # Workers use async processing
-                asyncio.run(process_fn(message))
-            except Exception as exc:
-                logger.error(
-                    "Worker handler failed for message %s: %s",
-                    message_id,
-                    str(exc),
-                    exc_info=True,
-                )
+            # Workers use async processing
+            if asyncio.run(deliver(process_fn, message)):
                 failures.append({"itemIdentifier": message_id})
         return {"batchItemFailures": failures}
 
@@ -90,31 +103,31 @@ def _build_handler(worker_module_path: str, process_func_name: str = "process_me
 # ---------------------------------------------------------------------------
 
 podcastindex_resolution_handler = _build_handler(
-    "media_summarizer.workers.podcastindex_resolution_worker"
+    "media_summarizer.workers.podcastindex_resolution_worker", fails_job=True
 )
 
 article_extraction_handler = _build_handler(
-    "media_summarizer.workers.article_extraction_worker"
+    "media_summarizer.workers.article_extraction_worker", fails_job=True
 )
 
 x_ingestion_handler = _build_handler(
-    "media_summarizer.workers.x_ingestion_worker"
+    "media_summarizer.workers.x_ingestion_worker", fails_job=True
 )
 
 youtube_ingestion_handler = _build_handler(
-    "media_summarizer.workers.youtube_ingestion_worker"
+    "media_summarizer.workers.youtube_ingestion_worker", fails_job=True
 )
 
 tiktok_ingestion_handler = _build_handler(
-    "media_summarizer.workers.tiktok_ingestion_worker"
+    "media_summarizer.workers.tiktok_ingestion_worker", fails_job=True
 )
 
 instagram_ingestion_handler = _build_handler(
-    "media_summarizer.workers.instagram_ingestion_worker"
+    "media_summarizer.workers.instagram_ingestion_worker", fails_job=True
 )
 
 deepgram_transcription_handler = _build_handler(
-    "media_summarizer.workers.transcription.deepgram_worker"
+    "media_summarizer.workers.transcription.deepgram_worker", fails_job=True
 )
 
 artifact_generator_handler = _build_handler(
@@ -123,7 +136,7 @@ artifact_generator_handler = _build_handler(
 
 
 document_parsing_handler = _build_handler(
-    "media_summarizer.workers.document_parsing.worker"
+    "media_summarizer.workers.document_parsing.worker", fails_job=True
 )
 
 search_indexing_handler = _build_handler(

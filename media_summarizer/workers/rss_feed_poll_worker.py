@@ -5,25 +5,22 @@ Periodically polls all active RSS feed subscriptions and routes new items
 to the appropriate ingestion queues (article extraction or audio download).
 
 Architecture:
-- Triggered by an SQS delayed message (self-re-enqueuing) or external scheduler
+- Triggered by a message on RSS_FEED_POLL_QUEUE (Lambda event source mapping)
 - For each active feed, parse the RSS and detect new items
 - Audio enclosures -> ingest-url pipeline (audio path)
 - Article links -> ingest-url pipeline (web/article path)
 - Deduplication via guid tracking in the UserRssFeed record
 """
 
-import asyncio
 import json
 import logging
-import os
 
 from media_summarizer.core.media_ingestion.title_derivation import select_title
 from media_summarizer.core.services import audio_quota_gate
 from media_summarizer.core.services.rss_feed_service import poll_feed
 from media_summarizer.utils import database_async, sqs
 from media_summarizer.utils.env import required_env
-from media_summarizer.utils.logging_config import log_event, setup_logging
-from media_summarizer.workers.base_worker import process_message_with_retry
+from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +28,6 @@ RSS_FEED_POLL_QUEUE = required_env("RSS_FEED_POLL_QUEUE")
 ARTICLE_EXTRACTION_QUEUE = required_env("ARTICLE_EXTRACTION_QUEUE")
 DEEPGRAM_TRANSCRIPTION_QUEUE = required_env("DEEPGRAM_TRANSCRIPTION_QUEUE")
 
-# Polling interval: re-enqueue after this many seconds (default 1 hour)
-POLL_INTERVAL_SECONDS = int(os.environ.get("RSS_POLL_INTERVAL_SECONDS", "3600"))
 
 
 async def _route_item_to_pipeline(
@@ -231,70 +226,3 @@ async def process_message(message: dict) -> None:
                     feed_url=feed.feed_url,
                 )
 
-
-async def _schedule_next_poll() -> None:
-    """Re-enqueue a poll trigger with a delay (self-scheduling)."""
-    await sqs.send_message(
-        queue_name=RSS_FEED_POLL_QUEUE,
-        message_body={"action": "poll_all"},
-        delay_seconds=min(POLL_INTERVAL_SECONDS, 900),  # SQS max delay is 900s
-    )
-
-
-async def poll_queue() -> None:
-    """Main polling loop: consume messages from the RSS feed poll queue."""
-    while True:
-        try:
-            messages = await sqs.receive_messages(
-                queue_name=RSS_FEED_POLL_QUEUE,
-                max_messages=1,
-                wait_time_seconds=20,
-                visibility_timeout=600,  # 10 minutes for full poll cycle
-            )
-
-            if messages:
-                for msg in messages:
-                    await process_message_with_retry(
-                        message=msg,
-                        processor=process_message,
-                        queue_name=RSS_FEED_POLL_QUEUE,
-                        max_retries=2,
-                        worker_name="rss_feed_poll",
-                    )
-                # Schedule next poll after completing
-                await _schedule_next_poll()
-            else:
-                # No messages -- schedule a trigger if queue is empty
-                await _schedule_next_poll()
-                await asyncio.sleep(5)
-
-        except Exception as e:
-            log_event(
-                logger,
-                logging.ERROR,
-                "worker.poll_error",
-                "RSS feed poll queue error",
-                queue=RSS_FEED_POLL_QUEUE,
-                error_type=type(e).__name__,
-                error_code="POLL_ERROR",
-            )
-            await asyncio.sleep(10)
-
-
-async def main() -> None:
-    setup_logging("worker-rss-feed-poll")
-    log_event(
-        logger,
-        logging.INFO,
-        "worker.started",
-        "RSS feed poll worker started",
-        queue=RSS_FEED_POLL_QUEUE,
-    )
-
-    # Seed the first poll trigger
-    await _schedule_next_poll()
-    await poll_queue()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
