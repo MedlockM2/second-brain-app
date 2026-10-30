@@ -194,6 +194,14 @@ pré-bêta choisi ici**, qui exige une identité Deepn validée sur le Store. Au
 2026-10-27, le nom Deepn et l'icône ambre sont enregistrés en brouillon dans Play
 Console ; aucune soumission en examen n'a été effectuée dans cette session.
 
+**Pages légales de la bêta — décision owner du 2026-10-30.** La review pré-bêta
+n'attend pas l'achat du domaine (`task-443`) : une seule page, la politique de
+confidentialité, avec sa section de suppression de compte ancrée `#delete-account`
+pour Google, est publiée sur le domaine par défaut de CloudFront (pas de conditions
+d'utilisation : le lien Terms pointe vers l'EULA standard d'Apple), avec une adresse de contact gratuite dédiée (`task-444`,
+amendement du README de `task-357`). La bascule vers `www.<domaine>` et l'adresse
+de contact sur le domaine sont un gate de la soumission en production (`task-454`).
+
 Ces validations concernent la **distribution bêta**. Elles ne déclenchent pas un
 lancement public et ne remplacent pas la soumission en production de l'étape 3
 (`task-454`). Préparer les éléments nécessaires de `task-450` dès cette étape,

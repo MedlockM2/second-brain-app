@@ -14,6 +14,13 @@ owner_decision: ok   # pending | ok | abandoned | redo | more
 - **Avant publication, le contenu des pages est mis à jour**, et c'est le principal risque de ce chantier. Il faut le nom Deepn (la politique et `mobile/src/constants/legal.ts` citent encore `privacy@mediasummarizer.com`), la nouvelle adresse de contact, et les sous-traitants réels et actuels (modèle du chat, RevenueCat, et ceux qui s'ajouteront).
 **Validated at**: 2026-10-11
 
+**Amendement owner du 2026-10-30 — publication provisoire sans domaine pour la review pré-bêta.** La décision ci-dessus reste la cible de production ; elle n'est plus un prérequis de la bêta.
+- **Avant la bêta, les pages sont servies sur le domaine par défaut de CloudFront** (`https://<id>.cloudfront.net/...`) : même infrastructure S3 + CloudFront dans Terraform, sans alias ni certificat personnalisé. Aucune règle Apple ou Google n'exige un domaine possédé (§2.1) ; les hébergeurs gratuits restent écartés (§2.2, §3).
+- **Une seule page : la politique de confidentialité** (`docs/compliance/privacy-policy.md`). La suppression de compte hors de l'app, exigée par Google (politique User Data), en est une section avec l'ancre `#delete-account`, dont l'URL est celle donnée à la Play Console ; Google accepte une section ancrée. **Pas de page de conditions d'utilisation** : Apple ne les exige que pour un abonnement auto-renouvelable (3.1.2), absent de la bêta ; le lien Terms de l'app pointe vers l'EULA standard d'Apple.
+- **Adresse de contact provisoire** : une boîte gratuite dédiée au projet, jamais une adresse personnelle. L'adresse sur le domaine (point ci-dessus) la remplace avant la production.
+- **Bascule vers le domaine avant la soumission en production** : alias `www.<domaine>` sur la même distribution, mise à jour de `mobile/src/constants/legal.ts` (OTA possible), d'App Store Connect et de la Play Console, remplacement de l'adresse de contact. Elle est suivie comme gate de task-454.
+- **À vérifier au moment de la bascule** : qu'App Store Connect accepte encore la modification de Privacy Policy URL tant que la version 1.0 n'a pas été soumise en production. C'est une déduction (§0.2 ne traite que des apps déjà publiées), pas un fait documenté par Apple.
+
 ---
 
 ## Recommendation

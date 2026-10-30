@@ -7,13 +7,13 @@ status: To Do
 assignee:
   - agent
 created_date: '2026-09-04 15:26'
-updated_date: '2026-10-11 15:00'
+updated_date: '2026-10-30 12:00'
 labels:
   - mobile
   - compliance
 dependencies:
   - TASK-357
-  - TASK-443
+  - TASK-444
 priority: high
 dispatchable: true
 ---
@@ -72,4 +72,6 @@ Les liens Privacy/Terms doivent aussi être accessibles depuis login/register et
 Le `Decision` de task-357 fixe les pages sur `https://www.<domaine>/privacy` et `/terms`, avec une adresse de contact dédiée sur ce même domaine. Or aucun domaine n'est acquis : task-443 est à l'owner, verrouillée (`dispatchable: false`), et `docs/BRAND_IDENTITY.md` interdit de déduire un domaine de « Deepn ». L'AC #1, qui demande les adresses exactes, ne peut donc pas être satisfaite, et un domaine inventé finirait dans le binaire.
 
 Dépendance TASK-443 ajoutée. La tâche redeviendra dispatchable quand le domaine et l'adresse de contact seront consignés.
+
+2026-10-30 — Dépendance TASK-443 remplacée par TASK-444. Décision owner : pour la bêta, les pages sont servies sur le domaine par défaut de CloudFront (amendement du README de task-357). L'AC #1 se lit donc contre les adresses CloudFront et l'adresse de contact provisoire consignées par task-444. Le passage au domaine définitif est un gate de task-454.
 <!-- SECTION:NOTES:END -->

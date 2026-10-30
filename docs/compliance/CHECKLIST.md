@@ -20,10 +20,10 @@ This checklist tracks readiness for Apple App Store and Google Play submission.
 
 ### Privacy Policy and Terms Hosting
 
-- [ ] Host privacy policy at `https://mediasummarizer.com/privacy`
-- [ ] Host terms of service at `https://mediasummarizer.com/terms`
-- [ ] Verify both URLs are publicly accessible (no authentication required)
-- [ ] Verify pages render correctly on mobile browsers
+- [x] Host privacy policy at `https://d3fc24zfw6pew8.cloudfront.net/privacy` (prod `www` distribution, 2026-10-30; account deletion section at `#delete-account`)
+- [x] No terms of service page for the beta: the Terms link points to Apple's standard EULA (task-357 README, owner amendment of 2026-10-30)
+- [x] Verify the URL is publicly accessible (no authentication required)
+- [ ] Verify the page renders correctly on mobile browsers
 
 ### Apple App Store (App Store Connect)
 
@@ -61,9 +61,8 @@ This checklist tracks readiness for Apple App Store and Google Play submission.
 
 ### Legal Review
 
-- [ ] Owner has reviewed and approved privacy policy content
-- [ ] Owner has reviewed and approved terms of service content
-- [ ] Contact email addresses are set up (privacy@mediasummarizer.com, legal@mediasummarizer.com)
+- [x] Owner has reviewed and approved privacy policy content (2026-10-30)
+- [x] Contact email address is set up (deepn.support@gmail.com)
 - [ ] Domain and website are ready to host compliance documents
 - [ ] Confirm compliance with GDPR requirements (if serving EU users)
 - [ ] Confirm compliance with CCPA requirements (if serving California users)
