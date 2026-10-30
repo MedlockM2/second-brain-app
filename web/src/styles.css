@@ -7,7 +7,7 @@
   --background: #fcf9f6; --surface: #ffffff; --surface-container: #f1edea; --surface-container-high: #ebe7e5; --surface-container-low: #f7f3f0;
   --text-main: #2b2d42; --text-muted: #8d99ae; --text-subtle: #5c6880; --outline: #78776f; --outline-variant: #c8c7bd;
   --glass: rgba(252, 249, 246, 0.9);
-  --error: #ba1a1a; --on-error: #ffffff; --error-container: #ffdad6; --error-tint: rgba(186, 26, 26, 0.1); --success: #2e7d4f; --success-tint: rgba(46, 125, 79, 0.11);
+  --error: #ba1a1a; --on-error: #ffffff; --error-container: #ffdad6; --error-tint: rgba(186, 26, 26, 0.1); --success: #2e7d4f; --success-tint: rgba(46, 125, 79, 0.11); --warning-tint: rgba(255, 203, 5, 0.18);
   --highlight: #fff0b3; --short-video-container: #d6e4fd; --audio-container: #d4e9d2; --image-post-container: #f3dcf2; --article-container: #c1ebec;
   /* The AI pane's formats (task-534, mobile-design-mockups/ai_tab_notebooklm/): a tint per
      format and its ink, the amber of the sparkles (the light primary is a fill only, 1.24:1)
@@ -26,7 +26,7 @@
   --background: #171511; --surface: #211e19; --surface-container: #2d2a25; --surface-container-high: #37332c; --surface-container-low: #262320;
   --text-main: #f1ebe1; --text-muted: #9aa3b4; --text-subtle: #c6cdd9; --outline: #a8a69a; --outline-variant: #3d3932;
   --glass: rgba(33, 30, 25, 0.92);
-  --error: #ffb4ab; --on-error: #690005; --error-container: #93000a; --error-tint: rgba(255, 180, 171, 0.08); --success: #7fd3a1; --success-tint: rgba(127, 211, 161, 0.12);
+  --error: #ffb4ab; --on-error: #690005; --error-container: #93000a; --error-tint: rgba(255, 180, 171, 0.08); --success: #7fd3a1; --success-tint: rgba(127, 211, 161, 0.12); --warning-tint: rgba(240, 191, 42, 0.14);
   --highlight: #5c4a12; --short-video-container: #1a4975; --audio-container: #275029; --image-post-container: #603962; --article-container: #0b4f51;
   --primary-ink: #f0bf2a; --sheen: rgba(240, 191, 42, 0.28);
   --artifact-summary-tint: #3f331a; --artifact-summary-ink: #e2b55a; --artifact-notes-tint: #28392b; --artifact-notes-ink: #93c89a;
@@ -240,6 +240,7 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .pane-title { font-size: 15px; font-weight: 600; line-height: 1.3; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 .pane-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 24px; }
 .pane-foot { flex: none; padding: 8px 12px 12px; }
+.pane-notice { flex: none; padding: 0 12px 4px; }
 .pane.rail { align-items: center; padding: 8px 0; gap: 10px; }
 .rail-ico { color: var(--text-subtle); }
 .rail-label { writing-mode: vertical-rl; font-size: 13px; font-weight: 600; color: var(--text-subtle); }
@@ -507,6 +508,11 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .thread .status { display: flex; align-items: center; gap: 6px; color: var(--text-subtle); }
 .thread .status.err { color: var(--error); }
 .chat-refusal { align-items: center; margin-bottom: 8px; }
+/* A folder conversation that no longer reads the folder as it is (task-572). */
+.chat-drift { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-radius: var(--r-lg); background: var(--warning-tint); color: var(--text-main); font-size: 14px; font-weight: 500; line-height: 20px; }
+.chat-drift > .ico { flex: none; color: var(--primary-ink); margin-top: 1px; }
+.chat-drift-action { display: block; margin-top: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.chat-drift-action:disabled { opacity: 0.4; cursor: default; }
 .composer { display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 14px; border-radius: var(--r-xl); background: var(--surface-container); }
 .composer:focus-within { box-shadow: 0 0 0 2px var(--primary); }
 .composer textarea { flex: 1; min-width: 0; max-height: 168px; padding: 7px 0; border: 0; outline: 0; resize: none; background: none; font-size: 15px; line-height: 1.5; color: var(--text-main); overflow-y: auto; }

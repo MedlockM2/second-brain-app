@@ -98,11 +98,27 @@ export interface ChatActiveGeneration extends ChatGeneration {
   last_seq?: number | null;
 }
 
+/**
+ * A folder conversation's frozen sources against the folder now (task-572):
+ * `added` are the readable sources a new conversation would read and this one
+ * does not, `removed` those this one reads that the folder no longer offers.
+ */
+export interface ChatSourceDrift {
+  added: number;
+  removed: number;
+}
+
 export interface ChatConversationDetail extends ChatConversationSummary {
   source_snapshot_version: string;
   sources: ChatSource[];
   messages: ChatMessage[];
   active_generation?: ChatActiveGeneration | null;
+  /**
+   * Null when the server did not measure it: a media conversation, a
+   * conversation just opened, a generation in flight. Keep the last value read
+   * for the same conversation (`withKnownSourceDrift`).
+   */
+  source_drift?: ChatSourceDrift | null;
 }
 
 export interface ChatTurnAccepted extends ChatGeneration {

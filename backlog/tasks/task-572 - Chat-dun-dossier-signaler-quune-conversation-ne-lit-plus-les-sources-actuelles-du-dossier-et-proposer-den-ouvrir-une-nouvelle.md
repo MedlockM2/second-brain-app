@@ -3,10 +3,10 @@ id: TASK-572
 title: >-
   Chat d'un dossier : signaler qu'une conversation ne lit plus les sources
   actuelles du dossier et proposer d'en ouvrir une nouvelle
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-30 10:16'
-updated_date: '2026-10-30 14:10'
+updated_date: '2026-10-30 14:24'
 labels:
   - mobile
   - web
@@ -53,11 +53,11 @@ Après déploiement de l'API et OTA : ouvrir une conversation dans un dossier, y
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Le détail d'une conversation de dossier renvoyé par l'API expose le nombre de sources ajoutées et retirées par rapport à l'état actuel du dossier, calculé côté serveur à partir de `resolve_scope_sources` ; une conversation de média n'expose pas cette divergence
-- [ ] #2 Le mobile affiche le bandeau dans la conversation quand ce nombre est non nul, avec une action qui ouvre une nouvelle conversation sur le même dossier par le chemin existant ; sans divergence, rien n'est affiché
-- [ ] #3 Le web affiche le même bandeau avec la même action
-- [ ] #4 Les libellés du bandeau (ajout, retrait, les deux, singulier et pluriel) existent dans les 11 catalogues i18n
+- [x] #2 Le mobile affiche le bandeau dans la conversation quand ce nombre est non nul, avec une action qui ouvre une nouvelle conversation sur le même dossier par le chemin existant ; sans divergence, rien n'est affiché
+- [x] #3 Le web affiche le même bandeau avec la même action
+- [x] #4 Les libellés du bandeau (ajout, retrait, les deux, singulier et pluriel) existent dans les 11 catalogues i18n
 - [x] #5 `docs/CHAT_DATA_MODEL.md` §2.2 décrit que l'instantané reste figé et que la divergence avec le dossier est signalée à l'utilisateur
-- [ ] #6 ruff et mypy propres sur le code serveur modifié ; typecheck et lint de mobile, web et packages/core propres
+- [x] #6 ruff et mypy propres sur le code serveur modifié ; typecheck et lint de mobile, web et packages/core propres
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -67,4 +67,12 @@ Après déploiement de l'API et OTA : ouvrir une conversation dans un dossier, y
 - chat_service.source_drift : pour une conversation de dossier, résout le dossier par resolve_scope_sources (même appel que open_conversation, dans la langue de la conversation) et compare ses sources lisibles aux lignes lisibles de l'instantané, par media_item_id. GET /api/chat/conversations/{id} renvoie source_drift {added, removed} ; null pour un média, pour la réponse d'ouverture, pendant une génération (le détail est relu toutes les 2 s et la résolution lit chaque transcription), ou si le dossier ne se résout pas. ruff et mypy passent.
 - docs/CHAT_DATA_MODEL.md §2.2 : l'instantané reste figé, sa divergence est signalée.
 - Maquette mobile-design-mockups/chat_source_drift_banner/ (code.html, screen.png) : deux emplacements (A sous l'en-tête, recommandé ; B au-dessus du champ), clair/sombre, cinq libellés. En attente du go de l'owner avant le code mobile, web et i18n (règle : maquette d'abord).
+
+2026-10-30, go de l'owner : emplacement A (fixe sous l'en-tête), sur un fond d'avertissement cohérent avec le design system.
+- Nouveau token warningTint (ambre en lavis : 18 % en clair, 14 % en sombre), à côté de errorTint / successTint, dans mobile/src/constants/theme.ts et web/src/styles.css (--warning-tint). Texte textMain (12,0:1 clair, 11,5:1 sombre). Glyphe warning-outline en primaryInk, décoratif (2,8:1 en clair, le texte porte le sens).
+- packages/core/src/chat/sourceDrift.ts : describeSourceDrift (texte du bandeau) et withKnownSourceDrift (garde la dernière valeur quand le serveur ne la mesure pas pendant une génération). Utilisés par ChatSessionContext / ChatDock / ChatConversationModal (mobile) et useChat / useChatPane (web ; nouvel emplacement PaneSpec.notice, hors du corps qui défile). Action « Nouvelle conversation » = startNew existant, désactivée pendant une génération.
+- i18n : chat.drift.added/removed (.one/.other, plus two/few/many en arabe), chat.drift.both, chat.drift.addedCount/removedCount, dans les 11 catalogues.
+- Icône warning-outline ajoutée au jeu du web (extract_icons.py).
+- typecheck et lint propres sur packages/core, mobile et web.
+- Note owner : après déploiement de l'API et OTA, vérifier sur iOS et le web (ouvrir une conversation de dossier, ajouter un média, rouvrir la conversation depuis l'historique).
 <!-- SECTION:NOTES:END -->

@@ -18,6 +18,7 @@ import type {
   ChatScope,
   ChatStreamEvent,
 } from "@media-summarizer/core/types/chat";
+import { withKnownSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { useAuth } from "./AuthContext";
 
 /**
@@ -224,7 +225,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       if (!active) {
         disconnect(key);
         update(scope, scopeId, {
-          conversation: detail,
+          conversation: withKnownSourceDrift(current.conversation, detail),
           generation: null,
           streamingText: "",
           lastSeq: -1,
@@ -238,7 +239,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
         current.generation?.turn_id === active.turn_id;
       if (!sameAttempt) disconnect(key);
       update(scope, scopeId, {
-        conversation: detail,
+        conversation: withKnownSourceDrift(current.conversation, detail),
         generation: {
           turn_id: active.turn_id,
           turn_index: active.turn_index,

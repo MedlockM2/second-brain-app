@@ -15,6 +15,8 @@ export type PaneSpec = {
   head?: ReactNode;
   actions?: ReactNode;
   body: ReactNode;
+  /** Held under the header, outside the scrolling body: a notice about the whole pane. */
+  notice?: ReactNode;
   foot?: ReactNode;
 };
 
@@ -140,6 +142,7 @@ function Pane({
         {spec.actions}
         {side === "left" && collapse}
       </header>
+      {spec.notice && <div className="pane-notice">{spec.notice}</div>}
       <div className="pane-body">{spec.body}</div>
       {spec.foot && <div className="pane-foot">{spec.foot}</div>}
     </section>

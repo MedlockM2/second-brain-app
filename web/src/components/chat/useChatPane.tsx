@@ -1,4 +1,5 @@
 import { describeChatRefusal } from "@media-summarizer/core/chat/refusal";
+import { describeSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { formatDate } from "@media-summarizer/core/i18n/runtime";
 import type { ChatConversationSummary, ChatMessage, ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -51,6 +52,7 @@ export function useChatPane({
   const generating = state.generation !== null;
   const sending = state.phase === "sending";
   const refusal = state.error ? describeChatRefusal(state.error, scope) : null;
+  const sourceDrift = describeSourceDrift(state.conversation);
 
   const submit = async () => {
     const question = draft;
@@ -117,6 +119,18 @@ export function useChatPane({
         </button>
       </>
     ),
+    notice:
+      !historyOpen && sourceDrift ? (
+        <div className="chat-drift" role="status">
+          <Icon name="warning-outline" size={18} />
+          <div className="grow">
+            {sourceDrift}
+            <button type="button" className="chat-drift-action" onClick={startNew} disabled={generating || sending}>
+              {t("chat.conversation.newConversation")}
+            </button>
+          </div>
+        </div>
+      ) : null,
     body: historyOpen ? (
       <History
         scope={scope}

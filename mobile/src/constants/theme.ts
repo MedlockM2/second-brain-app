@@ -275,6 +275,15 @@ const lightColors = {
    */
   success: "#2e7d4f",
   successTint: "rgba(46, 125, 79, 0.11)",
+  /**
+   * A caution that is not a failure: the banner of a folder conversation that no
+   * longer reads the folder as it is (task-572). The system's amber as a wash,
+   * strong enough to read as a warning where `primaryTint` (5 %) only
+   * highlights. Its text is `textMain` (12.0:1). Its glyph is `primaryInk`
+   * (2.8:1 here): decorative, hidden from assistive tech, the sentence beside it
+   * carries the warning.
+   */
+  warningTint: "rgba(255, 203, 5, 0.18)",
 
   // Tab bar
   tabActive: "#ffcb05",
@@ -452,6 +461,9 @@ const darkColors: ThemeColors = {
   errorTint: "rgba(255, 180, 171, 0.08)",
   success: "#7fd3a1",
   successTint: "rgba(127, 211, 161, 0.12)",
+  // 14 % rather than 18 %: the dark amber over `background` already reads as a
+  // warm block at that alpha; `textMain` keeps 11.5:1 on it, `primaryInk` 7.9:1.
+  warningTint: "rgba(240, 191, 42, 0.14)",
 
   tabActive: "#f0bf2a",
   tabInactive: "#9aa3b4",

@@ -67,6 +67,11 @@ export interface ChatConversationModalProps {
   onCancelPending: () => void;
   onRetry: (question: string) => void;
   refusal: ChatRefusal | null;
+  /**
+   * The folder changed since this conversation was opened, worded
+   * (`describeSourceDrift`, task-572); null hides the banner.
+   */
+  sourceDrift: string | null;
   onRefusalAction: (action: NonNullable<ChatRefusal["action"]>) => void;
   onNewConversation: () => void;
   sourceContent: React.ReactNode;
@@ -322,6 +327,30 @@ export function ChatConversationModal(
           </Pressable>
         </View>
 
+        {!props.historyOpen && props.sourceDrift ? (
+          <View style={styles.drift} testID="chat-conversation-source-drift">
+            <Ionicons name="warning-outline" size={20} color={Colors.primaryInk}
+              accessible={false} importantForAccessibility="no" />
+            <View style={styles.driftBody}>
+              <Text style={styles.driftText}>{props.sourceDrift}</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.driftAction,
+                  pressed && styles.pressed,
+                  (props.generating || props.sending) && styles.disabled,
+                ]}
+                onPress={startNew}
+                disabled={props.generating || props.sending}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: props.generating || props.sending }}
+                accessibilityLabel={t("chat.conversation.newConversation")}
+              >
+                <Text style={styles.driftActionLabel}>{t("chat.conversation.newConversation")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.scrollArea}>
         <ScrollView
           key={props.historyOpen ? "history" : `conversation-${props.resetKey}`}
@@ -526,4 +555,31 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       backgroundColor: Colors.primary,
     },
     refusalActionLabel: { ...Typography.label, color: Colors.onPrimary },
+    // Fixed under the header, never in the thread: it describes the
+    // conversation, so it is read on arrival (task-572 mockup, option A).
+    drift: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm + Spacing.xs,
+      marginHorizontal: Spacing.md,
+      marginBottom: Spacing.xs,
+      paddingHorizontal: Spacing.md,
+      paddingTop: Spacing.sm + Spacing.xs,
+      backgroundColor: Colors.warningTint,
+      borderRadius: BorderRadius.lg,
+    },
+    driftBody: { flex: 1 },
+    driftText: { ...Typography.label, lineHeight: 20, color: Colors.textMain },
+    driftAction: {
+      alignSelf: "flex-start",
+      minHeight: TouchTarget.minimum,
+      justifyContent: "center",
+      borderRadius: BorderRadius.sm,
+    },
+    driftActionLabel: {
+      ...Typography.label,
+      fontWeight: "600",
+      color: Colors.textMain,
+      textDecorationLine: "underline",
+    },
   });

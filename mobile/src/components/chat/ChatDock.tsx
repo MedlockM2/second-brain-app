@@ -28,6 +28,7 @@ import type { ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { useChatHistory } from "../../hooks/useChatHistory";
 import { ChatHistoryList } from "./ChatHistoryList";
 import { ChatConversationModal } from "./ChatConversationModal";
+import { describeSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 
 export interface ChatDockProps {
   scope: ChatScope;
@@ -237,6 +238,7 @@ export function ChatDock({
           onCancelPending={chat.cancelPending}
           onRetry={(question) => void ask(question)}
           refusal={refusal}
+          sourceDrift={describeSourceDrift(conversation)}
           onRefusalAction={handleRefusalAction}
           historyOpen={historyOpen}
           onToggleHistory={() => {

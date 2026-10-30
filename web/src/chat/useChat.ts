@@ -6,6 +6,7 @@ import type {
   ChatStreamEvent,
 } from "@media-summarizer/core/types/chat";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { withKnownSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { chatClient, type ChatStreamOpening } from "./chatClient";
 
 /**
@@ -127,14 +128,14 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean)
     const active = detail.active_generation ?? null;
     if (!active) {
       disconnect();
-      update({ conversation: detail, generation: null, streamingText: "", lastSeq: -1, phase: "idle", error: null });
+      update({ conversation: withKnownSourceDrift(latest.conversation, detail), generation: null, streamingText: "", lastSeq: -1, phase: "idle", error: null });
       return;
     }
     // Fragments may have come in while the read was pending: keep them.
     const same = latest.generation?.attempt_id === active.attempt_id && latest.generation?.turn_id === active.turn_id;
     if (!same) disconnect();
     update({
-      conversation: detail,
+      conversation: withKnownSourceDrift(latest.conversation, detail),
       generation: { turn_id: active.turn_id, turn_index: active.turn_index, attempt_id: active.attempt_id },
       streamingText: same ? latest.streamingText : "",
       lastSeq: same ? latest.lastSeq : -1,
