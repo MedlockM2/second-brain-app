@@ -57,6 +57,12 @@ Apple 5.1.2(i) demande une permission explicite avant d'envoyer des données per
 
 **Si un rejet cite 5.1.2(i)** : écran après le choix de la langue, gardé comme celui-ci dans `app/(tabs)/_layout.tsx`, qui nomme OpenAI, Deepgram, LlamaParse et Unstructured avec ce que chacun reçoit et signale la conservation possible de l'audio par Deepgram ; boutons « Allow » / « Not now » ; accord enregistré sur le compte ; retrait depuis l'onglet Account (5.1.1(ii)) ; politique 4.1 et 8 à remettre à jour ; compte de démo sans accord, et phrase dans les notes de review. Maquette d'abord.
 
+## Comptes de démo pour la review (créés le 2026-10-30)
+
+Apple (2.1) et Google (déclaration « App access ») exigent des identifiants qui marchent, même quand l'inscription est ouverte. Deux comptes e-mail + mot de passe sur **dev**, le backend du build de review : **un par store**, parce qu'un reviewer peut tester la suppression de compte et ne doit pas casser les identifiants de l'autre store. Chacun est confirmé sans code e-mail, en anglais, avec deux articles Wikipédia et une conférence TED, un résumé de chacun et des fiches de la conférence. Les adresses (alias « + » de la boîte du projet) et les mots de passe sont dans App Store Connect et la Play Console, jamais dans le dépôt. Aucun script de purge ne peut les atteindre : `purge_e2e_accounts.py` et `delete_e2e_account.py` ne visent que `@test.local`.
+
+**Après chaque review**, se connecter avec chaque compte. S'il a été supprimé, le recréer avec `scripts/create_review_account.py <e-mail>`, qui imprime un nouveau mot de passe à reporter dans la console du store.
+
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
