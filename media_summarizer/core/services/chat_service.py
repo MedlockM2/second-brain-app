@@ -154,10 +154,26 @@ class ActiveGeneration:
 
 
 @dataclass(frozen=True)
+class SourceDrift:
+    """How a folder conversation's frozen corpus differs from the folder now (task-572).
+
+    ``added`` counts the sources a conversation opened now would read and this one
+    does not -- a media added to the folder, or one that became readable since;
+    ``removed`` the sources this one reads that the folder no longer offers.
+    """
+
+    added: int
+    removed: int
+
+
+@dataclass(frozen=True)
 class ConversationView:
     conversation: ChatConversation
     messages: List[ChatMessage]
     active_generation: Optional[ActiveGeneration]
+    #: ``None`` when not measured: a media conversation, a generation in flight,
+    #: or a folder that could not be resolved.
+    source_drift: Optional[SourceDrift] = None
 
 
 async def _assert_scope_owned(*, user_id: str, scope: ChatScope, scope_id: str) -> str:
@@ -320,7 +336,48 @@ async def get_conversation_view(*, user_id: str, conversation_id: str) -> Conver
                 attempt_id=conversation.active_attempt_id,
             ),
         )
-    return ConversationView(conversation=conversation, messages=messages, active_generation=active)
+    return ConversationView(
+        conversation=conversation,
+        messages=messages,
+        active_generation=active,
+        # Not while a turn runs: the app reads this every 2 s while it polls a
+        # generation, and resolving the folder reads every transcript it holds.
+        source_drift=await source_drift(conversation) if active is None else None,
+    )
+
+
+async def source_drift(conversation: ChatConversation) -> Optional[SourceDrift]:
+    """Compare a folder conversation's snapshot with the folder as it resolves now.
+
+    The snapshot stays frozen (README §11.1): this only measures how far it has
+    drifted, so the app can offer a new conversation instead of letting a reader
+    ask about a media this one cannot read. The folder is resolved exactly as
+    :func:`open_conversation` resolves it -- descendants, exclusions, the
+    conversation's own language -- and the readable sources are compared by
+    library row.
+    """
+    if conversation.scope != ChatScope.FOLDER:
+        return None
+    try:
+        resolution = await resolve_scope_sources(
+            user_id=conversation.user_id,
+            scope=conversation.scope,
+            scope_id=conversation.scope_id,
+            reading_language=conversation.language,
+        )
+    except Exception as exc:  # noqa: BLE001 - the conversation reads fine without it
+        log_event(
+            logger,
+            logging.WARNING,
+            "chat.source_drift_unavailable",
+            "Could not resolve the folder to compare it with the conversation",
+            conversation_id=conversation.conversation_id,
+            error_type=type(exc).__name__,
+        )
+        return None
+    frozen = {source.media_item_id for source in conversation.source_snapshot.sources if not source.excluded}
+    current = {source.snapshot().media_item_id for source in resolution.sources}
+    return SourceDrift(added=len(current - frozen), removed=len(frozen - current))
 
 
 # ---------------------------------------------------------------------------
@@ -692,6 +749,7 @@ __all__ = [
     "ChatServiceError",
     "ConversationView",
     "InvalidCursorError",
+    "SourceDrift",
     "delete_conversation",
     "get_conversation_view",
     "list_conversations",
@@ -699,6 +757,7 @@ __all__ = [
     "release_turn_budget",
     "seal_if_lost",
     "send_turn",
+    "source_drift",
     "stop_turn",
     "turn_id_for_request",
 ]

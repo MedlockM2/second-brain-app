@@ -129,11 +129,24 @@ class ActiveGenerationResponse(BaseModel):
     last_seq: Optional[int] = None
 
 
+class SourceDriftResponse(BaseModel):
+    """A folder conversation's snapshot against the folder now (task-572)."""
+
+    #: Readable sources a new conversation would read and this one does not.
+    added: int
+    #: Sources this conversation reads that the folder no longer offers.
+    removed: int
+
+
 class ConversationDetailResponse(ConversationSummaryResponse):
     source_snapshot_version: str
     sources: List[ChatSourceResponse]
     messages: List[ChatMessageResponse] = Field(default_factory=list)
     active_generation: Optional[ActiveGenerationResponse] = None
+    #: ``None`` when not measured: a media conversation, a conversation just
+    #: opened, a generation in flight, or a folder that could not be resolved.
+    #: The app keeps the last value it read for the conversation.
+    source_drift: Optional[SourceDriftResponse] = None
 
 
 def _parse_scope(value: str) -> ChatScope:
@@ -197,6 +210,7 @@ def _detail(
     conversation: ChatConversation,
     messages: List[ChatMessage],
     active: Optional[chat_service.ActiveGeneration],
+    drift: Optional[chat_service.SourceDrift] = None,
 ) -> ConversationDetailResponse:
     return ConversationDetailResponse(
         **_summary_from_conversation(conversation).model_dump(),
@@ -222,6 +236,9 @@ def _detail(
             )
             if active is not None
             else None
+        ),
+        source_drift=(
+            SourceDriftResponse(added=drift.added, removed=drift.removed) if drift is not None else None
         ),
     )
 
@@ -343,7 +360,7 @@ async def get_conversation(
         )
     except chat_service.ChatServiceError as exc:
         raise _refusal(exc)
-    return _detail(view.conversation, view.messages, view.active_generation)
+    return _detail(view.conversation, view.messages, view.active_generation, view.source_drift)
 
 
 @router.post(

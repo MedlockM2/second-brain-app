@@ -102,6 +102,27 @@ the new state. `create_conversation` is the only write that sets it.
   text in the same order.
 - Built by `ChatSourceSnapshot.freeze(sources)`.
 
+**The snapshot stays frozen, and its drift is shown (task-572, owner decision of
+2026-10-30).** A conversation never takes in a source added to its folder after it
+was opened, nor stops reading one removed since: answers within one conversation
+stay consistent and the cached prefix stays valid (a changed corpus would make the
+next turn about ten times dearer). What changes is that the reader is told.
+`GET /api/chat/conversations/{id}` returns `source_drift: {added, removed}` for a
+folder conversation (`chat_service.source_drift`): the folder is resolved now
+exactly as `open_conversation` resolves it (`resolve_scope_sources`, descendants
+and exclusions included, in the conversation's language), and its readable sources
+are compared with the snapshot's readable lines by `media_item_id`. `added` counts
+the sources a new conversation would read and this one does not — a media added to
+the folder, or one that has become readable since — and `removed` those this one
+reads that the folder no longer offers. When either is non-zero the app shows a
+banner in the conversation with a "New conversation" action, the same path as the
+header's new-conversation button; the banner blocks neither reading nor sending.
+`source_drift` is `null` when it is not measured: a media conversation (one source,
+nothing to drift the same way), the response of the opening itself, a generation in
+flight (the app polls the detail every 2 s then, and the resolution reads every
+transcript), or a folder that could not be resolved. The app keeps the last value
+it read for the conversation.
+
 ### 2.3 Assistant message (turn state)
 
 Exists from the moment the turn is accepted, with no `text`.
