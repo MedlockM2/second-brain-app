@@ -1,8 +1,8 @@
-import { capacityLines } from "@media-summarizer/core/budget/presentation";
+import { capacityLines, capacityPercentage } from "@media-summarizer/core/budget/presentation";
 import type { EntitlementStatus } from "@media-summarizer/core/types/entitlements";
 import { getFriendlyErrorMessage } from "@media-summarizer/core/errors/friendlyError";
 import { LOCALE_ENDONYMS, SUPPORTED_LOCALES } from "@media-summarizer/core/i18n/locales";
-import { formatDate, formatNumber, type TranslationKey } from "@media-summarizer/core/i18n/runtime";
+import { formatDate, type TranslationKey } from "@media-summarizer/core/i18n/runtime";
 import type {
   AuthUser,
   ExtensionTokenResponse,
@@ -234,7 +234,7 @@ function PlanPane({ entitlement, failed, planName }: { entitlement: Entitlement 
                 <div
                   aria-label={t("budget.consumed")}
                 >
-                  <span className="display">{entitlement.budget.consumed_percent === null ? t("account.plan.unavailable") : `${formatNumber(entitlement.budget.consumed_percent)}%`}</span>
+                  <span className="display">{entitlement.budget.consumed_percent === null ? t("account.plan.unavailable") : capacityPercentage(entitlement.budget.consumed_percent)}</span>
 
                 </div>
                 {entitlement.budget.consumed_percent !== null && <div className="gauge">

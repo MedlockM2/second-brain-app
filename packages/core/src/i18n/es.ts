@@ -7,7 +7,6 @@ export const es: Catalog = {
   "budget.reserved": "{percent} reservado para operaciones en curso",
   "budget.uses": "Importar, crear vistas previas, traducir, generar con IA y chatear consume capacidad. Leer, organizar y abrir resultados existentes no.",
   "budget.forecast": "Reserva estimada: hasta {percent}. El consumo final depende del procesamiento realizado.",
-  "budget.forecastUnavailable": "Estimación no disponible. Se comprobará la capacidad antes de procesar.",
   "budget.automatic": "Preparar una fuente también puede generar su vista previa y traducir su texto.",
   "budget.warning": "{percent} consumido. La capacidad se renueva el {date}.",
 
@@ -574,10 +573,8 @@ export const es: Catalog = {
   "digest.tryAgain": "Reintentar",
   "digest.emptyDaily": "Hoy no hay nada que repasar",
   "digest.emptyWeekly": "Esta semana no hay nada que repasar",
-  "digest.emptyDailyHint":
-    "Lo que guardes aparecerá aquí en el próximo Digest.",
-  "digest.emptyWeeklyHint":
-    "Lo que guardes esta semana aparecerá aquí el lunes.",
+  "digest.emptyDailyHint": "Lo que guardes hoy aparece aquí y se actualiza en cinco minutos.",
+  "digest.emptyWeeklyHint": "Lo que guardes esta semana aparece aquí y se actualiza en cinco minutos.",
   "folderPicker.title": "Carpeta",
   "folderPicker.saveA11y": "Guardar la selección",
   "folderPicker.searchPlaceholder": "Buscar",

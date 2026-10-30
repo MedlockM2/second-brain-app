@@ -9,14 +9,16 @@ import { apiRequest } from "../services/apiClient";
 import { useTranslation } from "../i18n";
 
 /** Informational only: the primary action and the user's draft stay untouched. */
-export function BudgetForecastNotice({ request = null }: { request?: ForecastRequest | null }): React.JSX.Element {
+export function BudgetForecastNotice({ request = null }: { request?: ForecastRequest | null }): React.JSX.Element | null {
   useTranslation();
   const styles = useThemedStyles(makeStyles);
   const key = JSON.stringify(request);
   const [result, setResult] = useState<{ key: string; value: BudgetForecast | null } | null>(null);
   useEffect(() => watchForecast(JSON.parse(key) as ForecastRequest | null, { apiRequest },
     (value) => setResult({ key, value })), [key]);
-  return <Text style={styles.text}>{forecastLine(result?.key === key ? result.value : null)}</Text>;
+  const line = forecastLine(result?.key === key ? result.value : null);
+  if (line === null) return null;
+  return <Text style={styles.text}>{line}</Text>;
 }
 
 const makeStyles = ({ colors }: Theme) => StyleSheet.create({

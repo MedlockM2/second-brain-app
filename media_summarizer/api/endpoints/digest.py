@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
+from media_summarizer.core.models.digest import DigestType
 from media_summarizer.core.services import digest_service
 from media_summarizer.utils import user_media
 from media_summarizer.utils.logging_config import bind_log_context, log_event, reset_log_context
@@ -65,29 +66,11 @@ class DigestSettingsUpdateRequest(BaseModel):
 async def get_daily_digest(
     current_user: AuthUser = Depends(get_current_user),
 ):
-    """
-    Get the daily digest currently live for the authenticated user.
-
-    No date parameter: the period is the 24 hours the last 18:30 send announced,
-    and picking another one would answer a digest no notification ever named.
-
-    The zone comes off the session profile, so the period resolved here is the
-    same one the scheduler resolved when it sent the notification. Reading it in
-    UTC — which is what this did before task-369 — made the screen disagree with
-    the notification by the user's whole offset.
-    """
+    """Read the current local day, independently of notification times."""
     token = bind_log_context(user_id=current_user.id)
     try:
-        # Check if digest is enabled for this user
-        settings = await digest_service.get_user_digest_settings(current_user.id)
-        if not settings.digest_enabled or not settings.daily_digest_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Daily digest is disabled for this user",
-            )
-
-        digest = await digest_service.get_or_assemble_daily_digest(
-            current_user.id, iana_timezone=current_user.iana_timezone
+        digest = await digest_service.get_current_digest(
+            current_user.id, DigestType.DAILY, iana_timezone=current_user.iana_timezone
         )
 
         visible = await user_media.visible_media_ids(
@@ -135,24 +118,11 @@ async def get_daily_digest(
 async def get_weekly_digest(
     current_user: AuthUser = Depends(get_current_user),
 ):
-    """
-    Get the weekly digest currently live for the authenticated user.
-
-    No week parameter, for the same reason as the daily one: the period is the
-    Monday-to-Sunday week the last Monday 09:30 send announced.
-    """
+    """Read the current local ISO week, independently of notification times."""
     token = bind_log_context(user_id=current_user.id)
     try:
-        # Check if digest is enabled for this user
-        settings = await digest_service.get_user_digest_settings(current_user.id)
-        if not settings.digest_enabled or not settings.weekly_digest_enabled:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Weekly digest is disabled for this user",
-            )
-
-        digest = await digest_service.get_or_assemble_weekly_digest(
-            current_user.id, iana_timezone=current_user.iana_timezone
+        digest = await digest_service.get_current_digest(
+            current_user.id, DigestType.WEEKLY, iana_timezone=current_user.iana_timezone
         )
 
         visible = await user_media.visible_media_ids(

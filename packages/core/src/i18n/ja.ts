@@ -7,7 +7,6 @@ export const ja: Catalog = {
   "budget.reserved": "処理中の操作のために{percent}を確保",
   "budget.uses": "取り込み、プレビュー、翻訳、AI作成、チャットは容量を使用します。閲覧、整理、既存の結果を開く操作は使用しません。",
   "budget.forecast": "確保容量の見積もり：最大{percent}。最終的な使用量は実行した処理によります。",
-  "budget.forecastUnavailable": "見積もりを利用できません。処理前に容量が確認されます。",
   "budget.automatic": "ソースの準備では、プレビューの生成やテキストの翻訳も行う場合があります。",
   "budget.warning": "使用済み：{percent}。容量は{date}に更新されます。",
 
@@ -490,8 +489,8 @@ export const ja: Catalog = {
   "digest.tryAgain": "もう一度",
   "digest.emptyDaily": "今日はふりかえるものがありません",
   "digest.emptyWeekly": "今週はふりかえるものがありません",
-  "digest.emptyDailyHint": "保存したものは次のダイジェストにここに表示されます。",
-  "digest.emptyWeeklyHint": "今週保存したものは月曜日にここに表示されます。",
+  "digest.emptyDailyHint": "今日保存したものがここに表示され、5分以内に更新されます。",
+  "digest.emptyWeeklyHint": "今週保存したものがここに表示され、5分以内に更新されます。",
   "folderPicker.title": "フォルダ",
   "folderPicker.saveA11y": "選択を保存",
   "folderPicker.searchPlaceholder": "検索",

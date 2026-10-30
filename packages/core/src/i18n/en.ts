@@ -18,7 +18,6 @@ export const en = {
   "budget.reserved": "{percent} reserved for operations in progress",
   "budget.uses": "Imports, previews, translations, AI creations and chat use capacity. Reading, organising and opening existing results do not.",
   "budget.forecast": "Estimated reservation: up to {percent}. Final usage depends on the processing performed.",
-  "budget.forecastUnavailable": "Estimate unavailable. Capacity will be checked before processing starts.",
   "budget.automatic": "Preparing a source can also generate its preview and translate its text.",
   "budget.warning": "{percent} used. Capacity renews on {date}.",
 
@@ -688,10 +687,8 @@ export const en = {
   "digest.tryAgain": "Try Again",
   "digest.emptyDaily": "Nothing to review today",
   "digest.emptyWeekly": "Nothing to review this week",
-  "digest.emptyDailyHint":
-    "What you save shows up here in the next digest.",
-  "digest.emptyWeeklyHint":
-    "What you save this week shows up here on Monday.",
+  "digest.emptyDailyHint": "What you save today appears here, refreshed within five minutes.",
+  "digest.emptyWeeklyHint": "What you save this week appears here, refreshed within five minutes.",
   // --- Folder picker (modal) ---
   "folderPicker.title": "Folder",
   "folderPicker.saveA11y": "Save selection",

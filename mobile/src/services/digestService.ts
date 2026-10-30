@@ -45,21 +45,12 @@ export class DigestService {
     return response;
   }
 
-  /**
-   * Fetch the daily digest currently live: the 24 hours the last 18:30 send
-   * announced. No date parameter — asking for another day would answer a digest
-   * no notification ever named.
-   * GET /api/digest/daily
-   */
+  /** Current local calendar day, cached server-side for up to five minutes. */
   static async getDailyDigest(): Promise<Digest> {
     return this.getDigest("daily");
   }
 
-  /**
-   * Fetch the weekly digest currently live: the Monday-to-Sunday week the last
-   * Monday 09:30 send announced.
-   * GET /api/digest/weekly
-   */
+  /** Current local ISO week, cached server-side for up to five minutes. */
   static async getWeeklyDigest(): Promise<Digest> {
     return this.getDigest("weekly");
   }

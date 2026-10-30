@@ -11,5 +11,7 @@ export function BudgetForecastNotice({ request = null }: { request?: ForecastReq
   const [result, setResult] = useState<{ key: string; value: BudgetForecast | null } | null>(null);
   useEffect(() => watchForecast(JSON.parse(key) as ForecastRequest | null, { apiRequest },
     (value) => setResult({ key, value })), [key]);
-  return <p className="small subtle">{forecastLine(result?.key === key ? result.value : null)}</p>;
+  const line = forecastLine(result?.key === key ? result.value : null);
+  if (line === null) return null;
+  return <p className="small subtle">{line}</p>;
 }

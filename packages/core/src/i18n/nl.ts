@@ -7,7 +7,6 @@ export const nl: Catalog = {
   "budget.reserved": "{percent} gereserveerd voor lopende bewerkingen",
   "budget.uses": "Importeren, voorvertoningen, vertalingen, AI-creaties en chat verbruiken capaciteit. Lezen, ordenen en bestaande resultaten openen niet.",
   "budget.forecast": "Geschatte reservering: maximaal {percent}. Het uiteindelijke verbruik hangt af van de verwerking.",
-  "budget.forecastUnavailable": "Schatting niet beschikbaar. De capaciteit wordt vóór de verwerking gecontroleerd.",
   "budget.automatic": "Een bron voorbereiden kan ook een voorvertoning maken en de tekst vertalen.",
   "budget.warning": "{percent} verbruikt. De capaciteit wordt op {date} vernieuwd.",
 
@@ -502,8 +501,8 @@ export const nl: Catalog = {
   "digest.tryAgain": "Opnieuw proberen",
   "digest.emptyDaily": "Vandaag niets terug te lezen",
   "digest.emptyWeekly": "Deze week niets terug te lezen",
-  "digest.emptyDailyHint": "Wat je opslaat, verschijnt hier in de volgende Digest.",
-  "digest.emptyWeeklyHint": "Wat je deze week opslaat, verschijnt hier op maandag.",
+  "digest.emptyDailyHint": "Wat je vandaag opslaat, verschijnt hier en wordt binnen vijf minuten bijgewerkt.",
+  "digest.emptyWeeklyHint": "Wat je deze week opslaat, verschijnt hier en wordt binnen vijf minuten bijgewerkt.",
   "folderPicker.title": "Map",
   "folderPicker.saveA11y": "Selectie opslaan",
   "folderPicker.searchPlaceholder": "Zoeken",

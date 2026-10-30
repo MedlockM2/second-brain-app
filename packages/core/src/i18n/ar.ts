@@ -7,7 +7,6 @@ export const ar: Catalog = {
   "budget.reserved": "{percent} محجوزة للعمليات الجارية",
   "budget.uses": "تستهلك عمليات الاستيراد والمعاينة والترجمة وإنشاء الذكاء الاصطناعي والمحادثة سعة. لا تستهلك القراءة والتنظيم وفتح النتائج الموجودة سعة.",
   "budget.forecast": "الحجز المقدّر: حتى {percent}. يعتمد الاستهلاك النهائي على المعالجة المنفذة.",
-  "budget.forecastUnavailable": "التقدير غير متاح. ستُفحص السعة قبل بدء المعالجة.",
   "budget.automatic": "قد يتضمن إعداد المصدر إنشاء معاينته وترجمة نصه أيضًا.",
   "budget.warning": "تم استهلاك {percent}. تتجدد السعة في {date}.",
 
@@ -496,8 +495,8 @@ export const ar: Catalog = {
   "digest.tryAgain": "إعادة المحاولة",
   "digest.emptyDaily": "لا شيء للمراجعة اليوم",
   "digest.emptyWeekly": "لا شيء للمراجعة هذا الأسبوع",
-  "digest.emptyDailyHint": "ما تحفظه يظهر هنا في الدايجست القادم.",
-  "digest.emptyWeeklyHint": "ما تحفظه هذا الأسبوع يظهر هنا يوم الاثنين.",
+  "digest.emptyDailyHint": "ما تحفظه اليوم يظهر هنا، ويُحدَّث خلال خمس دقائق.",
+  "digest.emptyWeeklyHint": "ما تحفظه هذا الأسبوع يظهر هنا، ويُحدَّث خلال خمس دقائق.",
   "folderPicker.title": "مجلد",
   "folderPicker.saveA11y": "حفظ الاختيار",
   "folderPicker.searchPlaceholder": "بحث",

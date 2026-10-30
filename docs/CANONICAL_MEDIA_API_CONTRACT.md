@@ -132,8 +132,8 @@ Imports include the automatic preview and translation. Sheet text uses the
 document text ceiling. This estimate covers the named path, not an arbitrary
 URL's unknown collector/fallback chain or a prediction of actual billed tokens.
 For paths whose metadata/route is not yet known, clients must display no forecast.
-They explicitly say the estimate is unavailable; they do not display zero or
-disable submission. Informative forecasts appear in the existing import,
+Absent, pending and unavailable estimates render no message or reserved space;
+clients do not display zero or disable submission (TASK-577). Informative forecasts appear in the existing import,
 customization and chat surfaces, without adding a confirmation step. Responses
 for older drafts are discarded. Pending translation copy identifies the automatic
 processing while the original remains readable. Account warnings use the configured

@@ -2,7 +2,8 @@
 DynamoDB operations for the digest feature.
 
 Tables:
-- user_digests: PK=user_id, SK=digest_key (format: "{type}#{period_key}")
+- user_digests: PK=user_id, SK=digest_key ("{type}#{period_key}" for sends;
+  "{type}#current#{zone}" for replaceable five-minute read caches)
 - user_digest_settings: PK=user_id
 """
 
@@ -38,16 +39,16 @@ USER_DIGEST_SETTINGS_TABLE = required_env("USER_DIGEST_SETTINGS_TABLE")
 
 
 async def get_digest(
-    user_id: str, digest_type: DigestType, period_key: str
+    user_id: str, digest_type: DigestType, period_key: str, *, cache_slot: Optional[str] = None
 ) -> Optional[DigestRecord]:
-    """Get a specific digest by user_id + type + period."""
-    digest_key = f"{digest_type.value}#{period_key}"
+    """Read a notification capture, or the explicitly named current-period slot."""
+    digest_key = f"{digest_type.value}#{cache_slot or period_key}"
     try:
         session = get_session()
         async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
             table = await dynamodb.Table(USER_DIGESTS_TABLE)
             response = await table.get_item(
-                Key={"user_id": user_id, "digest_key": digest_key}
+                Key={"user_id": user_id, "digest_key": digest_key}, ConsistentRead=True
             )
             if "Item" in response:
                 return DigestRecord.from_dynamodb_item(response["Item"])
@@ -59,19 +60,24 @@ async def get_digest(
         raise
 
 
-async def save_digest(record: DigestRecord) -> DigestRecord:
-    """Create or update a digest record."""
+async def save_digest(
+    record: DigestRecord, *, cache_slot: Optional[str] = None
+) -> DigestRecord:
+    """Save a notification capture, or replace the named current-period slot."""
     record.updated_at = datetime.now(timezone.utc).isoformat()
     try:
         session = get_session()
         async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
             table = await dynamodb.Table(USER_DIGESTS_TABLE)
-            await table.put_item(Item=record.to_dynamodb_item())
+            item = record.to_dynamodb_item()
+            if cache_slot is not None:
+                item["digest_key"] = f"{record.digest_type.value}#{cache_slot}"
+            await table.put_item(Item=item)
             _log_dynamodb_success(
                 "save_digest",
                 table=USER_DIGESTS_TABLE,
                 user_id=record.user_id,
-                digest_key=record.digest_key,
+                digest_key=item["digest_key"],
             )
             return record
     except ClientError as e:

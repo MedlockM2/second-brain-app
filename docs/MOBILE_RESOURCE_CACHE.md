@@ -140,3 +140,26 @@ cache de consultation : elle n’est pas un tour accepté par le serveur, ne dé
 pas de génération et n’est conservée que dans la session de l’application.
 
 Détails de livraison et mesures : [correctifs TestFlight du 15 octobre](TESTFLIGHT_2026_10_15_FIXES.md).
+
+
+## Périodes Digest courantes (TASK-575)
+
+Depuis le retour TestFlight du 29 octobre, les lectures `/api/digest/daily` et
+`/api/digest/weekly` couvrent respectivement la journée locale depuis minuit et
+la semaine ISO locale depuis lundi minuit, jusqu’au début de leur composition.
+Elles sont disponibles indépendamment des réglages de notification. La zone du
+profil s’applique ; sans zone valide, la lecture utilise UTC.
+
+Le serveur réutilise une composition DynamoDB pendant cinq minutes au maximum
+à la prochaine lecture, même vide. Deux emplacements remplacés par période et
+fuseau (`daily#current#<zone>` et `weekly#current#<zone>`) évitent d’accumuler un
+cache par ouverture ou par date. Le changement de jour/semaine ignore aussitôt
+la composition précédente. Un nouvel ajout peut donc attendre cinq minutes
+avant d’apparaître lors d’une réouverture ; un écran laissé ouvert ne s’actualise
+pas automatiquement. Les suppressions sont toujours filtrées en lecture cohérente.
+Le client conserve son cache de session et la liste capturée du carrousel ouvert.
+
+Les notifications gardent leurs captures fermées et leurs horaires (18h30 et
+lundi 9h30), avec leurs clés et claims distincts. Ouvrir une notification mène
+au Digest courant, qui peut donc différer de la période annoncée. Aucune
+composition ne génère d’artefact ni ne fait d’appel fournisseur.

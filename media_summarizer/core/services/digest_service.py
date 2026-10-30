@@ -1,29 +1,13 @@
-"""
-Digest service: captures the ordered list of media a period held.
+"""Digest compositions, with no provider calls or automatic artifact generation.
 
-What a digest *is*, since task-366: the ids of the media saved in one period,
-oldest first. The client renders each one as the media page itself, so nothing is
-pre-computed here — no summary, no theme, no statistic, and above all **no
-artifact generation**. Assembling a digest costs one library query and never
-debits a quota. A generation started from the digest is one the user asked for,
-on the media page, exactly as anywhere else in the app.
+The tab reads the current local calendar day and ISO week, cached in DynamoDB
+for five minutes (including empty results). Each type/zone has one replaceable
+cache slot; the local period key prevents yesterday's/week's data being reused.
+The read-start timestamp bounds freshness even if two rebuilds overlap.
 
-Two rules carry the whole design.
-
-**A period ends at a send instant that is already past.** The daily digest is the
-24 hours before the last 18:30 local; the weekly one is the Monday-to-Sunday week
-that closed before the last Monday 09:30 local. Neither window can still be
-filling up, so what the screen shows is exactly what the notification announced —
-which a window recomputed as "the last 24 hours" could never be: opened at 21:00
-it would show 21:00−24h, a different set from the one announced at 18:30. Between
-midnight and 18:30 the screen therefore shows yesterday's capture, and that is
-the intended reading, not a staleness bug.
-
-**An empty period is not stored.** Nothing was announced and there is nothing to
-show, so the assembly returns an unsaved empty record: the tab shows its empty
-state, no row accumulates for the days a user saved nothing, and the next read
-re-derives the same emptiness. There is no fallback to an older, fuller period
-and no automatic switch to the weekly tab.
+Notifications still use closed windows and immutable captures: the 24 hours
+before 18:30, and the elapsed Monday-to-Sunday week announced on Monday 09:30.
+Their keys and publication claims are separate from the current-period cache.
 """
 
 from __future__ import annotations
@@ -51,6 +35,8 @@ DAILY_SEND_TIME = time(hour=18, minute=30)
 
 #: When the weekly digest notification goes out: Monday, local time.
 WEEKLY_SEND_TIME = time(hour=9, minute=30)
+
+CURRENT_DIGEST_MAX_AGE = timedelta(minutes=5)
 
 
 def resolve_zone(iana_timezone: Optional[str]) -> tzinfo:
@@ -224,35 +210,53 @@ async def get_or_assemble_for_window(
         period_key=window.period_key,
         media_items=media_items,
     )
-    # An empty period is not written. See the module docstring: there is nothing
-    # to announce and nothing to show, and a row per silent day is pure noise.
+    # An empty notification period is not written: nothing is announced.
+    # Current-period reads cache emptiness separately in a replaceable slot.
     if media_items:
         await digest_db.save_digest(record)
     return record
 
 
-async def get_or_assemble_daily_digest(
-    user_id: str, *, iana_timezone: Optional[str]
+async def get_current_digest(
+    user_id: str, digest_type: DigestType, *, iana_timezone: Optional[str]
 ) -> DigestRecord:
-    """The daily digest currently live for this user.
+    """Current local period, reused across opens and API Lambda instances.
 
-    ``iana_timezone`` is keyword-only and has no default on purpose: it is the
-    difference between the period the notification announced and a different one,
-    and a caller that forgets it has to fail at import rather than answer the
-    wrong day.
+    Notification preferences control sends only. Reading the current library
+    period remains available even when its notification is disabled.
     """
-    return await get_or_assemble_for_window(
-        user_id, DigestType.DAILY, resolve_daily_window(local_now(iana_timezone))
+    now = local_now(iana_timezone)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if digest_type is DigestType.WEEKLY:
+        start -= timedelta(days=now.weekday())
+        year, week, _ = start.isocalendar()
+        period_key = f"{year}-W{week:02d}"
+    else:
+        period_key = start.date().isoformat()
+    # The slot is stable across dates. A changed time zone must not reuse a
+    # composition built from another local midnight, even with the same date.
+    cache_slot = f"current#{now.tzinfo}"
+    cached = await digest_db.get_digest(
+        user_id, digest_type, period_key, cache_slot=cache_slot
     )
+    if cached is not None and cached.period_key == period_key:
+        age = now - datetime.fromisoformat(cached.created_at)
+        if timedelta(0) <= age < CURRENT_DIGEST_MAX_AGE:
+            return cached
 
-
-async def get_or_assemble_weekly_digest(
-    user_id: str, *, iana_timezone: Optional[str]
-) -> DigestRecord:
-    """The weekly digest currently live for this user."""
-    return await get_or_assemble_for_window(
-        user_id, DigestType.WEEKLY, resolve_weekly_window(local_now(iana_timezone))
+    window = DigestWindow(period_key=period_key, start=start, end=now, send_at=now)
+    items = await _collect_window_items(user_id, window)
+    record = DigestRecord(
+        user_id=user_id,
+        digest_type=digest_type,
+        period_key=period_key,
+        media_items=items,
+        created_at=now.astimezone(timezone.utc).isoformat(),
     )
+    # Empty results must be cached too, otherwise an empty library is assembled
+    # on every open. These are cache slots, never publication candidates.
+    await digest_db.save_digest(record, cache_slot=cache_slot)
+    return record
 
 
 async def get_user_digest_settings(user_id: str) -> UserDigestSettings:

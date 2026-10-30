@@ -1,4 +1,4 @@
-import { capacityLines } from "@media-summarizer/core/budget/presentation";
+import { capacityLines, capacityPercentage } from "@media-summarizer/core/budget/presentation";
 import React from "react";
 import {
   View,
@@ -24,7 +24,7 @@ import {
   getTierLabel,
   getUsageRatio,
 } from "../lib/subscriptionDisplay";
-import { t, formatNumber } from "../i18n";
+import { t } from "../i18n";
 
 /** Read-only settled beta capacity, independent of reservations in flight. */
 interface SubscriptionStatusCardProps {
@@ -137,7 +137,7 @@ function CardBody({
   const resetDate = formatResetDate(entitlement.budget.resets_at);
   const resetDateLabel = getResetDateLabel(entitlement);
   const consumed = entitlement.budget.consumed_percent;
-  const usage = consumed === null ? t("account.plan.unavailable") : `${formatNumber(consumed)}%`;
+  const usage = consumed === null ? t("account.plan.unavailable") : capacityPercentage(consumed);
   // The trial's own tier is the one the gauge below is measuring, and it is
   // worth naming — but it never becomes the heading, which would read as a plan
   // the user bought. Under the beta there is no chip at all: a plan's status note

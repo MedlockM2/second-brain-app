@@ -7,7 +7,6 @@ export const hi: Catalog = {
   "budget.reserved": "जारी प्रक्रियाओं के लिए {percent} आरक्षित",
   "budget.uses": "आयात, पूर्वावलोकन, अनुवाद, AI निर्माण और चैट क्षमता का उपयोग करते हैं। पढ़ना, व्यवस्थित करना और मौजूदा परिणाम खोलना नहीं।",
   "budget.forecast": "अनुमानित आरक्षण: अधिकतम {percent}। अंतिम उपयोग किए गए कार्य पर निर्भर करता है।",
-  "budget.forecastUnavailable": "अनुमान उपलब्ध नहीं है। प्रक्रिया से पहले क्षमता की जाँच होगी।",
   "budget.automatic": "स्रोत तैयार करने में उसका पूर्वावलोकन बनाना और पाठ का अनुवाद भी शामिल हो सकता है।",
   "budget.warning": "{percent} इस्तेमाल। क्षमता {date} को नवीनीकृत होगी।",
 
@@ -502,8 +501,8 @@ export const hi: Catalog = {
   "digest.tryAgain": "फिर कोशिश करें",
   "digest.emptyDaily": "आज दोहराने के लिए कुछ नहीं",
   "digest.emptyWeekly": "इस हफ़्ते दोहराने के लिए कुछ नहीं",
-  "digest.emptyDailyHint": "आप जो सहेजेंगे वह अगले डाइजेस्ट में यहाँ दिखेगा।",
-  "digest.emptyWeeklyHint": "इस हफ़्ते आप जो सहेजेंगे वह सोमवार को यहाँ दिखेगा।",
+  "digest.emptyDailyHint": "आज सहेजी गई सामग्री यहाँ दिखती है और पाँच मिनट के भीतर अपडेट होती है।",
+  "digest.emptyWeeklyHint": "इस हफ़्ते सहेजी गई सामग्री यहाँ दिखती है और पाँच मिनट के भीतर अपडेट होती है।",
   "folderPicker.title": "फ़ोल्डर",
   "folderPicker.saveA11y": "चयन सहेजें",
   "folderPicker.searchPlaceholder": "खोजें",
