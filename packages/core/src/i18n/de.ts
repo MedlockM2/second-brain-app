@@ -991,7 +991,7 @@ export const de: Catalog = {
   "auth.confirmPassword": "Passwort bestätigen",
   "auth.passwordsMatch": "Die Passwörter stimmen überein.",
   "auth.passwordsMismatch": "Die beiden Passwörter stimmen nicht überein.",
-  "register.legal": "Mit dem Erstellen eines Kontos akzeptierst du die {terms} und die {privacy} von Deepn.",
+  "register.legal": "Unsere {privacy} erklärt, wie Deepn mit deinen Daten umgeht.",
   "register.existsTitle": "Du hast bereits ein Konto",
   "register.existsBody": "Diese Adresse ist bei Deepn schon registriert.",
   "auth.forgotPasswordAction": "Passwort vergessen",

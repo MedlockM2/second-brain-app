@@ -943,7 +943,7 @@ export const ar: Catalog = {
   "auth.confirmPassword": "تأكيد كلمة المرور",
   "auth.passwordsMatch": "كلمتا المرور متطابقتان.",
   "auth.passwordsMismatch": "كلمتا المرور غير متطابقتين.",
-  "register.legal": "بإنشاء حساب، فإنك توافق على {terms} و{privacy} الخاصة بـ Deepn.",
+  "register.legal": "توضح {privacy} الخاصة بنا كيف يتعامل Deepn مع بياناتك.",
   "register.existsTitle": "لديك حساب بالفعل",
   "register.existsBody": "هذا العنوان مسجّل بالفعل في Deepn.",
   "auth.forgotPasswordAction": "نسيت كلمة المرور",

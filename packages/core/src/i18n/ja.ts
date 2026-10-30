@@ -858,7 +858,7 @@ export const ja: Catalog = {
   "auth.confirmPassword": "パスワードの確認",
   "auth.passwordsMatch": "パスワードが一致しています。",
   "auth.passwordsMismatch": "2 つのパスワードが一致しません。",
-  "register.legal": "アカウントを作成すると、Deepn の{terms}と{privacy}に同意したことになります。",
+  "register.legal": "Deepn によるデータの取り扱いについては、{privacy}をご覧ください。",
   "register.existsTitle": "すでにアカウントがあります",
   "register.existsBody": "このアドレスは Deepn に登録済みです。",
   "auth.forgotPasswordAction": "パスワードを忘れた",

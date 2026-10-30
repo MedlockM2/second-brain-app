@@ -21,7 +21,7 @@ import { AuthField } from "../../src/components/AuthField";
 import { AuthScreen } from "../../src/components/AuthScreen";
 import { PasswordRules } from "../../src/components/PasswordRules";
 import { SlotText } from "../../src/components/SlotText";
-import { PRIVACY_POLICY_URL, TERMS_URL } from "../../src/constants/legal";
+import { PRIVACY_POLICY_URL } from "../../src/constants/legal";
 import {
   Typography,
   Spacing,
@@ -90,8 +90,8 @@ export default function RegisterScreen() {
 
   if (verification) return <AuthCodeScreen recovery={false} credentials={verification} onCancel={() => setVerification(null)} />;
 
-  const link = (key: "paywall.terms" | "paywall.privacy", url: string) =>
-    <Text key={key} style={styles.legalLink} accessibilityRole="link" onPress={() => void Linking.openURL(url)}>{t(key)}</Text>;
+  const privacyLink =
+    <Text style={styles.legalLink} accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}>{t("paywall.privacy")}</Text>;
 
   return (
     <AuthScreen
@@ -99,7 +99,7 @@ export default function RegisterScreen() {
       subtitle={t("register.subtitle")}
       footer={<>
         {!accountExists && <SlotText style={styles.legal} template={t("register.legal")}
-          slots={{ terms: link("paywall.terms", TERMS_URL), privacy: link("paywall.privacy", PRIVACY_POLICY_URL) }} />}
+          slots={{ privacy: privacyLink }} />}
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>{t("register.hasAccount")} </Text>
           <TouchableOpacity accessibilityRole="link" onPress={() => router.replace("/(auth)/login")}>

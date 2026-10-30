@@ -884,7 +884,7 @@ export const hi: Catalog = {
   "auth.confirmPassword": "पासवर्ड की पुष्टि करें",
   "auth.passwordsMatch": "दोनों पासवर्ड मेल खाते हैं।",
   "auth.passwordsMismatch": "दोनों पासवर्ड मेल नहीं खाते।",
-  "register.legal": "खाता बनाकर, आप Deepn की {terms} और {privacy} स्वीकार करते हैं।",
+  "register.legal": "हमारी {privacy} बताती है कि Deepn आपके डेटा को कैसे संभालता है।",
   "register.existsTitle": "आपका खाता पहले से है",
   "register.existsBody": "यह पता Deepn पर पहले से रजिस्टर है।",
   "auth.forgotPasswordAction": "पासवर्ड भूल गए",

@@ -886,7 +886,7 @@ export const nl: Catalog = {
   "auth.confirmPassword": "Wachtwoord bevestigen",
   "auth.passwordsMatch": "De wachtwoorden komen overeen.",
   "auth.passwordsMismatch": "De twee wachtwoorden komen niet overeen.",
-  "register.legal": "Door een account aan te maken, ga je akkoord met de {terms} en het {privacy} van Deepn.",
+  "register.legal": "Ons {privacy} legt uit hoe Deepn met je gegevens omgaat.",
   "register.existsTitle": "Je hebt al een account",
   "register.existsBody": "Dit adres is al geregistreerd bij Deepn.",
   "auth.forgotPasswordAction": "Wachtwoord vergeten",

@@ -1134,7 +1134,7 @@ export const en = {
   "auth.confirmPassword": "Confirm password",
   "auth.passwordsMatch": "The passwords match.",
   "auth.passwordsMismatch": "The two passwords don’t match.",
-  "register.legal": "By creating an account, you accept Deepn’s {terms} and {privacy}.",
+  "register.legal": "Our {privacy} explains how Deepn handles your data.",
   "register.existsTitle": "You already have an account",
   "register.existsBody": "This address is already registered on Deepn.",
   "auth.forgotPasswordAction": "Forgot password",

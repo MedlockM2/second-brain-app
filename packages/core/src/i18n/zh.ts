@@ -843,7 +843,7 @@ export const zh: Catalog = {
   "auth.confirmPassword": "确认密码",
   "auth.passwordsMatch": "两次密码一致。",
   "auth.passwordsMismatch": "两次输入的密码不一致。",
-  "register.legal": "创建账户即表示你接受 Deepn 的{terms}和{privacy}。",
+  "register.legal": "Deepn 如何处理你的数据，请参阅我们的{privacy}。",
   "register.existsTitle": "你已经有账户了",
   "register.existsBody": "这个邮箱已在 Deepn 注册。",
   "auth.forgotPasswordAction": "忘记密码",

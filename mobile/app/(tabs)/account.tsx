@@ -21,6 +21,7 @@ import { FeedbackService } from "../../src/services/feedbackService";
 import { SubscriptionStatusCard } from "../../src/components/SubscriptionStatusCard";
 import { LOCALE_ENDONYMS, t, useTranslation } from "../../src/i18n";
 import { fetchPublicPricing } from "../../src/services/pricingService";
+import { PRIVACY_POLICY_URL } from "../../src/constants/legal";
 import {
   Typography,
   Spacing,
@@ -277,6 +278,14 @@ export default function AccountScreen() {
             icon="bug-outline"
             label={t("account.reportBug")}
             onPress={handleBugReport}
+          />
+          {/* The only in-app route to the privacy policy once signed in: the
+              paywall that also links it is hidden during the beta, and App
+              Store guideline 5.1.1(i) wants it easily accessible in the app. */}
+          <MenuItem
+            icon="shield-checkmark-outline"
+            label={t("paywall.privacy")}
+            onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_POLICY_URL)}
           />
           <View style={styles.menuDivider} />
           <TouchableOpacity

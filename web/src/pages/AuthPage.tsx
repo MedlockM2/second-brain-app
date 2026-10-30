@@ -12,8 +12,7 @@ import { AuthCodePage } from "./AuthCodePage";
 import { AuthField, PasswordRules, SlotText } from "../components/AuthField";
 import { AuthSplit } from "../components/welcome/AuthSplit";
 
-const TERMS_URL = "https://mediasummarizer.com/terms";
-const PRIVACY_POLICY_URL = "https://mediasummarizer.com/privacy";
+const PRIVACY_POLICY_URL = "https://d3fc24zfw6pew8.cloudfront.net/privacy";
 
 /**
  * Sign in and sign up, beside the welcome carousel: Apple, Google, « or », then
@@ -148,7 +147,6 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
       {register && !accountExists && <p className="small subtle auth-legal">
         <SlotText template={t("register.legal")} slots={{
-          terms: <a href={TERMS_URL} target="_blank" rel="noreferrer">{t("paywall.terms")}</a>,
           privacy: <a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer">{t("paywall.privacy")}</a>,
         }} />
       </p>}
