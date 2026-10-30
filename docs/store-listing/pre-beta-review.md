@@ -7,7 +7,14 @@ of both review teams. The production submission (task-454) reuses most of it and
 the beta leaves out: purchases, support URL, own domain.
 
 Never paste a credential into this file. The demo accounts (one per store, see task-454)
-and the review contact's name and phone exist only in the consoles.
+are in the dev secret `deepn-review-accounts` (keys `apple` and `google`):
+
+```sh
+AWS_PROFILE=second-brain-app aws secretsmanager get-secret-value --region eu-west-3 \
+  --secret-id deepn-review-accounts --query SecretString --output text
+```
+
+The review contact's name and phone exist only in the consoles.
 
 ## The build
 

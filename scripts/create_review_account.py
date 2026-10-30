@@ -13,13 +13,14 @@ hit:
 
 One account per store: a reviewer may test Delete Account, which must not break
 the other store's credentials. After a review that deleted it, run the script
-again with the same e-mail.
+again with the same store and e-mail.
 
-The password is generated here and printed once. It goes into App Store Connect
-or the Play Console, never into a tracked file.
+The password is generated here and stored, with the e-mail, under the store's key
+of the dev secret `deepn-review-accounts` -- the place to read the credentials
+from when filling App Store Connect or the Play Console. Never in a tracked file.
 
 Usage (dev credentials):
-    AWS_PROFILE=second-brain-app uv run python scripts/create_review_account.py <e-mail>
+    AWS_PROFILE=second-brain-app uv run python scripts/create_review_account.py <apple|google> <e-mail>
 
 Use a "+" alias of the project mailbox, one per store, so the address really
 receives mail. The addresses themselves stay out of tracked files, like the
@@ -29,6 +30,7 @@ passwords.
 from __future__ import annotations
 
 import argparse
+import json
 import secrets
 import string
 import sys
@@ -39,6 +41,7 @@ import requests
 API = "https://jji077bi8e.execute-api.eu-west-3.amazonaws.com"
 USER_POOL_ID = "eu-west-3_kvjrhVwnV"
 REGION = "eu-west-3"
+SECRET_ID = "deepn-review-accounts"
 
 #: Public pages and a public talk: nothing a reviewer could read as private data.
 DEMO_URLS = (
@@ -76,8 +79,10 @@ def seed_artifacts(headers: dict[str, str], media_ids: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("store", choices=("apple", "google"))
     parser.add_argument("email")
-    email = parser.parse_args().email.strip().lower()
+    args = parser.parse_args()
+    email = args.email.strip().lower()
     password = generate_password()
 
     response = requests.post(f"{API}/api/auth/register", json={"email": email, "password": password}, timeout=30)
@@ -103,7 +108,11 @@ def main() -> None:
         media_ids.append(item.json()["media_item_id"])
     seed_artifacts(headers, media_ids)
 
-    print(f"\nEmail:    {email}\nPassword: {password}")
+    secrets_manager = boto3.client("secretsmanager", region_name=REGION)
+    accounts = json.loads(secrets_manager.get_secret_value(SecretId=SECRET_ID)["SecretString"])
+    accounts[args.store] = {"email": email, "password": password}
+    secrets_manager.put_secret_value(SecretId=SECRET_ID, SecretString=json.dumps(accounts))
+    print(f"\n{args.store} account stored in {SECRET_ID}. Update the password in the store console.")
 
 
 if __name__ == "__main__":
