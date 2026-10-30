@@ -11,9 +11,10 @@ import { AccessibilityInfo } from "react-native";
  * an inert subscription — so this needs no platform guard, and it starts at
  * `false`, which is the only thing an asynchronous query allows.
  *
- * Shared by the two looping animations that must stop under that setting: the
+ * Shared by the looping animations that must stop under that setting: the
  * band that sweeps a cover still being processed (`MediaProcessingSweep`) and
- * the row of an artifact being generated (`ArtifactGeneratingRow`).
+ * the row of an artifact being generated (`ArtifactGeneratingRow`) and the
+ * chat's waiting dot (`ChatWaitingIndicator`).
  */
 export function useReduceMotion(): boolean {
   const [reduceMotion, setReduceMotion] = useState(false);

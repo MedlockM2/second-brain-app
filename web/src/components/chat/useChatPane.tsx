@@ -13,6 +13,7 @@ import { Icon } from "../Icon";
 import { MarkdownView } from "../MarkdownView";
 import { PaneEmpty, type PaneSpec } from "../panes/Panes";
 import { CopyAnswerButton } from "./CopyAnswerButton";
+import { ChatWaitingIndicator } from "./ChatWaitingIndicator";
 
 /**
  * The Discussion pane of a media or a folder (owner's mockup, "Média en trois
@@ -250,9 +251,7 @@ function Thread({
               <MarkdownView text={text} live={live} sources={sources} showSources={scope === "folder"} onOpenSource={onOpenSource} />
             )}
             {live && !text && (
-              <span className="spin" style={{ display: "inline-flex", color: "var(--text-muted)" }}>
-                <Icon name="sync-outline" size={18} />
-              </span>
+              <ChatWaitingIndicator label={t("chat.a11y.answerStarted")} />
             )}
             {status && (
               <div className={`status small${message.status === "failed" ? " err" : ""}`}>
@@ -278,13 +277,13 @@ function Thread({
           <div className="a">
             {state.pending.status === "waiting_for_source" ? (
               <div className="status small">
-                {t("chat.thread.waitingForSource")}
+                <ChatWaitingIndicator label={t("chat.thread.waitingForSource")} />
                 <button type="button" className="btn ghost" onClick={onCancelPending}>
                   {t("common.cancel")}
                 </button>
               </div>
             ) : state.pending.status === "sending" ? (
-              <div className="status small">{t("chat.thread.sending")}</div>
+              <ChatWaitingIndicator label={t("chat.thread.sending")} />
             ) : (
               <button type="button" className="btn tonal" disabled={retryDisabled} onClick={() => onRetry(state.pending!.question)}>
                 <Icon name="refresh-outline" size={18} />

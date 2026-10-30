@@ -11,13 +11,14 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
 import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
 import { MarkdownBody as ChatAnswer } from "../MarkdownBody";
 import { CopyAnswerButton } from "./CopyAnswerButton";
+import { ChatWaitingIndicator } from "./ChatWaitingIndicator";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];
@@ -117,9 +118,7 @@ export function ChatThread({
               />
             ) : null}
             {isLive && waiting && !text ? (
-              <View style={styles.pending}>
-                <ActivityIndicator size="small" color={Colors.textSubtle} />
-              </View>
+              <ChatWaitingIndicator label={t("chat.a11y.answerStarted")} />
             ) : null}
             {status ? (
               <View style={styles.statusRow}>
@@ -166,17 +165,14 @@ export function ChatThread({
           </View>
           {pendingQuestion.status === "waiting_for_source" ? (
             <View style={styles.pending} accessibilityLiveRegion="polite">
-              <Text style={styles.pendingText}>{t("chat.thread.waitingForSource")}</Text>
+              <ChatWaitingIndicator label={t("chat.thread.waitingForSource")} />
               <Pressable style={styles.retry} onPress={onCancelPending} accessibilityRole="button"
                 accessibilityLabel={t("common.cancel")}>
                 <Text style={styles.retryLabel}>{t("common.cancel")}</Text>
               </Pressable>
             </View>
           ) : pendingQuestion.status === "sending" ? (
-            <View style={styles.pending} accessibilityLiveRegion="polite">
-              <ActivityIndicator size="small" color={Colors.textSubtle} />
-              <Text style={styles.pendingText}>{t("chat.thread.sending")}</Text>
-            </View>
+            <ChatWaitingIndicator label={t("chat.thread.sending")} />
           ) : (
             <Pressable
               style={({ pressed }) => [styles.retry, pressed && styles.retryPressed]}
@@ -222,10 +218,6 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
-    },
-    pendingText: {
-      fontSize: Typography.small.fontSize,
-      color: Colors.textSubtle,
     },
     statusRow: {
       flexDirection: "row",

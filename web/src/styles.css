@@ -498,6 +498,10 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .thread .q { align-self: flex-end; max-width: 85%; background: var(--surface-container-high); border-radius: var(--r-xl); padding: 8px 14px; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .thread .a { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .thread .a > .md { align-self: stretch; }
+.chat-waiting { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex: none; color: var(--text-main); }
+.chat-waiting-dot { width: 16px; height: 16px; border-radius: 50%; background: currentColor; animation: chat-waiting-pulse 1.2s ease-in-out infinite; }
+@keyframes chat-waiting-pulse { 0%, 100% { transform: scale(.65); } 50% { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .chat-waiting-dot { animation: none; } }
 .chat-copy { display: flex; align-items: center; gap: 4px; }
 .chat-copy-error { color: var(--error); }
 .thread .status { display: flex; align-items: center; gap: 6px; color: var(--text-subtle); }
