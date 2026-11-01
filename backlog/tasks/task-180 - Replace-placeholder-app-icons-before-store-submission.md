@@ -1,11 +1,11 @@
 ---
 id: task-180
 title: Replace placeholder app icons before store submission
-status: To Do
+status: Done
 assignee:
   - owner
 created_date: '2026-06-10 13:48'
-updated_date: '2026-10-10 15:14'
+updated_date: '2026-10-30 14:42'
 labels:
   - mobile
   - release
@@ -19,55 +19,46 @@ dispatchable: false
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-## Responsabilité — cadrage lancement du 2026-10-10
+## Périmètre actuel — audit du 2026-10-30
 
-Owner / designer — décider et fournir les visuels finaux ; intégration et vérifications techniques selon la tâche existante. Coordonner la livraison native avec task-186. Le verrou owner-only existant est conservé.
+Remplacer les trois placeholders SB par le logo Deepn dans mobile/assets/icon.png, adaptive-icon.png et splash.png. Livrables intégrés par 94459581 puis c2d7a94e (2026-10-26). La source graphique actuelle est web/public/favicon.svg ; mobile/scripts/make_icons.py produit les variantes mobiles et web.
 
-> ⚠️ **MANUAL — OWNER ONLY. NEVER DISPATCH TO A SUBAGENT.**
-> Cette tâche relève de la création de visuels (design + outils graphiques propriétaires) et ne peut pas être exécutée par un agent. Toute tentative de dispatch doit être ignorée.
+L’ancien brief docs/store-listing/icon-and-graphics.md (directions A/B et mentions de placeholders) est historique et ne définit plus le dessin à livrer. Les contraintes de format iOS, transparence Android et protection des éléments essentiels du logo restent applicables. Le fond adaptatif est #ffcb05 ; le splash transparent se compose sur #fcf9f6.
 
-## Description
+La règle Android protège les éléments essentiels dans un cercle central de diamètre 66 dp sur un canevas de 108 dp ; elle ne constitue pas un contrôle exigeant zéro pixel d’anticrénelage à l’extérieur. Référence : https://developer.android.com/codelabs/basic-android-kotlin-compose-training-change-app-icon
 
-Pendant la task-160 (`expo prebuild` manuel), `mobile/assets/icon.png`, `mobile/assets/splash.png` et `mobile/assets/adaptive-icon.png` étaient absents alors que `mobile/app.config.ts` (lignes 9, 13, 34) les référence. Pour débloquer le prebuild, des **placeholders** ont été générés et commités : 3 PNG 1024×1024 warm-white (#fcf9f6) avec un cercle « SB » centré.
-
-Ces placeholders permettent à `prebuild` et `eas build` de fonctionner mais **ne doivent pas atteindre une soumission store**. Apple risque de rejeter (« icon doesn't represent the app ») et Google laissera passer mais c'est moche.
-
-## Scope
-
-Produire les vrais visuels conformes à la spec décidée dans `docs/store-listing/icon-and-graphics.md` (Direction A ou B selon préférence owner) et remplacer les 3 PNG dans `mobile/assets/`.
-
-## Contraintes techniques
-
-- `mobile/assets/icon.png` : **RGB sans alpha**, 1024×1024 (App Store rejette l'alpha).
-- `mobile/assets/adaptive-icon.png` : RGBA 1024×1024, foreground centré dans la safe zone (66×66 dp / 264×264 px center). Le background `#fcf9f6` est appliqué par Android via `app.config.ts:35`.
-- `mobile/assets/splash.png` : 1024×1024, fond `#fcf9f6` (cohérent avec `app.config.ts:15`).
-- Après remplacement : relancer `cd mobile && npx expo prebuild --clean` pour régénérer le natif avec les bonnes images.
-
-## Blocage release
-
-Cette tâche **bloque toute soumission App Store / Play Store**. Tant que les placeholders sont en place, ne pas exécuter de submit production.
-
-## À livrer dans le même push que task-186
-
-Les 3 PNG de `mobile/assets/` sont des **sources de l'empreinte `runtimeVersion`** (raison `expoConfigExternalFile`). Les remplacer déplace l'empreinte des **deux** plateformes, donc déclenche un build natif iOS *et* un build natif Android : `@expo/fingerprint` hashe le config Expo résolu comme un seul bloc, il n'existe pas de hash par plateforme.
-
-task-186 (rebrand) touche exactement le même genre de sources — `appName`, `iosShareExtensionName`, les 11 `mobile/locales/*.json`. Livrées séparément, les deux tâches coûtent **quatre** builds natifs ; dans le même push, **deux**. Sur le palier gratuit à 15 builds/mois, le regroupement est la seule parade.
-
-Mesuré le 2026-09-08 : une seule ligne ajoutée à `androidIntentFilters` (task-380, `4543f75`) a déplacé les deux empreintes — Android `87b855f2` → `96e3267b`, iOS `784f7b9c` → `421e4b93` — et consommé un build iOS pour un changement qu'iOS ne voit pas. Pour attribuer un déplacement d'empreinte : `eas fingerprint:compare --build-id A --build-id B`, depuis `mobile/`. Détails dans `mobile/MOBILE_CI_CD.md`, section « An Android-only config change moves the iOS fingerprint too ».
-
-## References
-
-- `docs/store-listing/icon-and-graphics.md` (spec design)
-- `mobile/app.config.ts:9,13,34` (chemins consommés)
-- task-160 (contexte du blocker initial)
-- task-44 (Done — couvre les screenshots/copy store, pas les icons)
+La production des visuels était owner/designer ; cet audit ne les redessine pas. Les livraisons natives et fiches stores relèvent de task-449 et task-450, pas de cette clôture du travail dans le dépôt.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 mobile/assets/icon.png est un PNG RGB 1024×1024 sans alpha conforme à docs/store-listing/icon-and-graphics.md
-- [ ] #2 mobile/assets/adaptive-icon.png est un PNG RGBA 1024×1024 dont le foreground respecte la safe zone Android
-- [ ] #3 mobile/assets/splash.png est un PNG 1024×1024 cohérent avec backgroundColor #fcf9f6
-- [ ] #4 expo prebuild --clean termine sans erreur après remplacement des assets
-- [ ] #5 Aucune mention « SB » placeholder ne subsiste dans les visuels finaux
+- [x] #1 mobile/assets/icon.png est un PNG RGB 1024×1024 sans alpha portant le logo Deepn intégré, dont la source est web/public/favicon.svg et le générateur mobile/scripts/make_icons.py
+- [x] #2 mobile/assets/adaptive-icon.png est un PNG RGBA 1024×1024 dont les éléments essentiels du logo restent dans la zone de sécurité Android (cercle central de diamètre 66 dp sur un canevas de 108 dp)
+- [x] #3 mobile/assets/splash.png est un PNG 1024×1024 cohérent avec backgroundColor #fcf9f6
+- [x] #4 expo prebuild --clean termine sans erreur après remplacement des assets
+- [x] #5 Aucune mention « SB » placeholder ne subsiste dans les visuels finaux
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Retrouver les livrables et les décisions graphiques intégrées.
+2. Vérifier formats, configuration, prebuild et portée actuelle des recommandations Android.
+3. Corriger les critères périmés et documenter la clôture sans changer les assets.
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-10-30 — Audit demandé par l’owner : le statut To Do est périmé, les trois placeholders ont été remplacés. Commit 94459581 puis c2d7a94e (2026-10-26) ; génération reproductible par mobile/scripts/make_icons.py à partir de web/public/favicon.svg. Inspection visuelle des trois PNG : logo Deepn, aucune lettre SB. Pillow confirme icon.png RGB 1024×1024 sans alpha ; adaptive-icon.png RGBA 1024×1024 ; splash.png RGBA 1024×1024, transparent autour du disque ambre, composé sur #fcf9f6 par la configuration Expo. Le fond adaptatif Android est désormais #ffcb05, conformément au générateur, et non le fond blanc cassé de la description historique.
+
+Vérification locale : expo prebuild --clean --no-install sort 0 pour iOS et Android dans une copie temporaire du HEAD avec les dépendances existantes ; aucun projet natif du workspace modifié, aucun build ni déploiement. AC #3, #4 et #5 vérifiés. AC #1 laissé non coché : format iOS conforme, mais docs/store-listing/icon-and-graphics.md décrit toujours des placeholders et des directions graphiques anciennes ; la conformité intégrale à cette spec ne peut pas être attestée. AC #2 laissé non coché : le rayon maximal des pixels non transparents est 314,12 px pour une safe zone 66/108 de rayon 312,89 px à 1024 px ; 29 pixels d’anticrénelage dépassent, dont aucun totalement opaque. Dépassement minime de 1,23 px, à corriger pour une conformité stricte. Aucun asset modifié pendant cet audit. Statut In Progress : livrables intégrés, clôture stricte non encore justifiée.
+
+2026-10-30 — Réexamen de validité demandé par l’owner, qui remplace la conclusion trop stricte de l’audit précédent. AC #1 : formats toujours pertinents et satisfaits ; rattacher le dessin aux directions A/B d’un ancien brief est périmé depuis le logo intégré en octobre. Le critère référence désormais la source graphique effectivement utilisée. AC #2 : la zone de sécurité reste pertinente, mais le codelab officiel Android demande que les informations essentielles y restent et autorise du contenu non essentiel à l’extérieur. Le contrôle zéro pixel semi-transparent hors cercle était une interprétation excessive, pas une exigence de la tâche ni un motif de refus store démontré. Tous les pixels totalement opaques de la source restent dans le cercle. Les cinq tailles générées par prebuild (108, 162, 216, 324, 432 px) conservent également leurs pixels opaques dans le cercle ; seuls quelques pixels de bord semi-transparents dépassent. Les éléments essentiels sont préservés. AC #2 précisé et satisfait ; aucune réduction de logo nécessaire. Référence : https://developer.android.com/codelabs/basic-android-kotlin-compose-training-change-app-icon, section Launcher Icons / safe zone.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Les trois placeholders sont remplacés par le logo Deepn ; formats vérifiés et prebuild iOS/Android réussi en copie isolée. Le brief graphique historique et l’interprétation excessivement stricte de la zone de sécurité ont été corrigés dans la tâche. Les éléments essentiels du logo sont protégés ; aucune modification d’asset requise. Clôture du livrable dans le dépôt, sans build distant ni déploiement.
+<!-- SECTION:FINAL_SUMMARY:END -->
