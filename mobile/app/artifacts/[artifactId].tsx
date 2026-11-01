@@ -12,7 +12,6 @@ import {
   pickString,
   pickStringArray,
   type ArtifactKind,
-  type Flashcard,
   type QuizQuestion,
 } from "@media-summarizer/core/artifacts/content";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -38,6 +37,7 @@ import {
   type ArtifactRegenerationTarget,
 } from "../../src/lib/artifactContentBlock";
 import { ResourceRefreshNotice } from "../../src/components/ResourceRefreshNotice";
+import { FlashcardSession } from "../../src/components/FlashcardSession";
 import { Bullets } from "../../src/components/Bullets";
 import {
   BorderRadius,
@@ -386,6 +386,21 @@ export default function ArtifactDetailScreen() {
             </View>
           ) : null}
         </View>
+      ) : state.type === "flashcards" ? (
+        <View style={styles.flashcardsScreen}>
+          <View style={styles.flashcardsNotice}>
+            <ResourceRefreshNotice
+              error={snapshot.error}
+              onRetry={handleReload}
+            />
+          </View>
+          <FlashcardsBody
+            content={(state.payload?.content ?? {}) as Record<string, unknown>}
+            labels={artifactTranslator(state.language)}
+            sourceTitle={state.sourceTitle}
+            onFinish={handleBack}
+          />
+        </View>
       ) : (
         <ScrollView
           ref={scrollViewRef}
@@ -441,7 +456,7 @@ function ArtifactBody({
   onQuizQuestionChange,
   onQuizFinish,
 }: {
-  type: ArtifactKind;
+  type: Exclude<ArtifactKind, "flashcards">;
   payload: ArtifactPayload;
   labels: ArtifactTranslator;
   onQuizQuestionChange: () => void;
@@ -454,9 +469,6 @@ function ArtifactBody({
   }
   if (type === "notes") {
     return <NotesBody content={content} labels={labels} />;
-  }
-  if (type === "flashcards") {
-    return <FlashcardsBody content={content} labels={labels} />;
   }
   return (
     <QuizBody
@@ -621,81 +633,36 @@ function NotesBody({
   );
 }
 
-// --- Flashcards (revealable) ---
+// --- Flashcards (one at a time, see FlashcardSession) ---
 
 function FlashcardsBody({
   content,
   labels,
+  sourceTitle,
+  onFinish,
 }: {
   content: Record<string, unknown>;
   labels: ArtifactTranslator;
+  sourceTitle: string | null;
+  onFinish: () => void;
 }) {
   const styles = useThemedStyles(makeStyles);
   const cards = pickFlashcardArray(content);
-  if (!cards || cards.length === 0) {
+  if (!cards) {
     return (
-      <Section>
+      <View style={styles.flashcardsEmpty}>
         <Text style={styles.emptyText}>{t("artifact.noFlashcards")}</Text>
-      </Section>
+      </View>
     );
   }
-
   return (
-    <Section title={labels.tCount("artifact.cardCount", cards.length)}>
-      {cards.map((card, i) => (
-        <FlashcardCard
-          key={`card-${i}`}
-          index={i + 1}
-          card={card}
-          labels={labels}
-        />
-      ))}
-    </Section>
-  );
-}
-
-function FlashcardCard({
-  index,
-  card,
-  labels,
-}: {
-  index: number;
-  card: Flashcard;
-  labels: ArtifactTranslator;
-}) {
-  const Colors = useThemeColors();
-  const styles = useThemedStyles(makeStyles);
-  const [revealed, setRevealed] = useState(false);
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.flashcard,
-        pressed && styles.flashcardPressed,
-      ]}
-      onPress={() => setRevealed((v) => !v)}
-      accessibilityRole="button"
-      accessibilityLabel={
-        revealed ? t("artifact.hideAnswer") : t("artifact.revealAnswerA11y")
-      }
-    >
-      <View style={styles.flashcardIndexRow}>
-        <Text style={styles.flashcardIndex}>{`#${index}`}</Text>
-        <Ionicons
-          name={revealed ? "eye-off-outline" : "eye-outline"}
-          size={16}
-          color={Colors.textMuted}
-        />
-      </View>
-      <Text style={styles.flashcardLabel}>{labels.t("artifact.question")}</Text>
-      <Text style={styles.flashcardQuestion}>{card.question}</Text>
-      <View style={styles.flashcardDivider} />
-      <Text style={styles.flashcardLabel}>{labels.t("artifact.answer")}</Text>
-      {revealed ? (
-        <Text style={styles.flashcardAnswer}>{card.answer}</Text>
-      ) : (
-        <Text style={styles.flashcardHint}>{t("artifact.tapToReveal")}</Text>
-      )}
-    </Pressable>
+    <FlashcardSession
+      cards={cards}
+      labels={labels}
+      kindLabel={t(KIND_LABEL_KEYS.flashcards).toUpperCase()}
+      sourceTitle={sourceTitle}
+      onFinish={onFinish}
+    />
   );
 }
 
@@ -1156,57 +1123,15 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     },
 
     // Flashcards
-    flashcard: {
-      backgroundColor: Colors.surface,
-      borderRadius: BorderRadius.xl,
-      padding: Spacing.lg,
-      marginBottom: Spacing.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: Colors.outlineVariant,
-      ...Shadows.soft,
+    flashcardsScreen: {
+      flex: 1,
     },
-    flashcardPressed: {
-      transform: [{ scale: 0.99 }],
+    flashcardsNotice: {
+      paddingHorizontal: Spacing.lg,
     },
-    flashcardIndexRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: Spacing.sm,
-    },
-    flashcardIndex: {
-      fontSize: Typography.small.fontSize,
-      fontWeight: "700",
-      color: Colors.textMuted,
-      letterSpacing: 0.5,
-    },
-    flashcardLabel: {
-      fontSize: 11,
-      fontWeight: "800",
-      color: Colors.textMuted,
-      letterSpacing: 0.8,
-      marginBottom: Spacing.xs,
-    },
-    flashcardQuestion: {
-      fontSize: Typography.body.fontSize,
-      fontWeight: "600",
-      color: Colors.textMain,
-      lineHeight: 24,
-    },
-    flashcardAnswer: {
-      fontSize: Typography.body.fontSize,
-      color: Colors.textMain,
-      lineHeight: 24,
-    },
-    flashcardHint: {
-      fontSize: Typography.body.fontSize,
-      fontStyle: "italic",
-      color: Colors.textMuted,
-    },
-    flashcardDivider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: Colors.outlineVariant,
-      marginVertical: Spacing.md,
+    flashcardsEmpty: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
     },
 
     // Quiz

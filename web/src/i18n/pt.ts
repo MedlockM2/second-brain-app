@@ -27,7 +27,6 @@ export const pt: WebCatalog = {
   "pane.aiLocked": "A geração abre assim que o texto deste conteúdo estiver pronto.",
   "pane.collapse": "Recolher este painel",
   "pane.expand": "Expandir este painel",
-  "artifact.showAnswer": "Mostrar a resposta",
   "pane.discussionUnavailable": "Sem conversa possível: não foi possível importar o texto deste conteúdo.",
   "pane.aiUnavailable": "Nada a gerar: não foi possível importar o texto deste conteúdo.",
   "media.timeoutHint": "Verifique novamente agora ou volte mais tarde.",

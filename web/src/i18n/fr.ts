@@ -27,7 +27,6 @@ export const fr: WebCatalog = {
   "pane.aiLocked": "La génération s'ouvre dès que le texte de ce média est prêt.",
   "pane.collapse": "Réduire ce volet",
   "pane.expand": "Déplier ce volet",
-  "artifact.showAnswer": "Retourner la carte",
   "pane.discussionUnavailable": "Pas de discussion possible : le texte de ce média n'a pas pu être importé.",
   "pane.aiUnavailable": "Rien à générer : le texte de ce média n'a pas pu être importé.",
   "media.timeoutHint": "Vérifiez à nouveau maintenant, ou revenez plus tard.",

@@ -27,7 +27,6 @@ export const zh: WebCatalog = {
   "pane.aiLocked": "此媒体的文本就绪后即可开始生成。",
   "pane.collapse": "收起此面板",
   "pane.expand": "展开此面板",
-  "artifact.showAnswer": "查看答案",
   "pane.discussionUnavailable": "无法讨论：此媒体的文本未能导入。",
   "pane.aiUnavailable": "无可生成：此媒体的文本未能导入。",
   "media.timeoutHint": "现在再检查一次，或稍后再来。",

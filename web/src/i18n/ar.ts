@@ -27,7 +27,6 @@ export const ar: WebCatalog = {
   "pane.aiLocked": "يُتاح الإنشاء بمجرد أن يصبح نص هذه الوسائط جاهزًا.",
   "pane.collapse": "طي هذه اللوحة",
   "pane.expand": "توسيع هذه اللوحة",
-  "artifact.showAnswer": "إظهار الإجابة",
   "pane.discussionUnavailable": "لا يمكن المناقشة: تعذّر استيراد نص هذه الوسائط.",
   "pane.aiUnavailable": "لا شيء للإنشاء: تعذّر استيراد نص هذه الوسائط.",
   "media.timeoutHint": "تحقّق مجددًا الآن، أو عُد لاحقًا.",

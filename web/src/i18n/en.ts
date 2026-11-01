@@ -33,7 +33,6 @@ export const en = {
   "pane.aiLocked": "Generation opens as soon as the text of this media is ready.",
   "pane.collapse": "Collapse this panel",
   "pane.expand": "Expand this panel",
-  "artifact.showAnswer": "Show the answer",
   "pane.discussionUnavailable": "Nothing to discuss: the text of this media could not be imported.",
   "pane.aiUnavailable": "Nothing to generate: the text of this media could not be imported.",
   "media.timeoutHint": "Check again now, or come back later.",

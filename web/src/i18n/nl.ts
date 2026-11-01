@@ -27,7 +27,6 @@ export const nl: WebCatalog = {
   "pane.aiLocked": "Genereren opent zodra de tekst van dit medium klaar is.",
   "pane.collapse": "Dit paneel inklappen",
   "pane.expand": "Dit paneel uitklappen",
-  "artifact.showAnswer": "Antwoord tonen",
   "pane.discussionUnavailable": "Geen gesprek mogelijk: de tekst van dit medium kon niet worden geïmporteerd.",
   "pane.aiUnavailable": "Niets te genereren: de tekst van dit medium kon niet worden geïmporteerd.",
   "media.timeoutHint": "Controleer het nu opnieuw of kom later terug.",

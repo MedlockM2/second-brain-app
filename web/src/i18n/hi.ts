@@ -27,7 +27,6 @@ export const hi: WebCatalog = {
   "pane.aiLocked": "इस मीडिया का टेक्स्ट तैयार होते ही जनरेशन शुरू हो जाएगा।",
   "pane.collapse": "यह पैनल छोटा करें",
   "pane.expand": "यह पैनल खोलें",
-  "artifact.showAnswer": "उत्तर दिखाएँ",
   "pane.discussionUnavailable": "चर्चा संभव नहीं: इस मीडिया का टेक्स्ट इम्पोर्ट नहीं हो सका।",
   "pane.aiUnavailable": "जनरेट करने को कुछ नहीं: इस मीडिया का टेक्स्ट इम्पोर्ट नहीं हो सका।",
   "media.timeoutHint": "अभी फिर से जाँचें, या बाद में लौटें।",

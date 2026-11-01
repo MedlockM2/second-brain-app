@@ -15,7 +15,12 @@ import {
   artifactTranslator,
   type ArtifactTranslator,
 } from "@media-summarizer/core/artifacts/i18n";
-import { useState, type ReactNode } from "react";
+import {
+  flashcardSessionReducer,
+  isFlashcardRoundOver,
+  startFlashcardSession,
+} from "@media-summarizer/core/artifacts/flashcardSession";
+import { useReducer, useState, type ReactNode } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon } from "../Icon";
 
@@ -45,7 +50,13 @@ export function ArtifactBody({
     case "notes":
       return <Notes content={content} labels={labels} />;
     case "flashcards":
-      return <Flashcards cards={pickFlashcardArray(content)} labels={labels} />;
+      return (
+        <Flashcards
+          cards={pickFlashcardArray(content)}
+          labels={labels}
+          onFinish={onFinish}
+        />
+      );
     default:
       return (
         <Quiz
@@ -216,63 +227,176 @@ function Notes({
   );
 }
 
+/**
+ * One card at a time: reveal the answer, say whether you knew it, and end on a
+ * summary that offers to go over the missed cards — the mobile's
+ * `FlashcardSession`, over the same shared session logic.
+ */
 function Flashcards({
   cards,
   labels,
+  onFinish,
 }: {
   cards: Flashcard[] | null;
   labels: ArtifactTranslator;
+  onFinish: () => void;
 }) {
   const { t } = useI18n();
-  if (!cards) return <p className="subtle">{t("artifact.noFlashcards")}</p>;
-  return (
-    <Section title={labels.tCount("artifact.cardCount", cards.length)}>
-      {cards.map((card, i) => (
-        <FlashcardCard key={i} card={card} labels={labels} />
-      ))}
-    </Section>
+  const [session, dispatch] = useReducer(
+    flashcardSessionReducer,
+    cards?.length ?? 0,
+    startFlashcardSession,
   );
-}
+  if (!cards) return <p className="subtle">{t("artifact.noFlashcards")}</p>;
 
-function FlashcardCard({
-  card,
-  labels,
-}: {
-  card: Flashcard;
-  labels: ArtifactTranslator;
-}) {
-  const { t, tw } = useI18n();
-  const [revealed, setRevealed] = useState(false);
-  return (
-    <div className="art-card">
-      <div className="caps">{labels.t("artifact.question")}</div>
-      <div className="q">{card.question}</div>
-      {revealed ? (
-        <>
-          <div className="caps" style={{ marginTop: 12 }}>
-            {labels.t("artifact.answer")}
-          </div>
-          <div>{card.answer}</div>
+  if (isFlashcardRoundOver(session)) {
+    const missed = session.again.length;
+    return (
+      <div className="fc-summary">
+        <div
+          className="fc-score"
+          aria-label={t("artifact.flashcards.scoreA11y", {
+            known: session.known.length,
+            total: session.order.length,
+          })}
+        >
+          <b>{session.known.length}</b>
+          <span>
+            {t("artifact.flashcards.scoreTotal", { total: session.order.length })}
+          </span>
+        </div>
+        <h3>{t("artifact.flashcards.doneTitle")}</h3>
+        <p className="subtle">
+          {missed > 0
+            ? t("artifact.flashcards.doneSome")
+            : t("artifact.flashcards.doneAll")}
+        </p>
+        {missed > 0 && (
+          <>
+            <div className="caps fc-missed-head">
+              {t("artifact.flashcards.again")}
+              <span className="fc-count">{missed}</span>
+            </div>
+            <ul className="fc-missed">
+              {session.again.map((i) => (
+                <li key={i}>
+                  <Icon name="refresh-outline" size={14} />
+                  <span>{cards[i].question}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <div className="fc-actions column">
           <button
             type="button"
-            className="chip-btn"
-            style={{ marginTop: 12 }}
-            onClick={() => setRevealed(false)}
+            className="btn primary"
+            onClick={() =>
+              missed > 0 ? dispatch({ type: "reviewMissed" }) : onFinish()
+            }
           >
-            <Icon name="eye-off-outline" size={14} />
-            {t("artifact.hideAnswer")}
+            {missed > 0 && <Icon name="refresh-outline" size={18} />}
+            {missed > 0
+              ? t("artifact.flashcards.reviewMissed")
+              : t("common.done")}
           </button>
-        </>
-      ) : (
-        <button
-          type="button"
-          className="chip-btn"
-          onClick={() => setRevealed(true)}
-        >
-          <Icon name="eye-outline" size={14} />
-          {tw("artifact.showAnswer")}
-        </button>
-      )}
+          <button
+            type="button"
+            className="btn ghost"
+            onClick={() => dispatch({ type: "restart", cardCount: cards.length })}
+          >
+            {t("artifact.flashcards.restart")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const card = cards[session.order[session.position]];
+  const total = session.order.length;
+  const index = session.position + 1;
+  const rated = session.known.length + session.again.length;
+  return (
+    <div>
+      <div className="fc-progress-row">
+        <span className="small subtle">
+          {labels.t("artifact.cardPosition", { index, total })}
+        </span>
+        {rated > 0 && (
+          <span
+            className="fc-tally"
+            aria-label={t("artifact.flashcards.tallyA11y", {
+              known: session.known.length,
+              again: session.again.length,
+            })}
+          >
+            <span className="ok">
+              <Icon name="checkmark" size={14} />
+              {session.known.length}
+            </span>
+            <span className="ko">
+              <Icon name="refresh-outline" size={14} />
+              {session.again.length}
+            </span>
+          </span>
+        )}
+      </div>
+      <div
+        className="quiz-progress"
+        role="progressbar"
+        aria-label={t("artifact.flashcards.progress")}
+        aria-valuemin={1}
+        aria-valuemax={total}
+        aria-valuenow={index}
+      >
+        <i style={{ width: `${(index / total) * 100}%` }} />
+      </div>
+      <div className="art-card fc-card">
+        {session.revealed ? (
+          <>
+            <div className="fc-q-small">{card.question}</div>
+            <div className="fc-rule" />
+            <div className="caps fc-ink">{labels.t("artifact.answer")}</div>
+            <div className="fc-a">{card.answer}</div>
+          </>
+        ) : (
+          <>
+            <div className="caps">{labels.t("artifact.question")}</div>
+            <div className="fc-q">{card.question}</div>
+          </>
+        )}
+      </div>
+      <div className="fc-actions">
+        {session.revealed ? (
+          <>
+            <button
+              type="button"
+              className="btn fc-again"
+              onClick={() => dispatch({ type: "rate", rating: "again" })}
+            >
+              <Icon name="refresh-outline" size={18} />
+              {t("artifact.flashcards.again")}
+            </button>
+            <button
+              type="button"
+              className="btn fc-known"
+              onClick={() => dispatch({ type: "rate", rating: "known" })}
+            >
+              <Icon name="checkmark" size={18} />
+              {t("artifact.flashcards.known")}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => dispatch({ type: "reveal" })}
+          >
+            <Icon name="eye-outline" size={18} />
+            {t("artifact.flashcards.reveal")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

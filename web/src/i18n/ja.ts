@@ -27,7 +27,6 @@ export const ja: WebCatalog = {
   "pane.aiLocked": "このメディアのテキストの準備ができると、生成できるようになります。",
   "pane.collapse": "このパネルを折りたたむ",
   "pane.expand": "このパネルを開く",
-  "artifact.showAnswer": "答えを見る",
   "pane.discussionUnavailable": "このメディアのテキストを取り込めなかったため、ディスカッションできません。",
   "pane.aiUnavailable": "このメディアのテキストを取り込めなかったため、生成できるものがありません。",
   "media.timeoutHint": "今すぐもう一度確認するか、後でお戻りください。",
