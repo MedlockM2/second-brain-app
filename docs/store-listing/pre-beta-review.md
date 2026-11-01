@@ -47,23 +47,53 @@ Save content by sharing a link from any app, pasting a link, or importing a file
 
 ### What to Test (per build)
 
-TestFlight shows this text on its own « From the Developer » screen, before the app starts. It is the
-only part of TestFlight's two first-launch screens we write, so it presents the app (the post-sign-in
-carousel no longer does, to avoid saying it twice). Nothing about sending feedback: the « Share
-Feedback » screen that follows already says it, and the in-app « Signaler un bug » screen gives the
-steps after the screenshot (feedback `AHZj_EmKyk_-POh6f05H_SE`). The field is localizable per build:
-English under English, French under French — set on build 21 on 2026-11-01, to repeat on each build.
+TestFlight shows this text on its own « From the Developer » screen, before the app starts; Play shows the
+release notes of the closed-testing release to its testers. Both say what Deepn is, what a tester can try
+(the five things the app does: save, read, ask, study, find) and the one feedback we want. Nothing on how
+to send it: TestFlight's « Share Feedback » screen comes right after, and the in-app « Signaler un bug »
+screen gives the steps (feedback `AHZj_EmKyk_-POh6f05H_SE`). Set on 2026-11-01 on iOS build 21 (en-US and
+fr-FR) and on the Android Alpha release 1.0.0 (28) (fr-FR and en-US): TestFlight's field is per build, to
+set again on each new build; Play release notes are capped at 500 characters per language.
 
-English:
-
-```
-Save a few things (a link shared from Safari or YouTube, a pasted link, a PDF or a photo of a page), then open them: read the transcript, generate a summary, notes or flashcards, and ask the chat a question about them. Tell us anything that is slow, wrong or confusing.
-```
-
-Français :
+TestFlight, English:
 
 ```
-Enregistrez quelques contenus (un lien partagé depuis Safari ou YouTube, un lien collé, un PDF ou la photo d'une page), puis ouvrez-les : lisez la transcription, générez un résumé, des notes ou des fiches, et posez une question au chat. Dites-nous tout ce qui est lent, faux ou déroutant.
+Deepn turns what you save (videos, podcasts, articles, PDFs…) into text you can read, question and study.
+
+Things to try:
+• Save: in YouTube, Instagram, Spotify or Safari, tap Share, then Deepn. Or use the + button to paste a link, import a file or photograph a page.
+• Read: open an item to read its full transcript, in your language.
+• Ask: ask questions about one item or a whole folder; every answer cites its sources.
+• Study: generate a summary, notes, flashcards or a quiz.
+• Find: search for a word, even one spoken in the middle of a podcast, and catch up on what you saved in the Digest.
+
+The beta is free. Tell us anything that is slow, wrong or confusing.
+```
+
+TestFlight, français :
+
+```
+Deepn transforme ce que vous enregistrez (vidéos, podcasts, articles, PDF…) en texte à lire, à interroger et à réviser.
+
+À essayer :
+• Enregistrer : dans YouTube, Instagram, Spotify ou Safari, touchez Partager puis Deepn. Ou utilisez le bouton + pour coller un lien, importer un fichier ou photographier une page.
+• Lire : ouvrez un média pour lire sa transcription complète, dans votre langue.
+• Discuter : posez vos questions sur un média ou sur tout un dossier ; chaque réponse cite ses sources.
+• Réviser : générez un résumé, des notes de cours, des cartes mémo ou un quiz.
+• Retrouver : cherchez un mot, même prononcé au milieu d'un podcast, et revoyez vos ajouts dans le Digest.
+
+La bêta est gratuite. Dites-nous ce qui est lent, faux ou déroutant.
+```
+
+Play, closed-testing release notes (500 characters max per language):
+
+```
+<fr-FR>
+Deepn transforme vos vidéos, podcasts, articles et PDF en texte à lire, interroger et réviser. À essayer : partagez un lien depuis YouTube, Instagram ou Chrome vers Deepn (ou bouton +), lisez la transcription, posez vos questions au chat, générez résumé, notes, cartes mémo ou quiz, et cherchez dans tout ce qui a été dit. La bêta est gratuite. Dites-nous ce qui est lent, faux ou déroutant.
+</fr-FR>
+<en-US>
+Deepn turns your videos, podcasts, articles and PDFs into text you can read, question and study. Try it: share a link from YouTube, Instagram or Chrome to Deepn (or use +), read the transcript, ask the chat, generate a summary, notes, flashcards or a quiz, and search everything that was said. The beta is free. Tell us anything that is slow, wrong or confusing.
+</en-US>
 ```
 
 ### Beta App Review Information
