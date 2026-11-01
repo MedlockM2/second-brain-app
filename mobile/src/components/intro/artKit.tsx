@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { View, type StyleProp, type ViewStyle } from "react-native";
+import { View } from "react-native";
 import { useTheme } from "../../contexts/ThemeContext";
 
 /**
@@ -10,12 +9,6 @@ import { useTheme } from "../../contexts/ThemeContext";
  */
 export const ART_WIDTH = 414;
 export const ART_HEIGHT = 416;
-
-/** A white card lifted off the background, absolutely placed. */
-export function Card({ style, children }: { style: StyleProp<ViewStyle>; children?: ReactNode }) {
-  const { colors, shadows } = useTheme();
-  return <View style={[{ position: "absolute", backgroundColor: colors.surface, borderRadius: 16 }, shadows.soft, style]}>{children}</View>;
-}
 
 /** A grey line standing for text. */
 export function Bar({ width, height = 6, color }: { width: number | `${number}%`; height?: number; color?: string }) {
