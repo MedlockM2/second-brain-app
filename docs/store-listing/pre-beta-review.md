@@ -111,10 +111,10 @@ Review Notes:
 Deepn is in beta. This build contains no in-app purchases: the subscription screen cannot be reached and every account has full access.
 
 SIGN-IN
-Use the demo account in the Sign-In Information fields (email and password). It is already verified, no code is needed, and its library already holds three items with their summaries and flashcards.
+Use the demo account in the Sign-In Information fields (email and password). It is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a two-page introduction follows the sign-in: tap "Next", then "Let's go".
 
 HOW TO TEST
-1. Save content: in the Inbox, tap the add button at the bottom, then "Paste a link" and paste any article or YouTube link. Or, in Safari, open a page, tap Share and choose Deepn.
+1. Save content: on the Home tab, tap the add button at the bottom, then "Paste a link" and paste any article or YouTube link. Or, in Safari, open a page, tap Share and choose Deepn.
 2. Open an item: read its text, generate a summary, notes or flashcards, and ask the chat a question about it.
 3. Account tab: "Privacy Policy" opens our privacy policy; "Delete Account" deletes the account and its data permanently. You are welcome to test it on the demo account.
 
@@ -148,5 +148,5 @@ before the release can be sent for review.
 App access instructions:
 
 ```
-Sign in with the email and password above on the "Sign in" screen. The account is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. There are no in-app purchases in this build.
+Sign in with the email and password above on the "Sign in" screen. The account is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a two-page introduction follows the sign-in: tap "Next", then "Let's go". There are no in-app purchases in this build.
 ```
