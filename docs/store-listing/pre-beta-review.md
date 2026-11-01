@@ -108,7 +108,7 @@ before the release can be sent for review.
 | App access | **All or some functionality is restricted** → add the Play demo account (console only) with the instructions below |
 | Ads | **No**, the app contains no ads |
 | Content rating | questionnaire in `google-play-store.md` ("Content Rating Questionnaire") |
-| Target audience | **18 and over** only. The privacy policy excludes children, and a younger age group brings the Families policy into scope |
+| Target audience | **13 and over**: the app targets students, high-school students included. The privacy policy excludes under-13s and anyone under the digital age of consent, so the Families policy is out of scope |
 | Data safety | `docs/compliance/google-play-data-safety.md`, answer by answer |
 | Account deletion | in-app path, and URL `https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account` |
 | Government apps, financial features, health apps | **No** to each |

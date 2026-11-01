@@ -23,6 +23,7 @@ terraform -chdir=infrastructure/terraform/envs/prod output -raw www_base_url
 
 - **Privacy policy URL:** append `/privacy` to that base URL.
 - **Account deletion URL:** append `/privacy#delete-account` to that base URL.
+- **Data deletion without account deletion URL:** append `/privacy#delete-data` to that base URL. This section explains in-app deletion and an email request path for selected saved items and chat conversations.
 - **Privacy/deletion contact:** deepn.support@gmail.com.
 
 Verify the public page loads without sign-in and that its deletion section is directly reachable. Use the same privacy URL in the app. Published on 2026-10-30: privacy **https://d3fc24zfw6pew8.cloudfront.net/privacy**, account deletion **https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account**.

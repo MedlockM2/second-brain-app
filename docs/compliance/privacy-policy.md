@@ -1,8 +1,8 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-10-30
-**Effective date:** 2026-10-30
+**Last updated:** 2026-10-31
+**Effective date:** 2026-10-31
 
 ## 1. Introduction
 
@@ -138,7 +138,22 @@ You can delete your Deepn account and all its data at any time, in either of two
 
 **Subscriptions:** deleting your account does not cancel a subscription bought through the App Store or Google Play. Cancel it in your Apple or Google account settings, otherwise the store keeps billing you.
 
-You can also delete individual items in the app at any time without deleting your account.
+<a id="delete-data"></a>
+
+## 7.1. Delete Data Without Deleting Your Account
+
+You can delete selected saved items or chat conversations while keeping your Deepn account and the rest of your library.
+
+**In the app:**
+
+- **Saved items:** in your library, press and hold the item, choose **Delete** and confirm.
+- **Chat conversations:** open the chat history, tap the trash icon beside the conversation and confirm.
+
+**Without the app:** send an email to **[deepn.support@gmail.com](mailto:deepn.support@gmail.com?subject=Delete%20selected%20Deepn%20data)** from the email address of your account, with the subject "Delete selected Deepn data". Identify the saved items or conversations you want deleted and say that you want to keep your account. Do not send your password. We process your request within 30 days and confirm by email. Saved items then follow the deletion period below.
+
+**What is deleted:** selected saved items disappear from your library and search immediately when deleted in the app, or when we process your email request. Their associated content and study material are permanently erased about 30 days later, unless the same content is still saved elsewhere in your library or by another account. Selected chat conversations and their messages are removed from the live database when deleted.
+
+**What is kept:** your account, the rest of your library, usage records and technical processing records remain. Public content still saved by another account is no longer linked to your deleted item. Copies in backups expire according to section 6. For deletion of your entire account and its associated records, use section 7 above.
 
 ## 8. Your Rights
 

@@ -162,7 +162,7 @@ Start building your second brain today.
 | User-Generated Content | No (app processes third-party URLs but does not host UGC for sharing between users) |
 | Ads | No |
 | Interactive Elements | Users interact (shares content) |
-| Target Audience | General / 18+ (not designed for children) |
+| Target Audience | 13+ (students, high-school students included; not designed for children under 13) |
 
 **Resulting Rating**: Everyone (ESRB) / PEGI 3
 
