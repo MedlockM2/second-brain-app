@@ -2,7 +2,8 @@ import { Redirect } from "expo-router";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuth } from "../src/contexts/AuthContext";
 import { useUserPreferences } from "../src/contexts/UserPreferencesContext";
-import { LANGUAGE_ONBOARDING_ROUTE, SIGNED_OUT_ENTRY_POINT } from "../src/constants/routes";
+import { INTRO_ROUTE, LANGUAGE_ONBOARDING_ROUTE, SIGNED_OUT_ENTRY_POINT } from "../src/constants/routes";
+import { isIntroOwed } from "../src/lib/introState";
 import { type Theme } from "../src/constants/theme";
 import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
 
@@ -15,9 +16,11 @@ import { useThemeColors, useThemedStyles } from "../src/contexts/ThemeContext";
  * Shows a loading indicator during session restoration.
  *
  * Routing logic:
- * 1. Not authenticated -> welcome carousel
+ * 1. Not authenticated -> sign-in screen
  * 2. Authenticated, no reading language -> onboarding language selection
- * 3. Authenticated with a reading language -> inbox
+ * 3. Authenticated with a reading language, intro owed -> the two-page intro
+ *    (first sign-in of a first install, `src/lib/introState.ts`)
+ * 4. Otherwise -> inbox
  *
  * Case 2 is the fast path, not the guarantee: this route only redirects while it
  * is focused, so it cannot be what *enforces* the language gate. Enforcement
@@ -42,6 +45,9 @@ export default function Index() {
   if (isAuthenticated) {
     if (needsLanguageOnboarding) {
       return <Redirect href={LANGUAGE_ONBOARDING_ROUTE} />;
+    }
+    if (isIntroOwed()) {
+      return <Redirect href={INTRO_ROUTE} />;
     }
     return <Redirect href="/(tabs)/inbox" />;
   }

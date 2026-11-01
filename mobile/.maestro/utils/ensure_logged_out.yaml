@@ -4,11 +4,11 @@
 appId: com.secondbrainlabs.core
 
 ---
-# The three states a launch can settle on: the welcome carousel, language
-# onboarding (restored session without a reading language), or the tab bar.
+# The states a launch can settle on: the sign-in screen, language onboarding
+# (restored session without a reading language), the intro, or the tab bar.
 - extendedWaitUntil:
     visible:
-      id: "welcome-screen|language-onboarding-screen|account-tab-button"
+      id: "login-email-input|language-onboarding-screen|intro-screen|account-tab-button"
     timeout: 30000
 
 # Onboarding has no tab bar, so complete it first to reach a signed-in state
@@ -20,10 +20,17 @@ appId: com.secondbrainlabs.core
     commands:
       - tapOn:
           id: "language-onboarding-continue-button"
+      - runFlow: finish_intro.yaml
       - extendedWaitUntil:
           visible:
             id: "inbox-screen"
           timeout: 20000
+
+- runFlow:
+    when:
+      visible:
+        id: "intro-screen"
+    file: finish_intro.yaml
 
 - runFlow:
     when:

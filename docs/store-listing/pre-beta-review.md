@@ -47,8 +47,27 @@ Save content by sharing a link from any app, pasting a link, or importing a file
 
 ### What to Test (per build)
 
+TestFlight shows this text on its own « From the Developer » screen, before the app starts and before
+its « Share Feedback » screen. It is the only part of those two screens we write, so it presents the app
+(the post-sign-in carousel no longer does, to avoid saying it twice) and ends on how to send feedback,
+which TestFlight's own screen leaves out (feedback `AHZj_EmKyk_-POh6f05H_SE`). The field is localizable
+per build: paste the French version under French, the English one under English. The last sentence
+points to the « Signaler un bug » screen: paste it only once a build carrying that screen is out.
+
+English:
+
 ```
 Save a few things (a link shared from Safari or YouTube, a pasted link, a PDF or a photo of a page), then open them: read the transcript, generate a summary, notes or flashcards, and ask the chat a question about them. Tell us anything that is slow, wrong or confusing.
+
+To send feedback: take a screenshot in the app, tap the thumbnail, then Share Beta Feedback. Step by step: Account → Report a Bug.
+```
+
+Français :
+
+```
+Enregistrez quelques contenus (un lien partagé depuis Safari ou YouTube, un lien collé, un PDF ou la photo d'une page), puis ouvrez-les : lisez la transcription, générez un résumé, des notes ou des fiches, et posez une question au chat. Dites-nous tout ce qui est lent, faux ou déroutant.
+
+Pour nous faire un retour : faites une capture d'écran dans l'app, touchez la vignette, puis « Partager l'évaluation bêta ». Le pas à pas : Compte → Signaler un bug.
 ```
 
 ### Beta App Review Information

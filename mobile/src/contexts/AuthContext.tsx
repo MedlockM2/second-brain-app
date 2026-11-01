@@ -14,6 +14,7 @@ import { unregisterCurrentDevice } from "../services/pushNotificationService";
 import { SessionManager } from "../services/sessionManager";
 import { TokenStorage } from "../services/tokenStorage";
 import { AuthUser, LoginRequest, RegisterRequest } from "@media-summarizer/core/types/auth";
+import { oweIntroIfUndecided, settleIntroForRestoredSession } from "../lib/introState";
 
 interface AuthState {
   user: AuthUser | null;
@@ -202,6 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
+      settleIntroForRestoredSession();
       activateResourceAccount(user.id, user.reading_language ?? null);
       setState({
         user,
@@ -264,6 +266,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // A session restored on an install that never decided about the intro is
+      // an install from before it: an update, which must not show it.
+      settleIntroForRestoredSession();
       activateResourceAccount(user.id, user.reading_language ?? null);
       setState({
         user,
@@ -304,6 +309,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (data: LoginRequest) => {
       const response = await AuthService.login(data);
+      oweIntroIfUndecided();
       setState({
         user: response.user,
         isLoading: false,
@@ -323,6 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithSocial = useCallback(async (provider: SocialProvider) => {
     const response = await AuthService.loginWithSocial(provider);
     if (!response) return false;
+    oweIntroIfUndecided();
     activateResourceAccount(response.user.id, response.user.reading_language ?? null);
     setState({ user: response.user, isLoading: false, isAuthenticated: true, isOffline: false, sessionError: null });
     await scheduleRefresh();

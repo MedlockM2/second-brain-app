@@ -4,18 +4,11 @@ appId: com.secondbrainlabs.core
 
 ---
 
-# A signed-out launch opens on the welcome carousel; the sign-in screen is
-# pushed from its « I already have an account » button.
+# A signed-out launch opens directly on the sign-in screen.
 - extendedWaitUntil:
     visible:
-      id: "welcome-sign-in-button"
+      id: "login-email-input"
     timeout: 15000
-- tapOn:
-    id: "welcome-sign-in-button"
-
-- assertVisible:
-    id: "login-email-input"
-    optional: false
 
 # Fill in email
 - tapOn:
@@ -30,6 +23,9 @@ appId: com.secondbrainlabs.core
 # Tap Sign In
 - tapOn:
     id: "login-submit-button"
+
+# A first sign-in after reset_app.yaml goes through the intro first.
+- runFlow: finish_intro.yaml
 
 # Wait for navigation to inbox (login success)
 - extendedWaitUntil:

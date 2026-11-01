@@ -9,16 +9,21 @@ import { Spacing, TouchTarget, Typography, type Theme } from "../constants/theme
 import { t } from "../i18n";
 
 /**
- * The frame of every screen pushed from the welcome carousel: a back arrow, the
+ * The frame of the sign-in, sign-up, code and recovery screens: a back arrow, the
  * title and its subtitle, the form, and a footer held at the bottom of the screen
  * (it follows the form when the form is taller than the screen).
  */
-export function AuthScreen({ title, subtitle, onBack, header, footer, children }: {
-  title: string;
+export function AuthScreen({ title, subtitle, onBack, hideBack = false, centered = false, header, footer, children }: {
+  /** A string, or a sentence with a styled word in it (the sign-in screen's brand). */
+  title: ReactNode;
   subtitle?: ReactNode;
-  /** Replaces the default back: to the previous screen, else to the welcome carousel. */
+  /** Replaces the default back: to the previous screen, else to the sign-in screen. */
   onBack?: () => void;
-  /** Above the title: the envelope of the code screen. */
+  /** The sign-in screen is the signed-out entry point: nothing is behind it. */
+  hideBack?: boolean;
+  /** Header, title and subtitle centred, under a centred logo. */
+  centered?: boolean;
+  /** Above the title: the envelope of the code screen, the logo of the sign-in screen. */
   header?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
@@ -30,12 +35,12 @@ export function AuthScreen({ title, subtitle, onBack, header, footer, children }
   return <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.xs, paddingBottom: insets.bottom + Spacing.md }]}
       keyboardShouldPersistTaps="handled">
-      <TouchableOpacity style={styles.back} onPress={back} accessibilityRole="button" accessibilityLabel={t("auth.back")} testID="auth-back-button">
+      {hideBack ? null : <TouchableOpacity style={styles.back} onPress={back} accessibilityRole="button" accessibilityLabel={t("auth.back")} testID="auth-back-button">
         <Ionicons name="chevron-back" size={26} color={colors.textMain} />
-      </TouchableOpacity>
-      {header}
-      <Text style={styles.title} accessibilityRole="header">{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      </TouchableOpacity>}
+      {header ? <View style={centered && styles.centered}>{header}</View> : null}
+      <Text style={[styles.title, centered && styles.centeredText]} accessibilityRole="header">{title}</Text>
+      {subtitle ? <Text style={[styles.subtitle, centered && styles.centeredText]}>{subtitle}</Text> : null}
       <View style={styles.body}>{children}</View>
       {footer ? <View style={styles.footer}>{footer}</View> : null}
     </ScrollView>
@@ -50,6 +55,8 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
     color: colors.textMain, marginTop: Spacing.xs },
   subtitle: { ...Typography.body, color: colors.textSubtle, marginTop: 6 },
   body: { marginTop: Spacing.lg - 4 },
+  centered: { alignItems: "center" },
+  centeredText: { textAlign: "center" },
   // `auto` pushes the footer to the bottom of a screen the form does not fill.
   footer: { marginTop: "auto", paddingTop: Spacing.lg, gap: Spacing.sm },
 });

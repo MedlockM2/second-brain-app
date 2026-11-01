@@ -25,11 +25,12 @@ const easProjectId = "fad6e877-590d-4143-bbaa-fdd013b01c43";
 const appName = "Deepn";
 
 /**
- * The label under the icon in the iOS share sheet: expo-share-intent writes this
- * string verbatim into the extension's `CFBundleDisplayName`
- * (`writeIosShareExtensionFiles.js`). It used to read "ShareMedia", a name that
- * appears nowhere else in the product, so the row was unfindable even when iOS
- * did offer it (task-347) — hence a label that starts with the app's name.
+ * The extension's display name: expo-share-intent writes this string verbatim
+ * into the extension's `CFBundleDisplayName` (`writeIosShareExtensionFiles.js`).
+ * It used to read "ShareMedia", a name that appears nowhere else in the product
+ * (task-347) — hence a name that starts with the app's. The row of apps of the
+ * iOS share sheet does not show it, though: an iPhone labels Deepn's icon there
+ * « Deepn » (checked by the owner on 2026-11-01), which is what the intro draws.
  *
  * **It must never strip down to the app's own Xcode target name.** The same
  * option also names the native target and the generated `ios/<Name>/` directory,

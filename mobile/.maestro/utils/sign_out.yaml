@@ -37,5 +37,5 @@ appId: com.secondbrainlabs.core
 
 - extendedWaitUntil:
     visible:
-      id: "welcome-screen"
+      id: "login-email-input"
     timeout: 15000

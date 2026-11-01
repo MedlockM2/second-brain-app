@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { INTRO_ROUTE } from "../../src/constants/routes";
+import { isIntroOwed } from "../../src/lib/introState";
 import { resolveDeviceLocale, t } from "../../src/i18n";
 import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
 import {
@@ -64,11 +66,12 @@ export default function OnboardingLanguageScreen() {
       // is also why the exit stays a direct hop to the inbox rather than going
       // through `/` — the preference is settled before navigation, so there is
       // nothing left for the entry point to arbitrate, and the extra hop would
-      // only add a frame of the root loading state.
+      // only add a frame of the root loading state. The one thing it would have
+      // decided, the intro owed after a first sign-in, is asked here directly.
       // A failed update throws instead, which keeps the user on this screen with
       // an error rather than sending them into the tabs with no language set.
       await updateReadingLanguage(selectedLanguage);
-      router.replace("/(tabs)/inbox");
+      router.replace(isIntroOwed() ? INTRO_ROUTE : "/(tabs)/inbox");
     } catch (err) {
       setError(
         getFriendlyErrorMessage(err, {

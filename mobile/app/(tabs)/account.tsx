@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
@@ -124,8 +125,13 @@ export default function AccountScreen() {
     V1_READING_LANGUAGES.find((l) => l.code === readingLanguage)?.label ??
     t("account.notSet");
 
+  // On an iPhone during the beta, bugs go through TestFlight's screenshot
+  // feedback, which carries the capture and the device: the screen explains
+  // how, in place of the form (TestFlight feedback AHZj_EmKyk_-POh6f05H_SE).
+  // Android keeps the form — Play's private feedback is written on the store
+  // listing, with no capture — and so does a store build once the beta closes.
   const handleBugReport = () => {
-    router.push("/bug-report");
+    router.push(Platform.OS === "ios" && isBetaAccess ? "/beta-feedback" : "/bug-report");
   };
 
   const handleLogout = () => {

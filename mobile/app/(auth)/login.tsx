@@ -30,6 +30,7 @@ import { AuthCodeScreen } from "../../src/components/AuthCodeScreen";
 import { AuthField } from "../../src/components/AuthField";
 import { AuthScreen } from "../../src/components/AuthScreen";
 import { SlotText } from "../../src/components/SlotText";
+import { AppLogo } from "../../src/components/AppLogo";
 import {
   Typography,
   Spacing,
@@ -131,8 +132,14 @@ export default function LoginScreen() {
 
   return (
     <AuthScreen
-      title={t("login.title")}
-      subtitle={t("login.subtitle")}
+      // The signed-out entry point (no welcome screen in front of it any more):
+      // nothing behind it, the app's logo above a welcome line, « Deepn » in the
+      // amber the design system keeps for text (`primaryInk`; the fill amber is
+      // 1.24:1 on the background, unreadable as type).
+      hideBack
+      centered
+      header={<View style={styles.logo}><AppLogo /></View>}
+      title={<SlotText template={t("login.welcome")} slots={{ brand: <Text key="brand" style={styles.brand}>Deepn</Text> }} />}
       footer={
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>{t("login.noAccount")} </Text>
@@ -224,6 +231,13 @@ export default function LoginScreen() {
 
 const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
+    logo: {
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.lg - 4,
+    },
+    brand: {
+      color: Colors.primaryInk,
+    },
     noticeContainer: {
       backgroundColor: Colors.surfaceContainerLow,
       padding: Spacing.md,

@@ -14,7 +14,7 @@ tags:
 
 - extendedWaitUntil:
     visible:
-      id: "welcome-screen"
+      id: "login-email-input"
     timeout: 15000
 
 - runFlow: utils/login.yaml

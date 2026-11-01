@@ -237,6 +237,14 @@ function AppNavigator() {
             gestureEnabled: false,
           }}
         />
+        {/* The post-sign-in intro: « Suivant » is its only way forward, never a swipe back. */}
+        <Stack.Screen
+          name="onboarding/intro"
+          options={{
+            animation: "fade",
+            gestureEnabled: false,
+          }}
+        />
         <Stack.Screen
           name="share-confirmation"
           options={{

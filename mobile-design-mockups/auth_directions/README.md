@@ -8,6 +8,11 @@ web. Chaque `direction_*/` montre ses écrans mobiles, ses écrans web pour ordi
 
 ## Direction retenue : C (2026-10-21), implémentée le 2026-10-23
 
+> **Remplacé le 2026-11-01** (retour TestFlight `AHZj_EmKyk_-POh6f05H_SE`) : l'écran d'accueil à carrousel et ses
+> boutons « Commencer » / « J'ai déjà un compte » sont supprimés de l'app. Une personne déconnectée arrive directement
+> sur la connexion, et ce que fait Deepn est montré après la première connexion, par un carrousel de deux pages.
+> Le panneau gauche du web a trois pages pensées pour un ordinateur. Voir `../onboarding_apres_connexion/`.
+
 L’owner a retenu C. `direction_c_finale/` en donne la version finale, implémentée dans l’app et sur le web :
 - un carrousel de quatre pages, retenues le 2026-10-23 : « Gardez ce qui compte. Approfondissez. Apprenez. »,
   « Depuis vos apps ou votre téléphone », « Interrogez tout un dossier », « Sur votre téléphone et votre

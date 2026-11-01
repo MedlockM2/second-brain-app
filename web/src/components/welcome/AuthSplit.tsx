@@ -3,21 +3,25 @@ import type { TranslationKey } from "@media-summarizer/core/i18n/runtime";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon } from "../Icon";
 import { LogoMark } from "../Logo";
-import { DepthArt, EverywhereArt, SearchArt, ShareArt } from "./WelcomeArt";
+import { BrowserArt, DepthArt, PhoneArt } from "./WelcomeArt";
 
-/** The four pages of the mobile welcome carousel, in the same order. */
+/**
+ * Three pages made for a computer (mockup `mobile-design-mockups/
+ * onboarding_apres_connexion`, section 4): what Deepn does, saving from the
+ * browser, and saving from the phone. Not the mobile intro: a computer has no
+ * share sheet, and « on the web too » means nothing to someone already on it.
+ */
 const SLIDES: { key: string; Art: ComponentType; title: TranslationKey; body: TranslationKey[] }[] = [
   { key: "deep", Art: DepthArt, title: "welcome.deep.title", body: ["welcome.deep.save", "welcome.deep.chat", "welcome.deep.review"] },
-  { key: "share", Art: ShareArt, title: "welcome.share.title", body: ["welcome.share.body"] },
-  { key: "search", Art: SearchArt, title: "welcome.search.title", body: ["welcome.search.body"] },
-  { key: "everywhere", Art: EverywhereArt, title: "welcome.everywhere.title", body: ["welcome.everywhere.body"] },
+  { key: "browser", Art: BrowserArt, title: "welcome.browser.title", body: ["welcome.browser.body"] },
+  { key: "phone", Art: PhoneArt, title: "welcome.phone.title", body: ["welcome.phone.body"] },
 ];
 
 /** Long enough to read three short paragraphs. */
 const ADVANCE_MS = 8000;
 
 /**
- * Sign-in, sign-up and the e-mail code on a desktop: the welcome carousel on the
+ * Sign-in, sign-up and the e-mail code on a desktop: the panel above on the
  * left, turning on its own (arrows and dots to drive it), the form on the right.
  * Under 960px the carousel gives way and the form stands alone.
  */

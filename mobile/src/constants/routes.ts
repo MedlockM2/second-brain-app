@@ -27,8 +27,16 @@ export const POST_AUTH_ENTRY_POINT = "/";
 export const LANGUAGE_ONBOARDING_ROUTE = "/onboarding/language";
 
 /**
- * Where a signed-out person lands: the welcome carousel, from which "Get
- * started" and "I already have an account" push the sign-up and sign-in screens.
- * Sign-out and account deletion end here too, like a first launch.
+ * Where a signed-out person lands: the sign-in screen, which links to sign-up.
+ * There is no welcome screen in front of it any more — what the app does is told
+ * after the first sign-in, by the intro below (TestFlight feedback
+ * AHZj_EmKyk_-POh6f05H_SE). Sign-out and account deletion end here too.
  */
-export const SIGNED_OUT_ENTRY_POINT = "/(auth)/welcome";
+export const SIGNED_OUT_ENTRY_POINT = "/(auth)/login";
+
+/**
+ * The two-page intro shown once, after the first sign-in of a first install
+ * (`src/lib/introState.ts` decides). Reached from `app/index.tsx` and from the
+ * end of the language onboarding, never from a tab.
+ */
+export const INTRO_ROUTE = "/onboarding/intro";
