@@ -18,7 +18,7 @@ Reference answers for Play Console, aligned with [Privacy Policy](privacy-policy
 For the pre-beta review, use the published default CloudFront domain selected in [task-357](../research/task-357-legal-pages-hosting/README.md). Retrieve the base URL with:
 
 ```sh
-terraform -chdir=infrastructure/terraform/envs/prod output -raw www_base_url
+AWS_PROFILE=second-brain-app terraform -chdir=infrastructure/terraform/envs/dev output -raw www_base_url
 ```
 
 - **Privacy policy URL:** append `/privacy` to that base URL.
@@ -26,7 +26,7 @@ terraform -chdir=infrastructure/terraform/envs/prod output -raw www_base_url
 - **Data deletion without account deletion URL:** append `/privacy#delete-data` to that base URL. This section explains in-app deletion and an email request path for selected saved items and chat conversations.
 - **Privacy/deletion contact:** deepn.support@gmail.com.
 
-Verify the public page loads without sign-in and that its deletion section is directly reachable. Use the same privacy URL in the app. Published on 2026-10-30: privacy **https://d3fc24zfw6pew8.cloudfront.net/privacy**, account deletion **https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account**.
+Verify the public page loads without sign-in and that its deletion section is directly reachable. Use the same privacy URL in the app. Published on the dev `www` distribution since 2026-11-01 (only dev is in use until production): privacy **https://d118p1z5xvufnz.cloudfront.net/privacy**, account deletion **https://d118p1z5xvufnz.cloudfront.net/privacy#delete-account**.
 
 ## Data Collected
 

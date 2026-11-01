@@ -10,7 +10,8 @@
  * addresses.
  *
  * Until the domain is bought (task-443), the privacy policy is served on the
- * default CloudFront name of the prod `www` distribution
+ * default CloudFront name of the dev `www` distribution — the only environment in
+ * use until production; prod stays dormant (owner, 2026-11-01)
  * (`infrastructure/terraform/modules/platform/www.tf`), published from
  * `docs/compliance/privacy-policy.md` by `scripts/publish_legal_site.sh`. Deepn
  * publishes no terms of use of its own: Apple requires them only for an
@@ -25,7 +26,7 @@ import { Platform } from "react-native";
 
 export const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
 
-export const PRIVACY_POLICY_URL = "https://d3fc24zfw6pew8.cloudfront.net/privacy";
+export const PRIVACY_POLICY_URL = "https://d118p1z5xvufnz.cloudfront.net/privacy";
 
 /**
  * Where a subscription is actually cancelled. The app cannot cancel one itself —

@@ -12,7 +12,7 @@ import { AuthCodePage } from "./AuthCodePage";
 import { AuthField, PasswordRules, SlotText } from "../components/AuthField";
 import { AuthSplit } from "../components/welcome/AuthSplit";
 
-const PRIVACY_POLICY_URL = "https://d3fc24zfw6pew8.cloudfront.net/privacy";
+const PRIVACY_POLICY_URL = "https://d118p1z5xvufnz.cloudfront.net/privacy";
 
 /**
  * Sign in and sign up, beside the welcome carousel: Apple, Google, « or », then

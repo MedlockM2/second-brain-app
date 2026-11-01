@@ -170,7 +170,7 @@ Start building your second brain today.
 
 Answer from `docs/compliance/google-play-data-safety.md`, which is checked against the code.
 Account deletion: in the app (Account tab > Delete Account) and at
-https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account.
+https://d118p1z5xvufnz.cloudfront.net/privacy#delete-account.
 
 ## Contact Details
 
@@ -179,7 +179,7 @@ https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account.
 | Developer Name | Second Brain Labs |
 | Email | deepn.support@gmail.com |
 | Website | none yet (moves to `www.<domaine>` with task-454) |
-| Privacy Policy | https://d3fc24zfw6pew8.cloudfront.net/privacy |
+| Privacy Policy | https://d118p1z5xvufnz.cloudfront.net/privacy |
 
 ## Store Listing Contact
 

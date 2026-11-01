@@ -35,7 +35,7 @@ then the build → **Add to external group** → submit for Beta App Review.
 | Beta App Description | see below |
 | Feedback Email | `deepn.support@gmail.com` |
 | Marketing URL | leave empty |
-| Privacy Policy URL | `https://d3fc24zfw6pew8.cloudfront.net/privacy` |
+| Privacy Policy URL | `https://d118p1z5xvufnz.cloudfront.net/privacy` |
 
 Beta App Description:
 
@@ -89,7 +89,7 @@ HOW TO TEST
 3. Account tab: "Privacy Policy" opens our privacy policy; "Delete Account" deletes the account and its data permanently. You are welcome to test it on the demo account.
 
 THIRD-PARTY AI
-To turn saved content into text and study material, Deepn sends it to OpenAI (summaries, notes, flashcards, chat answers), Deepgram (speech-to-text) and LlamaParse and Unstructured (text of documents and images). We do not attach the account email or name, and never send the password. This is disclosed in section 4 of the privacy policy: https://d3fc24zfw6pew8.cloudfront.net/privacy
+To turn saved content into text and study material, Deepn sends it to OpenAI (summaries, notes, flashcards, chat answers), Deepgram (speech-to-text) and LlamaParse and Unstructured (text of documents and images). We do not attach the account email or name, and never send the password. This is disclosed in section 4 of the privacy policy: https://d118p1z5xvufnz.cloudfront.net/privacy
 
 MEDIA FROM YOUTUBE AND OTHER PLATFORMS
 Deepn does not play, download, save or export videos or audio for the user. The app shows only text (transcripts, summaries, notes) made for the user's personal study; the "open source" action opens the original content in its own app or website.
@@ -104,13 +104,13 @@ before the release can be sent for review.
 
 | Section | Answer |
 |---|---|
-| Privacy policy | `https://d3fc24zfw6pew8.cloudfront.net/privacy` |
+| Privacy policy | `https://d118p1z5xvufnz.cloudfront.net/privacy` |
 | App access | **All or some functionality is restricted** → add the Play demo account (console only) with the instructions below |
 | Ads | **No**, the app contains no ads |
 | Content rating | questionnaire in `google-play-store.md` ("Content Rating Questionnaire") |
 | Target audience | **13 and over**: the app targets students, high-school students included. The privacy policy excludes under-13s and anyone under the digital age of consent, so the Families policy is out of scope |
 | Data safety | `docs/compliance/google-play-data-safety.md`, answer by answer |
-| Account deletion | in-app path, and URL `https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account` |
+| Account deletion | in-app path, and URL `https://d118p1z5xvufnz.cloudfront.net/privacy#delete-account` |
 | Government apps, financial features, health apps | **No** to each |
 | News app | **No** |
 | Store listing | short and full description in `google-play-store.md`; contact email `deepn.support@gmail.com` |

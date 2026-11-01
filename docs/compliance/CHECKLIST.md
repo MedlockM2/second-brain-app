@@ -20,7 +20,7 @@ This checklist tracks readiness for Apple App Store and Google Play submission.
 
 ### Privacy Policy and Terms Hosting
 
-- [x] Host privacy policy at `https://d3fc24zfw6pew8.cloudfront.net/privacy` (prod `www` distribution, 2026-10-30; account deletion section at `#delete-account`)
+- [x] Host privacy policy at `https://d118p1z5xvufnz.cloudfront.net/privacy` (dev `www` distribution since 2026-11-01, the only environment in use until production; account deletion section at `#delete-account`)
 - [x] No terms of service page for the beta: the Terms link points to Apple's standard EULA (task-357 README, owner amendment of 2026-10-30)
 - [x] Verify the URL is publicly accessible (no authentication required)
 - [ ] Verify the page renders correctly on mobile browsers

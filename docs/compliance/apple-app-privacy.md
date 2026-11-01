@@ -10,10 +10,10 @@ Reference answers for App Store Connect, aligned with [Privacy Policy](privacy-p
 Use the published HTTPS URL ending in `/privacy`. For the pre-beta review, the owner's decision in [task-357](../research/task-357-legal-pages-hosting/README.md) uses the default CloudFront domain. Retrieve the base URL with:
 
 ```sh
-terraform -chdir=infrastructure/terraform/envs/prod output -raw www_base_url
+AWS_PROFILE=second-brain-app terraform -chdir=infrastructure/terraform/envs/dev output -raw www_base_url
 ```
 
-Append `/privacy`, verify the page is publicly accessible, and use that same URL in the app and App Store Connect. Published on 2026-10-30: **https://d3fc24zfw6pew8.cloudfront.net/privacy** (republish after any edit of `privacy-policy.md` with `AWS_PROFILE=prod scripts/publish_legal_site.sh prod`).
+Append `/privacy`, verify the page is publicly accessible, and use that same URL in the app and App Store Connect. Published on the dev `www` distribution since 2026-11-01 — only dev is in use until production: **https://d118p1z5xvufnz.cloudfront.net/privacy** (republish after any edit of `privacy-policy.md` with `AWS_PROFILE=second-brain-app scripts/publish_legal_site.sh dev`).
 
 **Privacy contact:** deepn.support@gmail.com
 

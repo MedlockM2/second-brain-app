@@ -370,7 +370,7 @@ Welcome to Deepn! In this first release:
 
 | Field | Value |
 |-------|-------|
-| Privacy Policy URL | https://d3fc24zfw6pew8.cloudfront.net/privacy (published 2026-10-30, prod `www` distribution) |
+| Privacy Policy URL | https://d118p1z5xvufnz.cloudfront.net/privacy (dev `www` distribution since 2026-11-01: only dev is in use until production) |
 | Support URL | none yet: required for the 1.0 version, not for TestFlight. Moves to `www.<domaine>` with the rest at the switch gated by task-454 |
 | Marketing URL | optional, leave empty |
 

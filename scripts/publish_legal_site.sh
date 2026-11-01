@@ -16,7 +16,7 @@
 #   ./scripts/publish_legal_site.sh <dev|prod>
 #
 # Example:
-#   AWS_PROFILE=prod ./scripts/publish_legal_site.sh prod
+#   AWS_PROFILE=second-brain-app ./scripts/publish_legal_site.sh dev   (the only environment in use until production)
 
 set -euo pipefail
 
