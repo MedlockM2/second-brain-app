@@ -1,7 +1,7 @@
-# The two-page intro shown once after the first sign-in of a fresh install
+# The intro shown once after the first sign-in of a fresh install
 # (app/onboarding/intro.tsx). reset_app.yaml clears the app container, so a flow
-# that signs in after it meets the intro: walk through it with « Suivant », the
-# only way forward, then « C'est parti ». A no-op when the intro is not shown.
+# that signs in after it meets the intro: « C'est parti », its only way out.
+# A no-op when the intro is not shown.
 appId: com.secondbrainlabs.core
 
 ---
@@ -15,7 +15,5 @@ appId: com.secondbrainlabs.core
       visible:
         id: "intro-screen"
     commands:
-      - tapOn:
-          id: "intro-next-button"
       - tapOn:
           id: "intro-start-button"
