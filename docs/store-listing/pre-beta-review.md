@@ -87,7 +87,7 @@ Review Notes:
 Deepn is in beta. This build contains no in-app purchases: the subscription screen cannot be reached and every account has full access.
 
 SIGN-IN
-Use the demo account in the Sign-In Information fields (email and password). It is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a two-page introduction follows the sign-in: tap "Next", then "Let's go".
+Use the demo account in the Sign-In Information fields (email and password). It is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a one-screen introduction follows the sign-in: tap "Let's go".
 
 HOW TO TEST
 1. Save content: on the Home tab, tap the add button at the bottom, then "Paste a link" and paste any article or YouTube link. Or, in Safari, open a page, tap Share and choose Deepn.
@@ -113,6 +113,7 @@ before the release can be sent for review.
 | Privacy policy | `https://d118p1z5xvufnz.cloudfront.net/privacy` |
 | App access | **All or some functionality is restricted** → add the Play demo account (console only) with the instructions below |
 | Ads | **No**, the app contains no ads |
+| Closed test — testers' feedback contact | `deepn.support@gmail.com` (Alpha track → Testers → « URL ou adresse e-mail pour les commentaires ») |
 | Content rating | questionnaire in `google-play-store.md` ("Content Rating Questionnaire") |
 | Target audience | **13 and over**: the app targets students, high-school students included. The privacy policy excludes under-13s and anyone under the digital age of consent, so the Families policy is out of scope |
 | Data safety | `docs/compliance/google-play-data-safety.md`, answer by answer |
@@ -124,5 +125,5 @@ before the release can be sent for review.
 App access instructions:
 
 ```
-Sign in with the email and password above on the "Sign in" screen. The account is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a two-page introduction follows the sign-in: tap "Next", then "Let's go". There are no in-app purchases in this build.
+Sign in with the email and password above on the "Sign in" screen. The account is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a one-screen introduction follows the sign-in: tap "Let's go". There are no in-app purchases in this build.
 ```
