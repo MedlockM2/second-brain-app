@@ -19,9 +19,11 @@ The review contact's name and phone exist only in the consoles.
 ## The build
 
 The binary under review is the latest `internal` build (EAS profile `internal`, backend
-**dev**). It must have been built after commit `6007d03b`: an older binary first starts on
-its embedded JavaScript, with the old legal links and without the Privacy Policy row in
-Account, and only takes the OTA update on the next launch.
+**dev**): iOS 23 and Android 29, built from `c0a6220c`. A binary first starts on its
+embedded JavaScript and only takes an OTA update on the next cold launch, so the reviewer's
+first launch shows whatever the binary was built from: rebuild before a review whenever the
+screens a reviewer meets first (sign-in, intro, Account) changed since the last build. Builds
+21/28 were replaced for that reason on 2026-11-02 (pre-sign-in carousel, no intro).
 Builds iOS 21 and Android 28 (commit `6007d03b`) also embed the prod privacy URL
 (`https://d3fc24zfw6pew8.cloudfront.net/privacy`) for that first launch: the prod page stays published
 until every distributed binary was built after `3109ecf5`.
@@ -55,7 +57,7 @@ release notes of the closed-testing release to its testers. Its one job is the b
 is in one sentence, and what we ask of the tester. No feature list: the post-sign-in intro shows the one
 gesture the app cannot teach (saving from another app), the rest is found in the app, and TestFlight's
 « Share Feedback » screen that follows says how to send feedback (owner, 2026-11-01: no redundant screens
-before the app). Set on iOS build 21 and on the Android Alpha release 1.0.0 (28), French and English.
+before the app). Set on iOS build 23 and on the Android Alpha release 1.0.0 (29), French and English.
 TestFlight's field is per build: set it again on each new build. Play release notes: 500 characters max per
 language, in `<fr-FR>…</fr-FR>` / `<en-US>…</en-US>` tags.
 
