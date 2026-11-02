@@ -22,6 +22,9 @@ The binary under review is the latest `internal` build (EAS profile `internal`, 
 **dev**). It must have been built after commit `6007d03b`: an older binary first starts on
 its embedded JavaScript, with the old legal links and without the Privacy Policy row in
 Account, and only takes the OTA update on the next launch.
+Builds iOS 21 and Android 28 (commit `6007d03b`) also embed the prod privacy URL
+(`https://d3fc24zfw6pew8.cloudfront.net/privacy`) for that first launch: the prod page stays published
+until every distributed binary was built after `3109ecf5`.
 
 ## Apple — TestFlight
 

@@ -41,6 +41,8 @@ Lire l'amendement du 2026-10-30 sous **Owner Validation** du README de task-357.
 **Publié le 2026-10-30** (apply ciblé des 8 ressources de `www.tf` en prod, puis `scripts/publish_legal_site.sh prod`) : politique `https://d3fc24zfw6pew8.cloudfront.net/privacy`, suppression de compte `https://d3fc24zfw6pew8.cloudfront.net/privacy#delete-account`. Vérifié sans authentification : HTTP 200, `text/html`, HSTS, CSP et `nosniff` présents, HTTP redirigé en HTTPS, accès direct au bucket refusé (403). L'owner a relu et approuvé le texte le même jour.
 
 **Déplacé sur dev le 2026-11-01** (owner : seul l'environnement dev sert jusqu'à la production, prod reste en sommeil) : `AWS_PROFILE=second-brain-app scripts/publish_legal_site.sh dev`, politique `https://d118p1z5xvufnz.cloudfront.net/privacy`, suppression de compte `…/privacy#delete-account`, suppression de données sans compte `…/privacy#delete-data`. App, web, docs, App Store Connect (fiche bêta, notes de review) et Play Console (règles de confidentialité, sécurité des données) pointent vers cette adresse. La page a été retirée du bucket `www` de prod le même jour (la distribution répond 403) ; les ressources Terraform `www` de prod existent toujours.
+
+**Remise en prod le 2026-11-02** (owner) : `AWS_PROFILE=prod scripts/publish_legal_site.sh prod`, HTTP 200 vérifié. Les binaires iOS 21 et Android 28 embarquent encore l'adresse de prod et ouvrent ce lien au premier lancement, avant que l'OTA ne s'applique : le relecteur de la bêta l'aurait trouvé en 403. La page de prod reste en ligne tant qu'un binaire distribué a été compilé avant le commit `3109ecf5`. On ne la retire qu'une fois ces binaires remplacés.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
