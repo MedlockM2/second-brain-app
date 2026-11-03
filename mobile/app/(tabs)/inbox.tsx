@@ -263,7 +263,12 @@ export default function InboxScreen() {
           in react-native-screens), so anything inserted above this loses both.
           The floating buttons below are fine: they come after it. */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          hasLoadedUnsortedCount &&
+            unsortedCount === 0 &&
+            styles.scrollContentCentered,
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -744,21 +749,11 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       backgroundColor: Colors.background,
     },
     scrollContent: {
-      // Fills the viewport and centres the column in what is left above the
-      // floating buttons. Anchored at the top, the column left every point it did
-      // not use at the bottom, between the last row and the buttons: the
-      // unsorted-review card happened to fill that on a 6.1" phone, and without
-      // it the two rows sat right under the status bar over an empty band. Centred,
-      // the spare height is split evenly above and below, so the column keeps its
-      // own shape (`HOME_BLOCK_GAP` between blocks) whichever blocks are present,
-      // on any screen height, text size or display density. A column taller than
-      // the viewport leaves `flexGrow` nothing to grow, and scrolls from the top
-      // exactly as it did.
-      //
-      // Centring also means a block that lands late, or goes away once answered,
-      // moves what is around it by half its height instead of all of it, and only
-      // while the column fits on screen — the first-paint placeholders (task-417)
-      // still hold the space of a block whose answer is in flight.
+      // Keep the review deck and recent additions at the top whether or not
+      // there is anything to continue learning. Centre only after the unsorted
+      // count is known to be zero (scrollContentCentered): that is the sparse
+      // Home layout the owner retained. The review placeholder uses the same
+      // top alignment as the deck it may become (task-580).
       //
       // On iOS, `NativeTabs` also turns UIKit's automatic content inset on for
       // this scroll view (`RNSScrollViewHelper`), which adds the tab bar's band
@@ -766,7 +761,7 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       // fills the viewport, that band is what a drag can still reveal on a column
       // that fits: the doubled reserve task-350 left as an owner call, unchanged.
       flexGrow: 1,
-      justifyContent: "center",
+      justifyContent: "flex-start",
       // No top padding on purpose: whichever block comes first carries the gap
       // under the safe area itself, through the same `HOME_BLOCK_GAP` as every
       // other. Padding here would stack on top of it and make the head of the
@@ -778,10 +773,13 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       // pads its buttons by `Spacing.sm`, and they are `TouchTarget.large` tall,
       // so the sum is where their top edge is. Then `HOME_BLOCK_GAP`, because the
       // buttons are the column's last block and keep the one gap above themselves
-      // like every other: it is what makes the space under the safe area and the
-      // space above the buttons the same, and the centring above symmetric.
+      // like every other. When the column is centred, this also makes the space
+      // under the safe area and above the buttons symmetric.
       paddingBottom:
         TAB_BAR_CLEARANCE + Spacing.sm + TouchTarget.large + HOME_BLOCK_GAP,
+    },
+    scrollContentCentered: {
+      justifyContent: "center",
     },
 
     // Loading state

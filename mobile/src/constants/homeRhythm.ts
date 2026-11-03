@@ -19,7 +19,8 @@ import { Spacing } from "./theme";
  * desynchronising the head of the screen from its body. It is an alias of
  * `Spacing.lg`, never a value of its own.
  *
- * The screen centres the column in its viewport, and this same gap at both ends
- * (under the safe area, above the buttons) is what makes that centring symmetric.
+ * Without an unsorted-review deck, the screen centres the column in its viewport;
+ * this same gap at both ends (under the safe area, above the buttons) makes that
+ * centring symmetric. With the deck, the column stays anchored at the top.
  */
 export const HOME_BLOCK_GAP = Spacing.lg;
