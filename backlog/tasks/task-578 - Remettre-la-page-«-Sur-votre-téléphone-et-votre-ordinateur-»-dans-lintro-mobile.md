@@ -3,16 +3,18 @@ id: TASK-578
 title: >-
   Remettre la page « Sur votre téléphone et votre ordinateur » dans l'intro
   mobile
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-02 13:57'
-updated_date: '2026-11-03 10:20'
+updated_date: '2026-11-03 10:24'
 labels:
   - mobile
   - onboarding
 dependencies: []
 references:
-  - backlog/drafts/draft-2 - Appliquer-la-dernière-mise-à-jour-OTA-dès-la-première-connexion-sans-attente-au-démarrage.md
+  - >-
+    backlog/drafts/draft-2 -
+    Appliquer-la-dernière-mise-à-jour-OTA-dès-la-première-connexion-sans-attente-au-démarrage.md
   - mobile/app/onboarding/intro.tsx
   - mobile/src/components/intro/IntroArt.tsx
   - mobile-design-mockups/onboarding_apres_connexion/README.md
@@ -49,11 +51,27 @@ Après le merge, faire le build manuel décrit dans DRAFT-2 et le soumettre en r
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `mobile/app/onboarding/intro.tsx` affiche deux pages : partage, puis « Sur votre téléphone et votre ordinateur » ; « Suivant » sur la page 1, « C'est parti » sur la page 2, points de pagination sous le bouton, sans glissement ni retour
-- [ ] #2 `EverywhereArt` est de nouveau exporté par `mobile/src/components/intro/IntroArt.tsx`, sans légende
-- [ ] #3 Les clés `intro.next`, `intro.everywhere.title` et `intro.everywhere.body` existent dans les 11 catalogues de `packages/core/src/i18n/`
-- [ ] #4 `mobile/.maestro/utils/finish_intro.yaml` touche `intro-next-button` puis `intro-start-button`
-- [ ] #5 `npm run typecheck` et `npm run lint` passent dans `mobile/` et `packages/core`
-- [ ] #6 `docs/store-listing/pre-beta-review.md` décrit l'intro à deux pages dans les notes de review Apple et les instructions d'accès Play
-- [ ] #7 Les critères d'acceptation de DRAFT-2 sont satisfaits dans la même branche, et DRAFT-2 est cochée et passée à Done avec cette tâche
+- [x] #1 `mobile/app/onboarding/intro.tsx` affiche deux pages : partage, puis « Sur votre téléphone et votre ordinateur » ; « Suivant » sur la page 1, « C'est parti » sur la page 2, points de pagination sous le bouton, sans glissement ni retour
+- [x] #2 `EverywhereArt` est de nouveau exporté par `mobile/src/components/intro/IntroArt.tsx`, sans légende
+- [x] #3 Les clés `intro.next`, `intro.everywhere.title` et `intro.everywhere.body` existent dans les 11 catalogues de `packages/core/src/i18n/`
+- [x] #4 `mobile/.maestro/utils/finish_intro.yaml` touche `intro-next-button` puis `intro-start-button`
+- [x] #5 `npm run typecheck` et `npm run lint` passent dans `mobile/` et `packages/core`
+- [x] #6 `docs/store-listing/pre-beta-review.md` décrit l'intro à deux pages dans les notes de review Apple et les instructions d'accès Play
+- [x] #7 Les critères d'acceptation de DRAFT-2 sont satisfaits dans la même branche, et DRAFT-2 est cochée et passée à Done avec cette tâche
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+J'ai annulé le commit `23adf23f` (`git revert`), ce qui rend l'intro à deux pages telle qu'elle était au commit `6bbde721` :
+- dans `intro.tsx` : « Suivant », puis « C'est parti », les points de pagination sous le bouton, et l'illustration de la page 2 à ×1,12 ;
+- `EverywhereArt` ;
+- les clés `intro.next` et `intro.everywhere.*` dans les 11 catalogues ;
+- l'étape Next → Start de Maestro, modifiée mais pas lancée.
+
+Le dessin de la feuille de partage dans le téléphone, ajouté par le commit `0ad4c0c4`, est conservé. Le commentaire de l'écran note que la page revient avant la publication du web, par choix de l'owner.
+
+Les notes de review Apple et les instructions Play de `docs/store-listing/pre-beta-review.md` décrivent maintenant deux écrans, ainsi que le redémarrage possible après la connexion. Elles restent à recopier dans les consoles.
+
+DRAFT-2 a été réalisée dans le même run. `npm run typecheck` et `npm run lint` passent dans `mobile/` et `packages/core`. Le seul avertissement restant existait déjà, dans `purchaseService.ts`. Mise en œuvre directe par Claude à la demande de l'owner, sans dispatch.
+<!-- SECTION:FINAL_SUMMARY:END -->

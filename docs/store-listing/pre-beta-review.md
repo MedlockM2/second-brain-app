@@ -21,9 +21,11 @@ The review contact's name and phone exist only in the consoles.
 The binary under review is the latest `internal` build (EAS profile `internal`, backend
 **dev**): iOS 23 and Android 29, built from `c0a6220c`. A binary first starts on its
 embedded JavaScript and only takes an OTA update on the next cold launch, so the reviewer's
-first launch shows whatever the binary was built from: rebuild before a review whenever the
-screens a reviewer meets first (sign-in, intro, Account) changed since the last build. Builds
-21/28 were replaced for that reason on 2026-11-02 (pre-sign-in carousel, no intro).
+first launch shows whatever the binary was built from. Builds 21/28 were replaced for that
+reason on 2026-11-02 (pre-sign-in carousel, no intro). Since the build that embeds
+`mobile/src/lib/firstLaunchUpdate.ts`, a fresh install restarts on the latest update at its
+first sign-in (`mobile/MOBILE_CI_CD.md`, « A fresh install meets the latest update at its first
+sign-in »): screens before the sign-in still come from the binary, the rest from the update.
 Builds iOS 21 and Android 28 (commit `6007d03b`) also embed the prod privacy URL
 (`https://d3fc24zfw6pew8.cloudfront.net/privacy`) for that first launch: the prod page stays published
 until every distributed binary was built after `3109ecf5`.
@@ -92,7 +94,7 @@ Review Notes:
 Deepn is in beta. This build contains no in-app purchases: the subscription screen cannot be reached and every account has full access.
 
 SIGN-IN
-Use the demo account in the Sign-In Information fields (email and password). It is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a one-screen introduction follows the sign-in: tap "Let's go".
+Use the demo account in the Sign-In Information fields (email and password). It is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, the app may restart once right after the sign-in to apply its latest update (a brief loading screen, not a crash), then a two-screen introduction follows: tap "Next", then "Let's go".
 
 HOW TO TEST
 1. Save content: on the Home tab, tap the add button at the bottom, then "Paste a link" and paste any article or YouTube link. Or, in Safari, open a page, tap Share and choose Deepn.
@@ -130,5 +132,5 @@ before the release can be sent for review.
 App access instructions:
 
 ```
-Sign in with the email and password above on the "Sign in" screen. The account is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, a one-screen introduction follows the sign-in: tap "Let's go". There are no in-app purchases in this build.
+Sign in with the email and password above on the "Sign in" screen. The account is already verified, no code is needed, and its library already holds three items with their summaries and flashcards. On a first install, the app may restart once right after the sign-in to apply its latest update (a brief loading screen, not a crash), then a two-screen introduction follows: tap "Next", then "Let's go". There are no in-app purchases in this build.
 ```

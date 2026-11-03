@@ -678,6 +678,42 @@ A fingerprint runtime version is independent of `version` and of the
 `appVersionSource: "remote"` without interfering. Nothing about version management
 changed.
 
+### A fresh install meets the latest update at its first sign-in
+
+A binary always starts on the JavaScript it embeds. `expo-updates` downloads the
+latest update during that launch (`checkAutomatically` ON_LOAD, the default) and,
+left alone, only runs it at the next cold start. The first screens a new user
+meets, such as sign-in, reading language and the intro, would then be the binary's,
+however old. That is how the store reviewer met, on 2026-11-02, a carousel removed
+days earlier, and it cost a pair of builds (21/28 → 23/29).
+
+`updates.fallbackToCacheTimeout` would hold the splash screen until the download
+ends. The owner refused it: no launch may wait. Instead,
+`src/lib/firstLaunchUpdate.ts` uses the time the user spends signing in:
+
+- **Startup is unchanged.** A tracker mounted in `AuthProvider` mirrors the
+  download state from `useUpdates()`. If the startup check ends without an update
+  in hand, it checks and fetches once more by itself.
+- **On a successful sign-in** (`login`, `loginWithSocial` in `AuthContext`; sign-up
+  ends in `login` after the e-mail code), if the app runs its embedded code:
+  - an update already downloaded triggers `Updates.reloadAsync()`, behind the
+    sign-in button's spinner and a reload screen in the theme's colours;
+  - a download under way gets at most one second;
+  - otherwise the sign-in goes on, and the update runs at the next launch as
+    before.
+- **Only on an embedded launch.** After the reload the app runs the update, so this
+  cannot loop, and an install that already runs an update is never touched.
+- **The intro survives the reload** because `oweIntroIfUndecided()` writes « owed »
+  *before* the reload. If the reload came first, `settleIntroForRestoredSession`
+  would take the restored session for an install that predates the intro and mark
+  it seen.
+
+**This logic only works once it is embedded.** Changing `firstLaunchUpdate.ts`, or
+the sign-in path that calls it, is a JS-only change: CI ships it as an OTA, which a
+fresh install meets one launch too late. Build a binary by hand afterwards
+(`eas build --platform all --profile internal --auto-submit`). Every other JS change
+then reaches new users at their first sign-in without a build.
+
 #### Every fingerprint source must be in the repository
 
 The fingerprint is computed **twice** for one build: once by eas-cli on the

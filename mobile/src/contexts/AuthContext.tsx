@@ -15,6 +15,8 @@ import { SessionManager } from "../services/sessionManager";
 import { TokenStorage } from "../services/tokenStorage";
 import { AuthUser, LoginRequest, RegisterRequest } from "@media-summarizer/core/types/auth";
 import { oweIntroIfUndecided, settleIntroForRestoredSession } from "../lib/introState";
+import { applyLatestUpdateOnFirstSignIn, useFirstLaunchUpdateTracker } from "../lib/firstLaunchUpdate";
+import { useThemeColors } from "./ThemeContext";
 
 interface AuthState {
   user: AuthUser | null;
@@ -76,6 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revalidationRef = useRef<Promise<boolean> | null>(null);
   const initStartedRef = useRef(false);
+
+  // A fresh install restarts on the latest OTA update at its first sign-in
+  // (src/lib/firstLaunchUpdate.ts); the reload screen takes the theme's colours.
+  useFirstLaunchUpdateTracker();
+  const colors = useThemeColors();
+  const colorsRef = useRef(colors);
+  useEffect(() => {
+    colorsRef.current = colors;
+  }, [colors]);
 
   const clearRefreshTimer = useCallback(() => {
     if (refreshTimerRef.current) {
@@ -310,6 +321,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (data: LoginRequest) => {
       const response = await AuthService.login(data);
       oweIntroIfUndecided();
+      // After the intro is owed, never before: the restart restores the session,
+      // and settleIntroForRestoredSession would take an undecided install for one
+      // that predates the intro and mark it seen.
+      await applyLatestUpdateOnFirstSignIn(colorsRef.current);
       setState({
         user: response.user,
         isLoading: false,
@@ -330,6 +345,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const response = await AuthService.loginWithSocial(provider);
     if (!response) return false;
     oweIntroIfUndecided();
+    // After the intro is owed: see `login`.
+    await applyLatestUpdateOnFirstSignIn(colorsRef.current);
     activateResourceAccount(response.user.id, response.user.reading_language ?? null);
     setState({ user: response.user, isLoading: false, isAuthenticated: true, isOffline: false, sessionError: null });
     await scheduleRefresh();

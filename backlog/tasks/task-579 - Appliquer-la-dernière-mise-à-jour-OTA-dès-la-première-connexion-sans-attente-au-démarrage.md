@@ -1,11 +1,12 @@
 ---
-id: DRAFT-2
+id: TASK-579
 title: >-
   Appliquer la dernière mise à jour OTA dès la première connexion, sans attente
   au démarrage
-status: Draft
+status: Done
 assignee: []
 created_date: '2026-11-03 09:54'
+updated_date: '2026-11-03 10:24'
 labels:
   - mobile
   - onboarding
@@ -54,11 +55,32 @@ L'owner refuse la solution native `updates.fallbackToCacheTimeout`, qui ferait a
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Un module dédié (par exemple `mobile/src/lib/firstLaunchUpdate.ts`) applique la mise à jour téléchargée par `Updates.reloadAsync` uniquement si `Updates.isEnabled`, `Updates.isEmbeddedLaunch` et une mise à jour est prête ; il attend au plus environ 1 s un téléchargement en cours, et ne fait rien sinon
-- [ ] #2 Le module est appelé après chaque connexion réussie (`login`, `loginWithSocial`, fin de l'inscription vérifiée) dans `mobile/src/contexts/AuthContext.tsx`, après l'écriture de la session et `oweIntroIfUndecided()`, avant toute navigation
-- [ ] #3 `reloadAsync` n'est jamais appelé avant que `oweIntroIfUndecided()` ait écrit « owed » : l'ordre se lit dans le code et un commentaire explique pourquoi (`settleIntroForRestoredSession` marquerait sinon l'intro comme vue au redémarrage)
-- [ ] #4 Le rechargement utilise `reloadScreenOptions` avec les couleurs du thème clair et sombre
-- [ ] #5 `mobile/app.config.ts` et les dépendances natives de `mobile/package.json` sont inchangés
-- [ ] #6 `mobile/MOBILE_CI_CD.md` explique le comportement au premier lancement et la règle « un build manuel quand cette logique change »
-- [ ] #7 `npm run typecheck` et `npm run lint` passent dans `mobile/`
+- [x] #1 Un module dédié (par exemple `mobile/src/lib/firstLaunchUpdate.ts`) applique la mise à jour téléchargée par `Updates.reloadAsync` uniquement si `Updates.isEnabled`, `Updates.isEmbeddedLaunch` et une mise à jour est prête ; il attend au plus environ 1 s un téléchargement en cours, et ne fait rien sinon
+- [x] #2 Le module est appelé après chaque connexion réussie (`login`, `loginWithSocial`, fin de l'inscription vérifiée) dans `mobile/src/contexts/AuthContext.tsx`, après l'écriture de la session et `oweIntroIfUndecided()`, avant toute navigation
+- [x] #3 `reloadAsync` n'est jamais appelé avant que `oweIntroIfUndecided()` ait écrit « owed » : l'ordre se lit dans le code et un commentaire explique pourquoi (`settleIntroForRestoredSession` marquerait sinon l'intro comme vue au redémarrage)
+- [x] #4 Le rechargement utilise `reloadScreenOptions` avec les couleurs du thème clair et sombre
+- [x] #5 `mobile/app.config.ts` et les dépendances natives de `mobile/package.json` sont inchangés
+- [x] #6 `mobile/MOBILE_CI_CD.md` explique le comportement au premier lancement et la règle « un build manuel quand cette logique change »
+- [x] #7 `npm run typecheck` et `npm run lint` passent dans `mobile/`
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Nouveau module `mobile/src/lib/firstLaunchUpdate.ts`, avec deux points d'entrée.
+
+**`useFirstLaunchUpdateTracker()`**, monté dans `AuthProvider` :
+- il reflète l'état du téléchargement que publie `Updates.useUpdates()` ;
+- si le contrôle du démarrage se termine sans mise à jour en main, il lance une fois `checkForUpdateAsync` puis `fetchUpdateAsync`.
+
+**`applyLatestUpdateOnFirstSignIn(colors)`** :
+- il n'agit que si `Updates.isEnabled`, `Updates.isEmbeddedLaunch` et `!__DEV__` ;
+- si une mise à jour est déjà téléchargée, il appelle `reloadAsync` avec `reloadScreenOptions` (fond `colors.background`, indicateur `colors.primary`, fondu) ;
+- si un téléchargement est en cours, il l'attend au plus 1 s, puis rend la main.
+
+**Appels dans `AuthContext`** : dans `login` et `loginWithSocial`, juste après `oweIntroIfUndecided()`. Un commentaire explique l'ordre : sinon, `settleIntroForRestoredSession` marquerait l'intro comme vue au redémarrage. L'inscription se termine par `login` après le code reçu par e-mail, donc elle est couverte aussi. Les couleurs du thème clair ou sombre viennent de `useThemeColors()`, par une ref.
+
+`app.config.ts` et les dépendances natives sont inchangés. `MOBILE_CI_CD.md` gagne la section « A fresh install meets the latest update at its first sign-in », qui pose la règle du build manuel quand cette logique change.
+
+`npm run typecheck` et `npm run lint` passent dans `mobile/`. Réalisée dans le même run que TASK-578.
+<!-- SECTION:FINAL_SUMMARY:END -->
