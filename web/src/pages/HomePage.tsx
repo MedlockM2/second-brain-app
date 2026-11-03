@@ -133,7 +133,7 @@ export function HomePage() {
 
   return (
     <main className="page home">
-      <h1 className="visually-hidden">{t("tabs.home")}</h1>
+      <h1 className="display">{t("tabs.home")}</h1>
       {recentItems.length > 0 && (
         <TileRow icon="download" title={t("home.recentlyAdded")}>
           {recentItems.map((item) => (

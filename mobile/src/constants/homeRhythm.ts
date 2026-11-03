@@ -12,15 +12,15 @@ import { Spacing } from "./theme";
  * pill (absent without a trial) was not there.
  *
  * It lives in its own module because three files declare it: the screen, for the
- * review card, both `TileRow`s, the empty state and the room kept above the
+ * header slot, both `TileRow`s, the empty state and the room kept above the
  * floating buttons (the column's last block), and the two notices that only ever
  * render at the top of it (`FreeTrialNotice`, `MinutesWarningBanner`). Importing
  * the same constant is what keeps a later edit to one of them from quietly
  * desynchronising the head of the screen from its body. It is an alias of
  * `Spacing.lg`, never a value of its own.
  *
- * Without an unsorted-review deck, the screen centres the column in its viewport;
- * this same gap at both ends (under the safe area, above the buttons) makes that
- * centring symmetric. With the deck, the column stays anchored at the top.
+ * The column is always anchored at the top. The header reserves the same space
+ * for the review deck, its loading placeholder and the translated Home title,
+ * so neither the count nor an absent learning row moves the recent additions.
  */
 export const HOME_BLOCK_GAP = Spacing.lg;
