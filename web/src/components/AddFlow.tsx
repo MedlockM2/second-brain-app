@@ -15,7 +15,7 @@ import { useToast } from "./Toast";
  */
 type Step =
   | { kind: "closed" }
-  | { kind: "add"; file: File | null; text: string; nonce: number }
+  | { kind: "add"; file: File | null; text: string; recordAudio: boolean; nonce: number }
   | { kind: "offer"; mediaId: string }
   | { kind: "pick"; mediaId: string };
 
@@ -24,9 +24,9 @@ export function useAddFlow(onAdded?: () => void) {
   const toast = useToast();
   const [step, setStep] = useState<Step>({ kind: "closed" });
 
-  const open = useCallback((preset?: { file?: File | null; text?: string }) => {
+  const open = useCallback((preset?: { file?: File | null; text?: string; recordAudio?: boolean }) => {
     // A new nonce remounts the dialog, so a second drop replaces the first.
-    setStep({ kind: "add", file: preset?.file ?? null, text: preset?.text ?? "", nonce: Date.now() });
+    setStep({ kind: "add", file: preset?.file ?? null, text: preset?.text ?? "", recordAudio: preset?.recordAudio ?? false, nonce: Date.now() });
   }, []);
   const close = () => setStep({ kind: "closed" });
 
@@ -38,6 +38,7 @@ export function useAddFlow(onAdded?: () => void) {
           folder={null}
           initialFile={step.file}
           initialText={step.text}
+          initialRecording={step.recordAudio}
           onClose={() => setStep((current) => (current.kind === "add" ? { kind: "closed" } : current))}
           onAdded={(mediaId) => {
             onAdded?.();
@@ -94,7 +95,7 @@ export function FilePicker({ mediaId, onDone }: { mediaId: string; onDone: (fold
   );
 }
 
-type OpenAdd = (preset?: { file?: File | null; text?: string }) => void;
+type OpenAdd = (preset?: { file?: File | null; text?: string; recordAudio?: boolean }) => void;
 
 /** The bar's add flow, for a screen that offers its own way in (the empty Home). */
 export const AddFlowContext = createContext<OpenAdd | null>(null);

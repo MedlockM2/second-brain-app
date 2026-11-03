@@ -2,6 +2,7 @@ import { extractUrlFromText } from "@media-summarizer/core/media/urlValidation";
 import { useRef, useState, type DragEvent } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { addFile, addLink, addNote } from "../media/ingest";
+import { AudioNoteRecorder } from "./AudioNoteRecorder";
 import { BudgetForecastNotice } from "./BudgetForecastNotice";
 import { Icon } from "./Icon";
 
@@ -18,18 +19,21 @@ export function AddSourceDialog({
   folder,
   initialFile = null,
   initialText = "",
+  initialRecording = false,
   onAdded,
   onClose,
 }: {
   folder: { id: string; name: string } | null;
   initialFile?: File | null;
   initialText?: string;
+  initialRecording?: boolean;
   onAdded: (mediaItemId: string) => void;
   onClose: () => void;
 }) {
   const { t, tw } = useI18n();
   const [link, setLink] = useState(initialText);
   const [file, setFile] = useState<File | null>(initialFile);
+  const [recording, setRecording] = useState(initialRecording);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,15 +54,16 @@ export function AddSourceDialog({
     take(event.dataTransfer.files);
   };
 
-  const submit = async () => {
+  const submit = async (recordedFile?: File) => {
     if (busy) return;
     setError(null);
-    const url = file ? null : extractUrlFromText(link);
+    const selectedFile = recordedFile ?? file;
+    const url = selectedFile ? null : extractUrlFromText(link);
     const folderId = folder?.id ?? null;
     setBusy(true);
     try {
-      const id = file
-        ? await addFile(file, folderId)
+      const id = selectedFile
+        ? await addFile(selectedFile, folderId)
         : url
           ? await addLink(url, folderId)
           : await addNote(link, folderId);
@@ -71,6 +76,16 @@ export function AddSourceDialog({
   };
 
   const title = folder ? tw("add.titleFolder", { name: folder.name }) : tw("add.titleLibrary");
+
+  if (recording) return <AudioNoteRecorder
+    onClose={onClose}
+    onRecorded={(audio) => {
+      setFile(audio);
+      setLink("");
+      setRecording(false);
+      void submit(audio);
+    }}
+  />;
 
   return (
     <div className="scrim" onClick={busy ? undefined : onClose}>
@@ -150,7 +165,7 @@ export function AddSourceDialog({
         )}
 
         <p className="small subtle">{t("budget.automatic")}</p>
-        <BudgetForecastNotice request={file && /\.(pdf|docx|pptx|xlsx|jpg|jpeg|png|tiff|tif|bmp|heif|heic)$/i.test(file.name) ? { operation: "document_import", document_unit: /\.xlsx$/i.test(file.name) ? "sheet" : "page", ...(/\.(jpg|jpeg|png|bmp|heif|heic)$/i.test(file.name) ? { document_units: 1 } : {}) } : file && /\.(mp3|m4a|wav|ogg|flac|mp4)$/i.test(file.name) ? { operation: "audio_import" } : null} />
+        <BudgetForecastNotice request={file && /\.(pdf|docx|pptx|xlsx|jpg|jpeg|png|tiff|tif|bmp|heif|heic)$/i.test(file.name) ? { operation: "document_import", document_unit: /\.xlsx$/i.test(file.name) ? "sheet" : "page", ...(/\.(jpg|jpeg|png|bmp|heif|heic)$/i.test(file.name) ? { document_units: 1 } : {}) } : file && /\.(mp3|m4a|aac|wav|ogg|flac|opus|webm|mp4)$/i.test(file.name) ? { operation: "audio_import" } : null} />
         {error && (
           <div className="banner-err" role="alert">
             <Icon name="alert-circle-outline" size={18} />

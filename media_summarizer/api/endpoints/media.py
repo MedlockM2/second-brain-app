@@ -161,7 +161,7 @@ SUPPORTED_SHARED_AUDIO_MIME_TYPES = frozenset([
     "audio/amr",
 ])
 
-_AUDIO_EXTENSIONS = (".mp3", ".m4a", ".aac", ".ogg", ".wav", ".flac", ".opus")
+_AUDIO_EXTENSIONS = (".mp3", ".m4a", ".aac", ".ogg", ".wav", ".flac", ".opus", ".webm")
 
 _SHARED_AUDIO_MIME_EXTENSIONS = {
     "audio/ogg": "ogg",
@@ -1810,7 +1810,7 @@ async def upload_audio(
     """
     Ingest an audio file the client already uploaded, for transcription via Deepgram.
 
-    Supported formats: MP3, M4A, AAC, OGG, WAV, FLAC, OPUS.
+    Supported formats: MP3, M4A, AAC, OGG, WAV, FLAC, OPUS, WEBM.
     The bytes are not in this request: `upload_key` points at the object the client
     PUT to the presigned URL from `POST /api/media/upload-url`. The object is moved
     to its job-scoped key, then a pre-signed GET URL is generated and sent to the

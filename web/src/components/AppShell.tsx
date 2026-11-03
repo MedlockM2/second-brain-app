@@ -46,6 +46,9 @@ export function AppShell() {
         </nav>
         <span className="grow" />
         <SearchField />
+        <button type="button" className="icon-btn" aria-label={t("recording.entry")} title={t("recording.entry")} onClick={() => add.open({ recordAudio: true })}>
+          <Icon name="mic-outline" />
+        </button>
         <button type="button" className="btn primary" onClick={() => add.open()}>
           <Icon name="add" size={18} />
           <span>{tw("nav.add")}</span>

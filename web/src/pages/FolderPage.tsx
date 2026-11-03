@@ -46,7 +46,7 @@ function FolderView({ folderId }: { folderId: string }) {
   const [renamed, setRenamed] = useState<Folder | null>(null);
   const [sources, setSources] = useState<MediaListItem[] | null>(null);
   const [sourcesFailed, setSourcesFailed] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<"file" | "audio" | null>(null);
 
   const loadSources = useCallback(() => {
     const params = new URLSearchParams({ folder_id: folderId, limit: String(SOURCES_LIMIT) });
@@ -106,10 +106,13 @@ function FolderView({ folderId }: { folderId: string }) {
       <div className="small muted" style={{ marginBottom: 14 }}>
         {tCount("artifacts.sourceCount", count)}
       </div>
-      <button type="button" className="btn primary add-sources" onClick={() => setAdding(true)}>
-        <Icon name="add" size={18} />
-        {tw("folder.addSources")}
-      </button>
+      <div className="folder-source-actions">
+        <button type="button" className="icon-btn" aria-label={t("recording.entry")} title={t("recording.entry")} onClick={() => setAdding("audio")}><Icon name="mic-outline" /></button>
+        <button type="button" className="btn primary grow" onClick={() => setAdding("file")}>
+          <Icon name="add" size={18} />
+          {tw("folder.addSources")}
+        </button>
+      </div>
       {sources === null && sourcesFailed ? (
         <div className="section-error" role="alert">
           <span className="subtle">{t("folder.loadFailed")}</span>
@@ -179,7 +182,8 @@ function FolderView({ folderId }: { folderId: string }) {
       {adding && (
         <AddSourceDialog
           folder={{ id: folder.id, name }}
-          onClose={() => setAdding(false)}
+          initialRecording={adding === "audio"}
+          onClose={() => setAdding(null)}
           onAdded={() => {
             toast.show(tw("add.added"));
             loadSources();

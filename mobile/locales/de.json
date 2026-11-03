@@ -2,7 +2,8 @@
   "ios": {
     "CFBundleDisplayName": "Deepn",
     "NSPhotoLibraryUsageDescription": "Wird verwendet, um Bilder an deine Medien anzuhängen.",
-    "NSCameraUsageDescription": "Wird verwendet, um ein Dokument oder eine Seite zu fotografieren und in deine Bibliothek zu importieren."
+    "NSCameraUsageDescription": "Wird verwendet, um ein Dokument oder eine Seite zu fotografieren und in deine Bibliothek zu importieren.",
+    "NSMicrophoneUsageDescription": "Zum Aufnehmen einer Audionotiz, die du in deiner Bibliothek speichern und transkribieren lassen möchtest."
   },
   "android": {
     "app_name": "Deepn"

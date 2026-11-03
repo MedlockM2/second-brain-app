@@ -70,6 +70,7 @@ export const AUDIO_UPLOAD_EXTENSIONS = [
   "wav",
   "flac",
   "opus",
+  "webm",
 ] as const;
 
 /**
@@ -102,6 +103,7 @@ export const UPLOAD_PICKER_MIME_TYPES = [
   "audio/aac",
   "audio/ogg",
   "audio/opus",
+  "audio/webm",
   "audio/wav",
   "audio/x-wav",
   "audio/flac",
@@ -167,6 +169,7 @@ const EXTENSION_MIME_TYPES: Record<string, string> = {
   wav: "audio/wav",
   flac: "audio/flac",
   opus: "audio/opus",
+  webm: "audio/webm",
 };
 
 /**

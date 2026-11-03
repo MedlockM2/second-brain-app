@@ -1182,7 +1182,7 @@ Response (`UploadDocumentResponse`, `202 Accepted`):
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `upload_key` | string | yes | Key returned by `upload-url` for `target=audio`. Extension must be one of `.mp3`, `.m4a`, `.aac`, `.ogg`, `.wav`, `.flac`, `.opus`. Transcribed by Deepgram. |
+| `upload_key` | string | yes | Key returned by `upload-url` for `target=audio`. Extension must be one of `.mp3`, `.m4a`, `.aac`, `.ogg`, `.wav`, `.flac`, `.opus`, `.webm`. Transcribed by Deepgram. |
 | `folder_id` | string \| null | no | Same semantics as above. |
 
 Response (`UploadAudioResponse`, `202 Accepted`):
@@ -1193,6 +1193,14 @@ Response (`UploadAudioResponse`, `202 Accepted`):
   "source_platform": "audio"
 }
 ```
+
+Microphone notes (TASK-581) use this same upload contract and library pipeline.
+Native clients record AAC in M4A; browsers retain their supported audio container
+(WebM/Opus, MP4/AAC or Ogg/Opus). They upload only after the user saves. The file
+name supplies a dated title; `folder_id`, saved reading language, transcription
+and beta admission follow ordinary audio imports. Capture itself does not reserve
+capacity. Unknown container duration keeps the existing conservative ceiling
+reservation; it is not trusted from a client timer.
 
 ### Shared semantics
 

@@ -32,7 +32,7 @@ All rows below are **collected** and **not used for tracking**. Select the purpo
 | Contact Info / Email Address | Yes | App Functionality | Account email or Apple private relay address; support contact; email sent to Canny when the feedback board is opened |
 | Contact Info / Name | Yes | App Functionality | Display name sent to Canny when the feedback board is opened; the current backend derives it from the email prefix |
 | User Content / Photos or Videos | Yes | App Functionality | Images imported from the photo picker, camera or share sheet, including images attached to bug reports; this does not mean access to the entire photo library |
-| User Content / Audio Data | Yes | App Functionality; Other Purposes | Audio files imported for transcription; provider model improvement as described in privacy policy section 4.3 |
+| User Content / Audio Data | Yes | App Functionality; Other Purposes | Audio files imported and microphone notes saved for transcription; provider model improvement as described in privacy policy section 4.3 |
 | User Content / Emails or Text Messages | Yes | App Functionality | Questions and answers stored in the in-app chat |
 | User Content / Customer Support | Yes | App Functionality | Support requests, bug reports, descriptions and attachments, and feedback board submissions |
 | User Content / Other User Content | Yes | App Functionality | Submitted links, text, documents and file metadata; transcripts, translations, summaries, notes, flashcards, review prompts and digests; folders, followed feeds and settings |

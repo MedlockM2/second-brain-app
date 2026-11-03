@@ -2,6 +2,7 @@ import React, { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useShareIntake, type ShareSelectedFolder } from "../contexts/ShareIntentContext";
+import { AudioNoteRecorder } from "./AudioNoteRecorder";
 import { AddSourceSheet } from "./AddSourceSheet";
 import { UrlEntryDialog } from "./UrlEntryDialog";
 import { capturePhotoToImport, pickFileToImport, pickPhotoFromLibrary, type LocalImportResult } from "../lib/localImport";
@@ -19,6 +20,7 @@ export function SourceActions({ folder = null, bottomOffset = TAB_BAR_CLEARANCE 
   const styles = useThemedStyles(makeStyles);
   const { startLocalUpload, startUrlEntry } = useShareIntake();
   const [isSourceSheetVisible, setSourceSheetVisible] = useState(false);
+  const [isRecorderVisible, setRecorderVisible] = useState(false);
   const [isUrlDialogVisible, setUrlDialogVisible] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -110,6 +112,16 @@ export function SourceActions({ folder = null, bottomOffset = TAB_BAR_CLEARANCE 
         </Pressable>
 
         <Pressable
+          testID={`${folder ? "folder" : "inbox"}-microphone-button`}
+          style={({ pressed }) => [styles.cameraButton, pressed && styles.addButtonPressed]}
+          onPress={() => setRecorderVisible(true)}
+          accessibilityLabel={t("recording.entry")}
+          accessibilityRole="button"
+        >
+          <Ionicons name="mic" size={24} color={Colors.surface} />
+        </Pressable>
+
+        <Pressable
           testID={`${folder ? "folder" : "inbox"}-add-button`}
           style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
           onPress={() => setSourceSheetVisible(true)}
@@ -127,6 +139,14 @@ export function SourceActions({ folder = null, bottomOffset = TAB_BAR_CLEARANCE 
         onImportFile={handleImportFile}
         onImportPhoto={handleImportPhoto}
       />
+
+      {isRecorderVisible && <AudioNoteRecorder
+        onClose={() => setRecorderVisible(false)}
+        onRecorded={(file) => {
+          setRecorderVisible(false);
+          startLocalUpload(file, "file", folder);
+        }}
+      />}
 
       <UrlEntryDialog
         visible={isUrlDialogVisible}

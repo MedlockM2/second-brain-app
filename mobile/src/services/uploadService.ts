@@ -55,7 +55,7 @@ export class UploadService {
     });
   }
 
-  /** Audio files (mp3, m4a, aac, ogg, wav, flac, opus). */
+  /** Audio files (mp3, m4a, aac, ogg, wav, flac, opus, webm). */
   static async uploadAudio(
     file: LocalUploadFile,
     options: UploadOrganizationOptions = {},
