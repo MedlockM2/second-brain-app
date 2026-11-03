@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Japanese catalogue. See `en` for the reference wording and the key layout. */
 export const ja: Catalog = {
+  "artifactActions.longPressHint": "ダブルタップして長押しすると、この成果物の名前変更や削除ができます",
+  "artifactActions.moreA11y": "この成果物の操作",
+  "artifactActions.rename.title": "この成果物の名前を変更",
+  "artifactActions.rename.placeholder": "成果物の名前",
+  "artifactActions.renameFailed": "成果物の名前を変更できませんでした。もう一度お試しください。",
+  "artifactActions.deleteTitle": "この成果物を削除しますか？",
+  "artifactActions.deleteBody": "「{title}」を削除します。ソースは保持されます。この操作は取り消せません。",
+  "artifactActions.deleteFailed": "成果物を削除できませんでした。もう一度お試しください。",
+
   "budget.forecastOver": "この確保容量の見積もりは、現在利用可能な容量を超えています。",
   "budget.available": "利用可能：{percent}",
   "budget.reserved": "処理中の操作のために{percent}を確保",

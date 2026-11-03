@@ -30,6 +30,7 @@ export interface ScopeArtifacts {
   customize: (artifactType: ArtifactType) => void;
   /** Ask again for a failed entry, with the parameters it was asked with. */
   retry: (artifact: ArtifactSummary) => Promise<void>;
+  rename: (artifact: ArtifactSummary, title: string) => Promise<void>;
   remove: (artifact: ArtifactSummary) => Promise<void>;
   openArtifact: (artifact: Pick<ArtifactSummary, "artifact_id">) => void;
 }
@@ -133,13 +134,12 @@ export function useScopeArtifacts(
       void refresh();
     }
   }, [refresh]);
+  const rename = useCallback(async (artifact: ArtifactSummary, title: string) => {
+    await ArtifactService.renameArtifact(artifact.artifact_id, title, scope, scopeId);
+  }, [scope, scopeId]);
   const remove = useCallback(async (artifact: ArtifactSummary) => {
-    try {
-      await ArtifactService.deleteArtifact(artifact.artifact_id, scope, scopeId);
-    } finally {
-      void refresh();
-    }
-  }, [refresh, scope, scopeId]);
+    await ArtifactService.deleteArtifact(artifact.artifact_id, scope, scopeId);
+  }, [scope, scopeId]);
 
   return {
     history,
@@ -153,6 +153,7 @@ export function useScopeArtifacts(
     customize,
     retry,
     remove,
+    rename,
     openArtifact,
   };
 }

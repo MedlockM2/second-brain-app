@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Chinese catalogue. See `en` for the reference wording and the key layout. */
 export const zh: Catalog = {
+  "artifactActions.longPressHint": "轻点两次并按住以重命名或删除此成果",
+  "artifactActions.moreA11y": "此成果的操作",
+  "artifactActions.rename.title": "重命名此成果",
+  "artifactActions.rename.placeholder": "成果名称",
+  "artifactActions.renameFailed": "无法重命名此成果，请重试。",
+  "artifactActions.deleteTitle": "删除此成果？",
+  "artifactActions.deleteBody": "将删除“{title}”。来源将保留。此操作无法撤销。",
+  "artifactActions.deleteFailed": "无法删除此成果，请重试。",
+
   "budget.forecastOver": "此预计预留量超过当前可用容量。",
   "budget.available": "可用容量：{percent}",
   "budget.reserved": "进行中的操作已预留{percent}",

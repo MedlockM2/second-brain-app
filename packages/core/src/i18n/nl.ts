@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Dutch catalogue. See `en` for the reference wording and the key layout. */
 export const nl: Catalog = {
+  "artifactActions.longPressHint": "Tik tweemaal en houd vast om dit artefact te hernoemen of te verwijderen",
+  "artifactActions.moreA11y": "Acties voor dit artefact",
+  "artifactActions.rename.title": "Dit artefact hernoemen",
+  "artifactActions.rename.placeholder": "Naam van het artefact",
+  "artifactActions.renameFailed": "Dit artefact kon niet worden hernoemd. Probeer het opnieuw.",
+  "artifactActions.deleteTitle": "Dit artefact verwijderen?",
+  "artifactActions.deleteBody": "“{title}” wordt verwijderd. De bronnen blijven behouden. Dit kan niet ongedaan worden gemaakt.",
+  "artifactActions.deleteFailed": "Dit artefact kon niet worden verwijderd. Probeer het opnieuw.",
+
   "budget.forecastOver": "Deze geschatte reservering overschrijdt de momenteel beschikbare capaciteit.",
   "budget.available": "{percent} beschikbaar",
   "budget.reserved": "{percent} gereserveerd voor lopende bewerkingen",

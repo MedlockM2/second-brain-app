@@ -207,12 +207,18 @@ export function useAiPane({
       if (openId === retried.artifact_id) { setDirect(retried); setDirectAttempt(value => value + 1); }
     } finally { void loadHistory(); }
   };
+  const rename = async (artifact: ArtifactSummary, title: string): Promise<void> => {
+    const updated = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`, {
+      method: "PATCH", body: { title },
+    });
+    setHistory(current => mergeArtifactIntoHistory(current ?? [], updated));
+    setDirect(current => current?.artifact_id === updated.artifact_id ? updated : current);
+  };
   const remove = async (artifact: ArtifactSummary): Promise<void> => {
-    try {
-      await apiRequest<void>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`, { method: "DELETE" });
-      setHistory(current => (current ?? []).filter(entry => entry.artifact_id !== artifact.artifact_id));
-      if (openId === artifact.artifact_id) setOpenId(null);
-    } finally { void loadHistory(); }
+    await apiRequest<void>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}`, { method: "DELETE" });
+    setHistory(current => (current ?? []).filter(entry => entry.artifact_id !== artifact.artifact_id));
+    setDirect(current => current?.artifact_id === artifact.artifact_id ? null : current);
+    if (openId === artifact.artifact_id) setOpenId(null);
   };
 
   const open =
@@ -398,6 +404,7 @@ export function useAiPane({
               onOpen={(entry) => setOpenId(entry.artifact_id)}
               onRetry={retry}
               onDelete={remove}
+              onRename={rename}
             />
           ))}
         </div>
@@ -585,9 +592,7 @@ function OpenArtifact({
 
   if (!content) return <p className="small muted">{t("common.loading")}</p>;
 
-  const title =
-    artifactContentTitle(content.content) ??
-    (artifact.title?.trim() || typeLabel);
+  const title = artifact.title?.trim() || artifactContentTitle(content.content) || typeLabel;
   return (
     <article>
       <div className="caps">{caption}</div>

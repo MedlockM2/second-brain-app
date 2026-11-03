@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Arabic catalogue. See `en` for the reference wording and the key layout. */
 export const ar: Catalog = {
+  "artifactActions.longPressHint": "اضغط مرتين مع الاستمرار لإعادة تسمية هذا المحتوى أو حذفه",
+  "artifactActions.moreA11y": "إجراءات هذا المحتوى",
+  "artifactActions.rename.title": "إعادة تسمية هذا المحتوى",
+  "artifactActions.rename.placeholder": "اسم المحتوى",
+  "artifactActions.renameFailed": "تعذرت إعادة تسمية هذا المحتوى. حاول مجددًا.",
+  "artifactActions.deleteTitle": "حذف هذا المحتوى؟",
+  "artifactActions.deleteBody": "سيُحذف «{title}». ستُحفظ مصادره. لا يمكن التراجع عن هذا الإجراء.",
+  "artifactActions.deleteFailed": "تعذر حذف هذا المحتوى. حاول مجددًا.",
+
   "budget.forecastOver": "يتجاوز هذا الحجز المقدّر السعة المتاحة حاليًا.",
   "budget.available": "{percent} متاحة",
   "budget.reserved": "{percent} محجوزة للعمليات الجارية",

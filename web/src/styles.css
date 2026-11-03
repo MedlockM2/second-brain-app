@@ -614,3 +614,11 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .learning-badge { display: flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 8px; border-radius: 7px; background: var(--tint); color: var(--ink); font-size: 12px; font-weight: 600; }
 .learning-state { max-width: 100%; padding: 2px 6px; border-radius: 4px; color: var(--text-main); background: var(--surface); font-size: 11px; }
 .learning-state.failed { color: var(--error); }
+
+/* Artifact rows and resume tiles share the library's action menu. */
+.artifact-action-target { display: flex; align-items: center; min-width: 0; position: relative; }
+.artifact-action-target > .art-row { flex: 1; min-width: 0; }
+.artifact-action-target > .menu-anchor { flex-shrink: 0; }
+.artifact-action-target.learning-actions { flex: 0 0 200px; width: 200px; }
+.learning-actions > .menu-anchor { position: absolute; top: 6px; inset-inline-end: 6px; border-radius: 50%; background: var(--surface); }
+.dialog .btn.danger { background: var(--error); color: var(--on-error); }

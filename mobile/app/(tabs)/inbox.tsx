@@ -1,3 +1,8 @@
+import { useArtifactActions } from "../../src/hooks/useArtifactActions";
+import { ArtifactService } from "../../src/services/artifactService";
+import { AnchoredContextMenu, type AnchorRect } from "../../src/components/AnchoredContextMenu";
+import { RenameDialog } from "../../src/components/RenameDialog";
+import { engagementDisplay } from "@media-summarizer/core/engagements/display";
 import React, { useCallback, useEffect, useMemo } from "react";
 import {
   View,
@@ -217,6 +222,18 @@ export default function InboxScreen() {
     [continueLearning],
   );
 
+  const artifactActions = useArtifactActions<HomeTileItem>({
+    titleOf: item => engagementDisplay(item.learning!).title,
+    rename: async (item, title) => {
+      const entry = item.learning!;
+      await ArtifactService.renameArtifact(entry.id, title, entry.scope, entry.scope_id);
+    },
+    remove: async item => {
+      const entry = item.learning!;
+      await ArtifactService.deleteArtifact(entry.id, entry.scope, entry.scope_id);
+    },
+  });
+
   // Loading state — the only spinner on this screen, and only on the very first
   // media fetch. Every later refresh happens under the existing content.
   if (isLoading) {
@@ -335,6 +352,7 @@ export default function InboxScreen() {
               icon="play-circle"
               title={t("home.continueLearning")}
               tiles={continueTiles}
+              onTileLongPress={artifactActions.open}
               onTilePress={handleTilePress}
             />
           )
@@ -351,6 +369,8 @@ export default function InboxScreen() {
       {/* box-none: the row now spans the full width, so without this it would
           swallow taps on the content sitting behind it. */}
       <SourceActions />
+      <AnchoredContextMenu {...artifactActions.menuProps} renderPreview={item => <HomeTile item={item} onPress={() => {}} />} />
+      <RenameDialog {...artifactActions.renameProps} />
     </SafeAreaView>
   );
 }
@@ -444,6 +464,7 @@ interface TileRowProps {
   title: string;
   tiles: HomeTileItem[];
   onTilePress: (item: HomeTileItem) => void;
+  onTileLongPress?: (item: HomeTileItem, anchor: AnchorRect) => void;
   /**
    * Forwarded to every tile of the row. Only "Recently added" sets it: the
    * engagement row carries no status, so none of its tiles has a marker to still.
@@ -471,6 +492,7 @@ function TileRow({
   title,
   tiles,
   onTilePress,
+  onTileLongPress,
   processingStalled = false,
 }: TileRowProps) {
   const Colors = useThemeColors();
@@ -490,6 +512,7 @@ function TileRow({
           <HomeTile
             item={item}
             onPress={onTilePress}
+            onLongPress={item.learning?.kind === "artifact" && item.learning.state !== "pending" ? onTileLongPress : undefined}
             processingStalled={processingStalled}
           />
         )}

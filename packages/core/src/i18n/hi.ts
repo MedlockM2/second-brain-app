@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Hindi catalogue. See `en` for the reference wording and the key layout. */
 export const hi: Catalog = {
+  "artifactActions.longPressHint": "इस सामग्री का नाम बदलने या हटाने के लिए दो बार टैप करके दबाए रखें",
+  "artifactActions.moreA11y": "इस सामग्री के विकल्प",
+  "artifactActions.rename.title": "इस सामग्री का नाम बदलें",
+  "artifactActions.rename.placeholder": "सामग्री का नाम",
+  "artifactActions.renameFailed": "इस सामग्री का नाम नहीं बदला जा सका। फिर से कोशिश करें।",
+  "artifactActions.deleteTitle": "यह सामग्री हटाएँ?",
+  "artifactActions.deleteBody": "“{title}” हटा दी जाएगी। इसके स्रोत सुरक्षित रहेंगे। यह कार्रवाई वापस नहीं की जा सकती।",
+  "artifactActions.deleteFailed": "यह सामग्री हटाई नहीं जा सकी। फिर से कोशिश करें।",
+
   "budget.forecastOver": "यह अनुमानित आरक्षण वर्तमान में उपलब्ध क्षमता से अधिक है।",
   "budget.available": "{percent} उपलब्ध",
   "budget.reserved": "जारी प्रक्रियाओं के लिए {percent} आरक्षित",

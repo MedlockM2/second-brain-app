@@ -14,6 +14,7 @@ import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { artifactFormatOf } from "../lib/artifactFormats";
 import { getRelativeTime } from "../lib/relativeTime";
 import { t, tCount } from "../i18n";
+import type { AnchorRect } from "./AnchoredContextMenu";
 import type { ArtifactSummary } from "@media-summarizer/core/types/artifacts";
 
 interface ArtifactRowProps {
@@ -22,7 +23,7 @@ interface ArtifactRowProps {
   showSourceCount: boolean;
   onOpen: (artifact: ArtifactSummary) => void;
   onRetry: (artifact: ArtifactSummary) => Promise<void>;
-  onDelete: (artifact: ArtifactSummary) => Promise<void>;
+  onLongPress?: (artifact: ArtifactSummary, anchor: AnchorRect) => void;
 }
 
 export function ArtifactRow({
@@ -30,8 +31,13 @@ export function ArtifactRow({
   showSourceCount,
   onOpen,
   onRetry,
-  onDelete,
+  onLongPress,
 }: ArtifactRowProps): React.JSX.Element {
+  const rowRef = useRef<View>(null);
+  const handleLongPress = () => {
+    if (!onLongPress || busyRef.current) return;
+    rowRef.current?.measureInWindow((x, y, width, height) => onLongPress(artifact, { x, y, width, height }));
+  };
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const busyRef = useRef(false);
@@ -52,7 +58,12 @@ export function ArtifactRow({
 
   if (failed) {
     return (
-      <View style={styles.row} testID={`artifact-history-row-${artifact.artifact_id}`}>
+      <Pressable ref={rowRef} style={styles.row} testID={`artifact-history-row-${artifact.artifact_id}`}
+        onLongPress={onLongPress ? handleLongPress : undefined}
+        accessibilityHint={onLongPress ? t("artifactActions.longPressHint") : undefined}
+        accessibilityRole="button" accessibilityLabel={artifact.title?.trim() || typeLabel}
+        accessibilityActions={onLongPress ? [{ name: "longpress", label: t("artifactActions.moreA11y") }] : undefined}
+        onAccessibilityAction={handleLongPress}>
         <Ionicons name="alert-circle-outline" size={24} color={Colors.error} />
         <View style={styles.textColumn}>
           <Text style={styles.title}>{artifact.title?.trim() || typeLabel}</Text>
@@ -67,14 +78,10 @@ export function ArtifactRow({
                 <Text style={styles.actionText}>{t("artifacts.row.retry")}</Text>
               </Pressable>
             )}
-            <Pressable style={styles.action} disabled={busy} accessibilityRole="button"
-              accessibilityState={{ disabled: busy }} onPress={() => void act(() => onDelete(artifact))}>
-              <Text style={styles.actionText}>{t("common.delete")}</Text>
-            </Pressable>
           </View>
           {actionError && <Text style={styles.metaFailed} accessibilityRole="alert">{actionError}</Text>}
         </View>
-      </View>
+      </Pressable>
     );
   }
 
@@ -91,6 +98,11 @@ export function ArtifactRow({
 
   return (
     <Pressable
+      ref={rowRef}
+      onLongPress={onLongPress ? handleLongPress : undefined}
+      accessibilityHint={onLongPress ? t("artifactActions.longPressHint") : undefined}
+      accessibilityActions={onLongPress ? [{ name: "longpress", label: t("artifactActions.moreA11y") }] : undefined}
+      onAccessibilityAction={handleLongPress}
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={() => onOpen(artifact)}
       testID={`artifact-history-row-${artifact.artifact_id}`}

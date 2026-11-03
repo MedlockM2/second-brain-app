@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** German catalogue. See `en` for the reference wording and the key layout. */
 export const de: Catalog = {
+  "artifactActions.longPressHint": "Doppeltippen und halten, um dieses Artefakt umzubenennen oder zu löschen",
+  "artifactActions.moreA11y": "Aktionen für dieses Artefakt",
+  "artifactActions.rename.title": "Dieses Artefakt umbenennen",
+  "artifactActions.rename.placeholder": "Name des Artefakts",
+  "artifactActions.renameFailed": "Dieses Artefakt konnte nicht umbenannt werden. Versuche es erneut.",
+  "artifactActions.deleteTitle": "Dieses Artefakt löschen?",
+  "artifactActions.deleteBody": "„{title}“ wird gelöscht. Die Quellen bleiben erhalten. Dies kann nicht rückgängig gemacht werden.",
+  "artifactActions.deleteFailed": "Dieses Artefakt konnte nicht gelöscht werden. Versuche es erneut.",
+
   "budget.forecastOver": "Diese geschätzte Reservierung übersteigt die derzeit verfügbare Kapazität.",
   "budget.available": "{percent} verfügbar",
   "budget.reserved": "{percent} für laufende Vorgänge reserviert",

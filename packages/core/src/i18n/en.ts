@@ -13,6 +13,15 @@
  * categories (Arabic has six) simply declares them alongside.
  */
 export const en = {
+  "artifactActions.longPressHint": "Double tap and hold to rename or delete this artifact",
+  "artifactActions.moreA11y": "Actions for this artifact",
+  "artifactActions.rename.title": "Rename this artifact",
+  "artifactActions.rename.placeholder": "Artifact name",
+  "artifactActions.renameFailed": "This artifact could not be renamed. Try again.",
+  "artifactActions.deleteTitle": "Delete this artifact?",
+  "artifactActions.deleteBody": "“{title}” will be deleted. Its sources will be kept. This cannot be undone.",
+  "artifactActions.deleteFailed": "This artifact could not be deleted. Try again.",
+
   "budget.forecastOver": "This estimated reservation exceeds the capacity currently available.",
   "budget.available": "{percent} available",
   "budget.reserved": "{percent} reserved for operations in progress",
