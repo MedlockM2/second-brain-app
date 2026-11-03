@@ -1207,7 +1207,7 @@ components:
     MediaItemContract:
       type: object
       required:
-        [media_item_id, media_key, original_url, normalized_url, media_type, source_platform, status, transcript, artifact_statuses, created_at, updated_at]
+        [media_item_id, media_key, original_url, normalized_url, media_type, source_platform, status, transcript, artifact_statuses, folder_id, created_at, updated_at]
       properties:
         media_item_id: { type: string }
         media_key: { type: string }
@@ -1236,6 +1236,10 @@ components:
         artifact_statuses:
           type: object
           additionalProperties: true
+        folder_id:
+          type: string
+          nullable: true
+          description: Current folder of this save, including the default folder ID; null if unassigned.
         created_at: { type: string }
         updated_at: { type: string }
     MediaArtifactContract:

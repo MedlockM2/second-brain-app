@@ -100,7 +100,7 @@ export function MediaView({
             <MediaActions
               mediaId={mediaId}
               title={title}
-              folderId={item.folder_id ?? null}
+              folderId={item.folder_id}
               roots={folders.roots}
               onFolderCreated={folders.add}
               onMoved={(target) => {

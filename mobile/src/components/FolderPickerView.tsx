@@ -52,7 +52,7 @@ import type { Folder } from "@media-summarizer/core/types/organization";
 export interface FolderPickerViewProps {
   /** The user's folders, flat, as the backend returns them. */
   folders: Folder[];
-  /** Currently picked destination; `null` is "Unsorted". */
+  /** Currently picked destination; `null` or the default folder ID is "Unsorted". */
   selectedId: string | null;
   /**
    * Whether "Unsorted" is offered as a destination. False in the triage flow,
@@ -99,10 +99,14 @@ export function FolderPickerView({
   // down is visible without a hunt.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
-  const roots = useMemo(
-    () => buildFolderTree(folders).roots,
+  const { roots, defaultFolder } = useMemo(
+    () => buildFolderTree(folders),
     [folders],
   );
+  // Library and detail reads carry the actual default folder ID; choosing the
+  // Unsorted row sends null. Both identify the same destination.
+  const isUnsortedSelected =
+    selectedId === null || selectedId === defaultFolder?.id;
 
   const handleToggleExpand = useCallback((folderId: string) => {
     setCollapsedIds((prev) => {
@@ -295,14 +299,14 @@ export function FolderPickerView({
             <Pressable
               style={({ pressed }) => [
                 styles.unsortedCard,
-                selectedId === null && styles.unsortedCardSelected,
+                isUnsortedSelected && styles.unsortedCardSelected,
                 pressed && styles.rowPressed,
                 busy && styles.rowDisabled,
               ]}
               onPress={() => onSelect(null)}
               disabled={busy}
               accessibilityRole="radio"
-              accessibilityState={{ selected: selectedId === null }}
+              accessibilityState={{ selected: isUnsortedSelected }}
               accessibilityLabel={t("folderPicker.unsorted")}
             >
               <View style={styles.unsortedLeft}>
@@ -316,7 +320,7 @@ export function FolderPickerView({
                 </Text>
               </View>
               <View style={styles.unsortedRight}>
-                {selectedId === null && (
+                {isUnsortedSelected && (
                   <Ionicons
                     name="checkmark-circle"
                     size={20}

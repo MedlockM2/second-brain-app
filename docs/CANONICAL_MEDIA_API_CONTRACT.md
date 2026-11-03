@@ -307,6 +307,7 @@ Response (`MediaStatusResponse`):
       ]
     },
     "review_blurb_status": "ready",
+    "folder_id": "folder_01JQ8X8J5S3H3CXX8V70M9M3K7",
     "created_at": "2026-02-24T20:20:00Z",
     "updated_at": "2026-02-24T20:37:10Z"
   },
@@ -324,6 +325,12 @@ Response (`MediaStatusResponse`):
   }
 }
 ```
+
+`media_item.folder_id` is always present and comes from this save's `user_media`
+row (TASK-584). It is the current folder ID, including the user's default folder
+ID for an unsorted item, or `null` when unassigned. Detail, library and search
+therefore identify the same destination. Clients preselect that folder for Move;
+the default folder ID and `null` both select Unsorted.
 
 **Readiness is the availability of the content, not the ingestion worker's last write
 (task-498).** A worker may persist its completed job before the completion-event consumer
