@@ -14,6 +14,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -81,11 +82,12 @@ import type { RecentEngagement } from "@media-summarizer/core/types/engagements"
  * screen's own focus effect is left with the entitlements alone.
  *
  * The other two blocks hold their own space while their first answer is in flight
- * — `SectionPlaceholder` below — instead of appearing out of nothing once it
+ * — the placeholders below — instead of appearing out of nothing once it
  * lands. The three requests leave together but land whenever they land, and the
  * unsorted card sits *above* both rows, so an arrival used to push content the
- * user had already started reading. Held space only ever means "not answered yet":
- * once a source has answered, an empty section is absent exactly as before.
+ * user had already started reading. The header keeps its space after loading:
+ * at zero unsorted items, the translated Home title replaces the review deck.
+ * An empty learning row is absent without moving the content above it.
  *
  * The media list re-reads itself while a tile of "Recently added" is still being
  * processed, and stops as soon as none is (`useProcessingRefresh`, task-405): a
@@ -109,10 +111,19 @@ import type { RecentEngagement } from "@media-summarizer/core/types/engagements"
  * extra tile is a cover to fetch on a screen that already has two rows.
  */
 const RECENTLY_ADDED_LIMIT = 12;
+const HOME_TITLE_LINE_HEIGHT = Typography.display.fontSize * 1.25;
 
 export default function InboxScreen() {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const { fontScale } = useWindowDimensions();
+  // Reserve the same header for all three states, including two scaled lines
+  // of either label. A count or learning-row change never recentres the column.
+  const homeHeaderMinHeight = Math.max(
+    TouchTarget.comfortable + Spacing.xl + Spacing.sm,
+    2 * Typography.body.lineHeight * fontScale + 2 * Spacing.md + Spacing.sm,
+    2 * HOME_TITLE_LINE_HEIGHT * fontScale,
+  );
   // The screen's copy is resolved on render, so it redraws with the language.
   useTranslation();
   const router = useRouter();
@@ -289,12 +300,7 @@ export default function InboxScreen() {
           in react-native-screens), so anything inserted above this loses both.
           The floating buttons below are fine: they come after it. */}
       <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          hasLoadedUnsortedCount &&
-            unsortedCount === 0 &&
-            styles.scrollContentCentered,
-        ]}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -315,18 +321,28 @@ export default function InboxScreen() {
         <FreeTrialNotice />
         <MinutesWarningBanner />
 
-        {/* The card's own space, held from the first paint: it sits above both
-            rows, so it is the one block whose late arrival pushed content the user
-            was already reading. Once the count is in, the card is drawn or — at
-            zero — nothing is, exactly as before. */}
-        {hasLoadedUnsortedCount ? (
-          <UnsortedReviewButton
-            count={unsortedCount}
-            onPress={handleUnsortedReviewPress}
-          />
-        ) : (
-          <UnsortedReviewPlaceholder />
-        )}
+        <View
+          testID="home-header"
+          style={[styles.homeHeader, { minHeight: homeHeaderMinHeight }]}
+        >
+          {!hasLoadedUnsortedCount ? (
+            <UnsortedReviewPlaceholder />
+          ) : unsortedCount > 0 ? (
+            <UnsortedReviewButton
+              count={unsortedCount}
+              onPress={handleUnsortedReviewPress}
+            />
+          ) : (
+            <Text
+              testID="home-title"
+              style={styles.homeTitle}
+              accessibilityRole="header"
+              numberOfLines={2}
+            >
+              {t("tabs.home")}
+            </Text>
+          )}
+        </View>
 
         {recentTiles.length > 0 && (
           <TileRow
@@ -423,15 +439,10 @@ interface UnsortedReviewButtonProps {
 function UnsortedReviewButton({ count, onPress }: UnsortedReviewButtonProps) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  if (count <= 0) return null;
-
   return (
     <Pressable
       testID="home-unsorted-review-button"
-      style={({ pressed }) => [
-        styles.reviewDeck,
-        pressed && styles.reviewDeckPressed,
-      ]}
+      style={({ pressed }) => pressed && styles.reviewDeckPressed}
       onPress={onPress}
       accessibilityLabel={t("home.unsortedReviewA11y", {
         count: tCount("common.itemCount", count),
@@ -554,7 +565,6 @@ function UnsortedReviewPlaceholder() {
   return (
     <View
       testID="home-unsorted-review-placeholder"
-      style={styles.reviewDeck}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
@@ -783,11 +793,8 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       backgroundColor: Colors.background,
     },
     scrollContent: {
-      // Keep the review deck and recent additions at the top whether or not
-      // there is anything to continue learning. Centre only after the unsorted
-      // count is known to be zero (scrollContentCentered): that is the sparse
-      // Home layout the owner retained. The review placeholder uses the same
-      // top alignment as the deck it may become (task-580).
+      // All configurations start at the top. The shared header slot holds the
+      // deck, its placeholder or the Home title without moving either tile row.
       //
       // On iOS, `NativeTabs` also turns UIKit's automatic content inset on for
       // this scroll view (`RNSScrollViewHelper`), which adds the tab bar's band
@@ -807,13 +814,9 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       // pads its buttons by `Spacing.sm`, and they are `TouchTarget.large` tall,
       // so the sum is where their top edge is. Then `HOME_BLOCK_GAP`, because the
       // buttons are the column's last block and keep the one gap above themselves
-      // like every other. When the column is centred, this also makes the space
-      // under the safe area and above the buttons symmetric.
+      // like every other.
       paddingBottom:
         TAB_BAR_CLEARANCE + Spacing.sm + TouchTarget.large + HOME_BLOCK_GAP,
-    },
-    scrollContentCentered: {
-      justifyContent: "center",
     },
 
     // Loading state
@@ -856,12 +859,20 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       color: Colors.onPrimary,
     },
 
-    // Unsorted review card — variant F, "Deck tactile" (task-362)
-    reviewDeck: {
+    homeHeader: {
       marginHorizontal: Spacing.md,
-      // Its share of the column's rhythm, above only — see `HOME_BLOCK_GAP`.
       marginTop: HOME_BLOCK_GAP,
+      justifyContent: "center",
     },
+    homeTitle: {
+      ...Typography.display,
+      lineHeight: HOME_TITLE_LINE_HEIGHT,
+      includeFontPadding: false,
+      color: Colors.textMain,
+      paddingHorizontal: Spacing.sm,
+    },
+
+    // Unsorted review card — variant F, "Deck tactile" (task-362)
     reviewDeckPressed: {
       transform: [{ scale: 0.98 }],
       opacity: 0.9,
@@ -933,6 +944,8 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     reviewDeckLabel: {
       flex: 1,
       fontSize: Typography.body.fontSize,
+      lineHeight: Typography.body.lineHeight,
+      includeFontPadding: false,
       fontWeight: "600",
       color: Colors.textMain,
     },
