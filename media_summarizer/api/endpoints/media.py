@@ -1242,6 +1242,7 @@ def _build_media_item_contract(
         transcript=_canonical_transcript(job_status, record, job, source_language),
         review_blurb=record.review_blurb,
         review_blurb_status=review_blurb_status,
+        folder_id=record.folder_id,
         created_at=record.saved_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
     )

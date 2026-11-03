@@ -259,6 +259,10 @@ class MediaItemContract(BaseModel):
     # and one that will never exist are the same absence otherwise.
     review_blurb: Optional[ReviewBlurb] = None
     review_blurb_status: ReviewBlurbStatus = ReviewBlurbStatus.PENDING
+    folder_id: Optional[str] = Field(
+        ...,
+        description="Current folder of this save, including the default folder ID; null if unassigned.",
+    )
     # No artifact projection here on purpose (task-270): a scope now holds a
     # timestamped *history*, so "the artifact of this type" no longer exists.
     # The AI tab reads GET /api/artifacts?scope=media&scope_id=... which returns

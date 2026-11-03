@@ -239,7 +239,8 @@ export interface MediaItemContract {
    * the reader tab never has to guess how to read a null `review_blurb`.
    */
   review_blurb_status: ReviewBlurbStatus;
-  folder_id?: string | null;
+  /** Current folder of this save, including the default folder ID; null if unassigned. */
+  folder_id: string | null;
   created_at: string;
   updated_at: string;
 }
