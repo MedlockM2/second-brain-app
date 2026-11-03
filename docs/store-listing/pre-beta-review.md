@@ -19,7 +19,7 @@ The review contact's name and phone exist only in the consoles.
 ## The build
 
 The binary under review is the latest `internal` build (EAS profile `internal`, backend
-**dev**): iOS 23 and Android 29, built from `c0a6220c`. A binary first starts on its
+**dev**): iOS 24 and Android 30, built from `0dc2c380`. A binary first starts on its
 embedded JavaScript and only takes an OTA update on the next cold launch, so the reviewer's
 first launch shows whatever the binary was built from. Builds 21/28 were replaced for that
 reason on 2026-11-02 (pre-sign-in carousel, no intro). Since the build that embeds
@@ -59,7 +59,7 @@ release notes of the closed-testing release to its testers. Its one job is the b
 is in one sentence, and what we ask of the tester. No feature list: the post-sign-in intro shows the one
 gesture the app cannot teach (saving from another app), the rest is found in the app, and TestFlight's
 « Share Feedback » screen that follows says how to send feedback (owner, 2026-11-01: no redundant screens
-before the app). Set on iOS build 23 and on the Android Alpha release 1.0.0 (29), French and English.
+before the app). Set on iOS build 24 and on the Android Alpha release 1.0.0 (30), French and English.
 TestFlight's field is per build: set it again on each new build. Play release notes: 500 characters max per
 language, in `<fr-FR>…</fr-FR>` / `<en-US>…</en-US>` tags.
 
