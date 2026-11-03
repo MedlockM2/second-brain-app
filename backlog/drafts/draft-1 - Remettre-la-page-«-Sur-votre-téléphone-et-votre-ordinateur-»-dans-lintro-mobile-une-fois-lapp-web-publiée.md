@@ -11,6 +11,7 @@ labels:
   - onboarding
 dependencies: []
 references:
+  - backlog/drafts/draft-2
   - mobile/app/onboarding/intro.tsx
   - mobile/src/components/intro/IntroArt.tsx
   - mobile-design-mockups/onboarding_apres_connexion/README.md
@@ -27,6 +28,10 @@ type: enhancement
 L'intro affichée une fois après la première connexion (`mobile/app/onboarding/intro.tsx`) avait deux pages : le partage depuis une autre app, puis « Sur votre téléphone et votre ordinateur » (illustration ordinateur + téléphone). Le 2026-11-01, l'owner a retiré la page 2 (commit `23adf23f`) : elle annonçait une app web que les testeurs ne peuvent pas encore ouvrir, puisque le web n'est pas publié. Cette tâche la remet **quand l'app web sera publiée** et accessible aux testeurs.
 
 **Statut Draft volontaire** : à passer en To Do seulement le jour où l'app web est en ligne, sinon la page promettrait de nouveau quelque chose d'inaccessible.
+
+## Ce run réalise aussi DRAFT-2
+
+L'agent de cette tâche réalise **aussi DRAFT-2**, dans le même run et la même branche : « Appliquer la dernière mise à jour OTA dès la première connexion, sans attente au démarrage » (`backlog/drafts/draft-2 - …`). Il lit DRAFT-2 en entier, satisfait ses critères d'acceptation et passe les deux tâches à Done. Raison (owner, 2026-11-03) : un seul build natif et une seule review pour les deux changements. DRAFT-2 n'est jamais dispatchée seule : pour lancer le travail, passer seulement DRAFT-1 en To Do.
 
 ## Ce qu'il faut remettre
 
@@ -51,4 +56,5 @@ Après l'OTA, vérifier sur iPhone et Android, après une réinstallation : page
 - [ ] #4 `mobile/.maestro/utils/finish_intro.yaml` touche `intro-next-button` puis `intro-start-button`
 - [ ] #5 `npm run typecheck` et `npm run lint` passent dans `mobile/` et `packages/core`
 - [ ] #6 `docs/store-listing/pre-beta-review.md` décrit l'intro à deux pages dans les notes de review Apple et les instructions d'accès Play
+- [ ] #7 Les critères d'acceptation de DRAFT-2 sont satisfaits dans la même branche, et DRAFT-2 est cochée et passée à Done avec cette tâche
 <!-- AC:END -->
