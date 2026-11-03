@@ -4,10 +4,15 @@ import { File, Paths } from "expo-file-system";
  * Whether this install still owes the person the post-sign-in intro
  * (`app/onboarding/intro.tsx`).
  *
- * The owner wants it after a **first install only, never after an update**. So
- * the state lives in a file of the app's Documents directory: an uninstall
- * deletes it, an update keeps it. Not in `expo-secure-store`: the iOS keychain
- * survives an uninstall, and a reinstall would then never show the intro.
+ * The owner wants it after a **first install**, never after an update, and for
+ * **every new account**, even on a phone where the app was already installed
+ * (owner, 2026-11-03). The install part lives in a file of the app's Documents
+ * directory: an uninstall deletes it, an update keeps it. Not in
+ * `expo-secure-store`: the iOS keychain survives an uninstall, and a reinstall
+ * would then never show the intro. The account part needs no flag: a new account
+ * has no reading language yet, so it always goes through
+ * `app/onboarding/language.tsx`, which owes the intro unconditionally
+ * (`oweIntroToNewAccount`).
  *
  * Three values:
  * - no file — undecided: nothing has signed in on this install since this code
@@ -58,6 +63,14 @@ export function isIntroOwed(): boolean {
 /** After an interactive sign-in (e-mail or social): owe the intro if undecided. */
 export function oweIntroIfUndecided(): void {
   if (read() === null) write("owed");
+}
+
+/**
+ * The reading language was just chosen for the first time: the account is new,
+ * whatever this install already saw (e-mail and social sign-ups alike).
+ */
+export function oweIntroToNewAccount(): void {
+  write("owed");
 }
 
 /** After a restored session: an undecided install predates the intro, settle it. */

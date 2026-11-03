@@ -15,8 +15,8 @@ import { useThemeColors, useThemedStyles } from "../../src/contexts/ThemeContext
 const PAGE_COUNT = 2;
 
 /**
- * The intro shown once, after the first sign-in of a first install
- * (`src/lib/introState.ts`): how to save from another app, then « on your phone
+ * The intro shown once, after the first sign-in of a first install and after the
+ * reading language of every new account (`src/lib/introState.ts`): how to save from another app, then « on your phone
  * and your computer » (TestFlight feedback AHZj_EmKyk_-POh6f05H_SE; mockup
  * `mobile-design-mockups/onboarding_apres_connexion`). Page 2 was dropped on
  * 2026-11-01 while the web app was unpublished and restored on 2026-11-03, before
