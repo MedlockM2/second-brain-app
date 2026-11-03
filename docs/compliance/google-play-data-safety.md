@@ -40,7 +40,7 @@ Every row below is **collected** and **not processed only ephemerally**. Stored 
 | Financial info / Purchase history | No | Optional | App functionality; Account management | Purchase and subscription status received through RevenueCat when present; no payment-card details |
 | Messages / Other in-app messages | No | Optional | App functionality | Questions and answers in the in-app assistant chat |
 | Photos and videos / Photos | No | Optional | App functionality | Images selected, captured or shared for import, plus image attachments to bug reports |
-| Audio files / Voice or sound recordings | Yes | Optional | App functionality | Imported recordings sent for transcription |
+| Audio files / Voice or sound recordings | Yes | Optional | App functionality | Imported recordings and saved microphone notes sent for transcription |
 | Audio files / Music files | Yes | Optional | App functionality | User-provided music files accepted by the audio import flow |
 | Audio files / Other audio files | Yes | Optional | App functionality | Other imported audio files accepted for transcription |
 | Files and docs / Files and docs | No | Optional | App functionality | Imported documents, file names and support attachments |

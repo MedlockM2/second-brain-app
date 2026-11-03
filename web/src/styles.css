@@ -405,7 +405,8 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .src-row .wcover > .ico { width: 40%; height: 40%; }
 .src-row .t { font-size: 14px; font-weight: 600; line-height: 1.3; }
 .src-row .meta { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-muted); margin-top: 2px; min-width: 0; }
-.add-sources { width: 100%; min-height: 44px; margin: 4px 0 18px; }
+.folder-source-actions { display: flex; align-items: center; gap: 8px; margin: 4px 0 18px; }
+.folder-source-actions .btn { min-height: 44px; }
 .picker { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .picker .list { max-height: 420px; overflow-y: auto; margin: 0 -8px; padding: 0 8px; }
 .picker-cap { margin: 10px 0 4px; }
@@ -592,3 +593,16 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .customize-source-title { display: block; overflow-wrap: anywhere; font-size: 14px; }
 
 .art-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+/* Microphone capture: the same focused surface as native, in desktop scale. */
+.audio-recorder { position: relative; min-height: min(680px, 90dvh); }
+.recording-waveform { flex: 1; min-height: 200px; display: flex; gap: 4px; align-items: center; justify-content: center; overflow: hidden; }
+.recording-waveform span { flex: 1; max-width: 8px; border-radius: var(--r-full); background: var(--primary-ink); }
+.recording-details { text-align: center; }
+.recording-details p { margin: 8px 0; }
+.recording-timer { font-variant-numeric: tabular-nums; }
+.recording-controls { display: flex; gap: 24px; justify-content: center; padding: 24px 0; }
+.recording-control { width: 88px; height: 88px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-full); background: var(--surface-container-high); }
+.recording-control.primary { background: var(--primary); color: var(--on-primary); }
+.recording-discard { position: absolute; inset: 0; padding: 32px; border-radius: var(--r-xl); background: var(--surface); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.recording-surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }

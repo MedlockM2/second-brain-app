@@ -186,6 +186,26 @@ export const en = {
     "This folder could not be deleted. It is still in your library.",
 
   // --- Add-source sheet ---
+  "recording.entry": "Record an audio note",
+  "recording.title": "Audio note",
+  "recording.recording": "Recording",
+  "recording.paused": "Paused",
+  "recording.starting": "Preparing the microphone…",
+  "recording.finished": "Ready to save",
+  "recording.pause": "Pause recording",
+  "recording.resume": "Resume recording",
+  "recording.save": "Save recording",
+  "recording.discardTitle": "Discard this recording?",
+  "recording.discardBody": "If you leave, this recording will not be saved.",
+  "recording.discard": "Discard",
+  "recording.permission": "Allow microphone access in your device or browser settings, then try again.",
+  "recording.error": "Recording is unavailable. Check your microphone and try again.",
+  "recording.limit": "Record up to 1 hour. Saving starts the usual import and transcription.",
+  "recording.limitReached": "Recording limit reached. You can save your note now.",
+  "recording.interrupted": "Recording was interrupted. Save your note or resume when ready.",
+  "recording.filename": "Audio note",
+  "recording.settings": "Open settings",
+
   "addSource.title": "Add to your inbox",
   "addSource.enterUrl.label": "Paste a link",
   "addSource.enterUrl.description":

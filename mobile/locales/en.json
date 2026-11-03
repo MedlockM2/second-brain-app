@@ -2,7 +2,8 @@
   "ios": {
     "CFBundleDisplayName": "Deepn",
     "NSPhotoLibraryUsageDescription": "Used to attach images to media entries.",
-    "NSCameraUsageDescription": "Used to take a photo of a document or a page and import it into your library."
+    "NSCameraUsageDescription": "Used to take a photo of a document or a page and import it into your library.",
+    "NSMicrophoneUsageDescription": "Used to record an audio note that you choose to save and transcribe in your library."
   },
   "android": {
     "app_name": "Deepn"

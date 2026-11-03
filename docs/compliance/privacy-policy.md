@@ -1,8 +1,8 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-10-31
-**Effective date:** 2026-10-31
+**Last updated:** 2026-11-03
+**Effective date:** 2026-11-03
 
 ## 1. Introduction
 
@@ -22,6 +22,7 @@ Contact for any privacy question or request: **deepn.support@gmail.com**.
 
 - **Links you share** - web articles, podcast episodes, videos and posts (for example from YouTube, TikTok, Instagram or X), and podcast or RSS feeds you follow
 - **Files you share or import** - documents (such as PDFs), images, photos you take with the camera to import a page, and audio files
+- **Audio notes you record** - when you open the recorder and allow microphone access, you can record a spoken note. Only recordings you choose to save are uploaded for transcription; discarding a recording sends no audio to our servers
 - **Text you share** - text passages you send to the app
 - **Chat messages** - the questions you ask the in-app assistant and its answers
 - **Organisation** - folders, review settings, digest settings and your time zone

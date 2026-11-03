@@ -267,6 +267,8 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
         usesNonExemptEncryption: false,
       },
       infoPlist: {
+        NSMicrophoneUsageDescription:
+          "Used to record an audio note that you choose to save and transcribe in your library.",
         NSPhotoLibraryUsageDescription:
           "Used to attach images to media entries.",
         // Camera capture as an ingestion entry point (task-264): the photo is
@@ -314,21 +316,22 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
       },
       package: "com.secondbrainlabs.core",
       // Social sign-in uses the top-level Cognito callback scheme.
-      // Camera ingestion is requested by expo-image-picker.
-      permissions: ["android.permission.CAMERA"],
+      // Camera ingestion and audio-note capture request access only on use.
+      permissions: ["android.permission.CAMERA", "android.permission.RECORD_AUDIO"],
     },
     plugins: [
       "expo-router",
-      // The picker's plugin adds a microphone permission by default (Android
-      // RECORD_AUDIO, iOS NSMicrophoneUsageDescription with a generic string),
-      // for recording video from the camera. Deepn never records: the camera
-      // takes photos only (`src/lib/localImport.ts`), and picking an existing
-      // video for a bug report needs no microphone. An unused permission with a
-      // vague purpose string is a review rejection waiting to happen (App Store
-      // 5.1.1) and a needless Play declaration, so `false` removes the iOS key
-      // and blocks RECORD_AUDIO. The camera and photo strings stay in
-      // `ios.infoPlist` above.
-      ["expo-image-picker", { microphonePermission: false }],
+      // Both plugins must allow the microphone: image-picker's `false` blocks
+      // RECORD_AUDIO even when the recorder adds it. Only the audio-note flow
+      // requests access at runtime; camera capture still takes photos only.
+      ["expo-image-picker", {
+        microphonePermission: "Used to record an audio note that you choose to save and transcribe in your library.",
+      }],
+      ["expo-audio", {
+        microphonePermission: "Used to record an audio note that you choose to save and transcribe in your library.",
+        enableBackgroundRecording: false,
+        enableBackgroundPlayback: false,
+      }],
       "expo-secure-store",
       "expo-apple-authentication",
       "expo-localization",
