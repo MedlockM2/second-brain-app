@@ -13,11 +13,12 @@ export default function MediaDetailScreen() {
   const styles = useThemedStyles(makeStyles);
   useTranslation();
   // `passage`: the excerpt of the search hit this page was opened from, if any.
-  const { id, passage } = useLocalSearchParams<{ id: string; passage?: string }>();
+  const { id, passage, conversationId } = useLocalSearchParams<{ id: string; passage?: string; conversationId?: string }>();
   const router = useRouter();
   const { state, mediaData, fetchError, processingError, processingMessage, refresh } = useMediaDetailPolling(id);
   if (mediaData) {
     return <CompletedDetailView key={id} mediaData={mediaData} passage={passage}
+      conversationId={conversationId} onConversationOpened={() => router.setParams({ conversationId: undefined })}
       onBack={() => router.back()} onDeleted={() => router.back()}
       processingNotice={state === "completed" ? undefined : {
         message: state === "failed" ? (processingError ?? t("media.failedFallback"))

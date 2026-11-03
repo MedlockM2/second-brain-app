@@ -1,56 +1,25 @@
-/**
- * Wire types of the engagement API (task-303).
- *
- * "Engagement" is deliberately narrow: the user launched a generation, or opened
- * an artifact and read it. Opening a media detail screen is not one, and neither
- * is scrolling — so nothing on this path is ever fired from a render or a scroll
- * handler.
- */
+import type { ArtifactScope } from "./artifacts";
+import type { ArtifactType } from "./media";
 
-/** What was engaged with: a single media item, or a whole folder. */
-export type EngagementKind = "media" | "folder";
-
-export interface RecordEngagementRequest {
-  kind: EngagementKind;
-  id: string;
-}
-
-/**
- * One tile of the "Continue learning" row, already render-ready: the server
- * merges media and folders, sorts them newest first, caps the list and signs
- * every cover, so the client joins nothing.
- */
+/** One target can have one recent entry, regardless of its parent or type. */
+export type EngagementKind = "artifact" | "conversation";
+export interface RecordEngagementRequest { kind: EngagementKind; id: string }
 export interface RecentEngagement {
   kind: EngagementKind;
-  /** Media item id, or folder id — whichever `kind` says. */
   id: string;
-  title?: string | null;
-  /**
-   * Media only, and only when `title` is null: the key of the label the tile
-   * renders as "<label> — <created_at>" (task-400). A folder always has a name,
-   * so it never carries one.
-   */
-  title_label_key?: string | null;
-  /**
-   * Media only: when the media was *saved*, not when it was engaged with — the
-   * date the generic title above carries. Both are projected by the
-   * `engaged-index`, so naming a tile costs no extra read server-side.
-   */
-  created_at?: string | null;
+  scope: ArtifactScope;
+  scope_id: string;
+  title: string | null;
+  artifact_type: ArtifactType | null;
+  state: "pending" | "ready" | "failed";
   engaged_at: string;
-  /** Media only: publisher of the media (a channel, a show, a site, an account). */
-  creator_name?: string | null;
-  /** Media only: fetchable cover URL, absent when the source can never have one. */
-  image_url?: string | null;
-  /** Media only: drives the fallback icon when there is no cover. */
-  media_type?: string | null;
-  /** Folders only: items stored directly in the folder. */
-  item_count?: number | null;
-  /** Folders only: up to four covers of its newest items, possibly empty. */
+  scope_title: string | null;
+  scope_title_label_key: string | null;
+  scope_created_at: string | null;
+  creator_name: string | null;
+  image_url: string | null;
+  media_type: string | null;
+  item_count: number | null;
   preview_images: string[];
 }
-
-export interface RecentEngagementsResponse {
-  status: string;
-  items: RecentEngagement[];
-}
+export interface RecentEngagementsResponse { status: string; items: RecentEngagement[] }

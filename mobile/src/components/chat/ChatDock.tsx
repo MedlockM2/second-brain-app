@@ -5,6 +5,7 @@ import { useFocusEffect, useIsFocused, useRouter, usePathname } from "expo-route
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
+  ActivityIndicator,
   Alert,
   findNodeHandle,
   Keyboard,
@@ -28,11 +29,15 @@ import type { ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { useChatHistory } from "../../hooks/useChatHistory";
 import { ChatHistoryList } from "./ChatHistoryList";
 import { ChatConversationModal } from "./ChatConversationModal";
+import { useAppActive } from "../../hooks/useAppActive";
+import { EngagementService } from "../../services/engagementService";
 import { describeSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 
 export interface ChatDockProps {
   scope: ChatScope;
   scopeId: string;
+  initialConversationId?: string;
+  onInitialConversationConsumed?: () => void;
   title: string;
   imageUrl?: string | null;
   mediaTypeIcon?: React.ComponentProps<typeof Ionicons>["name"];
@@ -48,6 +53,8 @@ export interface ChatDockProps {
 export function ChatDock({
   scope,
   scopeId,
+  initialConversationId,
+  onInitialConversationConsumed,
   title,
   imageUrl,
   mediaTypeIcon,
@@ -61,6 +68,7 @@ export function ChatDock({
   const router = useRouter();
   const pathname = usePathname();
   const isFocused = useIsFocused();
+  const isAppActive = useAppActive();
   const chat = useChatSession(scope, scopeId);
   const { session } = chat;
   const [open, setOpen] = useState(false);
@@ -85,9 +93,55 @@ export function ChatDock({
   // The native modal covers the Digest carousel as well as the current page.
   // Leaving for a citation hides it; the session and generation go on.
   const modalVisible = open && isFocused;
+  const chatRef = useRef(chat);
+  const consumedRef = useRef(onInitialConversationConsumed);
+  useEffect(() => { chatRef.current = chat; consumedRef.current = onInitialConversationConsumed; }, [chat, onInitialConversationConsumed]);
+  const requestedRef = useRef<string | null>(null);
+  const reportedConversation = useRef<string | null>(null);
+  const [openingConversation, setOpeningConversation] = useState(false);
+  useEffect(() => {
+    if (!initialConversationId) { requestedRef.current = null; return; }
+    if (!isFocused || requestedRef.current === initialConversationId) return;
+    requestedRef.current = initialConversationId;
+    const request = ++selectionRequest.current;
+    setFocusOnOpen(false);
+    Keyboard.dismiss();
+    setScrollTarget("bottom");
+    setInitialOffset(0);
+    setHistoryOpen(false);
+    setOpeningConversation(true);
+    setOpen(true);
+    void chatRef.current.selectConversation(initialConversationId).then((selected) => {
+      if (request !== selectionRequest.current) return;
+      setOpeningConversation(false);
+      consumedRef.current?.();
+      if (!selected) {
+        setOpen(false);
+        Alert.alert(t("chat.history.error"), undefined, [
+          { text: t("common.goBack"), style: "cancel" },
+          { text: t("tabs.home"), onPress: () => router.replace("/(tabs)/inbox") },
+        ]);
+        return;
+      }
+      savedOffset.current = 0;
+      setResetKey((value) => value + 1);
+    });
+  }, [isFocused, initialConversationId, router]);
+  const visibleConversation = session.conversation;
+  useEffect(() => {
+    if (!modalVisible || !visibleConversation) { reportedConversation.current = null; return; }
+    if (!isAppActive || openingConversation || historyOpen) return;
+    if (visibleConversation.turn_count > 0 && reportedConversation.current !== visibleConversation.conversation_id) {
+      reportedConversation.current = visibleConversation.conversation_id;
+      void EngagementService.reportEngagement("conversation", visibleConversation.conversation_id);
+    }
+  }, [modalVisible, visibleConversation, isAppActive, openingConversation, historyOpen]);
+
 
   useFocusEffect(useCallback(() => () => {
     selectionRequest.current += 1;
+    requestedRef.current = null;
+    setOpeningConversation(false);
     setInitialOffset(savedOffset.current);
     setFocusOnOpen(false);
     setScrollTarget("offset");
@@ -117,6 +171,8 @@ export function ChatDock({
   const close = () => {
     selectionRequest.current += 1;
     Keyboard.dismiss();
+    setOpeningConversation(false);
+    consumedRef.current?.();
     setOpen(false);
     setHistoryOpen(false);
     // Back on the control that opened the modal.
@@ -200,7 +256,7 @@ export function ChatDock({
       {modalVisible ? (
         <ChatConversationModal
           visible
-          sourceContent={sourceContent}
+          sourceContent={openingConversation ? <ActivityIndicator /> : sourceContent}
           initialOffset={initialOffset}
           onSaveOffset={(offset) => { savedOffset.current = offset; }}
           scrollTarget={scrollTarget}
@@ -214,7 +270,7 @@ export function ChatDock({
           placeholder={
             isFolder ? t("chat.dock.askFolder") : t("chat.dock.askMedia")
           }
-          messages={conversation?.messages ?? []}
+          messages={openingConversation ? [] : conversation?.messages ?? []}
           pendingQuestion={session.pendingQuestion}
           sources={conversation?.sources ?? []}
           showSources={isFolder}
@@ -229,7 +285,7 @@ export function ChatDock({
           }
           waiting={generating && !session.streamingText}
           generating={generating}
-          sending={sending}
+          sending={sending || openingConversation}
           conversationId={conversation?.conversation_id}
           draft={draft}
           onChangeDraft={setDraft}

@@ -124,6 +124,10 @@ async def delete_media_for_user(*, user_id: str, media_item_id: str) -> Deletion
             raise MediaNotFound(media_item_id)
         deleted = current
 
+    from media_summarizer.core.services import engagement_service
+
+    await engagement_service.remove_scope(user_id=user_id, scope="media", scope_id=resolved_id)
+
     # Algolia is a live read surface, so "invisible immediately" has to include
     # it. Best-effort: the purge cascade calls the same delete again in 30 days,
     # so a failure here is a temporary leak of searchable text, not a permanent

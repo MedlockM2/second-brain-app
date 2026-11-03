@@ -463,7 +463,11 @@ async def delete_conversation(*, user_id: str, conversation_id: str) -> int:
     """
     if await chat_db.get_conversation(user_id, conversation_id) is None:
         raise ChatConversationNotFoundError()
-    return await chat_db.delete_conversation(user_id, conversation_id)
+    from media_summarizer.core.services import engagement_service
+
+    deleted = await chat_db.delete_conversation(user_id, conversation_id)
+    await engagement_service.remove(user_id=user_id, kind="conversation", subject_id=conversation_id)
+    return deleted
 
 
 # ---------------------------------------------------------------------------
@@ -628,6 +632,10 @@ async def send_turn(
         await release_turn_budget(user_id=user_id, turn_id=turn_id)
         raise ChatTurnCountChangedError() from exc
 
+    from media_summarizer.core.services import engagement_service
+
+    await engagement_service.stamp(user_id=user_id, kind="conversation", subject_id=conversation_id,
+                                   moment=accepted.question.created_at)
     status = await _dispatch_turn(accepted.attempt)
     return AcceptedChatTurn(
         turn_id=accepted.answer.turn_id,

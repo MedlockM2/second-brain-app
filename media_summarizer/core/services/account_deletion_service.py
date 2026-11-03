@@ -112,6 +112,7 @@ _USER_PARTITION_TABLES: Tuple[Tuple[str, Optional[str]], ...] = (
     # fragments, the in-flight marker — sits in its partition under one sort key
     # (task-457), so the whole chat goes with one partition sweep.
     ("CHAT_TABLE", "sk"),
+    ("USER_ENGAGEMENTS_TABLE", "target_key"),
 )
 
 # Tables that own the user's rows under their own primary key and expose them

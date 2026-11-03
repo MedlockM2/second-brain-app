@@ -298,6 +298,8 @@ export interface CompletedDetailViewProps {
    * of the text. Absent everywhere else, where the page opens at the top.
    */
   passage?: string | null;
+  conversationId?: string;
+  onConversationOpened?: () => void;
 }
 
 export function CompletedDetailView({
@@ -308,6 +310,8 @@ export function CompletedDetailView({
   translationBudgets,
   processingNotice,
   passage,
+  conversationId,
+  onConversationOpened,
 }: CompletedDetailViewProps): React.JSX.Element {
   // `mode` for the status bar glyphs below, which are a prop rather than a
   // style and so cannot come from the sheet.
@@ -1160,6 +1164,8 @@ export function CompletedDetailView({
           key={media_item.media_item_id}
           scope="media"
           scopeId={media_item.media_item_id}
+          initialConversationId={conversationId}
+          onInitialConversationConsumed={onConversationOpened}
           title={displayTitle}
           imageUrl={coverUrl}
           mediaTypeIcon={mediaTypeIcon}

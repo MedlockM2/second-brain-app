@@ -33,6 +33,7 @@ explanation.
 
 | Store | Retention | What ends it |
 |---|---|---|
+| `user_engagements` | 90 days after the last explicit activity; excluded at the cutoff and physically removed asynchronously by DynamoDB TTL | explicit target/parent deletion, account deletion, or `expires_at` TTL; never deletes the target |
 | `user_media` | **indefinite** | user deletion (§3) or account deletion (§4). Nothing else. |
 | `media_artifacts` + their S3 objects | lifetime of the user's final retained save row for that `media_key` | purge cascade (`core/services/media_purge_service.py`) |
 | Transcripts, audio, re-hosted covers in S3 | lifetime of the final retained save row for that `media_key`, **whoever holds it** | same cascade, by job-id prefix, gated on `media_purge_service.content_holders` |

@@ -5,6 +5,7 @@ import type {
   ChatScope,
   ChatStreamEvent,
 } from "@media-summarizer/core/types/chat";
+import { reportEngagement } from "../lib/engagements";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { withKnownSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { chatClient, type ChatStreamOpening } from "./chatClient";
@@ -63,7 +64,7 @@ const EMPTY: ChatState = {
 
 const codeOf = (error: unknown) => (error as { code?: string } | null)?.code;
 
-export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean) {
+export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean, requestedConversationId: string | null = null) {
   const key = `${scope}:${scopeId}`;
   const [state, setState] = useState<ChatState>(EMPTY);
   const stateRef = useRef<ChatState>(EMPTY);
@@ -219,11 +220,15 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean)
 
   /** Show a past conversation, resuming its answer if one is being written. */
   const select = useCallback(
-    async (conversationId: string) => {
+    async (conversationId: string, reportOpen = true) => {
       const epoch = reset();
       update({ phase: "sending" });
       try {
         const detail = await chatClient.getConversation(conversationId);
+        if (detail.scope !== scope || detail.scope_id !== scopeId) {
+          throw Object.assign(new Error("Conversation unavailable"), { code: "conversation_not_found" });
+        }
+
         if (epochRef.current !== epoch) return false;
         const active = detail.active_generation ?? null;
         update({
@@ -232,13 +237,14 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean)
           phase: active ? "streaming" : "idle",
         });
         if (active) void followRef.current();
+        if (reportOpen && detail.turn_count > 0) void reportEngagement("conversation", conversationId);
         return true;
       } catch (error) {
         if (epochRef.current === epoch) update({ phase: "idle", error });
         return false;
       }
     },
-    [reset, update],
+    [reset, update, scope, scopeId],
   );
 
   const send = useCallback(
@@ -356,25 +362,29 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean)
 
   const dismissError = useCallback(() => update({ error: null }), [update]);
 
+  const previousSelection = useRef<{ key: string; id: string | null } | null>(null);
   // Open on the latest conversation of the scope, resuming its answer if one is
   // being written (a reload in the middle of a stream picks it back up).
   useEffect(() => {
     // A new scope (the Digest shows one media after another in the same view):
-    // drop the previous one's transport and state. The state is not set here —
-    // `key` makes a render of the new scope read as empty until it is written.
+    // drop the previous transport and state, also when the URL selection changes.
     epochRef.current += 1;
     const epoch = epochRef.current;
     sendingRef.current = false;
     lastStreamRef.current = 0;
     disconnect();
     stateRef.current = { ...EMPTY, key };
+    setState(stateRef.current);
     let cancelled = false;
-    chatClient
+    const removedExplicitSelection = previousSelection.current?.key === key && previousSelection.current.id !== null && !requestedConversationId;
+    previousSelection.current = { key, id: requestedConversationId };
+    if (requestedConversationId) void select(requestedConversationId);
+    else if (!removedExplicitSelection) chatClient
       .listConversations(scope, scopeId)
       .then((list) => {
         const latest: ChatConversationSummary | undefined = list.conversations[0];
         if (!cancelled && latest && epochRef.current === epoch && !stateRef.current.conversation && !stateRef.current.pending) {
-          void select(latest.conversation_id);
+          void select(latest.conversation_id, false);
         }
       })
       .catch(() => {
@@ -385,7 +395,7 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean)
       epochRef.current += 1;
       disconnect();
     };
-  }, [key, scope, scopeId, select, disconnect]);
+  }, [key, scope, scopeId, requestedConversationId, select, disconnect]);
 
   return { state: state.key === key ? state : { ...EMPTY, key }, send, stop, select, newConversation: reset, remove, cancelPending, dismissError };
 }

@@ -562,6 +562,8 @@ export const fr: Catalog = {
   "tabs.account": "Compte",
   "home.loading": "Chargement de votre boîte de réception…",
   "home.retryA11y": "Réessayer de charger la boîte de réception",
+  "home.discussion": "Discussion",
+  "home.learningPending": "En préparation",
   "home.continueLearning": "Reprendre l'apprentissage",
   "home.recentlyAdded": "Ajouts récents",
   "home.takePhotoA11y": "Prendre une photo",

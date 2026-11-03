@@ -158,8 +158,9 @@ export default function FolderDetailScreen() {
   useTranslation();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const params = useLocalSearchParams<{ id: string; name?: string }>();
+  const params = useLocalSearchParams<{ id: string; name?: string; conversationId?: string }>();
   const folderId = params.id;
+  const [resumeChat, setResumeChat] = useState(Boolean(params.conversationId));
 
   const [activeTab, setActiveTab] = useState<FolderTabKey>("sources");
   const [cachedFolders] = useResourceState<Folder[]>(resourceKeys.folders, []);
@@ -555,11 +556,13 @@ export default function FolderDetailScreen() {
       {/* The chat composer, on the Sources tab only (owner decision of
           task-434), under the list. The SafeAreaView already keeps the bottom
           inset. */}
-      {hasContent && activeTab === "sources" && folderId ? (
+      {(hasContent || resumeChat || params.conversationId) && activeTab === "sources" && folderId ? (
         <ChatDock
           key={folderId}
           scope="folder"
           scopeId={folderId}
+          initialConversationId={params.conversationId}
+          onInitialConversationConsumed={() => { setResumeChat(true); router.setParams({ conversationId: undefined }); }}
           title={title}
           getSourceOffset={() => sourceOffset.current}
           sourceContent={

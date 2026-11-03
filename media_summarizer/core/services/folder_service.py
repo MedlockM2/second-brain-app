@@ -382,6 +382,9 @@ async def delete_folder(user_id: str, folder_id: str) -> Dict[str, Any]:
     deleted_folder_count = 0
     for fid in reversed(all_folder_ids_to_delete):
         await database_async.delete_folder(fid)
+        from media_summarizer.core.services import engagement_service
+
+        await engagement_service.remove_scope(user_id=user_id, scope="folder", scope_id=fid)
         deleted_folder_count += 1
 
     logger.info(

@@ -304,6 +304,53 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/engagements:
+    post:
+      operationId: recordEngagement
+      tags: [engagements]
+      description: Records an explicit opening of an owned artifact or nonempty conversation. Best-effort, never a GET side effect.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngagementCreateRequest'
+      responses:
+        '204':
+          description: Recorded, superseded by a newer engagement, or best-effort storage failure.
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '404':
+          description: Target or accessible parent not found.
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/engagements/recent:
+    get:
+      operationId: listRecentEngagements
+      tags: [engagements]
+      description: One entry per artifact or conversation, latest explicit activity first within 90 days. Never records activity.
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 20, default: 12 }
+      responses:
+        '200':
+          description: Current target metadata and accessible navigation parents, with signed covers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, items]
+                properties:
+                  status: { type: string, enum: [success] }
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecentEngagement'
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/artifacts:
     post:
       operationId: createArtifact
@@ -504,6 +551,34 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    EngagementCreateRequest:
+      type: object
+      required: [kind, id]
+      properties:
+        kind: { type: string, enum: [artifact, conversation] }
+        id: { type: string }
+    RecentEngagement:
+      type: object
+      required: [kind, id, scope, scope_id, state, engaged_at, preview_images]
+      properties:
+        kind: { type: string, enum: [artifact, conversation] }
+        id: { type: string }
+        scope: { type: string, enum: [media, folder] }
+        scope_id: { type: string, description: Accessible parent for navigation }
+        state: { type: string, enum: [pending, ready, failed] }
+        engaged_at: { type: string, format: date-time }
+        title: { type: string, nullable: true }
+        artifact_type: { type: string, nullable: true, enum: [summary_short, notes, flashcards, quiz] }
+        scope_title: { type: string, nullable: true }
+        scope_title_label_key: { type: string, nullable: true }
+        scope_created_at: { type: string, format: date-time, nullable: true }
+        creator_name: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        media_type: { type: string, nullable: true }
+        item_count: { type: integer, nullable: true }
+        preview_images:
+          type: array
+          items: { type: string }
     BudgetState:
       type: object
       required: [state, consumed_percent, reserved_percent, available_percent, open_operations, open_reservations, warning_threshold_percent, resets_at]

@@ -457,6 +457,8 @@ export const ja: Catalog = {
   "tabs.account": "アカウント",
   "home.loading": "受信箱を読み込み中…",
   "home.retryA11y": "受信箱を再読み込み",
+  "home.discussion": "会話",
+  "home.learningPending": "準備中",
   "home.continueLearning": "学習を再開",
   "home.recentlyAdded": "最近追加した項目",
   "home.takePhotoA11y": "写真を撮る",

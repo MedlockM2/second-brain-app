@@ -24,11 +24,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect, useIsFocused } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { useAuth } from "../../src/contexts/AuthContext";
 import { ArtifactService } from "../../src/services/artifactService";
+import { useAppActive } from "../../src/hooks/useAppActive";
 import { EngagementService } from "../../src/services/engagementService";
 import { getFriendlyErrorMessage } from "../../src/lib/getFriendlyErrorMessage";
 import { describeArtifactRefusal } from "../../src/lib/artifactRefusal";
@@ -130,15 +131,15 @@ export default function ArtifactDetailScreen() {
   useTranslation();
   const { artifactId } = useLocalSearchParams<{ artifactId: string }>();
   const router = useRouter();
+  const isFocused = useIsFocused();
+  const isAppActive = useAppActive();
   const { isAuthenticated } = useAuth();
   const mountedRef = useRef(true);
   const scrollViewRef = useRef<ScrollView>(null);
   const artifactBodyTopRef = useRef(0);
-  // "Opened and read" is reported once per mount (task-303), from the moment the
-  // content is actually on screen — not on tap, and not from the two `GET`s that
-  // fetch it, which stay safe methods. A retry after a failure re-reports nothing:
-  // the user already got their engagement recorded on the first successful render.
-  const engagementReportedRef = useRef(false);
+  // Report once per focused opening after display in the foreground.
+  // GETs stay side-effect-free; metadata/content refreshes do not re-report.
+  const engagementReportedRef = useRef<string | null>(null);
 
   const { readingLanguage } = useUserPreferences();
   const snapshot = useResourceSnapshot<ArtifactContentResponse>(
@@ -192,14 +193,15 @@ export default function ArtifactDetailScreen() {
     }, [fetchContent]),
   );
   useEffect(() => {
-    if (snapshot.data && !engagementReportedRef.current) {
-      engagementReportedRef.current = true;
+    if (!isFocused) { engagementReportedRef.current = null; return; }
+    if (isAppActive && (snapshot.data || block) && engagementReportedRef.current !== artifactId) {
+      engagementReportedRef.current = artifactId;
       void EngagementService.reportEngagement(
-        snapshot.data.scope,
-        snapshot.data.scope_id,
+        "artifact",
+        artifactId,
       );
     }
-  }, [snapshot.data]);
+  }, [snapshot.data, artifactId, isFocused, isAppActive, block]);
   const handleReload = useCallback(() => {
     void fetchContent();
   }, [fetchContent]);
@@ -291,6 +293,9 @@ export default function ArtifactDetailScreen() {
           />
           <Text style={styles.failedTitle}>{t("artifact.failedTitle")}</Text>
           <Text style={styles.failedMessage}>{state.message}</Text>
+          <Pressable onPress={() => router.replace("/(tabs)/inbox")} accessibilityRole="button">
+            <Text style={styles.failedMessage}>{t("tabs.home")}</Text>
+          </Pressable>
           <Pressable
             style={styles.refreshButton}
             onPress={handleReload}

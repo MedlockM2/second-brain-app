@@ -460,6 +460,8 @@ export const ar: Catalog = {
   "tabs.account": "الحساب",
   "home.loading": "جارٍ تحميل صندوق الوارد…",
   "home.retryA11y": "إعادة تحميل صندوق الوارد",
+  "home.discussion": "محادثة",
+  "home.learningPending": "قيد التحضير",
   "home.continueLearning": "واصل التعلّم",
   "home.recentlyAdded": "أُضيف مؤخرًا",
   "home.takePhotoA11y": "التقاط صورة",

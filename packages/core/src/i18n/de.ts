@@ -546,6 +546,8 @@ export const de: Catalog = {
   "tabs.account": "Konto",
   "home.loading": "Dein Posteingang wird geladen …",
   "home.retryA11y": "Posteingang erneut laden",
+  "home.discussion": "Gespräch",
+  "home.learningPending": "In Vorbereitung",
   "home.continueLearning": "Weiterlernen",
   "home.recentlyAdded": "Kürzlich hinzugefügt",
   "home.takePhotoA11y": "Foto aufnehmen",

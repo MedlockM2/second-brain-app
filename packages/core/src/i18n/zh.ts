@@ -448,6 +448,8 @@ export const zh: Catalog = {
   "tabs.account": "账户",
   "home.loading": "正在加载你的收件箱…",
   "home.retryA11y": "重新加载收件箱",
+  "home.discussion": "对话",
+  "home.learningPending": "准备中",
   "home.continueLearning": "继续学习",
   "home.recentlyAdded": "最近添加",
   "home.takePhotoA11y": "拍照",

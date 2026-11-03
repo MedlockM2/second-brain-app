@@ -538,6 +538,8 @@ export const es: Catalog = {
   "tabs.account": "Cuenta",
   "home.loading": "Cargando tu bandeja…",
   "home.retryA11y": "Reintentar la carga de la bandeja",
+  "home.discussion": "Conversación",
+  "home.learningPending": "En preparación",
   "home.continueLearning": "Seguir aprendiendo",
   "home.recentlyAdded": "Añadido recientemente",
   "home.takePhotoA11y": "Hacer una foto",

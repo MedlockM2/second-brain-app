@@ -1,8 +1,8 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-10-31
-**Effective date:** 2026-10-31
+**Last updated:** 2026-11-03
+**Effective date:** 2026-11-03
 
 ## 1. Introduction
 
@@ -35,6 +35,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 
 - **Crash, error and performance reports** - the error, where in the app it happened, device model, operating system and app version, the screens and in-app events just before it, and the timing of network requests (addresses without their parameters). They include neither your IP address nor your account identifier
 - **Server logs** - our servers record each request, including your IP address, the time and the endpoint called, to operate and secure the Service
+- **Continue learning** - the identifiers of the artifacts and conversations you open or start, and the time of your last activity on each, to let you resume them across devices
 - **Usage accounting** - how many minutes and pages of processing your account used, to apply plan limits
 - **Push notification token** - only if you allow notifications (section 4.5)
 
@@ -53,6 +54,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 | Sign-in and account management | Email, sign-in identifiers |
 | Processing what you share (transcription, extraction, AI-generated content) | Links, files, text, transcripts |
 | Answering your questions in the chat | Chat messages, your saved content |
+| Resuming your learning | Artifact and conversation identifiers, last activity time |
 | Search within your library | Your content and generated content |
 | Notifications (digests, content ready) | Push notification token, time zone |
 | Subscriptions and plan limits | Purchase status, usage accounting |
@@ -116,6 +118,7 @@ Notifications are optional. If you allow them, we send two kinds: digest alerts 
 - **An item you delete** - disappears from your library and search immediately, and is permanently erased about 30 days later (this window lets us restore it if you ask). Technical processing records of the item, such as the link submitted, are kept until you delete your account
 - **Content shared by several accounts** - the transcript and files of a public media (for example a YouTube video) are kept as long as at least one account still has that media in its library; they are no longer linked to you once you delete it
 - **Chat conversations** - kept until you delete the conversation or your account
+- **Continue learning activity** - used for 90 days after your last activity on each artifact or conversation, then automatically deleted shortly afterwards. Deleted destinations are excluded immediately; deleting your account erases these activity records. Expiry of an activity record never deletes the artifact or conversation itself
 - **Usage accounting** - up to 400 days, then deleted
 - **Crash reports** - up to 30 days
 - **Server logs** - up to 30 days

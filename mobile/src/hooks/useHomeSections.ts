@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useFocusEffect } from "expo-router";
+import { useProcessingRefresh } from "./useProcessingRefresh";
 import { useAuth } from "../contexts/AuthContext";
 import { useResourceSnapshot } from "../contexts/ResourceCacheContext";
 import { resourceKeys } from "../services/resourceCache";
@@ -30,6 +31,12 @@ export function useHomeSections() {
     };
     await Promise.all([read("recent"), read("unsorted")]);
   }, [isAuthenticated]);
+  const refreshRecent = useCallback(async () => {
+    if (isAuthenticated) await EngagementService.listRecent(12);
+  }, [isAuthenticated]);
+  const { rearm: rearmPending } = useProcessingRefresh({
+    hasProcessing: (recent.data ?? []).some(entry => entry.state === "pending"), refetch: refreshRecent,
+  });
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   useEffect(() => subscribeToMediaSaves(() => { void refresh(); }), [refresh]);
   return {
@@ -38,5 +45,6 @@ export function useHomeSections() {
     unsortedCount: unsorted.data ?? 0,
     hasLoadedUnsortedCount: unsorted.data !== undefined || Boolean(unsorted.error),
     refresh,
+    rearmPending,
   };
 }

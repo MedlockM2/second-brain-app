@@ -127,6 +127,7 @@ export default function InboxScreen() {
     unsortedCount,
     hasLoadedUnsortedCount,
     refresh: refreshSections,
+    rearmPending: rearmLearningRefresh,
   } = useHomeSections();
 
   const pendingSaves = usePendingSaves();
@@ -186,7 +187,8 @@ export default function InboxScreen() {
     // that outlived it is still on its way, and pulling down is how the user asks
     // again (task-404 §7.4).
     rearmProcessingRefresh();
-  }, [refresh, refreshSections, rearmProcessingRefresh]);
+    rearmLearningRefresh();
+  }, [refresh, refreshSections, rearmProcessingRefresh, rearmLearningRefresh]);
 
   const handleUnsortedReviewPress = useCallback(() => {
     router.push("/review");
@@ -194,6 +196,13 @@ export default function InboxScreen() {
 
   const handleTilePress = useCallback(
     (item: HomeTileItem) => {
+      if (item.learning) {
+        const entry = item.learning;
+        if (entry.kind === "artifact") router.push(`/artifacts/${entry.id}`);
+        else router.push({ pathname: entry.scope === "media" ? "/media/[id]" : "/media/folders/[id]",
+          params: { id: entry.scope_id, conversationId: entry.id } });
+        return;
+      }
       if (item.kind === "media") {
         router.push(`/media/${item.id}`);
       } else {
@@ -476,7 +485,7 @@ function TileRow({
       <FlatList
         testID={testID}
         data={tiles}
-        keyExtractor={(tile) => `${tile.kind}:${tile.id}`}
+        keyExtractor={(tile) => tile.learning ? `${tile.learning.kind}:${tile.learning.id}` : `${tile.kind}:${tile.id}`}
         renderItem={({ item }) => (
           <HomeTile
             item={item}
@@ -610,29 +619,31 @@ function EmptyState() {
  * only maps the wire shape onto the tile shape — and keeps the order it came in.
  */
 function toEngagementTile(entry: RecentEngagement): HomeTileItem {
-  if (entry.kind === "folder") {
+  if (entry.scope === "folder") {
     return {
+      learning: entry,
       kind: "folder",
-      id: entry.id,
-      name: entry.title?.trim() || t("home.untitledFolder"),
+      id: entry.scope_id,
+      name: entry.scope_title?.trim() || t("home.untitledFolder"),
       itemCount: entry.item_count ?? 0,
       previewImages: entry.preview_images ?? [],
     };
   }
   return {
     kind: "media",
-    id: entry.id,
-    title: entry.title ?? null,
+    id: entry.scope_id,
+    learning: entry,
+    title: entry.scope_title ?? null,
     // What names a media nothing named (task-400). `created_at` on this payload
     // is the media's *save* date, not the engagement's — `engaged_at` would date
     // the tile by when it was last read, which is not what it is called.
-    titleLabelKey: entry.title_label_key ?? null,
-    savedAt: entry.created_at ?? null,
+    titleLabelKey: entry.scope_title_label_key ?? null,
+    savedAt: entry.scope_created_at ?? null,
     creator: entry.creator_name ?? null,
     imageUrl: entry.image_url ?? null,
     // No `updated_at` on this payload, and `engaged_at` would churn the cache on
     // every engagement — the id alone is the stable identity here.
-    cacheKey: entry.id,
+    cacheKey: entry.scope_id,
     mediaType: (entry.media_type ?? "unknown") as MediaType,
   };
 }

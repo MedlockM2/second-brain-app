@@ -14,7 +14,7 @@ export type {
 } from "@media-summarizer/core/types/engagements";
 
 /**
- * Engagement service for the mobile app (task-303).
+ * Engagement service for the mobile app (TASK-582).
  *
  * The write side is a decoration on top of whatever the user was actually doing,
  * so `reportEngagement` is the one call in this codebase that resolves to nothing
@@ -32,8 +32,8 @@ export class EngagementService {
    * POST /api/engagements -> 204
    *
    * Fire-and-forget by contract: call it without awaiting, or await it knowing it
-   * always resolves. The server rate-limits repeats itself, so a screen that
-   * remounts does not need its own throttle beyond firing once per mount.
+   * always resolves. Call once per explicit opening, never from polling.
+   * There is no time dampener: quickly returning A -> B -> A must move A.
    */
   static async reportEngagement(
     kind: EngagementKind,
@@ -56,7 +56,7 @@ export class EngagementService {
   }
 
   /**
-   * The "Continue learning" row: media and folders merged, newest first,
+   * The "Continue learning" row: artifacts and conversations merged, newest first,
    * already capped and with every cover signed.
    * GET /api/engagements/recent
    *

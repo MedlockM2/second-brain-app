@@ -1,4 +1,6 @@
 import React from "react";
+import type { RecentEngagement } from "@media-summarizer/core/types/engagements";
+import { engagementDisplay } from "@media-summarizer/core/engagements/display";
 import { useRecoverableImage } from "../hooks/useRecoverableImage";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { Image } from "expo-image";
@@ -24,15 +26,9 @@ import { t, tCount } from "../i18n";
 /**
  * The tile of the Home screen's two horizontal rows (task-307).
  *
- * One component for "Continue learning" and "Recently added" alike: a large
- * cover, the title on up to three lines, the creator on one muted line. There is
- * no type badge and no timestamp — the rows are short and ordered, so neither
- * earns its space, and dropping them is what lets the title breathe. The two
- * exceptions are both about where an import stands, which is the one thing about
- * a tile that the user cannot find out by looking at it: a failed one is marked
- * over the cover (task-381), and one still on its way is swept by a blurred band
- * with the state in its subtitle (task-402). Exactly one of the two can show at
- * a time — see `tileStatusMarker`.
+ * Recently added draws a parent cover, title and creator, with import markers.
+ * Continue learning reuses the cover and adds the target's type badge, title,
+ * parent subtitle and generation state. The row's item identity is the target.
  *
  * Its height is fixed (`TILE_HEIGHT`) rather than driven by its own text, so the
  * row it sits in is the same height whichever kinds of tile it holds — see the
@@ -106,7 +102,7 @@ const MAX_MOSAIC_IMAGES = 4;
  * item count and borrows its members', and making that explicit is what keeps
  * the rendering branches honest.
  */
-export type HomeTileItem =
+export type HomeTileItem = (
   | {
       kind: "media";
       id: string;
@@ -157,7 +153,7 @@ export type HomeTileItem =
       itemCount: number;
       /** Up to four covers of its newest items. Possibly empty. */
       previewImages: string[];
-    };
+    }) & { learning?: RecentEngagement };
 
 interface HomeTileProps {
   item: HomeTileItem;
@@ -177,22 +173,46 @@ export function HomeTile({
   processingStalled = false,
 }: HomeTileProps): React.JSX.Element {
   const styles = useThemedStyles(makeStyles);
+  const Colors = useThemeColors();
+  const learning = item.learning ? engagementDisplay(item.learning) : null;
+  const badgeColors = learning?.tone === "notes" ? [Colors.artifactNotesTint, Colors.artifactNotesInk]
+    : learning?.tone === "flashcards" ? [Colors.artifactFlashcardsTint, Colors.artifactFlashcardsInk]
+    : learning?.tone === "quiz" ? [Colors.artifactQuizTint, Colors.artifactQuizInk]
+    : learning?.tone === "discussion" ? [Colors.surfaceContainer, Colors.textMain]
+    : [Colors.artifactSummaryTint, Colors.artifactSummaryInk];
 
   return (
     <Pressable
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
       onPress={() => onPress(item)}
       disabled={item.kind === "media" && item.provisional === true}
-      accessibilityLabel={describeTile(item)}
+      accessibilityLabel={learning?.accessibilityLabel ?? describeTile(item)}
       accessibilityRole="button"
     >
-      <TileCover item={item} processingStalled={processingStalled} />
+      <View>
+        <TileCover item={item} processingStalled={processingStalled} />
+        {learning && (
+          <View style={styles.learningLabels} accessible={false}>
+            <View style={[styles.learningBadge, { backgroundColor: badgeColors[0] }]}>
+              <Ionicons name={learning.icon} size={14} color={badgeColors[1]} />
+              <Text numberOfLines={1} style={[styles.learningLabel, { color: badgeColors[1] }]}>
+                {learning.typeLabel}
+              </Text>
+            </View>
+            {learning.stateLabel && (
+              <Text numberOfLines={1} style={[styles.learningState, item.learning?.state === "failed" && { color: Colors.error }]}>
+                {learning.stateLabel}
+              </Text>
+            )}
+          </View>
+        )}
+      </View>
       <Text style={styles.title} numberOfLines={TILE_TITLE_MAX_LINES}>
-        {tileTitle(item)}
+        {learning?.title ?? tileTitle(item)}
       </Text>
-      {tileSubtitle(item) ? (
+      {(learning?.sourceTitle ?? tileSubtitle(item)) ? (
         <Text style={styles.subtitle} numberOfLines={1}>
-          {tileSubtitle(item)}
+          {learning?.sourceTitle ?? tileSubtitle(item)}
         </Text>
       ) : null}
     </Pressable>
@@ -436,6 +456,31 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       // it happens to hold. Well past the 48 px touch floor, which the tile would
       // clear on its cover alone.
       height: TILE_HEIGHT,
+    },
+    learningLabels: {
+      position: "absolute",
+      bottom: Spacing.xs,
+      start: Spacing.xs,
+      end: Spacing.xs,
+      gap: 3,
+    },
+    learningBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      alignSelf: "flex-start",
+      borderRadius: BorderRadius.sm,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      maxWidth: "100%",
+    },
+    learningLabel: { fontSize: 12, flexShrink: 1 },
+    learningState: {
+      alignSelf: "flex-start",
+      backgroundColor: Colors.surface,
+      color: Colors.textMain,
+      paddingHorizontal: Spacing.xs,
+      fontSize: 12,
     },
     tilePressed: {
       opacity: 0.7,

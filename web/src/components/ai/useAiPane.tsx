@@ -16,6 +16,8 @@ import type {
 } from "@media-summarizer/core/types/artifacts";
 import type { ArtifactType } from "@media-summarizer/core/types/media";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import { reportEngagement } from "../../lib/engagements";
 import { apiRequest } from "../../api";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon } from "../Icon";
@@ -86,7 +88,41 @@ export function useAiPane({
   const requestsRef = useRef(new Set<ArtifactType>());
   const [refusal, setRefusal] = useState<string | null>(null);
   const [customizing, setCustomizing] = useState<ArtifactFormat | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const openId = params.get("artifactId");
+  const [direct, setDirect] = useState<ArtifactDetail | null>(null);
+  const [failedId, setFailedId] = useState<string | null>(null);
+  const directError = openId !== null && failedId === openId;
+  const [directAttempt, setDirectAttempt] = useState(0);
+  const setOpenId = (id: string | null) => {
+    setCustomizing(null);
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      if (id) next.set("artifactId", id); else next.delete("artifactId");
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (!openId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const read = async () => {
+      try {
+        const detail = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(openId)}`);
+        if (cancelled) return;
+        // Media history belongs to content: scope_id can name another save of it.
+        if (detail.scope !== scope || (scope === "folder" && detail.scope_id !== scopeId)) throw new Error("Artifact unavailable");
+        setDirect(detail);
+        setFailedId(null);
+        if (isInFlight(detail)) timer = setTimeout(() => void read(), POLL_MS);
+      } catch {
+        if (!cancelled) setFailedId(openId);
+      }
+    };
+    void read();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [openId, scope, scopeId, directAttempt]);
 
   const locked = Boolean(lockedMessage);
 
@@ -168,6 +204,7 @@ export function useAiPane({
     try {
       const retried = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(artifact.artifact_id)}/retry`, { method: "POST" });
       setHistory(current => mergeArtifactIntoHistory(current ?? [], retried));
+      if (openId === retried.artifact_id) { setDirect(retried); setDirectAttempt(value => value + 1); }
     } finally { void loadHistory(); }
   };
   const remove = async (artifact: ArtifactSummary): Promise<void> => {
@@ -179,9 +216,9 @@ export function useAiPane({
   };
 
   const open =
-    (history ?? []).find((artifact) => artifact.artifact_id === openId) ?? null;
+    (direct?.artifact_id === openId ? direct : null) ?? (history ?? []).find((artifact) => artifact.artifact_id === openId) ?? null;
 
-  if (locked) {
+  if (locked && !openId) {
     return {
       wide: false,
       spec: {
@@ -194,6 +231,16 @@ export function useAiPane({
         ),
       },
     };
+  }
+
+  if (openId && (!open || directError)) {
+    return { wide: true, spec: { title: t("media.tab.ai"), icon: "sparkles-outline", body:
+      directError ? <div className="section-error" role="alert">
+        <span>{t("artifact.loadFailed")}</span>
+        <button className="btn tonal" type="button" onClick={() => { setFailedId(null); setDirectAttempt(value => value + 1); }}>{t("common.retry")}</button>
+        <button className="btn ghost" type="button" onClick={() => setOpenId(null)}>{t("common.goBack")}</button>
+        <button className="btn ghost" type="button" onClick={() => navigate("/")}>{t("tabs.home")}</button>
+      </div> : <p className="small muted">{t("common.loading")}</p> } };
   }
 
   if (customizing) {
@@ -404,6 +451,13 @@ function OpenArtifact({
   const [attempt, setAttempt] = useState(0);
   const [regenerating, setRegenerating] = useState(false);
   const ready = artifact.status === "ready";
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!reported.current && (!ready || content)) {
+      reported.current = true;
+      void reportEngagement("artifact", artifact.artifact_id);
+    }
+  }, [artifact.artifact_id, ready, content]);
 
   useEffect(() => {
     if (!ready) return;
