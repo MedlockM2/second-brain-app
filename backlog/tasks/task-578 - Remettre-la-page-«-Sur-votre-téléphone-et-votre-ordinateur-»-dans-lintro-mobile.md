@@ -1,17 +1,18 @@
 ---
-id: DRAFT-1
+id: TASK-578
 title: >-
   Remettre la page « Sur votre téléphone et votre ordinateur » dans l'intro
-  mobile une fois l'app web publiée
-status: Draft
+  mobile
+status: To Do
 assignee: []
 created_date: '2026-11-02 13:57'
+updated_date: '2026-11-03 10:20'
 labels:
   - mobile
   - onboarding
 dependencies: []
 references:
-  - backlog/drafts/draft-2
+  - backlog/drafts/draft-2 - Appliquer-la-dernière-mise-à-jour-OTA-dès-la-première-connexion-sans-attente-au-démarrage.md
   - mobile/app/onboarding/intro.tsx
   - mobile/src/components/intro/IntroArt.tsx
   - mobile-design-mockups/onboarding_apres_connexion/README.md
@@ -25,13 +26,13 @@ type: enhancement
 <!-- SECTION:DESCRIPTION:BEGIN -->
 ## Pourquoi
 
-L'intro affichée une fois après la première connexion (`mobile/app/onboarding/intro.tsx`) avait deux pages : le partage depuis une autre app, puis « Sur votre téléphone et votre ordinateur » (illustration ordinateur + téléphone). Le 2026-11-01, l'owner a retiré la page 2 (commit `23adf23f`) : elle annonçait une app web que les testeurs ne peuvent pas encore ouvrir, puisque le web n'est pas publié. Cette tâche la remet **quand l'app web sera publiée** et accessible aux testeurs.
+L'intro affichée une fois après la première connexion (`mobile/app/onboarding/intro.tsx`) avait deux pages : le partage depuis une autre app, puis « Sur votre téléphone et votre ordinateur » (illustration ordinateur + téléphone). Le 2026-11-01, l'owner a retiré la page 2 (commit `23adf23f`) : elle annonçait une app web que les testeurs ne peuvent pas encore ouvrir, puisque le web n'est pas publié. Cette tâche la remet.
 
-**Statut Draft volontaire** : à passer en To Do seulement le jour où l'app web est en ligne, sinon la page promettrait de nouveau quelque chose d'inaccessible.
+**Remise avant la publication du web (owner, 2026-11-03)** : l'owner veut soumettre au plus vite un build qui contient à la fois cette page et DRAFT-2, sans attendre que le web soit en ligne. La page annonce donc l'app web avant qu'elle soit accessible : c'est un choix assumé, à ne pas contester. Le texte de la page 2 reste celui d'origine et ne cite aucune adresse web.
 
 ## Ce run réalise aussi DRAFT-2
 
-L'agent de cette tâche réalise **aussi DRAFT-2**, dans le même run et la même branche : « Appliquer la dernière mise à jour OTA dès la première connexion, sans attente au démarrage » (`backlog/drafts/draft-2 - …`). Il lit DRAFT-2 en entier, satisfait ses critères d'acceptation et passe les deux tâches à Done. Raison (owner, 2026-11-03) : un seul build natif et une seule review pour les deux changements. DRAFT-2 n'est jamais dispatchée seule : pour lancer le travail, passer seulement DRAFT-1 en To Do.
+L'agent de cette tâche réalise **aussi DRAFT-2**, dans le même run et la même branche : « Appliquer la dernière mise à jour OTA dès la première connexion, sans attente au démarrage » (`backlog/drafts/draft-2 - …`). Il lit DRAFT-2 en entier, satisfait ses critères d'acceptation et passe les deux tâches à Done. Raison (owner, 2026-11-03) : un seul build natif et une seule review pour les deux changements. DRAFT-2 reste en Draft et n'est jamais lancée seule : c'est cette tâche qui la porte.
 
 ## Ce qu'il faut remettre
 
@@ -41,11 +42,9 @@ Tout est dans l'historique git, au commit `6bbde721` (version à deux pages) :
 - Les clés `intro.next`, `intro.everywhere.title` et `intro.everywhere.body` dans les 11 catalogues de `packages/core/src/i18n/` (textes d'origine dans le commit `6bbde721`).
 - `mobile/.maestro/utils/finish_intro.yaml` : toucher `intro-next-button` puis `intro-start-button`.
 
-Le texte de la page 2 peut alors citer l'adresse réelle de l'app web, si l'owner le souhaite.
-
 ## Note pour l'owner (pas un critère)
 
-Après l'OTA, vérifier sur iPhone et Android, après une réinstallation : page 1, « Suivant », page 2, « C'est parti », Accueil. Les notes de review Apple et les instructions d'accès Play décrivent l'intro (« one-screen introduction… tap "Let's go" ») : les repasser à deux pages au même moment (`docs/store-listing/pre-beta-review.md`).
+Après le merge, faire le build manuel décrit dans DRAFT-2 et le soumettre en review (iOS : ajouter le build au groupe externe depuis le site ; Play : nouvelle version Alpha). Après l'OTA, vérifier sur iPhone et Android, après une réinstallation : page 1, « Suivant », page 2, « C'est parti », Accueil. Les notes de review Apple et les instructions d'accès Play décrivent l'intro (« one-screen introduction… tap "Let's go" ») : les repasser à deux pages au même moment (`docs/store-listing/pre-beta-review.md`).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

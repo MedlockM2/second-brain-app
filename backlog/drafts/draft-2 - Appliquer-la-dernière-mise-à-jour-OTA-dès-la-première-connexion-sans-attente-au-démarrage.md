@@ -23,9 +23,9 @@ type: enhancement
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-## Réalisée dans le même run que DRAFT-1
+## Réalisée dans le même run que TASK-578
 
-Cette tâche n'est **jamais dispatchée seule** et reste en Draft. L'agent qui réalise DRAFT-1 (remettre la page 2 de l'intro) réalise aussi celle-ci dans le même run et la même branche. Il passe ensuite les deux tâches à Done. Raison (owner, 2026-11-03) : un seul build natif et une seule review pour les deux changements. Pour lancer le travail, l'owner passe **DRAFT-1** en To Do. Celle-ci reste en Draft.
+Cette tâche n'est **jamais dispatchée seule** et reste en Draft. L'agent qui réalise TASK-578 (remettre la page 2 de l'intro, ex-DRAFT-1) réalise aussi celle-ci dans le même run et la même branche. Il passe ensuite les deux tâches à Done. Raison (owner, 2026-11-03) : un seul build natif et une seule review pour les deux changements. TASK-578 est en To Do depuis le 2026-11-03 ; celle-ci reste en Draft.
 
 ## Pourquoi
 
