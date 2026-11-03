@@ -462,10 +462,43 @@ paths:
           $ref: '#/components/responses/ArtifactNotFound'
         '500':
           $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: renameArtifact
+      tags: [artifacts]
+      description: Rename the owner's ready or failed artifact; generated payload and sources stay unchanged.
+      parameters:
+        - name: artifact_id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 120, description: Trimmed non-empty display title. }
+      responses:
+        '200':
+          description: Renamed artifact detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDetailResponse'
+        '401':
+          $ref: '#/components/responses/SessionExpired'
+        '404':
+          $ref: '#/components/responses/ArtifactNotFound'
+        '409':
+          description: artifact_action_conflict; entry changed or is still in flight.
+        '422':
+          description: Invalid title.
     delete:
       operationId: deleteArtifact
       tags: [artifacts]
-      description: Delete the owner's failed entry from server history; internal previews are not addressable.
+      description: Delete the owner's ready or failed entry and its payload; sources are kept and internal previews are not addressable.
       parameters:
         - name: artifact_id
           in: path
@@ -473,13 +506,13 @@ paths:
           schema: { type: string }
       responses:
         '204':
-          description: Failed entry removed from history.
+          description: Artifact removed from history.
         '401':
           $ref: '#/components/responses/SessionExpired'
         '404':
           $ref: '#/components/responses/ArtifactNotFound'
         '409':
-          description: artifact_action_conflict; entry changed or is not failed.
+          description: artifact_action_conflict; entry changed or is still in flight.
   /api/artifacts/{artifact_id}/retry:
     post:
       operationId: retryArtifact

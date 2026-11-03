@@ -15,6 +15,15 @@ import type { Catalog } from "./runtime";
  * `media.tab.reader` is the reading mode of a source, not the Reader tier.
  */
 export const fr: Catalog = {
+  "artifactActions.longPressHint": "Touchez deux fois et maintenez pour renommer ou supprimer cet artefact",
+  "artifactActions.moreA11y": "Actions de cet artefact",
+  "artifactActions.rename.title": "Renommer cet artefact",
+  "artifactActions.rename.placeholder": "Nom de l’artefact",
+  "artifactActions.renameFailed": "Impossible de renommer cet artefact. Réessayez.",
+  "artifactActions.deleteTitle": "Supprimer cet artefact ?",
+  "artifactActions.deleteBody": "« {title} » sera supprimé. Ses sources seront conservées. Cette action est irréversible.",
+  "artifactActions.deleteFailed": "Impossible de supprimer cet artefact. Réessayez.",
+
   "budget.forecastOver": "Cette réservation estimée dépasse la capacité actuellement disponible.",
   "budget.available": "{percent} disponibles",
   "budget.reserved": "{percent} réservés aux traitements en cours",

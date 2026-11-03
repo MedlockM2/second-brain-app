@@ -59,7 +59,7 @@ export interface ArtifactSummary {
   artifact_id: string;
   artifact_type: ArtifactType;
   status: ArtifactStatus;
-  /** Written by the model, which is what tells two entries of the same type apart. */
+  /** Generated title, editable by the owner once the entry is ready or failed. */
   title?: string | null;
   source_count: number;
   created_at: string;
@@ -103,3 +103,8 @@ export interface ArtifactContentResponse {
   /** Parsed JSON payload (shape depends on artifact_type). */
   content: Record<string, unknown>;
 }
+
+/** Display metadata only; the generation and source snapshot stay immutable. */
+export interface RenameArtifactRequest { title: string }
+
+export const MAX_ARTIFACT_TITLE_LENGTH = 120;

@@ -112,6 +112,15 @@ class ArtifactCreateRequest(BaseModel):
         return value
 
 
+class ArtifactRenameRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def _trim_title(cls, value: Any) -> Any:
+        return value.strip() if isinstance(value, str) else value
+
+
 class ArtifactSourceResponse(BaseModel):
     media_item_id: str
     title: Optional[str] = None
@@ -423,7 +432,8 @@ async def _owned_user_artifact(artifact_id: str, user_id: str) -> MediaArtifactR
     record = await get_media_artifact_record(artifact_id)
     if record is None or record.user_id != user_id or record.artifact_type in INTERNAL_ARTIFACT_TYPES:
         raise HTTPException(status_code=404, detail="Artifact not found")
-    await _assert_scope_owned(scope=record.scope, scope_id=record.scope_id, user_id=user_id)
+    # History is owned by the entry, and can be reached through another save
+    # of the same content even after its original library row was deleted.
     return record
 
 
@@ -446,12 +456,48 @@ async def retry_artifact(artifact_id: str, current_user: AuthUser = Depends(get_
         raise HTTPException(status_code=503, detail="Artifact generation is currently disabled") from exc
 
 
+@router.patch("/artifacts/{artifact_id}", response_model=ArtifactDetailResponse)
+async def rename_artifact(
+    artifact_id: str,
+    payload: ArtifactRenameRequest,
+    current_user: AuthUser = Depends(get_current_user),
+):
+    record = await _owned_user_artifact(artifact_id, current_user.id)
+    if record.status not in {MediaArtifactStatus.READY, MediaArtifactStatus.FAILED}:
+        raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"})
+    updated = await media_artifacts.rename_settled_artifact(record, payload.title)
+    if updated is None:
+        raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"})
+    return _detail(updated)
+
+
 @router.delete("/artifacts/{artifact_id}", status_code=204, response_class=Response)
 async def delete_artifact(artifact_id: str, current_user: AuthUser = Depends(get_current_user)):
     record = await _owned_user_artifact(artifact_id, current_user.id)
-    if record.status != MediaArtifactStatus.FAILED or not await media_artifacts.delete_failed_artifact(record):
+    if record.status not in {MediaArtifactStatus.READY, MediaArtifactStatus.FAILED}:
         raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"})
-    await engagement_service.remove(user_id=current_user.id, kind="artifact", subject_id=artifact_id)
+    if not await media_artifacts.delete_settled_artifact(record):
+        raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"})
+    try:
+        await engagement_service.remove(user_id=current_user.id, kind="artifact", subject_id=artifact_id)
+    except Exception as exc:
+        # Recent-engagement reads also discard a target whose record is gone.
+        log_event(
+            logger, logging.ERROR, "artifact.delete.engagement_cleanup_failed",
+            "Artifact removed but its recent-engagement reference could not be deleted",
+            artifact_id=artifact_id, error_type=type(exc).__name__, exc_info=exc,
+        )
+    if record.storage is not None:
+        try:
+            await s3.delete_object(bucket=record.storage.bucket, key=record.storage.key)
+        except Exception as exc:
+            # History deletion is already committed. Surface cleanup failures to
+            # operations without claiming that the deleted entry still exists.
+            log_event(
+                logger, logging.ERROR, "artifact.delete.storage_cleanup_failed",
+                "Artifact removed from history but its payload could not be deleted",
+                artifact_id=artifact_id, error_type=type(exc).__name__, exc_info=exc,
+            )
     return Response(status_code=204)
 
 
@@ -697,6 +743,9 @@ async def get_artifact_content(
 
         if not isinstance(content, dict):
             content = {"value": content}
+
+        if record.title and isinstance(content.get("content"), dict):
+            content["content"]["title"] = record.title
 
         log_event(
             logger,

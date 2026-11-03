@@ -1,3 +1,4 @@
+import type { RecentEngagement } from "@media-summarizer/core/types/engagements";
 import { mergeArtifactIntoHistory } from "../lib/artifactHistory";
 import { withoutDefaults } from "@media-summarizer/core/artifacts/options";
 import {
@@ -17,6 +18,7 @@ import type {
   ArtifactListResponse,
   ArtifactScope,
   GenerateArtifactRequest,
+  RenameArtifactRequest,
 } from "@media-summarizer/core/types/artifacts";
 
 export type {
@@ -73,15 +75,34 @@ export class ArtifactService {
     return result;
   }
 
-  static async deleteArtifact(artifactId: string, scope: ArtifactScope, scopeId: string): Promise<void> {
+  static async renameArtifact(artifactId: string, title: string, scope: ArtifactScope, scopeId: string): Promise<void> {
     const owner = mutationOwner();
     const language = resourceSession().language;
+    const result = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(artifactId)}`, {
+      method: "PATCH", body: { title } satisfies RenameArtifactRequest,
+    });
+    if (resourceSession().cache !== owner) return;
+    owner.remove(key => key[0] === "artifact-body" && key[1] === artifactId);
+    owner.update(key => key[0] === "artifact-list", data => {
+      const page = data as ArtifactListResponse;
+      return { ...page, artifacts: page.artifacts.map(entry => entry.artifact_id === artifactId ? { ...entry, title: result.title } : entry) };
+    });
+    owner.update(key => key[0] === "recent-engagements", data => (data as RecentEngagement[]).map(entry =>
+      entry.kind === "artifact" && entry.id === artifactId ? { ...entry, title: result.title ?? null } : entry));
+    this.storeMutation(result, owner, language, scope, scopeId);
+  }
+
+  static async deleteArtifact(artifactId: string, scope: ArtifactScope, scopeId: string): Promise<void> {
+    const owner = mutationOwner();
     await apiRequest<void>(`/api/artifacts/${encodeURIComponent(artifactId)}`, { method: "DELETE" });
     if (resourceSession().cache !== owner) return;
     owner.remove(key => (key[0] === "artifact" || key[0] === "artifact-body") && key[1] === artifactId);
-    const key = resourceKeys.artifacts(scope, scopeId, 50, null, language);
-    const page = owner.snapshot<ArtifactListResponse>(key).data;
-    if (page) owner.set(key, { ...page, artifacts: page.artifacts.filter(entry => entry.artifact_id !== artifactId) });
+    owner.update(key => key[0] === "artifact-list", data => {
+      const page = data as ArtifactListResponse;
+      return { ...page, artifacts: page.artifacts.filter(entry => entry.artifact_id !== artifactId) };
+    });
+    owner.update(key => key[0] === "recent-engagements", data => (data as RecentEngagement[]).filter(entry =>
+      entry.kind !== "artifact" || entry.id !== artifactId));
     owner.invalidate(key => key[0] === "artifact-list" && key[1] === scope && key[2] === scopeId);
     homeChanged(owner);
   }

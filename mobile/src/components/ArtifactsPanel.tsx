@@ -54,6 +54,10 @@ import { ARTIFACT_FORMATS, type ArtifactFormat } from "../lib/artifactFormats";
 import type { ScopeArtifacts } from "../hooks/useScopeArtifacts";
 import { ArtifactGeneratingRow } from "./ArtifactGeneratingRow";
 import { ArtifactRow } from "./ArtifactRow";
+import { AnchoredContextMenu } from "./AnchoredContextMenu";
+import { RenameDialog } from "./RenameDialog";
+import { useArtifactActions } from "../hooks/useArtifactActions";
+import { artifactFormatOf } from "../lib/artifactFormats";
 import { ResourceRefreshNotice } from "./ResourceRefreshNotice";
 import { t } from "../i18n";
 
@@ -91,8 +95,17 @@ export function ArtifactsPanel({
     customize,
     retry,
     remove,
+    rename,
     openArtifact,
   } = artifacts;
+
+  const actions = useArtifactActions<ArtifactSummary>({
+    titleOf: artifact => {
+      const format = artifactFormatOf(artifact.artifact_type);
+      return artifact.title?.trim() || (format ? t(format.labelKey) : artifact.artifact_type);
+    },
+    rename, remove,
+  });
 
   // Sorted here rather than trusted: a generation folded in by the POST, or a
   // failed entry rerun under its own id, keeps the place it had in the list.
@@ -161,11 +174,15 @@ export function ArtifactsPanel({
               showSourceCount={scope === "folder"}
               onOpen={openArtifact}
               onRetry={retry}
-              onDelete={remove}
+              onLongPress={actions.open}
             />
           ))}
         </View>
       )}
+      <AnchoredContextMenu {...actions.menuProps} renderPreview={artifact => (
+        <ArtifactRow artifact={artifact} showSourceCount={scope === "folder"} onOpen={() => {}} onRetry={async () => {}} />
+      )} />
+      <RenameDialog {...actions.renameProps} />
     </View>
   );
 }

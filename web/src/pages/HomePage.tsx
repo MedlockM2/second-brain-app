@@ -1,3 +1,5 @@
+import { ArtifactActions } from "../components/ai/ArtifactActions";
+import type { ArtifactDetail } from "@media-summarizer/core/types/artifacts";
 import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
 import { engagementDisplay } from "@media-summarizer/core/engagements/display";
@@ -6,7 +8,7 @@ import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/ty
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { apiRequest } from "../api";
-import { cachedData, readCached } from "../lib/resourceCache";
+import { cachedData, readCached, storeCached } from "../lib/resourceCache";
 import { useOpenAdd } from "../components/AddFlow";
 import { FolderMosaic, MediaCover } from "../components/Covers";
 import { Icon } from "../components/Icon";
@@ -75,6 +77,14 @@ export function HomePage() {
   useProcessingRefresh(processing, loadRecent);
   useProcessingRefresh((continuing.items ?? []).some(entry => entry.state === "pending"), loadContinuing);
 
+  const updateLearning = (id: string, title: string | null) => {
+    setContinuing(current => {
+      const items = title === null ? (current.items ?? []).filter(entry => entry.id !== id || entry.kind !== "artifact")
+        : (current.items ?? []).map(entry => entry.id === id && entry.kind === "artifact" ? { ...entry, title } : entry);
+      storeCached(CONTINUE_PATH, { status: "success", items } satisfies RecentEngagementsResponse);
+      return { ...current, items };
+    });
+  };
   const recentItems = recent.items ?? [];
   const continueItems = continuing.items ?? [];
   const settled = (recent.items !== null || recent.failed) && (continuing.items !== null || continuing.failed);
@@ -141,7 +151,7 @@ export function HomePage() {
       )}
       {continueItems.length > 0 && (
         <TileRow icon="play-circle-outline" title={t("home.continueLearning")}>
-          {continueItems.map(entry => <LearningTile key={`${entry.kind}:${entry.id}`} entry={entry} />)}
+          {continueItems.map(entry => <LearningTile key={`${entry.kind}:${entry.id}`} entry={entry} onChanged={title => updateLearning(entry.id, title)} />)}
         </TileRow>
       )}
     </main>
@@ -186,12 +196,12 @@ function MediaTile({
 }
 
 
-function LearningTile({ entry }: { entry: RecentEngagement }) {
+function LearningTile({ entry, onChanged }: { entry: RecentEngagement; onChanged: (title: string | null) => void }) {
   useI18n();
   const display = engagementDisplay(entry);
   const path = entry.scope === "media" ? mediaPath(entry.scope_id) : folderPath(entry.scope_id);
   const params = new URLSearchParams({ [entry.kind === "artifact" ? "artifactId" : "conversationId"]: entry.id });
-  return <Link to={`${path}?${params}`} className={`htile learning-tile f-${display.tone}`} aria-label={display.accessibilityLabel}>
+  const tile = <Link to={`${path}?${params}`} className={`htile learning-tile f-${display.tone}`} aria-label={display.accessibilityLabel}>
     <div className="learning-cover">
       {entry.scope === "folder" ? <FolderMosaic images={entry.preview_images} /> : <MediaCover imageUrl={entry.image_url} mediaType={entry.media_type} />}
       <span className="learning-labels" aria-hidden="true">
@@ -202,4 +212,14 @@ function LearningTile({ entry }: { entry: RecentEngagement }) {
     <span className="t clamp2">{display.title}</span>
     <span className="small muted ell">{display.sourceTitle}</span>
   </Link>;
+  if (entry.kind !== "artifact" || entry.state === "pending") return tile;
+  return <ArtifactActions title={display.title} className="learning-actions"
+    onRename={async title => {
+      const saved = await apiRequest<ArtifactDetail>(`/api/artifacts/${encodeURIComponent(entry.id)}`, { method: "PATCH", body: { title } });
+      onChanged(saved.title || title);
+    }}
+    onDelete={async () => {
+      await apiRequest(`/api/artifacts/${encodeURIComponent(entry.id)}`, { method: "DELETE" });
+      onChanged(null);
+    }}>{tile}</ArtifactActions>;
 }

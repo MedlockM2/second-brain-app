@@ -57,7 +57,7 @@ Operational behavior now implemented in runtime:
 `task-270` makes artifact generation **scope-addressed** and its storage **append-only**:
 - one set of routes under `/api/artifacts` serves a single media (`scope="media"`) and a folder (`scope="folder"`); the per-media routes are gone, with no alias
 - a folder-scoped artifact covers the folder **and all its descendants**, exactly like `GET /api/media?folder_id=` — or only the sources the request chose among them (`parameters.source_ids`, §3, task-532)
-- every generation writes a **new immutable entry** carrying a snapshot of the sources it read; nothing is overwritten, nothing is invalidated, and adding or removing a media from a folder changes no existing entry
+- every generation writes a **new entry with immutable generated content** carrying a snapshot of the sources it read; the owner can rename its display title or explicitly delete it (TASK-583). Adding or removing a media from a folder changes no existing entry
 - every submitted user request creates an opaque `artifact_id` and its own generation, even for identical options and sources, in the same account or another account (TASK-562). Two close taps that submit two requests produce two generations, both reserved and charged normally
 - only the automatic `review_blurb` retains content-addressed reuse, copies between saves and same-language accounts, and its existing beta budget rule 12; it is not user-requestable or shown in artifact history
 - failures remain in history at their creation position until an explicit action: a transient failure can be retried under the same id and stored options; every failed entry can be deleted
@@ -171,6 +171,26 @@ Authentication:
 - all endpoints require authenticated user context (Cognito access token, verified by the shared dependency; see `AUTHENTICATION_SETUP.md`)
 
 ## Request and response contracts
+
+### Artifact display metadata and deletion (TASK-583)
+
+`PATCH /api/artifacts/{artifact_id}` takes `{ "title": "New name" }` and returns
+`ArtifactDetailResponse` (200). A title is trimmed, non-empty and at most 120
+characters; invalid input is 422. Only the authenticated owner's `ready` or
+`failed` entries can be renamed. In-flight entries and concurrent retries give
+409 `artifact_action_conflict`; unknown, foreign and internal entries give 404.
+The mutation updates only the display title and modification timestamp. Generated
+content, source snapshot, generation options and chronology stay unchanged.
+Content reads project the stored title onto the response's `content.content.title`
+without rewriting the generated S3 payload, so viewers and history agree.
+
+`DELETE /api/artifacts/{artifact_id}` now accepts both `ready` and `failed` entries
+(204), with the same ownership and terminal-revision checks. It removes the
+history entry and its recent-engagement reference, then deletes its dedicated S3
+payload if present. A payload cleanup failure is logged for operations without
+restoring the deleted history entry. No media or folder source is deleted.
+Queued/generating entries remain protected with 409. These actions generate no
+content and consume no processing capacity.
 
 ### 1) POST /api/media/ingest-url
 

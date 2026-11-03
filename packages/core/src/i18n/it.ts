@@ -2,6 +2,15 @@ import type { Catalog } from "./runtime";
 
 /** Italian catalogue. See `en` for the reference wording and the key layout. */
 export const it: Catalog = {
+  "artifactActions.longPressHint": "Tocca due volte e tieni premuto per rinominare o eliminare questo artefatto",
+  "artifactActions.moreA11y": "Azioni per questo artefatto",
+  "artifactActions.rename.title": "Rinomina questo artefatto",
+  "artifactActions.rename.placeholder": "Nome dell’artefatto",
+  "artifactActions.renameFailed": "Impossibile rinominare questo artefatto. Riprova.",
+  "artifactActions.deleteTitle": "Eliminare questo artefatto?",
+  "artifactActions.deleteBody": "«{title}» verrà eliminato. Le fonti saranno conservate. L’azione è irreversibile.",
+  "artifactActions.deleteFailed": "Impossibile eliminare questo artefatto. Riprova.",
+
   "budget.forecastOver": "Questa prenotazione stimata supera la capacità attualmente disponibile.",
   "budget.available": "{percent} disponibile",
   "budget.reserved": "{percent} riservato alle operazioni in corso",

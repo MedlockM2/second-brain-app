@@ -423,22 +423,48 @@ async def delete_media_artifact(artifact_id: str) -> None:
         await table.delete_item(Key={"artifact_id": artifact_id})
 
 
-async def delete_failed_artifact(record: MediaArtifactRecord) -> bool:
-    """Remove this failed revision, refusing a concurrent retry."""
+async def delete_settled_artifact(record: MediaArtifactRecord) -> bool:
+    """Remove a terminal revision, refusing a concurrent retry or foreign owner."""
     session = database_async.get_session()
     try:
         async with session.resource("dynamodb", region_name=database_async.AWS_REGION) as dynamodb:
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
             await table.delete_item(
                 Key={"artifact_id": record.artifact_id},
-                ConditionExpression="#st = :failed AND generation_revision = :revision",
+                ConditionExpression="#st = :status AND generation_revision = :revision AND user_id = :owner",
                 ExpressionAttributeNames={"#st": "status"},
-                ExpressionAttributeValues={":failed": "failed", ":revision": record.generation_revision},
+                ExpressionAttributeValues={
+                    ":status": record.status.value, ":revision": record.generation_revision, ":owner": record.user_id,
+                },
             )
             return True
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             return False
+        raise
+
+
+async def rename_settled_artifact(record: MediaArtifactRecord, title: str) -> Optional[MediaArtifactRecord]:
+    """Change only the display title; never replace the generation or its snapshot."""
+    session = database_async.get_session()
+    try:
+        async with session.resource("dynamodb", region_name=database_async.AWS_REGION) as dynamodb:
+            table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
+            result = await table.update_item(
+                Key={"artifact_id": record.artifact_id},
+                UpdateExpression="SET #title = :title, updated_at = :now",
+                ConditionExpression="#st = :status AND generation_revision = :revision AND user_id = :owner",
+                ExpressionAttributeNames={"#st": "status", "#title": "title"},
+                ExpressionAttributeValues={
+                    ":title": title, ":now": _now_iso(), ":status": record.status.value,
+                    ":revision": record.generation_revision, ":owner": record.user_id,
+                },
+                ReturnValues="ALL_NEW",
+            )
+            return MediaArtifactRecord.from_dynamodb_item(result["Attributes"])
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return None
         raise
 
 

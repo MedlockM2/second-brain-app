@@ -1,3 +1,4 @@
+import { ArtifactActions } from "./ArtifactActions";
 import { useRef, useState } from "react";
 import { artifactFailureMessage } from "@media-summarizer/core/artifacts/failure";
 import { describeArtifactRefusal } from "@media-summarizer/core/artifacts/refusal";
@@ -31,6 +32,7 @@ export function ArtifactRow({
   onOpen,
   onRetry,
   onDelete,
+  onRename,
 }: {
   artifact: ArtifactSummary;
   /** Whether the meta line names the number of sources: a folder's entries do. */
@@ -38,6 +40,7 @@ export function ArtifactRow({
   onOpen: (artifact: ArtifactSummary) => void;
   onRetry: (artifact: ArtifactSummary) => Promise<void>;
   onDelete: (artifact: ArtifactSummary) => Promise<void>;
+  onRename: (artifact: ArtifactSummary, title: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -54,6 +57,7 @@ export function ArtifactRow({
   const { t } = useI18n();
   const format = artifactFormatOf(artifact.artifact_type);
   const typeLabel = format ? t(format.labelKey) : artifact.artifact_type;
+  const title = artifact.title?.trim() || typeLabel;
   const chevron = (
     <span className="flip-rtl">
       <Icon name="chevron-forward" size={18} />
@@ -62,6 +66,7 @@ export function ArtifactRow({
 
   if (artifact.status === "failed") {
     return (
+      <ArtifactActions title={title} onRename={title => onRename(artifact, title)} onDelete={() => onDelete(artifact)}>
       <div className="art-row err">
         <Icon name="alert-circle-outline" size={24} />
         <div className="grow">
@@ -71,16 +76,14 @@ export function ArtifactRow({
           <div className="art-actions">
             {artifact.retryable && <button type="button" className="btn tonal" disabled={busy}
               onClick={() => void act(() => onRetry(artifact))}>{t("artifacts.row.retry")}</button>}
-            <button type="button" className="btn ghost" disabled={busy}
-              onClick={() => void act(() => onDelete(artifact))}>{t("common.delete")}</button>
           </div>
           {actionError && <p className="small" style={{ color: "var(--error)" }} role="alert">{actionError}</p>}
         </div>
       </div>
+      </ArtifactActions>
     );
   }
 
-  const title = artifact.title?.trim() || typeLabel;
   const meta = [
     typeLabel,
     showSourceCount ? tCount("artifacts.sourceCount", artifact.source_count) : null,
@@ -90,6 +93,7 @@ export function ArtifactRow({
     .join(" · ");
 
   return (
+    <ArtifactActions title={title} onRename={title => onRename(artifact, title)} onDelete={() => onDelete(artifact)}>
     <button
       type="button"
       className={`art-row ${format?.tone ?? ""}`}
@@ -103,6 +107,7 @@ export function ArtifactRow({
       </span>
       {chevron}
     </button>
+    </ArtifactActions>
   );
 }
 

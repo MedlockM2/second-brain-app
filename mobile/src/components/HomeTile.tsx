@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useRef } from "react";
+import type { AnchorRect } from "./AnchoredContextMenu";
 import type { RecentEngagement } from "@media-summarizer/core/types/engagements";
 import { engagementDisplay } from "@media-summarizer/core/engagements/display";
 import { useRecoverableImage } from "../hooks/useRecoverableImage";
@@ -158,6 +159,7 @@ export type HomeTileItem = (
 interface HomeTileProps {
   item: HomeTileItem;
   onPress: (item: HomeTileItem) => void;
+  onLongPress?: (item: HomeTileItem, anchor: AnchorRect) => void;
   /**
    * The refresh budget of `useProcessingRefresh` is spent and something on the row
    * is still on its way. The processing marker then stops moving without going
@@ -170,8 +172,14 @@ interface HomeTileProps {
 export function HomeTile({
   item,
   onPress,
+  onLongPress,
   processingStalled = false,
 }: HomeTileProps): React.JSX.Element {
+  const rowRef = useRef<View>(null);
+  const handleLongPress = () => {
+    if (!onLongPress) return;
+    rowRef.current?.measureInWindow((x, y, width, height) => onLongPress(item, { x, y, width, height }));
+  };
   const styles = useThemedStyles(makeStyles);
   const Colors = useThemeColors();
   const learning = item.learning ? engagementDisplay(item.learning) : null;
@@ -183,6 +191,11 @@ export function HomeTile({
 
   return (
     <Pressable
+      ref={rowRef}
+      onLongPress={onLongPress ? handleLongPress : undefined}
+      accessibilityHint={onLongPress ? t("artifactActions.longPressHint") : undefined}
+      accessibilityActions={onLongPress ? [{ name: "longpress", label: t("artifactActions.moreA11y") }] : undefined}
+      onAccessibilityAction={handleLongPress}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
       onPress={() => onPress(item)}
       disabled={item.kind === "media" && item.provisional === true}
