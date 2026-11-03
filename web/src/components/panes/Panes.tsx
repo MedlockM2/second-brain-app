@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import { useI18n } from "../../i18n/I18nProvider";
 import { Icon, type IconName } from "../Icon";
 
@@ -56,7 +57,11 @@ export function Panes({
   band?: ReactNode;
 }) {
   const [folded, setFolded] = useState<Folded>(readFolded);
+  const [params] = useSearchParams();
+  const selectedArtifact = params.get("artifactId");
+  const [rightChoice, setRightChoice] = useState<string | null>(null);
   const fold = (side: keyof Folded, value: boolean) => {
+    if (side === "right") setRightChoice(selectedArtifact);
     setFolded((current) => {
       const next = { ...current, [side]: value };
       try {
@@ -68,10 +73,11 @@ export function Panes({
     });
   };
 
+  const rightFolded = folded.right && !(wideRight && selectedArtifact && rightChoice !== selectedArtifact);
   const columns = [
     folded.left ? "56px" : "minmax(0, 1.1fr)",
     "minmax(0, 1fr)",
-    folded.right ? "56px" : wideRight ? "minmax(0, 1.1fr)" : "400px",
+    rightFolded ? "56px" : wideRight ? "minmax(0, 1.1fr)" : "400px",
   ].join(" ");
 
   return (
@@ -80,7 +86,7 @@ export function Panes({
       <div className="panes" style={{ gridTemplateColumns: columns }}>
         <Pane spec={left} side="left" folded={folded.left} onFold={(v) => fold("left", v)} />
         <Pane spec={mid} side="mid" folded={false} />
-        <Pane spec={right} side="right" folded={folded.right} onFold={(v) => fold("right", v)} />
+        <Pane spec={right} side="right" folded={rightFolded} onFold={(v) => fold("right", v)} />
       </div>
     </div>
   );

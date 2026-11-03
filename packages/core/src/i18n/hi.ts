@@ -486,6 +486,8 @@ export const hi: Catalog = {
   "tabs.account": "खाता",
   "home.loading": "आपका इनबॉक्स लोड हो रहा है…",
   "home.retryA11y": "इनबॉक्स फिर से लोड करें",
+  "home.discussion": "बातचीत",
+  "home.learningPending": "तैयार हो रहा है",
   "home.continueLearning": "सीखना जारी रखें",
   "home.recentlyAdded": "हाल में जोड़े गए",
   "home.takePhotoA11y": "तस्वीर लें",

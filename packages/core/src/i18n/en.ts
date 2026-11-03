@@ -670,6 +670,8 @@ export const en = {
   // --- Home tab ---
   "home.loading": "Loading your inbox...",
   "home.retryA11y": "Retry loading inbox",
+  "home.discussion": "Discussion",
+  "home.learningPending": "In preparation",
   "home.continueLearning": "Continue learning",
   "home.recentlyAdded": "Recently added",
   "home.takePhotoA11y": "Take a photo",

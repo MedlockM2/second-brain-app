@@ -3,7 +3,7 @@ import { describeSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { formatDate } from "@media-summarizer/core/i18n/runtime";
 import type { ChatConversationSummary, ChatMessage, ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { chatClient } from "../../chat/chatClient";
 import { useChat, type ChatState } from "../../chat/useChat";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -44,7 +44,9 @@ export function useChatPane({
 }): PaneSpec {
   const { t, tw } = useI18n();
   const navigate = useNavigate();
-  const chat = useChat(scope, scopeId, sourceReady);
+  const [params, setParams] = useSearchParams();
+  const requestedConversationId = params.get("conversationId");
+  const chat = useChat(scope, scopeId, sourceReady, requestedConversationId);
   const [draft, setDraft] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const { state } = chat;
@@ -66,6 +68,7 @@ export function useChatPane({
   const startNew = () => {
     setHistoryOpen(false);
     chat.newConversation();
+    setParams(current => { const next = new URLSearchParams(current); next.delete("conversationId"); return next; });
   };
 
   const title = (
@@ -138,11 +141,21 @@ export function useChatPane({
         current={state.conversation?.conversation_id ?? null}
         onOpen={(id) => {
           setHistoryOpen(false);
-          void chat.select(id);
+          if (id === requestedConversationId) void chat.select(id);
+          else setParams(current => { const next = new URLSearchParams(current); next.set("conversationId", id); return next; });
         }}
-        onDelete={chat.remove}
+        onDelete={async (id) => {
+          await chat.remove(id);
+          if (id === requestedConversationId) setParams(current => { const next = new URLSearchParams(current); next.delete("conversationId"); return next; }, { replace: true });
+        }}
       />
     ) : (
+      <>
+      {requestedConversationId && state.error && !state.conversation && <div className="section-error" role="alert">
+        <span>{refusal?.message ?? t("chat.history.error")}</span>
+        <button className="btn tonal" type="button" onClick={() => void chat.select(requestedConversationId)}>{t("common.retry")}</button>
+        <button className="btn ghost" type="button" onClick={() => navigate("/")}>{t("tabs.home")}</button>
+      </div>}
       <Thread
         state={state}
         scope={scope}
@@ -151,6 +164,7 @@ export function useChatPane({
         retryDisabled={generating || sending}
         onOpenSource={(source) => navigate(mediaPath(source.media_item_id))}
       />
+      </>
     ),
     foot: historyOpen ? null : (
       <>

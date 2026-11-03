@@ -1,6 +1,6 @@
 import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
-import { tCount } from "@media-summarizer/core/i18n/runtime";
+import { engagementDisplay } from "@media-summarizer/core/engagements/display";
 import type { RecentEngagement, RecentEngagementsResponse } from "@media-summarizer/core/types/engagements";
 import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
 import { useCallback, useEffect, useState } from "react";
@@ -73,6 +73,7 @@ export function HomePage() {
 
   const processing = (recent.items ?? []).some((item) => mediaStatusMarker(item.status) === "processing");
   useProcessingRefresh(processing, loadRecent);
+  useProcessingRefresh((continuing.items ?? []).some(entry => entry.state === "pending"), loadContinuing);
 
   const recentItems = recent.items ?? [];
   const continueItems = continuing.items ?? [];
@@ -140,26 +141,7 @@ export function HomePage() {
       )}
       {continueItems.length > 0 && (
         <TileRow icon="play-circle-outline" title={t("home.continueLearning")}>
-          {continueItems.map((entry) =>
-            entry.kind === "folder" ? (
-              <Link key={`f:${entry.id}`} to={folderPath(entry.id)} className="htile">
-                <FolderMosaic images={entry.preview_images ?? []} />
-                <span className="t clamp2">{entry.title?.trim() || t("home.untitledFolder")}</span>
-                <span className="small muted ell">
-                  {tw("home.folderLabel")} · {tCount("common.itemCount", entry.item_count ?? 0)}
-                </span>
-              </Link>
-            ) : (
-              <MediaTile
-                key={`m:${entry.id}`}
-                id={entry.id}
-                title={resolveMediaTitle(entry)}
-                creator={entry.creator_name}
-                imageUrl={entry.image_url}
-                mediaType={entry.media_type}
-              />
-            ),
-          )}
+          {continueItems.map(entry => <LearningTile key={`${entry.kind}:${entry.id}`} entry={entry} />)}
         </TileRow>
       )}
     </main>
@@ -201,4 +183,23 @@ function MediaTile({
       <span className="small muted ell">{subtitle}</span>
     </Link>
   );
+}
+
+
+function LearningTile({ entry }: { entry: RecentEngagement }) {
+  useI18n();
+  const display = engagementDisplay(entry);
+  const path = entry.scope === "media" ? mediaPath(entry.scope_id) : folderPath(entry.scope_id);
+  const params = new URLSearchParams({ [entry.kind === "artifact" ? "artifactId" : "conversationId"]: entry.id });
+  return <Link to={`${path}?${params}`} className={`htile learning-tile f-${display.tone}`} aria-label={display.accessibilityLabel}>
+    <div className="learning-cover">
+      {entry.scope === "folder" ? <FolderMosaic images={entry.preview_images} /> : <MediaCover imageUrl={entry.image_url} mediaType={entry.media_type} />}
+      <span className="learning-labels" aria-hidden="true">
+        <span className="learning-badge"><Icon name={display.icon} size={14} /><span className="ell">{display.typeLabel}</span></span>
+        {display.stateLabel && <span className={`learning-state ${entry.state === "failed" ? "failed" : ""}`}>{display.stateLabel}</span>}
+      </span>
+    </div>
+    <span className="t clamp2">{display.title}</span>
+    <span className="small muted ell">{display.sourceTitle}</span>
+  </Link>;
 }

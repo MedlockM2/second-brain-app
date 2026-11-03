@@ -926,6 +926,37 @@ Semantics (task-264 for the folder half, task-346 for the title half):
 - a rename touches the user-facing title only: `media_key`, `saved_at`, dedup identity and artifacts are untouched
 - the path parameter is spelled `media_id` on this route; it carries the same durable library id as `{media_item_id}` elsewhere
 
+## Continue learning activity (TASK-582)
+
+`POST /api/engagements` accepts `{ "kind": "artifact" | "conversation", "id": "…" }`
+and returns 204. A missing/foreign/internal target or inaccessible parent is 404;
+a storage failure is best-effort and never fails the user's main action. Ownership
+and parent visibility are checked again atomically with the activity write.
+
+`GET /api/engagements/recent?limit=12` returns `{ "status": "success", "items": [...] }`.
+Limit is 1–20. Entries are one per `(kind, id)`, ordered by their last explicit
+engagement and identity, within 90 days. Several artifacts of the same type and
+parent, and several conversations of the same parent, coexist. No GET records activity.
+
+Each item carries `kind`, `id`, `scope` (`media|folder`), `scope_id` (an accessible
+navigation parent), nullable `title` and `artifact_type`, `state`
+(`pending|ready|failed`), `engaged_at`, and nullable parent metadata `scope_title`,
+`scope_title_label_key`, `scope_created_at`, `creator_name`, `image_url`,
+`media_type`, `item_count`, plus `preview_images` (always an array). Generic parent
+titles use the parent's save date, never `engaged_at`. Target titles, states and
+parents are read from their current records without S3 or chat-message reads.
+
+Artifact state is pending for queued/generating, failed for failed, ready otherwise.
+A conversation is pending while an answer is active and ready otherwise; a failed
+turn is shown inside the conversation. Conversation titles remain the first question.
+An artifact whose original save was deleted can navigate through another visible
+save of the same content owned by this account; its identity does not change.
+
+Accepted artifact creation/retry and non-replayed chat turns record activity server-side.
+Explicit client openings record it once after display; background completions,
+metadata polling, page/transcript opens and empty chat composers do not. Expiry
+removes the activity only. See `docs/CONTINUE_LEARNING.md` for storage and rollout.
+
 ## Chat conversations
 
 Router `media_summarizer/api/endpoints/chat.py`, mounted under `/api/chat` (never `/api/v1/`), service `media_summarizer/core/services/chat_service.py`, storage `docs/CHAT_DATA_MODEL.md` (task-461). Owner decision: `docs/research/task-430-chatbot-architecture/README.md`, Owner Validation, points 1, 5 and 7. Sending a turn and stopping it are task-462; the SSE stream has its own door (task-464, "Chat stream" below).

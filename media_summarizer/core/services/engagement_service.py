@@ -1,132 +1,233 @@
-"""The engagement signal behind the Inbox "Continue learning" row (task-303).
+"""Explicit recent artifact/conversation activity (TASK-582).
 
-Owner-validated recommendation of
-``docs/research/task-303-engagement-recency-model/README.md`` — Option A: the
-signal is **one attribute on the thing itself**, ``last_engaged_at``, plus one
-sparse GSI on ``user_media``. No activity table, no event log, no device-local
-store, and therefore nothing that can hold a pointer to destroyed content.
-
-What counts as an engagement (§2.2), and nothing else:
-
-    E1  a generation was launched -- ``POST /api/artifacts`` accepted a request for
-        this scope, including the ``200`` paths that hand back an artifact which
-        already existed. The user asked; that the answer was already generated is
-        an implementation detail they never see.
-    E2  an artifact was opened and rendered -- the viewer reports it once per
-        mount, through ``POST /api/engagements``.
-
-Opening a media detail screen does **not** count: it would make the row a
-*recently tapped* list, duplicate "Recently added", fire on accidental taps, and
-admit items that have nothing to continue. Reading the transcript does not count
-in v1 either, because the reader is the detail screen's default tab and the app
-cannot tell the two events apart.
-
-Both writes are best-effort in the ``quota_enforcer._debit`` sense: they swallow,
-they log, and they never fail the action the user actually asked for. There is no
-retry -- the event recurs the next time the user opens something, and a retry queue
-for a decoration is disproportionate.
+Writes are best-effort decorations; GETs neither record activity nor mutate data.
+Titles, status and covers are hydrated from live owned targets and parents.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
+from boto3.dynamodb.conditions import Attr, Key
 
 from media_summarizer.core.media_ingestion.media_metadata import parse_cover_locator
+from media_summarizer.core.models.chat import conversation_sk
+from media_summarizer.core.models.media_artifact import content_scope_id_from_scope_key
 from media_summarizer.core.services.media_search_service import COVER_URL_EXPIRATION_SECONDS
-from media_summarizer.utils import database_async, s3
-from media_summarizer.utils import user_media as user_media_store
+from media_summarizer.utils import database_async, s3, user_engagements
+from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
-
-# The two kinds of subject a user can engage with, in the same two words the
-# artifact API uses for its scope.
-KIND_MEDIA = "media"
-KIND_FOLDER = "folder"
-
-# How many entries the row holds. A server-side default so the row can be
-# re-tuned without shipping an app build.
 DEFAULT_RECENT_LIMIT = 12
 MAX_RECENT_LIMIT = 20
-
-# Beyond this, an engagement is not something to continue. Enforced as a sort-key
-# range condition on the media side, so stale entries cost nothing to exclude and
-# the row empties itself -- which is what makes "hide the section when empty"
-# implementable: no items means no section.
-RECENT_WINDOW_DAYS = 90
-
-# A folder tile draws a small mosaic of its newest items' covers.
+RECENT_WINDOW_DAYS = user_engagements.RECENT_WINDOW_DAYS
 MAX_PREVIEW_IMAGES = 4
+_TARGET_FIELDS = [
+    "user_id",
+    "artifact_id",
+    "conversation_id",
+    "scope",
+    "scope_id",
+    "scope_key",
+    "artifact_type",
+    "status",
+    "title",
+    "active_attempt_id",
+    "turn_count",
+    "sk",
+]
+_MEDIA_FIELDS = [
+    "user_id",
+    "media_item_id",
+    "media_key",
+    "title",
+    "title_label_key",
+    "saved_at",
+    "creator_name",
+    "thumbnail_url",
+    "media_type",
+    "deleted_at",
+]
+_FOLDER_FIELDS = ["id", "user_id", "name"]
 
 
 class EngagementSubjectNotFoundError(Exception):
-    """The subject does not exist, or is not this user's. Answered as a 404."""
+    """Missing, internal or foreign target, or no accessible parent."""
 
 
 @dataclass
 class RecentEngagement:
-    """One tile of the row, render-ready.
-
-    Both kinds share ``kind`` / ``id`` / ``title`` / ``engaged_at``. Media entries
-    carry ``creator_name``, ``image_url`` and ``media_type`` (the fallback icon
-    needs the type), plus ``title_label_key`` and ``saved_at`` -- the pair a tile
-    needs to name a media nothing named (task-400); folder entries carry
-    ``item_count`` and up to ``MAX_PREVIEW_IMAGES`` covers. A folder with no
-    covered item returns an empty list, and the client draws its accent-surface
-    fallback. A folder always has a name, so it never carries a label key.
-    """
-
     kind: str
     id: str
-    engaged_at: datetime
+    scope: str
+    scope_id: str
+    engaged_at: str
+    state: str
     title: Optional[str] = None
-    title_label_key: Optional[str] = None
-    saved_at: Optional[datetime] = None
+    artifact_type: Optional[str] = None
+    scope_title: Optional[str] = None
+    scope_title_label_key: Optional[str] = None
+    scope_created_at: Optional[str] = None
     creator_name: Optional[str] = None
     image_url: Optional[str] = None
     media_type: Optional[str] = None
     item_count: Optional[int] = None
     preview_images: List[str] = field(default_factory=list)
 
-
-# ---------------------------------------------------------------------------
-# Write path
-# ---------------------------------------------------------------------------
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
-async def stamp(*, user_id: str, kind: str, subject_id: str) -> bool:
-    """Stamp one engagement. Best-effort: never raises, never retries.
+async def _targets(user_id: str, rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    artifacts, conversations = await asyncio.gather(
+        user_engagements.batch_read(
+            required_env("MEDIA_ARTIFACTS_TABLE"),
+            [{"artifact_id": row["id"]} for row in rows if row["kind"] == "artifact"],
+            _TARGET_FIELDS,
+        ),
+        user_engagements.batch_read(
+            required_env("CHAT_TABLE"),
+            [{"user_id": user_id, "sk": conversation_sk(row["id"])} for row in rows if row["kind"] == "conversation"],
+            _TARGET_FIELDS,
+        ),
+    )
+    targets = {}
+    for target in artifacts:
+        if target.get("user_id") == user_id and target.get("artifact_type") != "review_blurb":
+            targets[user_engagements.target_key("artifact", target["artifact_id"])] = target
+    for target in conversations:
+        if target.get("user_id") == user_id and int(target.get("turn_count", 0)) > 0:
+            targets[user_engagements.target_key("conversation", target["conversation_id"])] = target
+    return targets
 
-    Callers that already know the subject is owned (``POST /api/artifacts``, which
-    asserted it to accept the generation at all) come straight here.
 
-    Returns:
-        True when the stamp landed. False covers every refusal without
-        distinguishing them, because no caller may act on the difference: the
-        dampener rejected it, the row is gone, the item is soft-deleted, the folder
-        belongs to somebody else, or the write itself failed.
-    """
-    subject_id = (subject_id or "").strip()
-    if not subject_id:
-        return False
+async def _parents(user_id: str, targets: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    media, folders = await asyncio.gather(
+        user_engagements.batch_read(
+            required_env("USER_MEDIA_TABLE"),
+            [
+                {"user_id": user_id, "media_item_id": target["scope_id"]}
+                for target in targets.values()
+                if target.get("scope") == "media"
+            ],
+            _MEDIA_FIELDS,
+        ),
+        user_engagements.batch_read(
+            required_env("USER_FOLDERS_TABLE"),
+            [{"id": target["scope_id"]} for target in targets.values() if target.get("scope") == "folder"],
+            _FOLDER_FIELDS,
+        ),
+    )
+    media_by_id = {row["media_item_id"]: row for row in media if not row.get("deleted_at")}
+    folder_by_id = {row["id"]: row for row in folders if row.get("user_id") == user_id}
+    parents = {}
+    missing_content = set()
+    for key, target in targets.items():
+        if target["scope"] == "folder":
+            parent = folder_by_id.get(target["scope_id"])
+        else:
+            parent = media_by_id.get(target["scope_id"])
+            if key.startswith("artifact#"):
+                content_id = content_scope_id_from_scope_key(target["scope_key"])
+                if parent is None or parent["media_key"] != content_id:
+                    missing_content.add(content_id)
+                    parent = None
+        if parent:
+            parents[key] = parent
+    if missing_content:
+        # Artifact histories belong to content, not one save. Resolve all missing
+        # content ids in one account-partition pass, never one query per vignette.
+        available: Dict[str, Dict[str, Any]] = {}
+        async with database_async.dynamodb_resource() as dynamodb:
+            table = await dynamodb.Table(required_env("USER_MEDIA_TABLE"))
+            names = {f"#f{i}": name for i, name in enumerate(_MEDIA_FIELDS)}
+            query: Dict[str, Any] = {
+                "KeyConditionExpression": Key("user_id").eq(user_id),
+                "ConsistentRead": True,
+                "FilterExpression": Attr("media_key").is_in(sorted(missing_content)) & Attr("deleted_at").not_exists(),
+                "ProjectionExpression": ", ".join(names),
+                "ExpressionAttributeNames": names,
+            }
+            while True:
+                response = await table.query(**query)
+                for row in response.get("Items", []):
+                    previous = available.get(row["media_key"])
+                    if previous is None or (row["saved_at"], row["media_item_id"]) > (previous["saved_at"], previous["media_item_id"]):
+                        available[row["media_key"]] = row
+                if not response.get("LastEvaluatedKey"):
+                    break
+                query["ExclusiveStartKey"] = response["LastEvaluatedKey"]
+        for key, target in targets.items():
+            if key not in parents and key.startswith("artifact#") and target["scope"] == "media":
+                parent = available.get(content_scope_id_from_scope_key(target["scope_key"]))
+                if parent:
+                    parents[key] = parent
+    return parents
+
+
+def _checks(
+    user_id: str, kind: str, subject_id: str, target: Dict[str, Any], parent: Dict[str, Any]
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    is_artifact = kind == "artifact"
+    target_check = {
+        "TableName": required_env("MEDIA_ARTIFACTS_TABLE" if is_artifact else "CHAT_TABLE"),
+        "Key": {"artifact_id": subject_id} if is_artifact else {"user_id": user_id, "sk": conversation_sk(subject_id)},
+        "ConditionExpression": "attribute_exists(#id) AND user_id = :owner AND #scope = :scope AND scope_id = :sid"
+        + (" AND scope_key = :content AND artifact_type <> :internal" if is_artifact else " AND turn_count > :zero"),
+        "ExpressionAttributeNames": {"#id": "artifact_id" if is_artifact else "sk", "#scope": "scope"},
+        "ExpressionAttributeValues": {
+            ":owner": user_id,
+            ":scope": target["scope"],
+            ":sid": target["scope_id"],
+            **({":content": target["scope_key"], ":internal": "review_blurb"} if is_artifact else {":zero": 0}),
+        },
+    }
+    is_media = target["scope"] == "media"
+    parent_check = {
+        "TableName": required_env("USER_MEDIA_TABLE" if is_media else "USER_FOLDERS_TABLE"),
+        "Key": {"user_id": user_id, "media_item_id": parent["media_item_id"]} if is_media else {"id": parent["id"]},
+        "ConditionExpression": "attribute_exists(#id) AND user_id = :owner"
+        + (" AND attribute_not_exists(deleted_at) AND media_key = :content" if is_media else ""),
+        "ExpressionAttributeNames": {"#id": "media_item_id" if is_media else "id"},
+        "ExpressionAttributeValues": {":owner": user_id, **({":content": parent["media_key"]} if is_media else {})},
+    }
+    return target_check, parent_check
+
+
+async def record_engagement(*, user_id: str, kind: str, subject_id: str, moment: Optional[datetime] = None) -> bool:
+    moment = moment or datetime.now(timezone.utc)
+    if kind not in ("artifact", "conversation") or not subject_id.strip():
+        raise EngagementSubjectNotFoundError("Unknown engagement target")
+    async with database_async.dynamodb_resource():
+        targets = await _targets(user_id, [{"kind": kind, "id": subject_id}])
+        parents = await _parents(user_id, targets)
+        key = user_engagements.target_key(kind, subject_id)
+        if key not in targets or key not in parents:
+            raise EngagementSubjectNotFoundError("Engagement target not found")
+        target, parent = targets[key], parents[key]
+        target_check, parent_check = _checks(user_id, kind, subject_id, target, parent)
+        return await user_engagements.record(
+            user_id=user_id,
+            kind=kind,
+            subject_id=subject_id,
+            scope=target["scope"],
+            scope_id=parent.get("media_item_id", parent.get("id", "")),
+            moment=moment,
+            target_check=target_check,
+            parent_check=parent_check,
+        )
+
+
+async def stamp(*, user_id: str, kind: str, subject_id: str, moment: Optional[datetime] = None) -> bool:
+    """Best-effort recording used after an already accepted user action."""
     try:
-        if kind == KIND_MEDIA:
-            return await user_media_store.stamp_engagement(user_id, subject_id)
-        if kind == KIND_FOLDER:
-            return await database_async.stamp_folder_engagement(
-                subject_id,
-                user_id=user_id,
-                dampener_seconds=user_media_store.ENGAGEMENT_DAMPENER_SECONDS,
-            )
-        return False
-    except Exception as exc:  # noqa: BLE001 - a recency decoration never fails a user action
-        # Logged as a structured event so a systematic breakage is visible, and
-        # deliberately without an alarm: the row degrades to empty, which the Inbox
-        # already renders as "no section".
+        return await record_engagement(user_id=user_id, kind=kind, subject_id=subject_id, moment=moment)
+    except Exception as exc:
         log_event(
             logger,
             logging.WARNING,
@@ -140,149 +241,101 @@ async def stamp(*, user_id: str, kind: str, subject_id: str) -> bool:
         return False
 
 
-async def record_engagement(*, user_id: str, kind: str, subject_id: str) -> bool:
-    """Ownership-checked stamp, behind ``POST /api/engagements``.
-
-    The subject is resolved before anything is written, so an unowned or unknown id
-    is a 404 that writes nothing -- the same check the artifact routes make, for the
-    same reason.
-
-    Raises:
-        EngagementSubjectNotFoundError: unknown subject, or another user's.
-    """
-    subject_id = (subject_id or "").strip()
-    if not subject_id:
-        raise EngagementSubjectNotFoundError("Unknown engagement subject")
-
-    if kind == KIND_MEDIA:
-        record = await user_media_store.get_user_media(user_id, subject_id)
-        if record is None:
-            raise EngagementSubjectNotFoundError("Media item not found")
-    elif kind == KIND_FOLDER:
-        folder = await database_async.get_folder_by_id(subject_id)
-        if folder is None or folder.user_id != user_id:
-            raise EngagementSubjectNotFoundError("Folder not found")
-    else:
-        raise EngagementSubjectNotFoundError(f"Unknown engagement kind: {kind}")
-
-    return await stamp(user_id=user_id, kind=kind, subject_id=subject_id)
+async def remove(*, user_id: str, kind: str, subject_id: str) -> None:
+    try:
+        await user_engagements.delete_target(user_id, kind, subject_id)
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "engagement.cleanup_failed",
+            "Could not remove a deleted target engagement",
+            user_id=user_id,
+            kind=kind,
+            subject_id=subject_id,
+            error_type=type(exc).__name__,
+        )
 
 
-# ---------------------------------------------------------------------------
-# Read path
-# ---------------------------------------------------------------------------
+async def remove_scope(*, user_id: str, scope: str, scope_id: str) -> None:
+    try:
+        await user_engagements.delete_scope(user_id, scope, scope_id)
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "engagement.cleanup_failed",
+            "Could not remove deleted scope engagements",
+            user_id=user_id,
+            scope=scope,
+            scope_id=scope_id,
+            error_type=type(exc).__name__,
+        )
 
 
 async def list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> List[RecentEngagement]:
-    # The sparse query, folder read and selected-folder hydration share one TLS pool.
-    async with database_async.dynamodb_resource():
-        return await _list_recent(user_id, limit=limit)
-
-
-async def _list_recent(user_id: str, *, limit: int = DEFAULT_RECENT_LIMIT) -> List[RecentEngagement]:
-    """The row itself: one merged, sorted, capped list of media *and* folders.
-
-    Two DynamoDB calls, issued concurrently — the sparse ``engaged-index`` query on
-    ``user_media``, and the ``user-index`` query that already returns every folder of
-    the user with every attribute (so the folder side needs no index of its own, and
-    is windowed and ordered in Python). A third, conditional call hydrates the
-    folders that made the cut.
-    """
     limit = max(1, min(limit, MAX_RECENT_LIMIT))
-    window_start = datetime.now(timezone.utc) - timedelta(days=RECENT_WINDOW_DAYS)
-
-    media_task = asyncio.create_task(
-        user_media_store.list_recently_engaged(user_id, limit=limit, since=window_start)
-    )
-    folder_task = asyncio.create_task(database_async.get_folders_by_user_id(user_id))
-    try:
-        engaged_media, folders = await asyncio.gather(media_task, folder_task)
-    finally:
-        # A shared client must outlive both children, including cancellation.
-        for task in (media_task, folder_task):
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(media_task, folder_task, return_exceptions=True)
-
-
+    since = datetime.now(timezone.utc) - timedelta(days=RECENT_WINDOW_DAYS)
     entries: List[RecentEngagement] = []
-
-    for item in engaged_media:
-        engaged_at = _parse_instant(item.get("last_engaged_at"))
-        media_item_id = str(item.get("media_item_id") or "")
-        if engaged_at is None or not media_item_id:
-            continue
-        entries.append(
-            RecentEngagement(
-                kind=KIND_MEDIA,
-                id=media_item_id,
-                engaged_at=engaged_at,
-                title=_as_optional_str(item.get("title")),
-                # Both projected by the `engaged-index` alongside the title, so a
-                # media nothing named is still nameable from the tile's own payload
-                # -- no per-tile row read (task-400).
-                title_label_key=_as_optional_str(item.get("title_label_key")),
-                saved_at=_parse_instant(item.get("saved_at")),
-                creator_name=_as_optional_str(item.get("creator_name")),
-                image_url=_as_optional_str(item.get("thumbnail_url")),
-                media_type=_as_optional_str(item.get("media_type")),
-            )
-        )
-
-    for folder in folders:
-        engaged_at = _as_aware(folder.last_engaged_at)
-        if engaged_at is None or engaged_at <= window_start:
-            continue
-        entries.append(
-            RecentEngagement(
-                kind=KIND_FOLDER,
-                id=folder.id,
-                engaged_at=engaged_at,
-                title=folder.name,
-            )
-        )
-
-    # Newest first, id as the tie-breaker so two engagements stamped in the same
-    # millisecond keep a stable order between two reads.
-    entries.sort(key=lambda entry: (entry.engaged_at, entry.id), reverse=True)
-    entries = entries[:limit]
-
-    await _hydrate_folders(user_id, entries)
-    await _sign_covers(entries)
+    cursor = None
+    async with database_async.dynamodb_resource():
+        while len(entries) < limit:
+            rows, cursor = await user_engagements.recent_page(user_id, since=since, limit=limit, cursor=cursor)
+            targets = await _targets(user_id, rows)
+            parents = await _parents(user_id, targets)
+            for row in rows:
+                key = row["target_key"]
+                if key not in targets or key not in parents:
+                    continue
+                target, parent = targets[key], parents[key]
+                scope = target["scope"]
+                raw_status = target.get("status")
+                state = (
+                    ("pending" if raw_status in ("queued", "generating") else "failed" if raw_status == "failed" else "ready")
+                    if row["kind"] == "artifact"
+                    else ("pending" if target.get("active_attempt_id") else "ready")
+                )
+                entries.append(
+                    RecentEngagement(
+                        kind=row["kind"],
+                        id=row["id"],
+                        scope=scope,
+                        scope_id=parent["media_item_id"] if scope == "media" else parent["id"],
+                        engaged_at=row["engaged_at"],
+                        state=state,
+                        title=target.get("title"),
+                        artifact_type=target.get("artifact_type"),
+                        scope_title=parent.get("title") if scope == "media" else parent["name"],
+                        scope_title_label_key=parent.get("title_label_key"),
+                        scope_created_at=parent.get("saved_at"),
+                        creator_name=parent.get("creator_name"),
+                        image_url=parent.get("thumbnail_url"),
+                        media_type=parent.get("media_type"),
+                    )
+                )
+                if len(entries) == limit:
+                    break
+            if not cursor:
+                break
+        await _hydrate_folders(user_id, entries)
+        await _sign_covers(entries)
     return entries
 
 
 async def _hydrate_folders(user_id: str, entries: List[RecentEngagement]) -> None:
-    """Fill ``item_count`` and ``preview_images`` for the folders in the row.
+    from media_summarizer.utils import user_media
 
-    Read counts and bounded cover projections concurrently for just the folders
-    that made the cut. A tile must not download the entire library (including
-    unrelated folders and full records) to show a number and four covers.
-    """
-    folder_ids = {entry.id for entry in entries if entry.kind == KIND_FOLDER}
+    folder_ids = sorted({entry.scope_id for entry in entries if entry.scope == "folder"})
     if not folder_ids:
         return
-
-    summaries = await user_media_store.folder_overviews(
-        user_id, sorted(folder_ids), preview_limit=MAX_PREVIEW_IMAGES
-    )
-
+    summaries = await user_media.folder_overviews(user_id, folder_ids, preview_limit=MAX_PREVIEW_IMAGES)
     for entry in entries:
-        if entry.kind != KIND_FOLDER:
-            continue
-        entry.item_count, entry.preview_images = summaries[entry.id]
+        if entry.scope == "folder":
+            entry.item_count, entry.preview_images = summaries[entry.scope_id]
 
 
 async def _sign_covers(entries: List[RecentEngagement]) -> None:
-    """Turn stored cover values into something the client can fetch, in place.
-
-    A cover is stored either as an absolute third-party URL, hotlinked as-is, or as
-    an ``s3://bucket/key`` locator for a re-hosted one, which is signed here — the
-    client must never have to know which. Every locator in the row goes through a
-    single signing client, and a signature that cannot be produced blanks that one
-    cover instead of failing the read.
-    """
-    pending: List[Tuple[RecentEngagement, Optional[int], Tuple[str, str]]] = []
+    pending: List[tuple[RecentEngagement, Optional[int], tuple[str, str]]] = []
     for entry in entries:
         located = parse_cover_locator(entry.image_url)
         if located:
@@ -293,46 +346,11 @@ async def _sign_covers(entries: List[RecentEngagement]) -> None:
                 pending.append((entry, index, located))
     if not pending:
         return
-
-    signed = await s3.generate_presigned_urls(
-        [located for _, _, located in pending],
-        expiration=COVER_URL_EXPIRATION_SECONDS,
-    )
+    signed = await s3.generate_presigned_urls([located for _, _, located in pending], expiration=COVER_URL_EXPIRATION_SECONDS)
     for (entry, slot, _), url in zip(pending, signed):
         if slot is None:
             entry.image_url = url
-        elif url:
-            entry.preview_images[slot] = url
-
-    # A preview whose signature failed is dropped rather than sent as an empty
-    # string: the tile draws fewer covers, which it already handles.
+        else:
+            entry.preview_images[slot] = url or ""
     for entry in entries:
-        if entry.preview_images:
-            entry.preview_images = [
-                value for value in entry.preview_images if not parse_cover_locator(value)
-            ]
-
-
-def _parse_instant(raw: Any) -> Optional[datetime]:
-    if not isinstance(raw, str) or not raw:
-        return None
-    try:
-        return _as_aware(datetime.fromisoformat(raw))
-    except ValueError:
-        return None
-
-
-def _as_aware(value: Optional[datetime]) -> Optional[datetime]:
-    """UTC-normalise an instant so window comparisons can never raise."""
-    if value is None:
-        return None
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
-
-
-def _as_optional_str(raw: Any) -> Optional[str]:
-    if raw is None:
-        return None
-    text = str(raw).strip()
-    return text or None
+        entry.preview_images = [value for value in entry.preview_images if value and not parse_cover_locator(value)]

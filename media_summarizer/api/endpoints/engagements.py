@@ -1,19 +1,7 @@
-"""Engagement routes: what the user last worked on (task-303).
+"""Explicit activity on artifacts and conversations, and the recent target list.
 
-    POST /api/engagements          -> 204, records one engagement
-    GET  /api/engagements/recent   -> 200, the "Continue learning" row
-
-Two deliberate shapes, both settled by the benchmark:
-
-* **An explicit ``POST``, never a ``GET`` side effect.** Stamping inside
-  ``GET /api/artifacts/{id}/content`` would need no new endpoint and no client
-  change, and it is rejected: ``GET`` is a safe method, the mobile client replays a
-  ``GET`` once after refreshing a 401, and ``expo-router`` can *render* a screen the
-  user never opened (``router.prefetch``), which would silently record engagements
-  for artifacts nobody read. The two artifact ``GET`` routes stay side-effect-free.
-* **One dedicated read endpoint, not an aggregate ``/api/home``.** Bundling the
-  digest, "Recently added" and this row into one response couples three independent
-  sections into one failure domain, behind the slowest of the three.
+GETs are side-effect-free. Only user-requested generations, accepted chat turns
+and explicit client POSTs record activity; reads and background completions do not.
 """
 
 from __future__ import annotations
@@ -39,26 +27,24 @@ logger = logging.getLogger(__name__)
 
 
 class EngagementCreateRequest(BaseModel):
-    kind: Literal["media", "folder"] = Field(
-        ..., description="What was engaged with: a media item or a folder"
-    )
-    id: str = Field(..., description="Media item id, or folder id")
+    kind: Literal["artifact", "conversation"] = Field(..., description="The artifact or conversation opened")
+    id: str = Field(..., description="Artifact id or conversation id")
 
 
 class RecentEngagementResponse(BaseModel):
-    """One tile of the row. The fields a media tile draws and the fields a
-    folder tile draws are both optional, and which ones are populated follows
-    from ``kind``."""
+    """One target with current title, state and accessible parent metadata."""
 
-    kind: str
+    kind: Literal["artifact", "conversation"]
     id: str
+    scope: Literal["media", "folder"]
+    scope_id: str
     title: Optional[str] = None
-    # Media tiles only, and only when ``title`` is null: the key of the label the
-    # client renders as "<label> — <created_at>" in the reader's language
-    # (task-400). ``created_at`` is the media's save date, not the engagement's.
-    title_label_key: Optional[str] = None
-    created_at: Optional[str] = None
+    artifact_type: Optional[str] = None
+    state: Literal["pending", "ready", "failed"]
     engaged_at: str
+    scope_title: Optional[str] = None
+    scope_title_label_key: Optional[str] = None
+    scope_created_at: Optional[str] = None
     creator_name: Optional[str] = None
     image_url: Optional[str] = None
     media_type: Optional[str] = None
@@ -95,9 +81,19 @@ async def create_engagement(
         # distinction about our data model that nobody reads: the client fires this
         # without awaiting it, so the answer never reaches a screen (task-397).
         logger.warning(f"Rejected engagement: {exc}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Subject not found"
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subject not found")
+    except Exception as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "engagement.stamp_failed",
+            "Could not record an engagement",
+            user_id=current_user.id,
+            kind=payload.kind,
+            subject_id=payload.id,
+            error_type=type(exc).__name__,
         )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     finally:
         reset_log_context(token)
 
@@ -107,7 +103,7 @@ async def list_recent_engagements(
     limit: int = Query(DEFAULT_RECENT_LIMIT, ge=1, le=MAX_RECENT_LIMIT),
     current_user: AuthUser = Depends(get_current_user),
 ) -> RecentEngagementListResponse:
-    """The "Continue learning" row: media and folders merged, newest first.
+    """The "Continue learning" row: artifacts and conversations merged, newest first.
 
     An empty list is a normal answer, not a degraded one — a brand-new account has
     engaged with nothing, and a row whose entries all aged out of the freshness
@@ -125,24 +121,7 @@ async def list_recent_engagements(
         )
         return RecentEngagementListResponse(
             status="success",
-            items=[
-                RecentEngagementResponse(
-                    kind=entry.kind,
-                    id=entry.id,
-                    title=entry.title,
-                    title_label_key=entry.title_label_key,
-                    created_at=(
-                        entry.saved_at.isoformat() if entry.saved_at else None
-                    ),
-                    engaged_at=entry.engaged_at.isoformat(),
-                    creator_name=entry.creator_name,
-                    image_url=entry.image_url,
-                    media_type=entry.media_type,
-                    item_count=entry.item_count,
-                    preview_images=list(entry.preview_images),
-                )
-                for entry in entries
-            ],
+            items=[RecentEngagementResponse(**entry.to_dict()) for entry in entries],
         )
     except Exception as exc:
         log_event(

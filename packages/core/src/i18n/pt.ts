@@ -487,6 +487,8 @@ export const pt: Catalog = {
   "tabs.account": "Conta",
   "home.loading": "A carregar a sua caixa de entrada…",
   "home.retryA11y": "Tentar carregar novamente a caixa de entrada",
+  "home.discussion": "Conversa",
+  "home.learningPending": "Em preparação",
   "home.continueLearning": "Continuar a aprender",
   "home.recentlyAdded": "Adicionados recentemente",
   "home.takePhotoA11y": "Tirar uma foto",

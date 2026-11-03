@@ -159,18 +159,6 @@ class UserMediaRecord(BaseModel):
     saved_at: datetime = Field(default_factory=_now_utc)
     updated_at: datetime = Field(default_factory=_now_utc)
 
-    # --- engagement (task-303) -----------------------------------------------
-    # Last time the user asked this item to produce or show them something: a
-    # generation launched, or an artifact opened and rendered. Range key of the
-    # sparse `engaged-index`, hence None until the first engagement.
-    #
-    # Distinct from ``updated_at`` on purpose: a background job finishing a
-    # transcription or re-hosting a cover bumps ``updated_at``, never this. Written
-    # only by ``user_media.stamp_engagement``, which is also why it never travels
-    # through ``update_attributes`` -- that helper always appends ``updated_at``,
-    # and ``updated_at`` is what the client's cover cache key is built from.
-    last_engaged_at: Optional[datetime] = None
-
     # --- denormalised operational hints (nullable by contract, invariant I3) --
     processing_status: Optional[UserMediaStatus] = None
     # Pointer for debugging and correlation. Global content reads prefer
@@ -200,9 +188,7 @@ class UserMediaRecord(BaseModel):
 
         ``deleted_at`` and ``purge_at`` are deliberately never emitted here: a
         freshly saved row is not in a deleted state, and only the deletion use
-        case may write them. ``last_engaged_at`` is never emitted either: saving
-        an item is not engaging with it (that is what "Recently added" is for), and
-        seeding it would put every new save in "Continue learning".
+        case may write them.
         """
         item: Dict[str, Any] = {
             "user_id": self.user_id,
@@ -242,7 +228,7 @@ class UserMediaRecord(BaseModel):
         # Derived on write, recomputed from folder_id + saved_at on read.
         payload.pop("folder_sort_key", None)
 
-        for field_name in ("saved_at", "updated_at", "deleted_at", "last_engaged_at"):
+        for field_name in ("saved_at", "updated_at", "deleted_at"):
             raw = payload.get(field_name)
             if isinstance(raw, str) and raw:
                 payload[field_name] = datetime.fromisoformat(raw)

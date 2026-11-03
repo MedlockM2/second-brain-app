@@ -487,6 +487,8 @@ export const nl: Catalog = {
   "tabs.account": "Account",
   "home.loading": "Je postvak wordt geladen…",
   "home.retryA11y": "Postvak opnieuw laden",
+  "home.discussion": "Gesprek",
+  "home.learningPending": "In voorbereiding",
   "home.continueLearning": "Verder leren",
   "home.recentlyAdded": "Recent toegevoegd",
   "home.takePhotoA11y": "Een foto maken",

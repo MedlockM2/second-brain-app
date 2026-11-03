@@ -486,6 +486,8 @@ export const it: Catalog = {
   "tabs.account": "Account",
   "home.loading": "Caricamento della posta in arrivo…",
   "home.retryA11y": "Riprova a caricare la posta in arrivo",
+  "home.discussion": "Conversazione",
+  "home.learningPending": "In preparazione",
   "home.continueLearning": "Continua a imparare",
   "home.recentlyAdded": "Aggiunti di recente",
   "home.takePhotoA11y": "Scatta una foto",

@@ -353,6 +353,10 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
       update(scope, scopeId, { phase: "sending" });
       try {
         const detail = await ChatService.getConversation(conversationId);
+        if (detail.scope !== scope || detail.scope_id !== scopeId) {
+          throw Object.assign(new Error("Conversation unavailable"), { code: "conversation_not_found" });
+        }
+
         if (!isCurrent(key, entry, epoch)) return false;
         update(scope, scopeId, {
           conversation: detail,

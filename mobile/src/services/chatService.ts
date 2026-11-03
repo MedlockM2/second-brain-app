@@ -3,6 +3,7 @@ import {
   resourceKeys,
   mutationOwner,
   historyChanged,
+  homeChanged,
   resourceSession,
 } from "./resourceCache";
 import { fetch as expoFetch } from "expo/fetch";
@@ -69,6 +70,7 @@ export class ChatService {
       },
     );
     historyChanged(owner);
+    homeChanged(owner);
     return result;
   }
 
@@ -148,6 +150,7 @@ export class ChatService {
       { method: "DELETE" },
     );
     historyChanged(owner, conversationId);
+    homeChanged(owner);
   }
 
   /**
@@ -173,6 +176,7 @@ export class ChatService {
       },
     );
     historyChanged(owner);
+    homeChanged(owner);
     return result;
   }
 

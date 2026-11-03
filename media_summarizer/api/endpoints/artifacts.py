@@ -309,18 +309,9 @@ async def create_artifact(
             ) from refusal
         record, _ = await commit_artifact_generation(plan)
 
-        # E1 of task-303: launching a generation is the strongest intent signal the
-        # app has, and the wait is precisely when the user needs a way back — so the
-        # scope enters "Continue learning" here, reuse included (the user asked, and
-        # that is what the signal measures). The ownership assertion above is what
-        # lets this skip its own check. Swallows everything by contract: a recency
-        # stamp must never fail a generation the user asked for.
-        # `ArtifactScope` and the engagement kinds are the same two words
-        # (`media`, `folder`), so the scope *is* the kind.
         await engagement_service.stamp(
-            user_id=current_user.id,
-            kind=scope.value,
-            subject_id=scope_id,
+            user_id=current_user.id, kind="artifact", subject_id=record.artifact_id,
+            moment=record.created_at,
         )
 
         log_event(
@@ -440,7 +431,9 @@ async def _owned_user_artifact(artifact_id: str, user_id: str) -> MediaArtifactR
 async def retry_artifact(artifact_id: str, current_user: AuthUser = Depends(get_current_user)):
     record = await _owned_user_artifact(artifact_id, current_user.id)
     try:
-        return _detail(await retry_artifact_generation(record))
+        retried = await retry_artifact_generation(record)
+        await engagement_service.stamp(user_id=current_user.id, kind="artifact", subject_id=artifact_id)
+        return _detail(retried)
     except BudgetRefusedError as refusal:
         raise HTTPException(
             status_code=refusal.http_status,
@@ -458,6 +451,7 @@ async def delete_artifact(artifact_id: str, current_user: AuthUser = Depends(get
     record = await _owned_user_artifact(artifact_id, current_user.id)
     if record.status != MediaArtifactStatus.FAILED or not await media_artifacts.delete_failed_artifact(record):
         raise HTTPException(status_code=409, detail={"error_code": "artifact_action_conflict"})
+    await engagement_service.remove(user_id=current_user.id, kind="artifact", subject_id=artifact_id)
     return Response(status_code=204)
 
 
