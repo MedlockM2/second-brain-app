@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "Déconnexion impossible. Vérifiez votre connexion et réessayez."
   },
+  "pairFirefox": {
+    "message": "Ouvrez Deepn sur le web, allez dans Mon compte › Extension navigateur, puis cliquez sur « Afficher un code »."
+  },
+  "pairFirefoxCode": {
+    "message": "Saisissez ce code et l'e-mail de votre compte ci-dessous :"
+  },
   "budgetExhausted": {
     "message": "La capacité du mois ne permet pas ce traitement."
   },

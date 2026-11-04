@@ -12,6 +12,10 @@ import { NotLinkedError, linkState, signOut } from "../../lib/session";
  */
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+if (import.meta.env.FIREFOX) {
+  $("pair-instructions").dataset.msg = "pairFirefox";
+  $("code-instructions").dataset.msg = "pairFirefoxCode";
+}
 localize(document);
 void takeContextFailure().then((failure) => {
   if (!failure) return;

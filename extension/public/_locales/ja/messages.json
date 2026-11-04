@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "ログアウトできませんでした。接続を確認して再試行してください。"
   },
+  "pairFirefox": {
+    "message": "ウェブ版Deepnでマイアカウント › ブラウザー拡張機能を開き、「コードを表示」をクリックしてください。"
+  },
+  "pairFirefoxCode": {
+    "message": "そのコードとアカウントのメールアドレスを以下に入力してください。"
+  },
   "budgetExhausted": {
     "message": "今月の容量ではこの処理を実行できません。"
   },

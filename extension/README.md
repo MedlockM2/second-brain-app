@@ -158,6 +158,8 @@ Le libellé du navigateur dans Mon compte distingue Firefox.
 confirme que ni `runtime.connect` ni `runtime.sendMessage` depuis une page web
 ne sont pris en charge sur Firefox. La cible Firefox n'émet donc pas de clé
 `externally_connectable` et n'enregistre aucun listener de message externe.
+La popup Firefox propose directement « Afficher un code » depuis Mon compte ;
+les consignes Chromium gardent le bouton d’appairage et le code de secours.
 Depuis Mon compte › Extension navigateur, afficher un code ; dans la popup de
 Firefox, saisir le code et l'e-mail du compte. Le bouton de la popup ouvre cette
 page de compte. Ne pas ajouter l'ID Gecko à `VITE_EXTENSION_IDS` (Chrome/Edge seuls).

@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "No se pudo cerrar sesión. Comprueba tu conexión e inténtalo de nuevo."
   },
+  "pairFirefox": {
+    "message": "Abre Deepn en la web, ve a Mi cuenta › Extensión del navegador y haz clic en «Mostrar un código»."
+  },
+  "pairFirefoxCode": {
+    "message": "Escribe ese código y el correo de tu cuenta a continuación:"
+  },
   "budgetExhausted": {
     "message": "La capacidad de este mes no cubre esta operación."
   },

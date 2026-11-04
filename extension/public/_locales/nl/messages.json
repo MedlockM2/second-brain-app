@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "Afmelden is mislukt. Controleer je verbinding en probeer opnieuw."
   },
+  "pairFirefox": {
+    "message": "Open Deepn op het web, ga naar Mijn account › Browserextensie en klik op ‘Code tonen’."
+  },
+  "pairFirefoxCode": {
+    "message": "Vul die code en het e-mailadres van je account hieronder in:"
+  },
   "budgetExhausted": {
     "message": "De capaciteit van deze maand is onvoldoende voor deze bewerking."
   },

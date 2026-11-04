@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "Could not sign out. Check your connection and try again."
   },
+  "pairFirefox": {
+    "message": "Open Deepn on the web, go to My account › Browser extension, and click “Show a code”."
+  },
+  "pairFirefoxCode": {
+    "message": "Type that code and your account email below:"
+  },
   "budgetExhausted": {
     "message": "This month’s capacity cannot cover this operation."
   },

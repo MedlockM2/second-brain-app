@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "无法退出登录。请检查网络连接后重试。"
   },
+  "pairFirefox": {
+    "message": "在网页版 Deepn 中打开“我的账户 › 浏览器扩展”，然后点击“显示代码”。"
+  },
+  "pairFirefoxCode": {
+    "message": "在下方输入该代码和账户邮箱："
+  },
   "budgetExhausted": {
     "message": "本月容量不足以执行此操作。"
   },

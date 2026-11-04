@@ -33,10 +33,10 @@
     <section id="pair" hidden>
       <h1 data-msg="pairTitle"></h1>
       <p id="pair-expired" class="status error" hidden data-msg="pairExpired"></p>
-      <p class="small" data-msg="pairOneClick"></p>
+      <p id="pair-instructions" class="small" data-msg="pairOneClick"></p>
       <button id="open-account" class="btn primary" type="button" data-msg="openAccount"></button>
       <form id="rescue">
-        <p class="small muted" data-msg="pairRescue"></p>
+        <p id="code-instructions" class="small muted" data-msg="pairRescue"></p>
         <input id="email" type="email" autocomplete="email" required data-msg-placeholder="pairEmail" />
         <input id="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required data-msg-placeholder="pairCode" />
         <button class="btn" type="submit" data-msg="pairSubmit"></button>

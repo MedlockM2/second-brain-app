@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "Impossibile uscire. Controlla la connessione e riprova."
   },
+  "pairFirefox": {
+    "message": "Apri Deepn sul web, vai su Il mio account › Estensione del browser e fai clic su «Mostra un codice»."
+  },
+  "pairFirefoxCode": {
+    "message": "Inserisci qui sotto quel codice e l'email del tuo account:"
+  },
   "budgetExhausted": {
     "message": "La capacità di questo mese non copre questa operazione."
   },

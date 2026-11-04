@@ -340,6 +340,24 @@ KEYS.append("signOutFailed")
 for locale, values in T.items():
     values.append(SIGN_OUT_FAILED[locale])
 
+# Firefox does not support web-page external pairing; the code is its main flow.
+FIREFOX_PAIRING = {
+    "en": ["Open Deepn on the web, go to My account › Browser extension, and click “Show a code”.", "Type that code and your account email below:"],
+    "fr": ["Ouvrez Deepn sur le web, allez dans Mon compte › Extension navigateur, puis cliquez sur « Afficher un code ».", "Saisissez ce code et l'e-mail de votre compte ci-dessous :"],
+    "es": ["Abre Deepn en la web, ve a Mi cuenta › Extensión del navegador y haz clic en «Mostrar un código».", "Escribe ese código y el correo de tu cuenta a continuación:"],
+    "de": ["Öffne Deepn im Web, gehe zu Mein Konto › Browser-Erweiterung und klicke auf „Code anzeigen“.", "Gib diesen Code und die E-Mail deines Kontos unten ein:"],
+    "it": ["Apri Deepn sul web, vai su Il mio account › Estensione del browser e fai clic su «Mostra un codice».", "Inserisci qui sotto quel codice e l'email del tuo account:"],
+    "pt_PT": ["Abre o Deepn na web, vai a A minha conta › Extensão do navegador e clica em «Mostrar um código».", "Introduz esse código e o email da tua conta abaixo:"],
+    "nl": ["Open Deepn op het web, ga naar Mijn account › Browserextensie en klik op ‘Code tonen’.", "Vul die code en het e-mailadres van je account hieronder in:"],
+    "ja": ["ウェブ版Deepnでマイアカウント › ブラウザー拡張機能を開き、「コードを表示」をクリックしてください。", "そのコードとアカウントのメールアドレスを以下に入力してください。"],
+    "zh_CN": ["在网页版 Deepn 中打开“我的账户 › 浏览器扩展”，然后点击“显示代码”。", "在下方输入该代码和账户邮箱："],
+    "hi": ["वेब पर Deepn खोलें, मेरा खाता › ब्राउज़र एक्सटेंशन पर जाएँ और “कोड दिखाएँ” पर क्लिक करें।", "नीचे वह कोड और अपने खाते का ईमेल दर्ज करें:"],
+    "ar": ["افتح Deepn على الويب، وانتقل إلى حسابي › إضافة المتصفح، ثم انقر على «إظهار رمز».", "أدخل ذلك الرمز والبريد الإلكتروني لحسابك أدناه:"],
+}
+KEYS.extend(["pairFirefox", "pairFirefoxCode"])
+for locale, values in T.items():
+    values.extend(FIREFOX_PAIRING[locale])
+
 # Reuse the apps' established wording without bundling every app catalogue.
 CORE_MESSAGES = {
     "budgetExhausted": "budget.exhausted",

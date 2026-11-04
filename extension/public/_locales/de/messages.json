@@ -74,6 +74,12 @@
   "signOutFailed": {
     "message": "Abmelden fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut."
   },
+  "pairFirefox": {
+    "message": "Öffne Deepn im Web, gehe zu Mein Konto › Browser-Erweiterung und klicke auf „Code anzeigen“."
+  },
+  "pairFirefoxCode": {
+    "message": "Gib diesen Code und die E-Mail deines Kontos unten ein:"
+  },
   "budgetExhausted": {
     "message": "Die Kapazität dieses Monats reicht für diesen Vorgang nicht aus."
   },
