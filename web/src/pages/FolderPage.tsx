@@ -1,11 +1,10 @@
 import { tCount } from "@media-summarizer/core/i18n/runtime";
 import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
-import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
 import type { Folder } from "@media-summarizer/core/types/organization";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { apiRequest } from "../api";
 import { AddSourceDialog } from "../components/AddSourceDialog";
 import { useAiPane } from "../components/ai/useAiPane";
 import { useChatPane } from "../components/chat/useChatPane";
@@ -17,6 +16,7 @@ import { PaneEmpty, Panes } from "../components/panes/Panes";
 import { useToast } from "../components/Toast";
 import { useI18n } from "../i18n/I18nProvider";
 import { useFolders } from "../media/useFolders";
+import { usePagedMedia } from "../media/usePagedMedia";
 import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { mediaPath } from "../routes";
@@ -44,32 +44,21 @@ function FolderView({ folderId }: { folderId: string }) {
   const folders = useFolders();
   const toast = useToast();
   const [renamed, setRenamed] = useState<Folder | null>(null);
-  const [sources, setSources] = useState<MediaListItem[] | null>(null);
-  const [sourcesFailed, setSourcesFailed] = useState(false);
+  const sourceList = usePagedMedia(SOURCES_LIMIT, folderId);
+  const { items: sources, failed: sourcesFailed, reload: loadSources } = sourceList;
   const [adding, setAdding] = useState<"file" | "audio" | null>(null);
 
-  const loadSources = useCallback(() => {
-    const params = new URLSearchParams({ folder_id: folderId, limit: String(SOURCES_LIMIT) });
-    apiRequest<ListMediaResponse>(`/api/media?${params.toString()}`)
-      .then((response) => {
-        setSources(response.items);
-        setSourcesFailed(false);
-      })
-      .catch(() => setSourcesFailed(true));
-  }, [folderId]);
-
-  useEffect(() => loadSources(), [loadSources]);
   useOnMediaSaved(loadSources);
   useProcessingRefresh(
     (sources ?? []).some((item) => mediaStatusMarker(item.status) === "processing"),
-    loadSources,
+    sourceList.refresh,
   );
 
   const ai = useAiPane({ scope: "folder", scopeId: folderId, showSourceCount: true });
 
   const found = folders.folders?.find((candidate) => candidate.id === folderId) ?? null;
   const folder = renamed ?? found;
-  const count = sources?.length ?? folder?.media_count ?? 0;
+  const count = sourceList.total ?? folder?.media_count ?? 0;
   const chat = useChatPane({
     scope: "folder",
     scopeId: folderId,
@@ -96,7 +85,7 @@ function FolderView({ folderId }: { folderId: string }) {
 
   const name = folder.is_default ? tw("nav.unsortedNoCount") : folder.name;
   const drop = (mediaId: string) =>
-    setSources((current) => (current ?? []).filter((item) => item.media_item_id !== mediaId));
+    sourceList.patch(mediaId, null);
 
   const sourcesBody = (
     <>
@@ -141,16 +130,28 @@ function FolderView({ folderId }: { folderId: string }) {
                   drop(item.media_item_id);
                   toast.show(t("media.movedToNamed", { name: target.is_default ? tw("nav.unsortedNoCount") : target.name }));
                 }}
-                onRenamed={(title) =>
-                  setSources((current) =>
-                    (current ?? []).map((row) => (row.media_item_id === item.media_item_id ? { ...row, title } : row)),
-                  )
-                }
+                onRenamed={(title) => sourceList.patch(item.media_item_id, { title })}
                 onDeleted={() => drop(item.media_item_id)}
               />
             }
           />
         ))
+      )}
+      {sources && sourcesFailed && (
+        <div className="section-error" role="alert">
+          <span className="subtle">{t("folder.loadFailed")}</span>
+          <button type="button" className="btn tonal" disabled={sourceList.loadingMore}
+            onClick={sourceList.cursor ? sourceList.loadMore : loadSources}>
+            {t("common.retry")}
+          </button>
+        </div>
+      )}
+      {sourceList.cursor && (
+        <div className="list-end">
+          <button type="button" className="btn tonal" disabled={sourceList.loadingMore} onClick={sourceList.loadMore}>
+            {sourceList.loadingMore ? t("common.loading") : tw("library.loadMore")}
+          </button>
+        </div>
       )}
     </>
   );
