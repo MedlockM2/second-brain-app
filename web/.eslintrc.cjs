@@ -10,6 +10,7 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   plugins: ['@typescript-eslint', 'react-hooks'],
   env: { browser: true, es2022: true },
+  overrides: [{ files: ['vite.config.ts', 'tooling/**/*.ts'], env: { node: true } }],
   rules: {
     'no-restricted-imports': [
       'error',

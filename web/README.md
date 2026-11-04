@@ -75,9 +75,12 @@ What works and what does not **until `api.<domain>` exists** (task-443, then tas
 
 ## Deployment
 
-Not covered here: `app.<domain>` is S3 + CloudFront in Terraform (task-445, runbook of task-471).
-The bucket serves `web/dist/`, with every unknown path answered by `index.html` (client-side
-routes). The `VITE_*` variables are build-time: a build is made per environment.
+Build-time configuration validation, package identity, S3/CloudFront cache settings
+and rollback are documented in [docs/WEB_RELEASE.md](../docs/WEB_RELEASE.md).
+`npm run build -- --mode <environment>` validates public settings before bundling
+and writes `dist/release.json`; `node scripts/verify_web_release.mjs web/dist`
+(from the repository root) checks the exact package and refuses compilation-only
+builds. TASK-471 owns AWS resources; TASK-591 owns real values and remote execution.
 
 ## Legal links
 
