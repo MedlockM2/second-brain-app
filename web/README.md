@@ -78,3 +78,19 @@ What works and what does not **until `api.<domain>` exists** (task-443, then tas
 Not covered here: `app.<domain>` is S3 + CloudFront in Terraform (task-445, runbook of task-471).
 The bucket serves `web/dist/`, with every unknown path answered by `index.html` (client-side
 routes). The `VITE_*` variables are build-time: a build is made per environment.
+
+## Legal links
+
+Sign-in, sign-up and My account use `LegalLinks` and the two public constants in
+`packages/core/src/constants/legal.ts`. Mobile's `src/constants/legal.ts`
+re-exports those same destinations (TASK-358); its store and contact settings
+remain platform-specific. The beta destinations follow TASK-357's owner amendment
+of 2026-10-30, updated on 2026-11-01: the published dev CloudFront privacy page and
+Apple's standard EULA. No Deepn `/terms` page is assumed to exist.
+
+After the owner publishes the domain-backed legal page (TASK-444), update the
+shared privacy constant once and rebuild web; mobile receives the same change
+through its normal OTA/build delivery. Change Terms only if the owner actually
+publishes Deepn terms and chooses them. TASK-591 owns the web cutover; TASK-454
+tracks the production metadata and contact changes. Changing `VITE_SITE_URL`
+alone does not change legal destinations.

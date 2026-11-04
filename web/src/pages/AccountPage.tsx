@@ -13,6 +13,7 @@ import type {
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router";
 import { apiRequest } from "../api";
+import { LegalLinks } from "../components/LegalLinks";
 import { Dialog } from "../components/Dialog";
 import { Icon, type IconName } from "../components/Icon";
 import { useToast } from "../components/Toast";
@@ -128,6 +129,7 @@ export function AccountPage() {
             onClick: () => void openFeedback(() => toast.show(t("account.feedbackUnavailableBody"))),
           })}
           {item("bug", "bug-outline", t("account.reportBug"))}
+          <LegalLinks />
           <div className="acc-sep" />
           {item(null, "log-out-outline", t("account.signOut"), null, { danger: true, onClick: () => setSigningOut(true) })}
           {item("delete", "trash-outline", t("deleteAccount.title"), null, { danger: true })}

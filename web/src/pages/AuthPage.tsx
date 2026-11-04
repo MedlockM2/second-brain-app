@@ -12,7 +12,7 @@ import { AuthCodePage } from "./AuthCodePage";
 import { AuthField, PasswordRules, SlotText } from "../components/AuthField";
 import { AuthSplit } from "../components/welcome/AuthSplit";
 
-const PRIVACY_POLICY_URL = "https://d118p1z5xvufnz.cloudfront.net/privacy";
+import { LegalLinks } from "../components/LegalLinks";
 
 /**
  * Sign in and sign up, beside the welcome carousel: Apple, Google, « or », then
@@ -145,11 +145,7 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
         </>}
       </form>
 
-      {register && !accountExists && <p className="small subtle auth-legal">
-        <SlotText template={t("register.legal")} slots={{
-          privacy: <a href={PRIVACY_POLICY_URL} target="_blank" rel="noreferrer">{t("paywall.privacy")}</a>,
-        }} />
-      </p>}
+      <LegalLinks registration={register && !accountExists} />
 
       <p className="small subtle auth-switch">
         {t(register ? "register.hasAccount" : "login.noAccount")}{" "}

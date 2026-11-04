@@ -24,9 +24,7 @@
  */
 import { Platform } from "react-native";
 
-export const TERMS_URL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
-
-export const PRIVACY_POLICY_URL = "https://d118p1z5xvufnz.cloudfront.net/privacy";
+export { TERMS_URL, PRIVACY_POLICY_URL } from "@media-summarizer/core/constants/legal";
 
 /**
  * Where a subscription is actually cancelled. The app cannot cancel one itself —
