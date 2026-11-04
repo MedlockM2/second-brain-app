@@ -2,7 +2,7 @@ import { formatNumber, tCount } from "@media-summarizer/core/i18n/runtime";
 import { getRelativeTime } from "@media-summarizer/core/i18n/relativeTime";
 import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
-import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
+import type { MediaListItem } from "@media-summarizer/core/types/media";
 import type { Folder, FolderListResponse } from "@media-summarizer/core/types/organization";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -12,6 +12,7 @@ import { Icon } from "../components/Icon";
 import { NewFolderDialog } from "../components/NewFolderDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { useOnMediaSaved } from "../lib/mediaSaved";
+import { usePagedMedia } from "../media/usePagedMedia";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
 import { BackToTop } from "../components/BackToTop";
@@ -34,11 +35,8 @@ export function LibraryPage() {
   const [foldersOpen, setFoldersOpen] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  const [media, setMedia] = useState<MediaListItem[] | null>(null);
-  const [mediaFailed, setMediaFailed] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const mediaList = usePagedMedia(PAGE_SIZE);
+  const { items: media, failed: mediaFailed, total, cursor, loadingMore, reload: loadMedia, loadMore } = mediaList;
 
   const loadFolders = useCallback(() => {
     apiRequest<FolderListResponse>("/api/folders")
@@ -49,38 +47,7 @@ export function LibraryPage() {
       .catch(() => setFoldersFailed(true));
   }, []);
 
-  /** The first page — a re-read replaces what is on screen with the newest page. */
-  const loadMedia = useCallback(() => {
-    apiRequest<ListMediaResponse>(`/api/media?limit=${PAGE_SIZE}`)
-      .then((response) => {
-        setMedia(response.items);
-        setTotal(response.total);
-        setCursor(response.has_more ? (response.next_cursor ?? null) : null);
-        setMediaFailed(false);
-      })
-      .catch(() => setMediaFailed(true));
-  }, []);
-
-  const loadMore = async () => {
-    if (!cursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const response = await apiRequest<ListMediaResponse>(
-        `/api/media?limit=${PAGE_SIZE}&cursor=${encodeURIComponent(cursor)}`,
-      );
-      setMedia((current) => [...(current ?? []), ...response.items]);
-      setCursor(response.has_more ? (response.next_cursor ?? null) : null);
-    } catch {
-      setMediaFailed(true);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    loadFolders();
-    loadMedia();
-  }, [loadFolders, loadMedia]);
+  useEffect(() => loadFolders(), [loadFolders]);
 
   const reloadAll = useCallback(() => {
     loadFolders();
@@ -88,11 +55,10 @@ export function LibraryPage() {
   }, [loadFolders, loadMedia]);
   useOnMediaSaved(reloadAll);
 
-  // Only while the first page is all there is: re-reading it would drop the
-  // pages loaded after it.
-  const processing =
-    cursor === null && (media ?? []).some((item) => mediaStatusMarker(item.status) === "processing");
-  useProcessingRefresh(processing, loadMedia);
+  // The existing hook caps polling at 36 rounds, every five seconds. Pagination
+  // does not decide whether a processing item deserves an update.
+  const processing = (media ?? []).some((item) => mediaStatusMarker(item.status) === "processing");
+  useProcessingRefresh(processing, mediaList.refreshProcessing);
 
   // One level: the folders at the root, Unsorted first, then by name.
   const roots = useMemo(() => {
@@ -161,7 +127,7 @@ export function LibraryPage() {
 
       <div className="lib-head" style={{ marginTop: 32 }}>
         <h2 className="headline grow">{t("search.allMedia")}</h2>
-        {media && <span className="count">{tCount("common.itemCount", total)}</span>}
+        {media && <span className="count">{tCount("common.itemCount", total ?? 0)}</span>}
       </div>
 
       {mediaFailed && !media ? (
@@ -183,6 +149,15 @@ export function LibraryPage() {
               <MediaCard key={item.media_item_id} item={item} />
             ))}
           </div>
+          {media && (mediaFailed || mediaList.refreshFailed) && (
+            <div className="section-error" role="alert">
+              <span className="subtle">{t("search.libraryLoadFailed")}</span>
+              <button type="button" className="btn tonal" disabled={loadingMore}
+                onClick={mediaList.refreshFailed ? mediaList.refreshProcessing : cursor ? loadMore : loadMedia}>
+                {t("common.retry")}
+              </button>
+            </div>
+          )}
           {media &&
             (cursor ? (
               <div className="list-end">

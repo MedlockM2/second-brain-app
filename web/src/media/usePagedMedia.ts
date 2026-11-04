@@ -1,4 +1,5 @@
-import type { ListMediaResponse, MediaListItem } from "@media-summarizer/core/types/media";
+import type { ListMediaResponse, MediaListItem, MediaStatusResponse } from "@media-summarizer/core/types/media";
+import { mediaStatusMarker } from "@media-summarizer/core/media/mediaDisplay";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "../api";
 
@@ -16,6 +17,8 @@ export function usePagedMedia(pageSize: number, folderId?: string) {
   const [page, setPage] = useState<MediaPage | null>(null);
   const [failed, setFailed] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
+  const polling = useRef(false);
   const current = useRef<MediaPage | null>(null);
   const epoch = useRef(0);
   const busy = useRef(false);
@@ -55,6 +58,7 @@ export function usePagedMedia(pageSize: number, folderId?: string) {
       loadedPages.current = pages;
       commit({ items: uniqueItems(items), total, cursor });
       setFailed(false);
+      setRefreshFailed(false);
     } catch {
       if (version === epoch.current) setFailed(true);
     } finally {
@@ -76,7 +80,7 @@ export function usePagedMedia(pageSize: number, folderId?: string) {
       if (version !== epoch.current) return;
       loadedPages.current += 1;
       commit({
-        items: uniqueItems([...previous.items, ...response.items]),
+        items: uniqueItems([...(current.current?.items ?? previous.items), ...response.items]),
         total: response.total,
         cursor: response.has_more ? (response.next_cursor ?? null) : null,
       });
@@ -94,6 +98,47 @@ export function usePagedMedia(pageSize: number, folderId?: string) {
   const refresh = useCallback(() => {
     if (!busy.current) void reload();
   }, [reload]);
+
+  // Read only displayed in-flight items, four at a time. Never replace a page or
+  // its cursor with the first page just because the last processing item ends.
+  const refreshProcessing = useCallback(async () => {
+    if (busy.current || polling.current) return;
+    const pending = (current.current?.items ?? []).filter(
+      (item) => mediaStatusMarker(item.status) === "processing",
+    );
+    if (!pending.length) return;
+    const version = epoch.current;
+    polling.current = true;
+    let anyFailed = false;
+    try {
+      for (let offset = 0; offset < pending.length; offset += 4) {
+        const batch = pending.slice(offset, offset + 4);
+        const results = await Promise.allSettled(batch.map((item) =>
+          apiRequest<MediaStatusResponse>(`/api/media/${encodeURIComponent(item.media_item_id)}`),
+        ));
+        if (version !== epoch.current) return;
+        const changes = new Map<string, Partial<MediaListItem>>();
+        results.forEach((result, index) => {
+          if (result.status === "rejected") { anyFailed = true; return; }
+          const { media_item: item, processing_job: job } = result.value;
+          changes.set(batch[index].media_item_id, {
+            title: item.title, title_label_key: item.title_label_key,
+            status: item.status, creator_name: item.creator_name, media_image: item.media_image,
+            media_type: item.media_type, source_platform: item.source_platform,
+            review_blurb: item.review_blurb, updated_at: item.updated_at,
+            completed_at: job.completed_at,
+          });
+        });
+        const latest = current.current;
+        if (latest) commit({ ...latest, items: latest.items.map((item) =>
+          changes.has(item.media_item_id) ? { ...item, ...changes.get(item.media_item_id) } : item,
+        ) });
+      }
+      setRefreshFailed(anyFailed);
+    } finally {
+      polling.current = false;
+    }
+  }, [commit]);
 
   const patch = useCallback((id: string, changes: Partial<MediaListItem> | null) => {
     // A read started before the confirmed mutation cannot undo it later.
@@ -122,5 +167,5 @@ export function usePagedMedia(pageSize: number, folderId?: string) {
   }, [reload]);
 
   return { items: page?.items ?? null, total: page?.total ?? null, cursor: page?.cursor ?? null,
-    failed, loadingMore, reload, refresh, loadMore, patch };
+    failed, refreshFailed, loadingMore, reload, refresh, refreshProcessing, loadMore, patch };
 }
