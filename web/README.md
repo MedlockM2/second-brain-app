@@ -37,6 +37,16 @@ From the repository root, once: `npm ci` (one workspace install; never inside `w
 A change to `packages/core` is also a mobile change: typecheck and lint `mobile/` and
 `packages/core` too.
 
+## CI checks
+
+Both PR and main run `npm ci` at the repository root, then
+`npm run typecheck --workspace web`, `npm run lint --workspace web` and
+`npm run build --workspace web -- --mode ci`. The tracked `web/.env.ci` supplies
+only a loopback compilation address; these checks make no API calls and produce
+no deployment. Distribution builds must use their environment's public settings.
+The separate `web-parity` job checks the `Web:` trailer on mobile commits; mobile
+and `packages/core` keep their own typecheck and lint jobs.
+
 ## Running against the -dev API
 
 1. `cp web/.env.example web/.env.local` (git-ignored) and set `VITE_API_BASE_URL` to the dev API:

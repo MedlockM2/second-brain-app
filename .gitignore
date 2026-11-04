@@ -10,6 +10,7 @@
 .env
 .env.*
 !.env.example
+!web/.env.ci
 front/.env
 mobile/.env
 
