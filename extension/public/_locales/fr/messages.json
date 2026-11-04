@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "Déconnexion impossible. Vérifiez votre connexion et réessayez."
+  },
+  "budgetExhausted": {
+    "message": "La capacité du mois ne permet pas ce traitement."
+  },
+  "budgetExhaustedUntil": {
+    "message": "La capacité se renouvelle le {date}. Lecture et rangement restent accessibles."
+  },
+  "itemTooLarge": {
+    "message": "Cet élément dépasse la limite de traitement."
+  },
+  "budgetUnavailable": {
+    "message": "Le traitement est temporairement indisponible. Réessayez plus tard."
+  },
+  "processingClosed": {
+    "message": "L’accès aux traitements bêta est fermé."
+  },
+  "providerSuspended": {
+    "message": "Ce service est momentanément suspendu. Votre bibliothèque reste accessible ; réessayez plus tard."
+  },
+  "networkError": {
+    "message": "Erreur réseau. Vérifiez votre connexion et réessayez."
+  },
+  "sourceRefused": {
+    "message": "Ce lien n'est pas encore pris en charge. Essayez une autre source."
+  },
+  "selectionRetryHint": {
+    "message": "Pour réessayer, sélectionnez le texte et utilisez à nouveau le menu contextuel."
   }
 }

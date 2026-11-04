@@ -4,6 +4,7 @@ One table, so a key cannot exist in one language and not in another.
 """
 
 import json
+import re
 from pathlib import Path
 
 KEYS = [
@@ -338,6 +339,43 @@ SIGN_OUT_FAILED = {
 KEYS.append("signOutFailed")
 for locale, values in T.items():
     values.append(SIGN_OUT_FAILED[locale])
+
+# Reuse the apps' established wording without bundling every app catalogue.
+CORE_MESSAGES = {
+    "budgetExhausted": "budget.exhausted",
+    "budgetExhaustedUntil": "budget.exhaustedUntil",
+    "itemTooLarge": "budget.tooLarge",
+    "budgetUnavailable": "budget.unavailable",
+    "processingClosed": "budget.closed",
+    "providerSuspended": "budget.suspended",
+    "networkError": "error.network",
+    "sourceRefused": "error.unsupportedUrl",
+}
+SELECTION_RETRY_HINT = {
+    "en": "To try again, select the text and use the context menu again.",
+    "fr": "Pour réessayer, sélectionnez le texte et utilisez à nouveau le menu contextuel.",
+    "es": "Para reintentar, selecciona el texto y vuelve a usar el menú contextual.",
+    "de": "Wähle zum erneuten Versuch den Text aus und nutze das Kontextmenü noch einmal.",
+    "it": "Per riprovare, seleziona il testo e usa di nuovo il menu contestuale.",
+    "pt_PT": "Para tentar novamente, seleciona o texto e usa outra vez o menu de contexto.",
+    "nl": "Selecteer de tekst en gebruik het contextmenu opnieuw om het nogmaals te proberen.",
+    "ja": "再試行するには、テキストを選択してコンテキストメニューをもう一度使ってください。",
+    "zh_CN": "如需重试，请重新选择文字并使用右键菜单。",
+    "hi": "फिर कोशिश करने के लिए टेक्स्ट चुनें और संदर्भ मेन्यू का दोबारा उपयोग करें।",
+    "ar": "للمحاولة مجددًا، حدّد النص واستخدم قائمة السياق مرة أخرى.",
+}
+core = Path(__file__).resolve().parents[2] / "packages" / "core" / "src" / "i18n"
+KEYS.extend(CORE_MESSAGES)
+KEYS.append("selectionRetryHint")
+for locale, values in T.items():
+    app_locale = {"pt_PT": "pt", "zh_CN": "zh"}.get(locale, locale)
+    catalogue = (core / f"{app_locale}.ts").read_text()
+    for key in CORE_MESSAGES.values():
+        match = re.search(r'^\s*"' + re.escape(key) + r'":\s*("(?:[^"\\]|\\.)*"),?\s*$', catalogue, re.MULTILINE)
+        if not match:
+            raise ValueError(f"Missing single-line catalogue value: {app_locale}/{key}")
+        values.append(json.loads(match.group(1)))
+    values.append(SELECTION_RETRY_HINT[locale])
 
 root = Path(__file__).resolve().parent.parent / "public" / "_locales"
 for lang, values in T.items():

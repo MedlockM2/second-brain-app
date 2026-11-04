@@ -1,6 +1,7 @@
 import { browser } from "wxt/browser";
 import { ACCOUNT_EXTENSION_URL } from "../../lib/config";
 import { claimPairingCode, lastFolderId, listFolders, rememberFolder, savePage } from "../../lib/api";
+import { clearContextFailure, failureMessage, saveFailure, takeContextFailure } from "../../lib/errors";
 import { localize, msg } from "../../lib/i18n";
 import { NotLinkedError, linkState, signOut } from "../../lib/session";
 
@@ -12,6 +13,12 @@ import { NotLinkedError, linkState, signOut } from "../../lib/session";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 localize(document);
+void takeContextFailure().then((failure) => {
+  if (!failure) return;
+  const contextStatus = $("context-status");
+  contextStatus.hidden = false;
+  contextStatus.textContent = `${msg("selectionFailed")} ${failureMessage(failure)} ${msg("selectionRetryHint")}`;
+}).catch(() => undefined);
 void render();
 
 async function render(): Promise<void> {
@@ -76,12 +83,14 @@ async function showSave(): Promise<void> {
     try {
       const folderId = select.value || null;
       await savePage(url, folderId);
-      await rememberFolder(folderId);
+      await rememberFolder(folderId).catch(() => undefined);
       status.textContent = msg("saved");
+      await clearContextFailure().catch(() => undefined);
+      $("context-status").hidden = true;
     } catch (error) {
       if (error instanceof NotLinkedError) return render();
       status.classList.add("error");
-      status.textContent = msg("saveFailed");
+      status.textContent = failureMessage(saveFailure(error));
       button.disabled = false;
     }
   };

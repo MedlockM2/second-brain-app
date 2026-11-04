@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "无法退出登录。请检查网络连接后重试。"
+  },
+  "budgetExhausted": {
+    "message": "本月容量不足以执行此操作。"
+  },
+  "budgetExhaustedUntil": {
+    "message": "容量将于{date}更新。阅读和整理仍可使用。"
+  },
+  "itemTooLarge": {
+    "message": "此项目超过处理上限。"
+  },
+  "budgetUnavailable": {
+    "message": "处理暂时不可用，请稍后重试。"
+  },
+  "processingClosed": {
+    "message": "测试版处理权限已关闭。"
+  },
+  "providerSuspended": {
+    "message": "此服务暂时暂停。你的资料库仍可使用，请稍后重试。"
+  },
+  "networkError": {
+    "message": "网络错误，请检查连接后重试。"
+  },
+  "sourceRefused": {
+    "message": "暂不支持该链接，请换一个来源。"
+  },
+  "selectionRetryHint": {
+    "message": "如需重试，请重新选择文字并使用右键菜单。"
   }
 }

@@ -1,4 +1,5 @@
 import { browser } from "wxt/browser";
+import { responseError } from "./errors";
 import { API_BASE_URL } from "./config";
 
 /**
@@ -29,6 +30,7 @@ const ACCESS_KEY = "access";
 const BUFFER_MS = 30_000;
 
 export class NotLinkedError extends Error {
+  readonly code = "session_expired";
   constructor() {
     super("not_linked");
   }
@@ -69,6 +71,9 @@ async function forget(expired: boolean): Promise<void> {
   else await browser.storage.local.remove(EXPIRED_KEY);
 }
 
+/** A second rejected bearer response also ends this local session. */
+export async function expireSession(): Promise<void> { await forget(true); }
+
 export type LinkState = "linked" | "unlinked" | "expired";
 
 export async function linkState(): Promise<LinkState> {
@@ -92,7 +97,7 @@ export function refresh(): Promise<string> {
       await forget(true);
       throw new NotLinkedError();
     }
-    if (!response.ok) throw new Error(`refresh_failed_${response.status}`);
+    if (!response.ok) throw await responseError(response);
     const body = (await response.json()) as { access_token: string; refresh_token: string; expires_in: number };
     await browser.storage.local.set({ [REFRESH_KEY]: { token: body.refresh_token } satisfies StoredRefresh });
     await browser.storage.session.set({

@@ -1,5 +1,6 @@
 import { browser } from "wxt/browser";
 import { WEB_APP_ORIGIN } from "../lib/config";
+import { clearContextFailure, rememberContextFailure } from "../lib/errors";
 import { msg } from "../lib/i18n";
 import { lastFolderId, saveSelection } from "../lib/api";
 import { NotLinkedError, savePairing } from "../lib/session";
@@ -26,8 +27,10 @@ export default defineBackground(() => {
     void (async () => {
       try {
         await saveSelection(info.selectionText!, info.pageUrl ?? tab?.url ?? null, await lastFolderId());
+        await clearContextFailure().catch(() => undefined);
         await flash("✓", "#1c1b1a");
       } catch (error) {
+        await rememberContextFailure(error).catch(() => undefined);
         await flash("!", "#ba1a1a");
         // Not linked: the popup is where the reader links it.
         if (error instanceof NotLinkedError) await browser.action.openPopup?.().catch(() => undefined);

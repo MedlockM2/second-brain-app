@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "Could not sign out. Check your connection and try again."
+  },
+  "budgetExhausted": {
+    "message": "This month’s capacity cannot cover this operation."
+  },
+  "budgetExhaustedUntil": {
+    "message": "Capacity renews on {date}. Reading and organising remain available."
+  },
+  "itemTooLarge": {
+    "message": "This item exceeds the processing limit."
+  },
+  "budgetUnavailable": {
+    "message": "Processing is temporarily unavailable. Try again later."
+  },
+  "processingClosed": {
+    "message": "Beta processing access is closed."
+  },
+  "providerSuspended": {
+    "message": "This service is paused for now. Your library stays available; try again later."
+  },
+  "networkError": {
+    "message": "Network error. Please check your connection and try again."
+  },
+  "sourceRefused": {
+    "message": "This link is not supported yet. Please try another source."
+  },
+  "selectionRetryHint": {
+    "message": "To try again, select the text and use the context menu again."
   }
 }

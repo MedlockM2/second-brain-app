@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "Abmelden fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut."
+  },
+  "budgetExhausted": {
+    "message": "Die Kapazität dieses Monats reicht für diesen Vorgang nicht aus."
+  },
+  "budgetExhaustedUntil": {
+    "message": "Die Kapazität wird am {date} erneuert. Lesen und Organisieren bleiben verfügbar."
+  },
+  "itemTooLarge": {
+    "message": "Dieses Element überschreitet die Verarbeitungsgrenze."
+  },
+  "budgetUnavailable": {
+    "message": "Die Verarbeitung ist vorübergehend nicht verfügbar. Versuche es später erneut."
+  },
+  "processingClosed": {
+    "message": "Der Zugang zur Beta-Verarbeitung ist geschlossen."
+  },
+  "providerSuspended": {
+    "message": "Dieser Dienst ist vorübergehend pausiert. Deine Bibliothek bleibt verfügbar. Versuche es später erneut."
+  },
+  "networkError": {
+    "message": "Netzwerkfehler. Prüfe deine Verbindung und versuche es erneut."
+  },
+  "sourceRefused": {
+    "message": "Dieser Link wird noch nicht unterstützt. Versuche eine andere Quelle."
+  },
+  "selectionRetryHint": {
+    "message": "Wähle zum erneuten Versuch den Text aus und nutze das Kontextmenü noch einmal."
   }
 }

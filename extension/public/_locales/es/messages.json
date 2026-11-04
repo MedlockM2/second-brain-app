@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "No se pudo cerrar sesión. Comprueba tu conexión e inténtalo de nuevo."
+  },
+  "budgetExhausted": {
+    "message": "La capacidad de este mes no cubre esta operación."
+  },
+  "budgetExhaustedUntil": {
+    "message": "La capacidad se renueva el {date}. Leer y organizar siguen disponibles."
+  },
+  "itemTooLarge": {
+    "message": "Este elemento supera el límite de procesamiento."
+  },
+  "budgetUnavailable": {
+    "message": "El procesamiento no está disponible temporalmente. Inténtalo más tarde."
+  },
+  "processingClosed": {
+    "message": "El acceso al procesamiento beta está cerrado."
+  },
+  "providerSuspended": {
+    "message": "Este servicio está en pausa por ahora. Tu biblioteca sigue disponible; inténtalo más tarde."
+  },
+  "networkError": {
+    "message": "Error de red. Comprueba tu conexión e inténtalo de nuevo."
+  },
+  "sourceRefused": {
+    "message": "Este enlace aún no es compatible. Prueba con otra fuente."
+  },
+  "selectionRetryHint": {
+    "message": "Para reintentar, selecciona el texto y vuelve a usar el menú contextual."
   }
 }

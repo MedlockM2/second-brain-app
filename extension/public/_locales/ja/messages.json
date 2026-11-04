@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "ログアウトできませんでした。接続を確認して再試行してください。"
+  },
+  "budgetExhausted": {
+    "message": "今月の容量ではこの処理を実行できません。"
+  },
+  "budgetExhaustedUntil": {
+    "message": "容量は{date}に更新されます。閲覧と整理は引き続き利用できます。"
+  },
+  "itemTooLarge": {
+    "message": "この項目は処理の上限を超えています。"
+  },
+  "budgetUnavailable": {
+    "message": "処理を一時的に利用できません。後でもう一度お試しください。"
+  },
+  "processingClosed": {
+    "message": "ベータ版の処理へのアクセスは終了しています。"
+  },
+  "providerSuspended": {
+    "message": "このサービスは一時停止中です。ライブラリは引き続き利用できます。後でもう一度お試しください。"
+  },
+  "networkError": {
+    "message": "ネットワークエラーです。接続を確認してもう一度お試しください。"
+  },
+  "sourceRefused": {
+    "message": "このリンクはまだ対応していません。別のソースをお試しください。"
+  },
+  "selectionRetryHint": {
+    "message": "再試行するには、テキストを選択してコンテキストメニューをもう一度使ってください。"
   }
 }

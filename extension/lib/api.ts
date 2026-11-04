@@ -2,7 +2,8 @@ import { browser } from "wxt/browser";
 import type { Folder, FolderListResponse } from "@media-summarizer/core/types/organization";
 import { API_BASE_URL } from "./config";
 import { clientLabel } from "./i18n";
-import { accessToken, refresh, savePairing } from "./session";
+import { responseError } from "./errors";
+import { accessToken, expireSession, NotLinkedError, refresh, savePairing } from "./session";
 
 /**
  * The few calls the extension makes — the ones its token's scope allows
@@ -24,7 +25,11 @@ async function authed(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 async function expectOk(response: Response): Promise<Response> {
-  if (!response.ok) throw new Error(`request_failed_${response.status}`);
+  if (response.status === 401) {
+    await expireSession();
+    throw new NotLinkedError();
+  }
+  if (!response.ok) throw await responseError(response);
   return response;
 }
 

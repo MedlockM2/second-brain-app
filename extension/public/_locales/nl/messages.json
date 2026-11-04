@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "Afmelden is mislukt. Controleer je verbinding en probeer opnieuw."
+  },
+  "budgetExhausted": {
+    "message": "De capaciteit van deze maand is onvoldoende voor deze bewerking."
+  },
+  "budgetExhaustedUntil": {
+    "message": "De capaciteit wordt op {date} vernieuwd. Lezen en ordenen blijven beschikbaar."
+  },
+  "itemTooLarge": {
+    "message": "Dit item overschrijdt de verwerkingslimiet."
+  },
+  "budgetUnavailable": {
+    "message": "Verwerking is tijdelijk niet beschikbaar. Probeer het later opnieuw."
+  },
+  "processingClosed": {
+    "message": "De toegang tot bètaverwerking is gesloten."
+  },
+  "providerSuspended": {
+    "message": "Deze dienst is tijdelijk gepauzeerd. Je bibliotheek blijft beschikbaar; probeer het later opnieuw."
+  },
+  "networkError": {
+    "message": "Netwerkfout. Controleer je verbinding en probeer het opnieuw."
+  },
+  "sourceRefused": {
+    "message": "Deze link wordt nog niet ondersteund. Probeer een andere bron."
+  },
+  "selectionRetryHint": {
+    "message": "Selecteer de tekst en gebruik het contextmenu opnieuw om het nogmaals te proberen."
   }
 }

@@ -210,3 +210,22 @@ Références officielles consultées le 11 octobre 2026 :
 [soumission des sources AMO](https://extensionworkshop.com/documentation/publish/source-code-submission/),
 [stockage Mozilla](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea/setAccessLevel),
 [API communes WXT](https://wxt.dev/guide/essentials/extension-apis.html).
+
+## Refus et reprise d'une sauvegarde
+
+La popup distingue réseau, session à relier, source refusée, capacité épuisée,
+limite par élément, traitement fermé et fournisseur suspendu. Elle reprend les
+libellés budgétaires mobile/web, avec la date de renouvellement quand elle est
+connue, sans prix ni achat. Un refus garde le dossier choisi et réactive le bouton
+pour un nouvel essai explicite. Une session révoquée demande de relier l'extension.
+Les erreurs du code d'appairage restent neutres sur l'existence du compte.
+
+Le menu contextuel montre ✓ seulement après acceptation de la sauvegarde, et !
+sur échec. Après !, ouvrir la popup pour lire l'explication du dernier refus.
+Seuls son code autorisé et, éventuellement, la date de renouvellement validée sont
+conservés temporairement dans `storage.session`, puis retirés à la lecture. Aucun
+texte sélectionné, URL, compte ou credential n'est ajouté à ce diagnostic ; il n'y
+a ni journal ni historique. Pour reprendre, sélectionner à nouveau le texte et
+utiliser le menu contextuel : aucune sauvegarde n'est rejouée automatiquement.
+La génération des `_locales` réutilise les phrases des catalogues de core ; elle
+échoue si une traduction attendue manque.

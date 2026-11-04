@@ -73,5 +73,32 @@
   },
   "signOutFailed": {
     "message": "Impossibile uscire. Controlla la connessione e riprova."
+  },
+  "budgetExhausted": {
+    "message": "La capacità di questo mese non copre questa operazione."
+  },
+  "budgetExhaustedUntil": {
+    "message": "La capacità si rinnova il {date}. Lettura e organizzazione restano disponibili."
+  },
+  "itemTooLarge": {
+    "message": "Questo elemento supera il limite di elaborazione."
+  },
+  "budgetUnavailable": {
+    "message": "Elaborazione temporaneamente non disponibile. Riprova più tardi."
+  },
+  "processingClosed": {
+    "message": "L’accesso all’elaborazione beta è chiuso."
+  },
+  "providerSuspended": {
+    "message": "Questo servizio è momentaneamente sospeso. La tua libreria resta disponibile; riprova più tardi."
+  },
+  "networkError": {
+    "message": "Errore di rete. Controlla la connessione e riprova."
+  },
+  "sourceRefused": {
+    "message": "Questo link non è ancora supportato. Prova un'altra fonte."
+  },
+  "selectionRetryHint": {
+    "message": "Per riprovare, seleziona il testo e usa di nuovo il menu contestuale."
   }
 }
