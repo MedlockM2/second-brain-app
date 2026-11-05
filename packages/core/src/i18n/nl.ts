@@ -242,7 +242,8 @@ export const nl: Catalog = {
   "error.mediaNotFound": "Dit item is niet gevonden of niet langer beschikbaar.",
   "error.artifactNotFound": "Deze gegenereerde inhoud is niet gevonden of niet langer beschikbaar.",
   "error.invalidUrl": "Deze link is ongeldig. Probeer een andere URL.",
-  "error.unsupportedUrl": "Deze link wordt nog niet ondersteund. Probeer een andere bron.",
+  "error.unsupportedUrl":
+    "Deze link wordt niet ondersteund. Ondersteunde links: podcastafleveringen, YouTube- en TikTok-video's, Instagram- en X-posts, webartikelen en audiobestanden.",
   "error.validation": "Vul alle verplichte velden in.",
   "error.rateLimited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
   "error.conflict": "Deze actie botst met bestaande gegevens. Vernieuw en probeer het opnieuw.",

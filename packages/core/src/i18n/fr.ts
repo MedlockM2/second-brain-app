@@ -273,7 +273,7 @@ export const fr: Catalog = {
     "Ce contenu généré est introuvable ou n'est plus disponible.",
   "error.invalidUrl": "Ce lien est invalide. Essayez une autre URL.",
   "error.unsupportedUrl":
-    "Ce lien n'est pas encore pris en charge. Essayez une autre source.",
+    "Ce lien n'est pas pris en charge. Liens acceptés : épisodes de podcast, vidéos YouTube et TikTok, publications Instagram et X, articles web, fichiers audio.",
   "error.validation": "Veuillez remplir tous les champs obligatoires.",
   "error.rateLimited":
     "Trop de requêtes. Patientez un instant et réessayez.",

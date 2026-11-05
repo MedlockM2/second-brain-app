@@ -123,17 +123,20 @@ async def _rate_limited_get(
 async def search_podcasts(
     query: str,
     max_results: int = 10,
-    clean: bool = True,
     similar: bool = False,
     http_client: Optional[httpx.AsyncClient] = None,
 ) -> Dict[str, Any]:
     """
     Search for podcasts by term using Podcast Index API.
 
+    PodcastIndex's `clean` flag is never sent: it drops every feed its publisher
+    marked explicit, which covers a large share of mainstream shows (Call Her
+    Daddy, Pretty Lonesome…). A reader who shares one of those episodes expects
+    it imported, and the resolver used to land on a lookalike feed instead.
+
     Args:
         query: Search query string
         max_results: Maximum number of results to return (default: 10, max: 1000)
-        clean: Whether to clean the results (remove explicit content, etc.)
         similar: Whether to include similar matches (fuzzy search)
         http_client: Optional HTTP client for dependency injection
 
@@ -147,8 +150,6 @@ async def search_podcasts(
         headers = _generate_headers()
         params = {"q": query, "max": min(max_results, 1000)}
 
-        if clean:
-            params["clean"] = "true"
         if similar:
             params["similar"] = "true"
 

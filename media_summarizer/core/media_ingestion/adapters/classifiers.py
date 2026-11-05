@@ -27,6 +27,7 @@ from media_summarizer.core.services.media_identity import (
     PLATFORM_HOSTS,
     MediaSourceType,
     classify_source_type,
+    spotify_path_segments,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,7 +158,7 @@ def _host_is_forbidden(host: str) -> bool:
 
 
 def _is_spotify_podcast_path(path: str) -> bool:
-    segments = _path_segments(path)
+    segments = spotify_path_segments(path)
     return len(segments) >= 2 and segments[0] in {"episode", "show"}
 
 

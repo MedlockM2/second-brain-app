@@ -242,7 +242,8 @@ export const hi: Catalog = {
   "error.mediaNotFound": "यह मीडिया नहीं मिला या अब उपलब्ध नहीं है।",
   "error.artifactNotFound": "यह बनाई गई सामग्री नहीं मिली या अब उपलब्ध नहीं है।",
   "error.invalidUrl": "यह लिंक अमान्य है। कोई और URL आज़माएँ।",
-  "error.unsupportedUrl": "यह लिंक अभी समर्थित नहीं है। कोई और स्रोत आज़माएँ।",
+  "error.unsupportedUrl":
+    "यह लिंक समर्थित नहीं है। समर्थित लिंक: पॉडकास्ट एपिसोड, YouTube और TikTok वीडियो, Instagram और X पोस्ट, वेब लेख और ऑडियो फ़ाइलें।",
   "error.validation": "कृपया सभी ज़रूरी जानकारी भरें।",
   "error.rateLimited": "बहुत सारे अनुरोध। थोड़ी देर रुककर फिर कोशिश करें।",
   "error.conflict": "यह काम मौजूदा डेटा से टकराता है। रीफ़्रेश करके फिर कोशिश करें।",

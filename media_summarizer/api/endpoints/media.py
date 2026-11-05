@@ -1521,6 +1521,12 @@ async def ingest_url(
             "media.ingest.unsupported_url",
             "Unsupported URL provided for ingestion",
             error_message=str(exc),
+            # Host and path only: they name the kind of page (a Spotify track, an
+            # Instagram story) that a tester tried, which is what tells us whether
+            # to support it. The query string is dropped, it carries share
+            # trackers (`si=`, `igsh=`) tied to the sender.
+            url_host=urlsplit(url).hostname,
+            url_path=urlsplit(url).path[:200],
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

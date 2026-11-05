@@ -160,6 +160,23 @@ def _path_segments(path: str) -> Tuple[str, ...]:
     return tuple(segment for segment in path.split("/") if segment)
 
 
+_SPOTIFY_LOCALE_SEGMENT_RE = re.compile(r"^intl-[a-z]{2}(?:-[a-z0-9]+)?$", re.IGNORECASE)
+
+
+def spotify_path_segments(path: str) -> Tuple[str, ...]:
+    """A Spotify path's segments without the locale prefix Spotify adds.
+
+    Spotify serves the same episode at `/episode/<id>` and `/intl-fr/episode/<id>`
+    (any language code), and a reader in France often copies the second. Every
+    reader of a Spotify path — the classifier, the resolver's canonical URL, the
+    identity key below — goes through here so both spellings are one episode.
+    """
+    segments = _path_segments(path)
+    if segments and _SPOTIFY_LOCALE_SEGMENT_RE.match(segments[0]):
+        return segments[1:]
+    return segments
+
+
 def _path_looks_like_feed(path: str) -> bool:
     return (
         path.endswith(".rss")
@@ -296,8 +313,8 @@ def _canon_tiktok(host: str, path: str) -> Tuple[str, str, str]:
 
 def _canon_spotify(path: str) -> Tuple[str, str, str]:
     host = "open.spotify.com"
-    path = _normalize_path(path)
-    parts = [p for p in path.split("/") if p]
+    parts = list(spotify_path_segments(_normalize_path(path)))
+    path = "/" + "/".join(parts) if parts else "/"
     if len(parts) >= 2:
         path = f"/{parts[0]}/{parts[1]}"
     return host, path, ""

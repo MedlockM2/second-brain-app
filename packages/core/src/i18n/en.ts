@@ -331,7 +331,8 @@ export const en = {
   "error.mediaNotFound": "This media item was not found or is no longer available.",
   "error.artifactNotFound": "This artifact was not found or is no longer available.",
   "error.invalidUrl": "This link is invalid. Please try another URL.",
-  "error.unsupportedUrl": "This link is not supported yet. Please try another source.",
+  "error.unsupportedUrl":
+    "This link isn't supported. Supported links: podcast episodes, YouTube and TikTok videos, Instagram and X posts, web articles, audio files.",
   "error.validation": "Please fill in all required fields.",
   "error.rateLimited": "Too many requests. Please wait a moment and try again.",
   "error.conflict":

@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
-from typing import Any
+from typing import Any, Callable, Mapping
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -91,6 +91,55 @@ def _extract_meta_content(document: str, *, key: str, attribute: str) -> str:
         if attrs.get(attribute.lower()) == key.lower():
             return attrs.get("content", "").strip()
     return ""
+
+
+def _spotify_show_queries(show_title: str) -> list[str]:
+    """The show title as Spotify prints it, then without its network suffix.
+
+    Spotify appends the distributor to some shows ("Pretty Lonesome with Madeline
+    Argy | SiriusXM Podcasts+") and PodcastIndex finds nothing for that string.
+    The full title goes first because a few real titles carry a "|" of their own.
+    """
+    queries = [show_title]
+    head = show_title.split(" | ", 1)[0].strip()
+    if head and head != show_title:
+        queries.append(head)
+    return queries
+
+
+#: PodcastIndex's ceiling for `episodes/byfeedid`.
+_PODCASTINDEX_MAX_EPISODES = 1000
+
+
+async def _find_episode_in_feed(
+    *,
+    feed_id: int,
+    episode_candidates: int,
+    match: Callable[[list[dict]], Mapping[str, Any] | None],
+) -> Mapping[str, Any] | None:
+    """Match an episode among a feed's recent items, then its whole back catalogue.
+
+    The recent window comes first so a fresh episode is not out-voted by an older
+    one with a similar title. A reader who shares an episode from a year ago
+    (Call Her Daddy publishes twice a week) is past that window, so a miss on a
+    full window reads the feed again up to PodcastIndex's ceiling. Raises when a
+    lookup fails; the caller decides whether that is transient.
+    """
+    window = min(episode_candidates, _PODCASTINDEX_MAX_EPISODES)
+    while True:
+        episodes_result = await podcast_index.get_episodes_by_feed_id(
+            feed_id=feed_id,
+            max_results=window,
+        )
+        if episodes_result.get("status") != "true":
+            raise RuntimeError(
+                "PodcastIndex episodes lookup returned non-success status."
+            )
+        items = episodes_result.get("items", [])
+        found = match(items)
+        if found or window >= _PODCASTINDEX_MAX_EPISODES or len(items) < window:
+            return found
+        window = _PODCASTINDEX_MAX_EPISODES
 
 
 def _extract_feed_id(feed_result: dict) -> int | None:
@@ -460,15 +509,20 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
                 },
             )
 
-        search_result = await podcast_index.search_podcasts(
-            query=show_title,
-            max_results=self._feed_candidates,
-            similar=True,
-        )
-        if search_result.get("status") != "true":
-            raise RuntimeError("PodcastIndex feed search returned non-success status.")
-
-        feeds = search_result.get("feeds", [])
+        feeds: list[dict] = []
+        for query in _spotify_show_queries(show_title):
+            search_result = await podcast_index.search_podcasts(
+                query=query,
+                max_results=self._feed_candidates,
+                similar=True,
+            )
+            if search_result.get("status") != "true":
+                raise RuntimeError(
+                    "PodcastIndex feed search returned non-success status."
+                )
+            feeds = search_result.get("feeds", [])
+            if feeds:
+                break
         if not feeds:
             return PodcastResolutionOutcome.failed(
                 error_code=PodcastResolverErrorCode.EPISODE_NOT_FOUND,
@@ -495,14 +549,11 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
             attempted_feed_ids.append(normalized_feed_id)
 
             try:
-                episodes_result = await podcast_index.get_episodes_by_feed_id(
+                match = await _find_episode_in_feed(
                     feed_id=normalized_feed_id,
-                    max_results=min(self._episode_candidates, 1000),
+                    episode_candidates=self._episode_candidates,
+                    match=lambda items: best_match_episode(items, episode_title),
                 )
-                if episodes_result.get("status") != "true":
-                    raise RuntimeError(
-                        "PodcastIndex episodes lookup returned non-success status."
-                    )
             except Exception as exc:
                 if _is_transient_error(exc):
                     transient_feed_errors += 1
@@ -513,8 +564,6 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
                 )
                 continue
 
-            episode_items = episodes_result.get("items", [])
-            match = best_match_episode(episode_items, episode_title)
             if not match:
                 continue
 
@@ -975,14 +1024,14 @@ class ApplePodcastsPlatformResolver(PodcastPlatformResolver):
         for feed_id in candidate_feed_ids:
             attempted_feed_ids.append(feed_id)
             try:
-                episodes_result = await podcast_index.get_episodes_by_feed_id(
+                match = await _find_episode_in_feed(
                     feed_id=feed_id,
-                    max_results=min(self._episode_candidates, 1000),
+                    episode_candidates=self._episode_candidates,
+                    match=lambda items: self._match_episode_by_title(
+                        episodes=items,
+                        episode_title=episode_title,
+                    ),
                 )
-                if episodes_result.get("status") != "true":
-                    raise RuntimeError(
-                        "PodcastIndex episodes lookup returned non-success status."
-                    )
             except Exception as exc:
                 if _is_transient_error(exc):
                     transient_feed_errors += 1
@@ -996,10 +1045,6 @@ class ApplePodcastsPlatformResolver(PodcastPlatformResolver):
                 )
                 continue
 
-            match = self._match_episode_by_title(
-                episodes=episodes_result.get("items", []),
-                episode_title=episode_title,
-            )
             if not match:
                 continue
 
@@ -1330,14 +1375,11 @@ class DeezerPodcastPlatformResolver(PodcastPlatformResolver):
             attempted_feed_ids.append(normalized_feed_id)
 
             try:
-                episodes_result = await podcast_index.get_episodes_by_feed_id(
+                match = await _find_episode_in_feed(
                     feed_id=normalized_feed_id,
-                    max_results=min(self._episode_candidates, 1000),
+                    episode_candidates=self._episode_candidates,
+                    match=lambda items: best_match_episode(items, episode_title),
                 )
-                if episodes_result.get("status") != "true":
-                    raise RuntimeError(
-                        "PodcastIndex episodes lookup returned non-success status."
-                    )
             except Exception as exc:
                 if _is_transient_error(exc):
                     transient_feed_errors += 1
@@ -1348,8 +1390,6 @@ class DeezerPodcastPlatformResolver(PodcastPlatformResolver):
                 )
                 continue
 
-            episode_items = episodes_result.get("items", [])
-            match = best_match_episode(episode_items, episode_title)
             if not match:
                 continue
 

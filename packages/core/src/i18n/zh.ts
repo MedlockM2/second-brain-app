@@ -231,7 +231,8 @@ export const zh: Catalog = {
   "error.mediaNotFound": "未找到该媒体，或它已不再可用。",
   "error.artifactNotFound": "未找到该生成内容，或它已不再可用。",
   "error.invalidUrl": "该链接无效，请换一个网址。",
-  "error.unsupportedUrl": "暂不支持该链接，请换一个来源。",
+  "error.unsupportedUrl":
+    "不支持此链接。支持的链接：播客单集、YouTube 和 TikTok 视频、Instagram 和 X 帖子、网页文章、音频文件。",
   "error.validation": "请填写所有必填项。",
   "error.rateLimited": "请求过于频繁，请稍候再试。",
   "error.conflict": "此操作与现有数据冲突，请刷新后重试。",

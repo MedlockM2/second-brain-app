@@ -255,7 +255,7 @@ export const es: Catalog = {
     "Este contenido generado no se ha encontrado o ya no está disponible.",
   "error.invalidUrl": "Este enlace no es válido. Prueba con otra URL.",
   "error.unsupportedUrl":
-    "Este enlace aún no es compatible. Prueba con otra fuente.",
+    "Este enlace no es compatible. Enlaces admitidos: episodios de pódcast, vídeos de YouTube y TikTok, publicaciones de Instagram y X, artículos web y archivos de audio.",
   "error.validation": "Rellena todos los campos obligatorios.",
   "error.rateLimited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
   "error.conflict":

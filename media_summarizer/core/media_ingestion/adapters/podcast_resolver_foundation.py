@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from media_summarizer.core.media_ingestion.domain import SourcePlatform
+from media_summarizer.core.services.media_identity import spotify_path_segments
 
 DEFAULT_PODCAST_RESOLUTION_PENDING_MESSAGE = (
     "Podcast URL accepted. Resolution is pending."
@@ -323,7 +324,7 @@ def _normalize_spotify(
     scheme: str,
     path: str,
 ) -> tuple[str, str, str, Dict[str, str]]:
-    segments = [segment for segment in path.split("/") if segment]
+    segments = spotify_path_segments(path)
     if len(segments) < 2 or segments[0] not in {"episode", "show"}:
         raise ValueError("Unsupported Spotify podcast URL format.")
 

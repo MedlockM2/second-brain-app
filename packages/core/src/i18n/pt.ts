@@ -242,7 +242,8 @@ export const pt: Catalog = {
   "error.mediaNotFound": "Este item não foi encontrado ou já não está disponível.",
   "error.artifactNotFound": "Este conteúdo gerado não foi encontrado ou já não está disponível.",
   "error.invalidUrl": "Esta ligação é inválida. Tente outro URL.",
-  "error.unsupportedUrl": "Esta ligação ainda não é suportada. Tente outra fonte.",
+  "error.unsupportedUrl":
+    "Esta ligação não é suportada. Ligações suportadas: episódios de podcast, vídeos do YouTube e TikTok, publicações do Instagram e X, artigos web e ficheiros de áudio.",
   "error.validation": "Preencha todos os campos obrigatórios.",
   "error.rateLimited": "Demasiados pedidos. Aguarde um momento e tente novamente.",
   "error.conflict": "Esta ação está em conflito com dados existentes. Atualize e tente novamente.",

@@ -240,7 +240,8 @@ export const ja: Catalog = {
   "error.mediaNotFound": "このメディアは見つからないか、すでに利用できません。",
   "error.artifactNotFound": "この生成コンテンツは見つからないか、すでに利用できません。",
   "error.invalidUrl": "このリンクは無効です。別の URL をお試しください。",
-  "error.unsupportedUrl": "このリンクはまだ対応していません。別のソースをお試しください。",
+  "error.unsupportedUrl":
+    "このリンクには対応していません。対応しているリンク：ポッドキャストのエピソード、YouTube・TikTok の動画、Instagram・X の投稿、Web 記事、音声ファイル。",
   "error.validation": "必須項目をすべて入力してください。",
   "error.rateLimited": "リクエストが多すぎます。少し待ってからもう一度お試しください。",
   "error.conflict": "この操作は既存のデータと競合します。更新してからもう一度お試しください。",
