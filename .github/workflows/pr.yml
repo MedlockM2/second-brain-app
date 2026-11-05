@@ -177,7 +177,7 @@ jobs:
       # command that does work on a bare module, and it is where most of the code is.
       - name: Validate every root and the shared module
         run: |
-          for ROOT in envs/dev envs/prod envs/staging shared modules/platform; do
+          for ROOT in envs/dev envs/prod envs/staging shared modules/platform modules/web_certificate; do
             echo "::group::$ROOT"
             terraform -chdir="infrastructure/terraform/$ROOT" init -backend=false -input=false
             terraform -chdir="infrastructure/terraform/$ROOT" validate

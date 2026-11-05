@@ -47,6 +47,11 @@ data "terraform_remote_state" "shared" {
 module "platform" {
   source = "../../modules/platform"
 
+  web_public_domain   = var.web_public_domain
+  web_public_zone_id  = var.web_public_zone_id
+  web_certificate_arn = module.web_certificate.certificate_arn
+  web_connect_origins = var.web_connect_origins
+
   cognito_google     = var.cognito_google
   cognito_apple      = var.cognito_apple
   environment        = "dev" # literal #2
@@ -55,7 +60,7 @@ module "platform" {
   # The web app's local Vite server until app.<domain> exists (task-443, task-445).
   # Its session does not survive a reload until then: the refresh cookie is set by
   # the execute-api host, a third party to localhost (task-473).
-  web_app_origin = "http://localhost:5173"
+  web_app_origin = var.web_public_domain == "" ? "http://localhost:5173" : "https://app.${var.web_public_domain}"
 
   # dev hosts the beta, so its alarms are on (≈ $3.30/mo measured): a suspended
   # provider, a full loss reserve or an approached operator ceiling must reach

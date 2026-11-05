@@ -1,7 +1,8 @@
 
 # Media Summarizer platform module.
 #
-# Every AWS resource of the application lives here, parameterised by
+# Application resources live here (the us-east-1 viewer certificate is isolated
+# in the sibling web_certificate module), parameterised by
 # var.environment. This module deliberately declares NO backend and NO provider
 # block: it can only be consumed from one of the environment roots in
 # ../../envs/<env>/, each of which pins a literal backend key and a literal

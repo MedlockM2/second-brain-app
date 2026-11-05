@@ -593,3 +593,11 @@ must not be able to mint an artifact that never went through dev.
 | `scripts/tf_plan_guard.sh` | Refuses a plan that crosses environments or destroys stateful resources |
 | `scripts/bootstrap_tf_backend.sh` | Creates a new account's state bucket + lock table (chicken-and-egg, so not Terraform) |
 | `scripts/dynamo_copy_env.py` | Copies table contents between environment suffixes (same account only) |
+
+## Hébergement app/www
+
+Les paramètres de domaine restent vides par défaut. Le module ACM régional,
+l’OAC/CloudFront app, les alias sur le www existant et le raccordement DNS sont
+décrits dans [docs/WEB_HOSTING.md](../../docs/WEB_HOSTING.md). La construction du
+paquet, son dépôt, les invalidations et le rollback suivent
+[docs/WEB_RELEASE.md](../../docs/WEB_RELEASE.md). La mise en service est propriétaire.

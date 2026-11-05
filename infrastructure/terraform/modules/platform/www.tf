@@ -7,9 +7,9 @@
 # pre-beta store review needs a public privacy policy URL, and no store rule
 # requires an owned domain. Until task-443 buys one, the page is served on the
 # distribution's default `*.cloudfront.net` name with CloudFront's own
-# certificate. task-471 later adds the `www.<domaine>` alias, its us-east-1
-# certificate and the Route 53 record to this same distribution, so the
-# provisional URL keeps working after the switch.
+# certificate. web_hosting.tf adds the optional `www` alias and Route 53 record
+# to this same distribution, using the us-east-1 viewer certificate supplied
+# by the root. The provisional CloudFront URL keeps working after the switch.
 #
 # The bucket stays private: CloudFront reads it through Origin Access Control,
 # and nothing else can. Content is uploaded by scripts/publish_legal_site.sh,
@@ -96,6 +96,7 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 }
 
 resource "aws_cloudfront_distribution" "www" {
+  aliases         = local.web_domains_enabled ? ["www.${var.web_public_domain}"] : []
   enabled         = true
   comment         = "${var.project_name}-www${local.suffix}"
   is_ipv6_enabled = true
@@ -125,7 +126,10 @@ resource "aws_cloudfront_distribution" "www" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = !local.web_domains_enabled
+    acm_certificate_arn            = local.web_domains_enabled ? var.web_certificate_arn : null
+    ssl_support_method             = local.web_domains_enabled ? "sni-only" : null
+    minimum_protocol_version       = local.web_domains_enabled ? "TLSv1.2_2021" : "TLSv1"
   }
 
   tags = {
@@ -171,6 +175,6 @@ output "www_distribution_id" {
 }
 
 output "www_base_url" {
-  description = "Public base URL of the static pages until task-471 adds the www.<domaine> alias."
-  value       = "https://${aws_cloudfront_distribution.www.domain_name}"
+  description = "Public base URL: configured www alias, otherwise the existing CloudFront name."
+  value       = local.web_domains_enabled ? "https://www.${var.web_public_domain}" : "https://${aws_cloudfront_distribution.www.domain_name}"
 }

@@ -170,7 +170,7 @@ jobs:
       # syntax-checked without any prod identity being involved.
       - name: Validate every root and the shared module
         run: |
-          for ROOT in envs/dev envs/prod envs/staging shared modules/platform; do
+          for ROOT in envs/dev envs/prod envs/staging shared modules/platform modules/web_certificate; do
             echo "::group::$ROOT"
             terraform -chdir="infrastructure/terraform/$ROOT" init -backend=false -input=false
             terraform -chdir="infrastructure/terraform/$ROOT" validate
