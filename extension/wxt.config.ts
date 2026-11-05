@@ -19,14 +19,23 @@ import { loadEnv } from "vite";
  * Build-time configuration, from `.env` files (see `.env.example`):
  * VITE_API_BASE_URL and VITE_WEB_APP_ORIGIN.
  */
-const env = loadEnv(process.env.NODE_ENV === "development" ? "development" : "production", __dirname, "VITE_");
-
-function origin(name: string): string {
-  const value = (env[name] ?? "").replace(/\/+$/, "");
-  if (!/^https?:\/\/[a-z0-9.-]+(:[0-9]+)?$/.test(value)) {
-    throw new Error(`${name} must be an origin such as https://app.example.com (extension/.env.example)`);
+function origin(name: string, mode: string): string {
+  const env = loadEnv(mode, __dirname, "VITE_");
+  if (Object.keys(env).some((key) => !["VITE_API_BASE_URL", "VITE_WEB_APP_ORIGIN"].includes(key))) {
+    throw new Error("Only the two documented public origins belong in extension VITE_* settings.");
   }
-  return value;
+  const value = (env[name] ?? "").replace(/\/+$/, "");
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error(`${name} must be an absolute origin.`); }
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password ||
+    url.pathname !== "/" || url.search || url.hash) throw new Error(`${name} must be an origin without credentials or path.`);
+  if (mode === "distribution" && (url.protocol !== "https:" ||
+    /^(localhost|127\.|\[::1\])/.test(url.hostname) ||
+    /(^|\.)(invalid|test|example|localhost)$/.test(url.hostname) ||
+    /(^|\.)example\.(com|net|org)$/.test(url.hostname))) {
+    throw new Error(`${name} must be the public HTTPS origin chosen for distribution.`);
+  }
+  return url.origin;
 }
 
 /** A match pattern for an origin. Match patterns carry no port; the exact origin,
@@ -46,9 +55,9 @@ export default defineConfig({
       alias: { "@media-summarizer/core": path.resolve(__dirname, "../packages/core/src") },
     },
   }),
-  manifest: ({ browser }) => {
-    const api = origin("VITE_API_BASE_URL");
-    const webApp = origin("VITE_WEB_APP_ORIGIN");
+  manifest: ({ browser, mode }) => {
+    const api = origin("VITE_API_BASE_URL", mode);
+    const webApp = origin("VITE_WEB_APP_ORIGIN", mode);
     return {
       ...(browser === "firefox" ? {
         browser_specific_settings: {

@@ -65,11 +65,13 @@ remplace cette vérification.
 
 ## Session et permissions
 
-Le refresh token propre à l'extension est dans `storage.local`, fermé aux scripts
+Le grant de rafraîchissement stable propre à l'extension est dans `storage.local`, fermé aux scripts
 de contenu par `setAccessLevel(TRUSTED_CONTEXTS)` sur Chromium. Firefox ne propose
 pas cette restriction locale : l'extension ne contient aucun script de contenu. L'access token est dans
-`storage.session` et disparaît au redémarrage du navigateur. Le serveur décide de
-l'expiration (90 jours d'inactivité, plafond d'un an) ; un 401 de refresh efface
+`storage.session` et disparaît au redémarrage du navigateur. Le backend renouvelle le délai d’inactivité du même grant à chaque `/refresh` et
+émet un nouvel access token de cinq minutes. Il ne fait pas tourner un jeton à
+usage unique : aucune fenêtre de rejeu de 60 secondes n’existe sur ce parcours.
+Le serveur décide de l’expiration (90 jours d’inactivité, plafond d’un an) ; un 401 de refresh efface
 les jetons et demande de relier l'extension. « Se déconnecter » révoque la lignée
 par `/api/auth/logout`. Si le réseau empêche la révocation, la popup affiche une
 erreur et conserve la session pour réessayer ; Mon compte permet aussi de révoquer.
@@ -95,20 +97,26 @@ Les icônes se régénèrent avec `python3 scripts/make_icons.py` (Pillow).
 
 ## Même zip pour les deux stores
 
-Depuis `extension/`, avec les origines HTTPS définitives dans `.env.local` :
+Depuis `extension/`, avec `EXT_API_ORIGIN` et `EXT_WEB_ORIGIN` renseignées par le
+propriétaire avec les origines publiques de la livraison :
 
 ```sh
 npm ci
 npm run typecheck
 npm run lint
-npm run zip
+npm run zip -- --api "$EXT_API_ORIGIN" --web "$EXT_WEB_ORIGIN"
 ```
 
-Livrable : `.output/deepn-extension-1.0.0-chrome.zip` (version de `package.json`).
+Livrable vérifié : `.output/delivery/distribution/<configuration>/deepn-extension-1.0.0-chrome.zip`,
+avec `delivery.json` et son SHA-256 (version de `package.json`). Les sorties WXT brutes
+à la racine de `.output/` ne portent aucune preuve de distribution.
 Téléverser **ce même fichier** sur Chrome Web Store et Microsoft Edge Add-ons,
 sans reconstruire pour Edge. Incrémenter la version dans `package.json` avant
 chaque mise à jour, puis actualiser le lockfile autonome avec npm. Vérifier le
-manifeste : origines définitives, aucun localhost ni hôte dev pour la publication.
+manifeste : origines choisies, aucun localhost ni nom d’exemple. **L’API AWS dev
+est autorisée pendant la bêta**, si le propriétaire la retient. L’origine web doit
+être la véritable origine HTTPS publique ; le nom d’environnement de l’API ne
+décide pas à lui seul de la validité d’une livraison.
 
 Sur Chrome Web Store, créer la fiche développeur puis importer le zip. Compléter
 la description et les captures, les déclarations de données et les justifications
@@ -172,21 +180,22 @@ Depuis `extension/`, avec les origines de la version à livrer :
 npm ci
 npm run typecheck
 npm run lint
-npm run sources:firefox -- --api https://api.example.com --web https://app.example.com
+npm run zip:firefox -- --api "$EXT_API_ORIGIN" --web "$EXT_WEB_ORIGIN"
 ```
 
-Remplacer les deux origines exemple par les origines définitives avant publication.
-Le script construit **ensemble** le paquet `.output/deepn-extension-1.0.0-firefox.zip`
-et son archive `.output/deepn-extension-1.0.0-firefox-sources.zip`. Il inclut les
+Le wrapper construit et inspecte **ensemble** le paquet Firefox et son archive
+de sources, puis les place dans `.output/delivery/distribution/<configuration>/`
+avec `delivery.json` et les SHA-256. Les variables désignent les origines publiques
+choisies pour cette livraison, dont l’API dev est une option valide en bêta. Il inclut les
 sources de l'extension et de `packages/core/src`, le lockfile autonome, les assets,
-une `.env.production` ne contenant que les deux origines publiques et un README
+une `.env` générée ne contenant que les deux origines publiques et un README
 racine qui enregistre l'OS, les versions exactes Node/npm/Python et les commandes.
 Il exclut les fichiers d'environnement locaux, les dépendances installées, les
 builds et les autres applications. WXT ne produit pas son archive automatique,
 qui ne contient pas les sources partagées hors de `extension/`.
 
 Avant soumission, extraire l'archive de sources dans un dossier vide et suivre
-son README : `cd extension`, `npm ci`, `npm run zip:firefox`. Comparer les fichiers
+son README : `cd extension`, `npm ci`, puis la commande WXT avec le mode indiqué. Comparer les fichiers
 extraits du zip reconstruit avec ceux du zip à soumettre : aucun écart de contenu
 n'est permis (les métadonnées ZIP peuvent différer). Outils open source seulement ;
 le reviewer n'a besoin d'aucun compte Deepn ni de credentials pour reconstruire.
@@ -231,3 +240,34 @@ a ni journal ni historique. Pour reprendre, sélectionner à nouveau le texte et
 utiliser le menu contextuel : aucune sauvegarde n'est rejouée automatiquement.
 La génération des `_locales` réutilise les phrases des catalogues de core ; elle
 échoue si une traduction attendue manque.
+
+## Trois usages explicites du packaging
+
+Les scripts de livraison demandent les deux origines en arguments. Ils suppriment
+les `VITE_*` héritées du processus, valident les valeurs choisies, puis vérifient
+la présence de ces origines dans le bundle et leur concordance avec le manifeste.
+Les permissions restent `activeTab`, `contextMenus`, `storage` et le seul hôte API.
+Un reçu ne paraît qu’après tous les contrôles ; un échec retire l’ancien reçu de
+cette configuration pour qu’il ne qualifie pas un paquet partiellement remplacé.
+
+| Usage | Commande depuis `extension/` | Destination / garde |
+|---|---|---|
+| Local | `python3 scripts/package_release.py --purpose local --target all --api http://127.0.0.1:9 --web http://localhost:5173` | `.output/delivery/local/` ; non distribuable |
+| Validation technique CI | `npm run package:ci -- --api https://api.deepn-validation.invalid --web https://app.deepn-validation.invalid` | `.output/delivery/validation/` ; noms réservés `.invalid`, aucun service réel, **ne pas soumettre** |
+| Chrome et Edge | `npm run zip -- --api "$EXT_API_ORIGIN" --web "$EXT_WEB_ORIGIN"` | `.output/delivery/distribution/` ; HTTPS public obligatoire, même ZIP pour les deux stores |
+| Firefox et sources | `npm run zip:firefox -- --api "$EXT_API_ORIGIN" --web "$EXT_WEB_ORIGIN"` | même garde, ZIP Firefox et sources inspectées ensemble |
+
+`npm run build` et `build:firefox` restent des compilations de développement,
+indépendamment du nom `production` du mode par défaut WXT : aucun reçu ne les
+annonce prêtes à soumettre. Le mode `distribution` refuse aussi directement les
+origines loopback ou réservées. Le contrôle est syntaxique et vérifie le paquet ;
+le propriétaire valide l’existence des origines, CORS et les parcours réels dans
+TASK-592/593/598. Il n’exécute aucun achat ni soumission aux stores.
+
+L’archive Firefox utilise l’allow-list du script de sources existant. Aucun `.env`
+local n’est copié : le seul fichier d’environnement archivé est généré depuis les
+deux arguments publics. La validation contrôle ce contenu exact et exclut chemins
+privés, clés, dépendances et sorties générées. Le README de reconstruction indique
+le mode, les versions d’outillage et les origines ; il marque une archive CI comme
+validation technique. `npm ci` dans les sources extraites reste autonome et ne
+requiert aucun accès Deepn.

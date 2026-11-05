@@ -3,7 +3,7 @@ import { responseError } from "./errors";
 import { API_BASE_URL } from "./config";
 
 /**
- * The extension's session (task-485): the refresh token of its own
+ * The extension's session: the stable refresh grant of its own
  * `browser_extension` lineage, renewed at every use, dead after 90 days without
  * one and a year after the pairing at the latest.
  *
@@ -11,9 +11,9 @@ import { API_BASE_URL } from "./config";
  *   restart), the access token in `storage.session` (memory, gone with the
  *   browser). Both are closed to content scripts — the extension has none, but
  *   the access level says so rather than relying on it.
- * - Every rotation goes through `refresh()`. The popup and the background are
- *   separate contexts and may race on the same single-use token; the API's
- *   60-second replay window answers both with the same pair.
+ * - `refresh()` renews that grant’s idle deadline and gets a new five-minute
+ *   access token. The grant itself stays the same; popup/background requests
+ *   do not rotate a single-use token. `inflight` only coalesces local calls.
  * - A 401 on /refresh means the lineage is over (expired or unlinked): the
  *   tokens are dropped and `expired` is set, so the popup asks to pair again.
  */
@@ -26,7 +26,7 @@ type StoredAccess = { token: string; expiresAtMs: number };
 const REFRESH_KEY = "refresh";
 const EXPIRED_KEY = "expired";
 const ACCESS_KEY = "access";
-/** A token is rotated this long before it expires. */
+/** Obtain a fresh access token this long before it expires. */
 const BUFFER_MS = 30_000;
 
 export class NotLinkedError extends Error {
@@ -54,7 +54,7 @@ async function readRefresh(): Promise<StoredRefresh | null> {
   return (stored[REFRESH_KEY] as StoredRefresh | undefined) ?? null;
 }
 
-/** Keep the refresh token a pairing handed over, and forget any old session. */
+/** Keep the stable grant handed over by pairing, and forget the old session. */
 export async function savePairing(refreshToken: string): Promise<void> {
   await prepareStorage();
   await browser.storage.local.set({ [REFRESH_KEY]: { token: refreshToken } satisfies StoredRefresh });
@@ -121,7 +121,7 @@ export async function accessToken(): Promise<string> {
 export async function signOut(): Promise<void> {
   try {
     const bearer = await accessToken();
-    // accessToken may rotate it: logout must present the current head.
+    // Logout revokes the same stable grant used to renew access tokens.
     const current = await readRefresh();
     if (current) {
       const response = await fetch(`${API_BASE_URL}/api/auth/logout`, {

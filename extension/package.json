@@ -7,13 +7,14 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
-    "zip": "wxt zip",
+    "zip": "python3 scripts/package_release.py --purpose distribution --target chromium",
     "postinstall": "wxt prepare",
     "typecheck": "wxt prepare && tsc --noEmit",
-    "lint": "eslint entrypoints lib --ext .ts",
+    "lint": "eslint entrypoints lib wxt.config.ts --ext .ts",
     "build:firefox": "wxt build -b firefox --mv3",
-    "zip:firefox": "wxt zip -b firefox --mv3",
-    "sources:firefox": "python3 scripts/firefox_sources.py"
+    "zip:firefox": "python3 scripts/package_release.py --purpose distribution --target firefox",
+    "sources:firefox": "python3 scripts/firefox_sources.py",
+    "package:ci": "python3 scripts/package_release.py --purpose validation --target all"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.270",

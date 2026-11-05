@@ -20,7 +20,7 @@ async function authed(path: string, init: RequestInit = {}): Promise<Response> {
       headers: { "Content-Type": "application/json", ...init.headers, Authorization: `Bearer ${token}` },
     });
   const response = await send(await accessToken());
-  // Refused mid-flight (an expiry read as still valid): one rotation, one replay.
+  // Refused mid-flight (an expiry read as still valid): one access renewal, one replay.
   return response.status === 401 ? send(await refresh()) : response;
 }
 

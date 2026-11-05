@@ -6,6 +6,7 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   plugins: ['@typescript-eslint'],
   env: { browser: true, es2022: true, webextensions: true },
+  overrides: [{ files: ['wxt.config.ts'], env: { node: true } }],
   ignorePatterns: ['.wxt', '.output'],
   rules: {
     'no-restricted-imports': [
