@@ -7,7 +7,7 @@ status: To Do
 assignee:
   - owner
 created_date: '2026-10-10 15:13'
-updated_date: '2026-10-29 13:31'
+updated_date: '2026-11-04 19:30'
 labels:
   - v1-launch
   - release
@@ -16,12 +16,21 @@ dependencies:
   - TASK-429
   - TASK-440
   - TASK-567
+references:
+  - TASK-592
+  - TASK-593
+  - TASK-591
+  - TASK-599
+  - TASK-600
+  - TASK-598
+  - TASK-601
 documentation:
   - docs/V1_LAUNCH_PLAN.md
   - docs/research/pricing-challenge/README.md
   - docs/research/task-547-beta-budget-control/README.md
 priority: high
 ordinal: 48000
+dispatchable: false
 ---
 
 ## Description
@@ -49,6 +58,14 @@ Vérifier sur comptes nouveaux et existants l’accès aux fonctionnalités, le 
 ## Exécution propriétaire et limites
 
 Exécution owner-only, dispatchable: false : les dates, opérations de configuration distante, appareils et release appartiennent à l’owner. Les critères portent sur le compte rendu et les décisions documentées ; ils ne deviennent pas des gates de déploiement pour les agents d’implémentation. Aucun nouveau test automatisé, aucune migration de fixtures, aucune compatibilité avec l’ancien comptage remplacé et aucune facturation commerciale à crédits. Ne pas toucher au sync Spotify, à la livraison email, à la logique de génération des quiz ou à Whisper. Aucun secret, identité de compte, identifiant de support ou payload brut dans les fichiers suivis.
+
+## Périmètre web et extensions — audit du 2026-11-04
+
+L’ouverture du périmètre mobile + web attend la mise en service TASK-591 et les recettes web rattachées à TASK-440. L’autorisation historique d’une bêta mobile minimale sur dev sans domaine ne vaut pas validation de ce périmètre complet. Acheter le domaine ne décide pas d’ouvrir prod. Les publications Chrome/Edge (TASK-592) et Firefox (TASK-593) sont suivies séparément : le go/no-go consigne explicitement les navigateurs distribués, les reviews en attente et tout report, sans assimiler code livré à extension publiée. La décision et la date d’ouverture restent au propriétaire.
+
+## Preuves agent et décision propriétaire
+
+Les recettes web TASK-440.1 à TASK-440.4 et la recette de développement extension TASK-598 sont exécutées par des agents. Les publications TASK-592/593 restent des opérations propriétaire ; leurs recettes après distribution sont TASK-599 (Chrome/Edge) et TASK-600 (Firefox). Pour chaque navigateur proposé aux testeurs, examiner à la fois sa disponibilité et le rapport de recette associé. Si un canal ou scénario est reporté, en consigner explicitement le périmètre et la raison, sans déclarer le parcours validé. Le go/no-go et les dates ne sont pas délégués.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -57,4 +74,5 @@ Exécution owner-only, dispatchable: false : les dates, opérations de configura
 - [ ] #2 Le compte rendu décrit la configuration et les environnements relus ou ouverts, avec la formule autonome à 5 EUR/compte/mois sans report et la référence au contrôle validé ; aucune identité de compte ni autre contenu de configuration n’est publié.
 - [ ] #3 Les observations sur comptes nouveaux et existants décrivent accès aux fonctionnalités, pourcentage et recharge, refus lisibles, masquage des achats, accès aux contenus disponibles et collecte de consommation, après la validation de task-440.
 - [ ] #4 Les modalités d’accès des testeurs, la collecte des retours et le bilan d’usage attendu en fin de bêta sont documentés sans identité de testeur ; les 5 EUR sont assumés suffisants pour cette phase sans nouvelle calibration des offres commerciales.
+- [ ] #5 Le compte rendu distingue publication et recette agent des navigateurs proposés, référence les rapports web et extension pertinents et consigne explicitement limites/reports avant la décision propriétaire d’ouverture.
 <!-- AC:END -->
