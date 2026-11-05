@@ -271,3 +271,14 @@ privés, clés, dépendances et sorties générées. Le README de reconstruction
 le mode, les versions d’outillage et les origines ; il marque une archive CI comme
 validation technique. `npm ci` dans les sources extraites reste autonome et ne
 requiert aucun accès Deepn.
+
+## Contrôles CI
+
+PR et main exécutent le même job extension, sans filtre de chemin : une modification
+de `packages/core` est donc aussi contrôlée. Ce job utilise Node 22, Python 3.10,
+`npm ci` dans `extension/` avec son lockfile autonome, puis `typecheck`, `lint` et
+`package:ci` pour les deux cibles et les sources Firefox. Les origines explicites
+`api.deepn-validation.invalid` / `app.deepn-validation.invalid` désignent uniquement
+la compilation. Aucun appel API, accès store, secret, publication ou test automatisé
+n’intervient. Les reçus restent sous `delivery/validation`, non distribuables.
+Les apps gardent leur installation racine, leurs checks et leur Node distincts.

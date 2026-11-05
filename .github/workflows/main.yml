@@ -47,6 +47,45 @@ jobs:
       - name: Build web (compilation configuration only)
         run: npm run build --workspace web -- --mode ci
 
+  # Standalone WXT lockfile; shared core changes are checked on every run too.
+  extension:
+    name: Extension (lint + typecheck + Chromium/Firefox packaging)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+    env:
+      # Reserved .invalid names: compilation/packaging validation, no live API.
+      VITE_API_BASE_URL: https://api.deepn-validation.invalid
+      VITE_WEB_APP_ORIGIN: https://app.deepn-validation.invalid
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install standalone extension dependencies
+        run: npm ci
+
+      - name: Run extension typecheck
+        run: npm run typecheck
+
+      - name: Run extension lint
+        run: npm run lint
+
+      - name: Inspect validation packages (not for store submission)
+        run: npm run package:ci -- --api "$VITE_API_BASE_URL" --web "$VITE_WEB_APP_ORIGIN"
+
   backend:
     name: Backend (lint + typecheck)
     runs-on: ubuntu-latest
