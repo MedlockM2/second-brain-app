@@ -96,12 +96,13 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 }
 
 resource "aws_cloudfront_distribution" "www" {
-  aliases         = local.web_domains_enabled ? ["www.${var.web_public_domain}"] : []
-  enabled         = true
-  comment         = "${var.project_name}-www${local.suffix}"
-  is_ipv6_enabled = true
-  http_version    = "http2and3"
-  price_class     = "PriceClass_100"
+  default_root_object = "index.html"
+  aliases             = local.web_domains_enabled ? ["www.${var.web_public_domain}"] : []
+  enabled             = true
+  comment             = "${var.project_name}-www${local.suffix}"
+  is_ipv6_enabled     = true
+  http_version        = "http2and3"
+  price_class         = "PriceClass_100"
 
   origin {
     domain_name              = aws_s3_bucket.www.bucket_regional_domain_name

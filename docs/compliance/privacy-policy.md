@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-11-03
+**Last updated:** 2026-11-05
 **Effective date:** 2026-11-03
 
 ## 1. Introduction
@@ -23,10 +23,11 @@ Contact for any privacy question or request: **deepn.support@gmail.com**.
 - **Links you share** - web articles, podcast episodes, videos and posts (for example from YouTube, TikTok, Instagram or X), and podcast or RSS feeds you follow
 - **Files you share or import** - documents (such as PDFs), images, photos you take with the camera to import a page, and audio files
 - **Audio notes you record** - when you open the recorder and allow microphone access, you can record a spoken note. Only recordings you choose to save are uploaded for transcription; discarding a recording sends no audio to our servers
-- **Text you share** - text passages you send to the app
+- **Text you share** - text passages you send to the app, including the source address when you save a browser selection
+- **Browser extension** - on your explicit action, the extension reads the current tab’s address and title locally. It sends the address you choose to save, or the text you select with its source address, and your chosen folder. It does not read the full page or your browsing history
 - **Chat messages** - the questions you ask the in-app assistant and its answers
 - **Organisation** - folders, review settings, digest settings and your time zone
-- **Feedback and bug reports** - the subject and description you write, any file you choose to attach, and the app version and platform (iOS or Android)
+- **Feedback and bug reports** - the subject and description you write, any file you choose to attach, and the app version and platform or browser information attached to the report
 
 ### 2.3 Content We Generate for You
 
@@ -37,7 +38,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 - **Crash, error and performance reports** - the error, where in the app it happened, device model, operating system and app version, the screens and in-app events just before it, and the timing of network requests (addresses without their parameters). They include neither your IP address nor your account identifier
 - **Server logs** - our servers record each request, including your IP address, the time and the endpoint called, to operate and secure the Service
 - **Continue learning** - the identifiers of the artifacts and conversations you open or start, and the time of your last activity on each, to let you resume them across devices
-- **Usage accounting** - how many minutes and pages of processing your account used, to apply plan limits
+- **Usage accounting** - processing operations, capacity reservations and their final usage, including token counts, audio duration and document units needed to enforce processing limits
 - **Push notification token** - only if you allow notifications (section 4.5)
 
 ### 2.5 What We Do NOT Collect
@@ -58,7 +59,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 | Resuming your learning | Artifact and conversation identifiers, last activity time |
 | Search within your library | Your content and generated content |
 | Notifications (digests, content ready) | Push notification token, time zone |
-| Subscriptions and plan limits | Purchase status, usage accounting |
+| Access and processing limits | Beta access or purchase status, usage accounting |
 | Support and feedback | Email, messages and reports you send us |
 | Stability and security | Crash reports, server logs |
 
@@ -110,7 +111,7 @@ Notifications are optional. If you allow them, we send two kinds: digest alerts 
 
 - All data in transit is encrypted (TLS 1.2 or higher)
 - Data at rest is encrypted with AWS-managed keys
-- Sign-in tokens are stored on your device in the platform's secure storage (iOS Keychain / Android Keystore)
+- On mobile, sign-in tokens are stored in the platform’s secure storage (iOS Keychain / Android Keystore). On the web, the access token stays in memory and the refresh session uses an HttpOnly cookie. In the browser extension, its own refresh grant is held in extension-local storage and its short-lived access token in session storage; revoking that extension ends its access
 - Access to our infrastructure is restricted to authorised accounts and recorded by AWS
 
 ## 6. Data Retention
