@@ -257,6 +257,9 @@ cette configuration pour qu’il ne qualifie pas un paquet partiellement remplac
 | Chrome et Edge | `npm run zip -- --api "$EXT_API_ORIGIN" --web "$EXT_WEB_ORIGIN"` | `.output/delivery/distribution/` ; HTTPS public obligatoire, même ZIP pour les deux stores |
 | Firefox et sources | `npm run zip:firefox -- --api "$EXT_API_ORIGIN" --web "$EXT_WEB_ORIGIN"` | même garde, ZIP Firefox et sources inspectées ensemble |
 
+Le but de livraison `local` utilise le mode WXT/Vite `development` : le nom de
+mode `local` est réservé par Vite au suffixe des fichiers d’environnement.
+
 `npm run build` et `build:firefox` restent des compilations de développement,
 indépendamment du nom `production` du mode par défaut WXT : aucun reçu ne les
 annonce prêtes à soumettre. Le mode `distribution` refuse aussi directement les

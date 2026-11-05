@@ -24,7 +24,7 @@ try:
     api, web = origin(args.api, args.purpose), origin(args.web, args.purpose)
 except ValueError as error:
     parser.error(str(error))
-mode = {"local": "local", "validation": "ci", "distribution": "distribution"}[args.purpose]
+mode = {"local": "development", "validation": "ci", "distribution": "distribution"}[args.purpose]
 env = {key: value for key, value in os.environ.items() if not key.startswith("VITE_")}
 env.update(VITE_API_BASE_URL=api, VITE_WEB_APP_ORIGIN=web)
 version = json.loads((EXTENSION / "package.json").read_text())["version"]

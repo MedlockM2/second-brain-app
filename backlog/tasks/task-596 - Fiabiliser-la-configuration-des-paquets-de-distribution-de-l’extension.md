@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-11-04 19:16'
-updated_date: '2026-11-05 08:57'
+updated_date: '2026-11-05 12:54'
 labels:
   - web
   - v1-launch
@@ -51,6 +51,8 @@ Contraintes : aucun nouveau test automatisé. Ne pas modifier le sync Spotify, l
 2. Ajouter une commande de packaging explicite qui construit puis inspecte ZIP, manifeste et bundle, et produit un reçu distinct pour validation/distribution ; garder le même ZIP Chromium pour Chrome/Edge.
 3. Intégrer le script existant de sources Firefox sans récursion, en générant seulement le fichier d’origines publiques choisi et en contrôlant l’archive source.
 4. Corriger les commentaires et le README sur le grant stable renouvelé, documenter les commandes et exécuter typecheck/lint/packaging de validation sous Node 22. Aucun appel backend/store et aucun test automatisé.
+
+Correction après essai concret : utiliser development pour le but de packaging local et pour la reconstruction Firefox correspondante, conserver ci/distribution et vérifier effectivement la commande locale documentée.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -61,10 +63,16 @@ Node 22.23.3 : typecheck, lint et packaging de validation Chromium/Firefox réus
 Reconstruction opérationnelle : archive Firefox extraite dans un dossier temporaire isolé, npm ci autonome puis WXT zip en mode ci réussis ; tous les fichiers extraits du paquet reconstruit sont identiques octet par octet. Les archives finales ont été régénérées après les derniers ajustements de documentation/outillage. Aucune publication, compte ou API réelle requis. Aucun test automatisé ajouté.
 
 Les commentaires et le README décrivent le grant stable réellement renvoyé par la branche extension de POST /api/auth/refresh : renouvellement de son délai et nouveau bearer de cinq minutes, sans rotation/rejeu ancien. L’API dev reste un choix valide du propriétaire pour la bêta ; seule l’origine publique web réelle convient à la distribution.
+
+Reprise de validation navigateur : la commande locale échoue avant build car Vite réserve le nom de mode local pour le suffixe .local des fichiers env. Les paquets ci précédemment vérifiés n’exerçaient pas cette branche. Corriger la correspondance du but local vers le mode development, puis reconstruire les paquets locaux avant le chargement Chrome.
+
+Correctif livré après reprise : le but local utilise le mode WXT/Vite development (local est réservé par Vite). La commande de packaging local documentée a maintenant été réellement exécutée pour Chromium et Firefox, avec le backend AWS dev et l’origine frontend localhost, sans appels API produit. Les ZIP et l’archive de sources ont passé leurs inspections ; Ruff propre. Aucun parcours d’extension dans le navigateur n’est encore déclaré validé par ce rebuild.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Sépare local, validation CI et distribution par des commandes de packaging explicites. Les ZIP vérifiés et les sources Firefox reçoivent un reçu lié aux origines choisies et aux empreintes ; une distribution refuse loopback/exemples et ne copie aucun environnement local. La documentation suit le grant courant. Contrôles Node 22 et reconstruction autonome Firefox réussis.
+
+Correctif de validation locale : supprime le mode Vite interdit local, le remplace par development pour le packaging et la reconstruction Firefox, et documente cette correspondance. Les deux paquets locaux ont été construits et inspectés avec succès.
 <!-- SECTION:FINAL_SUMMARY:END -->

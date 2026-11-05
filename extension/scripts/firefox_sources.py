@@ -15,7 +15,7 @@ ROOT = EXTENSION.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--api", required=True, help="Public API origin used by this release")
 parser.add_argument("--web", required=True, help="Public web app origin used by this release")
-parser.add_argument("--mode", choices=("local", "ci", "distribution"), default="distribution")
+parser.add_argument("--mode", choices=("development", "ci", "distribution"), default="distribution")
 args = parser.parse_args()
 # Generate only the explicitly chosen public values; never copy a local env file.
 purpose = "distribution" if args.mode == "distribution" else "validation"
