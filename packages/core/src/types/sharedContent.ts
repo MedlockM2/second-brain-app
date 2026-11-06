@@ -18,7 +18,24 @@
 import { formatNumber, t } from "../i18n/runtime";
 import { formatUploadSize } from "./upload";
 
-export type SharedContentType = "text" | "audio";
+export type SharedContentType = "text" | "audio" | "conversation";
+
+/**
+ * MIME type the patched iOS share extension gives a text message of a
+ * multi-selection (task-607): each text is written to a file of this type so the
+ * texts and voice notes of a WhatsApp selection reach the app as one ordered list
+ * of files. See `mobile/patches/expo-share-intent+6.1.1.patch`.
+ */
+export const SHARED_MESSAGE_MIME_TYPE = "text/x-shared-message";
+
+/**
+ * One message of a shared selection, in order: a text (the file the extension
+ * wrote it to) or a voice note. Saved together as one media through
+ * `share_type=conversation`.
+ */
+export type SharedConversationItem =
+  | { kind: "text"; uri: string }
+  | { kind: "voice"; file: SharedFileAttachment };
 
 /**
  * Supported audio MIME types for shared audio ingestion.

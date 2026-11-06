@@ -38,8 +38,14 @@ import {
 } from "../lib/quotaError";
 import { UploadService } from "../services/uploadService";
 import type { MediaType } from "@media-summarizer/core/types/media";
-import type { SharedFileAttachment } from "@media-summarizer/core/types/sharedContent";
-import { validateSharedNoteText } from "@media-summarizer/core/types/sharedContent";
+import type {
+  SharedConversationItem,
+  SharedFileAttachment,
+} from "@media-summarizer/core/types/sharedContent";
+import {
+  SHARED_MESSAGE_MIME_TYPE,
+  validateSharedNoteText,
+} from "@media-summarizer/core/types/sharedContent";
 import type { LocalUploadFile } from "@media-summarizer/core/types/upload";
 import {
   classifyUploadFile,
@@ -57,13 +63,21 @@ import {
  * - "file": Document imported from the device (task-264) or shared to the app
  * - "photo": Picture — a camera capture (task-264), a gallery pick, or an image
  *   shared from the system share sheet (a screenshot, task-347)
+ * - "conversation": Several messages selected together in a messaging app — texts
+ *   and voice notes, in order — saved as one media (task-607)
  *
  * The last two split on presentation, not on plumbing: both submit through the
  * upload endpoints, and only a picture is shown as one. Either can start from a
  * gesture inside the app or from a share intent, and both reuse the confirmation
  * screen so every source picks its folder the same way.
  */
-export type ShareContentType = "url" | "text" | "audio" | "file" | "photo";
+export type ShareContentType =
+  | "url"
+  | "text"
+  | "audio"
+  | "file"
+  | "photo"
+  | "conversation";
 
 /**
  * Where an intake came from — a fact about the save, not a branch in its
@@ -106,6 +120,11 @@ export interface ShareIntakeState {
   contentType: ShareContentType;
   /** Audio file attachment (for audio shares) */
   audioFile: SharedFileAttachment | null;
+  /**
+   * The selected messages, in order (for "conversation" shares). Optional so the
+   * other branches stay unchanged: omitting it clears any previous selection.
+   */
+  conversation?: SharedConversationItem[] | null;
   /**
    * The save the accepted submission created — the one a folder picked during
    * processing is applied to. Optional so a fresh intake, written as a whole
@@ -267,6 +286,38 @@ function shareIntentKey(intent: ShareIntent): string {
  * 3. failing both, the first item with a path — kept on purpose, so an
  *    unsupported share reaches its refusal instead of disappearing.
  */
+/**
+ * A selection of messages, when that is what the share is (task-607).
+ *
+ * The patched iOS share extension hands a multi-selection of texts and voice
+ * notes (WhatsApp) over as one ordered list of files, each text written to a file
+ * of type `SHARED_MESSAGE_MIME_TYPE`. Two items or more, all of them texts or
+ * audio, are one conversation saved as one media; anything else is a file share.
+ */
+function selectConversation(
+  files: ShareIntentFile[] | null | undefined,
+): SharedConversationItem[] | null {
+  const items = (files ?? []).filter((file) => Boolean(file?.path));
+  if (items.length < 2) return null;
+  const isMessage = (file: ShareIntentFile) =>
+    file.mimeType === SHARED_MESSAGE_MIME_TYPE ||
+    Boolean(file.mimeType?.startsWith("audio/"));
+  if (!items.every(isMessage)) return null;
+  return items.map((file) =>
+    file.mimeType === SHARED_MESSAGE_MIME_TYPE
+      ? { kind: "text", uri: file.path }
+      : {
+          kind: "voice",
+          file: {
+            uri: file.path,
+            mimeType: file.mimeType,
+            fileName: file.fileName ?? null,
+            fileSize: file.size ?? null,
+          },
+        },
+  );
+}
+
 function selectShareIntentFile(
   files: ShareIntentFile[] | null | undefined,
 ): ShareIntentFile | null {
@@ -314,6 +365,7 @@ function pendingSaveFor(
         ? { mediaType: "audio", labelKey: "audio_note" }
         : { mediaType: "document", labelKey: "document" };
     case "text":
+    case "conversation":
       return { mediaType: "shared_text", labelKey: "shared_note" };
     case "audio":
       return { mediaType: "audio_file", labelKey: "voice_note" };
@@ -574,6 +626,21 @@ export function ShareIntentProvider({
             audioFile: null,
           });
         }
+        mapped = true;
+      } else if (
+        (intent.type === "file" || intent.type === "media") &&
+        selectConversation(intent.files)
+      ) {
+        setIntake({
+          status: "ready",
+          origin: "share",
+          url: null,
+          rawText: null,
+          message: null,
+          contentType: "conversation",
+          audioFile: null,
+          conversation: selectConversation(intent.files),
+        });
         mapped = true;
       } else if (intent.type === "file" || intent.type === "media") {
         const file = selectShareIntentFile(intent.files);
@@ -1082,7 +1149,8 @@ export function ShareIntentProvider({
   ]);
 
   /**
-   * Submit shared content (text or audio) to the backend via ingest-shared-content.
+   * Submit shared content (text, audio or a selection of messages) to the backend
+   * via ingest-shared-content.
    */
   const submitSharedContent = useCallback(async (): Promise<string | null> => {
     if (!isSubmittable(intake.status)) return null;
@@ -1100,7 +1168,9 @@ export function ShareIntentProvider({
     // submission in flight rather than firing its own.
     const isText = intake.contentType === "text" && intake.rawText;
     const isAudio = intake.contentType === "audio" && intake.audioFile;
-    if (!isText && !isAudio) return null;
+    const conversation =
+      intake.contentType === "conversation" ? intake.conversation : null;
+    if (!isText && !isAudio && !conversation?.length) return null;
 
     const folderId = selectedFolder?.id ?? null;
     const reception = trackingRef.current;
@@ -1108,15 +1178,12 @@ export function ShareIntentProvider({
     const pendingSave = beginPendingSave(pendingSaveFor(intake));
 
     try {
-      const response = isText
-        ? await SharedContentService.ingestSharedText(intake.rawText!, {
-            sourceApp: sourceAppFor(intake.origin),
-            folderId,
-          })
-        : await SharedContentService.ingestSharedAudio(intake.audioFile!, {
-            sourceApp: sourceAppFor(intake.origin),
-            folderId,
-          });
+      const options = { sourceApp: sourceAppFor(intake.origin), folderId };
+      const response = conversation?.length
+        ? await SharedContentService.ingestSharedConversation(conversation, options)
+        : isText
+          ? await SharedContentService.ingestSharedText(intake.rawText!, options)
+          : await SharedContentService.ingestSharedAudio(intake.audioFile!, options);
 
       reportSaveCreated(
         reception,

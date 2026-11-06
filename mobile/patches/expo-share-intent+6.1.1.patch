@@ -1,0 +1,268 @@
+diff --git a/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift b/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift
+index 8559651..9f89e8e 100644
+--- a/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift
++++ b/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift
+@@ -14,9 +14,6 @@ class ShareViewController: UIViewController {
+   let shareProtocol: String = "<SCHEME>"
+   let sharedKey: String = "<SCHEME>ShareKey"
+   let hideView: Bool = <HIDEVIEW>
+-  var sharedMedia: [SharedMediaFile] = []
+-  var sharedWebUrl: [WebUrl] = []
+-  var sharedText: [String] = []
+   let imageContentType: String = UTType.image.identifier
+   let videoContentType: String = UTType.movie.identifier
+   let textContentType: String = UTType.text.identifier
+@@ -27,6 +24,19 @@ class ShareViewController: UIViewController {
+   let pdfContentType: String = UTType.pdf.identifier
+   let vcardContentType: String = "public.vcard"
+ 
++  // Second Brain patch (task-607): every attachment is collected by its index, and
++  // the share is written once, after the last one finished -- not by whichever
++  // attachment has the highest index, which kept only its own kind and dropped
++  // the rest (the voice notes of a WhatsApp multi-selection).
++  static let sharedMessageMimeType: String = "text/x-shared-message"
++  enum CollectedItem {
++    case text(String)
++    case webUrl(WebUrl)
++    case media(SharedMediaFile)
++  }
++  var collected: [Int: CollectedItem] = [:]
++  var finishedCount: Int = 0
++
+   override func viewDidLoad() {
+     super.viewDidLoad()
+     if hideView {
+@@ -113,14 +123,7 @@ class ShareViewController: UIViewController {
+       {
+         Task { @MainActor in
+ 
+-          self.sharedText.append(item)
+-          // If this is the last item, save sharedText in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
+-            let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+-            userDefaults?.set(self.sharedText, forKey: self.sharedKey)
+-            userDefaults?.synchronize()
+-            self.redirectToHostApp(type: .text)
+-          }
++          self.collect(content: content, index: index, item: .text(item))
+ 
+         }
+       } else {
+@@ -136,14 +139,9 @@ class ShareViewController: UIViewController {
+       if let item = try! await attachment.loadItem(forTypeIdentifier: self.urlContentType) as? URL {
+         Task { @MainActor in
+ 
+-          self.sharedWebUrl.append(WebUrl(url: item.absoluteString, meta: ""))
+-          // If this is the last item, save sharedText in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
+-            let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+-            userDefaults?.set(self.toData(data: self.sharedWebUrl), forKey: self.sharedKey)
+-            userDefaults?.synchronize()
+-            self.redirectToHostApp(type: .weburl)
+-          }
++          self.collect(
++            content: content, index: index,
++            item: .webUrl(WebUrl(url: item.absoluteString, meta: "")))
+ 
+         }
+       } else {
+@@ -170,15 +168,10 @@ class ShareViewController: UIViewController {
+             NSLog(
+               "[DEBUG] NSExtensionJavaScriptPreprocessingResultsKey \(String(describing: results))"
+             )
+-            self.sharedWebUrl.append(
+-              WebUrl(url: results["baseURI"] as! String, meta: results["meta"] as! String))
+-            // If this is the last item, save sharedText in userDefaults and redirect to host app
+-            if index == (content.attachments?.count)! - 1 {
+-              let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+-              userDefaults?.set(self.toData(data: self.sharedWebUrl), forKey: self.sharedKey)
+-              userDefaults?.synchronize()
+-              self.redirectToHostApp(type: .weburl)
+-            }
++            self.collect(
++              content: content, index: index,
++              item: .webUrl(
++                WebUrl(url: results["baseURI"] as! String, meta: results["meta"] as! String)))
+           } else {
+             NSLog("[ERROR] Cannot load preprocessing results !\(String(describing: content))")
+             self.dismissWithError(
+@@ -303,21 +296,14 @@ class ShareViewController: UIViewController {
+           
+           let copied = self.copyFile(at: safeURL, to: newPath)
+           
+-          if copied {
+-            self.sharedMedia.append(
+-              SharedMediaFile(
+-                path: newPath.absoluteString, thumbnail: nil, fileName: fileName,
+-                fileSize: fileSize, width: pixelWidth, height: pixelHeight, duration: nil,
+-                mimeType: mimeType, type: .image))
+-          }
+-
+-          // If this is the last item, save imagesData in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
+-            let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+-            userDefaults?.set(self.toData(data: self.sharedMedia), forKey: self.sharedKey)
+-            userDefaults?.synchronize()
+-            self.redirectToHostApp(type: .media)
+-          }
++          self.collect(
++            content: content, index: index,
++            item: copied
++              ? CollectedItem.media(
++                SharedMediaFile(
++                  path: newPath.absoluteString, thumbnail: nil, fileName: fileName,
++                  fileSize: fileSize, width: pixelWidth, height: pixelHeight, duration: nil,
++                  mimeType: mimeType, type: .image)) : nil)
+         }
+       } catch {
+         NSLog("[ERROR] handleImages: Exception loading image item: \(error)")
+@@ -386,23 +372,12 @@ class ShareViewController: UIViewController {
+               forSecurityApplicationGroupIdentifier: self.hostAppGroupIdentifier)!
+             .appendingPathComponent(newName)
+           let copied = self.copyFile(at: url, to: newPath)
+-          if copied {
+-            guard
+-              let sharedFile = self.getSharedMediaFile(
+-                forVideo: newPath, fileName: fileName, fileSize: fileSize, mimeType: mimeType)
+-            else {
+-              return
+-            }
+-            self.sharedMedia.append(sharedFile)
+-          }
+-
+-          // If this is the last item, save imagesData in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
+-            let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+-            userDefaults?.set(self.toData(data: self.sharedMedia), forKey: self.sharedKey)
+-            userDefaults?.synchronize()
+-            self.redirectToHostApp(type: .media)
+-          }
++          let sharedFile =
++            copied
++            ? self.getSharedMediaFile(
++              forVideo: newPath, fileName: fileName, fileSize: fileSize, mimeType: mimeType)
++            : nil
++          self.collect(content: content, index: index, item: sharedFile.map { CollectedItem.media($0) })
+ 
+         }
+       } else {
+@@ -457,20 +432,109 @@ class ShareViewController: UIViewController {
+         forSecurityApplicationGroupIdentifier: self.hostAppGroupIdentifier)!
+       .appendingPathComponent(newName)
+     let copied = self.copyFile(at: url, to: newPath)
+-    if copied {
+-      self.sharedMedia.append(
+-        SharedMediaFile(
+-          path: newPath.absoluteString, thumbnail: nil, fileName: fileName,
+-          fileSize: fileSize, width: nil, height: nil, duration: nil, mimeType: mimeType,
+-          type: .file))
++    self.collect(
++      content: content, index: index,
++      item: copied
++        ? CollectedItem.media(
++          SharedMediaFile(
++            path: newPath.absoluteString, thumbnail: nil, fileName: fileName,
++            fileSize: fileSize, width: nil, height: nil, duration: nil, mimeType: mimeType,
++            type: .file)) : nil)
++  }
++
++  /// Records what attachment `index` produced (nil: nothing usable), and writes the
++  /// share once every attachment has finished.
++  private func collect(content: NSExtensionItem, index: Int, item: CollectedItem?) {
++    if let item = item {
++      collected[index] = item
++    }
++    finishedCount += 1
++    if finishedCount == (content.attachments?.count ?? 0) {
++      writeShare()
++    }
++  }
++
++  /// One decision for the whole share, in attachment order:
++  /// 1. a link wins, as before (an app sharing a post sends its text with its URL);
++  /// 2. several items that are all texts or audio files are a selection of messages
++  ///    (a WhatsApp multi-selection): each text is written to the App Group as a
++  ///    file of type `text/x-shared-message`, so texts and voice notes reach the app
++  ///    as one ordered list of files;
++  /// 3. otherwise every file, then the texts.
++  private func writeShare() {
++    let items = collected.keys.sorted().compactMap { collected[$0] }
++    let userDefaults = UserDefaults(suiteName: hostAppGroupIdentifier)
++
++    var webUrls: [WebUrl] = []
++    var texts: [String] = []
++    var files: [SharedMediaFile] = []
++    for item in items {
++      switch item {
++      case .webUrl(let webUrl): webUrls.append(webUrl)
++      case .text(let text): texts.append(text)
++      case .media(let file): files.append(file)
++      }
+     }
+ 
+-    if index == (content.attachments?.count)! - 1 {
+-      let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+-      userDefaults?.set(self.toData(data: self.sharedMedia), forKey: self.sharedKey)
++    if !webUrls.isEmpty {
++      userDefaults?.set(toData(data: webUrls), forKey: sharedKey)
+       userDefaults?.synchronize()
+-      self.redirectToHostApp(type: .file)
++      redirectToHostApp(type: .weburl)
++      return
+     }
++
++    let isConversation =
++      items.count >= 2
++      && files.allSatisfy { $0.mimeType.lowercased().hasPrefix("audio/") }
++    if isConversation {
++      var messages: [SharedMediaFile] = []
++      for item in items {
++        switch item {
++        case .media(let file):
++          messages.append(file)
++        case .text(let text):
++          guard
++            let container = FileManager.default.containerURL(
++              forSecurityApplicationGroupIdentifier: hostAppGroupIdentifier)
++          else { continue }
++          let path = container.appendingPathComponent("\(UUID().uuidString).txt")
++          do {
++            try text.write(to: path, atomically: true, encoding: .utf8)
++          } catch {
++            NSLog("[ERROR] writeShare: cannot write message text: \(error)")
++            continue
++          }
++          messages.append(
++            SharedMediaFile(
++              path: path.absoluteString, thumbnail: nil, fileName: "message.txt",
++              fileSize: text.utf8.count, width: nil, height: nil, duration: nil,
++              mimeType: ShareViewController.sharedMessageMimeType, type: .file))
++        case .webUrl:
++          continue
++        }
++      }
++      userDefaults?.set(toData(data: messages), forKey: sharedKey)
++      userDefaults?.synchronize()
++      redirectToHostApp(type: .file)
++      return
++    }
++
++    if !files.isEmpty {
++      userDefaults?.set(toData(data: files), forKey: sharedKey)
++      userDefaults?.synchronize()
++      redirectToHostApp(
++        type: files.allSatisfy { $0.type == .image || $0.type == .video } ? .media : .file)
++      return
++    }
++
++    if !texts.isEmpty {
++      userDefaults?.set(texts, forKey: sharedKey)
++      userDefaults?.synchronize()
++      redirectToHostApp(type: .text)
++      return
++    }
++
++    dismissWithError(message: "No content found")
+   }
+ 
+   private func dismissWithError(message: String? = nil) {

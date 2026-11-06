@@ -4,21 +4,26 @@
  *
  * This service handles the non-URL share path where the content is either
  * raw text — a note, since no platform names the app it came from (task-380) —
- * or an audio file attachment, which is what a WhatsApp voice note is.
+ * an audio file attachment, which is what a WhatsApp voice note is, or a
+ * selection of several messages (texts and voice notes) saved as one media.
  *
  * The endpoint takes JSON, never bytes (task-345): a shared voice message is sent
  * straight to S3 through a presigned PUT, and the submission below only carries
  * the resulting key.
  */
 
+import { File } from "expo-file-system";
 import { Platform } from "react-native";
+import { t } from "../i18n";
 import { apiRequest } from "./apiClient";
 import { stageUpload } from "./presignedUpload";
 import type {
   IngestSharedContentResponse,
+  SharedConversationItem,
   SharedFileAttachment,
 } from "@media-summarizer/core/types/sharedContent";
 import {
+  MAX_SHARED_TEXT_LENGTH,
   validateSharedAudioFile,
   validateSharedNoteText,
 } from "@media-summarizer/core/types/sharedContent";
@@ -134,6 +139,99 @@ export class SharedContentService {
       content_mime_type: file.mimeType,
       original_name: fileName,
       upload_key: uploadKey,
+      locale: options.locale ?? null,
+      folder_id: options.folderId ?? null,
+    });
+  }
+
+  /**
+   * Submit a selection of messages — texts and voice notes, in order — as one
+   * media (task-607, `share_type=conversation`).
+   *
+   * Everything is checked before the first voice note leaves the device: the
+   * texts are read from the files the share extension wrote them to, their total
+   * is held to the note ceiling, and each voice note meets the single voice note
+   * checks. Then every voice note goes straight to S3, and the submission carries
+   * the texts and the keys in the order of the selection.
+   */
+  static async ingestSharedConversation(
+    items: SharedConversationItem[],
+    options: {
+      sourceApp?: string;
+      locale?: string;
+      folderId?: string | null;
+    } = {},
+  ): Promise<IngestSharedContentResponse> {
+    type Prepared =
+      | { kind: "text"; text: string }
+      | { kind: "voice"; file: SharedFileAttachment; fileName: string };
+    const prepared: Prepared[] = [];
+    for (const item of items) {
+      if (item.kind === "text") {
+        const text = (await new File(item.uri).text()).trim();
+        if (text) prepared.push({ kind: "text", text });
+        continue;
+      }
+      const validated = validateSharedAudioFile(item.file);
+      if ("rejection" in validated) {
+        throw new SharedContentValidationError(validated.rejection.message);
+      }
+      prepared.push({
+        kind: "voice",
+        file: item.file,
+        fileName:
+          item.file.fileName ?? `whatsapp-audio.${getExtension(item.file.mimeType)}`,
+      });
+    }
+    if (prepared.length === 0) {
+      throw new SharedContentValidationError(t("share.reject.nothingToSave"));
+    }
+    const texts = prepared.flatMap((m) => (m.kind === "text" ? [m.text] : []));
+    if (texts.join("").length > MAX_SHARED_TEXT_LENGTH) {
+      // The note ceiling, worded the way a note over it is refused.
+      const tooLong = validateSharedNoteText(texts.join("\n"));
+      if ("rejection" in tooLong) {
+        throw new SharedContentValidationError(tooLong.rejection.message);
+      }
+    }
+
+    const messages: Record<string, unknown>[] = [];
+    for (const message of prepared) {
+      if (message.kind === "text") {
+        messages.push({ kind: "text", text: message.text });
+        continue;
+      }
+      const uploadKey = await stageUpload({
+        target: "shared_audio",
+        uri: message.file.uri,
+        fileName: message.fileName,
+        mimeType: message.file.mimeType,
+        size: message.file.fileSize,
+      });
+      messages.push({
+        kind: "voice",
+        upload_key: uploadKey,
+        content_mime_type: message.file.mimeType,
+        original_name: message.fileName,
+      });
+    }
+
+    const sourceApp =
+      options.sourceApp ??
+      (Platform.OS === "ios" ? "ios-share-extension" : "android-share-intent");
+    const idempotencyKey = generateIdempotencyKey(
+      "conversation",
+      prepared
+        .map((m) => (m.kind === "text" ? m.text : `${m.fileName}:${m.file.fileSize ?? 0}`))
+        .join("|"),
+    );
+
+    return SharedContentService.submitIngest({
+      share_type: "conversation",
+      source_platform: "whatsapp",
+      source_app: sourceApp,
+      idempotency_key: idempotencyKey,
+      messages,
       locale: options.locale ?? null,
       folder_id: options.folderId ?? null,
     });
