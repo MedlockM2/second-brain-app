@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Chat — sources web et sources média (DRAFT-1)</title>
+<style>
+  /* Tokens: mobile/src/constants/theme.ts. --web / --onweb / --webink are the proposed new tokens. */
+  .light { --bg:#fcf9f6; --surface:#ffffff; --low:#f7f3f0; --cont:#f1edea; --high:#ebe7e5; --text:#2b2d42; --muted:#8d99ae; --subtle:#5c6880; --primary:#ffcb05; --onprimary:#1c1b1a; --outlineV:#c8c7bd;
+           --hl:#fff0b3; --onhl:#1c1b1a;
+           --web:#dfe8fa; --onweb:#24406e; --webink:#3d5f99; }
+  .dark  { --bg:#171511; --surface:#211e19; --low:#262320; --cont:#2d2a25; --high:#37332c; --text:#f1ebe1; --muted:#9aa3b4; --subtle:#c6cdd9; --primary:#f0bf2a; --onprimary:#1c1b1a; --outlineV:#3d3932;
+           --hl:#5c4a12; --onhl:#ffe9a8;
+           --web:#22344f; --onweb:#c9dafb; --webink:#9db8ea; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px; background:#e9e6e2; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Roboto,"Helvetica Neue",Arial,sans-serif; color:#2b2d42; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  h2 { font-size:19px; margin:40px 0 4px; }
+  p.lead { max-width:900px; font-size:15px; line-height:1.55; margin:6px 0 0; color:#3e4257; }
+  .row { display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start; margin-top:18px; }
+  .cap { font-size:13px; font-weight:600; margin:0 0 22px; color:#3e4257; max-width:414px; }
+  .note { font-size:13px; line-height:1.5; max-width:414px; margin:22px 0 0; color:#3e4257; }
+  .phone { width:414px; height:896px; overflow:hidden; border-radius:44px; background:var(--bg); color:var(--text); display:flex; flex-direction:column; box-shadow:0 0 0 10px #1c1b1a, 0 20px 50px rgba(0,0,0,.25); position:relative; }
+  .status { height:47px; display:flex; align-items:flex-end; justify-content:space-between; padding:0 34px 6px; font-size:15px; font-weight:600; }
+  .header { display:flex; align-items:center; min-height:56px; padding:0 8px; }
+  .hb { width:44px; height:44px; display:flex; align-items:center; justify-content:center; }
+  .identity { width:32px; margin-right:8px; display:flex; justify-content:center; }
+  .title { flex:1; font-size:18px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  svg.i { width:26px; height:26px; fill:none; stroke:var(--text); stroke-width:32; stroke-linecap:round; stroke-linejoin:round; }
+  svg.s { width:20px; height:20px; }
+  .scroll { flex:1; overflow:hidden; padding:8px 24px 24px; display:flex; flex-direction:column; gap:24px; justify-content:flex-end; }
+  .q { align-self:flex-end; max-width:85%; background:var(--high); border-radius:16px; padding:8px 16px; font-size:16px; line-height:25.6px; }
+  .a { font-size:16px; line-height:25.6px; }
+  .a p { margin:0 0 12px; } .a p:last-child { margin:0; }
+
+  /* Media citation, as MarkdownBody draws it today: amber highlight, the media's short title. */
+  .cm { font-size:13px; font-weight:700; color:var(--onhl); background:var(--hl); padding:1px 4px; white-space:nowrap; }
+  /* Web citation (proposed): ink-blue wash, globe glyph, the site's name. */
+  .cw { font-size:13px; font-weight:700; color:var(--onweb); background:var(--web); padding:1px 5px 1px 4px; white-space:nowrap; }
+  .cw svg { width:12px; height:12px; vertical-align:-1px; margin-right:3px; stroke:var(--onweb); stroke-width:40; fill:none; }
+
+  /* Option B: the pages the answer read, under it. */
+  .webl { margin-top:14px; border-top:1px solid var(--outlineV); padding-top:10px; }
+  .webl .h { font-size:13px; font-weight:600; color:var(--subtle); margin-bottom:2px; display:flex; align-items:center; gap:6px; }
+  .webl .h svg { width:14px; height:14px; stroke:var(--subtle); stroke-width:36; fill:none; }
+  .webl .it { display:flex; gap:0; align-items:flex-start; min-height:44px; padding:6px 0; }
+  .webl .n { flex:none; font-size:12px; font-weight:700; color:var(--onweb); background:var(--web); border-radius:4px; min-width:20px; height:20px; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .webl .t { font-size:14px; line-height:20px; color:var(--text); }
+  .webl .d { font-size:13px; line-height:18px; color:var(--subtle); }
+
+  .copy { margin-top:10px; width:44px; height:32px; display:flex; align-items:center; }
+  .copy svg { width:18px; height:18px; stroke:var(--subtle); }
+
+  /* Waiting: today's breathing dot, plus a label while a search runs. */
+  .wait { display:flex; align-items:center; gap:10px; }
+  .dot { width:16px; height:16px; border-radius:8px; background:var(--text); margin:4px; }
+  .wait .l { font-size:14px; color:var(--subtle); display:flex; align-items:center; gap:6px; }
+  .wait .l svg { width:14px; height:14px; stroke:var(--subtle); stroke-width:36; fill:none; }
+
+  .composer { padding:8px 16px 34px; display:flex; gap:8px; align-items:flex-end; }
+  .field { flex:1; min-height:44px; background:var(--low); border-radius:16px; padding:9px 16px; font-size:16px; line-height:25.6px; color:var(--muted); }
+  .send { width:44px; height:44px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; opacity:.4; }
+  .send svg { stroke:var(--onprimary); }
+  .stop { width:44px; height:44px; border-radius:50%; background:var(--text); display:flex; align-items:center; justify-content:center; }
+  .stop i { width:14px; height:14px; border-radius:3px; background:var(--bg); }
+
+  .rec { background:#fff7d1; border-radius:12px; padding:14px 18px; max-width:900px; font-size:14px; line-height:1.55; margin-top:18px; }
+  ul { margin:6px 0 0 18px; padding:0; font-size:14px; line-height:1.6; max-width:900px; }
+  code { font-size:13px; }
+  .sw { display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; border:1px solid rgba(0,0,0,.1); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="close" viewBox="0 0 512 512"><path d="M368 368L144 144M368 144L144 368"/></symbol>
+  <symbol id="folder" viewBox="0 0 512 512"><path d="M440 432H72a40 40 0 01-40-40V120a40 40 0 0140-40h75.89a40 40 0 0122.19 6.72l27.84 18.56a40 40 0 0022.19 6.72H440a40 40 0 0140 40v240a40 40 0 01-40 40z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="time" viewBox="0 0 512 512"><path d="M256 64C150 64 64 150 64 256s86 192 192 192 192-86 192-192S362 64 256 64z"/><path d="M256 128v144h96"/></symbol>
+  <symbol id="create" viewBox="0 0 512 512"><path d="M384 224v184a40 40 0 01-40 40H104a40 40 0 01-40-40V168a40 40 0 0140-40h167.48"/><path d="M459.94 53.25a16.06 16.06 0 00-23.22-.56L424.35 65a8 8 0 000 11.31l11.34 11.32a8 8 0 0011.34 0l12.06-12c6.1-6.09 6.67-16.01.85-22.38zM399.34 90L218.82 270.2a9 9 0 00-2.31 3.93L208.16 299a3.91 3.91 0 004.86 4.86l24.85-8.35a9 9 0 003.93-2.31L422 112.66a9 9 0 000-12.66l-9.95-10a9 9 0 00-12.71 0z"/></symbol>
+  <symbol id="up" viewBox="0 0 512 512"><path d="M112 244l144-144 144 144M256 120v292"/></symbol>
+  <symbol id="globe" viewBox="0 0 512 512"><path d="M256 48C141.13 48 48 141.13 48 256s93.13 208 208 208 208-93.13 208-208S370.87 48 256 48z"/><path d="M256 48c-58.07 0-112.67 93.13-112.67 208S197.93 464 256 464s112.67-93.13 112.67-208S314.07 48 256 48z"/><path d="M117.33 117.33c38.24 27.15 86.38 43.34 138.67 43.34s100.43-16.19 138.67-43.34M394.67 394.67c-38.24-27.15-86.38-43.34-138.67-43.34s-100.43 16.19-138.67 43.34M256 48v416M464 256H48"/></symbol>
+  <symbol id="copy" viewBox="0 0 512 512"><rect x="128" y="128" width="336" height="336" rx="57" ry="57"/><path d="M383.5 128l.5-24a56.16 56.16 0 00-56-56H112a64.19 64.19 0 00-64 64v216a56.16 56.16 0 0056 56h24"/></symbol>
+  <symbol id="doc" viewBox="0 0 512 512"><path d="M416 221.25V416a48 48 0 01-48 48H144a48 48 0 01-48-48V96a48 48 0 0148-48h98.75a32 32 0 0122.62 9.37l141.26 141.26a32 32 0 019.37 22.62z"/><path d="M256 56v120a32 32 0 0032 32h120"/></symbol>
+</svg>
+
+<h1>Chat — distinguer les pages web des médias (DRAFT-1)</h1>
+<p class="lead">Le chat peut désormais chercher sur le web. Une réponse cite alors deux familles de sources : les <strong>médias du dossier</strong>, comme aujourd'hui (surligné ambre, titre du média), et les <strong>pages web</strong>, dans une nouvelle couleur bleu encre, avec un globe et le nom du site. Un appui sur une source média ouvre le média dans l'app ; un appui sur une source web ouvre la page dans le navigateur.</p>
+
+<h2>Deux façons d'afficher les pages web</h2>
+<div class="row">
+  <div>
+    <p class="cap">A — dans le texte seulement</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Économie du logement</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">L'économiste du podcast prévoyait une baisse des prix. Est-ce que ça s'est confirmé ?</div>
+        <div class="a">
+          <p>Il annonçait une baisse modérée, portée par la remontée des taux <span class="cm">Le pari des taux</span>, et surtout dans les grandes villes <span class="cm">Immobilier : la fin…</span></p>
+          <p>Les chiffres publiés depuis lui donnent en partie raison : les prix de l'ancien ont reculé sur un an <span class="cw"><svg><use href="#globe"/></svg>insee.fr</span>, mais la baisse ralentit depuis le printemps <span class="cw"><svg><use href="#globe"/></svg>notaires.fr</span>.</p>
+          <p>Sa prévision sur Paris reste la plus nette, avec un recul plus marqué qu'ailleurs <span class="cw"><svg><use href="#globe"/></svg>lemonde.fr</span>.</p>
+          <div class="copy"><svg class="i"><use href="#copy"/></svg></div>
+        </div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">Le plus léger. Le titre complet de la page n'apparaît nulle part à l'écran, seulement dans le libellé d'accessibilité.</p>
+  </div>
+  <div>
+    <p class="cap">B — dans le texte, plus la liste des pages lues (recommandé)</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Économie du logement</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">L'économiste du podcast prévoyait une baisse des prix. Est-ce que ça s'est confirmé ?</div>
+        <div class="a">
+          <p>Il annonçait une baisse modérée, portée par la remontée des taux <span class="cm">Le pari des taux</span>, et surtout dans les grandes villes <span class="cm">Immobilier : la fin…</span></p>
+          <p>Les chiffres publiés depuis lui donnent en partie raison : les prix de l'ancien ont reculé sur un an <span class="cw"><svg><use href="#globe"/></svg>insee.fr</span>, mais la baisse ralentit depuis le printemps <span class="cw"><svg><use href="#globe"/></svg>notaires.fr</span>.</p>
+          <p>Sa prévision sur Paris reste la plus nette, avec un recul plus marqué qu'ailleurs <span class="cw"><svg><use href="#globe"/></svg>lemonde.fr</span>.</p>
+          <div class="webl">
+            <div class="h"><svg><use href="#globe"/></svg>Pages web consultées</div>
+            <div class="it"><div><div class="t">Indices des prix des logements anciens — 2ᵉ trimestre</div><div class="d">insee.fr</div></div></div>
+            <div class="it"><div><div class="t">Note de conjoncture immobilière</div><div class="d">notaires.fr</div></div></div>
+            <div class="it"><div><div class="t">À Paris, les prix de l'immobilier poursuivent leur repli</div><div class="d">lemonde.fr</div></div></div>
+          </div>
+          <div class="copy"><svg class="i"><use href="#copy"/></svg></div>
+        </div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">On voit d'un coup d'œil que la réponse est allée sur le web et ce qu'elle a lu, titre compris, sans quitter le chat. La liste n'apparaît que si la réponse cite au moins une page web.</p>
+  </div>
+</div>
+
+<h2>Thème sombre, chat d'un média, recherche en cours</h2>
+<div class="row">
+  <div>
+    <p class="cap">B — thème sombre</p>
+    <div class="phone dark">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Économie du logement</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">L'économiste du podcast prévoyait une baisse des prix. Est-ce que ça s'est confirmé ?</div>
+        <div class="a">
+          <p>Il annonçait une baisse modérée, portée par la remontée des taux <span class="cm">Le pari des taux</span>, et surtout dans les grandes villes <span class="cm">Immobilier : la fin…</span></p>
+          <p>Les chiffres publiés depuis lui donnent en partie raison : les prix de l'ancien ont reculé sur un an <span class="cw"><svg><use href="#globe"/></svg>insee.fr</span>, mais la baisse ralentit depuis le printemps <span class="cw"><svg><use href="#globe"/></svg>notaires.fr</span>.</p>
+          <p>Sa prévision sur Paris reste la plus nette, avec un recul plus marqué qu'ailleurs <span class="cw"><svg><use href="#globe"/></svg>lemonde.fr</span>.</p>
+          <div class="webl">
+            <div class="h"><svg><use href="#globe"/></svg>Pages web consultées</div>
+            <div class="it"><div><div class="t">Indices des prix des logements anciens — 2ᵉ trimestre</div><div class="d">insee.fr</div></div></div>
+            <div class="it"><div><div class="t">Note de conjoncture immobilière</div><div class="d">notaires.fr</div></div></div>
+            <div class="it"><div><div class="t">À Paris, les prix de l'immobilier poursuivent leur repli</div><div class="d">lemonde.fr</div></div></div>
+          </div>
+          <div class="copy"><svg class="i"><use href="#copy"/></svg></div>
+        </div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+  </div>
+  <div>
+    <p class="cap">Chat d'un média — seules les pages web sont citées</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="width:24px;height:24px"><use href="#doc"/></svg></div>
+        <div class="title">Le pari des taux</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">Qui est l'invité de l'épisode ?</div>
+        <div class="a">
+          <p>C'est un économiste spécialiste du crédit immobilier, présenté en début d'épisode comme ancien de la Banque de France.</p>
+          <p>Il publie depuis une chronique mensuelle sur le marché du logement <span class="cw"><svg><use href="#globe"/></svg>lesechos.fr</span>.</p>
+          <div class="webl">
+            <div class="h"><svg><use href="#globe"/></svg>Pages web consultées</div>
+            <div class="it"><div><div class="t">Chroniques — Logement et crédit</div><div class="d">lesechos.fr</div></div></div>
+          </div>
+          <div class="copy"><svg class="i"><use href="#copy"/></svg></div>
+        </div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce média</div><div class="send"><svg class="i s"><use href="#up"/></svg></div></div>
+    </div>
+    <p class="note">Le média ouvert n'est jamais cité, comme aujourd'hui. Les pages web le sont toujours.</p>
+  </div>
+  <div>
+    <p class="cap">Pendant une recherche</p>
+    <div class="phone light">
+      <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+      <div class="header">
+        <div class="hb"><svg class="i"><use href="#close"/></svg></div>
+        <div class="identity" style="color:var(--text)"><svg class="i" style="stroke:none;width:24px;height:24px"><use href="#folder"/></svg></div>
+        <div class="title">Économie du logement</div>
+        <div class="hb"><svg class="i"><use href="#time"/></svg></div>
+        <div class="hb"><svg class="i"><use href="#create"/></svg></div>
+      </div>
+      <div class="scroll">
+        <div class="q">L'économiste du podcast prévoyait une baisse des prix. Est-ce que ça s'est confirmé ?</div>
+        <div class="wait"><div class="dot"></div><div class="l"><svg><use href="#globe"/></svg>Recherche sur le web…</div></div>
+      </div>
+      <div class="composer"><div class="field">Poser une question sur ce dossier</div><div class="stop"><i></i></div></div>
+    </div>
+    <p class="note">Le point qui respire reste le même. Le libellé n'apparaît que pendant une recherche et disparaît au premier mot de la réponse.</p>
+  </div>
+</div>
+
+<div class="rec"><strong>Retenu par l'owner (2026-11-06) : B.</strong> L'ambre reste la couleur de tes médias. Les pages web prennent un bleu encre, de la même famille de teintes que les gris-bleus du système. Le globe sert de deuxième indice, pour qui distingue mal les couleurs, et le nom du site dit d'où vient l'information. La liste sous la réponse montre le titre complet de chaque page et rend visible le fait que le chat est allé sur le web. Le web reprend le même rendu dans le panneau de chat.</div>
+<ul>
+  <li>Nouveaux tokens : <code>webCitation</code> <span class="sw" style="background:#dfe8fa"></span> <code>#dfe8fa</code> / <code>onWebCitation</code> <span class="sw" style="background:#24406e"></span> <code>#24406e</code> en clair ; <span class="sw" style="background:#22344f"></span> <code>#22344f</code> / <span class="sw" style="background:#c9dafb"></span> <code>#c9dafb</code> en sombre.</li>
+  <li>La citation web affiche le domaine sans <code>www.</code>. Une page citée plusieurs fois n'apparaît qu'une fois dans la liste.</li>
+  <li>Chaque ligne de la liste fait 44 pt de haut et ouvre la page, comme la citation dans le texte.</li>
+  <li>La copie remplace chaque citation web par <code>[titre](url)</code>.</li>
+</ul>
+</body>
+</html>
