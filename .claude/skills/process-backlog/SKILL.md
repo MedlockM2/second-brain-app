@@ -1,5 +1,5 @@
 ---
-name: drain-backlog
+name: process-backlog
 description: Traite en séquence, dans la session courante et sur la branche courante, toutes les tâches dispatchables du backlog dont les dépendances sont Done — une par une (résolution, commit, passage à Done) jusqu'à ce qu'il n'en reste plus. À utiliser quand l'owner demande de « vider », « dérouler » ou « traiter » le backlog sans passer par scripts/dispatch_backlog.sh.
 ---
 
@@ -91,7 +91,7 @@ Puis retourne au § 1.
 Quand plus aucune tâche n'est sélectionnable, affiche :
 
 ```
-=== Backlog drained ===
+=== Backlog processed ===
 Done: N | Bloquées: N | Benchmarks produits: N
 
 + task-XX → Done — <commit sha court> — résumé en une ligne
