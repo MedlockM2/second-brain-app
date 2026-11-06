@@ -31,8 +31,16 @@ export function useHomeSections() {
     };
     await Promise.all([read("recent"), read("unsorted")]);
   }, [isAuthenticated]);
+  // The processing refresh fires this as `void refetch()`, so it must never
+  // reject: a superseded read used to escape here as an unhandled rejection
+  // (task-609). Any real failure is already published by the snapshot.
   const refreshRecent = useCallback(async () => {
-    if (isAuthenticated) await EngagementService.listRecent(12);
+    if (!isAuthenticated) return;
+    try {
+      await EngagementService.listRecent(12);
+    } catch {
+      /* Published by the section's snapshot; a superseded read is dropped. */
+    }
   }, [isAuthenticated]);
   const { rearm: rearmPending } = useProcessingRefresh({
     hasProcessing: (recent.data ?? []).some(entry => entry.state === "pending"), refetch: refreshRecent,

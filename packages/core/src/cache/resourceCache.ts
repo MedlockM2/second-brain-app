@@ -23,6 +23,7 @@ const EMPTY: ResourceSnapshot<never> = {
 export class ResourceSupersededError extends Error {
   constructor() {
     super("Resource request superseded");
+    this.name = "ResourceSupersededError";
   }
 }
 export const resourceId = (key: ResourceKey): string => JSON.stringify(key);

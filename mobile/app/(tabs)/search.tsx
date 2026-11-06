@@ -10,6 +10,7 @@ import {
   useResourceSnapshot,
 } from "../../src/contexts/ResourceCacheContext";
 import { resourceKeys, mutationOwner } from "../../src/services/resourceCache";
+import { isResourceSuperseded } from "@media-summarizer/core/cache/resourceCache";
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
@@ -395,7 +396,7 @@ export default function SearchScreen() {
     try {
       await MediaService.libraryWindow(mediaCursor);
     } catch (err) {
-      if (request === mediaRequest.current) {
+      if (request === mediaRequest.current && !isResourceSuperseded(err)) {
         setPageError(
           getFriendlyErrorMessage(err, {
             fallback: t("search.libraryLoadFailed"),

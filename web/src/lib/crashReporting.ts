@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/browser";
+import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
 import { Config } from "../config";
 
 /**
@@ -37,6 +38,9 @@ export function initCrashReporting(): void {
       // Full sampling while the beta's volume is low, as on mobile.
       tracesSampleRate: 1.0,
       beforeBreadcrumb: scrubBreadcrumb,
+      // A read the resource cache superseded or a fetch aborted on purpose is
+      // the app cancelling its own work, not an issue (task-609).
+      beforeSend: (event, hint) => (isNormalCancellation(hint.originalException) ? null : event),
     });
   } catch (error) {
     console.error("[crash-reporting] Sentry failed to initialise:", error);

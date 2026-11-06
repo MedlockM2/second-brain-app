@@ -1,5 +1,6 @@
 import { useResourceCache, useResourceState } from "../../src/contexts/ResourceCacheContext";
 import { resourceKeys } from "../../src/services/resourceCache";
+import { isResourceSuperseded } from "@media-summarizer/core/cache/resourceCache";
 /**
  * Unsorted review — the triage pass over the default folder.
  *
@@ -219,7 +220,8 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
         setQueueReady(true);
       }
     } catch (err) {
-      if (!isMountedRef.current) return;
+      // A superseded read is the cache dropping it, not a failure to show.
+      if (!isMountedRef.current || isResourceSuperseded(err)) return;
       setError(
         getFriendlyErrorMessage(err, {
           fallback: t("unsortedReview.loadFailed"),

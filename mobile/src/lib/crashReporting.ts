@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/react-native";
 import * as Updates from "expo-updates";
 import { AppState } from "react-native";
 
+import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
+
 import { Config } from "../constants/config";
 // Type-only on purpose: startupErrorGuard imports this module at runtime, so a
 // value import back would be a cycle.
@@ -184,6 +186,11 @@ export function initCrashReporting(): void {
       tracesSampleRate: 1.0,
       initialScope: { tags: resolveTags() },
       beforeBreadcrumb: scrubBreadcrumb,
+      // The app cancelling its own work is not an issue (task-609): a read
+      // the resource cache superseded, a fetch aborted on purpose. Callers
+      // catch these at the source; this is the net for one that slips by.
+      beforeSend: (event, hint) =>
+        isNormalCancellation(hint.originalException) ? null : event,
       integrations: [
         Sentry.reactNativeErrorHandlersIntegration({
           onerror: false,
