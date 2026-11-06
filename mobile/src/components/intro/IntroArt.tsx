@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme, useThemedStyles } from "../../contexts/ThemeContext";
 import type { Theme } from "../../constants/theme";
 import { t } from "../../i18n";
-import { ART_WIDTH, Bar } from "./artKit";
+import { ART_WIDTH, Bar, useArtStyles } from "./artKit";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -85,15 +85,26 @@ const makeWorksWithStyles = ({ colors }: Theme) => StyleSheet.create({
 // eye goes to the one icon to touch. The people row is left out: drawn inside
 // the phone it would push the row of apps under the button's fade. The phone
 // runs off the bottom of the screen, where the intro fades it out.
+// The screen inside the phone is laid out at its final size, like the frame
+// (`artKit.tsx`): shrinking a 392-point drawing with a transform resampled its
+// text and glyphs into a blur (TestFlight feedback AOtRbx0iVvGnJhQHFNYLy4Q).
 // ---------------------------------------------------------------------------
 const VIDEO_FILL = "#3d4a6b";
 const DIM = 0.32;
 
-/** Phone frame, in the 414-point art box; its screen is drawn at `SCREEN_DRAWN` points wide and scaled in. */
-const PHONE = { width: 340, height: 720, bezel: 9, top: 8 };
-const SCREEN_WIDTH = PHONE.width - 2 * PHONE.bezel;
+/**
+ * Phone frame, in the 414-point art box; its screen is what the bezel and the edge
+ * leave inside it (children sit inside the border, so the edge counts too). The
+ * screen keeps the mockup's 392-point layout, fitted to that width:
+ * `SCREEN_SCALE` frame points per point of the layout.
+ */
+const PHONE = { width: 340, height: 720, bezel: 9, edge: 1.5, top: 8 };
+const SCREEN_WIDTH = PHONE.width - 2 * (PHONE.bezel + PHONE.edge);
 const SCREEN_DRAWN = 392;
 const SCREEN_SCALE = SCREEN_WIDTH / SCREEN_DRAWN;
+
+/** Device points for a length of the screen's 392-point layout, at the art's scale. */
+const screenUnit = (scale: number) => (points: number) => points * SCREEN_SCALE * scale;
 
 /** Colours that are the device's, the system's or YouTube's — not the design system's. */
 const DEVICE_COLORS = {
@@ -101,15 +112,15 @@ const DEVICE_COLORS = {
   dark: { bezel: "#0b0a09", bezelEdge: "#5a544c", sheet: "#1c1c1e", line: "#2c2c2e", chip: "#3a3a3c", page: "#0f0f0f", pageBar: "#272727" },
 } as const;
 
-export function ShareSheetArt() {
+export function ShareSheetArt({ scale }: { scale: number }) {
   const { colors, mode } = useTheme();
   const device = DEVICE_COLORS[mode];
-  const styles = useThemedStyles(makeSheetStyles);
-  const tileRadius = (size: number) => (IS_ANDROID ? size / 2 : Math.round(size * 0.23));
+  const styles = useArtStyles(makeSheetStyles, scale);
+  const px = screenUnit(scale);
   const plain = (background: string, color: string, icon: IconName) =>
-    <View style={[styles.tile, { backgroundColor: background, borderRadius: tileRadius(56) }]}><Ionicons name={icon} size={28} color={color} /></View>;
-  const image = (source: ImageSourcePropType) => <Image source={source} style={[styles.tile, { borderRadius: tileRadius(56) }]} />;
-  const dimmedApp = (key: string, tile: ReactNode) => <View key={key} style={[styles.app, { opacity: DIM }]}>{tile}<Bar width={36} height={5} color={device.chip} /></View>;
+    <View style={[styles.tile, { backgroundColor: background }]}><Ionicons name={icon} size={px(28)} color={color} /></View>;
+  const image = (source: ImageSourcePropType) => <Image source={source} style={styles.tile} />;
+  const dimmedApp = (key: string, tile: ReactNode) => <View key={key} style={[styles.app, { opacity: DIM }]}>{tile}<Bar width={px(36)} height={px(5)} color={device.chip} /></View>;
   const others = IS_ANDROID
     ? [dimmedApp("messages", plain("#1a73e8", "#fff", "chatbubble-outline")), dimmedApp("gmail", plain("#fff", "#ea4335", "mail-outline")),
       dimmedApp("keep", image(TILES.googlekeep)), dimmedApp("drive", plain("#fff", "#188038", "cloud-upload-outline"))]
@@ -119,34 +130,34 @@ export function ShareSheetArt() {
     ? [["copy-outline", 120], ["open-outline", 170], ["download-outline", 96]]
     : [["copy-outline", 120], ["book-outline", 196], ["heart-outline", 150], ["search-outline", 170]];
   const rule = <View style={[styles.rule, { backgroundColor: device.line }]} />;
-  return <View style={[styles.phone, { backgroundColor: device.bezel, borderColor: device.bezelEdge, borderRadius: IS_ANDROID ? 40 : 50 }]}>
-    <View style={[styles.screen, { borderRadius: IS_ANDROID ? 32 : 41 }]}>
+  return <View style={[styles.phone, { backgroundColor: device.bezel, borderColor: device.bezelEdge }]}>
+    <View style={styles.screen}>
       <View style={[styles.drawn, { backgroundColor: device.page }]}>
         {/* The app the sheet was opened from: a YouTube video page, under the system's scrim. */}
-        <View style={{ height: IS_ANDROID ? 40 : 54 }} />
-        <View style={styles.video}><Ionicons name="play-circle-outline" size={54} color="#fff" /></View>
+        <View style={styles.statusBar} />
+        <View style={styles.video}><Ionicons name="play-circle-outline" size={px(54)} color="#fff" /></View>
         <View style={styles.videoText}>
-          <Bar width="86%" height={9} color={device.pageBar} />
-          <Bar width="54%" height={9} color={device.pageBar} />
-          <View style={styles.channel}><View style={[styles.channelAvatar, { backgroundColor: device.pageBar }]} /><Bar width="30%" height={9} color={device.pageBar} /></View>
+          <Bar width="86%" height={px(9)} color={device.pageBar} />
+          <Bar width="54%" height={px(9)} color={device.pageBar} />
+          <View style={styles.channel}><View style={[styles.channelAvatar, { backgroundColor: device.pageBar }]} /><Bar width="30%" height={px(9)} color={device.pageBar} /></View>
         </View>
         <View style={styles.scrim} />
         <View style={[styles.sheet, IS_ANDROID ? styles.sheetAndroid : styles.sheetIos, { backgroundColor: device.sheet }]}>
           {IS_ANDROID && <View style={styles.handle} />}
           <View style={styles.head}>
-            <View style={styles.thumb}><Ionicons name="play-circle-outline" size={20} color="#fff" /></View>
+            <View style={styles.thumb}><Ionicons name="play-circle-outline" size={px(20)} color="#fff" /></View>
             <View style={styles.headText}>
               <Text numberOfLines={1} style={styles.headTitle}>{t("welcome.art.videoTitle")}</Text>
               <Text numberOfLines={1} style={styles.headDetail}>youtube.com</Text>
             </View>
-            {!IS_ANDROID && <View style={[styles.close, { backgroundColor: device.line }]}><Ionicons name="close" size={16} color={colors.textSubtle} /></View>}
+            {!IS_ANDROID && <View style={[styles.close, { backgroundColor: device.line }]}><Ionicons name="close" size={px(16)} color={colors.textSubtle} /></View>}
           </View>
           {rule}
           <View style={styles.apps}>
             <View style={styles.app}>
               <View>
-                <View style={[styles.ring, { borderRadius: IS_ANDROID ? 34 : 19 }]} />
-                <Image source={APP_ICON} style={[styles.tile, { borderRadius: tileRadius(56) }]} />
+                <View style={styles.ring} />
+                <Image source={APP_ICON} style={styles.tile} />
               </View>
               <Text numberOfLines={1} style={styles.appLabel}>Deepn</Text>
             </View>
@@ -154,8 +165,8 @@ export function ShareSheetArt() {
           </View>
           {rule}
           <View style={{ opacity: DIM }}>
-            {actions.map(([icon, width], n) => <View key={icon} style={[styles.action, n > 0 && { borderTopWidth: 1, borderTopColor: device.line }]}>
-              <Ionicons name={icon} size={18} color={colors.textMain} /><Bar width={width} height={6} color={device.chip} />
+            {actions.map(([icon, width], n) => <View key={icon} style={[styles.action, n > 0 && [styles.actionRule, { borderTopColor: device.line }]]}>
+              <Ionicons name={icon} size={px(18)} color={colors.textMain} /><Bar width={px(width)} height={px(6)} color={device.chip} />
             </View>)}
           </View>
         </View>
@@ -165,37 +176,48 @@ export function ShareSheetArt() {
   </View>;
 }
 
-const makeSheetStyles = ({ colors }: Theme) => StyleSheet.create({
-  phone: { position: "absolute", left: (ART_WIDTH - PHONE.width) / 2, top: PHONE.top, width: PHONE.width, height: PHONE.height, padding: PHONE.bezel,
-    borderWidth: 1.5, shadowColor: "#000", shadowOffset: { width: 0, height: 30 }, shadowOpacity: 0.22, shadowRadius: 30, elevation: 8 },
-  screen: { flex: 1, overflow: "hidden" },
-  // The screen keeps the mockup's 392-point layout, scaled from its top-left corner into the frame.
-  drawn: { position: "absolute", left: 0, top: 0, width: SCREEN_DRAWN, height: PHONE.height / SCREEN_SCALE, transform: [{ scale: SCREEN_SCALE }], transformOrigin: "left top" },
-  video: { height: 220, backgroundColor: VIDEO_FILL, alignItems: "center", justifyContent: "center" },
-  videoText: { paddingVertical: 16, paddingHorizontal: 14, gap: 10 },
-  channel: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8 },
-  channelAvatar: { width: 34, height: 34, borderRadius: 17 },
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
-  island: { position: "absolute", left: SCREEN_WIDTH / 2 - 48, top: 10, width: 96, height: 28, borderRadius: 16, backgroundColor: "#000" },
-  camera: { position: "absolute", left: SCREEN_WIDTH / 2 - 6, top: 13, width: 12, height: 12, borderRadius: 6, backgroundColor: "#000" },
-  sheet: { position: "absolute", top: 196, overflow: "hidden" },
-  sheetIos: { left: 6, right: 6, bottom: 0, borderRadius: 30 },
-  sheetAndroid: { left: 0, right: 0, bottom: 0, borderTopLeftRadius: 26, borderTopRightRadius: 26 },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: colors.outlineVariant, alignSelf: "center", marginTop: 10 },
-  head: { flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 12 },
-  thumb: { width: 44, height: 44, borderRadius: 10, backgroundColor: VIDEO_FILL, alignItems: "center", justifyContent: "center" },
-  headText: { flex: 1, minWidth: 0 },
-  headTitle: { fontSize: 14, fontWeight: "600", color: colors.textMain },
-  headDetail: { fontSize: 12, color: colors.textSubtle },
-  close: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  rule: { height: 1 },
-  apps: { flexDirection: "row", justifyContent: "space-between", paddingTop: 14, paddingHorizontal: 10, paddingBottom: 12 },
-  app: { width: 70, alignItems: "center", gap: 8 },
-  tile: { width: 56, height: 56, alignItems: "center", justifyContent: "center" },
-  ring: { position: "absolute", left: -6, top: -6, right: -6, bottom: -6, borderWidth: 2.5, borderColor: colors.primary },
-  appLabel: { fontSize: 11.5, fontWeight: "700", color: colors.textMain },
-  action: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
-});
+const makeSheetStyles = ({ colors }: Theme, scale: number) => {
+  /** A length of the art box (the frame), then one of the screen's 392-point layout, in device points. */
+  const u = (points: number) => points * scale;
+  const px = screenUnit(scale);
+  return StyleSheet.create({
+    phone: { position: "absolute", left: u((ART_WIDTH - PHONE.width) / 2), top: u(PHONE.top), width: u(PHONE.width), height: u(PHONE.height),
+      padding: u(PHONE.bezel), borderWidth: u(PHONE.edge), borderRadius: u(IS_ANDROID ? 40 : 50),
+      shadowColor: "#000", shadowOffset: { width: 0, height: u(30) }, shadowOpacity: 0.22, shadowRadius: u(30), elevation: 8 },
+    screen: { flex: 1, overflow: "hidden", borderRadius: u(IS_ANDROID ? 32 : 41) },
+    // The mockup's 392-point layout, as tall as the frame so the sheet runs past
+    // the screen's bottom edge.
+    drawn: { position: "absolute", left: 0, top: 0, right: 0, height: u(PHONE.height) },
+    statusBar: { height: px(IS_ANDROID ? 40 : 54) },
+    video: { height: px(220), backgroundColor: VIDEO_FILL, alignItems: "center", justifyContent: "center" },
+    videoText: { paddingVertical: px(16), paddingHorizontal: px(14), gap: px(10) },
+    channel: { flexDirection: "row", alignItems: "center", gap: px(10), marginTop: px(8) },
+    channelAvatar: { width: px(34), height: px(34), borderRadius: px(17) },
+    scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.42)" },
+    island: { position: "absolute", left: u(SCREEN_WIDTH / 2 - 48), top: u(10), width: u(96), height: u(28), borderRadius: u(16), backgroundColor: "#000" },
+    camera: { position: "absolute", left: u(SCREEN_WIDTH / 2 - 6), top: u(13), width: u(12), height: u(12), borderRadius: u(6), backgroundColor: "#000" },
+    sheet: { position: "absolute", top: px(196), overflow: "hidden" },
+    sheetIos: { left: px(6), right: px(6), bottom: 0, borderRadius: px(30) },
+    sheetAndroid: { left: 0, right: 0, bottom: 0, borderTopLeftRadius: px(26), borderTopRightRadius: px(26) },
+    handle: { width: px(36), height: px(4), borderRadius: px(2), backgroundColor: colors.outlineVariant, alignSelf: "center", marginTop: px(10) },
+    head: { flexDirection: "row", alignItems: "center", gap: px(12), paddingTop: px(14), paddingHorizontal: px(16), paddingBottom: px(12) },
+    thumb: { width: px(44), height: px(44), borderRadius: px(10), backgroundColor: VIDEO_FILL, alignItems: "center", justifyContent: "center" },
+    headText: { flex: 1, minWidth: 0 },
+    headTitle: { fontSize: px(14), fontWeight: "600", color: colors.textMain },
+    headDetail: { fontSize: px(12), color: colors.textSubtle },
+    close: { width: px(30), height: px(30), borderRadius: px(15), alignItems: "center", justifyContent: "center" },
+    rule: { height: px(1) },
+    apps: { flexDirection: "row", justifyContent: "space-between", paddingTop: px(14), paddingHorizontal: px(10), paddingBottom: px(12) },
+    app: { width: px(70), alignItems: "center", gap: px(8) },
+    // The system's tile: a circle on Android, iOS's corner of 23 % of the side.
+    tile: { width: px(56), height: px(56), borderRadius: px(IS_ANDROID ? 56 / 2 : Math.round(56 * 0.23)), alignItems: "center", justifyContent: "center" },
+    ring: { position: "absolute", left: px(-6), top: px(-6), right: px(-6), bottom: px(-6), borderWidth: px(2.5), borderColor: colors.primary,
+      borderRadius: px(IS_ANDROID ? 34 : 19) },
+    appLabel: { fontSize: px(11.5), fontWeight: "700", color: colors.textMain },
+    action: { flexDirection: "row", alignItems: "center", gap: px(12), paddingVertical: px(14), paddingHorizontal: px(16) },
+    actionRule: { borderTopWidth: px(1) },
+  });
+};
 
 // ---------------------------------------------------------------------------
 // Page 2 — Everywhere: the web app on a laptop, the app on a phone.
@@ -203,24 +225,25 @@ const makeSheetStyles = ({ colors }: Theme) => StyleSheet.create({
 const LAPTOP_COVER = "#3d4a6b";
 const PHONE_COVERS = ["#b88a3e", "#4f6b5a"];
 
-export function EverywhereArt() {
+export function EverywhereArt({ scale }: { scale: number }) {
   const { colors } = useTheme();
-  const styles = useThemedStyles(makeEverywhereStyles);
+  const styles = useArtStyles(makeEverywhereStyles, scale);
+  const u = (points: number) => points * scale;
   return <>
     <View style={styles.laptop}>
       <View style={styles.screen}>
         <View style={styles.toolbar}>
-          <View style={styles.logo} /><Bar width={34} height={5} /><Bar width={34} height={5} /><Bar width={34} height={5} />
+          <View style={styles.logo} /><Bar width={u(34)} height={u(5)} /><Bar width={u(34)} height={u(5)} /><Bar width={u(34)} height={u(5)} />
         </View>
         <View style={styles.panes}>
           <View style={styles.leftPane}>
             <View style={[styles.cover, { backgroundColor: LAPTOP_COVER }]} />
-            <Bar width={60} height={5} /><Bar width={50} height={5} /><Bar width={64} height={5} />
+            <Bar width={u(60)} height={u(5)} /><Bar width={u(50)} height={u(5)} /><Bar width={u(64)} height={u(5)} />
           </View>
           <View style={styles.mainPane}>
-            <Bar width="80%" height={5} /><Bar width="60%" height={5} />
+            <Bar width="80%" height={u(5)} /><Bar width="60%" height={u(5)} />
             <View style={styles.bubble} />
-            <Bar width="70%" height={5} />
+            <Bar width="70%" height={u(5)} />
           </View>
           <View style={styles.rightPane}>{[0, 1, 2, 3].map((i) => <View key={i} style={styles.chip} />)}</View>
         </View>
@@ -229,31 +252,34 @@ export function EverywhereArt() {
     <View style={styles.base} />
     <View style={styles.phone}>
       <View style={styles.phoneScreen}>
-        <Bar width={50} height={6} color={colors.textMain} />
+        <Bar width={u(50)} height={u(6)} color={colors.textMain} />
         <View style={[styles.phoneCover, { backgroundColor: PHONE_COVERS[0] }]} />
-        <Bar width="80%" height={5} />
+        <Bar width="80%" height={u(5)} />
         <View style={[styles.phoneCover, { backgroundColor: PHONE_COVERS[1] }]} />
-        <Bar width="70%" height={5} />
+        <Bar width="70%" height={u(5)} />
       </View>
     </View>
   </>;
 }
 
-const makeEverywhereStyles = ({ colors }: Theme) => StyleSheet.create({
-  laptop: { position: "absolute", left: 28, top: 62, width: 310, height: 200, borderRadius: 14, backgroundColor: "#2b2d42", padding: 8 },
-  screen: { flex: 1, borderRadius: 7, backgroundColor: colors.background, overflow: "hidden" },
-  toolbar: { flexDirection: "row", alignItems: "center", gap: 6, height: 22, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: colors.surfaceContainer },
-  logo: { width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary },
-  panes: { flex: 1, flexDirection: "row", gap: 6, padding: 8 },
-  leftPane: { width: 70, gap: 6 },
-  cover: { width: 70, height: 42, borderRadius: 6 },
-  mainPane: { flex: 1, gap: 6, backgroundColor: colors.surface, borderRadius: 6, padding: 8 },
-  bubble: { marginLeft: "auto", width: "60%", height: 16, borderRadius: 6, backgroundColor: colors.surfaceContainerHigh },
-  rightPane: { width: 58, gap: 5 },
-  chip: { height: 14, borderRadius: 7, backgroundColor: colors.highlight },
-  base: { position: "absolute", left: 8, top: 262, width: 350, height: 12, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: "#c9c4bf" },
-  phone: { position: "absolute", left: 282, top: 118, width: 104, height: 212, borderRadius: 22, backgroundColor: "#1c1b1a", padding: 5,
-    shadowColor: "#2b2d42", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16, elevation: 4 },
-  phoneScreen: { flex: 1, borderRadius: 17, backgroundColor: colors.background, paddingTop: 18, paddingHorizontal: 8, paddingBottom: 8, gap: 6 },
-  phoneCover: { height: 52, borderRadius: 8 },
-});
+const makeEverywhereStyles = ({ colors }: Theme, scale: number) => {
+  const u = (points: number) => points * scale;
+  return StyleSheet.create({
+    laptop: { position: "absolute", left: u(28), top: u(62), width: u(310), height: u(200), borderRadius: u(14), backgroundColor: "#2b2d42", padding: u(8) },
+    screen: { flex: 1, borderRadius: u(7), backgroundColor: colors.background, overflow: "hidden" },
+    toolbar: { flexDirection: "row", alignItems: "center", gap: u(6), height: u(22), paddingHorizontal: u(8), borderBottomWidth: u(1), borderBottomColor: colors.surfaceContainer },
+    logo: { width: u(12), height: u(12), borderRadius: u(6), backgroundColor: colors.primary },
+    panes: { flex: 1, flexDirection: "row", gap: u(6), padding: u(8) },
+    leftPane: { width: u(70), gap: u(6) },
+    cover: { width: u(70), height: u(42), borderRadius: u(6) },
+    mainPane: { flex: 1, gap: u(6), backgroundColor: colors.surface, borderRadius: u(6), padding: u(8) },
+    bubble: { marginLeft: "auto", width: "60%", height: u(16), borderRadius: u(6), backgroundColor: colors.surfaceContainerHigh },
+    rightPane: { width: u(58), gap: u(5) },
+    chip: { height: u(14), borderRadius: u(7), backgroundColor: colors.highlight },
+    base: { position: "absolute", left: u(8), top: u(262), width: u(350), height: u(12), borderBottomLeftRadius: u(10), borderBottomRightRadius: u(10), backgroundColor: "#c9c4bf" },
+    phone: { position: "absolute", left: u(282), top: u(118), width: u(104), height: u(212), borderRadius: u(22), backgroundColor: "#1c1b1a", padding: u(5),
+      shadowColor: "#2b2d42", shadowOffset: { width: 0, height: u(8) }, shadowOpacity: 0.15, shadowRadius: u(16), elevation: 4 },
+    phoneScreen: { flex: 1, borderRadius: u(17), backgroundColor: colors.background, paddingTop: u(18), paddingHorizontal: u(8), paddingBottom: u(8), gap: u(6) },
+    phoneCover: { height: u(52), borderRadius: u(8) },
+  });
+};
