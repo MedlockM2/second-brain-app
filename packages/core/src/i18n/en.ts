@@ -517,8 +517,6 @@ export const en = {
   "transcript.status.transcribing": "Turning the audio into text...",
   "transcript.status.ready": "The text is ready.",
   "transcript.status.failed": "Preparing the text failed.",
-  "transcript.paragraphCount.one": "{count} paragraph",
-  "transcript.paragraphCount.other": "{count} paragraphs",
   "transcript.loading": "Loading the text…",
   "transcript.notAvailable": "The full text is not available for this item.",
   "transcript.retryA11y": "Retry loading the text",

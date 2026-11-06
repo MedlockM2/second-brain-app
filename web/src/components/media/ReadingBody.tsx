@@ -1,7 +1,5 @@
 import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
-import { formatDuration } from "@media-summarizer/core/i18n/duration";
 import { LOCALE_ENDONYMS, isSupportedLocale } from "@media-summarizer/core/i18n/locales";
-import { formatDate, tCount } from "@media-summarizer/core/i18n/runtime";
 import { mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveSourcePreviewState } from "@media-summarizer/core/media/sourcePreview";
 import { languageTag, resolveSourceLink, splitTranscriptParagraphs } from "@media-summarizer/core/media/transcript";
@@ -43,9 +41,8 @@ function processingKey(platform?: SourcePlatform | string) {
 }
 
 /**
- * The reading pane of a media: the cover band (creator and title on glass), the
- * line of facts (source, date, length, language, paragraphs), then "L'essentiel"
- * and the full text — or, while the media is not readable yet, where it stands.
+ * The reading pane of a media: the cover band (creator and title on glass), then
+ * "L'essentiel" and the full text — or, while the media is not readable yet, where it stands.
  *
  * Opened from a search result, the full text opens on the passage the result
  * quoted (`passage`, see `useSearchPassage`).
@@ -88,28 +85,10 @@ export function ReadingBody({
   useSearchPassage(reader, passage, shownText);
 
   const link = resolveSourceLink(item.original_url);
-  const created = new Date(item.created_at);
-  const languages =
-    translated && targetLanguage && sourceLanguage
-      ? `${describeLanguage(sourceLanguage)} → ${describeLanguage(targetLanguage)}`
-      : describeLanguage(sourceLanguage);
-  const facts = [
-    Number.isNaN(created.getTime()) ? null : formatDate(created, { day: "numeric", month: "short", year: "numeric" }),
-    item.transcript?.duration_seconds ? formatDuration(item.transcript.duration_seconds) : null,
-    languages,
-  ].filter(Boolean);
 
   return (
     <>
       <Hero item={item} title={title} link={link} />
-      <div className="meta-line">
-        {facts.map((fact) => (
-          <span key={fact}>{fact}</span>
-        ))}
-        {item.transcript?.segments_count ? (
-          <span style={{ flexBasis: "100%" }}>{tCount("transcript.paragraphCount", item.transcript.segments_count)}</span>
-        ) : null}
-      </div>
 
       {state === "processing" && (
         <div className="state-card" role="status">

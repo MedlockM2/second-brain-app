@@ -369,8 +369,6 @@ export const ja: Catalog = {
   "transcript.status.transcribing": "音声をテキストに変換中…",
   "transcript.status.ready": "本文の準備ができました。",
   "transcript.status.failed": "本文の準備に失敗しました。",
-  "transcript.paragraphCount.one": "{count} 段落",
-  "transcript.paragraphCount.other": "{count} 段落",
   "transcript.loading": "本文を読み込み中…",
   "transcript.notAvailable": "この項目の全文は利用できません。",
   "transcript.retryA11y": "本文を再読み込み",

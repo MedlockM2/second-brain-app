@@ -373,8 +373,6 @@ export const it: Catalog = {
   "transcript.status.transcribing": "Conversione dell'audio in testo…",
   "transcript.status.ready": "Il testo è pronto.",
   "transcript.status.failed": "La preparazione del testo non è riuscita.",
-  "transcript.paragraphCount.one": "{count} paragrafo",
-  "transcript.paragraphCount.other": "{count} paragrafi",
   "transcript.loading": "Caricamento del testo…",
   "transcript.notAvailable": "Il testo completo non è disponibile per questo elemento.",
   "transcript.retryA11y": "Riprova a caricare il testo",

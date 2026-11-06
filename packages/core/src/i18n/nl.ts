@@ -374,8 +374,6 @@ export const nl: Catalog = {
   "transcript.status.transcribing": "Audio wordt omgezet in tekst…",
   "transcript.status.ready": "De tekst is klaar.",
   "transcript.status.failed": "Het voorbereiden van de tekst is mislukt.",
-  "transcript.paragraphCount.one": "{count} alinea",
-  "transcript.paragraphCount.other": "{count} alinea's",
   "transcript.loading": "Tekst laden…",
   "transcript.notAvailable": "De volledige tekst is niet beschikbaar voor dit item.",
   "transcript.retryA11y": "Tekst opnieuw laden",

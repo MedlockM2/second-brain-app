@@ -432,8 +432,6 @@ export const de: Catalog = {
   "transcript.status.transcribing": "Audio wird in Text umgewandelt …",
   "transcript.status.ready": "Der Text ist fertig.",
   "transcript.status.failed": "Die Aufbereitung des Textes ist fehlgeschlagen.",
-  "transcript.paragraphCount.one": "{count} Absatz",
-  "transcript.paragraphCount.other": "{count} Absätze",
   "transcript.loading": "Text wird geladen …",
   "transcript.notAvailable":
     "Der Volltext ist für dieses Element nicht verfügbar.",

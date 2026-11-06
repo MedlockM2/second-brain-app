@@ -373,8 +373,6 @@ export const hi: Catalog = {
   "transcript.status.transcribing": "ऑडियो को टेक्स्ट में बदला जा रहा है…",
   "transcript.status.ready": "पाठ तैयार है।",
   "transcript.status.failed": "पाठ की तैयारी विफल रही।",
-  "transcript.paragraphCount.one": "{count} अनुच्छेद",
-  "transcript.paragraphCount.other": "{count} अनुच्छेद",
   "transcript.loading": "पाठ लोड हो रहा है…",
   "transcript.notAvailable": "इस आइटम के लिए पूरा पाठ उपलब्ध नहीं है।",
   "transcript.retryA11y": "पाठ फिर से लोड करें",

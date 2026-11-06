@@ -360,8 +360,6 @@ export const zh: Catalog = {
   "transcript.status.transcribing": "正在把音频转换为文字…",
   "transcript.status.ready": "正文已就绪。",
   "transcript.status.failed": "正文准备失败。",
-  "transcript.paragraphCount.one": "{count} 段",
-  "transcript.paragraphCount.other": "{count} 段",
   "transcript.loading": "正在加载正文…",
   "transcript.notAvailable": "该条目没有可用的全文内容。",
   "transcript.retryA11y": "重新加载正文",

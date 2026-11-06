@@ -374,8 +374,6 @@ export const pt: Catalog = {
   "transcript.status.transcribing": "A converter o áudio em texto…",
   "transcript.status.ready": "O texto está pronto.",
   "transcript.status.failed": "A preparação do texto falhou.",
-  "transcript.paragraphCount.one": "{count} parágrafo",
-  "transcript.paragraphCount.other": "{count} parágrafos",
   "transcript.loading": "A carregar o texto…",
   "transcript.notAvailable": "O texto completo não está disponível para este item.",
   "transcript.retryA11y": "Tentar carregar novamente o texto",
