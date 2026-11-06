@@ -37,8 +37,10 @@ export default function IntroScreen() {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(0);
   const isShare = page === 0;
-  // The illustrations are drawn on the mockup's 414-point width; the laptop of
-  // page 2 is drawn a little larger so it reaches down to the button.
+  // The illustrations are laid out on the mockup's 414-point width and drawn at
+  // the device's, every length multiplied by `scale` (`artKit.tsx`: no transform,
+  // which would blur their text); the laptop of page 2 is drawn a little larger
+  // so it reaches down to the button.
   const scale = (width / ART_WIDTH) * (isShare ? 1 : 1.12);
 
   useFocusEffect(useCallback(() => {
@@ -70,9 +72,9 @@ export default function IntroScreen() {
       {isShare && <WorksWith />}
     </View>
     <View style={styles.artArea} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <View style={[styles.art, { top: isShare ? 20 : 44, left: (width - ART_WIDTH) / 2, transform: [{ scale }] }]}>
-        <Glow top={isShare ? 20 : 40} height={420} />
-        {isShare ? <ShareSheetArt /> : <EverywhereArt />}
+      <View style={[styles.art, { top: isShare ? 20 : 44, left: (width - ART_WIDTH * scale) / 2, width: ART_WIDTH * scale, height: ART_HEIGHT * scale }]}>
+        <Glow top={isShare ? 20 : 40} height={420} scale={scale} />
+        {isShare ? <ShareSheetArt scale={scale} /> : <EverywhereArt scale={scale} />}
       </View>
     </View>
     <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.sm, experimental_backgroundImage: fade }]}>
@@ -97,9 +99,9 @@ const makeStyles = ({ colors }: Theme) => StyleSheet.create({
   body: { marginTop: 10, fontSize: 16, lineHeight: 24, color: colors.textSubtle, textAlign: "center" },
   strong: { fontWeight: "700", color: colors.textMain },
   artArea: { flex: 1 },
-  // The box keeps the mockup's coordinates; it is scaled from its top edge, so
-  // the illustration starts right under the text whatever the device width.
-  art: { position: "absolute", width: ART_WIDTH, height: ART_HEIGHT, transformOrigin: "top" },
+  // The box is the mockup's, at the device's scale, centred: its top edge stays
+  // right under the text whatever the device width.
+  art: { position: "absolute" },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, paddingTop: 120, paddingHorizontal: Spacing.lg, gap: Spacing.md },
   primary: { minHeight: TouchTarget.comfortable - 4, borderRadius: 999, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   primaryText: { color: colors.onPrimary, fontSize: Typography.body.fontSize, fontWeight: "700" },
