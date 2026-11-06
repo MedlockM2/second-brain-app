@@ -1,9 +1,10 @@
 ---
 id: TASK-608
 title: Déployer automatiquement la web app dev sur CloudFront à chaque push sur main
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-06 16:15'
+updated_date: '2026-11-06 16:32'
 labels:
   - tooling
   - web
@@ -16,6 +17,14 @@ references:
   - infrastructure/terraform/envs/dev/gha_oidc.tf
   - scripts/verify_web_release.mjs
   - docs/validation/task-605-web-cloudfront/README.md
+modified_files:
+  - .github/workflows/deploy-web.yml
+  - .gitignore
+  - web/.env.beta
+  - infrastructure/terraform/envs/dev/gha_oidc.tf
+  - infrastructure/terraform/modules/platform/web_hosting.tf
+  - docs/WEB_RELEASE.md
+  - web/README.md
 priority: high
 ordinal: 215000
 ---
@@ -39,9 +48,21 @@ Note propriétaire (hors AC) : le `terraform apply` des droits IAM part automati
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `.github/workflows/deploy-web.yml` existe, se déclenche sur push `main` (chemins web/core/lock/workflow) et sur `workflow_dispatch`, et ne cible que dev
-- [ ] #2 Les étapes d'envoi reprennent l'ordre et les en-têtes de cache de `docs/WEB_RELEASE.md`, sans `--delete`, et attendent la fin de l'invalidation puis comparent le `releaseId` distant au local
-- [ ] #3 `web/.env.beta` est commité, ne contient que des valeurs publiques, et `npm run build --workspace web -- --mode beta` suivi de `node scripts/verify_web_release.mjs web/dist` réussit en local
-- [ ] #4 Le rôle OIDC dev reçoit uniquement les droits S3 (bucket app dev) et CloudFront (distribution app dev) nécessaires ; `terraform fmt -check` et `terraform validate` sur `envs/dev` sont propres
-- [ ] #5 `docs/WEB_RELEASE.md` et `web/README.md` décrivent le déploiement automatique dev et limitent la procédure manuelle à la prod et au retour à un paquet précédent
+- [x] #1 `.github/workflows/deploy-web.yml` existe, se déclenche sur push `main` (chemins web/core/lock/workflow) et sur `workflow_dispatch`, et ne cible que dev
+- [x] #2 Les étapes d'envoi reprennent l'ordre et les en-têtes de cache de `docs/WEB_RELEASE.md`, sans `--delete`, et attendent la fin de l'invalidation puis comparent le `releaseId` distant au local
+- [x] #3 `web/.env.beta` est commité, ne contient que des valeurs publiques, et `npm run build --workspace web -- --mode beta` suivi de `node scripts/verify_web_release.mjs web/dist` réussit en local
+- [x] #4 Le rôle OIDC dev reçoit uniquement les droits S3 (bucket app dev) et CloudFront (distribution app dev) nécessaires ; `terraform fmt -check` et `terraform validate` sur `envs/dev` sont propres
+- [x] #5 `docs/WEB_RELEASE.md` et `web/README.md` décrivent le déploiement automatique dev et limitent la procédure manuelle à la prod et au retour à un paquet précédent
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Nouveau workflow `.github/workflows/deploy-web.yml`, lancé par un push sur `main` (web/, packages/core/, package.json, package-lock.json, le workflow lui-même) ou à la main. Il fait le typecheck, le lint, le build `beta`, passe le vérificateur, puis envoie dans l'ordre du runbook : archive, assets immuables, autres fichiers en no-store, index.html en dernier, sans suppression. Il attend la fin de l'invalidation `/*` et vérifie que le `release.json` servi porte le `releaseId` construit. Une seule publication à la fois, sans interruption, la plus récente en attente gagne. Le compte AWS dev est contrôlé avant tout envoi.
+
+Configuration publique : `web/.env.beta` est commité (exception dans `.gitignore`) avec `app_base_url` et `chat_stream_url`. Un build local `--mode beta` et le vérificateur passent avec ce seul fichier (releaseId ca9804ce…).
+
+Droits : le module expose `app_bucket_arn` et `app_distribution_arn`. Le rôle OIDC dev reçoit `s3:ListBucket` sur le bucket app, `s3:PutObject` sur ses objets, et `cloudfront:CreateInvalidation` / `GetInvalidation` sur la seule distribution app. `fmt` et `validate` passent. Le plan relu ne contenait que ces changements, plus la clé Apple réappliquée à chaque fois. Appliqué en ciblé sur dev avant le push, pour que le premier run ne parte pas avant ses droits.
+
+Documentation : `docs/WEB_RELEASE.md` et `web/README.md` décrivent la publication automatique de dev. La procédure manuelle ne sert plus qu'à la prod et au retour à un paquet précédent. Ils recommandent de ne pas créer de `web/.env.beta.local`, qui passerait devant `web/.env.beta`.
+<!-- SECTION:FINAL_SUMMARY:END -->

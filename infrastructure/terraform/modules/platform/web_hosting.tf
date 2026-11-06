@@ -257,6 +257,8 @@ resource "aws_route53_record" "web" {
 }
 output "app_bucket_name" { value = try(aws_s3_bucket.app[0].bucket, null) }
 output "app_distribution_id" { value = try(aws_cloudfront_distribution.app[0].id, null) }
+output "app_bucket_arn" { value = try(aws_s3_bucket.app[0].arn, null) }
+output "app_distribution_arn" { value = try(aws_cloudfront_distribution.app[0].arn, null) }
 output "app_base_url" {
   value = local.web_app_enabled ? (local.web_domains_enabled ? "https://app.${var.web_public_domain}" : "https://${aws_cloudfront_distribution.app[0].domain_name}") : null
 }

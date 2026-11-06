@@ -133,7 +133,7 @@ resource "aws_iam_role" "gha_deploy" {
   # stored in the AWS_DEPLOY_ROLE_ARN GitHub secret, and renaming would break
   # every deploy for the duration of the change. See divergence 1 in the header.
   name               = "${local.gha_project_name}-gha-deploy"
-  description        = "GitHub Actions deploy role for ${local.gha_environment} (deploy-lambda.yml). Assumable only by a job running on ${var.github_ref} of ${var.github_repository}."
+  description        = "GitHub Actions deploy role for ${local.gha_environment} (deploy-lambda.yml, deploy-web.yml). Assumable only by a job running on ${var.github_ref} of ${var.github_repository}."
   assume_role_policy = data.aws_iam_policy_document.gha_deploy_assume.json
 
   tags = {
@@ -220,6 +220,40 @@ data "aws_iam_policy_document" "gha_deploy" {
     effect    = "Allow"
     actions   = ["apigateway:GET"]
     resources = ["arn:aws:apigateway:${local.gha_aws_region}::/apis/*"]
+  }
+
+  # deploy-web.yml (TASK-608): publish the web package to the dev app bucket and
+  # invalidate its distribution. Scoped to that one bucket and that one
+  # distribution; no delete, since published hashed assets are never removed
+  # (docs/WEB_RELEASE.md). ListBucket is what `aws s3 sync` compares against.
+  dynamic "statement" {
+    for_each = module.platform.app_bucket_arn == null ? [] : [module.platform.app_bucket_arn]
+    content {
+      sid       = "WebAppList"
+      effect    = "Allow"
+      actions   = ["s3:ListBucket"]
+      resources = [statement.value]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = module.platform.app_bucket_arn == null ? [] : [module.platform.app_bucket_arn]
+    content {
+      sid       = "WebAppPublish"
+      effect    = "Allow"
+      actions   = ["s3:PutObject"]
+      resources = ["${statement.value}/*"]
+    }
+  }
+
+  dynamic "statement" {
+    for_each = module.platform.app_distribution_arn == null ? [] : [module.platform.app_distribution_arn]
+    content {
+      sid       = "WebAppInvalidate"
+      effect    = "Allow"
+      actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
+      resources = [statement.value]
+    }
   }
 }
 

@@ -2,7 +2,8 @@
 
 TASK-590 prépare le mécanisme local. TASK-591 porte la future bascule sur le domaine
 du propriétaire. TASK-605 publie d’abord la web app dev sur l’adresse CloudFront,
-avec autorisation explicite du propriétaire dans la conversation du 2026-11-06.
+avec autorisation explicite du propriétaire dans la conversation du 2026-11-06 ;
+depuis TASK-608, la CI republie dev à chaque push sur `main` qui touche le web.
 TASK-471 porte les ressources `app`, TASK-472 le site `www`. Les agents ordinaires
 d’implémentation préparent le paquet ; les opérations distantes nécessitent une
 instruction explicite de publication. Aucun domaine fictif n’est utilisé.
@@ -37,8 +38,9 @@ optionnelles absentes ne sont ni remplies artificiellement ni déclarées dispon
 ## Préparation locale par environnement
 
 1. Utiliser une révision commitée identifiée et Node 20. Depuis la racine : `npm ci`.
-2. Choisir un mode explicite, par exemple `beta`. Copier `web/.env.example` vers
-   `web/.env.beta.local` (ignoré par git), puis renseigner les valeurs publiques
+2. Choisir un mode explicite. `beta` (dev hébergé) lit le fichier suivi
+   `web/.env.beta`. Pour un autre environnement, copier `web/.env.example` vers
+   `web/.env.<mode>.local` (ignoré par git), puis renseigner les valeurs publiques
    vérifiées par le propriétaire. Écarter les anciens `.env.local` et les variables
    `VITE_*` héritées du shell : celles du processus ont priorité sur les fichiers.
 3. Exécuter depuis la racine :
@@ -66,7 +68,22 @@ Une compilation sans domaine reste possible avec `--mode ci`, suivie de
 `node scripts/verify_web_release.mjs web/dist --compilation-only` ; cela n'en fait
 pas un paquet de distribution. Les builds ne contactent aucune API.
 
-## Dépôt et invalidation — propriétaire uniquement
+## Dépôt et invalidation
+
+**Dev : automatique (TASK-608).** Chaque push sur `main` qui touche `web/`,
+`packages/core/`, `package.json` ou `package-lock.json` lance
+`.github/workflows/deploy-web.yml`. Le workflow construit le paquet `beta` à partir
+du fichier suivi `web/.env.beta` (valeurs publiques uniquement : `app_base_url` et
+`chat_stream_url` de la racine Terraform dev). Il exécute le vérificateur, puis les
+commandes ci-dessous dans le même ordre, attend la fin de l'invalidation et vérifie
+que le `release.json` servi porte le `releaseId` construit. Le rôle de déploiement
+OIDC dev (`infrastructure/terraform/envs/dev/gha_oidc.tf`) peut seulement lister et
+écrire dans le bucket app dev et invalider sa distribution : aucune suppression.
+Une publication à la fois ; un push arrivé pendant un run attend et seul le plus
+récent part. Relancer sans commit : `workflow_dispatch`. Ne pas créer de
+`web/.env.beta.local` : il passerait devant `web/.env.beta` lors d'un build local.
+
+**Prod et retour arrière : propriétaire uniquement**, à la main, comme suit.
 
 Prérequis TASK-471/605 : bucket privé avec OAC, distribution `app`, routage SPA et cache
 respectant les en-têtes d'origine (`min_ttl = 0` pour l'index). Vérifier l'environnement,

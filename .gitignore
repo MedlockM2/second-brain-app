@@ -11,6 +11,7 @@
 .env.*
 !.env.example
 !web/.env.ci
+!web/.env.beta
 front/.env
 mobile/.env
 

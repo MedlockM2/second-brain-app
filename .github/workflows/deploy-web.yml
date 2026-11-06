@@ -1,0 +1,121 @@
+# Build and publish the dev web app (https://d3n3qjz3si2rme.cloudfront.net) on every
+# push to main that changes it (TASK-608).
+#
+# Before this workflow the publication was a manual runbook step, so the web code on
+# main followed the mobile app (scripts/check_web_parity.py) while the site itself
+# kept whatever package someone last uploaded by hand.
+#
+# The steps are the runbook of docs/WEB_RELEASE.md, in its order: identified package,
+# verifier, archive, hashed assets (immutable, never deleted), other files, index.html
+# last, then a full invalidation and a check that the site serves this package.
+#
+# Production is never published from here: it stays a manual operation, like the
+# Lambda promotion in deploy-lambda.yml.
+
+name: Deploy Web App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      # Shared with the mobile app and bundled into the web app: the parity changes
+      # usually land here.
+      - "packages/core/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+# One publication at a time. A push arriving during a run waits, and only the most
+# recent waiting one runs: an upload is never interrupted halfway.
+concurrency:
+  group: deploy-web-dev
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_DEFAULT_REGION: eu-west-3
+  AWS_ACCOUNT_ID: "125313707865"
+  # Outputs app_bucket_name, app_distribution_id and app_base_url of
+  # infrastructure/terraform/envs/dev. The deploy role may write to this bucket and
+  # invalidate this distribution only, so a stale value fails instead of reaching
+  # another resource.
+  WEB_BUCKET: media-summarizer-app-125313707865-dev
+  WEB_DISTRIBUTION: E31Z5U8Y6RDUWR
+  WEB_URL: https://d3n3qjz3si2rme.cloudfront.net
+
+jobs:
+  deploy:
+    name: Publish the beta package on dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      - name: Run web typecheck
+        run: npm run typecheck --workspace web
+
+      - name: Run web lint
+        run: npm run lint --workspace web
+
+      # Public configuration from the committed web/.env.beta.
+      - name: Build the beta package
+        run: npm run build --workspace web -- --mode beta
+
+      - name: Verify the package
+        run: |
+          node scripts/verify_web_release.mjs web/dist
+          RELEASE_ID=$(node -p 'JSON.parse(require("fs").readFileSync("web/dist/release.json", "utf8")).releaseId')
+          echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
+          echo "Release $RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Guard — dev account
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          test "$ACCOUNT" = "$AWS_ACCOUNT_ID" || {
+            echo "::error::Assumed role is in account $ACCOUNT, expected dev $AWS_ACCOUNT_ID"
+            exit 1
+          }
+
+      - name: Upload (archive, assets, other files, index last)
+        run: |
+          ARCHIVE="$RUNNER_TEMP/$RELEASE_ID.tar.gz"
+          tar -czf "$ARCHIVE" -C web/dist .
+          aws s3 cp --only-show-errors "$ARCHIVE" "s3://$WEB_BUCKET/_releases/$RELEASE_ID.tar.gz" --cache-control 'public,max-age=31536000,immutable'
+          aws s3 sync --only-show-errors web/dist/assets/ "s3://$WEB_BUCKET/assets/" --cache-control 'public,max-age=31536000,immutable'
+          aws s3 cp --only-show-errors web/dist/ "s3://$WEB_BUCKET/" --recursive --exclude 'assets/*' --exclude 'index.html' --cache-control 'no-store,max-age=0'
+          aws s3 cp --only-show-errors web/dist/index.html "s3://$WEB_BUCKET/index.html" --content-type 'text/html; charset=utf-8' --cache-control 'no-store,max-age=0'
+
+      - name: Invalidate CloudFront and wait
+        run: |
+          INVALIDATION=$(aws cloudfront create-invalidation --distribution-id "$WEB_DISTRIBUTION" --paths '/*' --query Invalidation.Id --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$WEB_DISTRIBUTION" --id "$INVALIDATION"
+
+      - name: Check the site serves this package
+        run: |
+          REMOTE=$(curl -fsS "$WEB_URL/release.json" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.parse(s).releaseId))')
+          test "$REMOTE" = "$RELEASE_ID" || {
+            echo "::error::$WEB_URL serves release $REMOTE, expected $RELEASE_ID"
+            exit 1
+          }
+          echo "$WEB_URL serves $RELEASE_ID ($GITHUB_SHA)" >> "$GITHUB_STEP_SUMMARY"

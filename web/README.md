@@ -87,7 +87,10 @@ and rollback are documented in [docs/WEB_RELEASE.md](../docs/WEB_RELEASE.md).
 and writes `dist/release.json`; `node scripts/verify_web_release.mjs web/dist`
 (from the repository root) checks the exact package and refuses compilation-only
 builds. TASK-605 publishes dev on CloudFront before domain purchase; TASK-591 owns
-the later domain cutover. Read `app_base_url` from the dev Terraform root for the
+the later domain cutover. Every push to `main` touching `web/`, `packages/core/` or
+the npm lock republishes dev automatically (`.github/workflows/deploy-web.yml`,
+TASK-608), built with the tracked public settings of `web/.env.beta`; a manual
+publication is only for production and for rolling back to an earlier package. Read `app_base_url` from the dev Terraform root for the
 hosted app address. Cognito callbacks and upload/streaming CORS use that origin.
 
 ## Legal links
