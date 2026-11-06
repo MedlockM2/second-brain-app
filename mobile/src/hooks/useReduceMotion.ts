@@ -13,8 +13,9 @@ import { AccessibilityInfo } from "react-native";
  *
  * Shared by the looping animations that must stop under that setting: the
  * band that sweeps a cover still being processed (`MediaProcessingSweep`) and
- * the row of an artifact being generated (`ArtifactGeneratingRow`) and the
- * chat's waiting dot (`ChatWaitingIndicator`).
+ * the row of an artifact being generated (`ArtifactGeneratingRow`), the
+ * chat's waiting dot (`ChatWaitingIndicator`) and, one-shot, the exit of a
+ * card discarded in the Unsorted review (`app/review/index.tsx`).
  */
 export function useReduceMotion(): boolean {
   const [reduceMotion, setReduceMotion] = useState(false);

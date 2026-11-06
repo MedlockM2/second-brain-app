@@ -1,9 +1,10 @@
 ---
 id: TASK-602
 title: Donner une sortie animée à la carte jetée dans la Revue des non classés
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-06 09:01'
+updated_date: '2026-11-06 14:32'
 labels:
   - mobile
   - ux
@@ -45,9 +46,40 @@ NOTE PROPRIÉTAIRE : la vérification visuelle de l'animation (fluidité, direct
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 La carte jetée dans la Revue des non classés sort par une animation `Animated` de React Native ; le chemin est câblé depuis `handleDiscard` et aucune dépendance d'animation n'est ajoutée au projet.
-- [ ] #2 Le retrait de la file reste immédiat et non bloquant : aucun tap sur Jeter n'est ignoré ni différé pendant l'animation, et `restoreAt` remet la carte en place sans animation inverse.
-- [ ] #3 Réduire les animations supprime la sortie animée sur mobile via `useReduceMotion`, et `prefers-reduced-motion` fait de même sur `web/src/pages/UnsortedPage.tsx` ; l'animation est nettoyée au démontage.
-- [ ] #4 Le bouton Jeter de `web/src/pages/UnsortedPage.tsx` a la même sortie animée que le mobile.
-- [ ] #5 Typecheck et lint mobile, core et web passent, et le build web réussit ; aucun test automatisé n'est ajouté.
+- [x] #1 La carte jetée dans la Revue des non classés sort par une animation `Animated` de React Native ; le chemin est câblé depuis `handleDiscard` et aucune dépendance d'animation n'est ajoutée au projet.
+- [x] #2 Le retrait de la file reste immédiat et non bloquant : aucun tap sur Jeter n'est ignoré ni différé pendant l'animation, et `restoreAt` remet la carte en place sans animation inverse.
+- [x] #3 Réduire les animations supprime la sortie animée sur mobile via `useReduceMotion`, et `prefers-reduced-motion` fait de même sur `web/src/pages/UnsortedPage.tsx` ; l'animation est nettoyée au démontage.
+- [x] #4 Le bouton Jeter de `web/src/pages/UnsortedPage.tsx` a la même sortie animée que le mobile.
+- [x] #5 Typecheck et lint mobile, core et web passent, et le build web réussit ; aucun test automatisé n'est ajouté.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Mobile (`mobile/app/review/index.tsx`)
+
+`handleDiscard` still removes the card from the queue on the tap. It then sets a `leaving` copy of the card, which `DiscardedCardExit` draws over the next card, absolutely filling the stage:
+- `Animated.timing` on the native driver with `isInteraction: false`, 300 ms (the existing Toast and bug-report duration, kept as a local constant), ease-in;
+- the card slides one window width to the left, tilts −8° and fades out.
+
+The copy ignores touches (`pointerEvents="none"`) and is hidden from screen readers. Each new tap replaces the copy (keyed by a nonce), so nothing is queued or delayed.
+
+`restoreAt` stops drawing a copy of the restored card, with no reverse animation. Under `useReduceMotion` no copy is drawn. The animation is stopped on unmount (`exit.stop()` in the effect cleanup, as in `ChatWaitingIndicator`).
+
+No dependency was added. The screen's close at 1/1 is untouched.
+
+## Web (`web/src/pages/UnsortedPage.tsx`, `styles.css`)
+
+The card's head and blurb are extracted into `TriageSummary`. On discard, a `.triage-exit` copy (`aria-hidden`, `inert`) is drawn over the next card. A 300 ms CSS animation (mirrored in RTL) slides it to the start side, tilts it and fades it, and `onAnimationEnd` removes it.
+
+A failed DELETE removes the copy and restores the card without animation. `prefers-reduced-motion` skips the copy: it is checked at tap time, and CSS also sets `display: none` as a safety net.
+
+## Checks
+
+- `tsc` is clean in mobile and web; core is unchanged.
+- eslint: no new issue.
+- `vite build` passes.
+- No tests were added.
+
+The visual check is the owner's after OTA (see description).
+<!-- SECTION:NOTES:END -->

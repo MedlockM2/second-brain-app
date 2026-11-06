@@ -12,6 +12,7 @@ import {
   type UploadDocumentResponse,
 } from "@media-summarizer/core/types/upload";
 import { apiRequest } from "../api";
+import { startUploadTrace } from "../lib/crashReporting";
 
 /**
  * Adding a source from the web, on the endpoints the mobile app uses.
@@ -71,23 +72,39 @@ export async function addFile(file: File, folderId: string | null): Promise<stri
   if ("rejection" in prepared) throw new Error(prepared.rejection.message);
   const { kind, mimeType } = prepared.file;
 
+  // The trace of the direct upload (task-604): figures and enums, never the URL or the name.
+  const trace = startUploadTrace({ "upload.target": kind, "upload.content_type": mimeType, "upload.bytes": file.size });
+  const fail = (stage: string, message: string, status?: number): Error => {
+    trace.set({ "upload.failure_stage": stage, "http.response.status_code": status });
+    trace.end("error");
+    return new Error(message);
+  };
+
   let issued: UploadUrlResponse;
   try {
-    issued = await apiRequest<UploadUrlResponse>("/api/media/upload-url", {
-      method: "POST",
-      body: { target: kind, filename: file.name, content_type: mimeType, file_size: file.size },
-    });
+    issued = await trace.step("sign", () =>
+      apiRequest<UploadUrlResponse>("/api/media/upload-url", {
+        method: "POST",
+        body: { target: kind, filename: file.name, content_type: mimeType, file_size: file.size },
+      }),
+    );
   } catch (error) {
-    throw new Error(describeRefusal(error));
+    throw fail("sign", describeRefusal(error));
   }
 
   let put: Response;
   try {
-    put = await fetch(issued.upload_url, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
-  } catch {
-    throw new Error(t("upload.transferFailed.network"));
+    put = await trace.step("put", async () => {
+      const response = await fetch(issued.upload_url, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
+      if (!response.ok) throw response;
+      return response;
+    });
+  } catch (caught) {
+    if (caught instanceof Response) throw fail("put_rejected", t("upload.transferFailed.rejected"), caught.status);
+    throw fail("put_network", t("upload.transferFailed.network"));
   }
-  if (!put.ok) throw new Error(t("upload.transferFailed.rejected"));
+  trace.set({ "http.response.status_code": put.status });
+  trace.end("ok");
 
   try {
     const response = await apiRequest<UploadDocumentResponse | UploadAudioResponse>(

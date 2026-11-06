@@ -143,7 +143,8 @@ export type HomeTileItem = (
       status?: string | null;
       /**
        * Drawn for an import whose ingestion has not answered yet (task-568): it
-       * looks like any vignette being processed, but there is no media to open.
+       * looks like any vignette being processed, and opens the media page on the
+       * submission's key, which waits there for the real media (task-603).
        */
       provisional?: boolean;
     }
@@ -198,7 +199,6 @@ export function HomeTile({
       onAccessibilityAction={handleLongPress}
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
       onPress={() => onPress(item)}
-      disabled={item.kind === "media" && item.provisional === true}
       accessibilityLabel={learning?.accessibilityLabel ?? describeTile(item)}
       accessibilityRole="button"
     >

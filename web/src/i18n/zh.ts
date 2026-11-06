@@ -40,6 +40,7 @@ export const zh: WebCatalog = {
   "add.formats": "PDF、Office 文档、图片、音频文件 · 每次导入 1 个文件",
   "add.removeFile": "移除此文件",
   "add.uploading": "正在上传…",
+  "add.openWhileUploading": "打开其页面",
   "add.added": "已添加，处理已开始。",
   "pane.scopeFolder": "此文件夹",
   "chat.emptyMedia": "就此来源提问。回答仅依据其文本。",
