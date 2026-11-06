@@ -747,7 +747,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     # It sits under the job id, so the job's purge sweeps it.
                     plan_s3_key = f"{job.id}.conversation.json"
                     part_iter = iter(parts)
-                    plan = [
+                    plan: list[dict[str, str | int | None]] = [
                         {"kind": message.kind.value, "text": message.text}
                         if message.audio_s3_key is None
                         else {
