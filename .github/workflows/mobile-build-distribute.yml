@@ -235,6 +235,10 @@ jobs:
           echo "- Status: Submitted" >> $GITHUB_STEP_SUMMARY
           echo "- Build ID: \`${{ steps.build.outputs.build_id }}\`" >> $GITHUB_STEP_SUMMARY
 
+      - name: External beta distribution handoff
+        if: env.build_status == 'success' && steps.plan.outputs.submit == 'true' && steps.plan.outputs.profile == 'internal'
+        run: echo 'Mobile Beta Distribution will add this build to the existing external TestFlight group, set FR/EN welcome notes and submit for beta review after Apple processing.' >> "$GITHUB_STEP_SUMMARY"
+
   # -------------------------------------------------------------------
   # Android Build & Internal Testing Distribution
   # -------------------------------------------------------------------
@@ -363,6 +367,10 @@ jobs:
           echo "## Android Internal Testing Submission" >> $GITHUB_STEP_SUMMARY
           echo "- Status: Submitted" >> $GITHUB_STEP_SUMMARY
           echo "- Build ID: \`${{ steps.build.outputs.build_id }}\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Closed beta distribution handoff
+        if: env.build_status == 'success' && steps.plan.outputs.submit == 'true' && steps.plan.outputs.profile == 'internal'
+        run: echo 'Mobile Beta Distribution will promote this build from internal testing to the existing Play Alpha track, set FR/EN welcome notes and submit for review.' >> "$GITHUB_STEP_SUMMARY"
 
   # -------------------------------------------------------------------
   # Build Failure Notification

@@ -10,7 +10,87 @@ The pipeline uses **EAS Build** (Expo Application Services) for cloud-based nati
 **EAS Submit** for publishing to TestFlight (iOS) and Google Play Internal Testing (Android),
 and **EAS Update** to push JS-only changes to already-installed binaries without a build.
 
-Two workflows, two jobs. They do not overlap.
+The two build/update entry points below are followed by **Mobile Beta Distribution**
+(`.github/workflows/mobile-beta-distribute.yml`, TASK-616). EAS still uploads to
+internal testing; the separate distributor handles external TestFlight and Play
+Alpha after the asynchronous build, upload and store processing have finished.
+
+### Automatic external beta distribution (TASK-616, 2026-11-06)
+
+`scripts/mobile_beta_distribute.mjs` reads the latest finished EAS `internal` build
+on each platform and reconciles it with the stores. It never builds or uploads a
+binary. The workflow runs after `Mobile OTA or Build` / `Mobile Build & Distribute`
+on `main`, every 30 minutes at minutes 8 and 38, and by manual dispatch. The
+scheduled retry is essential: `--no-wait` can finish hours before the binary and
+its auto-submission are ready. GitHub schedules can be delayed; 30 minutes is
+the polling interval, not a delivery SLA. Each platform has a concurrency lock.
+
+- **iOS:** find the exact marketing version and build number in App Store
+  Connect, wait for valid processing, set the FR/EN "What to Test" notes,
+  enable automatic tester notification, assign the existing external group and
+  submit for TestFlight beta review only when its state requires submission.
+  Already reviewed or distributed builds are not submitted again. Rejected,
+  expired and export-compliance-blocked builds fail visibly and need attention.
+- **Android:** verify that the exact EAS version code is available on the
+  `internal` track, promote it to the existing `alpha` track with the same notes,
+  and commit with `changesNotSentForReview=false`. The commit uses
+  `changesInReviewBehavior=ERROR_IF_IN_REVIEW`: a review already in progress is
+  preserved and promotion retried later. An equal or newer version already on
+  Alpha, including pending review, is never submitted again.
+
+The destination identifiers live in `mobile/beta-distribution.json`. The public
+TestFlight link, Play tester Google Group and opt-in links are reused; the script
+does not change testers, country targeting or link settings. Play **managed
+publishing must remain disabled**, as it was when configured, so approval leads
+to distribution without another manual publish. Store approval remains external.
+The production App Store / Play tracks are outside this workflow's scope.
+
+The welcome text comes from `mobile/beta-notes/fr-FR.txt` and `en-US.txt`. Keep
+these welcoming to first-time testers; do not substitute technical commit logs.
+Changes apply when the distributor next handles the current iOS build, or a new
+Android release (existing Alpha releases are left alone). Each note is checked
+against Play's stricter 500-character limit.
+
+The existing `EXPO_TOKEN` finds the EAS build. Two additional GitHub Actions
+repository secrets authenticate directly to the stores:
+
+| Secret | JSON fields |
+|---|---|
+| `BETA_ASC_API_KEY_JSON` | `keyId`, `issuerId`, `privateKey` (App Store Connect ES256 key) |
+| `BETA_GOOGLE_PLAY_API_KEY_JSON` | Standard Google service-account key JSON, including `client_email` and `private_key` |
+
+Both were configured on 2026-11-06 by passing the existing EAS submission keys
+directly from memory to `gh secret set`; no new provider key was created. On
+rotation, update the corresponding GitHub secret as well as the EAS credential.
+The Apple key needs external TestFlight management rights; the Google service
+account needs test-track release rights for this app. Only the relevant platform
+secret is exposed to each script invocation. Keys and OAuth/JWT tokens stay in
+process memory: no service-account file, `serviceAccountKeyPath`, or extra EAS
+credential lookup is added to the normal upload workflows. Never print the JSON
+or paste it into a task, issue or run summary.
+
+Inspection without distributing or submitting:
+
+```bash
+gh workflow run mobile-beta-distribute.yml -f dry_run=true
+# Or with EXPO_TOKEN and the relevant BETA_*_API_KEY_JSON in the environment:
+node scripts/mobile_beta_distribute.mjs ios --dry-run
+node scripts/mobile_beta_distribute.mjs android --dry-run
+```
+
+iOS inspection only performs GETs. Google requires a temporary Edit even to read
+tracks: inspection creates and deletes that edit, without modifying a track or
+committing it. A missing upload is reported as pending for the next tick; API,
+credentials or invalid-state failures turn the workflow red. The job summary
+distinguishes submission from actual availability after approval.
+
+API references: [Apple beta review submission](https://developer.apple.com/documentation/appstoreconnectapi/post-v1-betaappreviewsubmissions),
+[Apple build localizations](https://developer.apple.com/documentation/appstoreconnectapi/beta-build-localizations),
+[Google tracks and release notes](https://developers.google.com/android-publisher/tracks),
+[Google edit commit and review preservation](https://developers.google.com/android-publisher/api-ref/rest/v3/edits/commit).
+
+The following diagram describes the build/update entry points; the distributor
+above is their asynchronous continuation for the `internal` build profile.
 
 ```
 Push to main touching mobile/    Push of a mobile-v* tag      Manual workflow_dispatch

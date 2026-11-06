@@ -1,0 +1,62 @@
+name: Mobile Beta Distribution
+
+# Native builds and store processing can finish hours after --no-wait returns.
+# Reconcile store state rather than holding an Actions runner or uploading again.
+on:
+  schedule:
+    - cron: "8,38 * * * *"
+  workflow_run:
+    workflows: [Mobile OTA or Build, Mobile Build & Distribute]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Inspect store state without distributing or submitting for review"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  distribute:
+    name: ${{ matrix.platform }} — external beta
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ios, android]
+    concurrency:
+      group: mobile-beta-distribution-${{ matrix.platform }}
+      cancel-in-progress: false
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      # workflow_run must only run trusted default-branch code with store keys.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm install -g eas-cli@22.0.0
+      - name: Reconcile external beta distribution
+        env:
+          BETA_ASC_API_KEY_JSON: ${{ matrix.platform == 'ios' && secrets.BETA_ASC_API_KEY_JSON || '' }}
+          BETA_GOOGLE_PLAY_API_KEY_JSON: ${{ matrix.platform == 'android' && secrets.BETA_GOOGLE_PLAY_API_KEY_JSON || '' }}
+          PLATFORM: ${{ matrix.platform }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo "::error::Missing EXPO_TOKEN repository secret."
+            exit 1
+          fi
+          ARGS=("$PLATFORM")
+          if [[ "$DRY_RUN" == "true" ]]; then ARGS+=(--dry-run); fi
+          node scripts/mobile_beta_distribute.mjs "${ARGS[@]}"

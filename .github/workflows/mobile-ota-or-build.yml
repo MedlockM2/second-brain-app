@@ -361,7 +361,7 @@ jobs:
             else
               echo "- No finished \`internal\` build carries this fingerprint."
               echo "- Started build \`${{ steps.build.outputs.build_id }}\` with \`--auto-submit\`."
-              echo "- It will reach TestFlight and the Play \`internal\` track without a further step."
+              echo "- EAS will upload to TestFlight / Play internal; Mobile Beta Distribution then assigns the external TestFlight group / Play Alpha and submits for beta review."
               echo "- Testers holding a binary built before this fingerprint must reinstall once."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

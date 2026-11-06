@@ -1,0 +1,15 @@
+{
+  "buildProfile": "internal",
+  "ios": {
+    "externalGroupId": "1bf3d422-1501-4b0e-b2b4-d63353b36318"
+  },
+  "android": {
+    "packageName": "com.secondbrainlabs.core",
+    "sourceTrack": "internal",
+    "targetTrack": "alpha"
+  },
+  "notes": {
+    "fr-FR": "beta-notes/fr-FR.txt",
+    "en-US": "beta-notes/en-US.txt"
+  }
+}
