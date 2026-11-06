@@ -150,6 +150,13 @@ export interface ShareIntakeState {
    * offered. Null/undefined for any other failure.
    */
   quotaErrorCode?: QuotaErrorCode | null;
+  /**
+   * Whether sending the same content again may succeed: true only for a
+   * transient failure (no answer, a 5xx, a transfer cut off). A content refused
+   * by the app or by the server, a quota refusal or a missing session would be
+   * refused again for the same reason, so the screen offers no retry for them.
+   */
+  retryable?: boolean;
 }
 
 export interface ShareSelectedFolder {
@@ -184,6 +191,11 @@ interface ShareIntentContextValue {
    * intent is cleared so the same content can be shared again.
    */
   dismissIntake: () => void;
+  /**
+   * Send a content whose submission failed transiently once more, in the
+   * background: the modal lets the intake go in the same move, so the folder
+   * question is not asked a second time.
+   */
   retry: () => void;
 }
 
@@ -261,6 +273,7 @@ const INITIAL_STATE: ShareIntakeState = {
   deduplicated: false,
   uploadFile: null,
   quotaErrorCode: null,
+  retryable: false,
 };
 
 const ShareIntentContext = createContext<ShareIntentContextValue | null>(null);
@@ -413,24 +426,65 @@ function toSubmissionError(
 ): {
   message: string;
   quotaErrorCode: QuotaErrorCode | null;
+  retryable: boolean;
 } {
   const quotaErrorCode = getQuotaErrorCode(error);
   if (quotaErrorCode) {
     return {
       message: getQuotaErrorMessage(error, quotaErrorCode),
       quotaErrorCode,
+      retryable: false,
     };
   }
   if (
     error instanceof DirectUploadError ||
     error instanceof SharedContentValidationError
   ) {
-    return { message: error.message, quotaErrorCode: null };
+    return {
+      message: error.message,
+      quotaErrorCode: null,
+      retryable: isTransientSubmissionError(error),
+    };
   }
   return {
     message: getFriendlyErrorMessage(error, { fallback }),
     quotaErrorCode: null,
+    retryable: isTransientSubmissionError(error),
   };
+}
+
+/** S3 codes that say "try again later" rather than "this request is wrong". */
+const TRANSIENT_S3_CODES: ReadonlySet<string> = new Set([
+  "RequestTimeout",
+  "SlowDown",
+  "ServiceUnavailable",
+  "InternalError",
+]);
+
+/**
+ * Whether the same submission sent again may succeed.
+ *
+ * Offering a retry on a deterministic refusal is what made the modal loop: the
+ * second attempt failed exactly like the first. So only what depends on the
+ * moment counts — no answer at all, a server fault, a rate limit, a transfer cut
+ * off or refused by S3 for load. A content the app rejected, a file it could
+ * not read and a 4xx are refused again for the same reason. An error with no
+ * status and no known type gets the benefit of the doubt.
+ */
+function isTransientSubmissionError(error: unknown): boolean {
+  if (error instanceof SharedContentValidationError) return false;
+  if (error instanceof DirectUploadError) {
+    const { stage, status, s3Code } = error.diagnostics;
+    if (stage === "read_file") return false;
+    if (stage === "put_network") return true;
+    if (s3Code && TRANSIENT_S3_CODES.has(s3Code)) return true;
+    return status === undefined || status >= 500 || status === 408;
+  }
+  const status = (error as { status?: unknown } | null)?.status;
+  if (typeof status === "number") {
+    return status >= 500 || status === 408 || status === 429;
+  }
+  return true;
 }
 
 /**
@@ -1073,7 +1127,10 @@ export function ShareIntentProvider({
       fallback: string,
       mediaType: string,
     ) => {
-      const { message, quotaErrorCode } = toSubmissionError(error, fallback);
+      const { message, quotaErrorCode, retryable } = toSubmissionError(
+        error,
+        fallback,
+      );
       // A media page open on this import (task-603) says the error itself.
       const shownByPage = failPendingSave(pendingSave, message);
       // The cause, not the displayed sentence: that one can repeat what the
@@ -1111,6 +1168,7 @@ export function ShareIntentProvider({
         status: "error",
         message,
         quotaErrorCode,
+        retryable,
       }));
     },
     [isShowing],
@@ -1137,6 +1195,7 @@ export function ShareIntentProvider({
         ...prev,
         status: "error",
         message: t("share.signInLinks"),
+        retryable: false,
       }));
       return null;
     }
@@ -1193,6 +1252,7 @@ export function ShareIntentProvider({
         ...prev,
         status: "error",
         message: t("share.signInContent"),
+        retryable: false,
       }));
       return null;
     }
@@ -1258,6 +1318,7 @@ export function ShareIntentProvider({
         ...prev,
         status: "error",
         message: t("share.signInFiles"),
+        retryable: false,
       }));
       return null;
     }
@@ -1412,22 +1473,27 @@ export function ShareIntentProvider({
   }, [resetShareIntent]);
 
   /**
-   * Retry after an error - go back to ready state.
+   * Send the content again after a transient failure, and let the modal go.
    *
-   * The reception's submission guard is reopened, so the effect above sends the
-   * content again exactly as it did on arrival.
+   * Going back to "ready" would replay the arrival, folder question included,
+   * and a failure that persists would then alternate question and error for as
+   * long as the user keeps trying. The question was asked once; the retry is the
+   * user choosing to send rather than to file. So the submission leaves from
+   * here and the intake is released in the same move: the Home vignette shows
+   * the import on its way, and a second failure is told like that of any
+   * released reception — by the vignette's page, or an alert. The folder can be
+   * chosen later from the media.
    */
   const retry = useCallback(() => {
-    if (intake.status === "error") {
-      trackingRef.current.autoSubmittedId = null;
-      setIntake((prev) => ({
-        ...prev,
-        status: "ready",
-        message: null,
-        quotaErrorCode: null,
-      }));
-    }
-  }, [intake]);
+    if (intake.status !== "error" || intake.retryable !== true) return;
+    const tracking = trackingRef.current;
+    // The automatic start must not fire a second submission of its own.
+    tracking.autoSubmittedId = tracking.receptionId;
+    // Synchronous up to its first await: the intake it reads is still this
+    // one, and the release below is in place before any outcome comes back.
+    void submitIntake();
+    dismissIntake();
+  }, [dismissIntake, intake.retryable, intake.status, submitIntake]);
 
   const value: ShareIntentContextValue = {
     intake,

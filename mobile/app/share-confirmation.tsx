@@ -168,9 +168,14 @@ export default function ShareConfirmationScreen() {
     router.push("/media/folder?mode=share");
   };
 
-  const handleRetry = () => {
+  /**
+   * Send again and leave: the submission carries on behind, shown by its Home
+   * vignette, and the folder question is not asked twice (see `retry`).
+   */
+  const handleRetry = useCallback(() => {
     retry();
-  };
+    leaveScreen();
+  }, [leaveScreen, retry]);
 
   // Offered when the backend refused the submission for a tier allowance. The
   // reason travels with the push so the paywall can open on the refusal the user
@@ -325,10 +330,11 @@ function ShareContent({
               </Text>
             </Pressable>
           )}
-          {/* No retry on a limit: the same submission would be refused for the
-              same reason. Someone who subscribes on the paywall sends the content
-              again from the app it came from. */}
-          {quotaErrorCode === null && (
+          {/* A retry only where one may succeed: a limit, a content refused by
+              the app or the server, would be refused again for the same reason.
+              Someone who subscribes on the paywall sends the content again from
+              the app it came from. */}
+          {intake.retryable === true && (
             <Pressable
               style={styles.retryButton}
               onPress={onRetry}
