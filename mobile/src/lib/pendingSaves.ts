@@ -14,7 +14,13 @@ import type { ListMediaResponse, MediaType } from "@media-summarizer/core/types/
  *
  * One entry per submission, in one of two states: still waiting for its
  * `media_item_id`, or holding it and waiting for the list to catch up. A failure
- * removes it; the error is said where it always was.
+ * removes it; the error is said where it always was, unless the media page is
+ * showing that very import (below).
+ *
+ * The vignette opens the media page before the media exists (task-603): the page
+ * route carries the entry's key, reads the import's outcome here, and takes the
+ * real id as soon as the ingestion names it. The outcome outlives the entry — a
+ * page opened on a key keeps finding its answer after the list took over.
  *
  * Module scope, like `mediaSaveNotice`, for the same reason: the producer is
  * `ShareIntentContext`, at the bottom of the provider tree, and the consumer is
@@ -46,9 +52,25 @@ export interface PendingSave {
  */
 const SETTLED_LIFETIME_MS = 2 * 60 * 1000;
 
+/** What became of a submission, as the media page opened on its key reads it. */
+export type PendingSaveOutcome =
+  | { state: "sending"; mediaType: MediaType }
+  | { state: "created"; mediaItemId: string }
+  | { state: "failed"; message: string };
+
+const KEY_PREFIX = "pending-";
+
 let entries: readonly PendingSave[] = [];
 let sequence = 0;
 const listeners = new Set<() => void>();
+const outcomes = new Map<string, PendingSaveOutcome>();
+/** Keys a media page is open on: their failure is said there, not in an alert. */
+const watched = new Map<string, number>();
+
+/** Whether a media route id is the key of a submission rather than a media id. */
+export function isPendingSaveKey(id: string): boolean {
+  return id.startsWith(KEY_PREFIX);
+}
 
 function publish(next: readonly PendingSave[]): void {
   entries = next;
@@ -61,7 +83,8 @@ export function beginPendingSave(save: {
   labelKey: string;
 }): string {
   sequence += 1;
-  const key = `pending:${sequence}`;
+  const key = `${KEY_PREFIX}${sequence}`;
+  outcomes.set(key, { state: "sending", mediaType: save.mediaType });
   const listed =
     resourceSession().cache.snapshot<ListMediaResponse>(resourceKeys.mediaPage())
       .data?.items ?? [];
@@ -82,9 +105,12 @@ export function beginPendingSave(save: {
 /** The submission answered: the entry now names the save it stands for. */
 export function resolvePendingSave(key: string, mediaItemId: string): void {
   if (!mediaItemId) {
+    // No save to open: the page says the generic failure (empty message).
+    outcomes.set(key, { state: "failed", message: "" });
     dropPendingSave(key);
     return;
   }
+  outcomes.set(key, { state: "created", mediaItemId });
   publish(
     entries.map((entry) =>
       entry.key === key ? { ...entry, mediaItemId } : entry,
@@ -93,7 +119,21 @@ export function resolvePendingSave(key: string, mediaItemId: string): void {
   setTimeout(() => dropPendingSave(key), SETTLED_LIFETIME_MS);
 }
 
-/** The submission failed, or the list now draws the save itself. */
+/**
+ * The submission failed. Returns whether a media page is open on it, in which
+ * case that page says the error and the caller must not say it again.
+ */
+export function failPendingSave(key: string, message: string): boolean {
+  outcomes.set(key, { state: "failed", message });
+  if (entries.some((entry) => entry.key === key)) {
+    publish(entries.filter((entry) => entry.key !== key));
+  } else {
+    for (const listener of [...listeners]) listener();
+  }
+  return (watched.get(key) ?? 0) > 0;
+}
+
+/** The list now draws the save itself, or the submission never named one. */
 export function dropPendingSave(key: string): void {
   if (!entries.some((entry) => entry.key === key)) return;
   publish(entries.filter((entry) => entry.key !== key));
@@ -124,4 +164,23 @@ function snapshot(): readonly PendingSave[] {
 
 export function usePendingSaves(): readonly PendingSave[] {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+
+/** Mark a key as shown by a media page; the returned function lets it go. */
+export function watchPendingSave(key: string): () => void {
+  watched.set(key, (watched.get(key) ?? 0) + 1);
+  return () => {
+    const count = (watched.get(key) ?? 1) - 1;
+    if (count > 0) watched.set(key, count);
+    else watched.delete(key);
+  };
+}
+
+/**
+ * The outcome of the submission behind `key`, or `null` for a key this run of
+ * the app never issued (a page restored after a relaunch).
+ */
+export function usePendingSaveOutcome(key: string): PendingSaveOutcome | null {
+  const read = () => outcomes.get(key) ?? null;
+  return useSyncExternalStore(subscribe, read, read);
 }

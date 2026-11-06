@@ -40,6 +40,7 @@ export const de: WebCatalog = {
   "add.formats": "PDF, Office-Dokumente, Bilder, Audiodateien · 1 Datei pro Import",
   "add.removeFile": "Diese Datei entfernen",
   "add.uploading": "Wird hochgeladen…",
+  "add.openWhileUploading": "Seite öffnen",
   "add.added": "Hinzugefügt. Die Verarbeitung hat begonnen.",
   "pane.scopeFolder": "Dieser Ordner",
   "chat.emptyMedia": "Stellen Sie eine Frage zu dieser Quelle. Die Antwort stützt sich nur auf ihren Text.",

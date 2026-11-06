@@ -40,6 +40,7 @@ export const hi: WebCatalog = {
   "add.formats": "PDF, Office दस्तावेज़, चित्र, ऑडियो फ़ाइलें · हर इम्पोर्ट में 1 फ़ाइल",
   "add.removeFile": "यह फ़ाइल हटाएँ",
   "add.uploading": "अपलोड हो रहा है…",
+  "add.openWhileUploading": "इसका पेज खोलें",
   "add.added": "जोड़ दिया गया। प्रोसेसिंग शुरू हो गई है।",
   "pane.scopeFolder": "यह फ़ोल्डर",
   "chat.emptyMedia": "इस स्रोत के बारे में प्रश्न पूछें। उत्तर केवल इसके पाठ पर आधारित होता है।",

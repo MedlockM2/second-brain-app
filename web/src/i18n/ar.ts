@@ -40,6 +40,7 @@ export const ar: WebCatalog = {
   "add.formats": "PDF، مستندات Office، صور، ملفات صوتية · ملف واحد في كل استيراد",
   "add.removeFile": "إزالة هذا الملف",
   "add.uploading": "جارٍ الإرسال…",
+  "add.openWhileUploading": "فتح صفحته",
   "add.added": "تمت الإضافة. بدأت المعالجة.",
   "pane.scopeFolder": "هذا المجلد",
   "chat.emptyMedia": "اطرح سؤالًا عن هذا المصدر. تستند الإجابة إلى نصه فقط.",

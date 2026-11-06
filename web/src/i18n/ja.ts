@@ -40,6 +40,7 @@ export const ja: WebCatalog = {
   "add.formats": "PDF、Office 文書、画像、音声ファイル · 1 回に 1 ファイル",
   "add.removeFile": "このファイルを外す",
   "add.uploading": "アップロード中…",
+  "add.openWhileUploading": "ページを開く",
   "add.added": "追加しました。処理が始まりました。",
   "pane.scopeFolder": "このフォルダ",
   "chat.emptyMedia": "このソースについて質問してください。回答はその本文だけに基づきます。",

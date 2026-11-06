@@ -46,6 +46,7 @@ export const en = {
   "add.formats": "PDF, Office documents, images, audio files · 1 file per import",
   "add.removeFile": "Remove this file",
   "add.uploading": "Uploading…",
+  "add.openWhileUploading": "Open its page",
   "add.added": "Added. Processing has started.",
   "pane.scopeFolder": "This folder",
   "chat.emptyMedia": "Ask a question about this source. The answer draws only on its text.",

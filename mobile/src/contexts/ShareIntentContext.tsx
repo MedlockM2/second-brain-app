@@ -27,7 +27,7 @@ import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { announceMediaSave } from "../lib/mediaSaveNotice";
 import {
   beginPendingSave,
-  dropPendingSave,
+  failPendingSave,
   resolvePendingSave,
 } from "../lib/pendingSaves";
 import { addPipelineBreadcrumb } from "../lib/crashReporting";
@@ -1000,14 +1000,15 @@ export function ShareIntentProvider({
       error: unknown,
       fallback: string,
     ) => {
-      dropPendingSave(pendingSave);
       const { message, quotaErrorCode } = toSubmissionError(error, fallback);
+      // A media page open on this import (task-603) says the error itself.
+      const shownByPage = failPendingSave(pendingSave, message);
       addPipelineBreadcrumb("save.failed", "Media save failed", {
         message,
         quotaErrorCode,
       });
       if (!isShowing(reception)) {
-        Alert.alert(t("common.error"), message);
+        if (!shownByPage) Alert.alert(t("common.error"), message);
         return;
       }
       setIntake((prev) => ({

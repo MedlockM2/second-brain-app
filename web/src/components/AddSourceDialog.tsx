@@ -1,7 +1,9 @@
 import { extractUrlFromText } from "@media-summarizer/core/media/urlValidation";
 import { useRef, useState, type DragEvent } from "react";
+import { useNavigate } from "react-router";
 import { useI18n } from "../i18n/I18nProvider";
 import { addFile, addLink, addNote } from "../media/ingest";
+import { beginPendingImport, failPendingImport, resolvePendingImport } from "../media/pendingImports";
 import { AudioNoteRecorder } from "./AudioNoteRecorder";
 import { BudgetForecastNotice } from "./BudgetForecastNotice";
 import { Icon } from "./Icon";
@@ -11,6 +13,11 @@ import { Icon } from "./Icon";
  * chosen or dropped here (captures 14 and the mockup's add dialog). With a
  * `folder`, the source is filed there on arrival; without one it lands in
  * Unsorted. The import starts on "Add" and the dialog closes.
+ *
+ * A file waits on its PUT to S3 before the media exists. Meanwhile the dialog
+ * offers to open the source's page (task-603): it shows the upload, then the
+ * media, and the dialog leaves — the upload carries on, and says its outcome
+ * on that page rather than here.
  *
  * `initialFile` / `initialText` open it already filled: a file dropped anywhere
  * in the app, a link pasted outside a text field.
@@ -37,7 +44,9 @@ export function AddSourceDialog({
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadKey, setUploadKey] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   const take = (files: FileList | null) => {
     const first = files?.[0];
@@ -61,18 +70,30 @@ export function AddSourceDialog({
     const url = selectedFile ? null : extractUrlFromText(link);
     const folderId = folder?.id ?? null;
     setBusy(true);
+    const key = selectedFile ? beginPendingImport() : null;
+    setUploadKey(key);
     try {
       const id = selectedFile
         ? await addFile(selectedFile, folderId)
         : url
           ? await addLink(url, folderId)
           : await addNote(link, folderId);
+      if (key) resolvePendingImport(key, id);
       onAdded(id);
       onClose();
     } catch (caught) {
-      setError((caught as Error).message);
+      const message = (caught as Error).message;
+      if (key) failPendingImport(key, message);
+      setError(message);
+      setUploadKey(null);
       setBusy(false);
     }
+  };
+
+  const openUploadPage = () => {
+    if (!uploadKey) return;
+    navigate(`/media/${uploadKey}`);
+    onClose();
   };
 
   const title = folder ? tw("add.titleFolder", { name: folder.name }) : tw("add.titleLibrary");
@@ -174,9 +195,15 @@ export function AddSourceDialog({
         )}
 
         <footer>
-          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
-            {t("common.cancel")}
-          </button>
+          {uploadKey ? (
+            <button type="button" className="btn ghost" onClick={openUploadPage}>
+              {tw("add.openWhileUploading")}
+            </button>
+          ) : (
+            <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+              {t("common.cancel")}
+            </button>
+          )}
           <button type="submit" className="btn primary" disabled={busy || (!file && !link.trim())}>
             {busy && file ? tw("add.uploading") : t("addUrl.submit")}
           </button>

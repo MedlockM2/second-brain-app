@@ -40,6 +40,7 @@ export const nl: WebCatalog = {
   "add.formats": "PDF, Office-documenten, afbeeldingen, audiobestanden · 1 bestand per import",
   "add.removeFile": "Dit bestand verwijderen",
   "add.uploading": "Uploaden…",
+  "add.openWhileUploading": "Pagina openen",
   "add.added": "Toegevoegd. De verwerking is begonnen.",
   "pane.scopeFolder": "Deze map",
   "chat.emptyMedia": "Stel een vraag over deze bron. Het antwoord steunt alleen op de tekst ervan.",
