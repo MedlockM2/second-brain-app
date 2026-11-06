@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Optional, Sequence, Tuple
 
 from media_summarizer.core.models.failure_codes import MediaFailureCode
 from media_summarizer.core.services import audio_duration_probe, beta_budget, budget_guard
@@ -152,6 +152,7 @@ async def gate_audio_transcription(
     error_step: str = "budget_admission",
     probe_budget_seconds: float = audio_duration_probe.DEFAULT_PROBE_BUDGET_SECONDS,
     mark_job_failed: bool = True,
+    voice_parts: Optional[Sequence[Tuple[str, int]]] = None,
 ) -> AudioGateDecision:
     """Admit a transcription on the beta budget, right before a Deepgram enqueue.
 
@@ -162,6 +163,11 @@ async def gate_audio_transcription(
 
     Without a ``user_id`` there is nobody whose budget bounds the call: refused,
     never let through (rule 9).
+
+    ``voice_parts`` admits several audio files transcribed one by one under the
+    same import (the voice notes of a shared conversation): one line per
+    ``(budget part, probed seconds)``, each bounded by its own duration, in one
+    decision. ``known_duration_seconds`` is then their total.
     """
     source_platform = getattr(job, "source_platform", None)
     duration_seconds = await resolve_audio_duration_seconds(
@@ -177,7 +183,16 @@ async def gate_audio_transcription(
         await budget_guard.admit_import(
             user_id or "",
             operation_id=operation_id,
-            acquisition=lambda ctx: [beta_budget.transcription_line(ctx, duration_seconds=measured)],
+            acquisition=lambda ctx: (
+                [
+                    beta_budget.transcription_line(
+                        ctx, duration_seconds=float(seconds) if seconds > 0 else None, part=part
+                    )
+                    for part, seconds in voice_parts
+                ]
+                if voice_parts
+                else [beta_budget.transcription_line(ctx, duration_seconds=measured)]
+            ),
             text=TextEstimate(duration_seconds=measured),
             media_item_id=getattr(job, "media_item_id", None),
             content_language=content_language,

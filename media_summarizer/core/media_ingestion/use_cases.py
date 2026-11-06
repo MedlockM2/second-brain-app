@@ -5,7 +5,13 @@ from __future__ import annotations
 import hashlib
 import re
 
+from media_summarizer.core.media_ingestion.conversation import (
+    format_conversation,
+    format_text_message,
+    message_lines,
+)
 from media_summarizer.core.media_ingestion.domain import (
+    ConversationMessageKind,
     IngestionOutcome,
     IngestSharedContentCommand,
     IngestUrlCommand,
@@ -255,4 +261,69 @@ class IngestSharedContentUseCase:
             )
             return await self._orchestrator.submit(command=command, resolved=resolved)
 
+        if share_type == SharedContentType.CONVERSATION:
+            return await self._submit_conversation(command)
+
         raise ResolutionError("Unsupported shared content type.")
+
+    async def _submit_conversation(
+        self, command: IngestSharedContentCommand
+    ) -> IngestionOutcome:
+        """A selection of messages, saved as one media (see ``conversation``).
+
+        Its identity is the whole selection, scoped to the account: the voice notes
+        in it are files this account sent (task-393), and the texts are part of the
+        same exchange. With no voice note the text is complete here and stored as a
+        note's is; with any, the Deepgram worker transcribes them and assembles it.
+        """
+        request = command.request
+        source_platform = request.source_platform
+        messages = request.conversation
+        content_hash = (request.content_hash or "").strip().lower()
+        if not messages:
+            raise ResolutionError("Shared conversation has no message.")
+        if not content_hash:
+            raise ResolutionError("Shared conversation content hash is required.")
+
+        locator = _share_locator(
+            source_platform=source_platform.value,
+            share_type=SharedContentType.CONVERSATION.value,
+            content_hash=content_hash,
+            owner_user_id=command.user.user_id,
+        )
+        texts = [
+            m.text or "" for m in messages if m.kind == ConversationMessageKind.TEXT
+        ]
+        has_voice = any(m.kind == ConversationMessageKind.VOICE for m in messages)
+        # The first words of the exchange name it, as a note's first line does. A
+        # selection opening on voice notes is named from its first text, and one
+        # made of voice notes only falls through to the "Shared note" label.
+        first_text = next((lines[0] for t in texts if (lines := message_lines(t))), None)
+        metadata = {
+            "share_type": SharedContentType.CONVERSATION.value,
+            "resolver_key": "shared.conversation",
+            "media_family": MediaFamily.TEXT.value,
+            "media_type": MediaType.SHARED_TEXT.value,
+            "source_platform": source_platform.value,
+            "content_hash": content_hash,
+            "message_count": len(messages),
+        }
+        resolved = ResolvedMedia(
+            media_key=generate_account_scoped_media_key(locator),
+            normalized_url=locator,
+            media_family=MediaFamily.TEXT,
+            media_type=MediaType.SHARED_TEXT,
+            source_platform=source_platform,
+            resolver_key="shared.conversation",
+            raw_text=(
+                None
+                if has_voice
+                else format_conversation(format_text_message(t) for t in texts)
+            ),
+            conversation=messages if has_voice else (),
+            title=select_title([first_sentence(first_text)]) if first_text else None,
+            cover_url=None,
+            creator_name=None,
+            metadata=metadata,
+        )
+        return await self._orchestrator.submit(command=command, resolved=resolved)

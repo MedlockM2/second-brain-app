@@ -36,6 +36,11 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from media_summarizer.core.media_ingestion.conversation import (
+    format_conversation,
+    format_text_message,
+    format_voice_message,
+)
 from media_summarizer.core.models.beta_budget import Component, MeasuredCost
 from media_summarizer.core.models.failure_codes import MediaFailureCode
 from media_summarizer.core.models.ingestion_failures import (
@@ -43,6 +48,7 @@ from media_summarizer.core.models.ingestion_failures import (
     PermanentIngestionFailure,
     TransientIngestionFailure,
 )
+from media_summarizer.core.models.processing_job import JobStatus
 from media_summarizer.core.services import beta_budget, budget_guard
 from media_summarizer.core.services.budget_guard import (
     BudgetBusyError,
@@ -578,12 +584,26 @@ class TranscriptionBudget:
     which bounds every further try (rule 3: the ceiling when it is unknown).
     """
 
-    def __init__(self, *, message_body: Dict[str, Any], job: Any, job_id: str) -> None:
+    def __init__(
+        self,
+        *,
+        message_body: Dict[str, Any],
+        job: Any,
+        job_id: str,
+        part: str = "",
+        duration_seconds: Any = None,
+    ) -> None:
+        """``part`` and ``duration_seconds`` name one voice note of a shared
+        conversation: its own step of the import, bounded by its own duration."""
         self.user_id = str(message_body.get("user_id") or getattr(job, "user_id", None) or "")
         self.operation_id = budget_guard.import_operation_id(job) or job_id
         self.media_key = message_body.get("media_key") or getattr(job, "media_key", None)
+        self.part = part
         try:
-            measured = float(message_body.get("audio_duration_seconds") or 0)
+            measured = float(
+                (message_body.get("audio_duration_seconds") if duration_seconds is None else duration_seconds)
+                or 0
+            )
         except (TypeError, ValueError):
             measured = 0.0
         self.duration_seconds: Optional[float] = measured if measured > 0 else None
@@ -594,7 +614,10 @@ class TranscriptionBudget:
             self.user_id,
             operation_id=self.operation_id,
             component=Component.TRANSCRIPTION,
-            line=lambda ctx: beta_budget.transcription_line(ctx, duration_seconds=self.duration_seconds),
+            part=self.part,
+            line=lambda ctx: beta_budget.transcription_line(
+                ctx, duration_seconds=self.duration_seconds, part=self.part
+            ),
             lease=_CLAIM_LEASE,
             content_media_key=self.media_key,
         )
@@ -714,6 +737,13 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
     if job:
         job.mark_transcribing()
         await database_async.update_processing_job(job)
+
+    plan_s3_key = message_body.get("conversation_plan_s3_key")
+    if plan_s3_key:
+        await _process_conversation(
+            message_body=message_body, job=job, job_id=job_id, plan_s3_key=str(plan_s3_key)
+        )
+        return
 
     if not audio_url and job:
         audio_url = getattr(job, "media_url", None)
@@ -959,6 +989,201 @@ async def _store_transcript(
         "transcript_s3_key": transcript_s3_key,
         "transcription_metadata": transcription_metadata,
     }
+
+
+async def _transcribe_voice_note(
+    *, message_body: Dict[str, Any], job: Any, job_id: str, voice: Dict[str, Any]
+) -> Tuple[str, float, Optional[str], Optional[BudgetCall], Optional[Dict[str, Any]]]:
+    """One voice note of a conversation: ``(text, seconds, language, call, payload)``.
+
+    A voice note Deepgram cannot make words of -- an answer with no transcript, a
+    file it refuses -- leaves an empty text and the conversation carries on: the
+    selection stays readable, that message keeps its place. What is about our
+    account (key refused, no credit left) is not about this file and fails the job.
+    """
+    probed = float(voice.get("duration_seconds") or 0)
+    audio_bytes = await s3.download_file_to_memory(AUDIO_BUCKET, str(voice["audio_s3_key"]))
+    content_type = _resolve_audio_content_type(
+        content_mime_type=voice.get("content_mime_type"),
+        original_name=voice.get("original_name"),
+    )
+    budget = TranscriptionBudget(
+        message_body=message_body,
+        job=job,
+        job_id=job_id,
+        part=str(voice.get("part") or ""),
+        duration_seconds=probed,
+    )
+    try:
+        payload, call = await budget.send(
+            lambda: call_deepgram_api_from_bytes(
+                audio_bytes=audio_bytes, content_type=content_type, job_id=job_id
+            ),
+            job_id=job_id,
+        )
+    except (DeepgramAccountRefusedError, DeepgramCreditExhaustedError):
+        raise
+    except DeepgramRefusedError as refused:
+        log_event(
+            logger,
+            logging.WARNING,
+            "transcription.conversation_voice_refused",
+            "Deepgram refused a voice note of a shared conversation; kept untranscribed",
+            provider="deepgram",
+            job_id=job_id,
+            details=refused.details,
+        )
+        return "", probed, None, None, None
+    try:
+        transcript = extract_transcript(payload)
+    except NonRetryableDeepgramError:
+        billed = float((payload.get("metadata") or {}).get("duration") or 0.0)
+        return "", billed or probed, None, call, payload
+    seconds = float(transcript.get("audio_duration_seconds") or 0.0) or probed
+    language = transcript.get("language")
+    return transcript["text"], seconds, language if language != "unknown" else None, call, payload
+
+
+async def _process_conversation(
+    *, message_body: Dict[str, Any], job: Any, job_id: str, plan_s3_key: str
+) -> None:
+    """Transcribe the voice notes of a shared conversation and assemble its text.
+
+    The plan the orchestrator stored lists the messages in selection order. Each
+    voice note is its own request under its own budget part; every call stays open
+    until the assembled text is stored on the job (rule 5), then each is settled
+    on what Deepgram billed for it. Once the event is out, the voice notes are
+    deleted: the conversation keeps their words, never their audio.
+    """
+    from media_summarizer.utils import database_async
+
+    if job is not None and job.status == JobStatus.COMPLETED and job.transcription_s3_key:
+        log_event(
+            logger,
+            logging.INFO,
+            "transcription.conversation_already_done",
+            "Shared conversation already transcribed; redelivery acknowledged",
+            job_id=job_id,
+        )
+        return
+
+    raw_plan = await s3.download_file_to_memory(TRANSCRIPT_BUCKET, plan_s3_key)
+    messages = json.loads(raw_plan.decode("utf-8")).get("messages") or []
+
+    started = time.time()
+    lines = []
+    open_calls: list = []
+    billed_seconds = 0.0
+    languages = []
+    voice_keys = []
+    try:
+        for message in messages:
+            if message.get("kind") != "voice":
+                lines.append(format_text_message(str(message.get("text") or "")))
+                continue
+            voice_keys.append(str(message["audio_s3_key"]))
+            text, seconds, language, call, payload = await _transcribe_voice_note(
+                message_body=message_body, job=job, job_id=job_id, voice=message
+            )
+            if call is not None and payload is not None:
+                open_calls.append((call, payload))
+            billed_seconds += seconds
+            if language:
+                languages.append(language)
+            lines.append(format_voice_message(text, seconds))
+
+        transcript_text = format_conversation(lines)
+        transcript_s3_key = f"{job_id}.txt"
+        await upload_transcription(transcript_s3_key, transcript_text)
+        transcription_metadata = {
+            "provider": "deepgram",
+            "transcript_source": "shared_conversation",
+            "deepgram_mode": "push",
+            "model_used": DEEPGRAM_MODEL,
+            "language": languages[0] if languages else "unknown",
+            "segments_count": count_paragraphs(transcript_text),
+            "audio_duration_seconds": billed_seconds,
+            "message_count": len(messages),
+            "voice_note_count": len(voice_keys),
+            "transcribed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        if job:
+            job.set_transcription_location(transcript_s3_key)
+            job.set_transcription_metadata(transcription_metadata)
+            job.set_processing_duration("transcription", int(time.time() - started))
+            job.mark_completed()
+            await database_async.update_processing_job(job)
+    except BaseException as exc:
+        for call, payload in open_calls:
+            try:
+                cost: Optional[MeasuredCost] = await TranscriptionBudget(
+                    message_body=message_body, job=job, job_id=job_id
+                ).billed(payload)
+            except Exception:  # noqa: BLE001 - the bound stands in for an unreadable barème
+                cost = None
+            await call.release(operator_cost=cost)
+        if isinstance(exc, Exception) and not isinstance(exc, IngestionFailure):
+            raise NonRetryableDeepgramError(
+                MediaFailureCode.UNEXPECTED_ERROR,
+                details="conversation_store_failed",
+                exception_type=type(exc).__name__,
+            ) from exc
+        raise
+
+    for call, payload in open_calls:
+        try:
+            cost = await TranscriptionBudget(
+                message_body=message_body, job=job, job_id=job_id
+            ).billed(payload)
+        except Exception:  # noqa: BLE001 - the ledger's backstop releases it at its bound
+            log_event(
+                logger,
+                logging.ERROR,
+                "budget.transcription_unpriced",
+                "Transcript delivered but its cost could not be priced",
+                job_id=job_id,
+                attempt_id=call.attempt_id,
+            )
+            continue
+        await call.settle(cost, metric_source="deepgram_metadata_duration")
+
+    await sqs.send_message(
+        queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
+        message_body={
+            "event_type": "episode_completion_status",
+            "status": "success",
+            "media_key": message_body.get("media_key"),
+            "canonical_job_id": job_id,
+            "transcription_s3_key": transcript_s3_key,
+            "transcription_metadata": transcription_metadata,
+        },
+    )
+
+    for key in voice_keys:
+        try:
+            await s3.delete_object(AUDIO_BUCKET, key)
+        except Exception as exc:  # noqa: BLE001 - the account sweep still covers it
+            log_event(
+                logger,
+                logging.WARNING,
+                "transcription.conversation_voice_not_deleted",
+                "Voice note of a transcribed conversation could not be deleted",
+                job_id=job_id,
+                exc_info=exc,
+            )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "transcription.completed",
+        "Shared conversation transcription completed",
+        provider="deepgram",
+        transcript_source="shared_conversation",
+        job_id=job_id,
+        media_item_id=job_id,
+        message_count=len(messages),
+        voice_note_count=len(voice_keys),
+    )
 
 
 async def _fail_job_on_refusal(*, job_id: Optional[str], refusal: BudgetRefusedError) -> None:

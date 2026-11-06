@@ -117,6 +117,22 @@ When a user shares an audio file that was sent as a document in WhatsApp:
 | Data | File URL to temporary file |
 | Filename pattern | Original filename preserved |
 
+### Multi-Selection (several messages at once) — observed 2026-11-06
+
+Selecting several messages and sharing them hands the extension **one attachment per message**:
+a `public.text` item per text message, carrying the message body only (no sender, no time) and
+ending with a newline, and a file item per voice note. Observed on dev in two saves of 2026-11-05,
+whose stock module output was the bodies joined by `","`.
+
+The stock `expo-share-intent` extension kept only the kind of the attachment with the highest
+index: a selection ending on a text lost its voice notes, one ending on a voice note lost its texts.
+The patched extension (task-607) reads every attachment, then hands the app the whole selection in
+order; the app saves it as one media through `share_type=conversation` (see
+`docs/CANONICAL_MEDIA_API_CONTRACT.md`, "Shared conversation").
+
+Android multi-selection is not documented yet: the module reads `EXTRA_STREAM` only for
+`ACTION_SEND_MULTIPLE`, and what WhatsApp Android sends for a mixed selection has not been observed.
+
 ## Dispatch Logic Summary
 
 ```

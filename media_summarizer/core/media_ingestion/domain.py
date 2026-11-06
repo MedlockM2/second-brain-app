@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 
 class MediaFamily(str, Enum):
@@ -54,6 +54,30 @@ class SourcePlatform(str, Enum):
 class SharedContentType(str, Enum):
     TEXT = "text"
     AUDIO = "audio"
+    #: Several messages selected together in a messaging app (a WhatsApp
+    #: multi-selection): their texts and voice notes, in order, saved as one media.
+    CONVERSATION = "conversation"
+
+
+class ConversationMessageKind(str, Enum):
+    TEXT = "text"
+    VOICE = "voice"
+
+
+@dataclass(frozen=True)
+class ConversationMessage:
+    """One message of a shared conversation, in the order it was selected.
+
+    A text carries its words; a voice note carries the audio object the endpoint
+    promoted, and the duration it probed from the bytes (0 when unreadable).
+    """
+
+    kind: ConversationMessageKind
+    text: Optional[str] = None
+    audio_s3_key: Optional[str] = None
+    content_mime_type: Optional[str] = None
+    original_name: Optional[str] = None
+    duration_seconds: int = 0
 
 
 class ProcessingLifecycleStatus(str, Enum):
@@ -114,6 +138,9 @@ class IngestSharedContentRequest:
     # own hash, so two accounts sharing the same words share one media, and an
     # address on the content would show one reader where the other was browsing.
     origin_url: Optional[str] = None
+    # share_type=conversation: the messages in selection order, and the identity
+    # of the whole selection the endpoint derived (`content_hash`).
+    conversation: Tuple[ConversationMessage, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -153,6 +180,9 @@ class ResolvedMedia:
     audio_url: Optional[str] = None
     audio_s3_key: Optional[str] = None
     raw_text: Optional[str] = None
+    # A shared conversation holding voice notes: transcribed message by message by
+    # the Deepgram worker, which assembles the text. Empty for everything else.
+    conversation: Tuple[ConversationMessage, ...] = ()
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

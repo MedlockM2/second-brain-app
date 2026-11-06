@@ -509,8 +509,13 @@ def transcription_line(
     *,
     duration_seconds: Optional[float],
     model: str = DEEPGRAM_MODEL,
+    part: str = "",
 ) -> ReservationLine:
-    """Bound of a Deepgram transcription, from the duration measured upstream."""
+    """Bound of a Deepgram transcription, from the duration measured upstream.
+
+    ``part`` tells apart the audio files of one import transcribed one by one (the
+    voice notes of a shared conversation).
+    """
     limit_minutes = ctx.formula.item_limits.audio_minutes
     if duration_seconds is None or duration_seconds <= 0:
         # The probe could not read the duration: reserve the ceiling, never a
@@ -530,6 +535,7 @@ def transcription_line(
         quantities={"seconds": seconds},
         bound_usd=Decimal(seconds) * per_minute / 60,
         measured=measured,
+        part=part,
     )
 
 

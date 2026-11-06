@@ -706,8 +706,24 @@ class UploadAudioRequest(BaseModel):
     )
 
 
+class SharedConversationMessage(BaseModel):
+    """One message of a shared conversation, in selection order."""
+
+    kind: str = Field(..., description="'text' or 'voice'")
+    text: Optional[str] = Field(None, description="The message body, for kind=text")
+    upload_key: Optional[str] = Field(
+        None,
+        description=(
+            "Key returned by POST /api/media/upload-url for target=shared_audio, "
+            "for kind=voice."
+        ),
+    )
+    content_mime_type: Optional[str] = Field(None, description="MIME type of a voice note")
+    original_name: Optional[str] = Field(None, description="File name of a voice note")
+
+
 class IngestSharedContentRequest(BaseModel):
-    share_type: str = Field(..., description="'text' or 'audio'")
+    share_type: str = Field(..., description="'text', 'audio' or 'conversation'")
     source_platform: str = Field(..., description="Platform the content was shared from")
     source_app: Optional[str] = None
     idempotency_key: Optional[str] = None
@@ -737,6 +753,13 @@ class IngestSharedContentRequest(BaseModel):
     )
     folder_id: Optional[str] = Field(
         None, description="Optional folder ID to assign to the media item"
+    )
+    messages: Optional[List[SharedConversationMessage]] = Field(
+        None,
+        description=(
+            "Required for share_type=conversation: the selected messages (texts and "
+            "voice notes) in order, saved as one media."
+        ),
     )
 
 
@@ -2015,6 +2038,119 @@ async def upload_audio(
         reset_log_context(token)
 
 
+async def _stage_shared_conversation(
+    messages: List[SharedConversationMessage], *, user_id: str
+) -> tuple:
+    """Validate a shared conversation and stage its voice notes.
+
+    Returns the domain messages in order and the identity of the selection. Empty
+    texts are dropped (a selection can carry a media message with no words); what
+    is left must hold at least one message and at most
+    ``MAX_CONVERSATION_MESSAGES``. Texts share one ceiling with a shared note,
+    ``MAX_SHARED_TEXT_LENGTH`` over the whole selection; each voice note meets the
+    checks of a single shared voice note. A voice note is moved under
+    ``shared-audio/<user>/conversation/<selection hash>/``: the account sweep
+    covers it, and the Deepgram worker deletes it once its words are stored.
+    """
+    from media_summarizer.core.media_ingestion.conversation import (
+        MAX_CONVERSATION_MESSAGES,
+        conversation_content_hash,
+    )
+    from media_summarizer.core.media_ingestion.domain import (
+        ConversationMessage,
+        ConversationMessageKind,
+    )
+
+    kept: List[SharedConversationMessage] = []
+    for message in messages:
+        kind = (message.kind or "").strip().lower()
+        if kind == "text":
+            if (message.text or "").strip():
+                kept.append(message)
+        elif kind == "voice":
+            kept.append(message)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid message kind: '{message.kind}'. Must be 'text' or 'voice'.",
+            )
+    if not kept:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Field 'messages' is required and must hold at least one message for share_type=conversation.",
+        )
+    if len(kept) > MAX_CONVERSATION_MESSAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many messages ({len(kept)}). Maximum is {MAX_CONVERSATION_MESSAGES}.",
+        )
+    text_length = sum(
+        len((m.text or "").strip()) for m in kept if m.kind.strip().lower() == "text"
+    )
+    if text_length > MAX_SHARED_TEXT_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Text is too long ({text_length} characters). Maximum is {MAX_SHARED_TEXT_LENGTH}.",
+        )
+
+    staged_voices: Dict[int, Any] = {}
+    identity: List[tuple] = []
+    for index, message in enumerate(kept):
+        if message.kind.strip().lower() == "text":
+            identity.append(("text", (message.text or "").strip()))
+            continue
+        staged = await _resolve_staged_upload(
+            message.upload_key, user_id=user_id, target=UploadTarget.SHARED_AUDIO
+        )
+        mime = (message.content_mime_type or staged.content_type or "").strip().lower()
+        _validate_upload_format(
+            UploadTarget.SHARED_AUDIO, file_name=staged.file_name, content_type=mime
+        )
+        staged_voices[index] = (staged, mime)
+        identity.append(("voice", staged.content_fingerprint))
+
+    if staged_voices:
+        # Same early answer as a single voice note: a month with nothing left is
+        # an HTTP error on the share sheet, not a job failing a second later.
+        await _precheck_budget(user_id)
+
+    selection_hash = conversation_content_hash(identity)
+    domain_messages: List[Any] = []
+    for index, message in enumerate(kept):
+        if index not in staged_voices:
+            domain_messages.append(
+                ConversationMessage(
+                    kind=ConversationMessageKind.TEXT, text=(message.text or "").strip()
+                )
+            )
+            continue
+        staged, mime = staged_voices[index]
+        duration = await _probe_staged_audio_duration(staged)
+        ext = _SHARED_AUDIO_MIME_EXTENSIONS.get(mime, "audio")
+        key = f"shared-audio/{user_id}/conversation/{selection_hash}/{index}.{ext}"
+        await _promote_staged_upload(staged, bucket=AUDIO_BUCKET, key=key)
+        domain_messages.append(
+            ConversationMessage(
+                kind=ConversationMessageKind.VOICE,
+                audio_s3_key=key,
+                content_mime_type=mime,
+                original_name=message.original_name or staged.file_name,
+                duration_seconds=duration,
+            )
+        )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "media.ingest_shared_content.conversation_staged",
+        "Shared conversation staged",
+        content_hash=selection_hash,
+        message_count=len(domain_messages),
+        voice_note_count=len(staged_voices),
+    )
+    return tuple(domain_messages), selection_hash
+
+
 def _validate_shared_source_url(
     raw: Optional[str], share_type: SharedContentType
 ) -> Optional[str]:
@@ -2096,10 +2232,13 @@ async def ingest_shared_content(
     try:
         # Validate share_type
         share_type_clean = (payload.share_type or "").strip().lower()
-        if share_type_clean not in ("text", "audio"):
+        if share_type_clean not in ("text", "audio", "conversation"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid share_type: '{payload.share_type}'. Must be 'text' or 'audio'.",
+                detail=(
+                    f"Invalid share_type: '{payload.share_type}'. "
+                    "Must be 'text', 'audio' or 'conversation'."
+                ),
             )
 
         # Validate source_platform
@@ -2131,6 +2270,7 @@ async def ingest_shared_content(
         content_hash: Optional[str] = None
         content_size_bytes: Optional[int] = None
         shared_audio_duration_seconds: int = 0
+        conversation: tuple = ()
 
         origin_url = _validate_shared_source_url(payload.source_url, domain_share_type)
 
@@ -2196,6 +2336,11 @@ async def ingest_shared_content(
                 file_size_bytes=content_size_bytes,
             )
 
+        elif domain_share_type == SharedContentType.CONVERSATION:
+            conversation, content_hash = await _stage_shared_conversation(
+                payload.messages or [], user_id=current_user.id
+            )
+
         # Build the domain command
         domain_request = DomainIngestSharedContentRequest(
             share_type=domain_share_type,
@@ -2212,6 +2357,7 @@ async def ingest_shared_content(
             audio_duration_seconds=shared_audio_duration_seconds,
             folder_id=resolved_folder_id,
             origin_url=origin_url,
+            conversation=conversation,
         )
         command = IngestSharedContentCommand(
             user=UserContext(user_id=current_user.id, user_email=user.email),

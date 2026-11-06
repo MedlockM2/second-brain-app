@@ -1323,6 +1323,60 @@ It is returned by `GET /api/media/{media_item_id}` as `media_item.origin_url`, n
 saved without one. `media_item.original_url` keeps being the content's locator (`share://…` for a
 note).
 
+### Shared conversation (task-606, task-607)
+
+`POST /api/media/ingest-shared-content` with `share_type=conversation` saves several messages
+selected together in a messaging app — a WhatsApp multi-selection of texts and voice notes — as
+**one** media (`media_type` `shared_text`, `source_platform` `whatsapp`).
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `messages` | array | yes | The messages in selection order. |
+| `messages[].kind` | string | yes | `text` or `voice`. |
+| `messages[].text` | string | for `text` | The message body. Blank texts are dropped. |
+| `messages[].upload_key` | string | for `voice` | Key from `POST /api/media/upload-url` with `target=shared_audio`. |
+| `messages[].content_mime_type` | string | no | MIME type of the voice note; the staged object's type otherwise. |
+| `messages[].original_name` | string | no | File name of the voice note. |
+
+Refusals, all `400`: no message left once blank texts are dropped, more than
+`MAX_CONVERSATION_MESSAGES` (50, `media_summarizer/core/media_ingestion/conversation.py`), texts
+totalling over `MAX_SHARED_TEXT_LENGTH`, an unknown `kind`, a voice note failing the checks of a
+single shared voice note (format, size, key). A month with no budget left answers like a single
+voice note does.
+
+**Identity.** The whole selection, scoped to the account: a hash of each message's kind and its
+text or audio fingerprint, under `share://whatsapp/conversation/<user>/<hash>`. Sharing the same
+selection twice lands on the same media.
+
+**Full text.** WhatsApp hands over the body of each message only — no author, no time (checked on
+dev on 2026-11-06). The stored text is one Markdown list item per message, in order; the lines of a
+multi-line message are indented under it. A voice note reads `🎤 (m:ss)` then its transcript; one
+Deepgram made no words of keeps its marker and duration alone. Readers on mobile and web draw it
+as a list through the Markdown path they already have.
+
+```
+- Oui pour ça que je voulais me barrer samedi soir
+- 🎤 (0:42) Bon je t'explique, en fait samedi on part tôt.
+- Je regarde à ma
+  Pause
+```
+
+**Processing.** With no voice note the text is complete at submission and stored like a note's.
+With any, the endpoint moves each voice note under
+`shared-audio/<user>/conversation/<hash>/<index>.<ext>`, the ingestion admits one transcription
+line per voice note on the beta budget (budget parts `voice1`, `voice2`, …, each bounded by its
+probed duration), writes the ordered plan to `<job_id>.conversation.json` in the transcript bucket
+and enqueues the Deepgram worker with `conversation_plan_s3_key`. The worker transcribes the voice
+notes one request each, stores the assembled text as `<job_id>.txt`, settles each request on what
+Deepgram billed, then deletes the voice notes: the media keeps their words, not their audio.
+
+**Client side (iOS).** `expo-share-intent` is patched (`mobile/patches/expo-share-intent+6.1.1.patch`)
+so the share extension writes a share once every attachment has been read, in attachment order. A
+share of two items or more that are all texts or audio files is a selection: each text is written
+to the App Group as a file of type `text/x-shared-message`, and the app receives the texts and the
+voice notes as one ordered list of files (`selectConversation` in
+`mobile/src/contexts/ShareIntentContext.tsx`). A link in the share still wins, as before.
+
 ## Domain enums (locked)
 
 `MediaItem`:

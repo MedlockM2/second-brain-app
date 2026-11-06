@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Dict, NamedTuple, Optional
 
+from media_summarizer.core.media_ingestion.conversation import voice_parts
 from media_summarizer.core.media_ingestion.domain import (
     IngestionOutcome,
     IngestSharedContentCommand,
@@ -725,6 +727,83 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     source_platform=resolved.source_platform.value,
                     transcript_source="shared_text",
                 )
+            elif resolved.conversation:
+                # A shared conversation holding voice notes (task-606): each voice
+                # note is its own Deepgram request under this import, admitted
+                # here all at once with the durations the endpoint probed.
+                parts = voice_parts(resolved.conversation)
+                gate = await audio_quota_gate.gate_audio_transcription(
+                    job_id=job.id,
+                    user_id=command.user.user_id,
+                    job=job,
+                    media_key=resolved.media_key,
+                    known_duration_seconds=sum(seconds for _, seconds in parts),
+                    error_step="ingestion_core",
+                    voice_parts=parts,
+                )
+                if gate.allowed:
+                    # The plan goes to S3 rather than into the message: a
+                    # selection's texts can outgrow an SQS body once JSON-escaped.
+                    # It sits under the job id, so the job's purge sweeps it.
+                    plan_s3_key = f"{job.id}.conversation.json"
+                    part_iter = iter(parts)
+                    plan = [
+                        {"kind": message.kind.value, "text": message.text}
+                        if message.audio_s3_key is None
+                        else {
+                            "kind": message.kind.value,
+                            "audio_s3_key": message.audio_s3_key,
+                            "content_mime_type": message.content_mime_type,
+                            "original_name": message.original_name,
+                            "duration_seconds": message.duration_seconds,
+                            "part": next(part_iter)[0],
+                        }
+                        for message in resolved.conversation
+                    ]
+                    await s3.upload_file_object(
+                        bucket=DEFAULT_TRANSCRIPT_BUCKET,
+                        key=plan_s3_key,
+                        file_obj=BytesIO(
+                            json.dumps({"messages": plan}, ensure_ascii=False).encode("utf-8")
+                        ),
+                        content_type="application/json",
+                        metadata={"content-type": "application/json"},
+                    )
+                    await sqs.send_message(
+                        queue_name=self._deepgram_transcription_queue,
+                        message_body={
+                            "job_id": job.id,
+                            "user_id": command.user.user_id,
+                            "user_email": command.user.user_email,
+                            "media_key": resolved.media_key,
+                            "normalized_url": resolved.normalized_url,
+                            "episode_title": title,
+                            "conversation_plan_s3_key": plan_s3_key,
+                            "audio_duration_seconds": gate.duration_seconds,
+                            "deepgram_mode": "push",
+                        },
+                    )
+                    pipeline_enqueued = True
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "transcription.enqueued",
+                        "Shared conversation transcription enqueued",
+                        job_id=job.id,
+                        media_item_id=canonical_media_item_id,
+                        queue=self._deepgram_transcription_queue,
+                        resolver_key=resolved.resolver_key,
+                        source_platform=resolved.source_platform.value,
+                        transcript_source="deepgram",
+                        voice_note_count=len(parts),
+                        message_count=len(resolved.conversation),
+                    )
+                else:
+                    await episode_idempotence.mark_failed(
+                        media_key=resolved.media_key,
+                        job_id=job.id,
+                    )
+                    outcome_status = ProcessingLifecycleStatus.FAILED
             elif resolved.audio_s3_key:
                 # Staged audio (WhatsApp voice notes and friends). The endpoint
                 # had the bytes in hand and probed the real duration, so this is
