@@ -21,6 +21,11 @@ variable "web_connect_origins" {
   type    = list(string)
   default = []
 }
+variable "web_app_origin" {
+  description = "Current dev CloudFront origin; explicit to avoid an API/CORS dependency cycle."
+  type        = string
+  default     = "https://d3n3qjz3si2rme.cloudfront.net"
+}
 module "web_certificate" {
   source    = "../../modules/web_certificate"
   providers = { aws = aws.us_east_1 }

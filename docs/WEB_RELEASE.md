@@ -1,9 +1,11 @@
 # Livrer un paquet web identifié
 
-TASK-590 prépare le mécanisme local. TASK-591 réserve au propriétaire le choix des
-valeurs réelles, les actions AWS et la mise en service. TASK-471 porte les ressources
-`app`, TASK-472 le site `www`. Aucune commande distante ci-dessous n'est exécutée par
-un agent d'implémentation. Aucun domaine fictif n'est une configuration de release.
+TASK-590 prépare le mécanisme local. TASK-591 porte la future bascule sur le domaine
+du propriétaire. TASK-605 publie d’abord la web app dev sur l’adresse CloudFront,
+avec autorisation explicite du propriétaire dans la conversation du 2026-11-06.
+TASK-471 porte les ressources `app`, TASK-472 le site `www`. Les agents ordinaires
+d’implémentation préparent le paquet ; les opérations distantes nécessitent une
+instruction explicite de publication. Aucun domaine fictif n’est utilisé.
 
 ## Configuration publique et provenance
 
@@ -15,7 +17,7 @@ site n'ont pas de query string. Les liens Play peuvent conserver leur paramètre
 
 | Variable | Provenance du propriétaire | Absence / règle |
 |---|---|---|
-| `VITE_API_BASE_URL` | output Terraform `api_endpoint`, puis domaine API décidé dans TASK-445 | Obligatoire : le build échoue si absente/invalide. Pas de repli vers l'origine web. |
+| `VITE_API_BASE_URL` | output Terraform `app_base_url` pour le web hébergé : CloudFront transmet `/api/*` à l’API existante. `api_endpoint` reste l’accès direct mobile/local. | Obligatoire : origine HTTPS sans suffixe `/api`. Pas de repli implicite vers l’origine web. |
 | `VITE_CHAT_STREAM_URL` | output `chat_stream_url` de la même racine Terraform | Optionnelle. Finit par `/v1` si présente. Absente : relecture de la conversation jusqu'à la réponse complète, sans streaming. |
 | `VITE_SITE_URL` | output `www_base_url`, puis origine publique retenue par TASK-443/472 | Optionnelle. Absente : Mon compte ne propose pas le lien d'installation de l'extension. Origine sans chemin si présente. |
 | `VITE_APP_STORE_URL` | lien TestFlight réel pour la bêta, ou fiche App Store | Optionnelle pour compiler/livrer le bureau. Absente : lien iOS désactivé sur l'écran sous 900 px. TASK-591 vérifie la disponibilité de la distribution souhaitée. |
@@ -66,7 +68,7 @@ pas un paquet de distribution. Les builds ne contactent aucune API.
 
 ## Dépôt et invalidation — propriétaire uniquement
 
-Prérequis TASK-471 : bucket privé avec OAC, distribution `app`, routage SPA et cache
+Prérequis TASK-471/605 : bucket privé avec OAC, distribution `app`, routage SPA et cache
 respectant les en-têtes d'origine (`min_ttl = 0` pour l'index). Vérifier l'environnement,
 le profil AWS et les outputs ciblés avant toute écriture. Exemple sur dev :
 
@@ -88,8 +90,33 @@ L'index est publié en dernier. Les assets hachés sont immuables et conservés 
 lisibles. Le nettoyage éventuel des anciennes releases est une opération distincte.
 Attendre la fin de l'invalidation puis vérifier le `release.json` distant, les routes
 profondes, CORS API/S3/streaming, les retours OAuth et le cookie de session. La
-persistance de session exige app et API sur le même site ; un build valide ne prouve
-pas ce prérequis navigateur. Les recettes dédiées restent bloquées sur TASK-591/601.
+persistance de session utilise les appels `/api/*` sur l’origine CloudFront du site ;
+un build valide ne prouve pas la restauration dans le navigateur. Le compte rendu
+de TASK-605 distingue les contrôles de publication des recettes complètes de
+TASK-440.1 à TASK-440.4 et des prérequis de TASK-601.
+
+## Première création sans domaine et bascule ultérieure
+
+Dev active `web_app_hosting_enabled` sans DNS ni certificat personnalisé. Le module
+renvoie `app_base_url` avec le nom `*.cloudfront.net`. Le proxy API utilise les
+politiques AWS `CachingDisabled` et `AllViewerExceptHostHeader` : aucune réponse de
+session n’est mise en cache ; cookies, Authorization, X-Session-Transport et query
+strings sont transmis. La réécriture SPA est une fonction attachée seulement au
+comportement S3 ; les erreurs de l’API conservent leur code et leur corps.
+
+La première création se fait en deux étapes : créer la distribution, puis renseigner
+la variable dev `web_app_origin` avec son URL et appliquer les origines et callbacks.
+Cette entrée explicite évite le cycle Terraform CloudFront → API Gateway → CORS →
+CloudFront. Elle est conservée dans la configuration dev pour les applies suivants.
+Le build utilise cette même URL pour `VITE_API_BASE_URL`, le streaming gardant sa
+porte dédiée et ses autorisations CORS. L’API et les comptes mobiles restent sur
+leurs ressources existantes.
+
+Après achat du domaine, renseigner `web_public_domain`/`web_public_zone_id`, appliquer
+le certificat et les alias existants, reconstruire avec la nouvelle `app_base_url`,
+puis publier le paquet. Le routage `/api/*` reste en place ; vérifier les callbacks
+Cognito et les origines d’upload/streaming. Une reconnexion est nécessaire sur la
+nouvelle adresse. La publication de `www` et les liens légaux gardent leur workflow.
 
 ## Retour à un paquet précédent — propriétaire uniquement
 

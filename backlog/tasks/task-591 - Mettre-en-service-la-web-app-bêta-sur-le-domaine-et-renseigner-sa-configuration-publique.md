@@ -7,7 +7,7 @@ status: To Do
 assignee:
   - owner
 created_date: '2026-11-04 19:11'
-updated_date: '2026-11-04 19:27'
+updated_date: '2026-11-06 15:51'
 labels:
   - web
   - v1-launch
@@ -27,7 +27,6 @@ references:
 priority: high
 type: task
 ordinal: 194000
-dispatchable: false
 ---
 
 ## Description
@@ -48,3 +47,9 @@ Contraintes : aucun nouveau test automatisé. Ne pas modifier le sync Spotify, l
 - [ ] #2 Les opérations DNS/TLS, origines API/S3/chat et callbacks OAuth sont consignées avec leurs observations ou limites ; les liens bêta et légaux ne sont pas remplacés par des URLs publiques fictives.
 - [ ] #3 Le compte rendu décrit ouverture initiale, rechargement d’une route profonde, paquet servi après mise à jour et procédure de retour arrière disponible ; tout élément manquant est identifié comme blocage ou limite explicite.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Le propriétaire a autorisé une publication préalable sans domaine le 2026-11-06, réalisée dans TASK-605 : web app dev sur https://d3n3qjz3si2rme.cloudfront.net avec proxy /api de même origine. Voir docs/validation/task-605-web-cloudfront/README.md. La présente tâche reste la bascule ultérieure sur le domaine et ses autres prérequis ; elle n’est pas déclarée terminée par cette publication.
+<!-- SECTION:NOTES:END -->

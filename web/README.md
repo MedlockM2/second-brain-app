@@ -11,7 +11,7 @@ is authoritative screen by screen). The decision behind it is
   there reach for Expo and React Native; the lint of this package refuses it. What the web needs
   and is platform-neutral goes into `packages/core` under its rule (`AGENTS.md`, "packages/core").
 - **Session**: `src/session/sessionStore.ts`. Every `/api/auth` call carries
-  `X-Session-Transport: cookie`; the refresh token is an `HttpOnly` cookie set by the API host
+  `X-Session-Transport: cookie`; the refresh token is an `HttpOnly` cookie set by the request host
   (task-473, `docs/AUTHENTICATION_SETUP.md`). The access token lives in memory only — never in
   `localStorage`. A page load reopens the session with one `/refresh`.
 - **Under 900 px** the app is not rendered: only the install page (`src/pages/InstallPage.tsx`).
@@ -49,6 +49,11 @@ and `packages/core` keep their own typecheck and lint jobs.
 
 ## Running against the -dev API
 
+The deployed dev app is https://d3n3qjz3si2rme.cloudfront.net (TASK-605).
+AWS dev now authorizes that origin and its Cognito callback. The local instructions
+below require deliberately switching dev's `web_app_origin` back to localhost and
+applying that configuration; direct local calls do not share the hosted session.
+
 1. `cp web/.env.example web/.env.local` (git-ignored) and set `VITE_API_BASE_URL` to the dev API:
    `AWS_PROFILE=second-brain-app terraform -chdir=infrastructure/terraform/envs/dev output -raw api_endpoint`.
 2. Configurer Google et Apple dans Cognito via Terraform (task-526), et vérifier le retour
@@ -57,7 +62,7 @@ and `packages/core` keep their own typecheck and lint jobs.
    `docs/AUTHENTICATION_SETUP.md` pour la bascule et les secrets de fédération.
 3. `npm run dev` in `web/`, and open http://localhost:5173 in a window at least 900 px wide.
 
-What works and what does not **until `api.<domain>` exists** (task-443, then task-445):
+Local Vite with direct calls to the dev API:
 
 - The dev API must run the task-473 backend and carry its CORS (`web_app_origin =
   "http://localhost:5173"` in `infrastructure/terraform/envs/dev/main.tf`, applied). Before that
@@ -66,11 +71,12 @@ What works and what does not **until `api.<domain>` exists** (task-443, then tas
 - Once it is applied, signing in works and the app is usable, **but the session does not survive
   a reload**: the refresh cookie is set by the `execute-api` host, a third party to `localhost`,
   and `SameSite=Strict` keeps the browser from sending it back. Sign in again after a reload.
-- With `app.<domain>` and `api.<domain>` on the same site, the cookie rides along and a reload
-  keeps the session.
+- The hosted web app uses `app_base_url` as `VITE_API_BASE_URL`. CloudFront forwards
+  `/api/*` to the existing API with cookies and no cache (TASK-605), so session restoration
+  works without buying a domain. Local Vite's direct cross-site calls retain the limitation above.
 - Importing a file sends its bytes from the browser straight to S3 through a presigned PUT. The
   `documents` and `audio` buckets answer that origin's CORS preflight only once the same
-  `web_app_origin` is applied (`aws_s3_bucket_cors_configuration` in
+  current `web_app_origin` is applied (`aws_s3_bucket_cors_configuration` in
   `infrastructure/terraform/modules/platform/s3.tf`); before that, a link imports but a file does not.
 
 ## Deployment
@@ -80,7 +86,9 @@ and rollback are documented in [docs/WEB_RELEASE.md](../docs/WEB_RELEASE.md).
 `npm run build -- --mode <environment>` validates public settings before bundling
 and writes `dist/release.json`; `node scripts/verify_web_release.mjs web/dist`
 (from the repository root) checks the exact package and refuses compilation-only
-builds. TASK-471 owns AWS resources; TASK-591 owns real values and remote execution.
+builds. TASK-605 publishes dev on CloudFront before domain purchase; TASK-591 owns
+the later domain cutover. Read `app_base_url` from the dev Terraform root for the
+hosted app address. Cognito callbacks and upload/streaming CORS use that origin.
 
 ## Legal links
 

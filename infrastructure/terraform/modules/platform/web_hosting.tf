@@ -1,4 +1,9 @@
-# Defaults create no app hosting, DNS or certificate. Existing www stays intact.
+# App hosting can use CloudFront's own hostname before a domain is purchased.
+variable "web_app_hosting_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "web_public_domain" {
   type    = string
   default = ""
@@ -29,6 +34,7 @@ variable "web_connect_origins" {
 
 locals {
   web_domains_enabled = var.web_public_domain != ""
+  web_app_enabled     = var.web_app_hosting_enabled || local.web_domains_enabled
   web_connect_sources = distinct(concat([
     aws_apigatewayv2_api.main.api_endpoint,
     "https://${aws_api_gateway_rest_api.chat_stream.id}.execute-api.${var.aws_region}.amazonaws.com",
@@ -42,12 +48,12 @@ locals {
 }
 
 resource "aws_s3_bucket" "app" {
-  count  = local.web_domains_enabled ? 1 : 0
+  count  = local.web_app_enabled ? 1 : 0
   bucket = "${var.project_name}-app-${data.aws_caller_identity.current.account_id}-${var.environment}"
   tags   = { Name = "${var.project_name}-app${local.suffix}" }
 }
 resource "aws_s3_bucket_public_access_block" "app" {
-  count                   = local.web_domains_enabled ? 1 : 0
+  count                   = local.web_app_enabled ? 1 : 0
   bucket                  = aws_s3_bucket.app[0].id
   block_public_acls       = true
   block_public_policy     = true
@@ -55,26 +61,26 @@ resource "aws_s3_bucket_public_access_block" "app" {
   restrict_public_buckets = true
 }
 resource "aws_s3_bucket_ownership_controls" "app" {
-  count  = local.web_domains_enabled ? 1 : 0
+  count  = local.web_app_enabled ? 1 : 0
   bucket = aws_s3_bucket.app[0].id
   rule { object_ownership = "BucketOwnerEnforced" }
 }
 resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
-  count  = local.web_domains_enabled ? 1 : 0
+  count  = local.web_app_enabled ? 1 : 0
   bucket = aws_s3_bucket.app[0].id
   rule {
     apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
   }
 }
 resource "aws_cloudfront_origin_access_control" "app" {
-  count                             = local.web_domains_enabled ? 1 : 0
+  count                             = local.web_app_enabled ? 1 : 0
   name                              = "${var.project_name}-app${local.suffix}"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
 resource "aws_cloudfront_cache_policy" "app" {
-  count       = local.web_domains_enabled ? 1 : 0
+  count       = local.web_app_enabled ? 1 : 0
   name        = "${var.project_name}-app${local.suffix}"
   min_ttl     = 0
   default_ttl = 0
@@ -88,7 +94,7 @@ resource "aws_cloudfront_cache_policy" "app" {
   }
 }
 resource "aws_cloudfront_response_headers_policy" "app" {
-  count = local.web_domains_enabled ? 1 : 0
+  count = local.web_app_enabled ? 1 : 0
   name  = "${var.project_name}-app${local.suffix}"
   security_headers_config {
     strict_transport_security {
@@ -112,11 +118,38 @@ resource "aws_cloudfront_response_headers_policy" "app" {
     }
   }
 }
+data "aws_cloudfront_cache_policy" "app_api" {
+  count = local.web_app_enabled ? 1 : 0
+  name  = "Managed-CachingDisabled"
+}
+
+# Forwards Authorization, X-Session-Transport, cookies and query strings, but
+# replaces Host with the API Gateway hostname required by that origin.
+data "aws_cloudfront_origin_request_policy" "app_api" {
+  count = local.web_app_enabled ? 1 : 0
+  name  = "Managed-AllViewerExceptHostHeader"
+}
+
+resource "aws_cloudfront_function" "app_routes" {
+  count   = local.web_app_enabled ? 1 : 0
+  name    = "${var.project_name}-app-routes${local.suffix}"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-JS
+    function handler(event) {
+      var request = event.request;
+      var filename = request.uri.split('/').pop();
+      if (filename.indexOf('.') === -1) request.uri = '/index.html';
+      return request;
+    }
+  JS
+}
+
 resource "aws_cloudfront_distribution" "app" {
-  count               = local.web_domains_enabled ? 1 : 0
+  count               = local.web_app_enabled ? 1 : 0
   enabled             = true
   comment             = "${var.project_name}-app${local.suffix}"
-  aliases             = ["app.${var.web_public_domain}"]
+  aliases             = local.web_domains_enabled ? ["app.${var.web_public_domain}"] : []
   default_root_object = "index.html"
   is_ipv6_enabled     = true
   http_version        = "http2and3"
@@ -126,6 +159,16 @@ resource "aws_cloudfront_distribution" "app" {
     origin_id                = "app-s3"
     origin_access_control_id = aws_cloudfront_origin_access_control.app[0].id
   }
+  origin {
+    domain_name = trimprefix(aws_apigatewayv2_api.main.api_endpoint, "https://")
+    origin_id   = "app-api"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
   default_cache_behavior {
     target_origin_id           = "app-s3"
     viewer_protocol_policy     = "redirect-to-https"
@@ -134,14 +177,30 @@ resource "aws_cloudfront_distribution" "app" {
     compress                   = true
     cache_policy_id            = aws_cloudfront_cache_policy.app[0].id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.app[0].id
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.app_routes[0].arn
+    }
   }
-  # S3 private origins can answer either 403 or 404 for a client-side route.
+  dynamic "ordered_cache_behavior" {
+    for_each = ["/api", "/api/*"]
+    content {
+      path_pattern             = ordered_cache_behavior.value
+      target_origin_id         = "app-api"
+      viewer_protocol_policy   = "https-only"
+      allowed_methods          = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+      cached_methods           = ["GET", "HEAD"]
+      compress                 = true
+      cache_policy_id          = data.aws_cloudfront_cache_policy.app_api[0].id
+      origin_request_policy_id = data.aws_cloudfront_origin_request_policy.app_api[0].id
+    }
+  }
+  # SPA rewriting is attached only to the S3 behavior above. API errors retain
+  # their status/body, and error responses must not be cached between sessions.
   dynamic "custom_error_response" {
-    for_each = toset([403, 404])
+    for_each = toset([403, 404, 500, 502, 503, 504])
     content {
       error_code            = custom_error_response.value
-      response_code         = 200
-      response_page_path    = "/index.html"
       error_caching_min_ttl = 0
     }
   }
@@ -149,15 +208,16 @@ resource "aws_cloudfront_distribution" "app" {
     geo_restriction { restriction_type = "none" }
   }
   viewer_certificate {
-    acm_certificate_arn      = var.web_certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+    cloudfront_default_certificate = !local.web_domains_enabled
+    acm_certificate_arn            = local.web_domains_enabled ? var.web_certificate_arn : null
+    ssl_support_method             = local.web_domains_enabled ? "sni-only" : null
+    minimum_protocol_version       = local.web_domains_enabled ? "TLSv1.2_2021" : "TLSv1"
   }
   tags = { Name = "${var.project_name}-app${local.suffix}" }
 }
 
 data "aws_iam_policy_document" "app_bucket" {
-  count = local.web_domains_enabled ? 1 : 0
+  count = local.web_app_enabled ? 1 : 0
   statement {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.app[0].arn}/*"]
@@ -173,7 +233,7 @@ data "aws_iam_policy_document" "app_bucket" {
   }
 }
 resource "aws_s3_bucket_policy" "app" {
-  count      = local.web_domains_enabled ? 1 : 0
+  count      = local.web_app_enabled ? 1 : 0
   bucket     = aws_s3_bucket.app[0].id
   policy     = data.aws_iam_policy_document.app_bucket[0].json
   depends_on = [aws_s3_bucket_public_access_block.app]
@@ -197,4 +257,6 @@ resource "aws_route53_record" "web" {
 }
 output "app_bucket_name" { value = try(aws_s3_bucket.app[0].bucket, null) }
 output "app_distribution_id" { value = try(aws_cloudfront_distribution.app[0].id, null) }
-output "app_base_url" { value = local.web_domains_enabled ? "https://app.${var.web_public_domain}" : null }
+output "app_base_url" {
+  value = local.web_app_enabled ? (local.web_domains_enabled ? "https://app.${var.web_public_domain}" : "https://${aws_cloudfront_distribution.app[0].domain_name}") : null
+}

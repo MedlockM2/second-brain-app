@@ -381,7 +381,12 @@ en mémoire et le refresh dans `__Secure-refresh_token`, cookie host-only sur l�
 Les requêtes de session web utilisent l’en-tête personnalisé et le CORS à origine
 explicite ; le corps ne contient jamais le refresh web. La configuration locale
 `localhost` + `execute-api` reste de sites différents : pas de restauration durable
-par cookie avant les domaines app/API sur le même site.
+par cookie avec ces appels directs. L’hébergement web CloudFront (TASK-605) expose
+`/api` et `/api/*` sur l’origine du site et les transmet à API Gateway, sans cache,
+avec les cookies et les en-têtes de session. Le cookie host-only est alors posé
+sur l’adresse CloudFront du site ; aucun domaine personnalisé n’est nécessaire.
+Le routage reste identique après ajout d’un domaine au site. La nouvelle adresse
+exige une reconnexion, son cookie étant distinct de celui de l’adresse précédente.
 
 Les access tokens durent quinze minutes. Les refresh tokens tournent avec
 `GetTokensFromRefreshToken`, grâce Cognito de 60 secondes. Leur limite absolue est

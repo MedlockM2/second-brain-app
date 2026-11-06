@@ -65,7 +65,8 @@ output "www_base_url" {
   value       = module.platform.www_base_url
 }
 
-# SPA hosting (null until a public domain is enabled).
+# SPA hosting, available on CloudFront before a custom domain is enabled.
 output "app_bucket_name" { value = module.platform.app_bucket_name }
 output "app_distribution_id" { value = module.platform.app_distribution_id }
 output "app_base_url" { value = module.platform.app_base_url }
+output "chat_stream_url" { value = module.platform.chat_stream_url }
