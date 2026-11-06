@@ -8,7 +8,12 @@ show those pages *apart* from the corpus sources ``[S1]`` … ``[Sn]`` (TASK-615
 the worker rewrites the answer as it streams:
 
 - every inline web link becomes a tag ``[W1]``, ``[W2]`` …, numbered in order of
-  first appearance, one number per URL (a page cited twice keeps its number);
+  first appearance, one number per URL (a page cited twice keeps its number).
+  A citation -- a link in parentheses, or one whose text is only the site or the
+  address -- becomes the tag alone. A link that is part of the sentence, its
+  text naming the thing (``[Gratin de ravioles au comté](https://…) : …``),
+  keeps its text and takes the tag after it, so the sentence still says what it
+  links to (``Gratin de ravioles au comté [W1] : …``);
 - the tags resolve through ``web_sources``: ``[{ref: "W1", url, title}]``, carried
   on each fragment written after the first one and on the sealed answer.
 
@@ -52,6 +57,20 @@ _LINK_PREFIX = re.compile(
 )
 
 _WEB_TAG = re.compile(r"\[%s(\d+)\]" % WEB_REF_LETTER)
+
+#: A bare site name: ``lemonde.fr``, ``www.insee.fr``, ``cuisine.journaldesfemmes.fr``.
+_DOMAIN_LIKE = re.compile(r"^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$")
+
+
+def _names_the_link(link_text: str, url: str) -> bool:
+    """Whether a link's text says something the tag does not: not empty, not the
+    address, not just a site name. Only such text is kept in the answer."""
+    text = link_text.strip().lower()
+    if not text:
+        return False
+    bare_url = re.sub(r"^https?://", "", url.lower()).rstrip("/")
+    bare_text = re.sub(r"^https?://", "", text).rstrip("/")
+    return bare_text != bare_url and not _DOMAIN_LIKE.match(bare_text)
 
 
 class WebCitationRewriter:
@@ -119,16 +138,22 @@ class WebCitationRewriter:
             match = _LINK.match(buffer, start)
             if match is not None:
                 end = match.end()
+                wrapped = False
                 if match.group("open"):
                     if end == len(buffer) and not final:
                         # ``([t](u)`` -- the closing parenthesis may be next.
                         break
                     if end < len(buffer) and buffer[end] == ")":
                         end += 1
+                        wrapped = True
                     else:
                         # Not wrapped after all: keep the parenthesis as text.
                         out.append("(")
-                out.append(self._tag(match.group("url"), match.group("text")))
+                link_text, url = match.group("text"), match.group("url")
+                if not wrapped and _names_the_link(link_text, url):
+                    # Part of the sentence: its words stay, the tag follows them.
+                    out.append(f"{link_text.strip()} ")
+                out.append(self._tag(url, link_text))
                 position = end
                 continue
             if not final and _LINK_PREFIX.fullmatch(buffer, start):
