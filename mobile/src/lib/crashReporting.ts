@@ -4,6 +4,11 @@ import { AppState } from "react-native";
 
 import { requestIdOf } from "@media-summarizer/core/api/apiClient";
 import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
+import {
+  describeHandledFailure,
+  routeOf,
+  type HandledFailure,
+} from "@media-summarizer/core/errors/handledFailure";
 
 import { Config } from "../constants/config";
 // Type-only on purpose: startupErrorGuard imports this module at runtime, so a
@@ -281,6 +286,52 @@ export function captureCaughtError(
   } catch {
     // Nothing to do about a reporter that throws while reporting a throw.
   }
+}
+
+/**
+ * Reports one failure the app handled and showed to the user (task-611): an
+ * API call with no answer or a 5xx, a transfer to S3, an import, the chat
+ * stream. A message event, not the error: it is built from enums, figures and
+ * a normalized route only (`describeHandledFailure`), so no URL, file name,
+ * typed text or server message can ride along. Grouped by operation, route
+ * and cause, so one outage is one issue.
+ *
+ * A no-op without a DSN, and it never throws.
+ */
+export function captureHandledFailure(failure: HandledFailure): void {
+  if (!Config.SENTRY_DSN) return;
+  try {
+    const { message, level, tags, fingerprint } = describeHandledFailure(failure);
+    Sentry.captureMessage(message, { level, tags, fingerprint });
+  } catch {
+    // Nothing to do about a reporter that throws while reporting a failure.
+  }
+}
+
+/**
+ * `fetch` for the few calls that cannot go through the shared API client
+ * (no session yet, or a public endpoint), reporting the same failures it would
+ * (task-611): no answer, or a 5xx. `path` is the API path, folded into the
+ * route; the body is never read.
+ */
+export async function fetchReportingFailures(
+  operation: string,
+  path: string,
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const route = routeOf(init.method ?? "GET", path);
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    if (!isNormalCancellation(error)) captureHandledFailure({ operation, cause: "network", route });
+    throw error;
+  }
+  if (response.status >= 500) {
+    captureHandledFailure({ operation, cause: `http_${response.status}`, route, status: response.status, level: "error" });
+  }
+  return response;
 }
 
 /**

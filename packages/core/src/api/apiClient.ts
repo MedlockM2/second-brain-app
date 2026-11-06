@@ -1,4 +1,6 @@
 import { createHttpError, parseErrorResponse, type HttpError } from "./httpError";
+import { isNormalCancellation } from "../errors/cancellation";
+import { routeOf, type HandledFailure } from "../errors/handledFailure";
 
 /**
  * The header that ties one app call to the server's log lines for it
@@ -45,6 +47,12 @@ export type ApiClientPlatform = {
   sessionExpired: { message: string; code: string };
   /** A fresh random id (a UUID) for the `X-Request-ID` of one request. */
   newRequestId: () => string;
+  /**
+   * Told about every call that got no answer (offline, timeout) and every 5xx
+   * (task-611), so the app reports what only the device sees. Expected 4xx
+   * (401, 402, 404, 429) never reach it. Errors it throws are swallowed.
+   */
+  onFailure?: (failure: HandledFailure) => void;
 };
 
 export type ApiClient = {
@@ -117,6 +125,14 @@ export function createApiClient(platform: ApiClientPlatform): ApiClient {
     return send(refreshedToken);
   }
 
+  function reportFailure(failure: HandledFailure): void {
+    try {
+      platform.onFailure?.(failure);
+    } catch {
+      // Reporting must never be the reason a request fails differently.
+    }
+  }
+
   async function apiRequest<T = unknown>(
     path: string,
     options: RequestOptions = {},
@@ -149,9 +165,28 @@ export function createApiClient(platform: ApiClientPlatform): ApiClient {
         if (typeof error === "object" && error !== null) {
           (error as HttpError).requestId = requestId;
         }
+        if (!isNormalCancellation(error)) {
+          reportFailure({
+            operation: "api.request",
+            cause: "network",
+            route: routeOf(method, path),
+            requestId,
+          });
+        }
         throw error;
       }
     });
+
+    if (response.status >= 500) {
+      reportFailure({
+        operation: "api.request",
+        cause: `http_${response.status}`,
+        route: routeOf(method, path),
+        status: response.status,
+        requestId,
+        level: "error",
+      });
+    }
 
     return parseResponse<T>(
       response,

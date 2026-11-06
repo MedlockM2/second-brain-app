@@ -13,6 +13,7 @@
  * is not user data.
  */
 import { Config } from "../constants/config";
+import { fetchReportingFailures } from "../lib/crashReporting";
 
 /** One purchasable tier. `id` matches the RevenueCat package identifier. */
 export interface PricingTier {
@@ -99,10 +100,12 @@ export interface PublicPricing {
  * the copy this endpoint replaces.
  */
 export async function fetchPublicPricing(): Promise<PublicPricing> {
-  const response = await fetch(`${Config.API_BASE_URL}/api/pricing`, {
-    method: "GET",
-    headers: { "Content-Type": "application/json" },
-  });
+  const response = await fetchReportingFailures(
+    "pricing",
+    "/api/pricing",
+    `${Config.API_BASE_URL}/api/pricing`,
+    { method: "GET", headers: { "Content-Type": "application/json" } },
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to load pricing: HTTP ${response.status}`);

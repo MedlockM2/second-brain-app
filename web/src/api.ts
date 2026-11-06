@@ -1,5 +1,6 @@
 import { createApiClient, type RequestOptions } from "@media-summarizer/core/api/apiClient";
 import { Config } from "./config";
+import { captureHandledFailure } from "./lib/crashReporting";
 import { invalidateResources } from "./lib/resourceCache";
 import {
   getAccessToken,
@@ -21,6 +22,7 @@ const client = createApiClient({
   refreshAccessToken,
   sessionExpired: { message: SESSION_EXPIRED_MESSAGE, code: SESSION_EXPIRED_CODE },
   newRequestId: () => crypto.randomUUID(),
+  onFailure: captureHandledFailure,
 });
 
 export const { sendAuthenticated } = client;

@@ -11,8 +11,10 @@ import {
   type UploadAudioResponse,
   type UploadDocumentResponse,
 } from "@media-summarizer/core/types/upload";
+import { requestIdOf } from "@media-summarizer/core/api/apiClient";
+import { failureCauseOf } from "@media-summarizer/core/errors/handledFailure";
 import { apiRequest } from "../api";
-import { startUploadTrace } from "../lib/crashReporting";
+import { captureHandledFailure, startUploadTrace } from "../lib/crashReporting";
 
 /**
  * Adding a source from the web, on the endpoints the mobile app uses.
@@ -39,6 +41,7 @@ export async function addLink(url: string, folderId: string | null): Promise<str
     });
     return response.media_item_id;
   } catch (error) {
+    reportImportFailure(error, "url", "submit");
     throw new Error(describeRefusal(error));
   }
 }
@@ -61,6 +64,7 @@ export async function addNote(text: string, folderId: string | null): Promise<st
     });
     return response.media_item_id;
   } catch (error) {
+    reportImportFailure(error, "shared_text", "submit");
     throw new Error(describeRefusal(error));
   }
 }
@@ -89,6 +93,7 @@ export async function addFile(file: File, folderId: string | null): Promise<stri
       }),
     );
   } catch (error) {
+    reportImportFailure(error, kind, "sign");
     throw fail("sign", describeRefusal(error));
   }
 
@@ -100,6 +105,11 @@ export async function addFile(file: File, folderId: string | null): Promise<stri
       return response;
     });
   } catch (caught) {
+    // What only the browser sees: S3 refusing the PUT, or the PUT never
+    // coming back (task-611). The signed URL never goes in the event.
+    const stage = caught instanceof Response ? "put_rejected" : "put_network";
+    const status = caught instanceof Response ? caught.status : undefined;
+    captureHandledFailure({ operation: "upload", cause: stage, failureStage: stage, status, mediaType: kind, level: "error" });
     if (caught instanceof Response) throw fail("put_rejected", t("upload.transferFailed.rejected"), caught.status);
     throw fail("put_network", t("upload.transferFailed.network"));
   }
@@ -113,8 +123,28 @@ export async function addFile(file: File, folderId: string | null): Promise<stri
     );
     return response.media_item_id;
   } catch (error) {
+    reportImportFailure(error, kind, "submit");
     throw new Error(describeRefusal(error));
   }
+}
+
+/**
+ * An import the API refused or never answered, the web side of the mobile
+ * `reportSaveFailed` (task-611). Quota refusals, an expired session and
+ * cancellations are not faults and send nothing (`failureCauseOf`).
+ */
+function reportImportFailure(error: unknown, mediaType: string, stage: string): void {
+  const cause = failureCauseOf(error);
+  if (!cause) return;
+  captureHandledFailure({
+    operation: "import",
+    cause,
+    failureStage: stage,
+    status: (error as { status?: number } | null)?.status,
+    mediaType,
+    requestId: requestIdOf(error),
+    level: "error",
+  });
 }
 
 /** A quota refusal names its figures; anything else gets the friendly wording of its code. */

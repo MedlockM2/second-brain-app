@@ -4,6 +4,7 @@ import {
 } from "@media-summarizer/core/api/httpError";
 import type { AuthUser, WebSessionResponse } from "@media-summarizer/core/types/auth";
 import { Config } from "../config";
+import { fetchReportingFailures } from "../lib/crashReporting";
 
 /**
  * The single owner of the web session (task-473, docs/AUTHENTICATION_SETUP.md).
@@ -65,6 +66,15 @@ function forget(): void {
   expiresAt = 0;
 }
 
+/**
+ * The session calls go around the shared client (it needs a session to
+ * exist): their network failures and 5xx are reported here (task-611), never
+ * with the body, which holds the credentials.
+ */
+export function reportedAuthFetch(path: string, init: RequestInit): Promise<Response> {
+  return fetchReportingFailures("auth", `/api/auth${path}`, `${Config.API_BASE_URL}/api/auth${path}`, init);
+}
+
 function authPost(
   path: string,
   { body, bearer }: { body?: unknown; bearer?: string } = {},
@@ -72,7 +82,7 @@ function authPost(
   const headers: Record<string, string> = { ...TRANSPORT_HEADERS };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
-  return fetch(`${Config.API_BASE_URL}/api/auth${path}`, {
+  return reportedAuthFetch(path, {
     method: "POST",
     credentials: "include",
     headers,

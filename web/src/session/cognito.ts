@@ -1,12 +1,11 @@
 import { createHttpError, parseErrorResponse } from "@media-summarizer/core/api/httpError";
 import { COGNITO_SCOPES, hostedUiRefusal, pendingLinkFrom, type AuthCodeAction, type CognitoOAuthConfig, type PendingLink, type SocialProvider } from "@media-summarizer/core/auth/cognito";
 import { apiRequest } from "../api";
-import { Config } from "../config";
-import { openSession } from "./sessionStore";
+import { openSession, reportedAuthFetch } from "./sessionStore";
 
 const headers = { "X-Session-Transport": "cookie", "Content-Type": "application/json" };
 export async function authAction(path: AuthCodeAction, body: unknown): Promise<void> {
-  const response = await fetch(`${Config.API_BASE_URL}/api/auth${path}`, {
+  const response = await reportedAuthFetch(path, {
     method: "POST", credentials: "include", headers, body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -43,7 +42,7 @@ export function setPendingLink(link: PendingLink | null): void {
 }
 
 export async function startSocialSignIn(provider: SocialProvider, purpose: Purpose = "signIn", retried = false): Promise<void> {
-  const response = await fetch(`${Config.API_BASE_URL}/api/auth/oauth/config`, { headers });
+  const response = await reportedAuthFetch("/oauth/config", { headers });
   if (!response.ok) throw createHttpError("Authentication unavailable", response.status, "AUTH_UNAVAILABLE");
   const config = await response.json() as CognitoOAuthConfig;
   if (config.redirect_uri !== `${window.location.origin}/auth/callback`) throw new Error("OAuth callback configuration mismatch");

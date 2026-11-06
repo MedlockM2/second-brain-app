@@ -8,8 +8,31 @@ import type {
   ChatStreamEvent,
   ChatTurnAccepted,
 } from "@media-summarizer/core/types/chat";
+import { failureCauseOf } from "@media-summarizer/core/errors/handledFailure";
 import { apiRequest, sendAuthenticated } from "../api";
+import { captureHandledFailure } from "../lib/crashReporting";
 import { Config } from "../config";
+
+const STREAM_ROUTE = "GET /chat/conversations/:id/stream";
+
+/**
+ * The chat stream is not called through `apiRequest` (its own Lambda, its own
+ * host), so the shared client never sees it fail: reported here (task-611),
+ * for a stream that could not be opened at all. Expected refusals and
+ * cancellations are left out by `failureCauseOf`.
+ */
+function reportStreamFailure(error: unknown): void {
+  const cause = failureCauseOf(error);
+  if (!cause) return;
+  const status = (error as { status?: number } | null)?.status;
+  captureHandledFailure({
+    operation: "chat.stream",
+    cause,
+    route: STREAM_ROUTE,
+    status,
+    level: status !== undefined && status >= 500 ? "error" : "warning",
+  });
+}
 
 /** What opening the stream answered before any event. */
 export type ChatStreamOpening =
@@ -96,7 +119,9 @@ export const chatClient = {
         }),
       );
     } catch (error) {
-      return signal.aborted ? { kind: "idle" } : { kind: "unavailable", error };
+      if (signal.aborted) return { kind: "idle" };
+      reportStreamFailure(error);
+      return { kind: "unavailable", error };
     }
 
     if (response.status === 204) return { kind: "idle" };
@@ -111,7 +136,9 @@ export const chatClient = {
     }
     if (!response.ok || !response.body) {
       const { message, code, details } = await parseErrorResponse(response, "Chat stream could not be opened");
-      return { kind: "unavailable", error: createHttpError(message, response.status, code, undefined, details) };
+      const error = createHttpError(message, response.status, code, undefined, details);
+      reportStreamFailure(error);
+      return { kind: "unavailable", error };
     }
 
     const reader = response.body.getReader();

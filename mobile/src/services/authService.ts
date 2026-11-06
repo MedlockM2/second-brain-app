@@ -15,6 +15,7 @@ import {
 import { Config } from "../constants/config";
 import { createHttpError, parseErrorResponse } from "@media-summarizer/core/api/httpError";
 import { apiRequest } from "./apiClient";
+import { fetchReportingFailures } from "../lib/crashReporting";
 import { TokenStorage } from "./tokenStorage";
 import { SessionManager } from "./sessionManager";
 
@@ -42,11 +43,18 @@ export class AuthService {
     body: unknown,
     fallbackMessage: string,
   ): Promise<T> {
-    const response = await fetch(`${Config.API_BASE_URL}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    // Sign-in and account calls carry no session, so they do not go through
+    // the shared client; their failures are reported all the same (task-611).
+    const response = await fetchReportingFailures(
+      "auth",
+      path,
+      `${Config.API_BASE_URL}${path}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
 
     if (!response.ok) {
       const { message, code, details } = await parseErrorResponse(
@@ -147,7 +155,11 @@ export class AuthService {
 
   /** Hosted UI authorization (Google off Android, Apple off iOS); null when cancelled. */
   private static async authorize(provider: SocialProvider, retried = false): Promise<{ code: string; code_verifier: string } | null> {
-    const response = await fetch(`${Config.API_BASE_URL}/api/auth/oauth/config`);
+    const response = await fetchReportingFailures(
+      "auth",
+      "/api/auth/oauth/config",
+      `${Config.API_BASE_URL}/api/auth/oauth/config`,
+    );
     if (!response.ok) {
       throw createHttpError("Authentication unavailable", response.status, "AUTH_UNAVAILABLE");
     }

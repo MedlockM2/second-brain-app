@@ -66,7 +66,11 @@
 import { t, type TranslationKey } from "../i18n";
 import { getFileExtension } from "@media-summarizer/core/types/upload";
 import { apiRequest } from "./apiClient";
-import { startUploadTrace, type UploadTrace } from "../lib/crashReporting";
+import {
+  captureHandledFailure,
+  startUploadTrace,
+  type UploadTrace,
+} from "../lib/crashReporting";
 import {
   describeUriShape,
   putLocalFileToUrl,
@@ -250,13 +254,33 @@ async function putToS3(params: {
   return result.status;
 }
 
-/** What a failed transfer leaves on its Sentry trace (task-604): enums and figures. */
-function recordFailure(trace: UploadTrace, error: unknown, fallbackStage: string): void {
+/**
+ * What a failed transfer leaves in Sentry: on its trace (task-604), and, for a
+ * failure only the device sees, an event of its own (task-611) with the stage
+ * and the target. A failed signing call is the API client's to report.
+ * Enums and figures only, as everywhere in this module.
+ */
+function recordFailure(
+  trace: UploadTrace,
+  error: unknown,
+  fallbackStage: string,
+  target: UploadTarget,
+): void {
   if (error instanceof DirectUploadError) {
     trace.set({
       "upload.failure_stage": error.diagnostics.stage,
       "http.response.status_code": error.diagnostics.status,
       "upload.s3_code": error.diagnostics.s3Code,
+    });
+    captureHandledFailure({
+      operation: "upload",
+      cause: error.diagnostics.s3Code
+        ? `${error.diagnostics.stage}:${error.diagnostics.s3Code}`
+        : error.diagnostics.stage,
+      failureStage: error.diagnostics.stage,
+      status: error.diagnostics.status,
+      mediaType: target,
+      level: "error",
     });
   } else {
     trace.set({ "upload.failure_stage": fallbackStage });
@@ -296,7 +320,7 @@ export async function stageUpload(params: {
       contentType: params.mimeType,
       cause: describeCause(error),
     });
-    recordFailure(trace, failure, "read_file");
+    recordFailure(trace, failure, "read_file", params.target);
     throw failure;
   }
   trace.set({ "upload.bytes": staged.bytes });
@@ -329,7 +353,7 @@ export async function stageUpload(params: {
     trace.end("ok");
     return issued.upload_key;
   } catch (error) {
-    recordFailure(trace, error, "sign");
+    recordFailure(trace, error, "sign", params.target);
     throw error;
   } finally {
     staged.release();

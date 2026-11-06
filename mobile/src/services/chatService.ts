@@ -15,6 +15,8 @@ import {
 } from "@media-summarizer/core/api/httpError";
 import { parseSseBlock } from "@media-summarizer/core/chat/sse";
 import { apiRequest, sendAuthenticated } from "./apiClient";
+import { captureHandledFailure } from "../lib/crashReporting";
+import { failureCauseOf } from "@media-summarizer/core/errors/handledFailure";
 import type {
   ChatConversationDetail,
   ChatConversationList,
@@ -55,6 +57,27 @@ export interface ChatStreamHandlers {
  * disconnect; only `stopTurn` asks the server to stop, and only an explicit user
  * action may call it.
  */
+const STREAM_ROUTE = "GET /chat/conversations/:id/stream";
+
+/**
+ * The chat stream is not called through `apiRequest` (its own Lambda, its own
+ * host), so the shared client never sees it fail: reported here (task-611),
+ * for a stream that could not be opened at all. Expected refusals and
+ * cancellations are left out by `failureCauseOf`.
+ */
+function reportStreamFailure(error: unknown): void {
+  const cause = failureCauseOf(error);
+  if (!cause) return;
+  const status = (error as { status?: number } | null)?.status;
+  captureHandledFailure({
+    operation: "chat.stream",
+    cause,
+    route: STREAM_ROUTE,
+    status,
+    level: status !== undefined && status >= 500 ? "error" : "warning",
+  });
+}
+
 export class ChatService {
   /** POST /api/chat/conversations — sources frozen now. */
   static async openConversation(
@@ -242,6 +265,7 @@ export class ChatService {
       );
     } catch (error) {
       if (signal.aborted) return { kind: "idle" };
+      reportStreamFailure(error);
       return { kind: "unavailable", error };
     }
 
@@ -273,16 +297,15 @@ export class ChatService {
         response as unknown as Response,
         "Chat stream could not be opened",
       );
-      return {
-        kind: "unavailable",
-        error: createHttpError(
-          message,
-          response.status,
-          code,
-          undefined,
-          details,
-        ),
-      };
+      const error = createHttpError(
+        message,
+        response.status,
+        code,
+        undefined,
+        details,
+      );
+      reportStreamFailure(error);
+      return { kind: "unavailable", error };
     }
 
     const reader = response.body.getReader();

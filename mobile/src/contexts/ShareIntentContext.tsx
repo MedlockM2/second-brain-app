@@ -30,7 +30,12 @@ import {
   failPendingSave,
   resolvePendingSave,
 } from "../lib/pendingSaves";
-import { addPipelineBreadcrumb } from "../lib/crashReporting";
+import {
+  addPipelineBreadcrumb,
+  captureHandledFailure,
+} from "../lib/crashReporting";
+import { failureCauseOf } from "@media-summarizer/core/errors/handledFailure";
+import { requestIdOf } from "@media-summarizer/core/api/apiClient";
 import {
   getQuotaErrorCode,
   getQuotaErrorMessage,
@@ -1066,14 +1071,37 @@ export function ShareIntentProvider({
       pendingSave: string,
       error: unknown,
       fallback: string,
+      mediaType: string,
     ) => {
       const { message, quotaErrorCode } = toSubmissionError(error, fallback);
       // A media page open on this import (task-603) says the error itself.
       const shownByPage = failPendingSave(pendingSave, message);
+      // The cause, not the displayed sentence: that one can repeat what the
+      // server said, and breadcrumbs travel with every event (task-611).
+      const cause = failureCauseOf(error);
       addPipelineBreadcrumb("save.failed", "Media save failed", {
-        message,
+        cause,
         quotaErrorCode,
       });
+      // An event of its own, except for what is not a fault: a quota refusal
+      // or an expired session (`failureCauseOf` returns null), content the
+      // app itself refused before sending, and a transfer `stageUpload`
+      // already reported with its stage.
+      if (
+        cause &&
+        !(error instanceof DirectUploadError) &&
+        !(error instanceof SharedContentValidationError)
+      ) {
+        captureHandledFailure({
+          operation: "import",
+          cause,
+          failureStage: "submit",
+          status: (error as { status?: number } | null)?.status,
+          mediaType,
+          requestId: requestIdOf(error),
+          level: "error",
+        });
+      }
       if (!isShowing(reception)) {
         if (!shownByPage) Alert.alert(t("common.error"), message);
         return;
@@ -1137,7 +1165,13 @@ export function ShareIntentProvider({
       );
       return response.media_item_id;
     } catch (error) {
-      reportSaveFailed(reception, pendingSave, error, t("share.saveLinkFailed"));
+      reportSaveFailed(
+        reception,
+        pendingSave,
+        error,
+        t("share.saveLinkFailed"),
+        "url",
+      );
       return null;
     }
   }, [
@@ -1199,6 +1233,7 @@ export function ShareIntentProvider({
         pendingSave,
         error,
         t("share.saveContentFailed"),
+        pendingSaveFor(intake).mediaType,
       );
       return null;
     }
@@ -1249,6 +1284,7 @@ export function ShareIntentProvider({
         pendingSave,
         error,
         t("share.importFileFailed"),
+        pendingSaveFor(intake).mediaType,
       );
       return null;
     }

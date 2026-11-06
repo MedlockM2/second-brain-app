@@ -1989,6 +1989,52 @@ result for its id means the request did not arrive. The chat stream
 (`CHAT_STREAM_URL`, its own Lambda behind API Gateway) is not called through
 `apiRequest` and carries no `X-Request-ID`.
 
+### Handled failures: what the user saw fail (task-611)
+
+The global handlers only see what throws all the way up: a crash, a render
+error, an unhandled rejection. A failure the app catches and shows ("Couldn't
+import", "Check your connection") used to leave only a breadcrumb. Each one is
+now an event of its own, sent by `captureHandledFailure` (`crashReporting.ts`,
+mobile and web; a no-op without a DSN, never throws) from a few central points:
+
+| Operation (`failure.operation`) | Sent from | When |
+|---|---|---|
+| `api.request` | the shared API client (`packages/core/src/api/apiClient.ts`) | a call with no answer (offline, timeout: cause `network`) or a 5xx (`http_<status>`). The expected 401, 402, 404 and 429, and every other 4xx, stay breadcrumbs |
+| `upload` | `stageUpload` (`presignedUpload.ts`), `addFile` on web | the device-only steps of a direct upload: `read_file`, `put_network`, `put_rejected` (with S3's `<Code>` when it sent one, as `put_rejected:<Code>`) |
+| `import` | `reportSaveFailed` (`ShareIntentContext.tsx`), `addLink`/`addNote`/`addFile` on web | an import the user saw fail, except a quota refusal, an expired session, content the app refused before sending, and an upload step already reported above |
+| `chat.stream` | `followStream` (mobile `chatService.ts`, web `chatClient.ts`) | the stream could not be opened: no answer or an unexpected status. It does not go through `apiRequest` |
+| `auth` | `fetchReportingFailures` in `AuthService` (account calls, OAuth config), web `reportedAuthFetch` | sign-in and account calls (they carry no session, so no shared client): no answer or a 5xx |
+| `pricing` | `fetchReportingFailures` in `fetchPublicPricing` | the paywall's public prices: no answer or a 5xx |
+
+Each event is a **message**, built from enums and figures only: the error
+itself is never sent, so neither is its message (which can echo the server).
+Never a signed URL, a query string, a file name, typed text or media content.
+
+| Tag | Value |
+|---|---|
+| `failure.operation` | see the table above |
+| `failure.cause` | `network`, `http_<status>`, `unexpected`, or an upload stage |
+| `failure.route` | `METHOD /path` with ids folded to `:id` (`routeOf`), no host, no query |
+| `http.status_code` | when there was an answer |
+| `failure.stage` | `read_file`, `put_network`, `put_rejected` for an upload; `sign` or `submit` for an import |
+| `media.type` | `url`, `shared_text`, `audio_file`, `document`, `audio`… when the failure concerns a media |
+| `request_id` | the failed call's `X-Request-ID`, when the API was called (see above) |
+
+Level `error` for a 5xx and for a failed upload or import, `warning` otherwise.
+The fingerprint is `["handled-failure", operation, route, cause]`, so one
+outage of one route makes one issue, however many users hit it.
+
+Filtering in Sentry (Issues or Discover):
+
+- everything users saw fail: `failure.operation:*`;
+- one kind: `failure.operation:upload failure.stage:put_network`;
+- offline vs server: `failure.cause:network` vs `failure.cause:http_503`;
+- one route: `failure.route:"POST /api/media/ingest-url"`;
+- then follow `request_id` to the server logs with the query above.
+
+One failed import can raise two events, `api.request` for the call and
+`import` for what the user saw. They share a `request_id`.
+
 ### App Hangs (iOS) & ANR (Android)
 
 The four `startup_guard.origin` capture paths above only ever see something

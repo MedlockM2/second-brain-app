@@ -1,6 +1,7 @@
 import * as Crypto from "expo-crypto";
 import { createApiClient } from "@media-summarizer/core/api/apiClient";
 import { Config } from "../constants/config";
+import { captureHandledFailure } from "../lib/crashReporting";
 import { SessionManager } from "./sessionManager";
 
 /**
@@ -17,4 +18,5 @@ export const { sendAuthenticated, apiRequest } = createApiClient({
     code: SessionManager.SESSION_EXPIRED_CODE,
   },
   newRequestId: () => Crypto.randomUUID(),
+  onFailure: captureHandledFailure,
 });
