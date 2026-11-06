@@ -2,8 +2,13 @@
  * Where a rename is typed: one field, prefilled with the name the thing has now,
  * and the two answers a naming prompt can get.
  *
- * The field is focused after presentation. The card stays visible and usable
- * while native keyboard frames determine its position, without layout animation.
+ * The field takes the keyboard as the dialog is presented
+ * (`FOCUS_DURING_PRESENTATION`), so the card does not first show at the bottom of
+ * the screen and then jump above a keyboard arriving after it. The card stays
+ * visible and usable while native keyboard frames determine its position, without
+ * layout animation, and a tap beside the field does not put the keyboard away
+ * (`keyboardShouldPersistTaps="always"`): the card would drop by a keyboard height
+ * under the next tap, onto the scrim that closes it.
  * A rename is a one-field edit
  * reached from a context menu, and pushing a route for it would take the user
  * away from the list they were filing — the list stays visible behind the scrim,
@@ -43,6 +48,7 @@ import { t } from "../i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardViewport, type KeyboardViewportHandle } from "./KeyboardViewport";
 import { useFocusedInputScroll } from "../hooks/useFocusedInputScroll";
+import { FOCUS_DURING_PRESENTATION } from "../lib/modalFieldFocus";
 
 export interface RenameDialogProps {
   visible: boolean;
@@ -88,7 +94,7 @@ export function RenameDialog(props: RenameDialogProps): React.JSX.Element {
       statusBarTranslucent
       onShow={() => {
         viewportRef.current?.refresh();
-        inputRef.current?.focus();
+        if (!FOCUS_DURING_PRESENTATION) inputRef.current?.focus();
       }}
       onRequestClose={props.isSaving ? undefined : props.onClose}
     >
@@ -126,6 +132,10 @@ function NamingForm({
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const inputScroll = useFocusedInputScroll(scrollRef);
+  // Fabric iOS applies `selectTextOnFocus` only in the `focus` command, which the
+  // presentation focus does not go through: the first focus of each opening
+  // selects the current name itself. The form is mounted once per opening.
+  const selectOnFirstFocus = useRef(FOCUS_DURING_PRESENTATION);
 
   return (
     <KeyboardViewport
@@ -146,7 +156,7 @@ function NamingForm({
           automaticallyAdjustKeyboardInsets={false}
           automaticallyAdjustContentInsets={false}
           contentInsetAdjustmentBehavior="never"
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           onLayout={inputScroll.reveal}
           onContentSizeChange={inputScroll.reveal}
           onScroll={inputScroll.onScroll}
@@ -170,7 +180,14 @@ function NamingForm({
 
             <TextInput
               ref={inputRef}
-              onFocus={() => inputScroll.focusInput(inputRef.current)}
+              autoFocus={FOCUS_DURING_PRESENTATION}
+              onFocus={() => {
+                if (selectOnFirstFocus.current) {
+                  selectOnFirstFocus.current = false;
+                  inputRef.current?.setSelection(0, value.length);
+                }
+                inputScroll.focusInput(inputRef.current);
+              }}
               style={styles.input}
               value={value}
               onChangeText={onChangeText}
