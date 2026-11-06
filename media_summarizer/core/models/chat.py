@@ -93,7 +93,7 @@ TERMINAL_TURN_STATUSES = frozenset({ChatTurnStatus.COMPLETED, ChatTurnStatus.FAI
 class ChatInterruptionCause(str, Enum):
     #: The user asked to stop (Decision point 6).
     CANCELLED = "cancelled"
-    #: The provider ended on ``finish_reason == "length"``.
+    #: The provider ended the response ``incomplete`` on ``max_output_tokens``.
     OUTPUT_LIMIT = "output_limit"
     #: The provider failed after some text had already been streamed: text the
     #: user has seen is not taken back (complement C1.11), so it is a partial

@@ -4,31 +4,48 @@ Extracted from the artifact worker so that the chat worker calls the provider th
 same way instead of through a "chat mode" of the artifact worker (Decision point 2
 of docs/research/task-430-chatbot-architecture/README.md). What lives here:
 
-- **the request**: model, reasoning effort and output ceiling come from
-  ``llm_config.chat_completion_parameters()`` and nowhere else -- a caller passes
-  its messages, an optional Structured Outputs schema and an optional
-  ``prompt_cache_key``, never a model or a ceiling of its own;
+- **the request**: one ``POST /v1/responses`` of the Responses API (task-613,
+  owner decision of 2026-11-06; the only path to the provider). Model, reasoning
+  effort, output ceiling and ``store: false`` come from
+  ``llm_config.response_parameters()`` and nowhere else -- a caller passes its
+  messages, an optional Structured Outputs ``text.format`` and an optional
+  ``prompt_cache_key``, never a model or a ceiling of its own. The messages go as
+  they are into ``input`` (``role`` + ``content``, the system or developer message
+  first), so the corpus they carry stays one stable prefix for the cache, and no
+  ``previous_response_id`` is ever sent: the caller rebuilds the conversation;
 - **the reading of a refusal**: one parse of the provider's answer through
   ``llm_failure.classify_llm_failure``, raised as ``LlmProviderRefusedError`` when
   the provider declined the call;
+- **the end of an answer**: a response is ``completed``, or ``incomplete`` with
+  ``incomplete_details.reason`` (``max_output_tokens`` when the ceiling cut it),
+  carried on :class:`LlmResult`;
 - **the usage**: ``read_usage`` reads the provider's usage block. What a call is
   charged is not decided here: every caller sends under an attempt of the beta
   budget and settles it on this usage (``budget_guard``, task-549).
 
 Two modes. ``complete`` buffers the answer: it is what every artifact, the review
-blurb and the re-translation use, and its request is byte-for-byte the one the
-artifact worker sent before the extraction. ``stream`` is taken only by a caller
-that asks for it -- the chat -- and reads the provider's server-sent events
-(``stream: true`` with ``stream_options.include_usage``), hands each text delta to a
-callback, lets the caller stop consuming, and tells a failure *before* the first
-text apart from one *after* it: only the former may be retried (Decision point 2),
-a text already shown is never taken back (Decision point 6).
+blurb and the re-translation use. ``stream`` is taken only by a caller that asks
+for it -- the chat -- and reads the provider's typed server-sent events
+(``response.output_text.delta`` for the text; ``response.completed`` or
+``response.incomplete`` for the end, the usage and the model; ``response.failed``
+and ``error`` for a failure), hands each text delta to a callback, lets the caller
+stop consuming, and tells a failure *before* the first text apart from one *after*
+it: only the former may be retried (Decision point 2), a text already shown is
+never taken back (Decision point 6).
 
-One call sends its own request: the full-text translation
+One call sends its own HTTP request: the full-text translation
 (``transcript_translation.py``), which must not carry the shared output ceiling and
-classifies every provider error itself for its retry budget. It still takes its
-model and reasoning effort from ``llm_config`` and prices its usage through
-:func:`read_usage` (task-556).
+classifies every provider error itself for its retry budget. It still builds its
+body with :func:`request_payload` and reads the answer with :func:`read_response`
+(task-556, task-613).
+
+Responses API reference and streaming events read on 2026-11-06:
+https://developers.openai.com/api/reference/resources/responses/methods/create and
+https://developers.openai.com/api/reference/resources/responses/streaming-events.
+The usage block is ``input_tokens`` (with ``input_tokens_details.cached_tokens``
+and ``cache_write_tokens``) and ``output_tokens``, reasoning included
+(``output_tokens_details.reasoning_tokens`` is a subset, never added again). The
+stream ends on its terminal event; there is no ``[DONE]`` sentinel.
 """
 
 from __future__ import annotations
@@ -43,8 +60,9 @@ import aiohttp
 
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
 from media_summarizer.core.services.llm_config import (
+    LLM_MAX_OUTPUT_TOKENS,
     LLM_MODEL,
-    chat_completion_parameters,
+    response_parameters,
 )
 from media_summarizer.core.services.llm_corpus import estimate_tokens
 from media_summarizer.core.services.llm_pricing import estimate_llm_cost_eur
@@ -59,12 +77,10 @@ from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
 
-LLM_API_URL = os.environ.get(
-    "LLM_API_URL", "https://api.openai.com/v1/chat/completions"
-)
+LLM_API_URL = os.environ.get("LLM_API_URL", "https://api.openai.com/v1/responses")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-#: One message of a conversation, as Chat Completions takes it:
+#: One message of a conversation, as an item of the Responses API ``input``:
 #: ``{"role": "system" | "developer" | "user" | "assistant", "content": "..."}``.
 LlmMessage = Dict[str, str]
 
@@ -73,21 +89,33 @@ LlmMessage = Dict[str, str]
 #: or ``True`` keeps reading.
 DeltaCallback = Callable[[str], Awaitable[Optional[bool]]]
 
-_STREAM_DONE = "[DONE]"
+#: ``incomplete_details.reason`` of a response the output ceiling cut.
+INCOMPLETE_MAX_OUTPUT_TOKENS = "max_output_tokens"
+
+#: The stream events that end a response with its final object.
+_TERMINAL_EVENTS = frozenset({"response.completed", "response.incomplete"})
 
 
 @dataclass(frozen=True)
 class LlmResult:
     """A finished call: the text, what it cost, and why the provider stopped.
 
-    ``finish_reason`` is the provider's own (``stop``, ``length``…), so a caller
-    can tell an answer cut by the output ceiling from a complete one. ``None`` when
-    the provider never sent one -- a stream the caller stopped.
+    ``status`` is the response's own (``completed``, ``incomplete``…) and
+    ``incomplete_reason`` its ``incomplete_details.reason`` (``max_output_tokens``,
+    ``content_filter``…), so a caller can tell an answer cut by the output ceiling
+    from a complete one. Both ``None`` when the provider never sent its final
+    response -- a stream the caller stopped.
     """
 
     content: str
     usage: ArtifactLlmUsage
-    finish_reason: Optional[str]
+    status: Optional[str]
+    incomplete_reason: Optional[str] = None
+
+    @property
+    def output_limit_reached(self) -> bool:
+        """The output ceiling (reasoning included) cut the answer."""
+        return self.status == "incomplete" and self.incomplete_reason == INCOMPLETE_MAX_OUTPUT_TOKENS
 
 
 @dataclass(frozen=True)
@@ -124,14 +152,30 @@ class LlmStreamInterruptedError(Exception):
         self.provider_status = provider_status
 
 
+class LlmResponseFailedError(RuntimeError):
+    """The provider reported, after its 200, that it could not generate a response.
+
+    ``failure_kind`` is read from the error it named: an ``invalid_prompt`` is
+    permanent and must not be retried, a ``server_error`` may pass.
+    """
+
+    def __init__(self, message: str, *, failure_kind: str) -> None:
+        super().__init__(message)
+        self.failure_kind = failure_kind
+
+
 def read_usage(usage: Dict[str, Any]) -> ArtifactLlmUsage:
-    """Price the provider's usage block, under the model the provider names."""
+    """Price the Responses API usage block, under the model the provider names.
+
+    ``input_tokens`` holds the cached and cache-written tokens as subsets;
+    ``output_tokens`` already counts the reasoning tokens.
+    """
     model = str(usage.get("model") or LLM_MODEL)
-    prompt_details = usage.get("prompt_tokens_details") or {}
-    prompt_tokens = int(usage.get("prompt_tokens") or 0)
-    cached_tokens = int(prompt_details.get("cached_tokens") or 0)
-    cache_write_tokens = int(prompt_details.get("cache_write_tokens") or 0)
-    completion_tokens = int(usage.get("completion_tokens") or 0)
+    input_details = usage.get("input_tokens_details") or {}
+    prompt_tokens = int(usage.get("input_tokens") or 0)
+    cached_tokens = int(input_details.get("cached_tokens") or 0)
+    cache_write_tokens = int(input_details.get("cache_write_tokens") or 0)
+    completion_tokens = int(usage.get("output_tokens") or 0)
     return ArtifactLlmUsage(
         model=model,
         prompt_tokens=prompt_tokens,
@@ -180,20 +224,77 @@ def estimate_usage(
     )
 
 
-def _build_payload(
+def request_payload(
     messages: Sequence[LlmMessage],
-    response_format: Optional[Dict[str, Any]],
-    prompt_cache_key: Optional[str],
+    *,
+    text_format: Optional[Dict[str, Any]] = None,
+    prompt_cache_key: Optional[str] = None,
+    max_output_tokens: Optional[int] = LLM_MAX_OUTPUT_TOKENS,
 ) -> Dict[str, Any]:
+    """The body of one ``POST /v1/responses``.
+
+    ``text_format`` is the generator's Structured Outputs format
+    (``{"type": "json_schema", "name", "strict", "schema"}``), sent as
+    ``text.format``. ``max_output_tokens=None`` is the full-text translation's
+    request: no ceiling but the model's.
+    """
     payload: Dict[str, Any] = {
-        **chat_completion_parameters(),
-        "messages": list(messages),
+        **response_parameters(max_output_tokens=max_output_tokens),
+        "input": list(messages),
     }
-    if response_format is not None:
-        payload["response_format"] = response_format
+    if text_format is not None:
+        payload["text"] = {"format": text_format}
     if prompt_cache_key:
         payload["prompt_cache_key"] = prompt_cache_key
     return payload
+
+
+def response_text(response: Dict[str, Any]) -> str:
+    """The text of a response: every ``output_text`` part of its ``message`` items.
+
+    ``output_text`` on the response object is an SDK convenience, absent from the
+    HTTP answer, so the ``output`` array is read. Reasoning items carry no text, and
+    a ``refusal`` part is not answer text.
+    """
+    parts: List[str] = []
+    for item in response.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for part in item.get("content") or []:
+            if part.get("type") == "output_text":
+                parts.append(str(part.get("text") or ""))
+    return "".join(parts)
+
+
+def _incomplete_reason(response: Dict[str, Any]) -> Optional[str]:
+    details = response.get("incomplete_details") or {}
+    reason = details.get("reason")
+    return str(reason) if reason else None
+
+
+def read_response(
+    response: Dict[str, Any], messages: Sequence[LlmMessage]
+) -> LlmResult:
+    """Read a whole (non-streamed) response: text, end and priced usage.
+
+    The usage is estimated when the provider sent none, rather than written as
+    zero.
+    """
+    content = response_text(response)
+    # The model that actually answered, as the provider names it, rides with the
+    # usage it produced: that is what cost and traceability read.
+    model = response.get("model") or LLM_MODEL
+    usage = response.get("usage")
+    return LlmResult(
+        content=content,
+        usage=(
+            read_usage({**usage, "model": model})
+            if usage
+            else estimate_usage(messages, content, model=model)
+        ),
+        status=response.get("status"),
+        incomplete_reason=_incomplete_reason(response),
+    )
 
 
 def _require_api_key() -> str:
@@ -262,7 +363,7 @@ async def _raise_for_provider_error(
 async def complete(
     messages: Sequence[LlmMessage],
     *,
-    response_format: Optional[Dict[str, Any]] = None,
+    text_format: Optional[Dict[str, Any]] = None,
     prompt_cache_key: Optional[str] = None,
     **log_fields: Any,
 ) -> LlmResult:
@@ -275,7 +376,9 @@ async def complete(
     timeout = aiohttp.ClientTimeout(
         total=int(os.environ.get("LLM_TIMEOUT_SECONDS", "180"))
     )
-    payload = _build_payload(messages, response_format, prompt_cache_key)
+    payload = request_payload(
+        messages, text_format=text_format, prompt_cache_key=prompt_cache_key
+    )
 
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
@@ -283,16 +386,13 @@ async def complete(
         ) as response:
             await _raise_for_provider_error(response, log_fields)
             result = await response.json()
-            usage = dict(result.get("usage") or {})
-            # The model that actually answered, as the provider names it, rides
-            # with the usage it produced: that is what cost and traceability read.
-            usage["model"] = result.get("model") or LLM_MODEL
-            choice = result["choices"][0]
-            return LlmResult(
-                content=choice["message"]["content"],
-                usage=read_usage(usage),
-                finish_reason=choice.get("finish_reason"),
-            )
+            # A response the model failed to generate is a 200 with
+            # ``status: failed``: classified like the same error in a stream.
+            if result.get("status") == "failed":
+                _raise_for_stream_error(
+                    {"type": "response.failed", "response": result}, log_fields
+                )
+            return read_response(result, messages)
 
 
 async def stream(
@@ -311,8 +411,8 @@ async def stream(
 
     ``on_delta`` returning ``False`` stops the read: the connection is closed, the
     provider stops generating, and the result comes back with ``stopped=True``,
-    the text delivered so far and an estimated usage (the usage chunk only comes
-    at the end).
+    the text delivered so far and an estimated usage (the usage only comes with
+    the terminal event).
 
     There is no total timeout: a long answer is bounded by the caller's own
     deadline. ``LLM_TIMEOUT_SECONDS`` bounds the silence between two reads
@@ -323,13 +423,12 @@ async def stream(
         total=None,
         sock_read=int(os.environ.get("LLM_TIMEOUT_SECONDS", "180")),
     )
-    payload = _build_payload(messages, None, prompt_cache_key)
+    payload = request_payload(messages, prompt_cache_key=prompt_cache_key)
     payload["stream"] = True
-    payload["stream_options"] = {"include_usage": True}
 
     parts: List[str] = []
     model: Optional[str] = None
-    finish_reason: Optional[str] = None
+    final: Optional[Dict[str, Any]] = None
     raw_usage: Optional[Dict[str, Any]] = None
 
     def interrupted(exc: BaseException) -> LlmStreamInterruptedError:
@@ -353,30 +452,34 @@ async def stream(
                     data = _sse_data(raw_line)
                     if data is None:
                         continue
-                    if data == _STREAM_DONE:
+                    event = json.loads(data)
+                    _raise_for_stream_error(event, log_fields)
+                    event_type = event.get("type")
+                    snapshot = event.get("response")
+                    if isinstance(snapshot, dict):
+                        # response.created / in_progress / completed / incomplete
+                        # all carry the response object: the model that answers.
+                        model = snapshot.get("model") or model
+                    if event_type in _TERMINAL_EVENTS and isinstance(snapshot, dict):
+                        final = snapshot
+                        if snapshot.get("usage"):
+                            raw_usage = dict(snapshot["usage"])
                         break
-                    chunk = json.loads(data)
-                    _raise_for_stream_error(chunk, log_fields)
-                    model = chunk.get("model") or model
-                    if chunk.get("usage"):
-                        # The extra chunk sent before [DONE]: no choices, the usage
-                        # of the whole call.
-                        raw_usage = dict(chunk["usage"])
-                    for choice in chunk.get("choices") or []:
-                        finish_reason = choice.get("finish_reason") or finish_reason
-                        text = (choice.get("delta") or {}).get("content")
-                        if not text:
-                            continue
-                        parts.append(text)
-                        if await on_delta(text) is False:
-                            response.close()
-                            content = "".join(parts)
-                            return LlmStreamResult(
-                                content=content,
-                                usage=_stream_usage(raw_usage, model, messages, content),
-                                finish_reason=None,
-                                stopped=True,
-                            )
+                    if event_type != "response.output_text.delta":
+                        continue
+                    text = event.get("delta")
+                    if not text:
+                        continue
+                    parts.append(text)
+                    if await on_delta(text) is False:
+                        response.close()
+                        content = "".join(parts)
+                        return LlmStreamResult(
+                            content=content,
+                            usage=_stream_usage(raw_usage, model, messages, content),
+                            status=None,
+                            stopped=True,
+                        )
             except Exception as exc:
                 if not parts:
                     raise
@@ -386,7 +489,8 @@ async def stream(
     return LlmStreamResult(
         content=content,
         usage=_stream_usage(raw_usage, model, messages, content),
-        finish_reason=finish_reason,
+        status=final.get("status") if final else None,
+        incomplete_reason=_incomplete_reason(final) if final else None,
     )
 
 
@@ -398,12 +502,18 @@ def _sse_data(raw_line: bytes) -> Optional[str]:
     return line[len("data:"):].strip()
 
 
-def _raise_for_stream_error(chunk: Dict[str, Any], log_fields: Dict[str, Any]) -> None:
-    """An error the provider reports inside the stream, after its 200."""
-    error = chunk.get("error")
-    if not error:
+def _raise_for_stream_error(event: Dict[str, Any], log_fields: Dict[str, Any]) -> None:
+    """An error the provider reports after its 200.
+
+    Two shapes in the stream: an ``error`` event (``code``, ``message`` at the top)
+    and ``response.failed``, whose response carries ``error.code`` and
+    ``error.message``. The raw event is what is classified, so either wording
+    reaches the markers of ``classify_llm_failure``.
+    """
+    event_type = event.get("type")
+    if event_type not in {"error", "response.failed"}:
         return
-    body = json.dumps(chunk)
+    body = json.dumps(event)
     failure = classify_llm_failure(status_code=None, body=body)
     log_event(
         logger,
@@ -422,7 +532,7 @@ def _raise_for_stream_error(chunk: Dict[str, Any], log_fields: Dict[str, Any]) -
             refusal_reason=failure.refusal_reason,
             failure_kind=failure.kind,
         )
-    raise RuntimeError(f"llm_stream_error: {body[:300]}")
+    raise LlmResponseFailedError(f"llm_stream_error: {body[:300]}", failure_kind=failure.kind)
 
 
 def _stream_usage(

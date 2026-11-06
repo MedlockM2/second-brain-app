@@ -150,6 +150,9 @@ _UNPROCESSABLE_REQUEST_MARKERS: tuple[str, ...] = (
     "do not have access to it",
     "context_length_exceeded",
     "string_above_max_length",
+    # Responses API ``error.code`` of a response the model failed to generate
+    # because of the prompt itself (reference read 2026-11-06, task-613).
+    "invalid_prompt",
 )
 
 # The provider is pacing us or briefly unwell: the same request passes once the
@@ -263,7 +266,9 @@ def classify_llm_failure(
     """Read one provider answer once, and return both of its axes.
 
     ``status_code`` is ``None`` for a failure that never got an HTTP answer (a
-    timeout, a DNS or TLS error), which is transient by nature and no refusal.
+    timeout, a DNS or TLS error), which is transient by nature and no refusal, and
+    for an error the provider reports after its 200 (an ``error`` or
+    ``response.failed`` event of the Responses API), which only its body tells.
     ``body`` is the raw response text -- never parsed as JSON, so a truncated or
     HTML body classifies exactly as well as a well-formed one. ``retry_after`` is
     the header of the same name when the provider sent one: its presence is the
@@ -285,6 +290,10 @@ def classify_llm_failure(
         return LlmFailure(LLMFailureKind.PERMANENT)
 
     if status_code is None:
+        # An error event inside a Responses API stream has no status of its own;
+        # ``rate_limit_exceeded`` is its code for a throttle (task-613).
+        if "rate_limit_exceeded" in text:
+            return LlmFailure(LLMFailureKind.TRANSIENT, REFUSAL_RATE_LIMIT)
         return LlmFailure(LLMFailureKind.TRANSIENT)
 
     if status_code in _AUTHENTICATION_STATUS_CODES:

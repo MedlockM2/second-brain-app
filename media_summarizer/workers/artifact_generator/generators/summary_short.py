@@ -145,7 +145,7 @@ Return JSON with this exact schema:
 """
         return corpus.build_prompt(sources, instructions)
 
-    def response_format_schema(self) -> Optional[Dict[str, Any]]:
+    def text_format(self) -> Optional[Dict[str, Any]]:
         return None
 
     def unwrap_structured_response(self, content: str) -> str:

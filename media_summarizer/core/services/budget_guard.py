@@ -37,7 +37,7 @@ Two rules hold everywhere and are enforced here rather than at each call site:
 - **a bound is a bound**. LLM inputs are measured as the UTF-8 bytes of the request
   (:func:`request_input_tokens`): every token of a byte-level BPE vocabulary covers
   at least one byte, so the byte count can never be below the token count the
-  provider bills, whatever the language. Outputs are the ``max_completion_tokens``
+  provider bills, whatever the language. Outputs are the ``max_output_tokens``
   actually sent.
 """
 
@@ -69,7 +69,7 @@ from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
 from media_summarizer.core.services import beta_budget, operator_guard
 from media_summarizer.core.services.beta_budget import ItemTooLargeError, PricingContext
 from media_summarizer.core.services.llm_config import (
-    LLM_MAX_COMPLETION_TOKENS,
+    LLM_MAX_OUTPUT_TOKENS,
     LLM_MODEL,
     LLM_MODEL_MAX_INPUT_TOKENS,
 )
@@ -505,7 +505,7 @@ def blurb_line(ctx: PricingContext, *, text_tokens: int) -> ReservationLine:
         model=LLM_MODEL,
         input_tokens=min(text_tokens, _BLURB_MAX_CORPUS_TOKENS) + BLURB_PROMPT_TOKENS,
         max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
-        max_output_tokens=LLM_MAX_COMPLETION_TOKENS,
+        max_output_tokens=LLM_MAX_OUTPUT_TOKENS,
         measured=False,
     )
 
@@ -996,12 +996,13 @@ async def charge_content_reuse(
 
 def request_input_tokens(
     messages: Sequence[Mapping[str, Any]],
-    response_format: Optional[Mapping[str, Any]] = None,
+    text_format: Optional[Mapping[str, Any]] = None,
 ) -> int:
-    """Upper bound of the input tokens of a Chat Completions request.
+    """Upper bound of the input tokens of a Responses API request.
 
-    Its UTF-8 bytes — every message's content, the Structured Outputs schema when
-    one is sent — plus a fixed overhead per message and per request. A token of a
+    Its UTF-8 bytes — the content of every message sent as an ``input`` item, the
+    Structured Outputs ``text.format`` when one is sent — plus a fixed overhead per
+    item and per request. A token of a
     byte-level BPE vocabulary covers at least one byte, so this is never below the
     prompt tokens the provider bills; on Latin text it is about 3.4 times the
     estimate the context ceilings use (``llm_corpus.BYTES_PER_TOKEN``), and the
@@ -1010,8 +1011,8 @@ def request_input_tokens(
     total = _REQUEST_OVERHEAD_BYTES
     for message in messages:
         total += len(str(message.get("content") or "").encode("utf-8")) + _MESSAGE_OVERHEAD_BYTES
-    if response_format:
-        total += len(json.dumps(response_format, ensure_ascii=False).encode("utf-8"))
+    if text_format:
+        total += len(json.dumps(text_format, ensure_ascii=False).encode("utf-8"))
     return total
 
 
@@ -1026,15 +1027,15 @@ def llm_call_line(
     *,
     component: Component,
     messages: Sequence[Mapping[str, Any]],
-    response_format: Optional[Mapping[str, Any]] = None,
-    max_output_tokens: int = LLM_MAX_COMPLETION_TOKENS,
+    text_format: Optional[Mapping[str, Any]] = None,
+    max_output_tokens: int = LLM_MAX_OUTPUT_TOKENS,
 ) -> ReservationLine:
     """Bound of a generation, a preview or a chat turn, from the request about to leave."""
     return beta_budget.llm_line(
         ctx,
         component=component,
         model=LLM_MODEL,
-        input_tokens=request_input_tokens(messages, response_format),
+        input_tokens=request_input_tokens(messages, text_format),
         max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
         max_output_tokens=max_output_tokens,
     )
@@ -1060,7 +1061,7 @@ def chat_turn_admission_line(ctx: PricingContext, *, estimated_input_tokens: int
         model=LLM_MODEL,
         input_tokens=ceil(max(1, estimated_input_tokens) * BYTES_PER_TOKEN) + _REQUEST_OVERHEAD_BYTES,
         max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
-        max_output_tokens=LLM_MAX_COMPLETION_TOKENS,
+        max_output_tokens=LLM_MAX_OUTPUT_TOKENS,
         measured=False,
     )
 

@@ -1,7 +1,7 @@
 """Flashcards artifact generator.
 
 Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type.
-Uses OpenAI Structured Outputs (response_format) for reliable JSON generation.
+Uses OpenAI Structured Outputs (the Responses API ``text.format``) for reliable JSON generation.
 """
 
 from __future__ import annotations
@@ -110,33 +110,31 @@ Return JSON with this exact schema:
 """
         return corpus.build_prompt(sources, instructions)
 
-    def response_format_schema(self) -> Optional[Dict[str, Any]]:
+    def text_format(self) -> Optional[Dict[str, Any]]:
         return {
             "type": "json_schema",
-            "json_schema": {
-                "name": "flashcards",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "title": {"type": "string"},
-                        "cards": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "question": {"type": "string"},
-                                    "answer": {"type": "string"},
-                                    "source_ref": {"type": ["string", "null"]},
-                                },
-                                "required": ["question", "answer", "source_ref"],
-                                "additionalProperties": False,
+            "name": "flashcards",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "cards": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "question": {"type": "string"},
+                                "answer": {"type": "string"},
+                                "source_ref": {"type": ["string", "null"]},
                             },
+                            "required": ["question", "answer", "source_ref"],
+                            "additionalProperties": False,
                         },
                     },
-                    "required": ["title", "cards"],
-                    "additionalProperties": False,
                 },
+                "required": ["title", "cards"],
+                "additionalProperties": False,
             },
         }
 

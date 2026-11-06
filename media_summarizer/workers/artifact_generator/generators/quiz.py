@@ -1,7 +1,7 @@
 """Quiz artifact generator.
 
 Model: the shared ``llm_config.LLM_MODEL`` (task-439), like every other type.
-Uses OpenAI Structured Outputs (response_format) for reliable JSON generation.
+Uses OpenAI Structured Outputs (the Responses API ``text.format``) for reliable JSON generation.
 
 The four options of a question are emitted as an *object* keyed by label, not as
 an array, so their cardinality is imposed at emission instead of being checked
@@ -192,7 +192,7 @@ Return JSON with this exact schema:
 """
         return corpus.build_prompt(sources, instructions)
 
-    def response_format_schema(self) -> Optional[Dict[str, Any]]:
+    def text_format(self) -> Optional[Dict[str, Any]]:
         """Schema that makes a wrong option count impossible to emit.
 
         ``options`` is an object with one required property per label instead of
@@ -211,49 +211,47 @@ Return JSON with this exact schema:
         """
         return {
             "type": "json_schema",
-            "json_schema": {
-                "name": "quiz",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "title": {"type": "string"},
-                        "questions": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "question": {"type": "string"},
-                                    "options": {
-                                        "type": "object",
-                                        "properties": {
-                                            label: {"type": "string"}
-                                            for label in LABELS
-                                        },
-                                        "required": list(LABELS),
-                                        "additionalProperties": False,
+            "name": "quiz",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "questions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "question": {"type": "string"},
+                                "options": {
+                                    "type": "object",
+                                    "properties": {
+                                        label: {"type": "string"}
+                                        for label in LABELS
                                     },
-                                    "correct_answer": {
-                                        "type": "string",
-                                        "enum": list(LABELS),
-                                    },
-                                    "explanation": {"type": "string"},
-                                    "source_ref": {"type": ["string", "null"]},
+                                    "required": list(LABELS),
+                                    "additionalProperties": False,
                                 },
-                                "required": [
-                                    "question",
-                                    "options",
-                                    "correct_answer",
-                                    "explanation",
-                                    "source_ref",
-                                ],
-                                "additionalProperties": False,
+                                "correct_answer": {
+                                    "type": "string",
+                                    "enum": list(LABELS),
+                                },
+                                "explanation": {"type": "string"},
+                                "source_ref": {"type": ["string", "null"]},
                             },
-                        }
-                    },
-                    "required": ["title", "questions"],
-                    "additionalProperties": False,
+                            "required": [
+                                "question",
+                                "options",
+                                "correct_answer",
+                                "explanation",
+                                "source_ref",
+                            ],
+                            "additionalProperties": False,
+                        },
+                    }
                 },
+                "required": ["title", "questions"],
+                "additionalProperties": False,
             },
         }
 
@@ -302,7 +300,7 @@ Return JSON with this exact schema:
                 ) from exc
 
             # No option-count nor label-uniqueness check left: both are imposed
-            # by the emitted schema (see `response_format_schema`) and by
+            # by the emitted schema (see `text_format`) and by
             # `QuizOptionTexts`, which accepts exactly the four labelled keys.
             # `ordered` is what turns that keyed object back into the canonical
             # A-to-D list the artifact content carries.

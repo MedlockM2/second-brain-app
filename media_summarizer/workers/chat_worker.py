@@ -30,7 +30,7 @@ the provider stream and the partial answer is sealed ``interrupted``.
 announces the end, Decision point 3):
 
 - the provider finished: ``completed``;
-- ``finish_reason == "length"``: ``interrupted`` / ``output_limit`` with the text
+- ``incomplete`` / ``max_output_tokens``: ``interrupted`` / ``output_limit`` with the text
   received, or ``failed`` / ``output_limit`` if nothing was shown -- never retried,
   a new attempt would hit the same ceiling;
 - a stop: ``interrupted`` / ``cancelled``;
@@ -611,7 +611,7 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
             usage=result.usage,
         )
         return
-    if result.finish_reason == "length":
+    if result.output_limit_reached:
         if text.strip():
             await _seal(
                 **seal_kwargs,

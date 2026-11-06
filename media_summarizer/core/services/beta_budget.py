@@ -598,7 +598,7 @@ def llm_line(
 
     ``input_tokens`` is the complete request measured before it is sent
     (instructions, schema, corpus, history, question); unknown, the model's largest
-    accepted input is reserved. The output is the ``max_completion_tokens`` the call
+    accepted input is reserved. The output is the ``max_output_tokens`` the call
     sends. ``measured=False`` marks an input that is an upstream estimate rather
     than a measurement (the blurb reserved with an import, rule 10).
     """
@@ -618,7 +618,7 @@ def translation_output_reserve(ctx: PricingContext, input_tokens: int) -> int:
     """Output tokens a full-text translation is reserved for: 1.5 × its input (rule 11).
 
     A reservation figure only, as the owner amended rule 11 on 2026-10-28: nothing
-    caps the generation at it, the call is not sent a ``max_completion_tokens`` of
+    caps the generation at it, the call is not sent a ``max_output_tokens`` of
     its own and only the model's output maximum applies. A translation longer than
     this, reasoning included, is settled on its real usage, past the reservation if
     need be (rule 8). Never above that model maximum (128 000 tokens on Luna), which

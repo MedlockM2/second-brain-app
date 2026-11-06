@@ -34,8 +34,12 @@ class ArtifactGenerator(Protocol):
         """
         ...
 
-    def response_format_schema(self) -> Optional[Dict[str, Any]]:
-        """Return OpenAI Structured Outputs schema, or None if not used."""
+    def text_format(self) -> Optional[Dict[str, Any]]:
+        """The Responses API ``text.format`` of a Structured Outputs schema, or None.
+
+        Shape: ``{"type": "json_schema", "name", "strict", "schema"}`` -- flat, not
+        the ``json_schema`` wrapper Chat Completions took.
+        """
         ...
 
     def unwrap_structured_response(self, content: str) -> str:

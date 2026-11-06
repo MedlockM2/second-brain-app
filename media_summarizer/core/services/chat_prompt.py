@@ -17,7 +17,7 @@ that does not fit is refused, never cut.
 **Ceilings** are explicit parameters (Decision point 8): the question's
 server-side size guard, the turns of a conversation, one turn in
 flight per account, and the context budget. The output ceiling is not a chat
-parameter: the chat keeps ``LLM_MAX_COMPLETION_TOKENS`` of ``llm_config`` (owner
+parameter: the chat keeps ``LLM_MAX_OUTPUT_TOKENS`` of ``llm_config`` (owner
 decision of 2026-10-10); how long an answer is, is said in the instructions.
 """
 

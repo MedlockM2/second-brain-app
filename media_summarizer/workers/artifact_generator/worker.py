@@ -289,7 +289,7 @@ async def process_message(message: Dict[str, Any]) -> None:
 
         # The configured model supports Structured Outputs (llm_config), so a
         # generator that has a schema always sends it.
-        schema = generator.response_format_schema()
+        schema = generator.text_format()
 
         messages = [{"role": "user", "content": prompt}]
         component, operation_id = _budget_step(artifact_type, body, artifact_id)
@@ -298,14 +298,14 @@ async def process_message(message: Dict[str, Any]) -> None:
             operation_id=operation_id,
             component=component,
             line=lambda ctx: budget_guard.llm_call_line(
-                ctx, component=component, messages=messages, response_format=schema
+                ctx, component=component, messages=messages, text_format=schema
             ),
             lease=timedelta(0),
         )
         try:
             result = await llm_client.complete(
                 messages,
-                response_format=schema,
+                text_format=schema,
                 prompt_cache_key=prompt_cache_key,
                 artifact_type=artifact_type.value,
             )

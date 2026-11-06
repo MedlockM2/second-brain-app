@@ -317,7 +317,7 @@ reserved, never a provisional minimum (rule 3).
 | `transcription_line` | seconds from `audio_duration_probe` | 240 min | 240 min reserved |
 | `document_line(unit="page")` | pages (PDF, images = 1, TIFF frames, PPTX slides, DOCX always unknown) | 100 pages | 100 pages reserved |
 | `document_line(unit="sheet")` | XLSX sheets | 30 sheets | 30 sheets reserved |
-| `llm_line` | complete request tokens, output = `max_completion_tokens` sent | `max_input_tokens` given by the caller | `max_input_tokens` reserved |
+| `llm_line` | complete request tokens, output = `max_output_tokens` sent | `max_input_tokens` given by the caller | `max_input_tokens` reserved |
 | `translation_line` | input tokens; output = `translation_output_reserve` (1.5 ×, at most the model's 128 000), an estimate the call is not capped at | — | estimated with `estimated_text_tokens` at import |
 | `apify_line` | one result of the actor | one result per run | n/a (fixed price) |
 | `x_post_line` | one post | one post | n/a (fixed price) |

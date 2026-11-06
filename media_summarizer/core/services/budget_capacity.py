@@ -9,7 +9,7 @@ from media_summarizer.core.models.beta_budget import BudgetRefusal, Component, R
 from media_summarizer.core.models.budget_contracts import BudgetForecast, BudgetState, ForecastRequest
 from media_summarizer.core.services import beta_budget, budget_guard, pricing_config_service
 from media_summarizer.core.services.llm_config import (
-    LLM_MAX_COMPLETION_TOKENS,
+    LLM_MAX_OUTPUT_TOKENS,
     LLM_MODEL,
     LLM_MODEL_MAX_INPUT_TOKENS,
 )
@@ -73,7 +73,7 @@ def _lines(ctx: beta_budget.PricingContext, request: ForecastRequest) -> List[Re
                 model=LLM_MODEL,
                 input_tokens=request.input_tokens,
                 max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
-                max_output_tokens=LLM_MAX_COMPLETION_TOKENS,
+                max_output_tokens=LLM_MAX_OUTPUT_TOKENS,
                 measured=False,
             )
         ]
@@ -174,7 +174,7 @@ async def _context_lines(
             ctx,
             component=Component.GENERATION,
             messages=[{"role": "user", "content": prompt}],
-            response_format=generator.response_format_schema(),
+            text_format=generator.text_format(),
         )
     ]
 

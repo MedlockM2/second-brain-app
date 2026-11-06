@@ -11,7 +11,7 @@ deliberately one variable, not one per type: a per-type knob is how the split th
 module removes came to exist.
 
 The full-text translation reads ``LLM_MODEL`` and ``LLM_REASONING_EFFORT`` but not
-``LLM_MAX_COMPLETION_TOKENS``: a translation is as long as its source, so a fixed
+``LLM_MAX_OUTPUT_TOKENS``: a translation is as long as its source, so a fixed
 32 000 would cut every long one. It sends no output ceiling at all: only the model's
 maximum applies, and 1.5 times its input is what the beta budget reserves for it
 (task-547 rule 11, amended 2026-10-28).
@@ -22,13 +22,14 @@ Parameters, from https://developers.openai.com/api/docs/models/gpt-6-luna
 (read 2026-10-10; on the re-read of 2026-10-28 for task-556 the reasoning values,
 the 128 000 output maximum and the absence of sampling parameters were unchanged):
 
-- **Reasoning.** ``reasoning_effort`` accepts ``none``, ``low``, ``medium``,
+- **Reasoning.** ``reasoning.effort`` accepts ``none``, ``low``, ``medium``,
   ``high``, ``xhigh`` and ``max``; ``medium`` is the provider default. It is sent
   explicitly so a change of provider default cannot silently change quality or cost.
   ``medium`` is also what the task-72 models ran at, since nothing set it before.
-  On Chat Completions, function calling works only at ``none`` -- a chat that needs
-  tools has to go through the Responses API instead of lowering this.
-- **Output ceiling.** 128 000 tokens is the model's maximum, reasoning tokens
+  Tools (the chat's web search, task-614) are taken at any effort on the Responses
+  API; it was Chat Completions that took them only at ``none``.
+- **Output ceiling.** ``max_output_tokens``, which counts "visible output tokens
+  and reasoning tokens" (Responses API reference, read 2026-11-06). 128 000 tokens is the model's maximum, reasoning tokens
   included. The default here is 32 000, for the chat and every artifact alike. The
   reasoning guide asks for "at least 25,000 tokens for reasoning and outputs", below
   which an answer comes back incomplete after its input and reasoning are billed.
@@ -44,19 +45,28 @@ the 128 000 output maximum and the absence of sampling parameters were unchanged
   generator that has a JSON schema sends it, and ``prompt_cache_key`` is still sent
   (on GPT-5.6 and later it keys cache accounting rather than routing).
 
+**The endpoint** (task-613, owner decision of 2026-11-06): every call goes to the
+Responses API, ``POST /v1/responses``, read on 2026-11-06 at
+https://developers.openai.com/api/reference/resources/responses/methods/create and
+https://developers.openai.com/api/reference/resources/responses/streaming-events.
+There is no other path to the provider. Every request carries ``store: false``:
+the conversation is rebuilt from DynamoDB on each turn (``chat_prompt``), never
+from a stored response, and nothing has to be kept for 30 days on OpenAI's side.
+
 The model stays configurable for an incident, never per type. Whatever replaces
-Luna must support Structured Outputs and ``reasoning_effort`` on Chat Completions,
-and must get a row in ``llm_pricing`` -- otherwise its cost reads as Luna's.
+Luna must support Structured Outputs (``text.format``) and ``reasoning.effort`` on
+the Responses API, and must get a row in ``llm_pricing`` -- otherwise its cost reads
+as Luna's.
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-6-luna")
 LLM_REASONING_EFFORT = os.environ.get("LLM_REASONING_EFFORT", "medium")
-LLM_MAX_COMPLETION_TOKENS = int(os.environ.get("LLM_MAX_COMPLETION_TOKENS", "32000"))
+LLM_MAX_OUTPUT_TOKENS = int(os.environ.get("LLM_MAX_OUTPUT_TOKENS", "32000"))
 
 #: The model's own limits, from the model page (re-read 2026-10-28): a 1 050 000
 #: token window, of which at most 128 000 are output, reasoning included. The beta
@@ -67,15 +77,21 @@ LLM_MODEL_MAX_OUTPUT_TOKENS = int(os.environ.get("LLM_MODEL_MAX_OUTPUT_TOKENS", 
 LLM_MODEL_MAX_INPUT_TOKENS = int(os.environ.get("LLM_MODEL_MAX_INPUT_TOKENS", "922000"))
 
 
-def chat_completion_parameters() -> Dict[str, Any]:
-    """The request fields that follow from the model choice, for ``/chat/completions``.
+def response_parameters(
+    *, max_output_tokens: Optional[int] = LLM_MAX_OUTPUT_TOKENS
+) -> Dict[str, Any]:
+    """The Responses API request fields that follow from the model choice.
 
-    Callers add what is theirs -- messages, ``response_format``,
-    ``prompt_cache_key`` -- on top. The future chat worker reads the same function,
-    so the chat and the artifacts cannot drift apart on model or reasoning.
+    Callers add what is theirs -- ``input``, ``text.format``, ``prompt_cache_key``
+    -- on top. The chat and the artifacts read the shared ceiling; the full-text
+    translation passes ``max_output_tokens=None`` and is bounded by the model's own
+    maximum only. ``store: false`` is here so that no call can forget it.
     """
-    return {
+    parameters: Dict[str, Any] = {
         "model": LLM_MODEL,
-        "reasoning_effort": LLM_REASONING_EFFORT,
-        "max_completion_tokens": LLM_MAX_COMPLETION_TOKENS,
+        "reasoning": {"effort": LLM_REASONING_EFFORT},
+        "store": False,
     }
+    if max_output_tokens is not None:
+        parameters["max_output_tokens"] = max_output_tokens
+    return parameters

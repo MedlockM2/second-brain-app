@@ -131,7 +131,7 @@ Exists from the moment the turn is accepted, with no `text`.
 |---|---|
 | `turn_id`, `turn_index` | the turn's identity and position |
 | `status` | `accepted` → `generating` → `completed` \| `failed` \| `interrupted` |
-| `interruption_cause` | only with `interrupted`: `cancelled` (stop requested), `output_limit` (`finish_reason == "length"`), `provider_error` (any technical break after text was streamed — a provider failure or a lost worker; a partial answer is not taken back) |
+| `interruption_cause` | only with `interrupted`: `cancelled` (stop requested), `output_limit` (response `incomplete` on `max_output_tokens`), `provider_error` (any technical break after text was streamed — a provider failure or a lost worker; a partial answer is not taken back) |
 | `attempt_id` | the turn's attempt: the one allowed to produce the answer, and the one that produced it once sealed |
 | `text` | the final answer, set by the seal. A 32,000-token answer is ~130 kB, under the 400 kB item limit |
 | `error_code`, `error_message` | on `failed` or a `provider_error` interruption. Among the codes: `dispatch_failed` (the API could not send the turn to the queue), `generation_lost` (§3.11) |

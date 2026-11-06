@@ -59,6 +59,7 @@ shown the original text, as for any failed translation.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -75,14 +76,12 @@ from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
 from media_summarizer.core.services import budget_guard
 from media_summarizer.core.services.budget_guard import BudgetCall, BudgetRefusedError
 from media_summarizer.core.services.llm_client import (
+    LLM_API_URL,
     LlmMessage,
-    estimate_usage,
-    read_usage,
+    read_response,
+    request_payload,
 )
-from media_summarizer.core.services.llm_config import (
-    LLM_MODEL,
-    LLM_REASONING_EFFORT,
-)
+from media_summarizer.core.services.llm_config import LLM_MODEL
 from media_summarizer.utils import s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.llm_failure import (
@@ -105,9 +104,6 @@ logger = logging.getLogger(__name__)
 
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 TRANSCRIPT_TRANSLATION_QUEUE = required_env("TRANSCRIPT_TRANSLATION_QUEUE")
-LLM_API_URL = os.environ.get(
-    "LLM_API_URL", "https://api.openai.com/v1/chat/completions"
-)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 TRANSLATION_TIMEOUT_SECONDS = int(
@@ -343,29 +339,29 @@ async def _call_translation_llm(
 ) -> Tuple[str, ArtifactLlmUsage]:
     """Call the shared model once. Returns ``(translated_text, usage)``.
 
-    The request follows ``llm_config`` (task-556): ``LLM_MODEL`` and
-    ``LLM_REASONING_EFFORT``, Standard processing, no sampling parameter. Checked
-    on 2026-10-28 against https://developers.openai.com/api/docs/models/gpt-6-luna
-    and the Chat Completions reference: Chat Completions is a supported endpoint;
-    ``reasoning_effort`` accepts ``none`` to ``max``, ``medium`` being the default;
-    the model documents no ``temperature``; and "with o1 models and newer, use
-    developer messages" rather than system messages, hence the ``developer`` role.
+    The request is ``llm_client.request_payload`` (task-556, task-613): a
+    ``POST /v1/responses`` of the Responses API with ``LLM_MODEL``,
+    ``reasoning.effort`` = ``LLM_REASONING_EFFORT``, ``store: false``, Standard
+    processing, no sampling parameter. The model page
+    (https://developers.openai.com/api/docs/models/gpt-6-luna, read 2026-10-28)
+    documents no ``temperature``; the instructions go as a ``developer`` message,
+    the role the Responses API reference (read 2026-11-06) lists beside ``system``.
 
-    No ``max_completion_tokens`` is sent: only the model's own maximum (128 000
+    No ``max_output_tokens`` is sent: only the model's own maximum (128 000
     output tokens, reasoning included) bounds the answer. The owner amended rule 11
     of the task-547 decision on 2026-10-28: its 1.5 × input is what the call is
     *reserved* for, never a cap on the generation, which would cut a short text
-    whose reasoning ate the allowance. The shared ``LLM_MAX_COMPLETION_TOKENS`` is
+    whose reasoning ate the allowance. The shared ``LLM_MAX_OUTPUT_TOKENS`` is
     not reused either: 32 000 tokens would cut every long translation. An answer
-    the model maximum cut (``finish_reason: length``) is stored as it is and
-    logged.
+    the model maximum cut (``incomplete`` on ``max_output_tokens``) is stored as
+    it is and logged.
 
     No chunking. Luna has a 1 050 000-token window and at most 128 000 output
     tokens, reasoning included, which leaves 922 000 for the input: more than
     240 minutes of audio, a 100-page document or an article (at most 2 MB of
     HTML) produce. What binds first is the output: a translation is about as long
     as its source, so a source text much above 100 000 tokens comes back cut
-    (``finish_reason: length``). A text file or a spreadsheet, bounded only by the
+    (``incomplete`` on ``max_output_tokens``). A text file or a spreadsheet, bounded only by the
     upload size, can exceed even the window, and the provider then refuses it.
 
     The usage is priced by ``llm_pricing`` under the model the provider names,
@@ -379,11 +375,7 @@ async def _call_translation_llm(
             refusal_reason=REFUSAL_AUTHENTICATION,
         )
 
-    payload: Dict[str, Any] = {
-        "model": LLM_MODEL,
-        "reasoning_effort": LLM_REASONING_EFFORT,
-        "messages": messages,
-    }
+    payload = request_payload(messages, max_output_tokens=None)
     timeout = aiohttp.ClientTimeout(total=TRANSLATION_TIMEOUT_SECONDS)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(
@@ -411,20 +403,23 @@ async def _call_translation_llm(
                     provider_status=response.status,
                 )
             result = await response.json()
-            choice = result["choices"][0]
-            content = choice["message"]["content"]
-            answered_by = result.get("model") or LLM_MODEL
-            if choice.get("finish_reason") == "length":
+            if result.get("status") == "failed":
+                body = json.dumps(result.get("error") or {})
+                failure = classify_llm_failure(status_code=None, body=body)
+                raise TranscriptTranslationError(
+                    f"translation_llm_failed: {body[:300]}",
+                    failure_kind=failure.kind,
+                    refusal_reason=failure.refusal_reason,
+                )
+            read = read_response(result, messages)
+            if read.output_limit_reached:
                 log_event(
                     logger,
                     logging.WARNING,
                     "translation.output_limit_reached",
                     "Translation cut by the model's output maximum; stored as is",
                 )
-            usage = result.get("usage")
-            if not usage:
-                return content, estimate_usage(messages, content or "", model=answered_by)
-            return content, read_usage({**usage, "model": answered_by})
+            return read.content, read.usage
 
 
 async def _start_translation_call(payer: Optional[TranslationPayer], messages: List[LlmMessage]) -> BudgetCall:
