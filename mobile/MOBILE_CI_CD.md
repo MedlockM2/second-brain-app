@@ -2040,6 +2040,51 @@ Status is `ok` on a commit and `error` on a rejected request — a failure still
 ends the span, because how long a section took to fail is what says whether the
 user waited on it.
 
+#### Custom spans: the direct upload of a file to S3 (task-604)
+
+The PUT of a file to its presigned URL is invisible to every automatic span: on
+mobile it leaves through expo-file-system's native `uploadAsync`, outside both the
+`fetch` and the XHR instrumentation, and the API is not in the loop. Before this
+trace it was only visible as the gap between `media.upload_url.issued` and
+`media.upload.created` in the API logs. `startUploadTrace` (`src/lib/crashReporting.ts`,
+called from `stageUpload` in `src/services/presignedUpload.ts`) records each
+transfer — documents, audio, shared audio — as **its own transaction**
+(`forceTransaction`), because it runs after the screen that started it.
+
+| Span | `op` | Covers |
+|---|---|---|
+| `upload.s3` (root) | `upload.s3` | the whole transfer, from reading the file to S3's answer |
+| `upload.read_file` | `upload.read_file` | opening and measuring the local file (`stageLocalFile`) — mobile only |
+| `upload.sign` | `upload.sign` | `POST /api/media/upload-url` |
+| `upload.put` | `upload.put` | the PUT to S3 |
+
+Attributes of the root span:
+
+| Attribute | Value |
+|---|---|
+| `upload.target` | `document`, `audio`, `shared_audio` |
+| `upload.content_type` | MIME type the PUT was signed for |
+| `upload.bytes` | bytes sent |
+| `http.response.status_code` | S3's status, when it answered |
+| `upload.backgrounded` | `true` if the app went to the background during the transfer (web: the tab was hidden) |
+| `upload.failure_stage` | on failure: `read_file`, `sign`, `put_network`, `put_rejected` (the `DirectUploadError` stage) |
+| `upload.s3_code` | on a refusal, the `<Code>` of S3's error body — mobile only |
+
+Status is `ok` or `error`; a failed transfer still ends its span. **Never in a
+trace: the presigned URL, any part of its query string, or the file's name** —
+the first is a credential for the object, the second the title of someone's note.
+
+**The web app** (`web/src/lib/crashReporting.ts`, called from `addFile` in
+`web/src/media/ingest.ts`) sends the same root span with the same attributes,
+when `VITE_SENTRY_DSN` is set at build time. It has no `upload.read_file` step:
+the browser reads the `File` while it sends it, so the read is inside
+`upload.put`. Its HTTP breadcrumbs lose their query string, as on mobile.
+
+**Finding them**: Sentry → Explore → Traces (dataset `spans`), filter
+`span.op:upload.s3`, then open a trace for its three children. Group by
+`upload.target` or `upload.backgrounded`, or filter on `upload.failure_stage`, to
+compare transfers.
+
 ### Anonymous per-installation context: deliberately not done
 
 `Sentry.setUser` was considered, to tell "one user crashing repeatedly" from

@@ -30,6 +30,8 @@ export const Config = {
   EXTENSION_IDS: (env.VITE_EXTENSION_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean),
   /** The feedback board, opened as-is when the API cannot sign the visitor in to it. */
   FEEDBACK_URL: env.VITE_FEEDBACK_URL ?? "",
+  /** Sentry's DSN (public by design). Empty: nothing is reported (task-604). */
+  SENTRY_DSN: env.VITE_SENTRY_DSN ?? "",
 } as const;
 
 if (!Config.API_BASE_URL) {

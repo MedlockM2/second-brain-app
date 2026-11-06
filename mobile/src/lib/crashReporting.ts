@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react-native";
 import * as Updates from "expo-updates";
+import { AppState } from "react-native";
 
 import { Config } from "../constants/config";
 // Type-only on purpose: startupErrorGuard imports this module at runtime, so a
@@ -324,5 +325,120 @@ export function startHomeSectionSpan(section: HomeSection): HomeSectionSpan {
     };
   } catch {
     return NOOP_HOME_SECTION_SPAN;
+  }
+}
+
+/**
+ * The direct PUT of a file to S3 (task-604), which no automatic span sees: it
+ * leaves through expo-file-system's native `uploadAsync`, outside both the
+ * `fetch` and the XHR instrumentation, and the API is not in the loop.
+ *
+ * One transaction per transfer, op `upload.s3` (`forceTransaction`: it runs
+ * long after the screen that started it, so no navigation transaction can be
+ * relied on to hold it), with one child per step so a slow read and a slow
+ * network are told apart:
+ *
+ * - `upload.read_file` — opening and measuring the local file;
+ * - `upload.sign` — `POST /api/media/upload-url`;
+ * - `upload.put` — the PUT itself.
+ *
+ * Its attributes are figures and enums only. **Never the presigned URL, any part
+ * of its query string, or the file's name** — the first is a credential, the
+ * second the title of someone's note; `sendDefaultPii` is off for the same reason.
+ *
+ * Documented in `mobile/MOBILE_CI_CD.md`, "Crash Reporting (Sentry)". A no-op
+ * without a DSN, and it never throws.
+ */
+export type UploadTraceStep = "read_file" | "sign" | "put";
+
+export type UploadTraceAttributes = {
+  "upload.target"?: string;
+  "upload.content_type"?: string;
+  "upload.bytes"?: number;
+  "http.response.status_code"?: number;
+  "upload.failure_stage"?: string;
+  "upload.s3_code"?: string;
+};
+
+export interface UploadTrace {
+  /** Time one step as a child span; a step that throws is marked failed. */
+  step<T>(step: UploadTraceStep, run: () => Promise<T>): Promise<T>;
+  set(attributes: UploadTraceAttributes): void;
+  /** Close the transfer. Safe to call twice. */
+  end(outcome: "ok" | "error"): void;
+}
+
+const NOOP_UPLOAD_TRACE: UploadTrace = {
+  step: (_step, run) => run(),
+  set: () => {},
+  end: () => {},
+};
+
+export function startUploadTrace(attributes: UploadTraceAttributes): UploadTrace {
+  if (!Config.SENTRY_DSN) return NOOP_UPLOAD_TRACE;
+  try {
+    const root = Sentry.startInactiveSpan({
+      name: "upload.s3",
+      op: "upload.s3",
+      forceTransaction: true,
+      attributes,
+    });
+    // Whether the OS could have throttled or suspended the transfer.
+    let backgrounded = AppState.currentState === "background";
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background") backgrounded = true;
+    });
+    let ended = false;
+    return {
+      async step(step, run) {
+        let child: ReturnType<typeof Sentry.startInactiveSpan> | null = null;
+        try {
+          child = Sentry.startInactiveSpan({
+            name: `upload.${step}`,
+            op: `upload.${step}`,
+            parentSpan: root,
+          });
+        } catch {
+          child = null;
+        }
+        const close = (ok: boolean) => {
+          try {
+            child?.setStatus({ code: ok ? SPAN_STATUS_OK : SPAN_STATUS_ERROR });
+            child?.end();
+          } catch {
+            // A reporter that fails while closing a span changes nothing.
+          }
+        };
+        try {
+          const value = await run();
+          close(true);
+          return value;
+        } catch (error) {
+          close(false);
+          throw error;
+        }
+      },
+      set(next) {
+        try {
+          root.setAttributes(next);
+        } catch {
+          // Same.
+        }
+      },
+      end(outcome) {
+        if (ended) return;
+        ended = true;
+        subscription.remove();
+        try {
+          root.setAttribute("upload.backgrounded", backgrounded);
+          root.setStatus({ code: outcome === "ok" ? SPAN_STATUS_OK : SPAN_STATUS_ERROR });
+          root.end();
+        } catch {
+          // Same.
+        }
+      },
+    };
+  } catch {
+    return NOOP_UPLOAD_TRACE;
   }
 }

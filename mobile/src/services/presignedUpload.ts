@@ -66,6 +66,7 @@
 import { t, type TranslationKey } from "../i18n";
 import { getFileExtension } from "@media-summarizer/core/types/upload";
 import { apiRequest } from "./apiClient";
+import { startUploadTrace, type UploadTrace } from "../lib/crashReporting";
 import {
   describeUriShape,
   putLocalFileToUrl,
@@ -217,7 +218,7 @@ async function putToS3(params: {
   fileUri: string;
   bytes: number;
   contentType: string;
-}): Promise<void> {
+}): Promise<number> {
   const shared = { bytes: params.bytes, contentType: params.contentType };
   let result: LocalFilePutResult;
   try {
@@ -246,6 +247,21 @@ async function putToS3(params: {
       ...shared,
     });
   }
+  return result.status;
+}
+
+/** What a failed transfer leaves on its Sentry trace (task-604): enums and figures. */
+function recordFailure(trace: UploadTrace, error: unknown, fallbackStage: string): void {
+  if (error instanceof DirectUploadError) {
+    trace.set({
+      "upload.failure_stage": error.diagnostics.stage,
+      "http.response.status_code": error.diagnostics.status,
+      "upload.s3_code": error.diagnostics.s3Code,
+    });
+  } else {
+    trace.set({ "upload.failure_stage": fallbackStage });
+  }
+  trace.end("error");
 }
 
 /**
@@ -264,11 +280,15 @@ export async function stageUpload(params: {
   mimeType: string;
   size?: number | null;
 }): Promise<string> {
+  const trace = startUploadTrace({
+    "upload.target": params.target,
+    "upload.content_type": params.mimeType,
+  });
   let staged: StagedLocalFile;
   try {
-    staged = await stageLocalFile(params.uri);
+    staged = await trace.step("read_file", () => stageLocalFile(params.uri));
   } catch (error) {
-    throw new DirectUploadError({
+    const failure = new DirectUploadError({
       stage: "read_file",
       uriScheme: uriScheme(params.uri),
       uriShape: describeUriShape(params.uri),
@@ -276,15 +296,17 @@ export async function stageUpload(params: {
       contentType: params.mimeType,
       cause: describeCause(error),
     });
+    recordFailure(trace, failure, "read_file");
+    throw failure;
   }
+  trace.set({ "upload.bytes": staged.bytes });
 
   try {
     const fileSize =
       params.size && params.size > 0 ? params.size : staged.bytes || 1;
 
-    const issued = await apiRequest<UploadUrlResponse>(
-      "/api/media/upload-url",
-      {
+    const issued = await trace.step("sign", () =>
+      apiRequest<UploadUrlResponse>("/api/media/upload-url", {
         method: "POST",
         body: {
           target: params.target,
@@ -292,16 +314,23 @@ export async function stageUpload(params: {
           content_type: params.mimeType,
           file_size: fileSize,
         },
-      },
+      }),
     );
 
-    await putToS3({
-      uploadUrl: issued.upload_url,
-      fileUri: staged.fileUri,
-      bytes: staged.bytes,
-      contentType: params.mimeType,
-    });
+    const status = await trace.step("put", () =>
+      putToS3({
+        uploadUrl: issued.upload_url,
+        fileUri: staged.fileUri,
+        bytes: staged.bytes,
+        contentType: params.mimeType,
+      }),
+    );
+    trace.set({ "http.response.status_code": status });
+    trace.end("ok");
     return issued.upload_key;
+  } catch (error) {
+    recordFailure(trace, error, "sign");
+    throw error;
   } finally {
     staged.release();
   }
