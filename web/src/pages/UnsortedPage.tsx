@@ -41,6 +41,8 @@ export function UnsortedPage() {
   const [failed, setFailed] = useState(false);
   const [index, setIndex] = useState(0);
   const [round, setRound] = useState(0);
+  // The card a discard just took out, drawn leaving over the next one (task-602).
+  const [leaving, setLeaving] = useState<{ item: MediaListItem; nonce: number } | null>(null);
 
   // The default folder is named by its id, never by its name (task-297). Keyed
   // on the id alone, so the queue is read once and stays frozen.
@@ -75,7 +77,10 @@ export function UnsortedPage() {
     if (!current || !queue) return;
     const at = queue.indexOf(current);
     leave(current.media_item_id);
+    if (!prefersReducedMotion()) setLeaving({ item: current, nonce: Date.now() });
     apiRequest(`/api/media/${encodeURIComponent(current.media_item_id)}`, { method: "DELETE" }).catch(() => {
+      // Back as a state, not as the exit played backwards.
+      setLeaving((prev) => (prev?.item.media_item_id === current.media_item_id ? null : prev));
       setQueue((items) => {
         const next = [...(items ?? [])];
         next.splice(Math.min(at, next.length), 0, current);
@@ -163,7 +168,6 @@ export function UnsortedPage() {
   }
 
   const position = queue.indexOf(current) + 1;
-  const blurb = current.review_blurb;
 
   return (
     <main className="review">
@@ -198,36 +202,19 @@ export function UnsortedPage() {
       </section>
 
       <div className="review-center">
+        {leaving && (
+          <article
+            key={leaving.nonce}
+            className="triage triage-exit"
+            aria-hidden="true"
+            inert
+            onAnimationEnd={() => setLeaving((prev) => (prev?.nonce === leaving.nonce ? null : prev))}
+          >
+            <TriageSummary item={leaving.item} />
+          </article>
+        )}
         <article className="triage" aria-live="polite">
-          <div className="triage-head">
-            <MediaCover imageUrl={current.media_image} mediaType={current.media_type} status={current.status} />
-            <div className="grow">
-              <div className="row small muted">
-                <TypeBadge type={current.media_type} />
-                <span>{getRelativeTime(current.created_at)}</span>
-              </div>
-              <h2 className="headline" style={{ fontSize: 24, margin: "6px 0 4px" }}>
-                {resolveMediaTitle(current)}
-              </h2>
-              {current.creator_name && <div className="subtle">{current.creator_name}</div>}
-            </div>
-          </div>
-          <div className="blurb">
-            {blurb?.hook ? (
-              <>
-                <p>{blurb.hook}</p>
-                {blurb.points.length > 0 && (
-                  <ul className="bullets">
-                    {blurb.points.map((point, i) => (
-                      <li key={i}>{point}</li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            ) : (
-              <span className="subtle">{t("unsortedReview.noBlurb")}</span>
-            )}
-          </div>
+          <TriageSummary item={current} />
           <div className="triage-actions">
             <button type="button" className="btn tonal" aria-label={t("unsortedReview.discardA11y", { title: resolveMediaTitle(current) })} onClick={discard}>
               <Icon name="trash-outline" size={18} />
@@ -275,4 +262,47 @@ export function UnsortedPage() {
       {toast.node}
     </main>
   );
+}
+
+/** The head and blurb of a triage card: the one on screen and the one leaving. */
+function TriageSummary({ item }: { item: MediaListItem }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <div className="triage-head">
+        <MediaCover imageUrl={item.media_image} mediaType={item.media_type} status={item.status} />
+        <div className="grow">
+          <div className="row small muted">
+            <TypeBadge type={item.media_type} />
+            <span>{getRelativeTime(item.created_at)}</span>
+          </div>
+          <h2 className="headline" style={{ fontSize: 24, margin: "6px 0 4px" }}>
+            {resolveMediaTitle(item)}
+          </h2>
+          {item.creator_name && <div className="subtle">{item.creator_name}</div>}
+        </div>
+      </div>
+      <div className="blurb">
+        {item.review_blurb?.hook ? (
+          <>
+            <p>{item.review_blurb.hook}</p>
+            {item.review_blurb.points.length > 0 && (
+              <ul className="bullets">
+                {item.review_blurb.points.map((point, i) => (
+                  <li key={i}>{point}</li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <span className="subtle">{t("unsortedReview.noBlurb")}</span>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** Read at the tap: the exit is skipped outright rather than run invisibly. */
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }

@@ -22,6 +22,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -48,6 +50,7 @@ import {
   useThemeColors,
   useThemedStyles,
 } from "../../src/contexts/ThemeContext";
+import { useReduceMotion } from "../../src/hooks/useReduceMotion";
 import { t, useTranslation } from "../../src/i18n";
 import { Bullets } from "../../src/components/Bullets";
 import { ResourceRefreshNotice } from "../../src/components/ResourceRefreshNotice";
@@ -157,6 +160,17 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
   const [saveTargetId, setSaveTargetId] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
+  const reduceMotion = useReduceMotion();
+  /**
+   * The card a discard just took out of the queue, drawn on its way out over the
+   * next one (task-602). Only a picture: the queue moved on the tap, and a second
+   * tap replaces it with the next card leaving rather than waiting for it.
+   */
+  const [leaving, setLeaving] = useState<{ item: MediaListItem; nonce: number } | null>(null);
+  const leavingNonce = useRef(0);
+  const clearLeaving = useCallback((nonce: number) => {
+    setLeaving((prev) => (prev?.nonce === nonce ? null : prev));
+  }, []);
 
   /**
    * The queue as the handlers read it, mirroring `items`.
@@ -321,6 +335,11 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     (index: number, item: MediaListItem) => {
       const queue = itemsRef.current;
       const at = Math.min(Math.max(index, 0), queue.length);
+      // Back as a state, not as the exit played backwards: a card still flying
+      // out is simply no longer drawn.
+      setLeaving((prev) =>
+        prev?.item.media_item_id === item.media_item_id ? null : prev,
+      );
       commitQueue([...queue.slice(0, at), item, ...queue.slice(at)], at);
     },
     [commitQueue],
@@ -364,6 +383,10 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
     hasActed.current = true;
     const index = removeById(target.media_item_id);
     if (index === -1) return;
+    if (!reduceMotion) {
+      leavingNonce.current += 1;
+      setLeaving({ item: target, nonce: leavingNonce.current });
+    }
     void (async () => {
       try {
         await MediaService.deleteMedia(target.media_item_id);
@@ -380,7 +403,7 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
         );
       }
     })();
-  }, [activeIndex, removeById, restoreAt]);
+  }, [activeIndex, reduceMotion, removeById, restoreAt]);
 
   /**
    * Deepen: open the media and come back. Not a decision — the item stays in the
@@ -555,6 +578,14 @@ export default function UnsortedReviewScreen(): React.JSX.Element {
                 item={current}
                 cardsBehind={items.length - 1 - activeIndex}
               />
+              {leaving && !reduceMotion ? (
+                <DiscardedCardExit
+                  key={leaving.nonce}
+                  item={leaving.item}
+                  distance={windowWidth}
+                  onDone={() => clearLeaving(leaving.nonce)}
+                />
+              ) : null}
             </Pressable>
           ) : null}
 
@@ -754,6 +785,81 @@ function QueueProgress({
  * overran. Raising `MAX_BULLET_LINES` instead of shortening the text is the wrong
  * fix — a clipped bullet carries less than a shorter one.
  */
+/**
+ * How long the discarded card takes to leave, in step with the Toast and the
+ * bug report sheet's 300 ms. Local on purpose: the theme holds no motion tokens.
+ */
+const DISCARD_EXIT_MS = 300;
+/** The tilt it leaves with, towards the Discard button on the left. */
+const DISCARD_EXIT_ROTATION = "-8deg";
+
+/**
+ * The discarded card sliding out to the left and fading (task-602).
+ *
+ * Purely visual and out of the way: it ignores touches, is hidden from screen
+ * readers, and is stopped on unmount like `ChatWaitingIndicator`. The queue has
+ * already advanced underneath it.
+ */
+function DiscardedCardExit({
+  item,
+  distance,
+  onDone,
+}: {
+  item: MediaListItem;
+  distance: number;
+  onDone: () => void;
+}): React.JSX.Element {
+  const progress = useMemo(() => new Animated.Value(0), []);
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    const exit = Animated.timing(progress, {
+      toValue: 1,
+      duration: DISCARD_EXIT_MS,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+      isInteraction: false,
+    });
+    exit.start(({ finished }) => {
+      if (finished) onDoneRef.current();
+    });
+    return () => exit.stop();
+  }, [progress]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          opacity: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+          transform: [
+            {
+              translateX: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, -distance],
+              }),
+            },
+            {
+              rotate: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0deg", DISCARD_EXIT_ROTATION],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <ReviewCard item={item} cardsBehind={0} />
+    </Animated.View>
+  );
+}
+
 function ReviewCard({
   item,
   cardsBehind,
