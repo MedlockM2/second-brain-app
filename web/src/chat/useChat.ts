@@ -4,6 +4,7 @@ import type {
   ChatGeneration,
   ChatScope,
   ChatStreamEvent,
+  ChatWebSource,
 } from "@media-summarizer/core/types/chat";
 import { reportEngagement } from "../lib/engagements";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -43,6 +44,10 @@ export interface ChatState {
   generation: ChatGeneration | null;
   streamingText: string;
   lastSeq: number;
+  /** What the `[W#]` tags of `streamingText` resolve to: the latest list streamed (task-614). */
+  streamingWebSources: ChatWebSource[];
+  /** The model is running a web search for the live turn. */
+  webSearching: boolean;
   phase: ChatPhase;
   error: unknown;
 }
@@ -58,6 +63,8 @@ const EMPTY: ChatState = {
   generation: null,
   streamingText: "",
   lastSeq: -1,
+  streamingWebSources: [],
+  webSearching: false,
   phase: "idle",
   error: null,
 };
@@ -129,7 +136,7 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
     const active = detail.active_generation ?? null;
     if (!active) {
       disconnect();
-      update({ conversation: withKnownSourceDrift(latest.conversation, detail), generation: null, streamingText: "", lastSeq: -1, phase: "idle", error: null });
+      update({ conversation: withKnownSourceDrift(latest.conversation, detail), generation: null, streamingText: "", lastSeq: -1, streamingWebSources: [], webSearching: false, phase: "idle", error: null });
       return;
     }
     // Fragments may have come in while the read was pending: keep them.
@@ -140,6 +147,8 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
       generation: { turn_id: active.turn_id, turn_index: active.turn_index, attempt_id: active.attempt_id },
       streamingText: same ? latest.streamingText : "",
       lastSeq: same ? latest.lastSeq : -1,
+      streamingWebSources: same ? latest.streamingWebSources : [],
+      webSearching: active.web_searching ?? false,
       error: null,
     });
     void followRef.current();
@@ -148,8 +157,20 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
   const applyEvent = useCallback(
     (event: ChatStreamEvent) => {
       const current = stateRef.current;
+      if (event.type === "search") {
+        update({ webSearching: event.data.active });
+        return;
+      }
       if (event.type !== "fragment" || event.data.seq <= current.lastSeq) return;
-      update({ streamingText: current.streamingText + event.data.text, lastSeq: event.data.seq, phase: "streaming" });
+      update({
+        streamingText: current.streamingText + event.data.text,
+        lastSeq: event.data.seq,
+        // Cumulative: the latest list resolves every tag received so far.
+        streamingWebSources: event.data.web_sources ?? current.streamingWebSources,
+        // A word of the answer means the search is over.
+        webSearching: false,
+        phase: "streaming",
+      });
     },
     [update],
   );
@@ -198,7 +219,7 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
 
     const ended = last as ChatStreamEvent | null;
     if (opening.kind === "stale") {
-      update({ generation: opening.live, streamingText: "", lastSeq: -1 });
+      update({ generation: opening.live, streamingText: "", lastSeq: -1, streamingWebSources: [], webSearching: false });
       lastStreamRef.current = 0;
       void syncRef.current();
     } else if (opening.kind === "unavailable") {
@@ -305,6 +326,8 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
           generation,
           streamingText: "",
           lastSeq: -1,
+          streamingWebSources: [],
+          webSearching: false,
           phase: "streaming",
           error: null,
         });

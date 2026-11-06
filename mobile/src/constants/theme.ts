@@ -102,6 +102,17 @@ const lightColors = {
   onHighlight: "#1c1b1a",
 
   /**
+   * A web page a chat answer cites (task-615, mockup `chat_web_sources`, option
+   * B validated 2026-11-06). Amber stays the colour of the user's own media
+   * (`highlight`); a web page takes an ink blue from the family of the system's
+   * blue-greys, so the two never read alike. The globe glyph beside it is the
+   * second cue, for whoever tells the colours apart poorly. `onWebCitation` on
+   * `webCitation`: 8.4:1.
+   */
+  webCitation: "#dfe8fa",
+  onWebCitation: "#24406e",
+
+  /**
    * The sheer white of the band that sweeps a cover still being processed
    * (`MediaProcessingSweep`, task-402, variant B "Balayage flou").
    *
@@ -385,6 +396,11 @@ const darkColors: ThemeColors = {
   // becomes a deep amber block carrying bright amber-tinted text (7.2:1).
   highlight: "#5c4a12",
   onHighlight: "#ffe9a8",
+
+  // Same polarity switch as `highlight`: a deep ink block carrying a pale blue
+  // text (8.9:1).
+  webCitation: "#22344f",
+  onWebCitation: "#c9dafb",
 
   // Still white, because a sheen has to be lighter than what it sweeps — but at
   // 22 % rather than 40 %: the band passes over a photograph on a dark page,

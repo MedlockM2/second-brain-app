@@ -280,6 +280,8 @@ export function ChatDock({
               ? {
                   turnIndex: session.generation.turn_index,
                   text: session.streamingText,
+                  webSources: session.streamingWebSources,
+                  searching: session.webSearching,
                 }
               : null
           }

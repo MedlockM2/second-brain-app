@@ -4,6 +4,8 @@
  * An answer is drawn from its Markdown by `ChatAnswer`, which also turns the
  * source tags the prompt makes the model write (`[S1]`, `[S2]`…, the refs of the
  * conversation's frozen snapshot) into the titles of the media they name. An
+ * answer may also cite web pages (`[W1]`, task-614): those are drawn in their
+ * own colour and listed under the answer as "Web pages consulted" (task-615). An
  * answer that stopped early says why — stopped by the user, cut by the output
  * ceiling, or interrupted by an error — so a partial answer never passes for a
  * complete one.
@@ -15,17 +17,22 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
-import type { ChatMessage, ChatSource } from "@media-summarizer/core/types/chat";
+import type { ChatMessage, ChatSource, ChatWebSource } from "@media-summarizer/core/types/chat";
+import { citedWebSources, webSourcesByRef } from "@media-summarizer/core/chat/webSources";
 import { MarkdownBody as ChatAnswer } from "../MarkdownBody";
 import { CopyAnswerButton } from "./CopyAnswerButton";
 import { ChatWaitingIndicator } from "./ChatWaitingIndicator";
+import { ChatWebSources } from "./ChatWebSources";
 
 export interface ChatThreadProps {
   messages: ChatMessage[];
   pendingQuestion: { question: string; status: "waiting_for_source" | "sending" | "failed" } | null;
   sources: ChatSource[];
-  /** The answer being written for the live turn, with its turn index. */
-  live: { turnIndex: number; text: string } | null;
+  /**
+   * The answer being written for the live turn, with its turn index, the web
+   * pages its `[W#]` tags resolve to so far, and whether a web search runs.
+   */
+  live: { turnIndex: number; text: string; webSources: ChatWebSource[]; searching: boolean } | null;
   /** A turn is in flight but nothing has arrived yet. */
   waiting: boolean;
   /** Ask a question of an earlier turn again, as a new turn. */
@@ -101,6 +108,7 @@ export function ChatThread({
         }
         const isLive = live !== null && live.turnIndex === message.turn_index;
         const text = isLive ? live.text : (message.text ?? "");
+        const webSources = isLive ? live.webSources : (message.web_sources ?? []);
         const status = isLive ? null : statusLine(message);
         const canRetry =
           !isLive &&
@@ -115,10 +123,15 @@ export function ChatThread({
                 sources={sourcesByRef}
                 showSources={showSources}
                 onOpenSource={onOpenSource}
+                webSources={webSourcesByRef(webSources)}
               />
             ) : null}
+            {text ? <ChatWebSources sources={citedWebSources(text, webSources)} /> : null}
             {isLive && waiting && !text ? (
-              <ChatWaitingIndicator label={t("chat.a11y.answerStarted")} />
+              <ChatWaitingIndicator
+                label={t("chat.a11y.answerStarted")}
+                caption={live.searching ? t("chat.thread.searchingWeb") : null}
+              />
             ) : null}
             {status ? (
               <View style={styles.statusRow}>
@@ -148,7 +161,7 @@ export function ChatThread({
               </Pressable>
             ) : null}
             {!isLive && text.trim() && (message.status === "completed" || message.status === "interrupted") ? (
-              <CopyAnswerButton text={text} />
+              <CopyAnswerButton text={text} webSources={webSources} />
             ) : null}
           </View>
         );

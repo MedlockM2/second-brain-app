@@ -55,7 +55,7 @@ export interface ChatConversationModalProps {
   sources: ChatSource[];
   showSources: ChatThreadProps["showSources"];
   onOpenSource: ChatThreadProps["onOpenSource"];
-  live: { turnIndex: number; text: string } | null;
+  live: ChatThreadProps["live"];
   waiting: boolean;
   generating: boolean;
   sending: boolean;

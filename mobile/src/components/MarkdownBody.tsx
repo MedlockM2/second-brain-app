@@ -12,6 +12,12 @@
  * page the conversation is opened on, so every tag would name what is already on
  * screen. Its tags are then left out altogether.
  *
+ * A web page the chat cites (`[W1]`, task-614) is drawn apart from the media
+ * (task-615): an ink-blue wash (`webCitation`), a globe and the site's name, and
+ * a press opens the page in the browser. It is drawn whatever `showSources` says:
+ * a web page is never the page open. A tag whose source has not arrived yet is
+ * left out until it does.
+ *
  * A source body opened from a search hit gets `passageFocus` (see
  * `SearchPassage`): the passage is looked for block by block — list items one by
  * one — its matched words are highlighted in the text blocks they fall in, and
@@ -19,6 +25,7 @@
  * table or a code block is an anchor as a whole, with no highlight inside.
  */
 
+import { Ionicons } from "@expo/vector-icons";
 import React, { useMemo } from "react";
 import {
   ScrollView,
@@ -40,7 +47,9 @@ import {
   type Span,
 } from "@media-summarizer/core/chat/markdown";
 import { resolveMediaTitle } from "../lib/mediaTitle";
-import type { ChatSource } from "@media-summarizer/core/types/chat";
+import type { ChatSource, ChatWebSource } from "@media-summarizer/core/types/chat";
+import { webDomain, webTitle } from "@media-summarizer/core/chat/webSources";
+import { openWebPage } from "../lib/openWebPage";
 import {
   locateSearchPassage,
   type PassageRange,
@@ -62,11 +71,14 @@ export interface MarkdownBodyProps {
   /** Source text preserves literal citation tags and permits text selection. */
   transcript?: boolean;
   onOpenSource?: (source: ChatSource) => void;
+  /** The web pages the answer cites, by tag (`W1`). A tag absent from it is not drawn. */
+  webSources?: ReadonlyMap<string, ChatWebSource>;
   /** A source body opened from a search hit: the passage to highlight and report. */
   passageFocus?: SearchPassageFocus | null;
 }
 
 const EMPTY_SOURCES: ReadonlyMap<string, ChatSource> = new Map();
+const EMPTY_WEB_SOURCES: ReadonlyMap<string, ChatWebSource> = new Map();
 const ignoreSource = () => {};
 const NO_MARKS: readonly PassageRange[] = [];
 
@@ -87,7 +99,9 @@ const NOWHERE: PassagePosition = { block: null, item: null };
 
 function spansText(spans: readonly Span[]): string {
   return spans
-    .map((span) => (span.kind === "text" ? span.text : span.refs.join(" ")))
+    .map((span) =>
+      span.kind === "text" ? span.text : span.kind === "webCitation" ? `[${span.ref}]` : span.refs.join(" "),
+    )
     .join("");
 }
 
@@ -150,6 +164,7 @@ export function MarkdownBody({
   showSources = false,
   transcript = false,
   onOpenSource = ignoreSource,
+  webSources = EMPTY_WEB_SOURCES,
   passageFocus,
 }: MarkdownBodyProps): React.JSX.Element {
   const styles = useThemedStyles(makeStyles);
@@ -194,18 +209,21 @@ export function MarkdownBody({
 
   const spoken = (spans: readonly Span[]): string | undefined => {
     if (transcript) return undefined;
-    if (!spans.some((span) => span.kind === "citation")) return undefined;
+    if (!spans.some((span) => span.kind !== "text")) return undefined;
     return spans
-      .map((span) =>
-        span.kind === "text"
-          ? span.text
-          : ` (${span.refs
+      .map((span) => {
+        if (span.kind === "text") return span.text;
+        if (span.kind === "webCitation") {
+          const source = webSources.get(span.ref);
+          return source ? ` (${t("chat.thread.webSourceA11y", { title: webTitle(source) })})` : "";
+        }
+        return ` (${span.refs
               .map((ref) => {
                 const source = sources.get(ref);
                 return t("chat.thread.sourceA11y", { title: source ? sourceTitle(source) : "" });
               })
-              .join(", ")})`,
-      )
+              .join(", ")})`;
+      })
       .join("");
   };
 
@@ -231,6 +249,31 @@ export function MarkdownBody({
             ]}
           >
             {speaker ? <><Text style={styles.bold}>{speaker[1]}: </Text>{shown}</> : shown}
+          </Text>
+        );
+      }
+      if (span.kind === "webCitation") {
+        if (transcript) {
+          drawn += span.ref.length + 2;
+          return <Text key={index}>{`[${span.ref}]`}</Text>;
+        }
+        const source = webSources.get(span.ref);
+        if (!source) return null;
+        const before = spans[index - 1];
+        return (
+          <Text key={index}>
+            {before?.kind === "text" && !/\s$/.test(before.text) ? " " : ""}
+            <Text
+              style={styles.webCitation}
+              onPress={() => openWebPage(source)}
+              accessibilityRole="link"
+              accessibilityLabel={t("chat.thread.openWebSourceA11y", { title: webTitle(source) })}
+              suppressHighlighting={false}
+            >
+              {NO_BREAK_SPACE}
+              <Ionicons name="globe-outline" size={Typography.small.fontSize} />
+              {`${NO_BREAK_SPACE}${webDomain(source.url)}${NO_BREAK_SPACE}`}
+            </Text>
           </Text>
         );
       }
@@ -267,13 +310,21 @@ export function MarkdownBody({
   };
 
   const citationActions = (spans: readonly Span[]) =>
-    [...new Set(spans.flatMap((span) => span.kind === "citation" ? span.refs : []))]
+    [...new Set(spans.flatMap((span) =>
+      span.kind === "citation" ? span.refs : span.kind === "webCitation" ? [span.ref] : []))]
       .flatMap((ref) => {
+        const web = webSources.get(ref);
+        if (web) return [{ name: ref, label: t("chat.thread.openWebSourceA11y", { title: webTitle(web) }) }];
         const source = sources.get(ref);
         return source ? [{ name: ref, label: t("chat.thread.openSourceA11y", { title: sourceTitle(source) }) }] : [];
       });
 
   const openAccessibleSource = (ref: string) => {
+    const web = webSources.get(ref);
+    if (web) {
+      openWebPage(web);
+      return;
+    }
     const source = sources.get(ref);
     if (source) onOpenSource(source);
   };
@@ -427,6 +478,12 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       fontWeight: Typography.headline.fontWeight,
       color: Colors.onHighlight,
       backgroundColor: Colors.highlight,
+    },
+    webCitation: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: Typography.headline.fontWeight,
+      color: Colors.onWebCitation,
+      backgroundColor: Colors.webCitation,
     },
     list: {
       gap: Spacing.sm,

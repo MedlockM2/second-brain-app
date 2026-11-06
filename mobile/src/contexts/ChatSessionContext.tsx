@@ -17,6 +17,7 @@ import type {
   ChatGeneration,
   ChatScope,
   ChatStreamEvent,
+  ChatWebSource,
 } from "@media-summarizer/core/types/chat";
 import { withKnownSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { useAuth } from "./AuthContext";
@@ -46,6 +47,10 @@ export interface ChatSession {
   generation: ChatGeneration | null;
   streamingText: string;
   lastSeq: number;
+  /** What the `[W#]` tags of `streamingText` resolve to: the latest list streamed (task-614). */
+  streamingWebSources: ChatWebSource[];
+  /** The model is running a web search for the live turn. */
+  webSearching: boolean;
   phase: ChatSessionPhase;
   error: unknown;
 }
@@ -78,6 +83,8 @@ const emptySession = (scope: ChatScope, scopeId: string): ChatSession => ({
   generation: null,
   streamingText: "",
   lastSeq: -1,
+  streamingWebSources: [],
+  webSearching: false,
   phase: "idle",
   error: null,
 });
@@ -229,6 +236,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           generation: null,
           streamingText: "",
           lastSeq: -1,
+          streamingWebSources: [],
+          webSearching: false,
           phase: "idle",
           error: null,
         });
@@ -247,6 +256,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
         },
         streamingText: sameAttempt ? current.streamingText : "",
         lastSeq: sameAttempt ? current.lastSeq : -1,
+        streamingWebSources: sameAttempt ? current.streamingWebSources : [],
+        webSearching: active.web_searching ?? false,
         error: null,
       });
       void followRef.current(scope, scopeId);
@@ -257,10 +268,18 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
   const applyEvent = useCallback(
     (scope: ChatScope, scopeId: string, event: ChatStreamEvent) => {
       const session = getSession(scope, scopeId);
+      if (event.type === "search") {
+        update(scope, scopeId, { webSearching: event.data.active });
+        return;
+      }
       if (event.type !== "fragment" || event.data.seq <= session.lastSeq) return;
       update(scope, scopeId, {
         streamingText: session.streamingText + event.data.text,
         lastSeq: event.data.seq,
+        // Cumulative: the latest list resolves every tag received so far.
+        streamingWebSources: event.data.web_sources ?? session.streamingWebSources,
+        // A word of the answer means the search is over.
+        webSearching: false,
         phase: "streaming",
       });
     },
@@ -322,7 +341,13 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
 
       const last = ended as ChatStreamEvent | null;
       if (opening.kind === "stale") {
-        update(scope, scopeId, { generation: opening.live, streamingText: "", lastSeq: -1 });
+        update(scope, scopeId, {
+          generation: opening.live,
+          streamingText: "",
+          lastSeq: -1,
+          streamingWebSources: [],
+          webSearching: false,
+        });
         entry.lastStreamAttempt = 0;
         void syncRef.current(scope, scopeId);
       } else if (opening.kind === "unavailable") {
@@ -495,6 +520,8 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           generation,
           streamingText: "",
           lastSeq: -1,
+          streamingWebSources: [],
+          webSearching: false,
           phase: "streaming",
           error: null,
         });

@@ -8,6 +8,8 @@
   --text-main: #2b2d42; --text-muted: #8d99ae; --text-subtle: #5c6880; --outline: #78776f; --outline-variant: #c8c7bd;
   --glass: rgba(252, 249, 246, 0.9);
   --error: #ba1a1a; --on-error: #ffffff; --error-container: #ffdad6; --error-tint: rgba(186, 26, 26, 0.1); --success: #2e7d4f; --success-tint: rgba(46, 125, 79, 0.11); --warning-tint: rgba(255, 203, 5, 0.18);
+  /* A web page the chat cites (task-615): mobile `webCitation` / `onWebCitation`. */
+  --web-citation: #dfe8fa; --on-web-citation: #24406e;
   --highlight: #fff0b3; --short-video-container: #d6e4fd; --audio-container: #d4e9d2; --image-post-container: #f3dcf2; --article-container: #c1ebec;
   /* The AI pane's formats (task-534, mobile-design-mockups/ai_tab_notebooklm/): a tint per
      format and its ink, the amber of the sparkles (the light primary is a fill only, 1.24:1)
@@ -27,6 +29,7 @@
   --text-main: #f1ebe1; --text-muted: #9aa3b4; --text-subtle: #c6cdd9; --outline: #a8a69a; --outline-variant: #3d3932;
   --glass: rgba(33, 30, 25, 0.92);
   --error: #ffb4ab; --on-error: #690005; --error-container: #93000a; --error-tint: rgba(255, 180, 171, 0.08); --success: #7fd3a1; --success-tint: rgba(127, 211, 161, 0.12); --warning-tint: rgba(240, 191, 42, 0.14);
+  --web-citation: #22344f; --on-web-citation: #c9dafb;
   --highlight: #5c4a12; --short-video-container: #1a4975; --audio-container: #275029; --image-post-container: #603962; --article-container: #0b4f51;
   --primary-ink: #f0bf2a; --sheen: rgba(240, 191, 42, 0.28);
   --artifact-summary-tint: #3f331a; --artifact-summary-ink: #e2b55a; --artifact-notes-tint: #28392b; --artifact-notes-ink: #93c89a;
@@ -526,6 +529,16 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .reader .md p { font-size: 15.5px; max-width: 68ch; margin: 0 0 16px; }
 .cite { display: inline; padding: 0 6px; margin: 0 1px; border-radius: var(--r-sm); background: var(--primary-tint); color: var(--text-main); font-size: .88em; font-weight: 600; line-height: 1.5; box-shadow: inset 0 0 0 1px var(--primary-30); }
 .cite:hover { background: var(--primary); color: var(--on-primary); }
+/* A web page the answer cites (task-615): ink blue, a globe and the site, never the media's amber. */
+.cite-web { display: inline; padding: 0 5px 0 4px; margin: 0 1px; border-radius: var(--r-sm); background: var(--web-citation); color: var(--on-web-citation); font-size: 13px; font-weight: 600; line-height: 1.5; text-decoration: none; white-space: nowrap; }
+.cite-web .ico { vertical-align: -2px; margin-right: 3px; }
+.cite-web:hover { text-decoration: underline; }
+.web-sources { align-self: stretch; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--outline-variant); display: flex; flex-direction: column; }
+.web-sources-head { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--text-subtle); }
+.web-source { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 6px 0; border-radius: var(--r-sm); color: inherit; text-decoration: none; }
+.web-source:hover .web-source-title { text-decoration: underline; }
+.web-source-title { font-size: 14px; line-height: 20px; color: var(--text-main); }
+.web-source-domain { font-size: 13px; line-height: 18px; color: var(--text-subtle); }
 
 /* Discussion pane (useChatPane) */
 .icon-btn.on { background: var(--surface-container); color: var(--text-main); }
@@ -537,6 +550,8 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .chat-waiting-dot { width: 16px; height: 16px; border-radius: 50%; background: currentColor; animation: chat-waiting-pulse 1.2s ease-in-out infinite; }
 @keyframes chat-waiting-pulse { 0%, 100% { transform: scale(.65); } 50% { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .chat-waiting-dot { animation: none; } }
+.chat-waiting-row { display: inline-flex; align-items: center; gap: 10px; }
+.chat-waiting-caption { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-subtle); }
 .chat-copy { display: flex; align-items: center; gap: 4px; }
 .chat-copy-error { color: var(--error); }
 .thread .status { display: flex; align-items: center; gap: 6px; color: var(--text-subtle); }

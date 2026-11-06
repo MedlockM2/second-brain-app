@@ -5,9 +5,21 @@ import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from "react-nati
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../../constants/theme";
 import { useThemeColors, useThemedStyles } from "../../contexts/ThemeContext";
 import { t } from "../../i18n";
+import type { ChatWebSource } from "@media-summarizer/core/types/chat";
+import { withWebLinks } from "@media-summarizer/core/chat/webSources";
 
-/** Copies the complete stored Markdown, including its citation tags. */
-export function CopyAnswerButton({ text }: { text: string }): React.JSX.Element {
+/**
+ * Copies the complete stored Markdown, including its media citation tags. A web
+ * citation is copied as a Markdown link to its page (`[title](url)`), never as a
+ * bare `[W1]` nobody could resolve outside the app (task-615).
+ */
+export function CopyAnswerButton({
+  text,
+  webSources,
+}: {
+  text: string;
+  webSources?: readonly ChatWebSource[] | null;
+}): React.JSX.Element {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const [state, setState] = useState<"idle" | "copying" | "copied" | "failed">("idle");
@@ -21,7 +33,7 @@ export function CopyAnswerButton({ text }: { text: string }): React.JSX.Element 
   const copy = async () => {
     setState("copying");
     try {
-      const copied = await Clipboard.setStringAsync(text);
+      const copied = await Clipboard.setStringAsync(withWebLinks(text, webSources));
       if (!copied) throw new Error("Clipboard write failed");
       setState("copied");
       AccessibilityInfo.announceForAccessibility(t("chat.thread.copied"));

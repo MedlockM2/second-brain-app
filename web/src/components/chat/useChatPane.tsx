@@ -1,6 +1,7 @@
 import { describeChatRefusal } from "@media-summarizer/core/chat/refusal";
 import { describeSourceDrift } from "@media-summarizer/core/chat/sourceDrift";
 import { formatDate } from "@media-summarizer/core/i18n/runtime";
+import { citedWebSources, webSourcesByRef } from "@media-summarizer/core/chat/webSources";
 import type { ChatConversationSummary, ChatMessage, ChatScope, ChatSource } from "@media-summarizer/core/types/chat";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
@@ -15,6 +16,7 @@ import { MarkdownView } from "../MarkdownView";
 import { PaneEmpty, type PaneSpec } from "../panes/Panes";
 import { CopyAnswerButton } from "./CopyAnswerButton";
 import { ChatWaitingIndicator } from "./ChatWaitingIndicator";
+import { ChatWebSources } from "./ChatWebSources";
 
 /**
  * The Discussion pane of a media or a folder (owner's mockup, "Média en trois
@@ -269,6 +271,7 @@ function Thread({
         }
         const live = liveIndex === message.turn_index;
         const text = live ? state.streamingText : (message.text ?? "");
+        const webSources = live ? state.streamingWebSources : (message.web_sources ?? []);
         const status = live ? null : statusLine(message, t);
         const canRetry =
           !live &&
@@ -276,10 +279,15 @@ function Thread({
         return (
           <div key={`${message.turn_id}-a`} className="a">
             {text && (
-              <MarkdownView text={text} live={live} sources={sources} showSources={scope === "folder"} onOpenSource={onOpenSource} />
+              <MarkdownView text={text} live={live} sources={sources} showSources={scope === "folder"} onOpenSource={onOpenSource}
+                webSources={webSourcesByRef(webSources)} />
             )}
+            {text && <ChatWebSources sources={citedWebSources(text, webSources)} />}
             {live && !text && (
-              <ChatWaitingIndicator label={t("chat.a11y.answerStarted")} />
+              <ChatWaitingIndicator
+                label={t("chat.a11y.answerStarted")}
+                caption={state.webSearching ? t("chat.thread.searchingWeb") : null}
+              />
             )}
             {status && (
               <div className={`status small${message.status === "failed" ? " err" : ""}`}>
@@ -294,7 +302,7 @@ function Thread({
               </button>
             )}
             {!live && text.trim() && (message.status === "completed" || message.status === "interrupted") && (
-              <CopyAnswerButton text={text} />
+              <CopyAnswerButton text={text} webSources={webSources} />
             )}
           </div>
         );

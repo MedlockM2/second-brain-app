@@ -13,7 +13,9 @@
  *   documents: paragraphs, headings, lists (nested), quotes, code, rules; bold,
  *   italic, inline code, links and GFM tables. The media reader shares this subset.
  * - A citation is a first-class inline token here, not text a renderer has to
- *   find again after the fact.
+ *   find again after the fact. Two families: the corpus tags `[S#]` (media) and
+ *   the web tags `[W#]` the chat writes for the pages it read on the web
+ *   (task-614), never grouped together so they can never be drawn alike.
  * - An answer is read while it is being written. `live` mode treats what has not
  *   arrived yet as still to come: a `**` without its closer bolds what follows
  *   instead of showing, and a delimiter or tag cut in half by a fragment
@@ -39,7 +41,14 @@ export interface CitationSpan {
   refs: string[];
 }
 
-export type Span = TextSpan | CitationSpan;
+/** A web page the answer cites (`[W1]`), resolved through the message's `web_sources`. */
+export interface WebCitationSpan {
+  kind: "webCitation";
+  /** The tag's content without brackets: `W1`, the `ref` of a `ChatWebSource`. */
+  ref: string;
+}
+
+export type Span = TextSpan | CitationSpan | WebCitationSpan;
 
 export interface ListItem {
   ordered: boolean;
@@ -75,8 +84,9 @@ const ITEM = /^(\s*)(?:([-*+\u2022])|(\d{1,3})[.)])\s+(.*)$/;
 const PARTIAL_MARKER = /^\s*(?:#{1,6}|[-*+\u2022]|\d{1,3}[.)]?|>|`{1,3}\w*|~{1,3}\w*)\s*$/;
 
 const CITATION = /^\[S\d+(?:\s*[,;]\s*S?\d+)*\]/;
-/** The beginning of a tag cut by the end of what has arrived: `[`, `[S`, `[S1`, `[S1, S`. */
-const PARTIAL_CITATION = /^\[(?:S\d*(?:\s*[,;]\s*S?\d*)*)?$/;
+const WEB_CITATION = /^\[(W\d+)\]/;
+/** The beginning of a tag cut by the end of what has arrived: `[`, `[S`, `[S1`, `[S1, S`, `[W1`. */
+const PARTIAL_CITATION = /^\[(?:S\d*(?:\s*[,;]\s*S?\d*)*|W\d*)?$/;
 const LINK = /^\[([^\]\n]+)\]\(([^)\s]+)\)/;
 const ESCAPABLE = "\\`*_[]()#+-.!>~|";
 /** Latin letters with their accents: what `_` must not open or close inside of. */
@@ -142,7 +152,9 @@ export function keepCitations(spans: readonly Span[], keep: (ref: string) => boo
   const out: Span[] = [];
   for (let index = 0; index < spans.length; index += 1) {
     const span = spans[index];
-    if (span.kind === "text") {
+    if (span.kind !== "citation") {
+      // Text, and web citations: those are always drawn (a web page is never
+      // "the page open").
       out.push(span);
       continue;
     }
@@ -468,6 +480,13 @@ function walk(source: string, style: InlineStyle, live: boolean, out: Span[]): v
         index += citation[0].length;
         continue;
       }
+      const webCitation = WEB_CITATION.exec(rest);
+      if (webCitation) {
+        pushText();
+        out.push({ kind: "webCitation", ref: webCitation[1] });
+        index += webCitation[0].length;
+        continue;
+      }
       if (live && PARTIAL_CITATION.test(rest)) {
         pushText();
         return;
@@ -537,7 +556,7 @@ function groupCitations(spans: readonly Span[]): Span[] {
       if (next.kind === "citation") {
         refs.push(...next.refs);
         index += 1;
-      } else if (next.text.trim() === "" && afterNext?.kind === "citation") {
+      } else if (next.kind === "text" && next.text.trim() === "" && afterNext?.kind === "citation") {
         refs.push(...afterNext.refs);
         index += 2;
       } else {

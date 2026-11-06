@@ -1,8 +1,10 @@
 import { keepCitations, parseChatMarkdown, type Block, type ListItem, type Span } from "@media-summarizer/core/chat/markdown";
+import { webDomain, webTitle } from "@media-summarizer/core/chat/webSources";
 import { resolveMediaTitle } from "@media-summarizer/core/media/mediaTitle";
-import type { ChatSource } from "@media-summarizer/core/types/chat";
+import type { ChatSource, ChatWebSource } from "@media-summarizer/core/types/chat";
 import { Fragment, useMemo, type ReactNode } from "react";
 import { useI18n } from "../i18n/I18nProvider";
+import { Icon } from "./Icon";
 
 /**
  * A chat answer or a source's text, drawn from its Markdown with the shared
@@ -15,9 +17,15 @@ import { useI18n } from "../i18n/I18nProvider";
  * conversation: its one source is the page on screen, so its tags are left out.
  * In `transcript` mode the text is a source's, not an answer: a tag stays
  * literal text and a leading "Speaker N:" is set in bold.
+ *
+ * A web page the chat cites (`[W1]`, task-614) is drawn apart (task-615): ink
+ * blue, a globe and the site's name, a link that opens the page in a new tab.
+ * It is drawn whatever `showSources` says; a tag whose source has not arrived
+ * yet is left out until it does.
  */
 const SHORT_TITLE_LENGTH = 28;
 const EMPTY_SOURCES: ReadonlyMap<string, ChatSource> = new Map();
+const EMPTY_WEB_SOURCES: ReadonlyMap<string, ChatWebSource> = new Map();
 
 function shortTitle(title: string): string {
   if (title.length <= SHORT_TITLE_LENGTH) return title;
@@ -36,6 +44,7 @@ export function MarkdownView({
   showSources = false,
   transcript = false,
   onOpenSource,
+  webSources = EMPTY_WEB_SOURCES,
   className = "md",
 }: {
   text: string;
@@ -45,6 +54,8 @@ export function MarkdownView({
   showSources?: boolean;
   transcript?: boolean;
   onOpenSource?: (source: ChatSource) => void;
+  /** The web pages the answer cites, by tag (`W1`). */
+  webSources?: ReadonlyMap<string, ChatWebSource>;
   className?: string;
 }) {
   const { t } = useI18n();
@@ -67,6 +78,28 @@ export function MarkdownView({
         if (span.italic) node = <em>{node}</em>;
         if (span.bold) node = <strong>{node}</strong>;
         return <Fragment key={index}>{node}</Fragment>;
+      }
+      if (span.kind === "webCitation") {
+        if (transcript) return <Fragment key={index}>{`[${span.ref}]`}</Fragment>;
+        const source = webSources.get(span.ref);
+        if (!source || !/^https?:\/\//i.test(source.url)) return null;
+        const before = shown[index - 1];
+        return (
+          <Fragment key={index}>
+            {before?.kind === "text" && !/\s$/.test(before.text) ? " " : ""}
+            <a
+              className="cite-web"
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={webTitle(source)}
+              aria-label={t("chat.thread.openWebSourceA11y", { title: webTitle(source) })}
+            >
+              <Icon name="globe-outline" size={14} />
+              {webDomain(source.url)}
+            </a>
+          </Fragment>
+        );
       }
       if (transcript) return <Fragment key={index}>{span.refs.join(" ")}</Fragment>;
       const previous = shown[index - 1];
