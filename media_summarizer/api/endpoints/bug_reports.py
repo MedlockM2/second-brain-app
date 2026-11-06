@@ -126,6 +126,24 @@ class CreateBugReportRequest(BaseModel):
     error_code: Optional[str] = Field(
         default=None, description="MediaFailureCode the client saw on that item"
     )
+    # --- The way from a report to Sentry (task-612) -----------------------------
+    # Each one is an identifier with a fixed shape, never free text: anything
+    # else is refused with a 422 rather than stored.
+    sentry_event_id: Optional[str] = Field(
+        default=None,
+        pattern=r"^[0-9a-fA-F]{32}$",
+        description="Id of the last Sentry event the app sent in this session, when there is one",
+    )
+    source_app_build: Optional[str] = Field(
+        default=None,
+        pattern=r"^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$",
+        description="Native build number (Sentry's dist), or the web bundle's build",
+    )
+    ota_update_id: Optional[str] = Field(
+        default=None,
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        description="EAS Update id of the running bundle, absent on the embedded one",
+    )
 
 
 class CreateBugReportResponse(BaseModel):
@@ -244,6 +262,10 @@ async def create_bug_report(
         source_url=media_context.source_url,
         media_key=media_context.media_key,
         media_type=media_context.media_type,
+        # Sentry writes event ids in lowercase; stored as Sentry searches them.
+        sentry_event_id=body.sentry_event_id.lower() if body.sentry_event_id else None,
+        source_app_build=body.source_app_build,
+        ota_update_id=body.ota_update_id,
     )
 
     return CreateBugReportResponse(

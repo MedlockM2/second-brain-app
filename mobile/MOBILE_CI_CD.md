@@ -2035,6 +2035,35 @@ Filtering in Sentry (Issues or Discover):
 One failed import can raise two events, `api.request` for the call and
 `import` for what the user saw. They share a `request_id`.
 
+### From a bug report to its Sentry event (task-612)
+
+Every in-app bug report (`app/bug-report.tsx`, the source-support card, and
+the web Account page's form) carries, when they exist:
+
+| Field (DynamoDB `bug_reports`) | Value |
+|---|---|
+| `sentry_event_id` | `Sentry.lastEventId()`: the last event this session sent, typically the crash or handled failure that led to the report. Absent when nothing was sent, or without a DSN |
+| `source_app_build` | the native build number (`expo-application`), which is Sentry's `dist`. Mobile only |
+| `ota_update_id` | the running EAS Update (`ota.update_id` in Sentry), absent on the embedded bundle. Mobile only |
+
+The API refuses anything but these shapes with a 422 (32 hex characters, a
+build token, a UUID); the app leaves a malformed value out rather than lose
+the report (`packages/core/src/api/bugReportDiagnostics.ts`). Still no account
+identifier in Sentry: the report is what is linked to the account.
+
+To open the event from a report:
+
+- **Sentry UI**: paste the `sentry_event_id` into the Issues search bar; Sentry
+  jumps to that event;
+- **terminal**: `AWS_PROFILE=second-brain-app uv run python scripts/sentry_issue.py --event-id <sentry_event_id>`
+  prints the issue, the event's tags (`request_id`, `failure.*`, `dist`,
+  `ota.update_id`…), its breadcrumbs and, when the event has a `request_id`,
+  the Logs Insights query for the server side.
+
+Without a `sentry_event_id` (nothing was sent before the report), filter the
+project's issues on the report's `source_app_build` (`dist:<build>`) and
+`ota.update_id`, around the report's `created_at`.
+
 ### App Hangs (iOS) & ANR (Android)
 
 The four `startup_guard.origin` capture paths above only ever see something

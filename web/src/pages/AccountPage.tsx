@@ -21,6 +21,7 @@ import { Config } from "../config";
 import { useI18n } from "../i18n/I18nProvider";
 import { useSession } from "../session/SessionProvider";
 import { useTheme, type ThemePreference } from "../theme";
+import { currentBugReportDiagnostics } from "../lib/crashReporting";
 
 /**
  * My account, adapted to the desktop (owner's mockup, captures 15 and 16): the
@@ -581,7 +582,13 @@ function BugReportPane({ onSent }: { onSent: () => void }) {
     try {
       await apiRequest("/api/bug-reports", {
         method: "POST",
-        body: { subject: subject.trim(), description: description.trim(), source_platform: "web" },
+        body: {
+          subject: subject.trim(),
+          description: description.trim(),
+          source_platform: "web",
+          // The way from this report to its Sentry event (task-612).
+          ...currentBugReportDiagnostics(),
+        },
       });
       setSubject("");
       setDescription("");

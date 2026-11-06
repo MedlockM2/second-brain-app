@@ -1,8 +1,13 @@
 import * as Sentry from "@sentry/react-native";
+import * as Application from "expo-application";
 import * as Updates from "expo-updates";
 import { AppState } from "react-native";
 
 import { requestIdOf } from "@media-summarizer/core/api/apiClient";
+import {
+  bugReportDiagnostics,
+  type BugReportDiagnostics,
+} from "@media-summarizer/core/api/bugReportDiagnostics";
 import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
 import {
   describeHandledFailure,
@@ -332,6 +337,26 @@ export async function fetchReportingFailures(
     captureHandledFailure({ operation, cause: `http_${response.status}`, route, status: response.status, level: "error" });
   }
   return response;
+}
+
+/**
+ * What a bug report carries to lead to Sentry (task-612): the id of the last
+ * event this session sent, when it sent one, and the running bundle: native
+ * build (Sentry's `dist`) and OTA update (`ota.update_id`). Never an account
+ * identifier. Never throws: a report must go out even if this cannot be read.
+ */
+export function currentBugReportDiagnostics(): BugReportDiagnostics {
+  let eventId: string | undefined;
+  try {
+    eventId = Config.SENTRY_DSN ? Sentry.lastEventId() : undefined;
+  } catch {
+    eventId = undefined;
+  }
+  return bugReportDiagnostics({
+    eventId,
+    build: Application.nativeBuildVersion,
+    updateId: Updates.updateId,
+  });
 }
 
 /**

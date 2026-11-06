@@ -22,6 +22,13 @@ def _parse_args() -> argparse.Namespace:
         help="Sentry search query (e.g., 'is:unresolved').",
     )
     parser.add_argument(
+        "--event-id",
+        help=(
+            "Sentry event ID (32 hex characters), e.g. the sentry_event_id stored on a "
+            "bug report: shows that very event and its issue."
+        ),
+    )
+    parser.add_argument(
         "--region",
         default=os.environ.get("AWS_DEFAULT_REGION", "eu-west-3"),
         help="AWS region for Secrets Manager (default: eu-west-3).",
@@ -79,7 +86,8 @@ def _fetch_issue(
     issue_id: str, org: str, project: str, auth_token: str
 ) -> dict[str, Any] | None:
     """Fetch a single issue by ID or short-ID."""
-    url = f"https://sentry.io/api/0/projects/{org}/{project}/issues/{issue_id}/"
+    # Organization-scoped: the project-scoped issue route answers 404.
+    url = f"https://sentry.io/api/0/organizations/{org}/issues/{issue_id}/"
     headers = {"Authorization": f"Bearer {auth_token}"}
 
     response = requests.get(url, headers=headers, timeout=30)
@@ -118,7 +126,7 @@ def _fetch_latest_event(
     issue_id: str, org: str, project: str, auth_token: str
 ) -> dict[str, Any] | None:
     """Fetch the latest event for an issue."""
-    url = f"https://sentry.io/api/0/projects/{org}/{project}/issues/{issue_id}/events/latest/"
+    url = f"https://sentry.io/api/0/organizations/{org}/issues/{issue_id}/events/latest/"
     headers = {"Authorization": f"Bearer {auth_token}"}
 
     response = requests.get(url, headers=headers, timeout=30)
@@ -133,6 +141,37 @@ def _fetch_latest_event(
         return None
 
     return response.json()
+
+
+def _resolve_event(
+    event_id: str, org: str, project: str, auth_token: str
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    """Resolve an event ID to its issue and the event itself (task-612)."""
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    lookup = requests.get(
+        f"https://sentry.io/api/0/organizations/{org}/eventids/{event_id}/",
+        headers=headers,
+        timeout=30,
+    )
+    if lookup.status_code == 404:
+        print(f"Event {event_id} not found (or no longer retained).", file=sys.stderr)
+        return None
+    if lookup.status_code != 200:
+        print(f"Failed to resolve event {event_id}: HTTP {lookup.status_code}", file=sys.stderr)
+        return None
+    group_id = str(lookup.json().get("groupId", ""))
+    issue = _fetch_issue(group_id, org, project, auth_token) if group_id else None
+    if not issue:
+        return None
+    response = requests.get(
+        f"https://sentry.io/api/0/projects/{org}/{project}/events/{event_id}/",
+        headers=headers,
+        timeout=30,
+    )
+    if response.status_code != 200:
+        print(f"Failed to fetch event {event_id}: HTTP {response.status_code}", file=sys.stderr)
+        return None
+    return issue, response.json()
 
 
 def _extract_media_item_id(breadcrumbs: list[dict[str, Any]]) -> str | None:
@@ -183,14 +222,24 @@ def _display_issue(
         "ota.embedded_launch",
         "api.host",
         "environment",
+        "request_id",
+        "failure.operation",
+        "failure.cause",
+        "failure.route",
+        "failure.stage",
+        "media.type",
+        "http.status_code",
     ]
 
     print("\n--- Tags ---")
+    request_id = None
     for tag in tags:
         key = tag.get("key")
         value = tag.get("value")
         if key in relevant_tag_keys:
             print(f"  {key}: {value}")
+        if key == "request_id":
+            request_id = value
 
     # Extract and display breadcrumbs
     breadcrumbs_data = event.get("entries", [])
@@ -219,6 +268,14 @@ def _display_issue(
     else:
         print("  No breadcrumbs found.")
 
+    if request_id and show_insights_query:
+        print("\n--- Server logs of the failed call (task-610) ---")
+        print(
+            f'  Query: fields @timestamp, level, event, message | filter request_id = "{request_id}"'
+            " | sort @timestamp asc"
+        )
+        print("  Run it on the API log group (/aws/lambda/media-summarizer-api-dev for dev).")
+
     # Extract mediaItemId from save.created breadcrumb
     media_item_id = _extract_media_item_id(breadcrumbs)
     if media_item_id and show_insights_query:
@@ -231,14 +288,21 @@ def _display_issue(
 def main() -> int:
     args = _parse_args()
 
-    if not args.issue_id and args.query is None:
-        print("Error: Must provide either --issue-id or --query.", file=sys.stderr)
+    if not args.issue_id and args.query is None and not args.event_id:
+        print("Error: Must provide --issue-id, --query or --event-id.", file=sys.stderr)
         return 1
 
     config = _load_sentry_config(args.region, args.profile)
     auth_token = config["auth_token"]
     org = config["org"]
     project = config["project"]
+
+    if args.event_id:
+        resolved = _resolve_event(args.event_id.lower(), org, project, auth_token)
+        if not resolved:
+            return 1
+        _display_issue(resolved[0], resolved[1], show_insights_query=True)
+        return 0
 
     issues = []
     if args.issue_id:

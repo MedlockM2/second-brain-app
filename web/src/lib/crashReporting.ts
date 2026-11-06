@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/browser";
 import { requestIdOf } from "@media-summarizer/core/api/apiClient";
+import { bugReportDiagnostics, type BugReportDiagnostics } from "@media-summarizer/core/api/bugReportDiagnostics";
 import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
 import { describeHandledFailure, routeOf, type HandledFailure } from "@media-summarizer/core/errors/handledFailure";
 import { Config } from "../config";
@@ -121,6 +122,19 @@ export async function fetchReportingFailures(
     captureHandledFailure({ operation, cause: `http_${response.status}`, route, status: response.status, level: "error" });
   }
   return response;
+}
+
+/**
+ * The id of the last Sentry event this tab sent, for the bug report (task-612).
+ * The web bundle has neither a build number nor an OTA update: the event's own
+ * tags say which deployment it came from. Never throws.
+ */
+export function currentBugReportDiagnostics(): BugReportDiagnostics {
+  try {
+    return bugReportDiagnostics({ eventId: Config.SENTRY_DSN ? Sentry.lastEventId() : undefined });
+  } catch {
+    return {};
+  }
 }
 
 // `SpanStatusCode` values (wire protocol), as on mobile.

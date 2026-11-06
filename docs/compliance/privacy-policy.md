@@ -27,7 +27,7 @@ Contact for any privacy question or request: **deepn.support@gmail.com**.
 - **Browser extension** - on your explicit action, the extension reads the current tab’s address and title locally. It sends the address you choose to save, or the text you select with its source address, and your chosen folder. It does not read the full page or your browsing history
 - **Chat messages** - the questions you ask the in-app assistant and its answers
 - **Organisation** - folders, review settings, digest settings and your time zone
-- **Feedback and bug reports** - the subject and description you write, any file you choose to attach, and the app version and platform or browser information attached to the report
+- **Feedback and bug reports** - the subject and description you write, any file you choose to attach, the app version, build and update, the platform or browser information attached to the report, and the identifier of the last crash or error report the app sent (section 2.4), so we can find what happened just before
 
 ### 2.3 Content We Generate for You
 

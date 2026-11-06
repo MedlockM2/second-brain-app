@@ -6,6 +6,7 @@ import {
   type LocalFilePutResult,
   type StagedLocalFile,
 } from "./localFileTransfer";
+import { currentBugReportDiagnostics } from "../lib/crashReporting";
 
 /**
  * Allowed file extensions for bug report attachments.
@@ -223,9 +224,11 @@ export class BugReportService {
   static async createBugReport(
     payload: CreateBugReportPayload,
   ): Promise<CreateBugReportResponse> {
+    // Every report, from the form or a support request, carries the way to
+    // its Sentry event and the exact bundle that was running (task-612).
     return apiRequest<CreateBugReportResponse>("/api/bug-reports", {
       method: "POST",
-      body: payload,
+      body: { ...payload, ...currentBugReportDiagnostics() },
     });
   }
 }

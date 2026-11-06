@@ -63,6 +63,13 @@ class BugReport(BaseModel):
     media_key: Optional[str] = None
     media_type: Optional[str] = None
 
+    # --- What leads from the report to Sentry (task-612) ------------------------
+    # The last event the app sent before the report, and the exact bundle that
+    # was running: build (Sentry's dist) and OTA update. Validated by the API.
+    sentry_event_id: Optional[str] = None
+    source_app_build: Optional[str] = None
+    ota_update_id: Optional[str] = None
+
     def to_dynamodb_item(self) -> Dict[str, Any]:
         """Serialize to DynamoDB item format."""
         item: Dict[str, Any] = {
@@ -89,6 +96,12 @@ class BugReport(BaseModel):
             item["media_key"] = self.media_key
         if self.media_type:
             item["media_type"] = self.media_type
+        if self.sentry_event_id:
+            item["sentry_event_id"] = self.sentry_event_id
+        if self.source_app_build:
+            item["source_app_build"] = self.source_app_build
+        if self.ota_update_id:
+            item["ota_update_id"] = self.ota_update_id
         return item
 
     @classmethod
@@ -109,6 +122,9 @@ class BugReport(BaseModel):
             source_url=item.get("source_url"),
             media_key=item.get("media_key"),
             media_type=item.get("media_type"),
+            sentry_event_id=item.get("sentry_event_id"),
+            source_app_build=item.get("source_app_build"),
+            ota_update_id=item.get("ota_update_id"),
         )
 
 
@@ -131,6 +147,9 @@ class BugReportService:
         source_url: Optional[str] = None,
         media_key: Optional[str] = None,
         media_type: Optional[str] = None,
+        sentry_event_id: Optional[str] = None,
+        source_app_build: Optional[str] = None,
+        ota_update_id: Optional[str] = None,
     ) -> BugReport:
         """Create and persist a new bug report."""
         report = BugReport(
@@ -145,6 +164,9 @@ class BugReportService:
             source_url=source_url,
             media_key=media_key,
             media_type=media_type,
+            sentry_event_id=sentry_event_id,
+            source_app_build=source_app_build,
+            ota_update_id=ota_update_id,
         )
 
         await self._persist(report)
@@ -159,6 +181,9 @@ class BugReportService:
             source_app_version=report.source_app_version,
             media_item_id=report.media_item_id,
             error_code=report.error_code,
+            sentry_event_id=report.sentry_event_id,
+            source_app_build=report.source_app_build,
+            ota_update_id=report.ota_update_id,
         )
         return report
 
