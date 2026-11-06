@@ -14,6 +14,7 @@ export function useKeyboardViewport(viewportRef: RefObject<View | null>, active 
   const mounted = useRef(false);
   const revision = useRef(0);
   const needsRefresh = useRef(true);
+  const heard = useRef(false);
   const [viewport, setViewport] = useState<KeyboardViewportRect | null>(null);
   const [keyboard, setKeyboard] = useState<KeyboardMetrics | null>(() => Keyboard.metrics() ?? null);
 
@@ -32,14 +33,19 @@ export function useKeyboardViewport(viewportRef: RefObject<View | null>, active 
     });
   }, [viewportRef]);
 
-  // Call at Modal.onShow, before requesting focus. In particular, reopening a
-  // mounted dialog must not reuse the previous opening's keyboard metrics.
+  // Call at Modal.onShow. Reopening a mounted dialog must not reuse the previous
+  // opening's keyboard metrics, so they are read again — unless a keyboard event
+  // has already arrived since this activation. `Keyboard.metrics()` only follows
+  // keyboardDidShow/keyboardDidHide, so a field focused during the presentation
+  // would otherwise be thrown back to the keyboard-less layout while its keyboard
+  // is still rising, and the card would move a second time.
   const refresh = useCallback(() => {
-    needsRefresh.current = true;
+    if (!heard.current) needsRefresh.current = true;
     measure();
   }, [measure]);
   const accept = useCallback((next: KeyboardMetrics | null) => {
     if (!mounted.current) return;
+    heard.current = true;
     needsRefresh.current = false;
     setKeyboard(next);
     measure();
@@ -48,6 +54,7 @@ export function useKeyboardViewport(viewportRef: RefObject<View | null>, active 
   useLayoutEffect(() => {
     if (!active) return;
     mounted.current = true;
+    heard.current = false;
     needsRefresh.current = true;
     const show = (event: KeyboardEvent) => accept(event.endCoordinates);
     const subscriptions = [

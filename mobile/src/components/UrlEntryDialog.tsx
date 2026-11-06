@@ -4,9 +4,20 @@
  *
  * A surface of the app rather than a system prompt. `Alert.prompt` is iOS-only —
  * it does not exist on Android — so a dialog of our own is the only shape that can
- * be the same on both platforms. It is a centred card for the same reason
+ * be the same on both platforms. It is a card over a scrim for the same reason
  * `RenameDialog` is: a one-field entry reached from a menu, with the screen it was
- * opened from still visible behind the scrim.
+ * opened from still visible behind it.
+ *
+ * The keyboard opens with the dialog (`FOCUS_DURING_PRESENTATION`) and the card
+ * sits just above it, as `RenameDialog` does — not centred. A centred card is
+ * lifted by half the keyboard height when the keyboard arrives, which on a phone
+ * is about the distance from the field down to Cancel: a tap aimed at the field
+ * as the keyboard came in began on Cancel and closed the dialog. Anchored above
+ * the keyboard, the place the field leaves is taken by the keyboard itself, never
+ * by an action. For the same reason nothing in the card puts the keyboard away —
+ * neither a tap beside the field (`keyboardShouldPersistTaps="always"`) nor Go on
+ * a refused link (`submitBehavior="submit"`): either would drop the card under
+ * the next tap.
  *
  * Pasting is the keyboard's own paste, which every platform offers on a long press
  * in a text field. There is deliberately no "Paste" button: reading the clipboard
@@ -41,6 +52,7 @@ import { t } from "../i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardViewport, type KeyboardViewportHandle } from "./KeyboardViewport";
 import { useFocusedInputScroll } from "../hooks/useFocusedInputScroll";
+import { FOCUS_DURING_PRESENTATION } from "../lib/modalFieldFocus";
 
 export interface UrlEntryDialogProps {
   visible: boolean;
@@ -88,7 +100,7 @@ export function UrlEntryDialog({
       statusBarTranslucent
       onShow={() => {
         viewportRef.current?.refresh();
-        inputRef.current?.focus();
+        if (!FOCUS_DURING_PRESENTATION) inputRef.current?.focus();
       }}
       onRequestClose={onClose}
     >
@@ -99,7 +111,7 @@ export function UrlEntryDialog({
               ref={scrollRef}
               style={styles.form}
               contentContainerStyle={[
-                styles.centering,
+                styles.formContent,
                 {
                   paddingTop: insets.top + Spacing.md,
                   paddingBottom: Spacing.md + (keyboardVisible ? 0 : insets.bottom),
@@ -108,7 +120,7 @@ export function UrlEntryDialog({
               automaticallyAdjustKeyboardInsets={false}
               automaticallyAdjustContentInsets={false}
               contentInsetAdjustmentBehavior="never"
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="always"
               onLayout={inputScroll.reveal}
               onContentSizeChange={inputScroll.reveal}
               onScroll={inputScroll.onScroll}
@@ -125,6 +137,7 @@ export function UrlEntryDialog({
 
                 <TextInput
                   ref={inputRef}
+                  autoFocus={FOCUS_DURING_PRESENTATION}
                   onFocus={() => inputScroll.focusInput(inputRef.current)}
                   style={styles.input}
                   value={value}
@@ -140,6 +153,8 @@ export function UrlEntryDialog({
                   spellCheck={false}
                   multiline={false}
                   returnKeyType="go"
+                  // A refused link is corrected in place: the keyboard stays open.
+                  submitBehavior="submit"
                   onSubmitEditing={handleSubmit}
                   // The field is emptied on every opening, so this only ever clears a
                   // paste the user wants to redo.
@@ -206,9 +221,9 @@ const makeStyles = ({ colors: Colors, shadows: Shadows }: Theme) =>
     backdrop: {
       ...StyleSheet.absoluteFillObject,
     },
-    centering: {
+    formContent: {
       flexGrow: 1,
-      justifyContent: "center",
+      justifyContent: "flex-end",
       paddingHorizontal: Spacing.lg,
     },
     card: {
