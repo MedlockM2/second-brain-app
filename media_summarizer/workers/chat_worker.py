@@ -42,6 +42,15 @@ announces the end, Decision point 3):
 - a provider failure **after** text: ``interrupted`` / ``provider_error`` with the
   partial text -- shown text is never taken back (complement C1.11).
 
+**Web search** (task-614). The request carries the hosted ``web_search`` tool,
+bounded by ``chat_prompt.MAX_WEB_SEARCHES_PER_TURN``. While a search runs the
+attempt carries ``web_search_started_at``, which the stream door turns into a
+``search`` event. The model's inline links to web pages are rewritten into
+``[W#]`` tags as the text streams (``chat_web_citations``); every fragment written
+after the first citation carries the web sources cited so far, and the sealed
+answer carries them with the titles of the provider's ``url_citation``
+annotations. The searches are priced into the turn's usage and settled with it.
+
 **Beta budget** (task-549). The turn was admitted when it was accepted
 (``chat_service.send_turn``, operation ``chat:<turn_id>``). Every provider call
 is sent under an attempt of that operation: the first claims the admission, each
@@ -68,7 +77,7 @@ import os
 import random
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from media_summarizer.core.models.beta_budget import Component
 from media_summarizer.core.models.chat import (
@@ -79,6 +88,7 @@ from media_summarizer.core.models.chat import (
     ChatInterruptionCause,
     ChatTurnStatus,
     ChatUserMessage,
+    ChatWebSource,
     is_attempt_lost,
 )
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
@@ -90,7 +100,8 @@ from media_summarizer.core.services import (
     llm_corpus,
 )
 from media_summarizer.core.services.budget_guard import BudgetCall, BudgetRefusedError
-from media_summarizer.core.services.llm_client import LlmStreamInterruptedError
+from media_summarizer.core.services.chat_web_citations import WebCitationRewriter
+from media_summarizer.core.services.llm_client import LlmStreamInterruptedError, UrlCitation
 from media_summarizer.utils import chat_db
 from media_summarizer.utils.llm_failure import (
     LLMFailureKind,
@@ -144,6 +155,11 @@ class _StreamState:
         self.attempt = attempt
         self.conversation_id = conversation_id
         self.user_id = user_id
+        #: Rewrites the model's web links into ``[W#]`` tags (task-614).
+        self.citations = WebCitationRewriter()
+        #: Everything the rewriter let through: the answer as stored.
+        self.parts: List[str] = []
+        self.web_searching = False
         self.buffer: List[str] = []
         self.next_seq = 0
         now = time.monotonic()
@@ -164,6 +180,9 @@ class _StreamState:
             return True
         text = "".join(self.buffer)
         self.buffer = []
+        if not text:
+            # The rewriter is holding a link back: nothing to show yet.
+            return True
         written = await chat_db.append_fragment(
             ChatFragment(
                 user_id=self.user_id,
@@ -173,6 +192,7 @@ class _StreamState:
                 attempt_id=self.attempt.attempt_id,
                 seq=self.next_seq,
                 text=text,
+                web_sources=self.web_sources,
             )
         )
         if not written:
@@ -185,7 +205,9 @@ class _StreamState:
         """The stream callback: buffer, flush, watch for a stop or a lost lease."""
         if self.fenced_out:
             return False
-        self.buffer.append(text)
+        shown = self.citations.feed(text)
+        self.parts.append(shown)
+        self.buffer.append(shown)
         now = time.monotonic()
         if now - self.last_flush >= FLUSH_INTERVAL_SECONDS and not await self.flush():
             return False
@@ -201,6 +223,42 @@ class _StreamState:
                 self.cancel_requested = True
                 return False
         return None
+
+    async def on_web_search(self, searching: bool) -> None:
+        """The stream's web search callback: mark the attempt while a search runs."""
+        if self.fenced_out or searching == self.web_searching:
+            return
+        self.web_searching = searching
+        try:
+            live = await chat_db.set_web_search_state(
+                user_id=self.user_id,
+                conversation_id=self.conversation_id,
+                turn_index=self.attempt.turn_index,
+                attempt_id=self.attempt.attempt_id,
+                searching=searching,
+            )
+        except Exception as exc:  # noqa: BLE001 - a missed indicator never fails a turn
+            log_event(logger, logging.WARNING, "chat.web_search_state_failed", "Search state not written", exc_info=exc)
+            return
+        if not live:
+            self.fenced_out = True
+
+    async def finish_text(self, citations: Sequence[UrlCitation] = ()) -> bool:
+        """Let through what the rewriter held back, take the provider's titles,
+        and write the last fragment. ``False``: fenced out."""
+        rest = self.citations.finish()
+        self.parts.append(rest)
+        self.buffer.append(rest)
+        self.citations.apply_titles((citation.url, citation.title) for citation in citations)
+        return await self.flush()
+
+    @property
+    def text(self) -> str:
+        return "".join(self.parts)
+
+    @property
+    def web_sources(self) -> Optional[List[ChatWebSource]]:
+        return self.citations.sources or None
 
 
 class _LeaseHeartbeat:
@@ -277,6 +335,7 @@ async def _seal(
     error_message: Optional[str] = None,
     usage: Optional[ArtifactLlmUsage] = None,
 ) -> None:
+    web_sources = state.web_sources if (text or "").strip() else None
     sealed = await chat_db.seal_turn(
         user_id=user_id,
         conversation_id=conversation_id,
@@ -288,6 +347,7 @@ async def _seal(
         error_code=error_code,
         error_message=error_message,
         llm_usage=usage,
+        web_sources=web_sources,
     )
     log_event(
         logger,
@@ -301,6 +361,8 @@ async def _seal(
         prompt_tokens=usage.prompt_tokens if usage else None,
         cached_tokens=usage.cached_tokens if usage else None,
         completion_tokens=usage.completion_tokens if usage else None,
+        web_search_calls=usage.web_search_calls if usage else None,
+        web_sources=len(web_sources or []),
         usage_estimated=usage.usage_estimated if usage else None,
     )
     await _close_budget(state, delivered=sealed and bool((text or "").strip()), usage=usage)
@@ -345,7 +407,10 @@ async def _stream_with_retries(
             operation_id=state.budget_operation,
             component=Component.CHAT_TURN,
             line=lambda ctx: budget_guard.llm_call_line(
-                ctx, component=Component.CHAT_TURN, messages=messages
+                ctx,
+                component=Component.CHAT_TURN,
+                messages=messages,
+                web_search_calls=chat_prompt.MAX_WEB_SEARCHES_PER_TURN,
             ),
             lease=timedelta(0),
         )
@@ -354,11 +419,16 @@ async def _stream_with_retries(
                 messages,
                 on_delta=state.on_delta,
                 prompt_cache_key=prompt_cache_key,
+                tools=[chat_prompt.WEB_SEARCH_TOOL],
+                max_tool_calls=chat_prompt.MAX_WEB_SEARCHES_PER_TURN,
+                on_web_search=state.on_web_search,
                 call=WORKER_NAME,
             )
         except LlmStreamInterruptedError:
             raise
         except Exception as exc:
+            # A call that failed during a search leaves no search running.
+            await state.on_web_search(False)
             # Nothing was shown: this try goes back, at zero when the provider
             # answered an error, at its bound when the outcome is unknown.
             await state.budget_call.release_for(
@@ -569,12 +639,12 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
         return
     except LlmStreamInterruptedError as exc:
         log_llm_generation_failure(logger, worker=WORKER_NAME, exc=exc, text_emitted=True)
-        if not await state.flush() or state.fenced_out:
+        if not await state.finish_text(exc.url_citations) or state.fenced_out:
             return
         await _seal(
             **seal_kwargs,
             status=ChatTurnStatus.INTERRUPTED,
-            text=exc.partial_content,
+            text=state.text,
             cause=ChatInterruptionCause.PROVIDER_ERROR,
             error_code="provider_error",
             error_message=str(exc),
@@ -598,10 +668,11 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
         # Sealed by someone else while streaming: their state wins.
         log_event(logger, logging.WARNING, "chat.fenced_out", "Attempt no longer live; stopped streaming")
         return
-    if not await state.flush():
+    if not await state.finish_text(result.url_citations):
         return
 
-    text = result.content
+    # The answer as shown: the model's web links rewritten into ``[W#]`` tags.
+    text = state.text
     if state.cancel_requested or result.stopped:
         await _seal(
             **seal_kwargs,

@@ -3,9 +3,10 @@ id: TASK-614
 title: >-
   Permettre au chat de chercher sur le web et livrer ses sources web séparément
   des sources média
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-06 18:31'
+updated_date: '2026-11-06 19:22'
 labels:
   - backend
   - chat
@@ -56,12 +57,37 @@ Note pour l'owner : à vérifier en E2E manuel après le push. Une question d'ac
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le chat worker envoie l'outil `web_search` avec une borne explicite du nombre de recherches ; `complete` (artefacts) et la traduction n'envoient aucun outil
-- [ ] #2 Les instructions du chat disent quand chercher et réservent les tags `[S#]` au corpus
-- [ ] #3 Le message assistant scellé porte `web_sources` (ref, url, titre ; dédupliqué par URL) et son Markdown porte des tags `[W#]` à la place des liens web en ligne ; le champ est exposé par l'API et typé dans `packages/core/src/types/chat.ts`
-- [ ] #4 Les sources web d'un tour en cours sont lisibles par l'app avant que le tour soit scellé
-- [ ] #5 `history_turns` renvoie au modèle les citations web passées sous une forme lisible (titre et URL), jamais un `[W#]` nu
-- [ ] #6 Le prix d'une recherche web est dans `llm_pricing` avec sa source datée ; le coût d'un tour l'inclut et l'admission du budget réserve le maximum de recherches autorisé
-- [ ] #7 Le tour en cours expose l'état « recherche web en cours » tiré des événements `web_search_call`
-- [ ] #8 `ruff` et `mypy` propres ; `tsc` propre sur `packages/core`
+- [x] #1 Le chat worker envoie l'outil `web_search` avec une borne explicite du nombre de recherches ; `complete` (artefacts) et la traduction n'envoient aucun outil
+- [x] #2 Les instructions du chat disent quand chercher et réservent les tags `[S#]` au corpus
+- [x] #3 Le message assistant scellé porte `web_sources` (ref, url, titre ; dédupliqué par URL) et son Markdown porte des tags `[W#]` à la place des liens web en ligne ; le champ est exposé par l'API et typé dans `packages/core/src/types/chat.ts`
+- [x] #4 Les sources web d'un tour en cours sont lisibles par l'app avant que le tour soit scellé
+- [x] #5 `history_turns` renvoie au modèle les citations web passées sous une forme lisible (titre et URL), jamais un `[W#]` nu
+- [x] #6 Le prix d'une recherche web est dans `llm_pricing` avec sa source datée ; le coût d'un tour l'inclut et l'admission du budget réserve le maximum de recherches autorisé
+- [x] #7 Le tour en cours expose l'état « recherche web en cours » tiré des événements `web_search_call`
+- [x] #8 `ruff` et `mypy` propres ; `tsc` propre sur `packages/core`
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Docs lues le 2026-11-06 et datées dans le code : guide de l'outil web search, référence Responses API (`max_tool_calls`, annotations, événements `response.web_search_call.*` et `response.output_text.annotation.added`), page tarifaire (10 $ / 1 000 appels ; les tokens de contenu sont facturés au tarif d'entrée du modèle).
+
+Ce qui a été fait :
+- **Outil** : `llm_client.stream(..., tools, max_tool_calls, on_web_search)`. Seul le chat passe `chat_prompt.WEB_SEARCH_TOOL` (`{"type": "web_search"}`, `tool_choice` auto par défaut), avec `max_tool_calls = chat_prompt.MAX_WEB_SEARCHES_PER_TURN = 3`. Justification dans le code : le plafond compte aussi `open_page` et `find_in_page` ; 3 permet de chercher puis d'affiner ou d'ouvrir la page trouvée ; le coût des appels reste à 0,03 $ par tour au plus. `complete` et la traduction n'envoient aucun outil.
+- **Prompt** : `chat_instructions` dit de chercher seulement pour des faits absents du corpus, récents ou à vérifier ; de citer une page par un lien Markdown ; de ne jamais poser `[S#]` sur un fait venu du web.
+- **Citations** : nouveau module `core/services/chat_web_citations.py`. `WebCitationRewriter` remplace dans le flux chaque lien web en ligne (`[t](url)` ou `([t](url))`) par `[W#]`, avec un numéro par URL dans l'ordre de première citation. Il retient la fin du texte tant qu'un lien coupé entre deux deltas peut encore se former. Vérifié à la main sur 2 000 découpages aléatoires ; aucun test commité. Les titres sont repris des annotations `url_citation` au scellement. `ChatWebSource {ref, url, title}` est stocké sur `ChatAssistantMessage.web_sources`, exposé par `ChatMessageResponse.web_sources` et typé `ChatWebSource` dans `packages/core/src/types/chat.ts`.
+- **Pendant le flux** : chaque fragment écrit après la première citation porte la liste cumulée `web_sources`, transmise dans l'événement SSE `fragment` (et dans l'événement `end`). Un tour perdu reconstruit aussi ses sources à partir des fragments (`chat_db.fragments_answer`).
+- **Historique** : `history_turns` développe chaque `[W#]` en `([titre](url))` via `expand_web_refs`. L'API et le worker passent tous deux par `history_turns`, donc l'estimation de contexte reste cohérente.
+- **Coût et budget** : `llm_pricing.WEB_SEARCH_USD_PER_CALL = 0.01` (source datée). `ArtifactLlmUsage.web_search_calls` est lu dans `tool_usage.web_search.num_requests`, sinon compté sur les items `web_search_call` de type `search`, et intégré à `cost_eur`. Le barème du budget gagne `openai_tools.web_search.per_call = 0.01` (version 2026-11-06). `beta_budget.llm_line` et `llm_cost` prennent `web_search_calls`. L'admission du tour (`chat_turn_admission_line`), chaque tentative du worker et le pronostic `budget_capacity` réservent les 3 recherches.
+- **Recherche en cours** : les événements `response.web_search_call.*` posent ou retirent `ChatAttempt.web_search_started_at` (`chat_db.set_web_search_state`, conditionné sur l'état `generating`). La porte de flux émet un événement `search {active}` ; `active_generation.web_searching` est exposé par la lecture de la conversation. Le parseur `sse.ts` reconnaît `search`.
+- Docs mises à jour : `CHAT_DATA_MODEL.md`, `CANONICAL_MEDIA_API_CONTRACT.md`.
+
+Vérifications : ruff et mypy propres sur les 15 fichiers Python touchés ; `tsc` propre sur `packages/core` (et sur `web/`) ; `check_env_example_complete.py` OK ; imports de l'API, de la porte de flux et du worker vérifiés. Aucun test ajouté.
+
+À valider par l'owner (déduit, aucune source ne le formule) :
+- Le guide web search dit que « le contexte de la recherche web est limité à 128k même quand le modèle a une fenêtre plus grande ». Le budget de contexte du chat va jusqu'à environ 247k tokens. À vérifier en E2E sur un gros dossier : si l'outil échoue au-delà de 128k, il faudra ne pas envoyer l'outil au-delà d'un seuil.
+- Les pages lues sont facturées en tokens d'entrée et ne sont pas bornées par la réservation (qui ne compte que les octets de la requête et le prix des appels). Elles sont régularisées sur l'usage réel (règle 8).
+- Tous les liens `http(s)` en ligne écrits par le modèle deviennent des `[W#]`, y compris un lien qui ne viendrait pas d'une recherche.
+
+Note pour l'owner (E2E après push) : une question d'actualité doit déclencher une recherche avec des `[W#]` résolus ; une question à laquelle le corpus suffit ne doit pas en déclencher ; le coût du tour doit inclure les recherches. L'affichage côté app relève de TASK-615.
+<!-- SECTION:NOTES:END -->

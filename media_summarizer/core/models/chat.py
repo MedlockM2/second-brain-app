@@ -314,6 +314,20 @@ class ChatSourceSnapshot(BaseModel):
         )
 
 
+class ChatWebSource(BaseModel):
+    """A web page an answer cites (task-614), apart from the corpus sources.
+
+    ``ref`` is the tag's content without brackets -- ``W1``, ``W2`` … -- numbered in
+    order of first citation within one answer, one per URL. The answer's Markdown
+    carries ``[W1]`` where the page supports a statement
+    (``core/services/chat_web_citations.py``).
+    """
+
+    ref: str
+    url: str
+    title: Optional[str] = None
+
+
 class ChatConversation(_ChatItem):
     KIND: ClassVar[str] = "conversation"
 
@@ -424,6 +438,9 @@ class ChatAssistantMessage(_ChatItem):
     error_code: Optional[str] = None
     error_message: Optional[str] = None
     llm_usage: Optional[ArtifactLlmUsage] = None
+    #: The web pages the ``[W#]`` tags of ``text`` resolve to (task-614); absent
+    #: when the answer cites none.
+    web_sources: Optional[List[ChatWebSource]] = None
     created_at: datetime = Field(default_factory=_now_utc)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -449,6 +466,10 @@ class ChatAttempt(_ChatItem):
     #: Set by the stop route; the worker reads it while streaming. Closing the
     #: stream on the phone does not set it (Decision point 6).
     cancel_requested_at: Optional[datetime] = None
+    #: Set by the worker while the model runs a web search (task-614), from the
+    #: provider's ``response.web_search_call.*`` events; removed when no search is
+    #: running. The stream door turns it into a ``search`` event.
+    web_search_started_at: Optional[datetime] = None
     error_code: Optional[str] = None
     created_at: datetime = Field(default_factory=_now_utc)
     started_at: Optional[datetime] = None
@@ -470,6 +491,11 @@ class ChatFragment(_ChatItem):
     attempt_id: str
     seq: int
     text: str
+    #: Every web source cited so far in this attempt, ``[W#]`` tags of this
+    #: fragment and the earlier ones included (task-614). Cumulative so that a
+    #: client resuming from any cursor resolves every tag it holds with the last
+    #: list it read. Absent until the first web citation.
+    web_sources: Optional[List[ChatWebSource]] = None
     created_at: datetime = Field(default_factory=_now_utc)
 
     def sort_key(self) -> str:

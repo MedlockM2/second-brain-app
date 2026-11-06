@@ -61,6 +61,13 @@ _MODEL_PRICES: Dict[str, _ModelPrices] = {
 }
 _FALLBACK_PRICES = max(_MODEL_PRICES.values(), key=lambda prices: prices.long.input)
 
+# USD per call of the hosted ``web_search`` tool of the Responses API, the chat's
+# only tool (task-614): "Web search (all models) | $10.00 / 1k calls + Search
+# content tokens billed at model rates" -- https://developers.openai.com/api/docs/pricing,
+# built-in tools, read 2026-11-06. The content tokens are already inside the
+# response's ``input_tokens``, priced above; only the per-call price is added here.
+WEB_SEARCH_USD_PER_CALL = 0.01
+
 
 def _prices_for(model: str) -> _ModelPrices:
     normalized = (model or "").lower()
@@ -77,6 +84,7 @@ def estimate_llm_cost_eur(
     cached_tokens: int,
     completion_tokens: int,
     cache_write_tokens: int = 0,
+    web_search_calls: int = 0,
 ) -> float:
     """Cost in EUR of one call, cached and cache-written tokens at their own rates.
 
@@ -100,4 +108,5 @@ def estimate_llm_cost_eur(
         + billed_written * rates.cache_write
         + max(0, completion_tokens) * rates.output
     ) / 1_000_000
+    usd += max(0, web_search_calls) * WEB_SEARCH_USD_PER_CALL
     return round(usd * USD_EUR, 6)

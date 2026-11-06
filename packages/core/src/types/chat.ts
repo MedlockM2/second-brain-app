@@ -47,6 +47,18 @@ export interface ChatSource {
   excluded_reason?: string | null;
 }
 
+/**
+ * A web page an answer cites (task-614), kept apart from the corpus sources.
+ * `[W1]` in the answer's Markdown resolves to the entry whose `ref` is `W1`;
+ * `[S1]` tags keep resolving to `ChatSource`.
+ */
+export interface ChatWebSource {
+  /** The tag's content without brackets: `W1`, `W2` … */
+  ref: string;
+  url: string;
+  title?: string | null;
+}
+
 export interface ChatConversationSummary {
   conversation_id: string;
   scope: ChatScope;
@@ -80,6 +92,8 @@ export interface ChatMessage {
   error_code?: string | null;
   attempt_id?: string | null;
   completed_at?: string | null;
+  /** Assistant messages only: what the `[W#]` tags of `text` resolve to. */
+  web_sources?: ChatWebSource[];
 }
 
 /**
@@ -96,6 +110,8 @@ export interface ChatGeneration {
 export interface ChatActiveGeneration extends ChatGeneration {
   /** Highest fragment sequence persisted; null before the first. */
   last_seq?: number | null;
+  /** The model is running a web search right now. */
+  web_searching?: boolean;
 }
 
 /**
@@ -148,10 +164,19 @@ export type ChatErrorCode =
   | "context_budget_exceeded"
   | "generation_stale";
 
-/** Events of the chat stream, as the SSE door sends them. */
+/**
+ * Events of the chat stream, as the SSE door sends them.
+ *
+ * A `fragment` written after the answer's first web citation carries
+ * `web_sources`: every page its `[W#]` tags so far resolve to (cumulative, so the
+ * latest list received wins). `search` says a web search started
+ * (`active: true`) or ended (`active: false`); the next fragment also means it
+ * is over.
+ */
 export type ChatStreamEvent =
   | { type: "generation"; data: ChatGeneration }
-  | { type: "fragment"; data: { seq: number; text: string } }
+  | { type: "fragment"; data: { seq: number; text: string; web_sources?: ChatWebSource[] } }
+  | { type: "search"; data: { active: boolean } }
   | {
       type: "end";
       data: {
@@ -162,6 +187,7 @@ export type ChatStreamEvent =
         error_code?: string | null;
         last_seq?: number;
         text?: string | null;
+        web_sources?: ChatWebSource[];
       };
     }
   | { type: "reconnect"; data: { turn_id: string; attempt_id: string; after_seq: number } };

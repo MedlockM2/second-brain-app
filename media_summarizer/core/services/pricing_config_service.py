@@ -190,7 +190,7 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
     # 2026-10-27/28 (Apify programmes, X API). Bump `version` with any price: every
     # reservation records the version it was bounded with.
     "provider_tariffs": {
-        "version": "2026-10-28",
+        "version": "2026-11-06",
         "currency": "USD",
         # Nova-3 pre-recorded, monolingual batch, per minute, billed to the second.
         "deepgram": {"nova-3": {"per_minute": "0.0043"}},
@@ -212,6 +212,11 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
                 "long": {"input": "0.20", "cached_input": "0.02", "cache_write": "0.25", "output": "0.75"},
             },
         },
+        # USD per call of a hosted tool of the Responses API. `web_search` is the
+        # chat's (task-614): "$10.00 / 1k calls + Search content tokens billed at
+        # model rates", pricing page read 2026-11-06. The content tokens are input
+        # tokens of the response, priced by the `openai` rows above.
+        "openai_tools": {"web_search": {"per_call": "0.01"}},
         # Price of one result, Free plan (the dearest listed), keyed by the default
         # actor ids of `apify_adapter.py`. An actor configured with another id must
         # get its own price here before it is reserved.

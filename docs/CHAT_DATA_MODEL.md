@@ -135,7 +135,8 @@ Exists from the moment the turn is accepted, with no `text`.
 | `attempt_id` | the turn's attempt: the one allowed to produce the answer, and the one that produced it once sealed |
 | `text` | the final answer, set by the seal. A 32,000-token answer is ~130 kB, under the 400 kB item limit |
 | `error_code`, `error_message` | on `failed` or a `provider_error` interruption. Among the codes: `dispatch_failed` (the API could not send the turn to the queue), `generation_lost` (§3.11) |
-| `llm_usage` | `ArtifactLlmUsage` (model, tokens, cache, cost; `usage_estimated` when a stream ended without its usage) |
+| `llm_usage` | `ArtifactLlmUsage` (model, tokens, cache, cost; `web_search_calls` when the model searched the web, priced into the cost; `usage_estimated` when a stream ended without its usage) |
+| `web_sources` | task-614: the web pages the `[W#]` tags of `text` resolve to, `[{ref: "W1", url, title}]`, one per URL in order of first citation. Absent when the answer cites no web page. The corpus tags `[S#]` resolve to the source snapshot |
 | `created_at`, `started_at`, `completed_at` | |
 
 ### 2.4 Attempt
@@ -148,6 +149,7 @@ on behalf of a generation is fenced on its attempt.
 | `status` | `queued` → `generating` → `completed` \| `failed` \| `interrupted`; or `queued` → terminal directly (stop before the claim, failed send, lost) |
 | `lease_expires_at` | the worker's lease while `generating` |
 | `cancel_requested_at` | set by the stop route; the worker reads it while streaming |
+| `web_search_started_at` | task-614: set by the worker while the model runs a web search (`set_web_search_state`, fenced on `generating`), removed when it ends; the stream door sends it as a `search` event |
 | `error_code`, `created_at`, `started_at`, `ended_at` | |
 
 A turn has **one** attempt. An attempt whose lease expired is **never re-claimed**:
@@ -157,7 +159,10 @@ and sealed (§3.11); the user's retry is a new turn.
 ### 2.5 Fragment
 
 `turn_id`, `turn_index`, `attempt_id`, `seq` (0, 1, 2… per attempt), `text`,
-`created_at`, `fragment_expires_at` = write time + 1 day. A transport buffer: the
+`web_sources` (task-614: every web source cited so far in the attempt, cumulative,
+absent before the first web citation), `created_at`, `fragment_expires_at` = write
+time + 1 day. The text already carries `[W#]` tags: the worker rewrites the model's
+inline web links as it streams (`core/services/chat_web_citations.py`). A transport buffer: the
 stream replays the fragments after the client's cursor, then follows new ones; once
 sealed, the final text is on the message and the fragments only serve a resume.
 
@@ -286,8 +291,8 @@ renewing its lease at the same moment wins the race.
 - no visible text: `failed` / `generation_lost`, then its budget released
   (`release_turn_budget`);
 - some fragments: `interrupted` / `provider_error`, `error_code =
-  generation_lost`, with the text rebuilt from the fragments, so the app shows the
-  partial and its retry button unchanged.
+  generation_lost`, with the text and the web sources rebuilt from the fragments,
+  so the app shows the partial and its retry button unchanged.
 
 The `INFLIGHT` marker is released as for every seal.
 
@@ -324,7 +329,7 @@ nothing ever sets a turn back to `accepted`.
 
 `get_conversation`, `list_conversations_by_scope` (LSI page + cursor),
 `list_messages`, `get_assistant_message`, `get_attempt`, `list_attempts`,
-`list_fragments`, `fragments_text`, `get_last_fragment_seq`. All base-table reads
+`list_fragments`, `fragments_answer`, `get_last_fragment_seq`. All base-table reads
 are strongly consistent.
 
 ## 6. Not decided here

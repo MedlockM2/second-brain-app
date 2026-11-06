@@ -54,7 +54,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 import aiohttp
 
@@ -89,11 +89,23 @@ LlmMessage = Dict[str, str]
 #: or ``True`` keeps reading.
 DeltaCallback = Callable[[str], Awaitable[Optional[bool]]]
 
+#: Told ``True`` when the model starts a web search and no other one is running,
+#: ``False`` when the last running one ends (``response.web_search_call.*``).
+WebSearchCallback = Callable[[bool], Awaitable[None]]
+
 #: ``incomplete_details.reason`` of a response the output ceiling cut.
 INCOMPLETE_MAX_OUTPUT_TOKENS = "max_output_tokens"
 
 #: The stream events that end a response with its final object.
 _TERMINAL_EVENTS = frozenset({"response.completed", "response.incomplete"})
+
+
+@dataclass(frozen=True)
+class UrlCitation:
+    """A ``url_citation`` annotation: a web page the answer cites."""
+
+    url: str
+    title: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +123,8 @@ class LlmResult:
     usage: ArtifactLlmUsage
     status: Optional[str]
     incomplete_reason: Optional[str] = None
+    #: The pages the answer cites, from its ``url_citation`` annotations, in order.
+    url_citations: Tuple[UrlCitation, ...] = ()
 
     @property
     def output_limit_reached(self) -> bool:
@@ -143,9 +157,11 @@ class LlmStreamInterruptedError(Exception):
         failure_kind: str,
         refusal_reason: Optional[str] = None,
         provider_status: Optional[int] = None,
+        url_citations: Tuple[UrlCitation, ...] = (),
     ) -> None:
         super().__init__(message)
         self.partial_content = partial_content
+        self.url_citations = url_citations
         self.usage = usage
         self.failure_kind = failure_kind
         self.refusal_reason = refusal_reason
@@ -164,11 +180,13 @@ class LlmResponseFailedError(RuntimeError):
         self.failure_kind = failure_kind
 
 
-def read_usage(usage: Dict[str, Any]) -> ArtifactLlmUsage:
+def read_usage(usage: Dict[str, Any], *, web_search_calls: int = 0) -> ArtifactLlmUsage:
     """Price the Responses API usage block, under the model the provider names.
 
-    ``input_tokens`` holds the cached and cache-written tokens as subsets;
-    ``output_tokens`` already counts the reasoning tokens.
+    ``input_tokens`` holds the cached and cache-written tokens as subsets, and the
+    web search content the model read; ``output_tokens`` already counts the
+    reasoning tokens. ``web_search_calls`` are billed per call on top
+    (``llm_pricing``).
     """
     model = str(usage.get("model") or LLM_MODEL)
     input_details = usage.get("input_tokens_details") or {}
@@ -182,12 +200,14 @@ def read_usage(usage: Dict[str, Any]) -> ArtifactLlmUsage:
         cached_tokens=cached_tokens,
         cache_write_tokens=cache_write_tokens,
         completion_tokens=completion_tokens,
+        web_search_calls=web_search_calls or None,
         cost_eur=estimate_llm_cost_eur(
             model=model,
             prompt_tokens=prompt_tokens,
             cached_tokens=cached_tokens,
             cache_write_tokens=cache_write_tokens,
             completion_tokens=completion_tokens,
+            web_search_calls=web_search_calls,
         ),
     )
 
@@ -197,13 +217,15 @@ def estimate_usage(
     completion_text: str,
     *,
     model: Optional[str] = None,
+    web_search_calls: int = 0,
 ) -> ArtifactLlmUsage:
     """The usage of a stream that ended without its usage chunk (complement C1.11).
 
     Writing zeros would understate the observed cost exactly on the interrupted
     turns. The input is estimated from the bytes sent, the output from the text
-    received -- which leaves out reasoning tokens, so it stays a floor -- and no
-    cache discount is assumed. The figure is marked as estimated.
+    received -- which leaves out reasoning tokens and the web search content read,
+    so it stays a floor -- and no cache discount is assumed. The web searches seen
+    finished in the stream are counted. The figure is marked as estimated.
     """
     model = model or LLM_MODEL
     prompt_tokens = estimate_tokens(
@@ -214,11 +236,13 @@ def estimate_usage(
         model=model,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        web_search_calls=web_search_calls or None,
         cost_eur=estimate_llm_cost_eur(
             model=model,
             prompt_tokens=prompt_tokens,
             cached_tokens=0,
             completion_tokens=completion_tokens,
+            web_search_calls=web_search_calls,
         ),
         usage_estimated=True,
     )
@@ -230,13 +254,17 @@ def request_payload(
     text_format: Optional[Dict[str, Any]] = None,
     prompt_cache_key: Optional[str] = None,
     max_output_tokens: Optional[int] = LLM_MAX_OUTPUT_TOKENS,
+    tools: Optional[Sequence[Dict[str, Any]]] = None,
+    max_tool_calls: Optional[int] = None,
 ) -> Dict[str, Any]:
     """The body of one ``POST /v1/responses``.
 
     ``text_format`` is the generator's Structured Outputs format
     (``{"type": "json_schema", "name", "strict", "schema"}``), sent as
     ``text.format``. ``max_output_tokens=None`` is the full-text translation's
-    request: no ceiling but the model's.
+    request: no ceiling but the model's. ``tools`` are hosted tools the model may
+    call (``tool_choice`` stays the provider's ``auto``); only the chat passes any,
+    with ``max_tool_calls`` bounding the calls of one response.
     """
     payload: Dict[str, Any] = {
         **response_parameters(max_output_tokens=max_output_tokens),
@@ -246,6 +274,10 @@ def request_payload(
         payload["text"] = {"format": text_format}
     if prompt_cache_key:
         payload["prompt_cache_key"] = prompt_cache_key
+    if tools:
+        payload["tools"] = list(tools)
+        if max_tool_calls is not None:
+            payload["max_tool_calls"] = max_tool_calls
     return payload
 
 
@@ -264,6 +296,56 @@ def response_text(response: Dict[str, Any]) -> str:
             if part.get("type") == "output_text":
                 parts.append(str(part.get("text") or ""))
     return "".join(parts)
+
+
+def _url_citation(annotation: Any) -> Optional[UrlCitation]:
+    if not isinstance(annotation, dict) or annotation.get("type") != "url_citation":
+        return None
+    url = annotation.get("url")
+    if not url:
+        return None
+    title = annotation.get("title")
+    return UrlCitation(url=str(url), title=str(title) if title else None)
+
+
+def response_citations(response: Dict[str, Any]) -> Tuple[UrlCitation, ...]:
+    """The ``url_citation`` annotations of a response's text, in order."""
+    citations: List[UrlCitation] = []
+    for item in response.get("output") or []:
+        if item.get("type") != "message":
+            continue
+        for part in item.get("content") or []:
+            for annotation in part.get("annotations") or []:
+                citation = _url_citation(annotation)
+                if citation is not None:
+                    citations.append(citation)
+    return tuple(citations)
+
+
+def _is_search(item: Any) -> bool:
+    """A ``web_search_call`` item whose action is a search -- the billed kind.
+
+    ``open_page`` and ``find_in_page`` actions carry no call price (web search
+    guide, read 2026-11-06). An item with no action is counted: over-counting is
+    the safe direction for a cost.
+    """
+    if not isinstance(item, dict) or item.get("type") != "web_search_call":
+        return False
+    action = item.get("action") or {}
+    return action.get("type") in (None, "search")
+
+
+def response_web_search_calls(response: Dict[str, Any]) -> int:
+    """Web searches a response was billed for.
+
+    ``tool_usage.web_search.num_requests`` when the provider reports it, else the
+    ``web_search_call`` items of the output whose action is a search.
+    """
+    tool_usage = (response.get("tool_usage") or {}).get("web_search") or {}
+    reported = tool_usage.get("num_requests")
+    if reported is not None:
+        return int(reported)
+    return sum(1 for item in response.get("output") or [] if _is_search(item))
 
 
 def _incomplete_reason(response: Dict[str, Any]) -> Optional[str]:
@@ -285,15 +367,17 @@ def read_response(
     # usage it produced: that is what cost and traceability read.
     model = response.get("model") or LLM_MODEL
     usage = response.get("usage")
+    searches = response_web_search_calls(response)
     return LlmResult(
         content=content,
         usage=(
-            read_usage({**usage, "model": model})
+            read_usage({**usage, "model": model}, web_search_calls=searches)
             if usage
-            else estimate_usage(messages, content, model=model)
+            else estimate_usage(messages, content, model=model, web_search_calls=searches)
         ),
         status=response.get("status"),
         incomplete_reason=_incomplete_reason(response),
+        url_citations=response_citations(response),
     )
 
 
@@ -395,11 +479,86 @@ async def complete(
             return read_response(result, messages)
 
 
+class _StreamReading:
+    """What one streamed response has said so far, besides its text."""
+
+    def __init__(self, on_web_search: Optional[WebSearchCallback]) -> None:
+        self.on_web_search = on_web_search
+        self.model: Optional[str] = None
+        self.final: Optional[Dict[str, Any]] = None
+        self.raw_usage: Optional[Dict[str, Any]] = None
+        self.citations: List[UrlCitation] = []
+        #: Searches seen finished, for a stream that ends without its final
+        #: response (stopped or cut).
+        self.searches_done = 0
+        self.searches_running: Set[str] = set()
+
+    async def read(self, event: Dict[str, Any]) -> None:
+        """Take one non-text event into account."""
+        event_type = str(event.get("type") or "")
+        snapshot = event.get("response")
+        if isinstance(snapshot, dict):
+            # response.created / in_progress / completed / incomplete all carry
+            # the response object: the model that answers.
+            self.model = snapshot.get("model") or self.model
+            if event_type in _TERMINAL_EVENTS:
+                self.final = snapshot
+                if snapshot.get("usage"):
+                    self.raw_usage = dict(snapshot["usage"])
+            return
+        if event_type == "response.output_text.annotation.added":
+            citation = _url_citation(event.get("annotation"))
+            if citation is not None:
+                self.citations.append(citation)
+            return
+        if event_type == "response.output_item.done" and _is_search(event.get("item")):
+            self.searches_done += 1
+            return
+        if event_type.startswith("response.web_search_call."):
+            await self._search_state(str(event.get("item_id") or ""), event_type)
+
+    async def _search_state(self, item_id: str, event_type: str) -> None:
+        was_running = bool(self.searches_running)
+        if event_type.endswith(".completed"):
+            self.searches_running.discard(item_id)
+        else:
+            # ``in_progress`` and ``searching``.
+            self.searches_running.add(item_id)
+        running = bool(self.searches_running)
+        if self.on_web_search is not None and running != was_running:
+            await self.on_web_search(running)
+
+    @property
+    def web_search_calls(self) -> int:
+        if self.final is not None:
+            return response_web_search_calls(self.final)
+        return self.searches_done
+
+    @property
+    def url_citations(self) -> Tuple[UrlCitation, ...]:
+        if self.final is not None:
+            return response_citations(self.final) or tuple(self.citations)
+        return tuple(self.citations)
+
+    def usage(self, messages: Sequence[LlmMessage], content: str) -> ArtifactLlmUsage:
+        if self.raw_usage is None:
+            return estimate_usage(
+                messages, content, model=self.model, web_search_calls=self.web_search_calls
+            )
+        return read_usage(
+            {**self.raw_usage, "model": self.model or LLM_MODEL},
+            web_search_calls=self.web_search_calls,
+        )
+
+
 async def stream(
     messages: Sequence[LlmMessage],
     *,
     on_delta: DeltaCallback,
     prompt_cache_key: Optional[str] = None,
+    tools: Optional[Sequence[Dict[str, Any]]] = None,
+    max_tool_calls: Optional[int] = None,
+    on_web_search: Optional[WebSearchCallback] = None,
     **log_fields: Any,
 ) -> LlmStreamResult:
     """Call the model and hand its answer over as it is written.
@@ -414,32 +573,42 @@ async def stream(
     the text delivered so far and an estimated usage (the usage only comes with
     the terminal event).
 
+    ``tools`` / ``max_tool_calls`` are passed to the request (the chat's web
+    search, task-614). ``on_web_search`` follows the ``response.web_search_call.*``
+    events; the ``url_citation`` annotations and the number of searches come back
+    on the result.
+
     There is no total timeout: a long answer is bounded by the caller's own
     deadline. ``LLM_TIMEOUT_SECONDS`` bounds the silence between two reads
-    instead, which covers a reasoning model thinking before its first token.
+    instead, which covers a reasoning model thinking (or searching) before its
+    first token.
     """
     api_key = _require_api_key()
     timeout = aiohttp.ClientTimeout(
         total=None,
         sock_read=int(os.environ.get("LLM_TIMEOUT_SECONDS", "180")),
     )
-    payload = request_payload(messages, prompt_cache_key=prompt_cache_key)
+    payload = request_payload(
+        messages,
+        prompt_cache_key=prompt_cache_key,
+        tools=tools,
+        max_tool_calls=max_tool_calls,
+    )
     payload["stream"] = True
 
     parts: List[str] = []
-    model: Optional[str] = None
-    final: Optional[Dict[str, Any]] = None
-    raw_usage: Optional[Dict[str, Any]] = None
+    reading = _StreamReading(on_web_search)
 
     def interrupted(exc: BaseException) -> LlmStreamInterruptedError:
         partial = "".join(parts)
         return LlmStreamInterruptedError(
             f"llm_stream_interrupted: {type(exc).__name__}: {exc}"[:500],
             partial_content=partial,
-            usage=_stream_usage(raw_usage, model, messages, partial),
+            usage=reading.usage(messages, partial),
             failure_kind=getattr(exc, "failure_kind", LLMFailureKind.TRANSIENT),
             refusal_reason=getattr(exc, "refusal_reason", None),
             provider_status=getattr(exc, "provider_status", None),
+            url_citations=reading.url_citations,
         )
 
     async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -454,18 +623,10 @@ async def stream(
                         continue
                     event = json.loads(data)
                     _raise_for_stream_error(event, log_fields)
-                    event_type = event.get("type")
-                    snapshot = event.get("response")
-                    if isinstance(snapshot, dict):
-                        # response.created / in_progress / completed / incomplete
-                        # all carry the response object: the model that answers.
-                        model = snapshot.get("model") or model
-                    if event_type in _TERMINAL_EVENTS and isinstance(snapshot, dict):
-                        final = snapshot
-                        if snapshot.get("usage"):
-                            raw_usage = dict(snapshot["usage"])
-                        break
-                    if event_type != "response.output_text.delta":
+                    if event.get("type") != "response.output_text.delta":
+                        await reading.read(event)
+                        if reading.final is not None:
+                            break
                         continue
                     text = event.get("delta")
                     if not text:
@@ -476,8 +637,9 @@ async def stream(
                         content = "".join(parts)
                         return LlmStreamResult(
                             content=content,
-                            usage=_stream_usage(raw_usage, model, messages, content),
+                            usage=reading.usage(messages, content),
                             status=None,
+                            url_citations=reading.url_citations,
                             stopped=True,
                         )
             except Exception as exc:
@@ -486,11 +648,13 @@ async def stream(
                 raise interrupted(exc) from exc
 
     content = "".join(parts)
+    final = reading.final
     return LlmStreamResult(
         content=content,
-        usage=_stream_usage(raw_usage, model, messages, content),
+        usage=reading.usage(messages, content),
         status=final.get("status") if final else None,
         incomplete_reason=_incomplete_reason(final) if final else None,
+        url_citations=reading.url_citations,
     )
 
 
@@ -534,13 +698,3 @@ def _raise_for_stream_error(event: Dict[str, Any], log_fields: Dict[str, Any]) -
         )
     raise LlmResponseFailedError(f"llm_stream_error: {body[:300]}", failure_kind=failure.kind)
 
-
-def _stream_usage(
-    raw_usage: Optional[Dict[str, Any]],
-    model: Optional[str],
-    messages: Sequence[LlmMessage],
-    content: str,
-) -> ArtifactLlmUsage:
-    if raw_usage is None:
-        return estimate_usage(messages, content, model=model)
-    return read_usage({**raw_usage, "model": model or LLM_MODEL})

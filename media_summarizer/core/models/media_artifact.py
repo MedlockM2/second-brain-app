@@ -148,6 +148,10 @@ class ArtifactLlmUsage(BaseModel):
     cached_tokens: int = 0
     cache_write_tokens: int = 0
     completion_tokens: int = 0
+    #: Web searches the call ran (the chat's hosted ``web_search`` tool, task-614),
+    #: billed per call on top of the tokens and included in ``cost_eur``. Absent
+    #: when none ran, so an artifact's usage keeps its shape.
+    web_search_calls: Optional[int] = None
     cost_eur: float = 0.0
     #: ``True`` when the provider never delivered its usage block -- a streamed
     #: answer cut before its last chunk -- and the counts above are estimated from

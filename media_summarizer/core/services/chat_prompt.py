@@ -16,14 +16,22 @@ that does not fit is refused, never cut.
 
 **Ceilings** are explicit parameters (Decision point 8): the question's
 server-side size guard, the turns of a conversation, one turn in
-flight per account, and the context budget. The output ceiling is not a chat
-parameter: the chat keeps ``LLM_MAX_OUTPUT_TOKENS`` of ``llm_config`` (owner
-decision of 2026-10-10); how long an answer is, is said in the instructions.
+flight per account, the context budget and the web searches of a turn. The
+output ceiling is not a chat parameter: the chat keeps ``LLM_MAX_OUTPUT_TOKENS``
+of ``llm_config`` (owner decision of 2026-10-10); how long an answer is, is said
+in the instructions.
+
+**Web search** (task-614, owner decision of 2026-11-06). The chat, and only the
+chat, sends the hosted ``web_search`` tool of the Responses API with the
+provider's ``tool_choice: auto``: the model searches when it needs to. The
+instructions say when, and keep the corpus tags ``[S#]`` for the corpus. The
+pages it cites become ``[W#]`` tags (``chat_web_citations``); a past answer goes
+back to the model with them expanded to ``([title](url))``.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from media_summarizer.core.models.chat import (
     ChatAssistantMessage,
@@ -32,6 +40,7 @@ from media_summarizer.core.models.chat import (
     ChatUserMessage,
 )
 from media_summarizer.core.services import llm_corpus
+from media_summarizer.core.services.chat_web_citations import expand_web_refs
 from media_summarizer.core.services.llm_client import LlmMessage
 
 #: Server-only guard against oversized questions, not a composer limit (task-503).
@@ -59,6 +68,22 @@ ESTIMATOR_ERROR = 0.10
 #: answers by their visible text) and the question -- and never the output ceiling,
 #: which the step does not price and which would only take room from the corpus.
 CONTEXT_BUDGET_TOKENS = int(PRICE_STEP_INPUT_TOKENS / (1 + ESTIMATOR_ERROR))
+
+#: Built-in tool calls one turn may make, sent as ``max_tool_calls``. The
+#: Responses API counts every built-in tool call against it, ``open_page`` and
+#: ``find_in_page`` included, and ignores the calls past it (reference read
+#: 2026-11-06). Three lets the model search, then search again to refine or
+#: cross-check, or open the page it found: enough for a conversational answer
+#: grounded first on the corpus, where a research run would need more. Each search
+#: is billed $0.01 and brings in pages billed as input, so three bounds the call
+#: price at $0.03 a turn -- about twice the worst output of the shared ceiling --
+#: and caps how much web content a turn can add. The beta budget reserves the
+#: three at admission.
+MAX_WEB_SEARCHES_PER_TURN = 3
+
+#: The hosted web search tool, as the chat sends it. Default search context and
+#: no domain filter: the model is told when to search, not where.
+WEB_SEARCH_TOOL: Dict[str, Any] = {"type": "web_search"}
 
 #: Bytes allowed per source for its corpus header (tag, title, language, dates),
 #: used only when the corpus text is not in hand -- the API checks the budget from
@@ -102,6 +127,13 @@ def chat_instructions(language: Optional[str]) -> str:
             "a source carry no tag, and where it matters, say in passing that they go "
             "beyond the sources. Never put a tag on something the source does not say.",
             llm_corpus.source_ref_instruction(required=True),
+            "- You can search the web. Search only when the question needs facts the "
+            "sources do not give: something recent, something to check or update, or "
+            "outside knowledge you are not sure of. When the sources or plain "
+            "reasoning answer the question, do not search.",
+            "- Cite each web page you rely on with a Markdown link to it right after "
+            "the statement it supports. A fact found on the web never carries a source "
+            'tag like "[S2]": those tags are only for the sources above.',
             "- Keep an answer to a few short paragraphs unless the question asks for "
             "more detail, a list or a longer explanation.",
             llm_corpus.subject_matter_instruction(),
@@ -133,7 +165,9 @@ def history_turns(messages: Sequence[object]) -> List[Tuple[str, str]]:
             continue
         question = questions.get(message.turn_index)
         if question is not None:
-            turns.append((question, message.text))
+            # The model reads its web citations back as links, never as a bare
+            # ``[W#]`` it could not resolve (task-614).
+            turns.append((question, expand_web_refs(message.text, message.web_sources)))
     return turns
 
 

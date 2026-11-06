@@ -1058,13 +1058,13 @@ Response `200` — the summary fields above, plus:
       "status": "interrupted", "interruption_cause": "cancelled", "error_code": null,
       "attempt_id": "at_…", "completed_at": "…" }
   ],
-  "active_generation": { "turn_id": "tn_…", "turn_index": 2, "attempt_id": "at_…", "last_seq": 14 }
+  "active_generation": { "turn_id": "tn_…", "turn_index": 2, "attempt_id": "at_…", "last_seq": 14, "web_searching": false }
 }
 ```
 
-- `messages`: each turn's question then its answer, turns in order. Only assistant messages carry `status`, `interruption_cause` (`cancelled`, `output_limit`, `provider_error`, with `interrupted` only), `error_code`, `attempt_id`, `completed_at`. An assistant message with no `text` is a turn still running or one that failed before any text. `error_code` names why a turn failed or was cut, among them `dispatch_failed` (the turn could not be sent to its worker) and `generation_lost` (its generation was lost, see **Lost turns** below); every failed turn is offered for a retry, which is a new question with a new `client_request_id`
+- `messages`: each turn's question then its answer, turns in order. Only assistant messages carry `status`, `interruption_cause` (`cancelled`, `output_limit`, `provider_error`, with `interrupted` only), `error_code`, `attempt_id`, `completed_at` and `web_sources`. **Web citations (task-614).** The chat model may search the web; an answer's `text` then cites pages as `[W1]`, `[W2]` … tags, which resolve through `web_sources: [{ref: "W1", url, title}]` (one entry per URL, in order of first citation; `[]` when none), apart from the corpus tags `[S1]` … that resolve through `sources`. An assistant message with no `text` is a turn still running or one that failed before any text. `error_code` names why a turn failed or was cut, among them `dispatch_failed` (the turn could not be sent to its worker) and `generation_lost` (its generation was lost, see **Lost turns** below); every failed turn is offered for a retry, which is a new question with a new `client_request_id`
 - **Lost turns.** A turn is never relaunched automatically. Its generation is lost when it waited in the queue more than 300 s without starting, or when its worker's lease ran out more than 15 s ago (`core/models/chat.is_attempt_lost`). This read seals such a turn before answering: `failed` / `generation_lost`, its budget released, when no text was shown; `interrupted` / `provider_error` with `error_code: generation_lost` and the partial text otherwise
-- `active_generation`: the generation in flight — `(turn_id, attempt_id)` is the generation identity the stream is resumed with, `last_seq` the highest fragment sequence persisted for that attempt (`null` before the first). `null` when no turn is running
+- `active_generation`: the generation in flight — `(turn_id, attempt_id)` is the generation identity the stream is resumed with, `last_seq` the highest fragment sequence persisted for that attempt (`null` before the first), `web_searching` true while the model runs a web search. `null` when no turn is running
 - unknown or foreign id: `404 conversation_not_found`
 
 ### POST /api/chat/conversations/{conversation_id}/turns
@@ -1157,8 +1157,9 @@ Otherwise `200`, `Content-Type: text/event-stream`. Events, in order:
 | `event` | `id` | `data` | Meaning |
 | --- | --- | --- | --- |
 | `generation` | — | `{turn_id, turn_index, attempt_id}` | the generation this stream follows, always first |
-| `fragment` | the sequence | `{seq, text}` | the next piece of the answer. Sequences of one attempt start at 0 and grow by 1; the app drops any `seq` it already holds |
-| `end` | — | `{turn_id, attempt_id, status, interruption_cause, error_code, last_seq, text}` | sent only after the turn's final state was **read back persisted**: `status` is `completed`, `interrupted` (with its cause: `cancelled`, `output_limit`, `provider_error`) or `failed`; `text` is the final answer as stored. The stream then closes |
+| `fragment` | the sequence | `{seq, text, web_sources?}` | the next piece of the answer. Sequences of one attempt start at 0 and grow by 1; the app drops any `seq` it already holds. From the first web citation on, every fragment carries `web_sources`, all the pages the `[W#]` tags so far resolve to; the latest list received is the one to use |
+| `search` | — | `{active}` | task-614: `true` when the model starts a web search, `false` when it ends (a new fragment also means it is over). Read from the attempt about once a second while no text arrives |
+| `end` | — | `{turn_id, attempt_id, status, interruption_cause, error_code, last_seq, text, web_sources}` | sent only after the turn's final state was **read back persisted**: `status` is `completed`, `interrupted` (with its cause: `cancelled`, `output_limit`, `provider_error`) or `failed`; `text` is the final answer as stored. The stream then closes |
 | `reconnect` | — | `{turn_id, attempt_id, after_seq}` | the stream reached its own time limit (14 minutes); the app reconnects with this cursor. Nothing is lost: fragments live a day |
 
 If the generation is lost while the stream is open, the stream closes **without** an `end`: this door is read-only and no terminal state is persisted yet. The app reads the conversation, which seals the turn; reopening the stream answers `204`.

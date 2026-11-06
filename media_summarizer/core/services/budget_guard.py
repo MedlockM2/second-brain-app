@@ -68,6 +68,7 @@ from media_summarizer.core.models.failure_codes import MediaFailureCode
 from media_summarizer.core.models.media_artifact import ArtifactLlmUsage
 from media_summarizer.core.services import beta_budget, operator_guard
 from media_summarizer.core.services.beta_budget import ItemTooLargeError, PricingContext
+from media_summarizer.core.services.chat_prompt import MAX_WEB_SEARCHES_PER_TURN
 from media_summarizer.core.services.llm_config import (
     LLM_MAX_OUTPUT_TOKENS,
     LLM_MODEL,
@@ -1029,8 +1030,13 @@ def llm_call_line(
     messages: Sequence[Mapping[str, Any]],
     text_format: Optional[Mapping[str, Any]] = None,
     max_output_tokens: int = LLM_MAX_OUTPUT_TOKENS,
+    web_search_calls: int = 0,
 ) -> ReservationLine:
-    """Bound of a generation, a preview or a chat turn, from the request about to leave."""
+    """Bound of a generation, a preview or a chat turn, from the request about to leave.
+
+    ``web_search_calls`` is the request's ``max_tool_calls`` when it carries the
+    web search tool (the chat), reserved at the call price.
+    """
     return beta_budget.llm_line(
         ctx,
         component=component,
@@ -1038,6 +1044,7 @@ def llm_call_line(
         input_tokens=request_input_tokens(messages, text_format),
         max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
         max_output_tokens=max_output_tokens,
+        web_search_calls=web_search_calls,
     )
 
 
@@ -1053,7 +1060,8 @@ def chat_turn_admission_line(ctx: PricingContext, *, estimated_input_tokens: int
     (``chat_prompt.estimate_turn_input_tokens``, bytes over ``BYTES_PER_TOKEN``,
     on the high side of the request the worker sends). Turned back into bytes it
     is the same byte-count bound as :func:`request_input_tokens`; the output is the
-    shared ceiling every chat call sends.
+    shared ceiling every chat call sends, and the web searches the most the turn
+    may run (``chat_prompt.MAX_WEB_SEARCHES_PER_TURN``, task-614).
     """
     return beta_budget.llm_line(
         ctx,
@@ -1063,6 +1071,7 @@ def chat_turn_admission_line(ctx: PricingContext, *, estimated_input_tokens: int
         max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
         max_output_tokens=LLM_MAX_OUTPUT_TOKENS,
         measured=False,
+        web_search_calls=MAX_WEB_SEARCHES_PER_TURN,
     )
 
 
@@ -1108,6 +1117,7 @@ async def llm_cost(usage: ArtifactLlmUsage) -> MeasuredCost:
         cached_tokens=usage.cached_tokens,
         cache_write_tokens=usage.cache_write_tokens,
         completion_tokens=usage.completion_tokens,
+        web_search_calls=usage.web_search_calls or 0,
     )
 
 

@@ -54,6 +54,7 @@ from media_summarizer.core.models.chat import (
     ChatScope,
     ChatTurnStatus,
     ChatUserMessage,
+    ChatWebSource,
     attempt_sk,
     attempts_prefix,
     conversation_children_prefix,
@@ -645,6 +646,42 @@ class FragmentAlreadyWrittenError(Exception):
     """This attempt already wrote a fragment with this sequence number."""
 
 
+async def set_web_search_state(
+    *,
+    user_id: str,
+    conversation_id: str,
+    turn_index: int,
+    attempt_id: str,
+    searching: bool,
+) -> bool:
+    """Mark a generating attempt as running a web search, or not any more (task-614).
+
+    Fenced like the lease: ``False`` when the attempt is no longer live. The stream
+    door reads it and tells the app.
+    """
+    session = get_session()
+    update = "SET web_search_started_at = :now" if searching else "REMOVE web_search_started_at"
+    values: Dict[str, Any] = {":generating": ChatAttemptStatus.GENERATING.value}
+    if searching:
+        values[":now"] = _stored_timestamp(_now())
+    try:
+        async with session.resource("dynamodb", **_dynamodb_client_kwargs()) as dynamodb:
+            table = await dynamodb.Table(CHAT_TABLE)
+            await table.update_item(
+                Key=_key(user_id, attempt_sk(conversation_id, turn_index, attempt_id)),
+                UpdateExpression=update,
+                ConditionExpression="attribute_exists(sk) AND #st = :generating",
+                ExpressionAttributeNames={"#st": "status"},
+                ExpressionAttributeValues=values,
+            )
+            return True
+    except ClientError as exc:
+        if _is_conditional_failure(exc):
+            return False
+        _log_dynamodb_error("chat.set_web_search_state", exc, table=CHAT_TABLE, user_id=user_id)
+        raise
+
+
 async def append_fragment(fragment: ChatFragment) -> bool:
     """Write one flush of streamed text, fenced on its attempt being live.
 
@@ -738,6 +775,7 @@ async def seal_turn(
     error_code: Optional[str] = None,
     error_message: Optional[str] = None,
     llm_usage: Optional[ArtifactLlmUsage] = None,
+    web_sources: Optional[Sequence[ChatWebSource]] = None,
     only_if_lost_at: Optional[datetime] = None,
 ) -> bool:
     """Persist a turn's final answer and terminal state, from its live attempt only.
@@ -781,6 +819,7 @@ async def seal_turn(
         ("error_code", error_code),
         ("error_message", error_message[:500] if error_message else None),
         ("llm_usage", _usage_item(llm_usage)),
+        ("web_sources", [source.model_dump(exclude_none=True) for source in web_sources] if web_sources else None),
     ):
         if value is not None:
             # `text` is reserved by DynamoDB. Alias every optional field so all
@@ -852,16 +891,22 @@ def _stored_timestamp(value: datetime) -> str:
     return str(_DATETIME.dump_python(value, mode="json"))
 
 
-async def fragments_text(*, user_id: str, conversation_id: str, attempt_id: str) -> str:
-    """Every fragment of an attempt joined in order: the text its stream showed."""
+async def fragments_answer(
+    *, user_id: str, conversation_id: str, attempt_id: str
+) -> Tuple[str, Optional[List[ChatWebSource]]]:
+    """Every fragment of an attempt joined in order: the text its stream showed,
+    and the web sources its ``[W#]`` tags resolve to (the last list written)."""
     parts: List[str] = []
+    web_sources: Optional[List[ChatWebSource]] = None
     cursor = -1
     while page := await list_fragments(
         user_id=user_id, conversation_id=conversation_id, attempt_id=attempt_id, after_seq=cursor
     ):
-        parts.extend(fragment.text for fragment in page)
+        for fragment in page:
+            parts.append(fragment.text)
+            web_sources = fragment.web_sources or web_sources
         cursor = page[-1].seq
-    return "".join(parts)
+    return "".join(parts), web_sources
 
 
 #: The ``error_code`` of a turn sealed because its generation was lost.
@@ -885,7 +930,7 @@ async def seal_lost_attempt(attempt: ChatAttempt, *, now: Optional[datetime] = N
     refunds a ``failed`` seal (``chat_service.seal_if_lost``).
     """
     now = now or _now()
-    text = await fragments_text(
+    text, web_sources = await fragments_answer(
         user_id=attempt.user_id, conversation_id=attempt.conversation_id, attempt_id=attempt.attempt_id
     )
     shown = bool(text.strip())
@@ -899,6 +944,7 @@ async def seal_lost_attempt(attempt: ChatAttempt, *, now: Optional[datetime] = N
         text=text if shown else None,
         interruption_cause=ChatInterruptionCause.PROVIDER_ERROR if shown else None,
         error_code=GENERATION_LOST,
+        web_sources=web_sources if shown else None,
         only_if_lost_at=now,
     )
     return status if sealed else None

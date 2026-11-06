@@ -361,6 +361,10 @@ class Tariffs:
     def x_per_post(self) -> Decimal:
         return self._price("x_api", "post", "usd")
 
+    def web_search_per_call(self) -> Decimal:
+        """One call of the Responses API's hosted ``web_search`` tool (task-614)."""
+        return self._price("openai_tools", "web_search", "per_call")
+
     def llm_rates(self, model: str, input_tokens: int) -> LlmRates:
         """The rates of ``model`` for a request of ``input_tokens``.
 
@@ -593,8 +597,14 @@ def llm_line(
     max_input_tokens: int,
     max_output_tokens: int,
     measured: bool = True,
+    web_search_calls: int = 0,
 ) -> ReservationLine:
     """Bound of a generation, a chat turn or the automatic blurb.
+
+    ``web_search_calls`` is the most web searches the call may run (the chat's
+    ``max_tool_calls``, task-614), each reserved at its call price. The pages they
+    bring in are input tokens the request bytes do not bound: they are settled on
+    the provider's usage (rule 8).
 
     ``input_tokens`` is the complete request measured before it is sent
     (instructions, schema, corpus, history, question); unknown, the model's largest
@@ -608,8 +618,13 @@ def llm_line(
         kind=ProviderKind.LLM,
         provider="openai",
         model=model,
-        quantities={"input_tokens": tokens, "output_tokens": max_output_tokens},
-        bound_usd=llm_bound_usd(ctx, model=model, input_tokens=tokens, output_tokens=max_output_tokens),
+        quantities={
+            "input_tokens": tokens,
+            "output_tokens": max_output_tokens,
+            **({"web_search_calls": web_search_calls} if web_search_calls else {}),
+        },
+        bound_usd=llm_bound_usd(ctx, model=model, input_tokens=tokens, output_tokens=max_output_tokens)
+        + Decimal(max(0, web_search_calls)) * ctx.tariffs.web_search_per_call(),
         measured=measured and is_measured,
     )
 
@@ -729,12 +744,14 @@ def llm_cost(
     cached_tokens: int,
     cache_write_tokens: int,
     completion_tokens: int,
+    web_search_calls: int = 0,
 ) -> MeasuredCost:
     """Cost of one call from the provider's usage block.
 
     Cached and cache-written tokens are subsets of ``prompt_tokens``: they replace
     the fresh rate on those tokens, they are never added on top. Reasoning tokens
-    are already inside ``completion_tokens`` and are not counted twice.
+    are already inside ``completion_tokens`` and are not counted twice. Web
+    searches are billed per call on top (task-614).
     """
     prompt = max(0, prompt_tokens)
     rates = ctx.tariffs.llm_rates(model, prompt)
@@ -748,6 +765,8 @@ def llm_cost(
         + Decimal(written) * rates.cache_write
         + Decimal(output) * rates.output
     ) / Decimal(1_000_000)
+    searches = max(0, web_search_calls)
+    usd += Decimal(searches) * ctx.tariffs.web_search_per_call()
     return MeasuredCost(
         usd=usd,
         usage={
@@ -755,6 +774,7 @@ def llm_cost(
             "cached_tokens": cached,
             "cache_write_tokens": written,
             "completion_tokens": output,
+            **({"web_search_calls": searches} if searches else {}),
         },
         tariff_version=ctx.tariffs.version,
     )

@@ -105,6 +105,14 @@ class ConversationListResponse(BaseModel):
     next_cursor: Optional[str] = None
 
 
+class ChatWebSourceResponse(BaseModel):
+    """A web page an answer cites (task-614): ``[W1]`` in the text is ``ref`` ``W1``."""
+
+    ref: str
+    url: str
+    title: Optional[str] = None
+
+
 class ChatMessageResponse(BaseModel):
     turn_id: str
     turn_index: int
@@ -117,6 +125,9 @@ class ChatMessageResponse(BaseModel):
     error_code: Optional[str] = None
     attempt_id: Optional[str] = None
     completed_at: Optional[str] = None
+    #: Assistant messages only: what the ``[W#]`` tags of ``text`` resolve to,
+    #: kept apart from the corpus ``sources`` (task-614). Empty when none.
+    web_sources: List[ChatWebSourceResponse] = Field(default_factory=list)
 
 
 class ActiveGenerationResponse(BaseModel):
@@ -127,6 +138,8 @@ class ActiveGenerationResponse(BaseModel):
     attempt_id: str
     #: Highest fragment sequence persisted for this attempt; ``None`` before the first.
     last_seq: Optional[int] = None
+    #: The model is running a web search right now (task-614).
+    web_searching: bool = False
 
 
 class SourceDriftResponse(BaseModel):
@@ -203,6 +216,10 @@ def _message(message: ChatMessage) -> ChatMessageResponse:
         response.error_code = message.error_code
         response.attempt_id = message.attempt_id
         response.completed_at = message.completed_at.isoformat() if message.completed_at else None
+        response.web_sources = [
+            ChatWebSourceResponse(ref=source.ref, url=source.url, title=source.title)
+            for source in message.web_sources or []
+        ]
     return response
 
 
@@ -233,6 +250,7 @@ def _detail(
                 turn_index=active.turn_index,
                 attempt_id=active.attempt_id,
                 last_seq=active.last_seq,
+                web_searching=active.web_searching,
             )
             if active is not None
             else None

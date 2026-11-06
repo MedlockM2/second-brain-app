@@ -19,6 +19,7 @@ export function parseSseBlock(block: string): ChatStreamEvent | null {
     switch (name) {
       case "generation":
       case "fragment":
+      case "search":
       case "end":
       case "reconnect":
         return { type: name, data: parsed } as ChatStreamEvent;

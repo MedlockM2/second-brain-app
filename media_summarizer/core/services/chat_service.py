@@ -144,13 +144,15 @@ class ActiveGeneration:
     """The generation in flight: what the app resumes the stream from.
 
     ``last_seq`` is the highest fragment sequence persisted for this attempt,
-    ``None`` when none is written yet.
+    ``None`` when none is written yet. ``web_searching`` is true while the model
+    runs a web search (task-614).
     """
 
     turn_id: str
     turn_index: int
     attempt_id: str
     last_seq: Optional[int]
+    web_searching: bool = False
 
 
 @dataclass(frozen=True)
@@ -326,6 +328,9 @@ async def get_conversation_view(*, user_id: str, conversation_id: str) -> Conver
         and conversation.active_turn_id
         and conversation.active_turn_index is not None
     ):
+        attempt = await chat_db.get_attempt(
+            user_id, conversation_id, conversation.active_turn_index, conversation.active_attempt_id
+        )
         active = ActiveGeneration(
             turn_id=conversation.active_turn_id,
             turn_index=conversation.active_turn_index,
@@ -335,6 +340,7 @@ async def get_conversation_view(*, user_id: str, conversation_id: str) -> Conver
                 conversation_id=conversation_id,
                 attempt_id=conversation.active_attempt_id,
             ),
+            web_searching=attempt is not None and attempt.web_search_started_at is not None,
         )
     return ConversationView(
         conversation=conversation,

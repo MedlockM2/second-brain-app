@@ -22,7 +22,11 @@ a **sequence cursor** (Decision point 6):
   the live one in the body;
 - otherwise ``200 text/event-stream``: the fragments after the cursor are replayed,
   then new ones are followed by re-reading the fragment range every
-  :data:`POLL_INTERVAL_SECONDS`. Each event carries its sequence number as its SSE
+  :data:`POLL_INTERVAL_SECONDS`. A fragment written after the answer's first web
+  citation carries ``web_sources``, every page its ``[W#]`` tags so far resolve to
+  (task-614); the latest list read is the one to use. While the model runs a web
+  search, a ``search`` event says so (``{"active": true}``), and another says
+  when it is over (``{"active": false}``). Each event carries its sequence number as its SSE
   ``id`` so the app de-duplicates across reconnections. The terminal ``end`` event
   is sent only once the turn's final state is **read back persisted**, then the
   stream closes. A stream that reaches :data:`MAX_STREAM_SECONDS` ends with
@@ -62,7 +66,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send  # noqa: E402
 
 from media_summarizer.api.dependencies.auth import get_current_user  # noqa: E402
 from media_summarizer.core.models.auth import AuthUser  # noqa: E402
-from media_summarizer.core.models.chat import TERMINAL_TURN_STATUSES, is_attempt_lost  # noqa: E402
+from media_summarizer.core.models.chat import (  # noqa: E402
+    TERMINAL_TURN_STATUSES,
+    ChatFragment,
+    is_attempt_lost,
+)
 from media_summarizer.utils import chat_db  # noqa: E402
 from media_summarizer.utils.logging_config import log_event, setup_logging  # noqa: E402
 
@@ -115,6 +123,13 @@ class _WebOriginCors:
 
 
 app.add_middleware(_WebOriginCors)
+
+
+def _fragment_event(fragment: ChatFragment) -> str:
+    data: Dict[str, object] = {"seq": fragment.seq, "text": fragment.text}
+    if fragment.web_sources:
+        data["web_sources"] = [source.model_dump(exclude_none=True) for source in fragment.web_sources]
+    return _event("fragment", data, event_id=fragment.seq)
 
 
 def _event(name: str, data: Dict[str, object], *, event_id: Optional[int] = None) -> str:
@@ -204,6 +219,8 @@ async def _follow(
     started = time.monotonic()
     last_sent = started
     last_state_check = 0.0
+    #: What the app was last told about a web search (task-614).
+    searching = False
     yield _event("generation", {"turn_id": turn_id, "turn_index": turn_index, "attempt_id": attempt_id})
 
     while True:
@@ -215,7 +232,7 @@ async def _follow(
         )
         for fragment in fragments:
             cursor = fragment.seq
-            yield _event("fragment", {"seq": fragment.seq, "text": fragment.text}, event_id=fragment.seq)
+            yield _fragment_event(fragment)
             last_sent = time.monotonic()
 
         now = time.monotonic()
@@ -238,7 +255,7 @@ async def _follow(
                 ):
                     for fragment in remaining:
                         cursor = fragment.seq
-                        yield _event("fragment", {"seq": fragment.seq, "text": fragment.text}, event_id=fragment.seq)
+                        yield _fragment_event(fragment)
                 yield _event(
                     "end",
                     {
@@ -251,6 +268,9 @@ async def _follow(
                         "error_code": answer.error_code,
                         "last_seq": cursor,
                         "text": answer.text,
+                        "web_sources": [
+                            source.model_dump(exclude_none=True) for source in answer.web_sources or []
+                        ],
                     },
                 )
                 return
@@ -267,6 +287,10 @@ async def _follow(
                     attempt_id=attempt_id,
                 )
                 return
+            if (attempt.web_search_started_at is not None) != searching:
+                searching = not searching
+                yield _event("search", {"active": searching})
+                last_sent = now
 
         if now - started >= MAX_STREAM_SECONDS:
             yield _event("reconnect", {"turn_id": turn_id, "attempt_id": attempt_id, "after_seq": cursor})

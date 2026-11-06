@@ -8,6 +8,7 @@ from typing import List, Optional
 from media_summarizer.core.models.beta_budget import BudgetRefusal, Component, ReservationLine
 from media_summarizer.core.models.budget_contracts import BudgetForecast, BudgetState, ForecastRequest
 from media_summarizer.core.services import beta_budget, budget_guard, pricing_config_service
+from media_summarizer.core.services.chat_prompt import MAX_WEB_SEARCHES_PER_TURN
 from media_summarizer.core.services.llm_config import (
     LLM_MAX_OUTPUT_TOKENS,
     LLM_MODEL,
@@ -75,6 +76,9 @@ def _lines(ctx: beta_budget.PricingContext, request: ForecastRequest) -> List[Re
                 max_input_tokens=LLM_MODEL_MAX_INPUT_TOKENS,
                 max_output_tokens=LLM_MAX_OUTPUT_TOKENS,
                 measured=False,
+                # A chat turn may search the web (task-614): its admission
+                # reserves the most searches it may run.
+                web_search_calls=MAX_WEB_SEARCHES_PER_TURN if request.operation == "chat_turn" else 0,
             )
         ]
     if request.operation == "audio_import":
