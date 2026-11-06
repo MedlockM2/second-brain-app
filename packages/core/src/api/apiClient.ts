@@ -1,4 +1,24 @@
-import { createHttpError, parseErrorResponse } from "./httpError";
+import { createHttpError, parseErrorResponse, type HttpError } from "./httpError";
+
+/**
+ * The header that ties one app call to the server's log lines for it
+ * (task-610). The API's `request_id_middleware` takes it as is, binds it to
+ * every log line of the request and echoes it on the response.
+ */
+export const REQUEST_ID_HEADER = "X-Request-ID";
+
+/**
+ * The request id of the call an error comes from, when the shared client
+ * raised it: an HTTP refusal, or a transport failure (offline, timeout) that
+ * never got an answer. The crash reporters tag events with it.
+ */
+export function requestIdOf(error: unknown): string | undefined {
+  const value =
+    typeof error === "object" && error !== null
+      ? (error as HttpError).requestId
+      : undefined;
+  return typeof value === "string" ? value : undefined;
+}
 
 export type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -23,6 +43,8 @@ export type ApiClientPlatform = {
   refreshAccessToken: () => Promise<string>;
   /** The error raised when there is no session to send with. */
   sessionExpired: { message: string; code: string };
+  /** A fresh random id (a UUID) for the `X-Request-ID` of one request. */
+  newRequestId: () => string;
 };
 
 export type ApiClient = {
@@ -35,19 +57,22 @@ export type ApiClient = {
 async function parseResponse<T>(
   response: Response,
   fallbackMessage: string,
+  requestId: string,
 ): Promise<T> {
   if (!response.ok) {
     const { message, code, quotaErrorCode, details } = await parseErrorResponse(
       response,
       fallbackMessage,
     );
-    throw createHttpError(
+    const error = createHttpError(
       message,
       response.status,
       code,
       quotaErrorCode,
       details,
     );
+    error.requestId = requestId;
+    throw error;
   }
 
   // Handle 204 No Content
@@ -99,22 +124,40 @@ export function createApiClient(platform: ApiClientPlatform): ApiClient {
     const { method = "GET", body, headers: extraHeaders } = options;
     const url = `${platform.baseUrl}${path}`;
 
-    const response = await sendAuthenticated((accessToken) => {
+    // One id per HTTP request: the replay after a refused token gets its own,
+    // and the error carries the id of the attempt that actually failed.
+    let requestId = "";
+    const response = await sendAuthenticated(async (accessToken) => {
+      requestId = platform.newRequestId();
       const init: RequestInit = {
         method,
         headers: {
           "Content-Type": "application/json",
           ...extraHeaders,
           Authorization: `Bearer ${accessToken}`,
+          [REQUEST_ID_HEADER]: requestId,
         },
       };
       if (body !== undefined) {
         init.body = JSON.stringify(body);
       }
-      return platform.fetch(url, init);
+      try {
+        return await platform.fetch(url, init);
+      } catch (error) {
+        // A transport failure has no response to read an id from: the app
+        // keeps the one it sent, which the API logged if the request arrived.
+        if (typeof error === "object" && error !== null) {
+          (error as HttpError).requestId = requestId;
+        }
+        throw error;
+      }
     });
 
-    return parseResponse<T>(response, `Request failed: ${method} ${path}`);
+    return parseResponse<T>(
+      response,
+      `Request failed: ${method} ${path}`,
+      requestId,
+    );
   }
 
   return { sendAuthenticated, apiRequest };

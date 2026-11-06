@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/react-native";
 import * as Updates from "expo-updates";
 import { AppState } from "react-native";
 
+import { requestIdOf } from "@media-summarizer/core/api/apiClient";
 import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
 
 import { Config } from "../constants/config";
@@ -138,18 +139,73 @@ function withoutQuery(url: string): string {
   return cut === -1 ? url : url.slice(0, cut);
 }
 
+// `@sentry/react-native` does not re-export the hint types.
+type BreadcrumbHint = Parameters<
+  NonNullable<Sentry.ReactNativeOptions["beforeBreadcrumb"]>
+>[1];
+type EventHint = Parameters<NonNullable<Sentry.ReactNativeOptions["beforeSend"]>>[1];
+
+/** What the SDK's XHR instrumentation keeps on the request it watches. */
+type WatchedXhr = XMLHttpRequest & {
+  __sentry_xhr_v3__?: { request_headers?: Record<string, string> };
+};
+
+/**
+ * The `X-Request-ID` of the call behind an HTTP breadcrumb (task-610). React
+ * Native's `fetch` goes out through XHR, so the hint carries the `xhr`: the id
+ * the app sent (headers the SDK recorded, lower-cased), else the one the API
+ * echoed back. Only the API sets it, so other hosts simply have none.
+ */
+function requestIdFromHint(hint: BreadcrumbHint | undefined): string | undefined {
+  const xhr = hint?.xhr as WatchedXhr | undefined;
+  if (!xhr) return undefined;
+  try {
+    return (
+      xhr.__sentry_xhr_v3__?.request_headers?.["x-request-id"] ??
+      xhr.getResponseHeader("x-request-id") ??
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * HTTP breadcrumbs keep the method, the path and the status, but lose the
  * query string: that is where a search term (`/api/search/transcripts?q=`) and
  * the signature of a presigned upload URL travel, and neither belongs in a
- * crash report.
+ * crash report. They gain the call's `request_id`, the key to its server logs.
  */
-function scrubBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
+function scrubBreadcrumb(
+  breadcrumb: Sentry.Breadcrumb,
+  hint?: BreadcrumbHint,
+): Sentry.Breadcrumb {
   const url = breadcrumb.data?.url;
   if (breadcrumb.type === "http" && typeof url === "string") {
-    return { ...breadcrumb, data: { ...breadcrumb.data, url: withoutQuery(url) } };
+    const requestId = requestIdFromHint(hint);
+    return {
+      ...breadcrumb,
+      data: {
+        ...breadcrumb.data,
+        url: withoutQuery(url),
+        ...(requestId ? { request_id: requestId } : {}),
+      },
+    };
   }
   return breadcrumb;
+}
+
+/**
+ * Drops the app cancelling its own work (task-609) and tags an event raised by
+ * a failed API call with that call's `request_id` (task-610), so the issue
+ * leads straight to the server's log lines. Never an account identifier: the
+ * join with the account happens server-side, in the logs.
+ */
+function prepareEvent(event: Sentry.ErrorEvent, hint: EventHint): Sentry.ErrorEvent | null {
+  if (isNormalCancellation(hint.originalException)) return null;
+  const requestId = requestIdOf(hint.originalException);
+  if (requestId) event.tags = { ...event.tags, request_id: requestId };
+  return event;
 }
 
 /**
@@ -186,11 +242,9 @@ export function initCrashReporting(): void {
       tracesSampleRate: 1.0,
       initialScope: { tags: resolveTags() },
       beforeBreadcrumb: scrubBreadcrumb,
-      // The app cancelling its own work is not an issue (task-609): a read
-      // the resource cache superseded, a fetch aborted on purpose. Callers
-      // catch these at the source; this is the net for one that slips by.
-      beforeSend: (event, hint) =>
-        isNormalCancellation(hint.originalException) ? null : event,
+      // Cancellations dropped (callers catch them at the source; this is the
+      // net for one that slips by), failed API calls tagged with request_id.
+      beforeSend: prepareEvent,
       integrations: [
         Sentry.reactNativeErrorHandlersIntegration({
           onerror: false,

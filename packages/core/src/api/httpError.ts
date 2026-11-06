@@ -17,6 +17,11 @@ export type HttpError = Error & {
    * sentence where the API gave it an exact one.
    */
   details?: Record<string, unknown>;
+  /**
+   * The `X-Request-ID` of the call that failed (task-610): the key to the
+   * server's log lines for that request. Set by the shared API client.
+   */
+  requestId?: string;
 };
 
 export function createHttpError(

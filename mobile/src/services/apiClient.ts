@@ -1,3 +1,4 @@
+import * as Crypto from "expo-crypto";
 import { createApiClient } from "@media-summarizer/core/api/apiClient";
 import { Config } from "../constants/config";
 import { SessionManager } from "./sessionManager";
@@ -15,4 +16,5 @@ export const { sendAuthenticated, apiRequest } = createApiClient({
     message: SessionManager.SESSION_EXPIRED_MESSAGE,
     code: SessionManager.SESSION_EXPIRED_CODE,
   },
+  newRequestId: () => Crypto.randomUUID(),
 });

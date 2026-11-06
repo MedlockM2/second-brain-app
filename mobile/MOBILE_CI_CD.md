@@ -1936,14 +1936,58 @@ run `npx sentry-expo-upload-sourcemaps dist`.
 | `api.host` tag | the API host the build talks to, which answers "dev or prod?" directly: `preview` and `internal` use the -dev API, `production` the prod one | `Config.API_BASE_URL` |
 | `ota.update_id`, `ota.embedded_launch` tags | which bundle was running: two OTA updates on one build share release and dist | `expo-updates` |
 | `startup_guard.origin` tag | `fatal-error`, `render`, `unhandled-rejection` or `non-fatal-error` | the guard |
+| `request_id` tag | the `X-Request-ID` of the API call whose failure raised the event, when there is one; see "Request id: from an event to the server logs" below | the shared API client, via `beforeSend` |
 
 HTTP breadcrumbs keep method, path and status but drop the query string, which
-is where a search term and a presigned URL's signature travel. No user identity
-is ever attached. The store privacy answers ("Crash Data — Not linked to
-identity") depend on that: see `docs/compliance/apple-app-privacy.md`. For the
-same reason, `Sentry.setUser` is never called and must stay that way unless
-that declaration (Apple and Google Play both) is updated to match — see
-"Anonymous per-installation context: deliberately not done" below.
+is where a search term and a presigned URL's signature travel. They also carry
+the call's `request_id`. No account identifier is ever attached to an event,
+and `Sentry.setUser` is never called. The `request_id` does let the owner join
+an event to the server logs, which are tied to the account, so since task-610
+the store answers declare Crash Data and Performance Data as **linked to
+identity** (`docs/compliance/apple-app-privacy.md`,
+`docs/compliance/google-play-data-safety.md`).
+
+### Request id: from an event to the server logs
+
+Every call of the shared API client (`packages/core/src/api/apiClient.ts`,
+mobile and web) sends a fresh UUID in `X-Request-ID`. The API's
+`request_id_middleware` (`media_summarizer/api/main.py`) takes it as is, puts it
+on every log line of that request (`request_id` field of the JSON log) and
+echoes it on the response. A replay after a refused token gets its own id.
+
+In Sentry it shows up in two places:
+
+- **HTTP breadcrumbs**: `data.request_id` on each call to the API (read from
+  the request the SDK watched, or the header the API echoed);
+- **`request_id` tag** on an event raised by a failed API call, an HTTP
+  refusal or a transport failure (offline, timeout). The error the client
+  throws carries it (`requestIdOf(error)`), and `beforeSend` copies it to the
+  tag. Filter with `request_id:<id>`.
+
+To read the server side of that call, run this in CloudWatch Logs Insights on
+the API log group (`/aws/lambda/media-summarizer-api-dev` for dev, the builds
+whose `api.host` is the -dev API):
+
+```
+fields @timestamp, level, event, message, user_id
+| filter request_id = "<request_id>"
+| sort @timestamp asc
+```
+
+Or from a terminal:
+
+```bash
+AWS_PROFILE=second-brain-app aws logs start-query \
+  --log-group-name /aws/lambda/media-summarizer-api-dev \
+  --start-time $(( $(date +%s) - 86400 )) --end-time $(date +%s) \
+  --query-string 'fields @timestamp, level, event, message, user_id | filter request_id = "<request_id>" | sort @timestamp asc'
+# then: aws logs get-query-results --query-id <queryId>
+```
+
+A transport failure that never reached the API has no server line: an empty
+result for its id means the request did not arrive. The chat stream
+(`CHAT_STREAM_URL`, its own Lambda behind API Gateway) is not called through
+`apiRequest` and carries no `X-Request-ID`.
 
 ### App Hangs (iOS) & ANR (Android)
 
@@ -2088,15 +2132,13 @@ compare transfers.
 ### Anonymous per-installation context: deliberately not done
 
 `Sentry.setUser` was considered, to tell "one user crashing repeatedly" from
-"many users crashing once" — and dropped. `apple-app-privacy.md` ties the
-"Crash Data — Not linked to identity" answer explicitly to `crashReporting.ts`
-never calling it; adding even a purpose-built random UUID unrelated to the
-account would flip that declaration on both Apple and Google Play. No such
-anonymous identifier exists elsewhere in the app to begin with — RevenueCat's
+"many users crashing once" — and dropped. The owner wants no account
+identifier in Sentry: the join with an account goes through the `request_id`
+and the server logs (task-610), never through the event itself. A random
+per-installation id would also be the only one of its kind: RevenueCat's
 `appUserID` is bound to the real account id the moment a user signs in
-(`purchaseService.ts`), and the push token is documented as linked to
-identity. If this is revisited, budget for updating both compliance docs
-alongside the code.
+(`purchaseService.ts`), and the push token is linked to the account. If this
+is revisited, update both compliance docs alongside the code.
 
 ### Alert: new issue after a release
 

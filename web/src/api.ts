@@ -20,6 +20,7 @@ const client = createApiClient({
   getAccessToken,
   refreshAccessToken,
   sessionExpired: { message: SESSION_EXPIRED_MESSAGE, code: SESSION_EXPIRED_CODE },
+  newRequestId: () => crypto.randomUUID(),
 });
 
 export const { sendAuthenticated } = client;

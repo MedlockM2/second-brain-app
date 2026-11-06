@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/browser";
+import { requestIdOf } from "@media-summarizer/core/api/apiClient";
 import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
 import { Config } from "../config";
 
@@ -18,12 +19,42 @@ function withoutQuery(url: string): string {
   return cut === -1 ? url : url.slice(0, cut);
 }
 
-function scrubBreadcrumb(breadcrumb: Sentry.Breadcrumb): Sentry.Breadcrumb {
+/**
+ * The `X-Request-ID` of the call behind a fetch breadcrumb (task-610): the one
+ * the API echoed back, else the one the app sent. Only the API sets it.
+ */
+function requestIdFromHint(hint: Sentry.BreadcrumbHint | undefined): string | undefined {
+  try {
+    const echoed = (hint?.response as Response | undefined)?.headers?.get("x-request-id");
+    if (echoed) return echoed;
+    const init = (hint?.input as [unknown, RequestInit?] | undefined)?.[1];
+    return new Headers(init?.headers).get("x-request-id") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function scrubBreadcrumb(breadcrumb: Sentry.Breadcrumb, hint?: Sentry.BreadcrumbHint): Sentry.Breadcrumb {
   const url = breadcrumb.data?.url;
   if (typeof url === "string") {
-    return { ...breadcrumb, data: { ...breadcrumb.data, url: withoutQuery(url) } };
+    const requestId = breadcrumb.type === "http" ? requestIdFromHint(hint) : undefined;
+    return {
+      ...breadcrumb,
+      data: { ...breadcrumb.data, url: withoutQuery(url), ...(requestId ? { request_id: requestId } : {}) },
+    };
   }
   return breadcrumb;
+}
+
+/**
+ * Cancellations dropped (task-609); an event raised by a failed API call tagged
+ * with that call's `request_id` (task-610). Never an account identifier.
+ */
+function prepareEvent(event: Sentry.ErrorEvent, hint: Sentry.EventHint): Sentry.ErrorEvent | null {
+  if (isNormalCancellation(hint.originalException)) return null;
+  const requestId = requestIdOf(hint.originalException);
+  if (requestId) event.tags = { ...event.tags, request_id: requestId };
+  return event;
 }
 
 export function initCrashReporting(): void {
@@ -38,9 +69,7 @@ export function initCrashReporting(): void {
       // Full sampling while the beta's volume is low, as on mobile.
       tracesSampleRate: 1.0,
       beforeBreadcrumb: scrubBreadcrumb,
-      // A read the resource cache superseded or a fetch aborted on purpose is
-      // the app cancelling its own work, not an issue (task-609).
-      beforeSend: (event, hint) => (isNormalCancellation(hint.originalException) ? null : event),
+      beforeSend: prepareEvent,
     });
   } catch (error) {
     console.error("[crash-reporting] Sentry failed to initialise:", error);

@@ -55,6 +55,8 @@ Every row below is **collected** and **not processed only ephemerally**. Stored 
 
 **Purchase history:** the row covers the purchase/subscription flow where a purchase exists; beta access itself is not a purchase. Purchase status is distinct from card details, which Apple or Google handle directly.
 
+**Crash logs and Diagnostics:** Play's form has no "linked to identity" question, so these rows do not change. The disclosure still has to stay true: since task-610, every API call carries a random `X-Request-ID`, recorded in the Sentry report and in the account-linked server logs, so a crash or diagnostic report can be joined to an account by the developer. No account identifier is sent to Sentry (`Sentry.setUser` is never called). The privacy policy (section 2.4) says so, and the Apple answers declare Crash Data and Performance Data as linked.
+
 **Other user-generated content:** saving and organizing content is the core service. Individual formats, chat and support submissions remain user-selected. Do not describe all collection as optional simply because users can stop using the app.
 
 ## Transfers and the “Shared” Answers

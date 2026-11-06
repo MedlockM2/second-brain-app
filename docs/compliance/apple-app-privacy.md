@@ -41,14 +41,14 @@ All rows below are **collected** and **not used for tracking**. Select the purpo
 | Identifiers / Device ID | Yes | App Functionality | Expo push token linked to the signed-in account, only when notifications are allowed |
 | Purchases / Purchase History | Yes | App Functionality | Store purchase and subscription status received through RevenueCat, where present; no card or bank details |
 | Usage Data / Product Interaction | Yes | App Functionality | Processing usage used to enforce plan limits; saved-content activity and review/digest settings. Recent screens and events also appear in Sentry diagnostics without an attached account ID |
-| Diagnostics / Crash Data | No | App Functionality | Sentry crash and error reports, stack traces and device/app context |
-| Diagnostics / Performance Data | No | App Functionality | Sentry launch, navigation, hang and network timing measurements |
+| Diagnostics / Crash Data | Yes | App Functionality | Sentry crash and error reports, stack traces and device/app context; each API call's request ID, which joins a report to the account-linked server logs |
+| Diagnostics / Performance Data | Yes | App Functionality | Sentry launch, navigation, hang and network timing measurements, with the request ID of each API call |
 | Diagnostics / Other Diagnostic Data | Yes | App Functionality | Server request/security logs, including request time and endpoint; authenticated operations can be associated with the account |
 | Other Data / Other Data Types | Yes | App Functionality | IP addresses in server logs, used for operation and security, without location inference |
 
 The photo/video category covers image uploads; Deepn does not offer a general device-video upload flow. Public video links are included under Other User Content.
 
-The linked answer for a type is **Yes** when any collection of that type is linked to an account. It does not mean an account identifier is attached to Sentry reports. The current `mobile/src/lib/crashReporting.ts` sets `sendDefaultPii: false`, does not call `Sentry.setUser`, and removes HTTP query strings from breadcrumbs.
+The linked answer for a type is **Yes** when any collection of that type is linked to an account. Crash Data and Performance Data are **Yes** since task-610 (owner decision of 2026-11-06): every API call carries a random `X-Request-ID`, recorded both in the Sentry report (breadcrumbs and `request_id` tag) and in the server logs, which are associated with the account. The developer can therefore join a report to an account. This does not mean an account identifier is attached to Sentry reports: `mobile/src/lib/crashReporting.ts` sets `sendDefaultPii: false`, does not call `Sentry.setUser`, and removes HTTP query strings from breadcrumbs. Diagnostics stay **not used for tracking**.
 
 Purchase History describes the purchase/subscription path in the current app. Beta access does not itself constitute a paid purchase; do not infer that payment-card data is collected from the presence of RevenueCat.
 

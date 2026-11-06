@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-11-05
+**Last updated:** 2026-11-06
 **Effective date:** 2026-11-03
 
 ## 1. Introduction
@@ -35,7 +35,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 
 ### 2.4 Technical Data
 
-- **Crash, error and performance reports** - the error, where in the app it happened, device model, operating system and app version, the screens and in-app events just before it, and the timing of network requests (addresses without their parameters). They include neither your IP address nor your account identifier
+- **Crash, error and performance reports** - the error, where in the app it happened, device model, operating system and app version, the screens and in-app events just before it, the timing of network requests (addresses without their parameters), and a random identifier for each request to our servers. They include neither your IP address nor your account identifier, but that request identifier lets us match a report with our server logs, which are linked to your account, to find the cause of a problem
 - **Server logs** - our servers record each request, including your IP address, the time and the endpoint called, to operate and secure the Service
 - **Continue learning** - the identifiers of the artifacts and conversations you open or start, and the time of your last activity on each, to let you resume them across devices
 - **Usage accounting** - processing operations, capacity reservations and their final usage, including token counts, audio duration and document units needed to enforce processing limits
