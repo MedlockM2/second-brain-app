@@ -111,10 +111,12 @@ def _spotify_show_queries(show_title: str) -> list[str]:
     return queries
 
 
-#: How many title-search results are scanned for an exact title. Only exact
-#: titles are kept from it, so it reads deeper than the term search: "LEGEND"
-#: ranks below several "Legend…" shows even there.
-_TITLE_SEARCH_DEPTH = 50
+#: How many title-search results are scanned for an exact title: PodcastIndex's
+#: ceiling. Only exact titles are kept from it, so reading deep costs one larger
+#: response, not more calls. Its ranking also depends on the depth asked: "TRY"
+#: returns no feed titled exactly "TRY" at 50, and 29 of them, the right one
+#: first, at 200.
+_TITLE_SEARCH_DEPTH = 1000
 
 
 async def _spotify_candidate_feeds(show_title: str, *, limit: int) -> list[dict]:
@@ -126,73 +128,126 @@ async def _spotify_candidate_feeds(show_title: str, *, limit: int) -> list[dict]
     either search; the term search's own ranking follows, as before. A query
     that yields no exact title hands over to the next one (the title without
     its network suffix) instead of stopping at a fuzzy hit.
+
+    A short title has dozens of namesakes ("TRY": 29 feeds); only the first
+    `limit` of them are kept, and a namesake left out stays eligible through the
+    term search's ranking, which may place it first.
     """
     exact: list[dict] = []
-    others: list[dict] = []
-    seen: set[int] = set()
+    term_feeds: list[dict] = []
     for query in _spotify_show_queries(show_title):
-        wanted = normalize_podcast_title(query)
-        for search, depth in (
-            (podcast_index.search_podcasts_by_title, _TITLE_SEARCH_DEPTH),
-            (podcast_index.search_podcasts, limit),
-        ):
-            result = await search(query=query, max_results=depth, similar=True)
-            if result.get("status") != "true":
-                raise RuntimeError(
-                    "PodcastIndex feed search returned non-success status."
-                )
-            is_term_search = search is podcast_index.search_podcasts
-            for feed in (result.get("feeds") or [])[:depth]:
-                feed_id = _extract_feed_id({"feed": feed})
-                if feed_id is None or feed_id in seen:
-                    continue
-                if normalize_podcast_title(feed.get("title") or "") == wanted:
-                    seen.add(feed_id)
-                    exact.append(feed)
-                elif is_term_search:
-                    seen.add(feed_id)
-                    others.append(feed)
+        by_title = await _search_feeds(
+            podcast_index.search_podcasts_by_title, query, _TITLE_SEARCH_DEPTH
+        )
+        by_term = await _search_feeds(podcast_index.search_podcasts, query, limit)
+        exact_ids = {_extract_feed_id({"feed": feed}) for feed in exact}
+        for feed in by_title + by_term:
+            feed_id = _extract_feed_id({"feed": feed})
+            if (
+                feed_id is not None
+                and feed_id not in exact_ids
+                and _is_named(feed, query)
+            ):
+                exact_ids.add(feed_id)
+                exact.append(feed)
+        term_feeds.extend(by_term)
         if exact:
             break
-    return exact[:limit] + others[:limit]
 
+    kept = exact[:limit]
+    kept_ids = {_extract_feed_id({"feed": feed}) for feed in kept}
+    others: list[dict] = []
+    for feed in term_feeds:
+        feed_id = _extract_feed_id({"feed": feed})
+        if feed_id is not None and feed_id not in kept_ids:
+            kept_ids.add(feed_id)
+            others.append(feed)
+    return kept + others[:limit]
+
+
+async def _search_feeds(
+    search: Callable[..., Any], query: str, depth: int
+) -> list[dict]:
+    result = await search(query=query, max_results=depth, similar=True)
+    if result.get("status") != "true":
+        raise RuntimeError("PodcastIndex feed search returned non-success status.")
+    return list(result.get("feeds") or [])[:depth]
+
+
+def _is_named(feed: Mapping[str, Any], title: str) -> bool:
+    """Whether a feed's title is the show title, accents, case and punctuation aside."""
+    return normalize_podcast_title(feed.get("title") or "") == normalize_podcast_title(
+        title
+    )
+
+
+def _named_like_show(feed: Mapping[str, Any], show_title: str) -> bool:
+    """Whether a feed bears the Spotify show's name, with or without its suffix."""
+    return any(_is_named(feed, query) for query in _spotify_show_queries(show_title))
+
+
+#: How far an episode's publication may stray from Spotify's and still be the one
+#: the reader shared. Spotify keeps the feed's own publication time: the gap was
+#: under a minute on every episode resolved on dev (2026-11). An hour stays clear
+#: of a show's other episodes of the day (Les Grosses Têtes publishes at 10:00,
+#: 13:30 and 16:58).
+_SPOTIFY_DATE_TOLERANCE_SECONDS = 3600
 
 #: How far an episode's length may stray from Spotify's and still be the one the
-#: reader shared. The publisher's own feed carries Spotify's exact length;
-#: re-uploads of the same episode under another account ran 6-7 % longer
-#: (Call Her Daddy, 2026-11). A few seconds absorbs rounding.
+#: reader shared, when its date does not say. Length alone is weak: a feed with
+#: dynamic ad insertion runs minutes longer than Spotify (TRY on Acast: +145 s),
+#: so it only stands in for a missing or re-dated publication time.
 _SPOTIFY_DURATION_TOLERANCE_SECONDS = 5
 
 
-def _duration_gap(episode: Mapping[str, Any], target_seconds: int) -> int | None:
-    """Seconds between an episode's length and the target, None when unknown."""
+def _gap(value: Any, target: int) -> int | None:
+    """Distance between an episode's figure and Spotify's, None when unknown."""
     try:
-        duration = int(episode.get("duration") or 0)
+        number = int(value or 0)
     except (TypeError, ValueError):
         return None
-    if target_seconds <= 0 or duration <= 0:
+    if target <= 0 or number <= 0:
         return None
-    return abs(duration - target_seconds)
+    return abs(number - target)
 
 
-def _closest_in_length(
-    episodes: list[Mapping[str, Any]], target_seconds: int
-) -> Mapping[str, Any] | None:
-    """The title match whose length is nearest the target, feed order on ties.
+def _spotify_fit(
+    episode: Mapping[str, Any], *, published_at: int, duration: int
+) -> tuple[bool, bool, int] | None:
+    """How well a title match fits the Spotify episode, lower is better.
 
-    One title can name several episodes of a feed (Call Her Daddy published
-    "Khloé Kardashian: I'm Done with NBA Players" at 38 and 73 minutes); only the
-    length says which one was shared. Episodes of unknown length rank last.
+    None when the episode cannot be the shared one: its publication time or its
+    length is known and neither is close. A sibling episode under the same title
+    template ("Côté coulisses : X se confie avant l'émission") was imported in
+    place of a fresh episode PodcastIndex had not indexed yet; its date gives it
+    away. Among the plausible ones, the right date ranks first, then the nearest
+    length, which tells the publisher's feed from re-uploads of the same episode
+    under another account (Call Her Daddy: exact length against 6-7 % longer).
     """
-    if not episodes:
-        return None
-    return min(
-        episodes,
-        key=lambda episode: (
-            _duration_gap(episode, target_seconds) is None,
-            _duration_gap(episode, target_seconds) or 0,
-        ),
+    date_gap = _gap(episode.get("datePublished"), published_at)
+    length_gap = _gap(episode.get("duration"), duration)
+    date_fits = date_gap is not None and date_gap <= _SPOTIFY_DATE_TOLERANCE_SECONDS
+    length_fits = (
+        length_gap is not None and length_gap <= _SPOTIFY_DURATION_TOLERANCE_SECONDS
     )
+    if (date_gap is not None or length_gap is not None) and not (
+        date_fits or length_fits
+    ):
+        return None
+    return (not date_fits, length_gap is None, length_gap or 0)
+
+
+def _best_spotify_fit(
+    episodes: list[Mapping[str, Any]], *, published_at: int, duration: int
+) -> Mapping[str, Any] | None:
+    """The plausible title match that fits Spotify best, feed order on ties."""
+    best: Mapping[str, Any] | None = None
+    best_fit: tuple[bool, bool, int] | None = None
+    for episode in episodes:
+        fit = _spotify_fit(episode, published_at=published_at, duration=duration)
+        if fit is not None and (best_fit is None or fit < best_fit):
+            best, best_fit = episode, fit
+    return best
 
 
 #: PodcastIndex's ceiling for `episodes/byfeedid`.
@@ -559,6 +614,9 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
             duration_seconds = int(duration_raw) if duration_raw else 0
         except Exception:
             duration_seconds = 0
+        published_at = _parse_timestamp_seconds(
+            _extract_meta_content(page, attribute="name", key="music:release_date")
+        )
 
         show_match = _SPOTIFY_SHOW_ID_PATTERN.search(page or "")
         spotify_show_id = show_match.group(1) if show_match else ""
@@ -575,6 +633,7 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
             "show_title": show_title,
             "episode_image": (oembed_payload.get("thumbnail_url") or "").strip(),
             "audio_duration_seconds": duration_seconds,
+            "published_at": published_at,
         }
 
     async def _resolve_from_podcastindex(
@@ -614,14 +673,18 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
             )
 
         spotify_duration = int(spotify_metadata.get("audio_duration_seconds") or 0)
+        spotify_published_at = int(spotify_metadata.get("published_at") or 0)
         attempted_feed_ids: list[int] = []
         transient_feed_errors = 0
-        # The nearest-length match seen so far, kept while a later feed may still
-        # carry the episode at Spotify's exact length.
-        closest: tuple[int | None, dict, Mapping[str, Any]] | None = None
+        # The best-fitting match seen so far, kept while a later feed may still
+        # carry the episode at Spotify's exact date and length.
+        best: tuple[tuple[bool, bool, int], dict, Mapping[str, Any]] | None = None
+        namesakes_only = False
         for feed in feeds:
             normalized_feed_id = _extract_feed_id({"feed": feed})
             if normalized_feed_id is None:
+                continue
+            if namesakes_only and not _named_like_show(feed, show_title):
                 continue
             attempted_feed_ids.append(normalized_feed_id)
 
@@ -629,8 +692,10 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
                 match = await _find_episode_in_feed(
                     feed_id=normalized_feed_id,
                     episode_candidates=self._episode_candidates,
-                    match=lambda items: _closest_in_length(
-                        matching_episodes(items, episode_title), spotify_duration
+                    match=lambda items: _best_spotify_fit(
+                        matching_episodes(items, episode_title),
+                        published_at=spotify_published_at,
+                        duration=spotify_duration,
                     ),
                 )
             except Exception as exc:
@@ -646,47 +711,44 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
             if not match:
                 continue
 
-            gap = _duration_gap(match, spotify_duration)
-            if spotify_duration <= 0 or (
-                gap is not None and gap <= _SPOTIFY_DURATION_TOLERANCE_SECONDS
+            fit = _spotify_fit(
+                match, published_at=spotify_published_at, duration=spotify_duration
+            )
+            if fit is None:
+                continue
+            if best is None or fit < best[0]:
+                best = (fit, feed, match)
+            # Stop reading feeds once no later one can do better: the right date
+            # at the right length, or nothing to compare with.
+            date_misses, length_unknown, length_gap = fit
+            if (
+                not date_misses
+                and not length_unknown
+                and length_gap <= _SPOTIFY_DURATION_TOLERANCE_SECONDS
             ):
-                closest = (gap, feed, match)
                 break
-            if closest is None or (
-                gap is not None and (closest[0] is None or gap < closest[0])
-            ):
-                closest = (gap, feed, match)
+            if spotify_published_at <= 0 and spotify_duration <= 0:
+                break
+            # The right date in a feed named like the show, at another length:
+            # dynamic ads (TRY on Acast, +145 s), or a re-upload while the
+            # publisher's feed comes later. Only the show's other namesakes can
+            # hold a better match; the term search's fuzzy feeds cannot, and
+            # reading them cost 14 calls on TRY.
+            if not date_misses and _named_like_show(feed, show_title):
+                namesakes_only = True
 
-        if closest is not None:
-            gap, feed, match = closest
+        if best is not None:
+            fit, feed, match = best
             normalized_feed_id = _extract_feed_id({"feed": feed})
             logger.info(
-                "Spotify resolver matched feed_id=%s duration_gap=%s "
+                "Spotify resolver matched feed_id=%s date_fits=%s "
                 "(spotify=%ss, feed=%ss) among %s candidate feeds",
                 normalized_feed_id,
-                gap,
+                not fit[0],
                 spotify_duration,
                 match.get("duration"),
                 len(attempted_feed_ids),
             )
-            if spotify_duration > 0 and (
-                gap is None or gap > _SPOTIFY_DURATION_TOLERANCE_SECONDS
-            ):
-                return PodcastResolutionOutcome.failed(
-                    error_code=PodcastResolverErrorCode.EPISODE_NOT_FOUND,
-                    client_message=DEFAULT_PODCAST_RESOLUTION_FAILED_MESSAGE,
-                    retryable=False,
-                    metadata={
-                        "reason": "no_episode_matching_spotify_duration",
-                        "spotify_episode_id": spotify_episode_id,
-                        "show_title": show_title,
-                        "episode_title": episode_title,
-                        "spotify_duration_seconds": spotify_duration,
-                        "closest_feed_id": normalized_feed_id,
-                        "closest_duration_seconds": int(match.get("duration") or 0),
-                        "attempted_feed_ids": attempted_feed_ids,
-                    },
-                )
 
             audio_url = (match.get("enclosureUrl") or "").strip()
             if not audio_url:
