@@ -3,9 +3,10 @@ id: TASK-618
 title: >-
   Rendre le déploiement des Lambdas sûr face à Terraform Dev et relançable après
   un échec partiel
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-08 18:09'
+updated_date: '2026-11-08 18:34'
 labels:
   - tooling
   - infrastructure
@@ -43,8 +44,23 @@ Note owner : la preuve réelle ne peut venir que d'un run. Au prochain push qui 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Dans `deploy-lambda.yml`, chaque `update-function-code` (API, workers, chat, dev) ne part qu'une fois la fonction hors mise à jour en cours, et un `ResourceConflictException` passager ne fait plus échouer le job ni ne laisse des fonctions sur l'ancienne image ; le mécanisme retenu et sa raison sont commentés dans le workflow.
-- [ ] #2 Quand l'image `api-<sha>`, `worker-<sha>` ou `chat-stream-<sha>` existe déjà dans ECR, le job correspondant récupère son digest et déploie ce digest sans reconstruire ni repousser l'image ; sinon il construit et pousse comme aujourd'hui.
-- [ ] #3 L'isolation par environnement (filtre de tag `Environment`, refus d'une fonction hors `-dev`), le déploiement par digest et le job `promote-prod` sont inchangés.
-- [ ] #4 Le workflow est syntaxiquement valide (actionlint ou équivalent sans erreur) et le dépôt ECR garde des tags `<kind>-<sha>` immuables.
+- [x] #1 Dans `deploy-lambda.yml`, chaque `update-function-code` (API, workers, chat, dev) ne part qu'une fois la fonction hors mise à jour en cours, et un `ResourceConflictException` passager ne fait plus échouer le job ni ne laisse des fonctions sur l'ancienne image ; le mécanisme retenu et sa raison sont commentés dans le workflow.
+- [x] #2 Quand l'image `api-<sha>`, `worker-<sha>` ou `chat-stream-<sha>` existe déjà dans ECR, le job correspondant récupère son digest et déploie ce digest sans reconstruire ni repousser l'image ; sinon il construit et pousse comme aujourd'hui.
+- [x] #3 L'isolation par environnement (filtre de tag `Environment`, refus d'une fonction hors `-dev`), le déploiement par digest et le job `promote-prod` sont inchangés.
+- [x] #4 Le workflow est syntaxiquement valide (actionlint ou équivalent sans erreur) et le dépôt ECR garde des tags `<kind>-<sha>` immuables.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Nouveau helper `.github/scripts/lib/lambda-deploy.sh`, sourcé par les trois jobs dev de `deploy-lambda.yml`.
+
+1. Course avec Terraform Dev : `update_function_image` attend que la fonction ne soit plus en cours de mise à jour (`wait function-updated-v2`) avant chaque `update-function-code`, puis réessaie sur `ResourceConflictException` (10 tentatives, attente croissante), et vérifie à la fin State=Active / LastUpdateStatus=Successful. On attend la fonction elle-même au lieu d'ordonner le workflow après Terraform Dev : le conflit est propre à chaque fonction et bref, et l'attente couvre aussi un apply manuel. La raison est en commentaire dans le helper et dans chaque étape. Dans la boucle des workers, chaque worker est tenté même si un autre échoue ; l'étape échoue à la fin en listant ceux qui n'ont pas reçu l'image.
+2. Relance : une étape « Find an image this commit already pushed » lit le digest de `<kind>-<sha>` via `ecr batch-get-image` (le rôle de déploiement dev a `BatchGetImage` mais pas `DescribeImages`, donc aucun changement IAM n'est nécessaire). Si l'image existe, buildx, QEMU et le build sont sautés et ce digest est déployé ; sinon le build reste celui d'avant.
+3. Le filtre par tag `Environment`, le refus d'une fonction hors `-dev` et le déploiement par digest sont inchangés ; le bloc `promote-prod` est identique octet pour octet (vérifié avec diff contre HEAD). L'ECR reste `IMMUTABLE_WITH_EXCLUSION`.
+4. `actionlint` (avec shellcheck sur les blocs `run`) et `shellcheck` sur le helper : aucune erreur.
+
+Vérifié sur le vrai dev : le digest de `batch-get-image` pour `api-1169c55c…` est exactement celui que tourne `media-summarizer-api-dev`, et un tag absent ne renvoie rien. Sur `media-summarizer-chat-stream-dev`, avec une mise à jour de config en cours (timeout réappliqué à l'identique), un `update-function-code` brut est rejeté alors que `update_function_image` passe et redéploie le même digest.
+
+Vérification owner (nécessite un run) : au prochain push qui touche à la fois Terraform et le backend, « Deploy Lambda Functions » doit être vert avec toutes les fonctions -dev sur le digest du commit ; puis relancer un job déjà réussi doit passer sans reconstruire l'image.
+<!-- SECTION:NOTES:END -->

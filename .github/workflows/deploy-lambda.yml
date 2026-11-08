@@ -21,6 +21,7 @@ on:
       - "infrastructure/docker/lambda.Dockerfile"
       - "infrastructure/docker/lambda-chat-stream.Dockerfile"
       - ".github/workflows/deploy-lambda.yml"
+      - ".github/scripts/lib/lambda-deploy.sh"
   # Production is never deployed automatically. It is promoted, by hand, from an
   # image a push to main already built and validated in dev.
   workflow_dispatch:
@@ -74,6 +75,7 @@ jobs:
               - 'uv.lock'
               - 'infrastructure/docker/lambda-api.Dockerfile'
               - '.github/workflows/deploy-lambda.yml'
+              - '.github/scripts/lib/lambda-deploy.sh'
             workers:
               - 'media_summarizer/workers/**'
               - 'media_summarizer/core/**'
@@ -84,6 +86,7 @@ jobs:
               - 'uv.lock'
               - 'infrastructure/docker/lambda.Dockerfile'
               - '.github/workflows/deploy-lambda.yml'
+              - '.github/scripts/lib/lambda-deploy.sh'
             # The chat stream app imports the shared auth, models and access
             # layer, so it rebuilds on the same core paths as the API.
             chat_stream:
@@ -95,6 +98,7 @@ jobs:
               - 'uv.lock'
               - 'infrastructure/docker/lambda-chat-stream.Dockerfile'
               - '.github/workflows/deploy-lambda.yml'
+              - '.github/scripts/lib/lambda-deploy.sh'
 
   deploy-api:
     needs: changes
@@ -125,16 +129,30 @@ jobs:
         with:
           registry-type: public
 
+      # A rerun of this job after a partial failure finds api-<sha> already in
+      # the registry. The tag is immutable, so it is deployed by its digest instead
+      # of being rebuilt and refused at push (see .github/scripts/lib/lambda-deploy.sh).
+      - name: Find an image this commit already pushed
+        id: existing-api
+        run: |
+          source .github/scripts/lib/lambda-deploy.sh
+          DIGEST=$(existing_image_digest "$ECR_REPOSITORY" "api-${IMAGE_TAG}")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          if [ -n "$DIGEST" ]; then echo "api-${IMAGE_TAG} already pushed as $DIGEST: deploying it as is"; fi
+
       - name: Set up Docker Buildx
+        if: steps.existing-api.outputs.digest == ''
         uses: docker/setup-buildx-action@v3
 
       - name: Set up QEMU for ARM64
+        if: steps.existing-api.outputs.digest == ''
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Build and push dedicated API image
         id: build-api
+        if: steps.existing-api.outputs.digest == ''
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -153,23 +171,12 @@ jobs:
         run: |
           # The function is media-summarizer-api-<env> since task-237; the
           # unsuffixed name no longer exists in the account.
-          API_FUNCTION="media-summarizer-api-${DEPLOY_ENVIRONMENT}"
-          aws lambda update-function-code \
-            --function-name "$API_FUNCTION" \
-            --image-uri "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.build-api.outputs.digest }}" \
-            --no-cli-pager
-          aws lambda wait function-updated-v2 \
-            --function-name "$API_FUNCTION"
-          API_STATE=$(aws lambda get-function-configuration \
-            --function-name "$API_FUNCTION" \
-            --query 'State' \
-            --output text)
-          API_UPDATE=$(aws lambda get-function-configuration \
-            --function-name "$API_FUNCTION" \
-            --query 'LastUpdateStatus' \
-            --output text)
-          test "$API_STATE" = "Active"
-          test "$API_UPDATE" = "Successful"
+          # update_function_image waits out any configuration update Terraform Dev
+          # has in flight and retries on ResourceConflictException; the reason is
+          # written out in .github/scripts/lib/lambda-deploy.sh.
+          source .github/scripts/lib/lambda-deploy.sh
+          update_function_image "media-summarizer-api-${DEPLOY_ENVIRONMENT}" \
+            "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.existing-api.outputs.digest || steps.build-api.outputs.digest }}"
 
   deploy-workers:
     needs: changes
@@ -200,16 +207,30 @@ jobs:
         with:
           registry-type: public
 
+      # A rerun of this job after a partial failure finds worker-<sha> already in
+      # the registry. The tag is immutable, so it is deployed by its digest instead
+      # of being rebuilt and refused at push (see .github/scripts/lib/lambda-deploy.sh).
+      - name: Find an image this commit already pushed
+        id: existing-workers
+        run: |
+          source .github/scripts/lib/lambda-deploy.sh
+          DIGEST=$(existing_image_digest "$ECR_REPOSITORY" "worker-${IMAGE_TAG}")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          if [ -n "$DIGEST" ]; then echo "worker-${IMAGE_TAG} already pushed as $DIGEST: deploying it as is"; fi
+
       - name: Set up Docker Buildx
+        if: steps.existing-workers.outputs.digest == ''
         uses: docker/setup-buildx-action@v3
 
       - name: Set up QEMU for ARM64
+        if: steps.existing-workers.outputs.digest == ''
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Build and push shared worker image
         id: build-workers
+        if: steps.existing-workers.outputs.digest == ''
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -248,25 +269,21 @@ jobs:
             esac
           done
           echo "Deploying to: $(echo "$WORKERS" | tr '\n' ' ')"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.existing-workers.outputs.digest || steps.build-workers.outputs.digest }}"
+          # Every worker is attempted even if one fails, and the step fails only
+          # at the end: stopping at the first error is what left 5 of 19 workers on
+          # the previous image on 2026-11-08. update_function_image waits out a
+          # Terraform Dev configuration update and retries on conflict (reason in
+          # .github/scripts/lib/lambda-deploy.sh).
+          source .github/scripts/lib/lambda-deploy.sh
+          FAILED=""
           for FUNCTION_NAME in $WORKERS; do
-            aws lambda update-function-code \
-              --function-name "$FUNCTION_NAME" \
-              --image-uri "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.build-workers.outputs.digest }}" \
-              --no-cli-pager
+            update_function_image "$FUNCTION_NAME" "$IMAGE_URI" || FAILED="$FAILED $FUNCTION_NAME"
           done
-          for FUNCTION_NAME in $WORKERS; do
-            aws lambda wait function-updated-v2 --function-name "$FUNCTION_NAME"
-            WORKER_STATE=$(aws lambda get-function-configuration \
-              --function-name "$FUNCTION_NAME" \
-              --query 'State' \
-              --output text)
-            WORKER_UPDATE=$(aws lambda get-function-configuration \
-              --function-name "$FUNCTION_NAME" \
-              --query 'LastUpdateStatus' \
-              --output text)
-            test "$WORKER_STATE" = "Active"
-            test "$WORKER_UPDATE" = "Successful"
-          done
+          if [ -n "$FAILED" ]; then
+            echo "Not on $IMAGE_URI:$FAILED"
+            exit 1
+          fi
 
   # The chat's SSE door (task-464): its own image, its own function, deployed by
   # digest like the API. Deliberately outside the workers' loop, which matches
@@ -300,16 +317,30 @@ jobs:
         with:
           registry-type: public
 
+      # A rerun of this job after a partial failure finds chat-stream-<sha> already in
+      # the registry. The tag is immutable, so it is deployed by its digest instead
+      # of being rebuilt and refused at push (see .github/scripts/lib/lambda-deploy.sh).
+      - name: Find an image this commit already pushed
+        id: existing-chat-stream
+        run: |
+          source .github/scripts/lib/lambda-deploy.sh
+          DIGEST=$(existing_image_digest "$ECR_REPOSITORY" "chat-stream-${IMAGE_TAG}")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          if [ -n "$DIGEST" ]; then echo "chat-stream-${IMAGE_TAG} already pushed as $DIGEST: deploying it as is"; fi
+
       - name: Set up Docker Buildx
+        if: steps.existing-chat-stream.outputs.digest == ''
         uses: docker/setup-buildx-action@v3
 
       - name: Set up QEMU for ARM64
+        if: steps.existing-chat-stream.outputs.digest == ''
         uses: docker/setup-qemu-action@v3
         with:
           platforms: arm64
 
       - name: Build and push chat stream image
         id: build-chat-stream
+        if: steps.existing-chat-stream.outputs.digest == ''
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -326,14 +357,11 @@ jobs:
 
       - name: Deploy chat stream by immutable digest
         run: |
-          STREAM_FUNCTION="media-summarizer-chat-stream-${DEPLOY_ENVIRONMENT}"
-          aws lambda update-function-code \
-            --function-name "$STREAM_FUNCTION" \
-            --image-uri "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.build-chat-stream.outputs.digest }}" \
-            --no-cli-pager
-          aws lambda wait function-updated-v2 --function-name "$STREAM_FUNCTION"
-          test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query State --output text)" = "Active"
-          test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query LastUpdateStatus --output text)" = "Successful"
+          # Same wait-and-retry against a Terraform Dev update as the API and the
+          # workers (.github/scripts/lib/lambda-deploy.sh).
+          source .github/scripts/lib/lambda-deploy.sh
+          update_function_image "media-summarizer-chat-stream-${DEPLOY_ENVIRONMENT}" \
+            "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.existing-chat-stream.outputs.digest || steps.build-chat-stream.outputs.digest }}"
 
   release-validation:
     needs: [changes, deploy-api, deploy-workers]
