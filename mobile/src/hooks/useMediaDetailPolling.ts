@@ -77,12 +77,15 @@ export function useMediaDetailPolling(
   const fetchMediaStatus = useCallback(async () => {
     if (!isAuthenticated || !mediaId) return;
     try {
-      await MediaService.getMediaStatus(mediaId, readingLanguage);
+      // The cache's language, as the subscribed key above: a language passed from
+      // the preferences could differ from it, and readResource would supersede
+      // the read in silence, leaving the page on its spinner.
+      await MediaService.getMediaStatus(mediaId);
     } catch (error) {
       if (isResourceSuperseded(error)) return;
       // The cache publishes the error; cached content stays readable on network failure.
     }
-  }, [isAuthenticated, mediaId, readingLanguage]);
+  }, [isAuthenticated, mediaId]);
   useFocusEffect(
     useCallback(() => {
       if (budgetKey.current !== processingKey) {

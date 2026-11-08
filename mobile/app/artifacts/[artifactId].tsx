@@ -1,5 +1,4 @@
 import { useResourceSnapshot } from "../../src/contexts/ResourceCacheContext";
-import { useUserPreferences } from "../../src/contexts/UserPreferencesContext";
 import { resourceKeys } from "../../src/services/resourceCache";
 import type { ArtifactContentResponse } from "@media-summarizer/core/types/artifacts";
 import {
@@ -141,7 +140,6 @@ export default function ArtifactDetailScreen() {
   // GETs stay side-effect-free; metadata/content refreshes do not re-report.
   const engagementReportedRef = useRef<string | null>(null);
 
-  const { readingLanguage } = useUserPreferences();
   const snapshot = useResourceSnapshot<ArtifactContentResponse>(
     resourceKeys.artifactBody(artifactId),
   );
@@ -182,11 +180,12 @@ export default function ArtifactDetailScreen() {
   const fetchContent = useCallback(async () => {
     if (!isAuthenticated || !artifactId) return;
     try {
-      await ArtifactService.getArtifactContent(artifactId, readingLanguage);
+      // The cache's language, as the subscribed key: see useMediaDetailPolling.
+      await ArtifactService.getArtifactContent(artifactId);
     } catch {
       /* Cache errors describe pending/failed and retain ready bodies offline. */
     }
-  }, [isAuthenticated, artifactId, readingLanguage]);
+  }, [isAuthenticated, artifactId]);
   useFocusEffect(
     useCallback(() => {
       void fetchContent();

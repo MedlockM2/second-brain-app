@@ -1,5 +1,6 @@
 import { setResourceLanguage, resourceSession } from "./resourceCache";
 import { apiRequest } from "./apiClient";
+import { TokenStorage } from "./tokenStorage";
 import { AuthUser } from "@media-summarizer/core/types/auth";
 import { LOCALE_ENDONYMS } from "@media-summarizer/core/i18n/locales";
 
@@ -48,7 +49,12 @@ export class UserPreferencesService {
     const user = await apiRequest<AuthUser>("/api/auth/me", {
       method: "PATCH", body: { reading_language: language },
     });
-    if (resourceSession() === owner) setResourceLanguage(user.reading_language ?? language);
+    if (resourceSession() !== owner) return user;
+    // The keychain profile is what a return to the foreground re-reads
+    // (AuthContext.revalidateSession): left with the language it was signed in
+    // with, it would reset the cache's language under the preferences'.
+    await TokenStorage.saveUser(user);
+    setResourceLanguage(user.reading_language ?? language);
     return user;
   }
 
