@@ -58,22 +58,26 @@ hour-long block.
 ### What bounds our rate today
 
 Only `podcastindex_resolution_worker` calls PodcastIndex in production (Spotify, Apple
-Podcasts, Deezer resolvers). Its global rate is the product of three settings, not a
-function of the number of users — more shares make the SQS queue longer, never the
-outbound rate higher:
+Podcasts, Deezer resolvers). Its global rate is a product of settings, not a function
+of the number of users — more shares make the SQS queue longer, never the outbound
+rate higher. Each instance runs a GCRA pacer: `PODCASTINDEX_RATE_LIMIT_BURST` calls at
+once, then `PODCASTINDEX_RATE_LIMIT_RPS` per second (defaults 5 and 2, since
+2026-11-08; before, 1 req/s with no burst, which made every resolution wait a second
+between its 3 to 7 calls):
 
-    instances (ESM maximum_concurrency, 10) × messages per instance (batch_size, 1)
-      × PODCASTINDEX_RATE_LIMIT_RPS (1, per instance) = 10 req/s at most
+    sustained: instances (ESM maximum_concurrency, 10) × RPS (2)   = 20 req/s
+    at once:   instances (10)                          × BURST (5) = 50 requests
 
-**Keep that product well under 64 req/s.** Raising `maximum_concurrency` or
-`PODCASTINDEX_RATE_LIMIT_RPS`, or disabling the limiter, moves it; nothing else in
-the code warns about it. Lambda egress IPs are AWS's, shared with other customers, and
+**Keep both well under 64.** Raising `maximum_concurrency`, `PODCASTINDEX_RATE_LIMIT_RPS`
+or `PODCASTINDEX_RATE_LIMIT_BURST`, or disabling the limiter, moves them; nothing else
+in the code warns about it. `batch_size` is 1, so an instance resolves one episode at
+a time. Lambda egress IPs are AWS's, shared with other customers, and
 instances do not necessarily share one, so the per-IP margin is likely wider than this
 product suggests — and a neighbour on the same IP could trip the block for us.
 
 The Redis limiter described below was never configured: no environment sets
 `PODCASTINDEX_LIMITER_REDIS_URL`, so each Lambda instance paces itself locally and the
-"global 1 req/s" below is in practice 1 req/s per instance. Making it global is part of
+"global 1 req/s" below is in practice the per-instance pace above. Making it global is part of
 the provider capacity work (TASK-563 / TASK-564, deferred by owner decision of
 2026-10-29), not of this ADR.
 
@@ -180,7 +184,7 @@ flowchart LR
   I --> J["Create media item + processing job (resolving)"]
   J --> Q["SQS: podcastindex-resolution-queue"]
   Q --> W["Podcast resolver worker"]
-  W --> L["Limiter (1 req/s per instance; Redis never configured)"]
+  W --> L["Limiter (per instance: burst 5, then 2 req/s; Redis never configured)"]
   L --> P["PodcastIndex API"]
   W --> N["Persist enclosure/audio resolution result"]
 ```
@@ -205,7 +209,7 @@ Key points:
 Required:
 - `PODCASTINDEXORG_API_KEY`
 - `PODCASTINDEXORG_API_SECRET`
-- `PODCASTINDEX_RATE_LIMIT_RPS=1` (default; per instance while Redis is not configured)
+- `PODCASTINDEX_RATE_LIMIT_RPS` (default 2) and `PODCASTINDEX_RATE_LIMIT_BURST` (default 5), per instance while Redis is not configured
 - `PODCASTINDEX_LIMITER_REDIS_URL` (optional; unset in every environment as of 2026-11-08)
 - `PODCASTINDEX_RESOLUTION_QUEUE` (new)
 - `PODCASTINDEX_RESOLUTION_DLQ` (new)
@@ -243,7 +247,7 @@ Validation scenario:
 
 Practical local check for the limiter itself:
 - `PODCASTINDEX_LIMITER_REDIS_URL=redis://localhost:6379/0 python scripts/verify_podcastindex_limiter_multi_instance.py --workers 4 --iterations 5`
-- Expected result: minimum inter-slot gap stays near 1 second (with tolerance).
+- Expected result: any n consecutive slots, across processes, span at least (n - burst) intervals.
 
 Success criteria:
 - global rate compliance proven by logs/metrics timestamps

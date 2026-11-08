@@ -14,7 +14,15 @@ _LIMIT_ENABLED = os.getenv("PODCASTINDEX_RATE_LIMIT_ENABLED", "true").lower() no
     "false",
     "no",
 }
-_RPS = float(os.getenv("PODCASTINDEX_RATE_LIMIT_RPS", "1") or "1")
+# Sustained rate and burst per limiter scope. Without Redis the scope is one
+# Lambda instance, so the global ceiling is instances x these values: with the
+# resolution worker's 10 instances, 20 req/s sustained and 50 requests at once,
+# against a provider that served 64 req/s cleanly and blocks an IP for an hour
+# somewhere below 128 (docs/ADR/podcastindex-rate-limiting.md). The burst lets a
+# resolution's 3 to 7 calls run without waiting; 1 req/s with no burst made each
+# one wait a second between calls.
+_RPS = float(os.getenv("PODCASTINDEX_RATE_LIMIT_RPS", "2") or "2")
+_BURST = max(1, int(os.getenv("PODCASTINDEX_RATE_LIMIT_BURST", "5") or "5"))
 _INTERVAL_MS = max(1, int(1000 / max(_RPS, 0.001)))
 _REDIS_URL = (os.getenv("PODCASTINDEX_LIMITER_REDIS_URL") or "").strip()
 _REDIS_KEY = os.getenv(
@@ -38,4 +46,5 @@ async def acquire_podcastindex_slot() -> float:
         redis_key_ttl_ms=_REDIS_KEY_TTL_MS,
         limiter_name="PodcastIndex",
         logger=logger,
+        burst=_BURST,
     )

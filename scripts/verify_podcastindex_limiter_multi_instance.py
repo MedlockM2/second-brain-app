@@ -35,10 +35,10 @@ def main() -> int:
         "--iterations", type=int, default=5, help="Limiter acquisitions per process"
     )
     parser.add_argument(
-        "--min-gap-ms",
+        "--tolerance-ms",
         type=int,
-        default=900,
-        help="Minimum expected global gap between consecutive slots (tolerance).",
+        default=100,
+        help="Timing slack allowed below the limiter's guarantee.",
     )
     args = parser.parse_args()
 
@@ -58,27 +58,29 @@ def main() -> int:
         print("Not enough timestamps to validate limiter behavior.")
         return 2
 
-    gaps_ms = [
-        int((all_timestamps[i + 1] - all_timestamps[i]) * 1000)
-        for i in range(len(all_timestamps) - 1)
-    ]
-    min_gap = min(gaps_ms)
-    max_gap = max(gaps_ms)
-    avg_gap = int(sum(gaps_ms) / len(gaps_ms))
+    from media_summarizer.utils.podcastindex_limiter import _BURST, _INTERVAL_MS
+
+    # The limiter's guarantee (GCRA): any n consecutive slots, across every
+    # process, span at least (n - burst) intervals.
+    worst_ms = 0
+    for i in range(len(all_timestamps)):
+        for j in range(i + 1, len(all_timestamps)):
+            required = (j - i + 1 - _BURST) * _INTERVAL_MS
+            actual = (all_timestamps[j] - all_timestamps[i]) * 1000
+            worst_ms = max(worst_ms, int(required - actual))
 
     print(
         f"Collected {len(all_timestamps)} slots "
-        f"(workers={args.workers}, iterations={args.iterations})."
+        f"(workers={args.workers}, iterations={args.iterations}, "
+        f"interval={_INTERVAL_MS}ms, burst={_BURST})."
     )
-    print(f"Gap stats (ms): min={min_gap}, avg={avg_gap}, max={max_gap}")
+    print(f"Largest shortfall against the guarantee: {worst_ms}ms")
 
-    if min_gap < args.min_gap_ms:
-        print(
-            f"FAILED: min gap {min_gap}ms is below threshold {args.min_gap_ms}ms."
-        )
+    if worst_ms > args.tolerance_ms:
+        print(f"FAILED: slots ran {worst_ms}ms ahead of the limiter's guarantee.")
         return 1
 
-    print("OK: global limiter gap is within expected bounds.")
+    print("OK: slots stay within the limiter's guarantee.")
     return 0
 
 

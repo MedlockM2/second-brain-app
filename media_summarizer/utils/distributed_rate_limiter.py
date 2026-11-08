@@ -19,20 +19,27 @@ _LOCAL_SLOT_STATE: dict[str, int] = {}
 _LOCAL_COUNTER_LOCKS: dict[str, asyncio.Lock] = {}
 _LOCAL_COUNTER_STATE: dict[str, tuple[int, float]] = {}
 
+# GCRA (generic cell rate algorithm): the key holds the theoretical arrival time
+# (TAT) of the next slot. A call may run up to `tolerance_ms` ahead of it, which
+# lets `burst` calls through at once before the pace settles to one per
+# interval. With a tolerance of 0 it is the plain "one slot per interval" pacer.
 _RESERVE_SLOT_LUA = """
 local key = KEYS[1]
 local now_ms = tonumber(ARGV[1])
 local interval_ms = tonumber(ARGV[2])
 local ttl_ms = tonumber(ARGV[3])
+local tolerance_ms = tonumber(ARGV[4])
 
-local next_allowed = tonumber(redis.call("GET", key) or "0")
-local scheduled = now_ms
-if next_allowed > now_ms then
-  scheduled = next_allowed
+local tat = tonumber(redis.call("GET", key) or "0")
+if tat < now_ms then
+  tat = now_ms
+end
+local scheduled = tat - tolerance_ms
+if scheduled < now_ms then
+  scheduled = now_ms
 end
 
-local new_next = scheduled + interval_ms
-redis.call("SET", key, new_next, "PX", ttl_ms)
+redis.call("SET", key, tat + interval_ms, "PX", ttl_ms)
 return scheduled
 """
 
@@ -81,10 +88,17 @@ async def acquire_global_slot(
     redis_key_ttl_ms: int,
     limiter_name: str,
     logger: Optional[logging.Logger] = None,
+    burst: int = 1,
 ) -> float:
-    """Reserve a globally paced slot, waiting until it becomes due."""
+    """Reserve a paced slot, waiting until it becomes due.
+
+    `burst` calls may run back to back; beyond them, one slot per `interval_ms`.
+    Over any stretch, n slots therefore span at least (n - burst) intervals.
+    """
     if not enabled:
         return 0.0
+
+    tolerance_ms = max(0, int(burst) - 1) * interval_ms
 
     active_logger = logger or logging.getLogger(__name__)
     now_ms = _now_ms()
@@ -104,6 +118,7 @@ async def acquire_global_slot(
                         now_ms,
                         interval_ms,
                         redis_key_ttl_ms,
+                        tolerance_ms,
                     )
                 )
             )
@@ -116,8 +131,9 @@ async def acquire_global_slot(
 
     if scheduled_ms is None:
         async with _slot_lock(redis_key):
-            scheduled_ms = max(now_ms, _LOCAL_SLOT_STATE.get(redis_key, 0))
-            _LOCAL_SLOT_STATE[redis_key] = scheduled_ms + interval_ms
+            tat_ms = max(now_ms, _LOCAL_SLOT_STATE.get(redis_key, 0))
+            scheduled_ms = max(now_ms, tat_ms - tolerance_ms)
+            _LOCAL_SLOT_STATE[redis_key] = tat_ms + interval_ms
 
     wait_ms = max(0, scheduled_ms - now_ms)
     if wait_ms > 0:
