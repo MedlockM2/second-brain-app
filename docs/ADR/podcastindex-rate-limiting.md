@@ -2,7 +2,9 @@
 
 ## Status
 - Accepted (implemented for task-9 scope)
-- Last updated: 2026-03-01
+- Last updated: 2026-11-08 — the limit this ADR was built on was measured and found
+  to be wrong; see "Measured limit". The queue-first design stands, the 1 req/s
+  premise does not.
 
 ## Decision context (updated)
 
@@ -14,8 +16,70 @@ Current product architecture is now:
 - no end-user manual podcast search flow as a product requirement
 - a single entry path for podcasts: user shares a podcast URL into the app, then ingestion resolves to `enclosureUrl` through PodcastIndex
 
-The key constraint remains unchanged:
-- PodcastIndex enforces a strict global limit of `1 request / second` per API key.
+The constraint this ADR assumed, and which turned out to be false:
+- ~~PodcastIndex enforces a strict global limit of `1 request / second` per API key.~~
+  PodcastIndex documents no rate limit at all, and the measured limit is per client IP,
+  between 64 and 128 requests per second (next section). `1 req/s` is a policy of this
+  application, not a constraint of the provider.
+
+## Measured limit (2026-11-08)
+
+What the provider says: the API documentation
+(<https://podcastindex-org.github.io/docs-api/>, source in
+`Podcastindex-org/docs-api`) publishes no rate limit; it caps `max` at 1000 per call.
+Responses carry no rate-limit header (`X-RateLimit-*`, `Retry-After`) under normal use.
+
+What was measured, from one machine, with this application's key, on
+`GET /podcasts/byfeedid`, in 10–15 s steps with a 1 req/s probe against another
+Cloudflare host as a network control:
+
+| Rate sent | Requests | Result |
+|---|---|---|
+| 2 – 16 req/s | 450 | all `200`, median ~140 ms, p95 < 175 ms |
+| 32 req/s for 10 s | 320 | all `200` |
+| 64 req/s for 10 s | 640 | all `200`, p95 202 ms |
+| 128 req/s | ~250 in 2 s | `429`, `Retry-After: 3600` |
+
+The `429` is Cloudflare's, in front of the API: `Error 1015: You are being rate limited
+by the website owner's configuration`. An unauthenticated request from the same machine
+got the same `429` and the same countdown, so the block is **per client IP, not per
+key**: the key, which dev and prod share, was not banned. The penalty is a full hour.
+
+Two earlier runs the same evening showed a slow tail at 8–16 req/s (p95 ~1 s, a few
+requests with no answer after 20 s) with the network control clean. A third run at the
+same rates was spotless. That slowness is PodcastIndex's own variance, not a response
+to our rate; the code already treats a timeout as transient.
+
+Not measured: a window longer than 15 s. A Cloudflare rule can also count per minute or
+per hour, so sustained traffic far below 64 req/s for a long time is not proven safe.
+The exact threshold between 64 and 128 req/s was not sought: finding it costs another
+hour-long block.
+
+### What bounds our rate today
+
+Only `podcastindex_resolution_worker` calls PodcastIndex in production (Spotify, Apple
+Podcasts, Deezer resolvers). Its global rate is the product of three settings, not a
+function of the number of users — more shares make the SQS queue longer, never the
+outbound rate higher:
+
+    instances (ESM maximum_concurrency, 10) × messages per instance (batch_size, 1)
+      × PODCASTINDEX_RATE_LIMIT_RPS (1, per instance) = 10 req/s at most
+
+**Keep that product well under 64 req/s.** Raising `maximum_concurrency` or
+`PODCASTINDEX_RATE_LIMIT_RPS`, or disabling the limiter, moves it; nothing else in
+the code warns about it. Lambda egress IPs are AWS's, shared with other customers, and
+instances do not necessarily share one, so the per-IP margin is likely wider than this
+product suggests — and a neighbour on the same IP could trip the block for us.
+
+The Redis limiter described below was never configured: no environment sets
+`PODCASTINDEX_LIMITER_REDIS_URL`, so each Lambda instance paces itself locally and the
+"global 1 req/s" below is in practice 1 req/s per instance. Making it global is part of
+the provider capacity work (TASK-563 / TASK-564, deferred by owner decision of
+2026-10-29), not of this ADR.
+
+A `429` from Cloudflare asks for an hour. The resolver retries a few seconds later and
+SQS redelivers up to three times, so jobs reaching PodcastIndex during a block fail
+rather than wait it out.
 
 ## Problem
 
@@ -116,7 +180,7 @@ flowchart LR
   I --> J["Create media item + processing job (resolving)"]
   J --> Q["SQS: podcastindex-resolution-queue"]
   Q --> W["Podcast resolver worker"]
-  W --> L["Redis global limiter (1 req/s)"]
+  W --> L["Limiter (1 req/s per instance; Redis never configured)"]
   L --> P["PodcastIndex API"]
   W --> N["Persist enclosure/audio resolution result"]
 ```
@@ -124,7 +188,7 @@ flowchart LR
 Key points:
 - no `manual vs async` key split
 - all PodcastIndex calls pass through one governed pipeline
-- Redis limiter is the hard global guardrail
+- Redis limiter was meant as the hard global guardrail; it is not configured (see "What bounds our rate today")
 
 ## Runtime behavior and error policy
 
@@ -141,8 +205,8 @@ Key points:
 Required:
 - `PODCASTINDEXORG_API_KEY`
 - `PODCASTINDEXORG_API_SECRET`
-- `PODCASTINDEX_RATE_LIMIT_RPS=1`
-- `PODCASTINDEX_LIMITER_REDIS_URL`
+- `PODCASTINDEX_RATE_LIMIT_RPS=1` (default; per instance while Redis is not configured)
+- `PODCASTINDEX_LIMITER_REDIS_URL` (optional; unset in every environment as of 2026-11-08)
 - `PODCASTINDEX_RESOLUTION_QUEUE` (new)
 - `PODCASTINDEX_RESOLUTION_DLQ` (new)
 - `PODCASTINDEX_MAX_RETRIES` (bounded retries)

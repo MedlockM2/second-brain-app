@@ -13,7 +13,6 @@ from .auth import (
     TokenVerificationResponse,
 )
 from .billing import (
-    Follow,
     Subscription,
     SubscriptionStatus,
     SubscriptionTier,
@@ -53,7 +52,6 @@ __all__ = [
     "Subscription",
     "SubscriptionStatus",
     "SubscriptionTier",
-    "Follow",
     "Folder",
     "UNCATEGORIZED_FOLDER_NAME",
     "MAX_FOLDER_DEPTH",

@@ -25,8 +25,6 @@ locals {
     USER_DIGESTS_TABLE            = aws_dynamodb_table.user_digests_v1.name
     USER_DIGEST_SETTINGS_TABLE    = aws_dynamodb_table.user_digest_settings_v1.name
     SUBSCRIPTIONS_TABLE           = aws_dynamodb_table.subscriptions.name
-    FOLLOWS_TABLE                 = aws_dynamodb_table.follows.name
-    FEED_FORECASTS_TABLE          = aws_dynamodb_table.feed_forecasts.name
     USER_USAGE_MONTHLY_TABLE      = aws_dynamodb_table.user_usage_monthly.name
     BETA_BUDGET_TABLE             = aws_dynamodb_table.beta_budget.name
     REVENUCAT_EVENTS_TABLE        = aws_dynamodb_table.revenucat_events.name

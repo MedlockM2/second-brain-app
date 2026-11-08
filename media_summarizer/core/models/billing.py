@@ -102,37 +102,3 @@ class Subscription(BaseModel):
             created_at=datetime.fromisoformat(item["created_at"]),
             updated_at=datetime.fromisoformat(item["updated_at"]),
         )
-
-
-class Follow(BaseModel):
-    user_id: str = Field(...)
-    feed_id: str = Field(...)
-    forecast_minutes: int = Field(default=0, ge=0)
-    reserved_minutes: int = Field(default=0, ge=0)
-    history_pointer: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    def to_dynamodb_item(self) -> Dict[str, Any]:
-        return {
-            "user_id": self.user_id,
-            "feed_id": self.feed_id,
-            "forecast_minutes": self.forecast_minutes,
-            "reserved_minutes": self.reserved_minutes,
-            "history_pointer": self.history_pointer,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
-
-    @classmethod
-    def from_dynamodb_item(cls, item: Dict[str, Any]) -> "Follow":
-        return cls(
-            user_id=item["user_id"],
-            feed_id=item["feed_id"],
-            forecast_minutes=item.get("forecast_minutes", 0),
-            reserved_minutes=item.get("reserved_minutes", 0),
-            history_pointer=item.get("history_pointer"),
-            created_at=datetime.fromisoformat(item["created_at"]) if item.get("created_at") else datetime.now(timezone.utc),
-            updated_at=datetime.fromisoformat(item["updated_at"]) if item.get("updated_at") else datetime.now(timezone.utc),
-        )
-

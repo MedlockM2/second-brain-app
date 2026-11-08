@@ -46,10 +46,7 @@ deleted every job row of the account that first submitted it.
 
 Deliberately out of scope
 -------------------------
-``feed_forecasts`` (PK ``feed_id``) describes content, not people: it carries no
-user id, is shared by every account that followed the same feed, and cannot be
-queried per user in the first place. Artifact rows are reached through the scope
-index, keyed on ``user_id``. ``pricing_config`` is global configuration.
+Artifact rows are reached through the scope index, keyed on ``user_id``. ``pricing_config`` is global configuration.
 
 ``media_idempotence`` (PK ``media_key``) describes content too, and for the same
 reason is not swept by user. It is nonetheless *deleted per content* here: a row
@@ -107,7 +104,6 @@ _USER_PARTITION_TABLES: Tuple[Tuple[str, Optional[str]], ...] = (
     ("BETA_BUDGET_TABLE", "sk"),
     ("USER_DIGESTS_TABLE", "digest_key"),
     ("USER_DIGEST_SETTINGS_TABLE", None),
-    ("FOLLOWS_TABLE", "feed_id"),
     # Every chat item of the account — conversations, messages, attempts,
     # fragments, the in-flight marker — sits in its partition under one sort key
     # (task-457), so the whole chat goes with one partition sweep.
