@@ -2,15 +2,13 @@
 Audio duration probing without an ffmpeg dependency (task-250 Layer 1).
 
 The quota gate needs the duration of an audio file *before* paying Deepgram for
-it. Two shapes are needed:
+it, and reads it from a URL, never from a whole file in memory:
+`probe_duration_seconds_from_url` takes a podcast enclosure, a direct audio URL,
+an RSS item, or a presigned GET on an uploaded audio (TASK-620 removed the
+in-memory variant, which nothing called). Three short HTTP Range requests at most,
+under a hard time budget.
 
-- `probe_duration_seconds_from_bytes`: the whole file is already in memory
-  (direct upload, WhatsApp share).
-- `probe_duration_seconds_from_url`: only a remote URL is known (podcast
-  enclosure, direct audio URL, RSS item). Three short HTTP Range requests at
-  most, under a hard time budget.
-
-Both read the container metadata directly:
+It reads the container metadata directly:
 
 - MPEG audio (MP3): ID3v2 tag length, then the first frame header plus the
   `Xing`/`Info`/`VBRI` frame count; falls back to CBR bitrate x byte length. When
@@ -471,32 +469,6 @@ def _duration_from_buffers(
     if duration is None:
         duration = _duration_from_mp4_search(head)
     return duration
-
-
-def probe_duration_seconds_from_bytes(data: bytes) -> Optional[int]:
-    """
-    Duration of an in-memory audio file, or None when it cannot be read.
-
-    The whole file is available, so head and tail point at the same buffer and a
-    single pass covers every supported container.
-    """
-    if not data:
-        return None
-    try:
-        seconds = _duration_from_buffers(data, data, len(data))
-    except Exception as exc:  # a malformed upload must not break the request
-        log_event(
-            logger,
-            logging.WARNING,
-            "audio_probe.local_failed",
-            "Local audio duration probe raised",
-            error=str(exc),
-            byte_length=len(data),
-        )
-        return None
-    if seconds is None:
-        return None
-    return int(round(seconds))
 
 
 def _finalize(seconds: Optional[float]) -> Optional[int]:

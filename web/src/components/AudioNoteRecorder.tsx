@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_RECORDING_SECONDS, RECORDING_BIT_RATE, RECORDING_SAMPLE_INTERVAL_MS, RECORDING_WAVEFORM_BARS, formatRecordingDuration, recordingFileName, recordingLevel } from "@media-summarizer/core/media/audioRecording";
-import { MAX_UPLOAD_SIZE_BYTES } from "@media-summarizer/core/types/upload";
+import { MAX_AUDIO_UPLOAD_SIZE_BYTES } from "@media-summarizer/core/types/upload";
 import { useI18n } from "../i18n/I18nProvider";
 import { Icon } from "./Icon";
 
@@ -80,7 +80,7 @@ export function AudioNoteRecorder({ onClose, onRecorded }: {
           if (cancelled || !data.size) return;
           current.chunks.push(data);
           current.bytes += data.size;
-          if (current.bytes >= MAX_UPLOAD_SIZE_BYTES - 1024 * 1024 && !current.stopping) {
+          if (current.bytes >= MAX_AUDIO_UPLOAD_SIZE_BYTES - 1024 * 1024 && !current.stopping) {
             setMessage(t("recording.limitReached"));
             stop(false);
           }
@@ -98,7 +98,7 @@ export function AudioNoteRecorder({ onClose, onRecorded }: {
           void current.context?.close().catch(() => {});
           const blob = new Blob(current.chunks, { type: recorder.mimeType });
           current.chunks = [];
-          if (!blob.size || blob.size > MAX_UPLOAD_SIZE_BYTES || current.duration < 500) {
+          if (!blob.size || blob.size > MAX_AUDIO_UPLOAD_SIZE_BYTES || current.duration < 500) {
             setMessage(t("recording.error"));
             setPhase("error");
             return;

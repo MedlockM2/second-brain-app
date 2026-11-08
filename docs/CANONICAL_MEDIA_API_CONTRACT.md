@@ -1212,9 +1212,17 @@ Response (`200 OK`):
 
 The client then sends the raw bytes with `PUT` to `upload_url`, **without** the `Authorization`
 header: the signature is the credential, and the session must not travel to a host that is not this
-API. Ceilings are `MAX_UPLOAD_SIZE_BYTES` (50 MB) for `document` and `audio`,
-`MAX_SHARED_AUDIO_SIZE_BYTES` (25 MB) for `shared_audio`; both are mirrored in the mobile client
-(`packages/core/src/types/upload.ts`, `packages/core/src/types/sharedContent.ts`).
+API. Ceilings are `MAX_DOCUMENT_UPLOAD_SIZE_BYTES` (50 MB) for `document` and
+`MAX_AUDIO_UPLOAD_SIZE_BYTES` (250 MB) for every audio, `audio` and `shared_audio` alike (owner
+decision of 2026-11-08, TASK-620). They are constants, not environment settings, and the clients
+mirror them exactly (`packages/core/src/types/upload.ts`), so the app refuses before the network
+what this endpoint refuses. A larger file is answered `413` with the ceiling in the detail.
+
+The audio ceiling is only a technical guard: what bounds an audio is its **duration**, against the
+plan's per-item limit (`max_minutes_per_item`), measured on the staged object before it is accepted.
+250 MB is about 240 minutes, the highest per-item limit, at 128 kbps. An uploaded audio is never read
+into a Lambda's memory: the duration probe reads its container metadata through Range requests, and
+the Deepgram worker hands Deepgram a presigned GET on it (pull mode).
 
 ### POST /api/media/upload
 

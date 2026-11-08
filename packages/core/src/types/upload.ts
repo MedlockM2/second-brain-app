@@ -110,13 +110,25 @@ export const UPLOAD_PICKER_MIME_TYPES = [
 ] as const;
 
 /**
- * Server-side ceiling for both upload endpoints (`MAX_UPLOAD_SIZE_BYTES`,
- * 50 MB, in `media_summarizer/api/endpoints/media.py`). The same value is what
- * `POST /api/media/upload-url` checks before signing anything, so mirroring it
+ * The server's upload ceilings, mirrored exactly
+ * (`MAX_DOCUMENT_UPLOAD_SIZE_BYTES` and `MAX_AUDIO_UPLOAD_SIZE_BYTES` in
+ * `media_summarizer/api/endpoints/media.py`). They are what
+ * `POST /api/media/upload-url` checks before signing anything, so mirroring them
  * here refuses an oversized file with a clear message on the device instead of
  * spending the user's bandwidth to be told the same thing.
+ *
+ * Every audio — imported, shared to the app, recorded — has the one ceiling
+ * (TASK-620). The limit that matters for audio is its duration, per plan; the
+ * size only guards against a file no plan could fit, and 250 MB is about
+ * 240 minutes at 128 kbps.
  */
-export const MAX_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+export const MAX_DOCUMENT_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024;
+export const MAX_AUDIO_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024;
+
+/** The ceiling for one kind of upload. */
+export function maxUploadSizeBytes(kind: LocalUploadKind): number {
+  return kind === "audio" ? MAX_AUDIO_UPLOAD_SIZE_BYTES : MAX_DOCUMENT_UPLOAD_SIZE_BYTES;
+}
 
 /** A file picked or captured on the device, ready for the confirmation screen. */
 export interface LocalUploadFile {
@@ -366,13 +378,14 @@ export function prepareLocalUploadFile(input: {
       },
     };
   }
-  if (size !== null && size > MAX_UPLOAD_SIZE_BYTES) {
+  const maxBytes = maxUploadSizeBytes(kind);
+  if (size !== null && size > maxBytes) {
     return {
       rejection: {
         reason: "too_large",
         message: t("upload.reject.tooLarge", {
           size: formatUploadSize(size),
-          max: formatUploadSize(MAX_UPLOAD_SIZE_BYTES),
+          max: formatUploadSize(maxBytes),
         }),
       },
     };

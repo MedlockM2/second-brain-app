@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 import { File } from "expo-file-system";
 import { MAX_RECORDING_SECONDS, RECORDING_BIT_RATE, RECORDING_SAMPLE_INTERVAL_MS, RECORDING_WAVEFORM_BARS, formatRecordingDuration, recordingFileName, recordingLevel } from "@media-summarizer/core/media/audioRecording";
-import { MAX_UPLOAD_SIZE_BYTES, type LocalUploadFile } from "@media-summarizer/core/types/upload";
+import { MAX_AUDIO_UPLOAD_SIZE_BYTES, type LocalUploadFile } from "@media-summarizer/core/types/upload";
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { getActiveLocale, t } from "../i18n";
@@ -16,7 +16,7 @@ const OPTIONS = {
   numberOfChannels: 1,
   bitRate: RECORDING_BIT_RATE,
   isMeteringEnabled: true,
-  android: { ...RecordingPresets.HIGH_QUALITY.android, maxFileSize: MAX_UPLOAD_SIZE_BYTES },
+  android: { ...RecordingPresets.HIGH_QUALITY.android, maxFileSize: MAX_AUDIO_UPLOAD_SIZE_BYTES },
 };
 
 /** The file only enters the ordinary intake after this modal has dismissed. */
@@ -195,7 +195,7 @@ export function AudioNoteRecorder({ onClose, onRecorded }: {
       if (!uri) throw new Error("no recording");
       fileUri.current = uri;
       const file = new File(uri);
-      if (!file.exists || !file.size || file.size > MAX_UPLOAD_SIZE_BYTES) throw new Error("invalid recording");
+      if (!file.exists || !file.size || file.size > MAX_AUDIO_UPLOAD_SIZE_BYTES) throw new Error("invalid recording");
       handedOver.current = {
         uri, name: recordingFileName(t("recording.filename"), date, "m4a"),
         mimeType: "audio/mp4", size: file.size, kind: "audio",

@@ -8,7 +8,7 @@ Upload: presigned PUT URL — binary never transits through this API. API Gatewa
 base64-encodes the request body into the Lambda event, so Lambda's 6 MiB
 synchronous payload ceiling caps any HTTP body at 4 718 592 raw bytes; above that
 the gateway answers `Request Entity Too Large` itself, before the request reaches
-FastAPI, which made the 50 MB / 25 MB limits this module advertises unreachable.
+FastAPI, which made the upload size limits this module advertises unreachable.
 Clients therefore ask `POST /api/media/upload-url` for a presigned PUT, send the
 bytes straight to S3, and hand the resulting key to the ingestion endpoint. Same
 pattern as `endpoints/bug_reports.py`.
@@ -139,11 +139,22 @@ AUDIO_BUCKET = required_env("AUDIO_BUCKET")
 # Pre-signed URL validity for audio uploads (10 minutes)
 AUDIO_PRESIGNED_URL_EXPIRATION = int(os.environ.get("AUDIO_PRESIGNED_URL_EXPIRATION", "600"))
 
-# Max upload size: 50MB
-MAX_UPLOAD_SIZE_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE_BYTES", str(50 * 1024 * 1024)))
+# Upload size ceilings, one per kind of file (TASK-620). Fixed rather than read
+# from the environment because `packages/core/src/types/upload.ts` mirrors them
+# exactly, so that the app refuses before the network what the server refuses;
+# an override here would only move where the rejection happens.
+#
+# Documents: what the parsers were sized for (task-91).
+MAX_DOCUMENT_UPLOAD_SIZE_BYTES = 50 * 1024 * 1024
+# Every audio -- imported, shared to the app, recorded -- has the same ceiling,
+# owner decision of 2026-11-08. The product limit is the duration
+# (`max_minutes_per_item` per plan, enforced on the probed duration); size only
+# depends on the encoding, and 250 MB is about 240 min (the highest per-item
+# ceiling) at 128 kbps. The Deepgram worker transcribes it in pull mode, so the
+# file is never held in a Lambda's memory.
+MAX_AUDIO_UPLOAD_SIZE_BYTES = 250 * 1024 * 1024
 
 # Shared content limits (aligned with mobile client constants)
-MAX_SHARED_AUDIO_SIZE_BYTES = int(os.environ.get("MAX_SHARED_AUDIO_SIZE_BYTES", str(25 * 1024 * 1024)))
 MAX_SHARED_TEXT_LENGTH = int(os.environ.get("MAX_SHARED_TEXT_LENGTH", "50000"))
 # The address a shared selection came from. Browsers cap a URL far above this, but
 # an address longer than 2 048 characters is not one a reader will ever follow.
@@ -184,8 +195,9 @@ _SHARED_AUDIO_MIME_EXTENSIONS = {
 # (infrastructure/terraform/modules/platform/s3.tf).
 UPLOAD_STAGING_PREFIX = "uploads"
 
-# Presigned PUT validity: enough to push 50 MB over a poor mobile connection,
-# short enough that a URL read from a log later is worthless.
+# Presigned PUT validity: S3 checks it when the PUT starts, not when it ends, so
+# a 250 MB audio started in time still completes over a slow connection; short
+# enough that a URL read from a log later is worthless.
 UPLOAD_PRESIGNED_URL_EXPIRATION = int(os.environ.get("UPLOAD_PRESIGNED_URL_EXPIRATION", "900"))
 
 # Presigned GET validity for the pre-storage duration probe, which reads a few
@@ -346,9 +358,9 @@ def _upload_content_fingerprint(
 
 def _max_upload_bytes_for(target: UploadTarget) -> int:
     return (
-        MAX_SHARED_AUDIO_SIZE_BYTES
-        if target is UploadTarget.SHARED_AUDIO
-        else MAX_UPLOAD_SIZE_BYTES
+        MAX_DOCUMENT_UPLOAD_SIZE_BYTES
+        if target is UploadTarget.DOCUMENT
+        else MAX_AUDIO_UPLOAD_SIZE_BYTES
     )
 
 

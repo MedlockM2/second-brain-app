@@ -73,24 +73,19 @@ class AudioGateDecision:
 async def resolve_audio_duration_seconds(
     *,
     known_duration_seconds: int = 0,
-    audio_bytes: Optional[bytes] = None,
     audio_url: Optional[str] = None,
     probe_budget_seconds: float = audio_duration_probe.DEFAULT_PROBE_BUDGET_SECONDS,
 ) -> int:
     """Best available duration for a submission, or 0 when unobtainable.
 
     Cheapest source first: a duration the platform already told us (feed
-    metadata, extractor output), then the local bytes, then an HTTP Range probe
-    on the remote URL. Returning 0 is a valid answer and means "accept anyway,
+    metadata, extractor output), then an HTTP Range probe on the remote URL. No
+    caller holds the whole file: an uploaded audio is probed over a presigned GET
+    by the upload endpoint, never read into memory (TASK-620). Returning 0 is a valid answer and means "accept anyway,
     reserve the per-item ceiling, settle on what Deepgram bills".
     """
     if known_duration_seconds and known_duration_seconds > 0:
         return int(known_duration_seconds)
-
-    if audio_bytes:
-        local = audio_duration_probe.probe_duration_seconds_from_bytes(audio_bytes)
-        if local:
-            return local
 
     if audio_url:
         remote = await audio_duration_probe.probe_duration_seconds_from_url(
@@ -146,7 +141,6 @@ async def gate_audio_transcription(
     job: Any = None,
     media_key: Optional[str] = None,
     audio_url: Optional[str] = None,
-    audio_bytes: Optional[bytes] = None,
     known_duration_seconds: int = 0,
     content_language: Optional[str] = None,
     error_step: str = "budget_admission",
@@ -172,7 +166,6 @@ async def gate_audio_transcription(
     source_platform = getattr(job, "source_platform", None)
     duration_seconds = await resolve_audio_duration_seconds(
         known_duration_seconds=known_duration_seconds,
-        audio_bytes=audio_bytes,
         audio_url=audio_url,
         probe_budget_seconds=probe_budget_seconds,
     )

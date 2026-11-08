@@ -154,7 +154,7 @@ Incoming share payload
 1. **WhatsApp "View Once" media**: Cannot be shared via the share sheet; no handling needed.
 2. **WhatsApp Status shares**: Come as video (`video/mp4`), not handled in this scope.
 3. **Multi-file shares**: WhatsApp sends one file at a time; we accept max 1 attachment.
-4. **Large voice messages**: WhatsApp limits voice notes to ~16 MB. Our limit is 25 MB to provide headroom.
+4. **Large voice messages**: WhatsApp limits voice notes to ~16 MB. Our limit is the one for every audio, 250 MB (`MAX_AUDIO_UPLOAD_SIZE_BYTES`), so a voice note never reaches it.
 5. **Network interruption during upload**: The mobile app should show a clear error and allow retry.
 6. **Duplicate prevention**: Idempotency keys based on content hash + time window prevent double-ingestion from rapid double-taps or Android intent re-delivery.
 

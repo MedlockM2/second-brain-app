@@ -16,7 +16,7 @@
  */
 
 import { formatNumber, t } from "../i18n/runtime";
-import { formatUploadSize } from "./upload";
+import { formatUploadSize, MAX_AUDIO_UPLOAD_SIZE_BYTES } from "./upload";
 
 export type SharedContentType = "text" | "audio" | "conversation";
 
@@ -56,12 +56,6 @@ export const SUPPORTED_AUDIO_MIME_TYPES = [
 ] as const;
 
 export type SupportedAudioMimeType = (typeof SUPPORTED_AUDIO_MIME_TYPES)[number];
-
-/**
- * Maximum audio file size for shared content ingestion (25 MB).
- * WhatsApp voice messages are typically under 16 MB; this provides headroom.
- */
-export const MAX_SHARED_AUDIO_SIZE_BYTES = 25 * 1024 * 1024;
 
 /**
  * Maximum text length for shared text ingestion (50,000 characters).
@@ -254,13 +248,14 @@ export function validateSharedAudioFile(
       rejection: { reason: "empty", message: t("upload.reject.empty") },
     };
   }
-  if (file.fileSize !== null && file.fileSize > MAX_SHARED_AUDIO_SIZE_BYTES) {
+  // The same ceiling as an imported audio: a share is an audio like any other.
+  if (file.fileSize !== null && file.fileSize > MAX_AUDIO_UPLOAD_SIZE_BYTES) {
     return {
       rejection: {
         reason: "too_large",
         message: t("upload.reject.tooLarge", {
           size: formatUploadSize(file.fileSize),
-          max: formatUploadSize(MAX_SHARED_AUDIO_SIZE_BYTES),
+          max: formatUploadSize(MAX_AUDIO_UPLOAD_SIZE_BYTES),
         }),
       },
     };

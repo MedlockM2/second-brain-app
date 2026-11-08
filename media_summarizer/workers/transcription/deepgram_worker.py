@@ -236,7 +236,15 @@ async def upload_transcription(transcript_s3_key: str, transcription_text: str) 
     )
 
 
-async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
+async def call_deepgram_api(
+    *, audio_url: str, job_id: str, log_audio_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """Pull mode: Deepgram fetches ``audio_url`` itself.
+
+    ``log_audio_url`` replaces ``audio_url`` in the log line and in any provider
+    text carried by an error, for a URL that must not be written down -- a
+    presigned S3 GET, which grants read access to the object until it expires.
+    """
     if not DEEPGRAM_API_KEY:
         raise DeepgramAccountRefusedError(details="deepgram_api_key_missing")
 
@@ -263,13 +271,16 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
 
     latency_seconds = time.time() - started
     status = response.status_code
+    provider_text = response.text
+    if log_audio_url:
+        provider_text = provider_text.replace(audio_url, log_audio_url)
 
-    _raise_for_account(status, response.text)
+    _raise_for_account(status, provider_text)
     if status in (401, 403, 400, 404, 415, 422):
         # Detect REMOTE_CONTENT_ERROR: Deepgram could not fetch the audio URL
         # (e.g. source CDN blocks cloud SaaS IPs with HTTP 403).
         # Raise RemoteContentError so callers can fall back to push-mode.
-        response_text = response.text[:500]
+        response_text = provider_text[:500]
         if "REMOTE_CONTENT_ERROR" in response_text or (
             status == 400 and "403" in response_text
         ):
@@ -286,13 +297,13 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
             provider_detail=response_text[:300],
         )
     if status == 429 or status >= 500:
-        raise RetryableDeepgramError(status=status, provider_detail=response.text[:300])
+        raise RetryableDeepgramError(status=status, provider_detail=provider_text[:300])
     if status >= 300:
         raise DeepgramRefusedError(
             MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
             details="deepgram_unexpected_status",
             status=status,
-            provider_detail=response.text[:300],
+            provider_detail=provider_text[:300],
         )
 
     try:
@@ -315,9 +326,37 @@ async def call_deepgram_api(*, audio_url: str, job_id: str) -> Dict[str, Any]:
         status=status,
         duration_ms=int(latency_seconds * 1000),
         provider_request_id=request_id,
-        audio_url=audio_url,
+        audio_url=log_audio_url or audio_url,
     )
     return payload
+
+
+#: Validity of the presigned GET handed to Deepgram for an audio stored in our
+#: bucket. Deepgram fetches the file while the prerecorded request is open, which
+#: is bounded by ``DEEPGRAM_TIMEOUT_SECONDS`` (300 s by default); an hour covers
+#: that with a wide margin for its own queueing, and is still short enough that a
+#: URL leaking from Deepgram's side stops working the same day.
+S3_AUDIO_PULL_URL_EXPIRATION = 3600
+
+
+async def call_deepgram_api_on_s3_audio(*, s3_key: str, job_id: str) -> Dict[str, Any]:
+    """Transcribe an audio stored in ``AUDIO_BUCKET`` in pull mode (TASK-620).
+
+    Deepgram fetches the object over a presigned GET instead of receiving its
+    bytes, so the file never sits in this Lambda's memory: an upload may be up to
+    250 MB (``MAX_AUDIO_UPLOAD_SIZE_BYTES``) and the function has 512 MB. The
+    bucket has no policy restricting where a GET comes from and is SSE-S3
+    encrypted, so a presigned URL is enough for Deepgram to read it. The URL is
+    never logged: ``s3://bucket/key`` stands in for it.
+    """
+    presigned_url = await s3.generate_presigned_url(
+        AUDIO_BUCKET, s3_key, expiration=S3_AUDIO_PULL_URL_EXPIRATION, http_method="GET"
+    )
+    return await call_deepgram_api(
+        audio_url=presigned_url,
+        job_id=job_id,
+        log_audio_url=f"s3://{AUDIO_BUCKET}/{s3_key}",
+    )
 
 
 # Maximum audio file size for push-mode fallback (250 MB).
@@ -429,22 +468,6 @@ async def _download_audio_for_push_fallback(
             details="audio_download_transport_error",
             exception_type=type(exc).__name__,
         ) from exc
-
-
-def _resolve_audio_content_type(
-    *,
-    content_mime_type: Optional[str],
-    original_name: Optional[str],
-) -> str:
-    mime_type = (content_mime_type or "").strip().lower()
-    if mime_type.startswith("audio/") or mime_type.startswith("video/"):
-        return mime_type
-
-    guessed, _ = mimetypes.guess_type((original_name or "").strip())
-    guessed = (guessed or "").strip().lower()
-    if guessed.startswith("audio/") or guessed.startswith("video/"):
-        return guessed
-    return "application/octet-stream"
 
 
 async def call_deepgram_api_from_bytes(
@@ -757,21 +780,13 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
     started = time.time()
 
     if isinstance(audio_s3_key, str) and audio_s3_key.strip():
-        # S3-based audio always uses push-mode (bytes already available)
-        audio_bytes = await s3.download_file_to_memory(AUDIO_BUCKET, audio_s3_key.strip())
-        content_type = _resolve_audio_content_type(
-            content_mime_type=message_body.get("content_mime_type"),
-            original_name=message_body.get("original_name"),
-        )
+        # Our own bucket: pull mode over a presigned GET, never the bytes in memory.
+        s3_key = audio_s3_key.strip()
         deepgram_payload, call = await budget.send(
-            lambda: call_deepgram_api_from_bytes(
-                audio_bytes=audio_bytes,
-                content_type=content_type,
-                job_id=job_id,
-            ),
+            lambda: call_deepgram_api_on_s3_audio(s3_key=s3_key, job_id=job_id),
             job_id=job_id,
         )
-        deepgram_mode_used = "push"
+        deepgram_mode_used = "pull"
     elif isinstance(audio_url, str) and audio_url.strip():
         source_url = audio_url.strip()
         if requested_mode == "push":
@@ -1002,11 +1017,7 @@ async def _transcribe_voice_note(
     account (key refused, no credit left) is not about this file and fails the job.
     """
     probed = float(voice.get("duration_seconds") or 0)
-    audio_bytes = await s3.download_file_to_memory(AUDIO_BUCKET, str(voice["audio_s3_key"]))
-    content_type = _resolve_audio_content_type(
-        content_mime_type=voice.get("content_mime_type"),
-        original_name=voice.get("original_name"),
-    )
+    voice_key = str(voice["audio_s3_key"])
     budget = TranscriptionBudget(
         message_body=message_body,
         job=job,
@@ -1015,10 +1026,11 @@ async def _transcribe_voice_note(
         duration_seconds=probed,
     )
     try:
+        # Pull mode, like a single uploaded audio: a voice note is small by nature,
+        # but nothing bounds it below the 250 MB audio ceiling, and the same path
+        # keeps every audio of our bucket out of this function's memory.
         payload, call = await budget.send(
-            lambda: call_deepgram_api_from_bytes(
-                audio_bytes=audio_bytes, content_type=content_type, job_id=job_id
-            ),
+            lambda: call_deepgram_api_on_s3_audio(s3_key=voice_key, job_id=job_id),
             job_id=job_id,
         )
     except (DeepgramAccountRefusedError, DeepgramCreditExhaustedError):

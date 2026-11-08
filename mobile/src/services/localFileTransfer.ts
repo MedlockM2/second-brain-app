@@ -38,7 +38,7 @@
  * - `uploadAsync(…, BINARY_CONTENT)` streams the file from disk natively
  *   (`URLSession.uploadTask(with:fromFile:)` on iOS, OkHttp `asRequestBody` on
  *   Android), so the bytes never enter the JavaScript heap. That matters at this
- *   app's 50 MB ceiling: reading the file into a `Uint8Array` and letting `fetch`
+ *   app's ceilings (50 MB for a document, 250 MB for an audio): reading the file into a `Uint8Array` and letting `fetch`
  *   send it costs three copies of the file (the array, whatwg-fetch's clone, and
  *   the base64 string `convertRequestBody` builds), where the old blob at least
  *   stayed native.
