@@ -27,7 +27,11 @@ from media_summarizer.core.media_ingestion.adapters.podcast_resolver_foundation 
     PodcastUrlDescriptor,
 )
 from media_summarizer.core.media_ingestion.domain import SourcePlatform
-from media_summarizer.core.services.podcast_matching import best_match_episode
+from media_summarizer.core.services.podcast_matching import (
+    best_match_episode,
+    matching_episodes,
+    normalize_podcast_title,
+)
 from media_summarizer.utils import podcast_index
 
 logger = logging.getLogger(__name__)
@@ -105,6 +109,90 @@ def _spotify_show_queries(show_title: str) -> list[str]:
     if head and head != show_title:
         queries.append(head)
     return queries
+
+
+#: How many title-search results are scanned for an exact title. Only exact
+#: titles are kept from it, so it reads deeper than the term search: "LEGEND"
+#: ranks below several "Legend…" shows even there.
+_TITLE_SEARCH_DEPTH = 50
+
+
+async def _spotify_candidate_feeds(show_title: str, *, limit: int) -> list[dict]:
+    """The feeds that may carry a Spotify show, the ones named exactly like it first.
+
+    `search/byterm` alone lost LEGEND (Guillaume Pley): five feeds with "legend"
+    somewhere in their metadata outranked the show itself. `search/bytitle`
+    finds it, so every feed whose title equals the show's comes first, from
+    either search; the term search's own ranking follows, as before. A query
+    that yields no exact title hands over to the next one (the title without
+    its network suffix) instead of stopping at a fuzzy hit.
+    """
+    exact: list[dict] = []
+    others: list[dict] = []
+    seen: set[int] = set()
+    for query in _spotify_show_queries(show_title):
+        wanted = normalize_podcast_title(query)
+        for search, depth in (
+            (podcast_index.search_podcasts_by_title, _TITLE_SEARCH_DEPTH),
+            (podcast_index.search_podcasts, limit),
+        ):
+            result = await search(query=query, max_results=depth, similar=True)
+            if result.get("status") != "true":
+                raise RuntimeError(
+                    "PodcastIndex feed search returned non-success status."
+                )
+            is_term_search = search is podcast_index.search_podcasts
+            for feed in (result.get("feeds") or [])[:depth]:
+                feed_id = _extract_feed_id({"feed": feed})
+                if feed_id is None or feed_id in seen:
+                    continue
+                if normalize_podcast_title(feed.get("title") or "") == wanted:
+                    seen.add(feed_id)
+                    exact.append(feed)
+                elif is_term_search:
+                    seen.add(feed_id)
+                    others.append(feed)
+        if exact:
+            break
+    return exact[:limit] + others[:limit]
+
+
+#: How far an episode's length may stray from Spotify's and still be the one the
+#: reader shared. The publisher's own feed carries Spotify's exact length;
+#: re-uploads of the same episode under another account ran 6-7 % longer
+#: (Call Her Daddy, 2026-11). A few seconds absorbs rounding.
+_SPOTIFY_DURATION_TOLERANCE_SECONDS = 5
+
+
+def _duration_gap(episode: Mapping[str, Any], target_seconds: int) -> int | None:
+    """Seconds between an episode's length and the target, None when unknown."""
+    try:
+        duration = int(episode.get("duration") or 0)
+    except (TypeError, ValueError):
+        return None
+    if target_seconds <= 0 or duration <= 0:
+        return None
+    return abs(duration - target_seconds)
+
+
+def _closest_in_length(
+    episodes: list[Mapping[str, Any]], target_seconds: int
+) -> Mapping[str, Any] | None:
+    """The title match whose length is nearest the target, feed order on ties.
+
+    One title can name several episodes of a feed (Call Her Daddy published
+    "Khloé Kardashian: I'm Done with NBA Players" at 38 and 73 minutes); only the
+    length says which one was shared. Episodes of unknown length rank last.
+    """
+    if not episodes:
+        return None
+    return min(
+        episodes,
+        key=lambda episode: (
+            _duration_gap(episode, target_seconds) is None,
+            _duration_gap(episode, target_seconds) or 0,
+        ),
+    )
 
 
 #: PodcastIndex's ceiling for `episodes/byfeedid`.
@@ -509,20 +597,9 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
                 },
             )
 
-        feeds: list[dict] = []
-        for query in _spotify_show_queries(show_title):
-            search_result = await podcast_index.search_podcasts(
-                query=query,
-                max_results=self._feed_candidates,
-                similar=True,
-            )
-            if search_result.get("status") != "true":
-                raise RuntimeError(
-                    "PodcastIndex feed search returned non-success status."
-                )
-            feeds = search_result.get("feeds", [])
-            if feeds:
-                break
+        feeds = await _spotify_candidate_feeds(
+            show_title, limit=self._feed_candidates
+        )
         if not feeds:
             return PodcastResolutionOutcome.failed(
                 error_code=PodcastResolverErrorCode.EPISODE_NOT_FOUND,
@@ -536,15 +613,15 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
                 },
             )
 
+        spotify_duration = int(spotify_metadata.get("audio_duration_seconds") or 0)
         attempted_feed_ids: list[int] = []
         transient_feed_errors = 0
-        for feed in feeds[: self._feed_candidates]:
-            feed_id = feed.get("id")
-            if feed_id is None:
-                continue
-            try:
-                normalized_feed_id = int(feed_id)
-            except Exception:
+        # The nearest-length match seen so far, kept while a later feed may still
+        # carry the episode at Spotify's exact length.
+        closest: tuple[int | None, dict, Mapping[str, Any]] | None = None
+        for feed in feeds:
+            normalized_feed_id = _extract_feed_id({"feed": feed})
+            if normalized_feed_id is None:
                 continue
             attempted_feed_ids.append(normalized_feed_id)
 
@@ -552,7 +629,9 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
                 match = await _find_episode_in_feed(
                     feed_id=normalized_feed_id,
                     episode_candidates=self._episode_candidates,
-                    match=lambda items: best_match_episode(items, episode_title),
+                    match=lambda items: _closest_in_length(
+                        matching_episodes(items, episode_title), spotify_duration
+                    ),
                 )
             except Exception as exc:
                 if _is_transient_error(exc):
@@ -566,6 +645,48 @@ class SpotifyPodcastPlatformResolver(PodcastPlatformResolver):
 
             if not match:
                 continue
+
+            gap = _duration_gap(match, spotify_duration)
+            if spotify_duration <= 0 or (
+                gap is not None and gap <= _SPOTIFY_DURATION_TOLERANCE_SECONDS
+            ):
+                closest = (gap, feed, match)
+                break
+            if closest is None or (
+                gap is not None and (closest[0] is None or gap < closest[0])
+            ):
+                closest = (gap, feed, match)
+
+        if closest is not None:
+            gap, feed, match = closest
+            normalized_feed_id = _extract_feed_id({"feed": feed})
+            logger.info(
+                "Spotify resolver matched feed_id=%s duration_gap=%s "
+                "(spotify=%ss, feed=%ss) among %s candidate feeds",
+                normalized_feed_id,
+                gap,
+                spotify_duration,
+                match.get("duration"),
+                len(attempted_feed_ids),
+            )
+            if spotify_duration > 0 and (
+                gap is None or gap > _SPOTIFY_DURATION_TOLERANCE_SECONDS
+            ):
+                return PodcastResolutionOutcome.failed(
+                    error_code=PodcastResolverErrorCode.EPISODE_NOT_FOUND,
+                    client_message=DEFAULT_PODCAST_RESOLUTION_FAILED_MESSAGE,
+                    retryable=False,
+                    metadata={
+                        "reason": "no_episode_matching_spotify_duration",
+                        "spotify_episode_id": spotify_episode_id,
+                        "show_title": show_title,
+                        "episode_title": episode_title,
+                        "spotify_duration_seconds": spotify_duration,
+                        "closest_feed_id": normalized_feed_id,
+                        "closest_duration_seconds": int(match.get("duration") or 0),
+                        "attempted_feed_ids": attempted_feed_ids,
+                    },
+                )
 
             audio_url = (match.get("enclosureUrl") or "").strip()
             if not audio_url:

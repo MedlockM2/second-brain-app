@@ -60,40 +60,66 @@ def best_match_episode(
     """
     Select the best matching episode candidate for a target title.
 
-    Matching strategy (same behavior as legacy sync services):
+    The first of `matching_episodes`: for ties, the first candidate encountered
+    keeps precedence.
+    """
+    matches = matching_episodes(
+        episodes,
+        target_title,
+        min_token_overlap_score=min_token_overlap_score,
+    )
+    return matches[0] if matches else None
+
+
+def matching_episodes(
+    episodes: Sequence[Mapping[str, Any]],
+    target_title: str,
+    *,
+    min_token_overlap_score: float = DEFAULT_MIN_TOKEN_OVERLAP_SCORE,
+) -> list[Mapping[str, Any]]:
+    """
+    Every episode tied at the strongest title match, in feed order.
+
+    Matching strategy (same behavior as legacy sync services), the first tier
+    that matches anything wins:
     1. strict equality on normalized titles
     2. substring match in either direction on normalized titles
     3. highest Jaccard token overlap, accepted when score >= threshold
 
-    The scoring is deterministic: for ties, the first candidate encountered
-    keeps precedence.
+    A feed can carry several episodes under one title (a two-part interview, a
+    re-run): the caller tells them apart with what the title cannot say.
     """
     target_normalized = normalize_podcast_title(target_title)
+    normalized = [
+        (episode, normalize_podcast_title(_episode_title(episode)))
+        for episode in episodes
+    ]
 
-    for episode in episodes:
-        episode_normalized = normalize_podcast_title(_episode_title(episode))
-        if episode_normalized == target_normalized:
-            return episode
+    exact = [episode for episode, title in normalized if title == target_normalized]
+    if exact:
+        return exact
 
-    for episode in episodes:
-        episode_normalized = normalize_podcast_title(_episode_title(episode))
-        if (
-            target_normalized in episode_normalized
-            or episode_normalized in target_normalized
-        ):
-            return episode
+    substring = [
+        episode
+        for episode, title in normalized
+        if target_normalized in title or title in target_normalized
+    ]
+    if substring:
+        return substring
 
-    best_episode: Mapping[str, Any] | None = None
     best_score = 0.0
+    best: list[Mapping[str, Any]] = []
     for episode in episodes:
         score = jaccard_token_overlap_score(target_title, _episode_title(episode))
         if score > best_score:
             best_score = score
-            best_episode = episode
+            best = [episode]
+        elif score == best_score and best:
+            best.append(episode)
 
     if best_score >= min_token_overlap_score:
-        return best_episode
-    return None
+        return best
+    return []
 
 
 def _episode_title(episode: Mapping[str, Any]) -> str:

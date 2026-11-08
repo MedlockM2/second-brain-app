@@ -11,6 +11,7 @@ import json
 import logging
 import os
 from io import BytesIO
+from typing import Any, Mapping
 
 from media_summarizer.core.media_ingestion.adapters.podcast_resolver_foundation import (
     PodcastResolutionStatus,
@@ -81,10 +82,25 @@ _RESOLVER_FAILURES: dict[PodcastResolverErrorCode, tuple[bool, MediaFailureCode]
 }
 
 
-def _resolution_failure(error_code: PodcastResolverErrorCode) -> IngestionFailure:
+def _resolution_failure(
+    error_code: PodcastResolverErrorCode,
+    resolver_metadata: Mapping[str, Any] | None = None,
+) -> IngestionFailure:
+    """The job failure for a resolver outcome, with what the resolver tried.
+
+    The resolver's own facts (its finer reason, the show it searched for, the
+    feeds it read) land in the job's `error_metadata`; without them a failed
+    episode could only be explained by re-reading the Lambda logs. Its `reason`
+    is kept as `resolver_reason` so the job's reason token stays the error code.
+    """
     retryable, failure_code = _RESOLVER_FAILURES[error_code]
     failure_type = TransientIngestionFailure if retryable else PermanentIngestionFailure
-    return failure_type(failure_code, details=error_code.value)
+    context = {
+        ("resolver_reason" if key == "reason" else key): value
+        for key, value in (resolver_metadata or {}).items()
+        if key not in ("step", "attempt")
+    }
+    return failure_type(failure_code, details=error_code.value, **context)
 
 
 def _source_platform_from_message_value(value: str) -> SourcePlatform:
@@ -127,7 +143,8 @@ async def _resolve_audio_url(message_body: dict) -> dict:
     outcome = await resolver.resolve(descriptor=descriptor)
     if outcome.status != PodcastResolutionStatus.RESOLVED or not outcome.audio_url:
         raise _resolution_failure(
-            outcome.error_code or PodcastResolverErrorCode.AUDIO_URL_NOT_FOUND
+            outcome.error_code or PodcastResolverErrorCode.AUDIO_URL_NOT_FOUND,
+            outcome.metadata,
         )
 
     return {

@@ -146,6 +146,46 @@ async def search_podcasts(
     Raises:
         Exception: If the API request fails
     """
+    return await _search_feeds(
+        endpoint="search/byterm",
+        query=query,
+        max_results=max_results,
+        similar=similar,
+        http_client=http_client,
+    )
+
+
+async def search_podcasts_by_title(
+    query: str,
+    max_results: int = 10,
+    similar: bool = False,
+    http_client: Optional[httpx.AsyncClient] = None,
+) -> Dict[str, Any]:
+    """
+    Search for podcasts whose title matches `query`, ignoring author and owner.
+
+    `search/byterm` ranks a short, common show name ("LEGEND") below every feed
+    that carries the word anywhere, so the show itself can fall out of the first
+    results. Matching on the title field alone keeps it in. Same contract and
+    errors as `search_podcasts`.
+    """
+    return await _search_feeds(
+        endpoint="search/bytitle",
+        query=query,
+        max_results=max_results,
+        similar=similar,
+        http_client=http_client,
+    )
+
+
+async def _search_feeds(
+    *,
+    endpoint: str,
+    query: str,
+    max_results: int,
+    similar: bool,
+    http_client: Optional[httpx.AsyncClient],
+) -> Dict[str, Any]:
     try:
         headers = _generate_headers()
         params = {"q": query, "max": min(max_results, 1000)}
@@ -153,7 +193,7 @@ async def search_podcasts(
         if similar:
             params["similar"] = "true"
 
-        url = f"{PODCAST_INDEX_BASE_URL}/search/byterm"
+        url = f"{PODCAST_INDEX_BASE_URL}/{endpoint}"
 
         response = await _rate_limited_get(
             url=url,
@@ -165,7 +205,9 @@ async def search_podcasts(
         response.raise_for_status()
         data = response.json()
 
-        logger.info(f"Found {data.get('count', 0)} podcasts for query: {query}")
+        logger.info(
+            f"Found {data.get('count', 0)} podcasts on {endpoint} for query: {query}"
+        )
         return data
 
     except httpx.HTTPStatusError as e:
