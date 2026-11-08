@@ -2,8 +2,11 @@
  * The two things the app owes the push notification path: a registered device,
  * and somewhere to land when a notification is opened.
  *
- * Registration is attempted once per signed-in account, and retried on every
- * return to the foreground until it succeeds. The retry costs one permission
+ * Registration is attempted once per signed-in account and interface language,
+ * and retried on every return to the foreground until it succeeds. The language
+ * is part of the key because the backend renders this device's notifications in
+ * it: switching the app's language in the settings registers again, so the next
+ * notification arrives in the new one (TASK-619). The retry costs one permission
  * *read* — it can never re-prompt, the service holds that invariant — and it is
  * what recovers the two everyday failures: the device was offline when the
  * account signed in, and the user granted the permission afterwards in the system
@@ -22,13 +25,16 @@ import {
   MEDIA_READY_NOTIFICATION_TYPE,
   registerForPushNotifications,
 } from "../services/pushNotificationService";
+import { useTranslation } from "../i18n";
 
 export function usePushNotifications(userId: string | null): void {
   const router = useRouter();
+  const { locale } = useTranslation();
 
-  // Which account this device is registered for. Keyed by id, because the
-  // provider outlives a sign-out: a second account signing in on the same phone
-  // has to register the same token under its own id.
+  // Which account, in which interface language, this device is registered for.
+  // Keyed by id because the provider outlives a sign-out: a second account
+  // signing in on the same phone has to register the same token under its own id.
+  // Keyed by language because the backend renders notifications in it.
   const registeredForRef = useRef<string | null>(null);
   const isRegisteringRef = useRef(false);
   // The notification whose tap has already been routed. `useLastNotificationResponse`
@@ -38,12 +44,13 @@ export function usePushNotifications(userId: string | null): void {
 
   const register = useCallback(async () => {
     if (!userId || isRegisteringRef.current) return;
-    if (registeredForRef.current === userId) return;
+    const registrationKey = `${userId}:${locale}`;
+    if (registeredForRef.current === registrationKey) return;
 
     isRegisteringRef.current = true;
     try {
-      if ((await registerForPushNotifications()) === "registered") {
-        registeredForRef.current = userId;
+      if ((await registerForPushNotifications(locale)) === "registered") {
+        registeredForRef.current = registrationKey;
       }
       // Any other outcome leaves the ref untouched on purpose: `denied` and
       // `unavailable` are both states the next foreground pass may find changed.
@@ -53,9 +60,10 @@ export function usePushNotifications(userId: string | null): void {
     } finally {
       isRegisteringRef.current = false;
     }
-  }, [userId]);
+  }, [locale, userId]);
 
-  // Sign-in, and the moment the session is restored on a cold start.
+  // Sign-in, the moment the session is restored on a cold start, and a change of
+  // interface language.
   useEffect(() => {
     void register();
   }, [register]);

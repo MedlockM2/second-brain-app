@@ -75,9 +75,11 @@ export function resolveDeviceLocale(): SupportedLocale {
 /**
  * The in-app override, stored on the device and nowhere else.
  *
- * The backend has no business knowing the language of the chrome: it renders
- * none of it. `reading_language`, which it *does* need, is a different setting
- * that keeps travelling through `PATCH /api/auth/me`.
+ * The backend renders none of the chrome, so the preference itself stays here.
+ * The one thing it writes in this language is push notifications, and for those
+ * the resolved locale travels with the device's push token
+ * (`usePushNotifications`), not as an account setting. `reading_language` is a
+ * different setting that keeps travelling through `PATCH /api/auth/me`.
  *
  * SecureStore is the app's only key/value store (AsyncStorage was removed in
  * V1), so it holds this the same way it holds the usage-warning dismissal.

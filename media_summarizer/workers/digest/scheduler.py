@@ -143,7 +143,10 @@ def _notification_message(
 ) -> Dict[str, Any]:
     """The queue message for one notification.
 
-    The body is a count and nothing else, deliberately. Expo's push service is a
+    The message describes the notification and carries no text: the consumer
+    renders it in each device's interface language
+    (``push_notification_copy.render_digest``, TASK-619), plurals included. What
+    travels is a count and nothing else, deliberately. Expo's push service is a
     third party that relays the payload and whose staff can see it while
     debugging, so nothing about *what* the user saved travels: no title, no
     source, no excerpt. The count is enough to make the notification worth
@@ -154,20 +157,14 @@ def _notification_message(
     ``type`` it does not know — then the Digest tab to select, and the period so a
     stale notification opened days later is still legible in logs.
     """
-    plural = "item" if item_count == 1 else "items"
-    if digest_type is DigestType.DAILY:
-        title = "Your daily digest is ready"
-        body = f"You saved {item_count} {plural} today."
-    else:
-        title = "Your weekly digest is ready"
-        body = f"You saved {item_count} {plural} last week."
-
     return {
         "notification_type": "send",
         "user_id": account.user_id,
-        "title": title,
-        "body": body,
-        "channel_id": push_notification_dispatch.ANDROID_CHANNEL_DIGEST,
+        "notification": {
+            "kind": push_notification_dispatch.NOTIFICATION_TYPE_DIGEST,
+            "digest_type": digest_type.value,
+            "item_count": item_count,
+        },
         "data": {
             "type": push_notification_dispatch.NOTIFICATION_TYPE_DIGEST,
             "digest_type": digest_type.value,

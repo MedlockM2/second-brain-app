@@ -5,7 +5,9 @@
  * *separate axis* from it: `reading_language` picks the language of the
  * generated content (summaries, translated transcripts, digests) and lives
  * server-side, while this one picks the language of the chrome around it and
- * never leaves the device. Someone reading English summaries in a French
+ * stays on the device — except as the language the backend writes this device's
+ * push notifications in, sent with its push token. The backend keeps the same
+ * eleven in `core/services/push_notification_copy.py`. Someone reading English summaries in a French
  * interface is a supported combination, not an inconsistency to reconcile.
  *
  * `en` is the fallback: it is the reference catalogue, the development

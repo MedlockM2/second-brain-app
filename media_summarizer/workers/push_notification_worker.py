@@ -11,11 +11,18 @@ payload dialects — for a push surface of two Digest notifications a week and o
 line when a saved source becomes readable. Expo already holds the credentials the
 EAS build was signed with.
 
-**It knows nothing about what it is delivering.** A message names a title, a body,
-an Android channel and a ``data`` blob; which of those a Digest and a ready source
-put in them belongs to their producers (``workers/digest/scheduler.py`` and
-``core/services/push_notification_dispatch.py``). Adding a third kind of
-notification is a third producer, not a branch here.
+**It renders, per device language, what the producers describe.** A ``send``
+message carries a ``notification`` — its ``kind`` and the parameters it needs (the
+media's category, a Digest's period and count) — and a ``data`` blob the app routes
+on; deciding *that* a notification is due and with which parameters belongs to the
+producers (``workers/digest/scheduler.py`` and
+``core/services/push_notification_dispatch.py``). The text cannot be fixed by the
+producer, because one message reaches every device of an account and each device
+reads its notifications in the app's own interface language, stored with its token
+(TASK-619). So the tokens are grouped by locale and each group gets its own
+rendering from ``core/services/push_notification_copy.py``, which is the one place
+the words live. Adding a third kind of notification is a third producer and a third
+entry in ``_render``.
 
 **Two message shapes on one queue.** A ``send`` message names a user and the
 notification to deliver; a ``receipt_check`` message names the tickets a previous
@@ -45,11 +52,15 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import httpx
 
-from media_summarizer.core.services import push_notification_dispatch
+from media_summarizer.core.models.push_token import PushToken
+from media_summarizer.core.services import (
+    push_notification_copy,
+    push_notification_dispatch,
+)
 from media_summarizer.utils import push_token_db, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import (
@@ -90,13 +101,12 @@ ERROR_DEVICE_NOT_REGISTERED = "DeviceNotRegistered"
 #: a perfectly valid state.
 EXPO_ACCESS_TOKEN = os.environ.get("EXPO_ACCESS_TOKEN", "").strip()
 
-#: The channel a message that names none falls back to. Both channels are declared
-#: in ``core/services/push_notification_dispatch.py``, next to the producer that
-#: needs them; this one is repeated here only as the default, because an Android
-#: payload with no ``channelId`` lands in expo-notifications' own "Miscellaneous"
-#: channel (``BaseNotificationBuilder.FALLBACK_CHANNEL_ID``) — a category the user
-#: cannot recognise, and one the per-category mute cannot be used on.
-DEFAULT_ANDROID_CHANNEL_ID = push_notification_dispatch.ANDROID_CHANNEL_DIGEST
+#: The Android channel each kind of notification is filed under, declared next to
+#: the producer that needs them in ``core/services/push_notification_dispatch.py``.
+_CHANNEL_BY_KIND = {
+    push_notification_dispatch.NOTIFICATION_TYPE_DIGEST: push_notification_dispatch.ANDROID_CHANNEL_DIGEST,
+    push_notification_dispatch.NOTIFICATION_TYPE_MEDIA_READY: push_notification_dispatch.ANDROID_CHANNEL_MEDIA_READY,
+}
 
 
 def _expo_headers() -> Dict[str, str]:
@@ -151,17 +161,110 @@ def _error_code(entry: Dict[str, Any]) -> str:
     return ""
 
 
+def _render(
+    notification: Dict[str, Any], locale: str
+) -> Optional[push_notification_copy.RenderedNotification]:
+    """The title and body of ``notification`` in ``locale``, or None for a shape
+    this consumer does not know."""
+    kind = notification.get("kind")
+    if kind == push_notification_dispatch.NOTIFICATION_TYPE_MEDIA_READY:
+        return push_notification_copy.render_media_ready(
+            locale, str(notification.get("media_category") or "")
+        )
+    if kind == push_notification_dispatch.NOTIFICATION_TYPE_DIGEST:
+        item_count = notification.get("item_count")
+        if not isinstance(item_count, int) or isinstance(item_count, bool):
+            return None
+        return push_notification_copy.render_digest(
+            locale, str(notification.get("digest_type") or ""), item_count
+        )
+    return None
+
+
+async def _send_chunk(
+    user_id: str,
+    chunk: Sequence[PushToken],
+    rendered: push_notification_copy.RenderedNotification,
+    data: Dict[str, Any],
+    channel_id: str,
+) -> Tuple[List[Tuple[str, str]], int]:
+    """One Expo send call for up to ``SEND_BATCH_SIZE`` devices sharing a language.
+
+    Returns the accepted ``(ticket_id, push_token)`` pairs and the rejected count.
+    """
+    accepted: List[Tuple[str, str]] = []
+    rejected = 0
+    payload = {
+        "to": [token.push_token for token in chunk],
+        "title": rendered.title,
+        "body": rendered.body,
+        "data": data,
+        "sound": "default",
+        "channelId": channel_id,
+    }
+    response = await _post_to_expo(EXPO_SEND_URL, payload)
+
+    # Expo answers one ticket per recipient, in the order the recipients were
+    # given. `zip` on the shorter of the two is deliberate: a truncated answer
+    # loses the tail's receipts, which the next send recovers, whereas
+    # indexing blind would mis-attribute a verdict to the wrong device — and
+    # delete a live registration.
+    tickets = response.get("data") or []
+    if not isinstance(tickets, list):
+        raise RuntimeError("Expo push service returned a non-list ticket set")
+    if len(tickets) != len(chunk):
+        log_event(
+            logger,
+            logging.WARNING,
+            "push_notification.ticket_count_mismatch",
+            "Expo returned a different number of tickets than recipients",
+            user_id=user_id,
+            sent_count=len(chunk),
+            ticket_count=len(tickets),
+        )
+
+    for token, ticket in zip(chunk, tickets):
+        if not isinstance(ticket, dict):
+            continue
+        if ticket.get("status") == "ok":
+            ticket_id = ticket.get("id")
+            if ticket_id:
+                accepted.append((str(ticket_id), token.push_token))
+            continue
+
+        rejected += 1
+        code = _error_code(ticket)
+        log_event(
+            logger,
+            logging.WARNING,
+            "push_notification.rejected",
+            "Expo rejected a push recipient",
+            user_id=user_id,
+            platform=token.platform.value,
+            error_code=code or "unknown",
+        )
+        if code == ERROR_DEVICE_NOT_REGISTERED:
+            await push_token_db.delete_token(user_id, token.push_token)
+    return accepted, rejected
+
+
 async def _handle_send(body: Dict[str, Any]) -> None:
-    """Deliver one notification to every device of one account.
+    """Deliver one notification to every device of one account, each in its language.
 
     Devices are read here rather than carried in the message: the scheduler
     decides *that* a notification is due, and a device registered or removed in
     the seconds since is still handled correctly.
     """
     user_id = body.get("user_id")
-    title = body.get("title")
-    message_body = body.get("body")
-    if not user_id or not title or not message_body:
+    notification = body.get("notification")
+    kind = notification.get("kind") if isinstance(notification, dict) else None
+    channel_id = _CHANNEL_BY_KIND.get(str(kind))
+    if (
+        not user_id
+        or not isinstance(notification, dict)
+        or channel_id is None
+        or _render(notification, push_notification_copy.FALLBACK_LOCALE) is None
+    ):
         # Nothing a retry would fix. Logged and dropped rather than sent to the
         # DLQ three attempts later.
         log_event(
@@ -174,7 +277,6 @@ async def _handle_send(body: Dict[str, Any]) -> None:
         return
 
     data = body.get("data") or {}
-    channel_id = body.get("channel_id") or DEFAULT_ANDROID_CHANNEL_ID
     tokens = await push_token_db.list_tokens_for_user(user_id)
     if not tokens:
         # The normal state for an account that never granted the permission, or
@@ -189,62 +291,28 @@ async def _handle_send(body: Dict[str, Any]) -> None:
         )
         return
 
+    # One rendering per interface language among this account's devices. A row
+    # registered before the app sent its language has none and reads English.
+    by_locale: Dict[str, List[PushToken]] = {}
+    for token in tokens:
+        by_locale.setdefault(
+            push_notification_copy.normalize_locale(token.locale), []
+        ).append(token)
+
     accepted: List[Tuple[str, str]] = []  # (ticket_id, push_token)
     rejected = 0
 
-    for start in range(0, len(tokens), SEND_BATCH_SIZE):
-        chunk = tokens[start : start + SEND_BATCH_SIZE]
-        payload = {
-            "to": [token.push_token for token in chunk],
-            "title": title,
-            "body": message_body,
-            "data": data,
-            "sound": "default",
-            "channelId": channel_id,
-        }
-        response = await _post_to_expo(EXPO_SEND_URL, payload)
-
-        # Expo answers one ticket per recipient, in the order the recipients were
-        # given. `zip` on the shorter of the two is deliberate: a truncated answer
-        # loses the tail's receipts, which the next send recovers, whereas
-        # indexing blind would mis-attribute a verdict to the wrong device — and
-        # delete a live registration.
-        tickets = response.get("data") or []
-        if not isinstance(tickets, list):
-            raise RuntimeError("Expo push service returned a non-list ticket set")
-        if len(tickets) != len(chunk):
-            log_event(
-                logger,
-                logging.WARNING,
-                "push_notification.ticket_count_mismatch",
-                "Expo returned a different number of tickets than recipients",
-                user_id=user_id,
-                sent_count=len(chunk),
-                ticket_count=len(tickets),
+    for locale, locale_tokens in by_locale.items():
+        rendered = _render(notification, locale)
+        if rendered is None:  # cannot happen: the shape was checked above
+            continue
+        for start in range(0, len(locale_tokens), SEND_BATCH_SIZE):
+            chunk = locale_tokens[start : start + SEND_BATCH_SIZE]
+            accepted_chunk, rejected_chunk = await _send_chunk(
+                user_id, chunk, rendered, data, channel_id
             )
-
-        for token, ticket in zip(chunk, tickets):
-            if not isinstance(ticket, dict):
-                continue
-            if ticket.get("status") == "ok":
-                ticket_id = ticket.get("id")
-                if ticket_id:
-                    accepted.append((str(ticket_id), token.push_token))
-                continue
-
-            rejected += 1
-            code = _error_code(ticket)
-            log_event(
-                logger,
-                logging.WARNING,
-                "push_notification.rejected",
-                "Expo rejected a push recipient",
-                user_id=user_id,
-                platform=token.platform.value,
-                error_code=code or "unknown",
-            )
-            if code == ERROR_DEVICE_NOT_REGISTERED:
-                await push_token_db.delete_token(user_id, token.push_token)
+            accepted.extend(accepted_chunk)
+            rejected += rejected_chunk
 
     log_event(
         logger,
@@ -255,6 +323,7 @@ async def _handle_send(body: Dict[str, Any]) -> None:
         notification_kind=data.get("type"),
         period_key=data.get("period_key"),
         device_count=len(tokens),
+        locales=sorted(by_locale),
         accepted_count=len(accepted),
         rejected_count=rejected,
     )

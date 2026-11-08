@@ -1,5 +1,5 @@
 """
-Device registration for Digest push notifications.
+Device registration for push notifications (Digest and media ready).
 
 - ``POST /api/push-token``   register this device, or refresh its ``last_seen_at``
 - ``DELETE /api/push-token`` drop this device (sign-out)
@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, field_validator
 from media_summarizer.api.dependencies.auth import get_current_user
 from media_summarizer.core.models.auth import AuthUser
 from media_summarizer.core.models.push_token import PushTokenPlatform
+from media_summarizer.core.services.push_notification_copy import normalize_locale
 from media_summarizer.utils import push_token_db
 from media_summarizer.utils.logging_config import (
     bind_log_context,
@@ -44,12 +45,19 @@ _EXPO_TOKEN_PREFIXES = ("ExponentPushToken[", "ExpoPushToken[")
 
 
 class PushTokenRequest(BaseModel):
-    """The token, and which platform reported it."""
+    """The token, which platform reported it, and the app's interface language."""
 
     expo_push_token: str = Field(
         ..., description="Expo push token, e.g. ExponentPushToken[...]"
     )
     platform: PushTokenPlatform = Field(..., description="ios or android")
+    locale: str = Field(
+        ...,
+        description=(
+            "The app's interface language on this device. Its notifications are "
+            "rendered in it; an unsupported value falls back to en."
+        ),
+    )
 
     @field_validator("expo_push_token")
     @classmethod
@@ -62,6 +70,13 @@ class PushTokenRequest(BaseModel):
                 "ExpoPushToken[...]"
             )
         return token
+
+    @field_validator("locale")
+    @classmethod
+    def to_supported_locale(cls, value: str) -> str:
+        # Not a rejection: an app shipping a twelfth language before the backend
+        # knows it should still be registered, in English.
+        return normalize_locale(value)
 
 
 class PushTokenDeleteRequest(BaseModel):
@@ -79,7 +94,7 @@ async def register_push_token(
     token = bind_log_context(user_id=current_user.id)
     try:
         await push_token_db.save_token(
-            current_user.id, payload.expo_push_token, payload.platform
+            current_user.id, payload.expo_push_token, payload.platform, payload.locale
         )
         log_event(
             logger,
@@ -88,6 +103,7 @@ async def register_push_token(
             "Push token registered",
             user_id=current_user.id,
             platform=payload.platform.value,
+            locale=payload.locale,
         )
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as exc:

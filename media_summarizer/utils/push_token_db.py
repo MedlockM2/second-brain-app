@@ -67,9 +67,13 @@ async def _transact(actions: List[Dict[str, Any]]) -> None:
 
 
 async def save_token(
-    user_id: str, push_token: str, platform: PushTokenPlatform
+    user_id: str, push_token: str, platform: PushTokenPlatform, locale: str
 ) -> None:
     """Register and exclusively assign this token to the authenticated account.
+
+    ``locale`` is the app's interface language on this device, already normalised
+    by the caller; it is overwritten on every registration, which is how a language
+    change in the app's settings reaches the notifications (TASK-619).
 
     Sign-out is best-effort on a phone that may be offline or restarted. Its
     success cannot be the uniqueness constraint: the same Expo token survives
@@ -84,9 +88,11 @@ async def save_token(
                 "Key": {"user_id": user_id, "push_token": push_token},
                 "UpdateExpression": (
                     "SET created_at = if_not_exists(created_at, :now), "
-                    "last_seen_at = :now, platform = :platform"
+                    "last_seen_at = :now, platform = :platform, locale = :locale"
                 ),
-                "ExpressionAttributeValues": {":now": now, ":platform": platform.value},
+                "ExpressionAttributeValues": {
+                    ":now": now, ":platform": platform.value, ":locale": locale,
+                },
             }},
             {"Put": {
                 "TableName": USER_PUSH_TOKENS_TABLE,

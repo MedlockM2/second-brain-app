@@ -13,15 +13,15 @@ is also the join point that already deduplicates a user appearing both as the
 submitter and as a watcher of the same content. So the body can speak of a single
 media in the singular, with no count to compute.
 
-**The body names the media's category, and nothing more.** Expo's push service
-relays the payload and its staff can read it while debugging, so the rule inherited
-from the Digest notification (task-368) stands: no title, no creator, **and no
-source platform** — "Your video has been processed", never "Your YouTube video".
-Naming the category is the compromise the owner settled on task-407: more useful
-than the count this used to carry ("1 source is ready."), which told the person
-nothing they did not already know, while still not revealing which service they
-feed on. ``data`` carries the library id, which is opaque and is what the app needs
-to open the right screen.
+**The message describes the notification; it carries no text.** One message
+reaches every device of the account, and each device is rendered in its own
+interface language by the consumer (``core/services/push_notification_copy.py``,
+TASK-619). What this producer decides is the category the body names, and nothing
+more: Expo's push service relays the payload and its staff can read it while
+debugging, so the rule inherited from the Digest notification (task-368) stands —
+no title, no creator, **and no source platform**: "Your video has been processed",
+never "Your YouTube video" (task-407). ``data`` carries the library id, which is
+opaque and is what the app needs to open the right screen.
 
 **Failure is swallowed.** A completion event must not be replayed because a
 notification could not be scheduled: replaying it would re-index, re-blurb and
@@ -31,8 +31,9 @@ re-notify. The enqueue is best effort and says so in its return value.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
+from media_summarizer.core.services.push_notification_copy import MediaCategory
 from media_summarizer.utils import sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.logging_config import log_event
@@ -60,8 +61,9 @@ ANDROID_CHANNEL_MEDIA_READY = "media_ready"
 NOTIFICATION_TYPE_DIGEST = "digest"
 NOTIFICATION_TYPE_MEDIA_READY = "media_ready"
 
-#: The word the body puts after "Your", per value an ingestion path actually
-#: writes into ``media_type``.
+#: The category the body names, per value an ingestion path actually writes into
+#: ``media_type``. The categories are the keys of
+#: ``push_notification_copy.MEDIA_CATEGORIES``.
 #:
 #: Keyed on what the *code* writes, not on the ``MediaType`` enum: the enum is not
 #: the contract here, because ``media_type`` is an ``Optional[str]`` on
@@ -69,14 +71,14 @@ NOTIFICATION_TYPE_MEDIA_READY = "media_ready"
 #: ``"document"`` (the upload handler in ``api/endpoints/media.py`` and
 #: ``workers/document_parsing/worker.py``) and ``"audio"`` (the audio upload
 #: handler). A map built from the enum would have quietly sent every parsed document
-#: and every uploaded audio file through the generic label, which is the whole point
-#: of enumerating the written values instead (task-407).
+#: and every uploaded audio file through the generic category, which is the whole
+#: point of enumerating the written values instead (task-407).
 #:
-#: Each label is a *category*, deliberately never a platform: ``youtube_video`` and
+#: Each value is a *category*, deliberately never a platform: ``youtube_video`` and
 #: ``short_video`` both read "video" because the body must not say which service the
 #: media came from.
-MEDIA_TYPE_LABELS = {
-    "podcast_episode": "podcast episode",
+MEDIA_TYPE_CATEGORIES: Dict[str, MediaCategory] = {
+    "podcast_episode": "podcast_episode",
     "article": "article",
     "youtube_video": "video",
     "short_video": "video",
@@ -89,19 +91,18 @@ MEDIA_TYPE_LABELS = {
 
 #: What an unnamed media is called. Covers three cases that are all the same for the
 #: reader: no ``media_type`` on the job at all, ``MediaType.UNKNOWN``, and a value a
-#: future ingestion path writes without adding it above. The raw value is never
-#: interpolated into the body -- an internal token like ``short_video`` in a
-#: notification would be a leak of vocabulary, and a wrong one is worse than a vague
-#: one.
-GENERIC_MEDIA_LABEL = "source"
+#: future ingestion path writes without adding it above. The raw value never reaches
+#: the body -- an internal token like ``short_video`` in a notification would be a
+#: leak of vocabulary, and a wrong one is worse than a vague one.
+GENERIC_MEDIA_CATEGORY: MediaCategory = "source"
 
 
-def _media_label(media_type: Optional[str]) -> str:
-    """The category word for this media, or the generic one. Never the raw value."""
+def _media_category(media_type: Optional[str]) -> MediaCategory:
+    """The category for this media, or the generic one. Never the raw value."""
     normalized = (media_type or "").strip().lower()
-    label = MEDIA_TYPE_LABELS.get(normalized)
-    if label:
-        return label
+    category = MEDIA_TYPE_CATEGORIES.get(normalized)
+    if category:
+        return category
     if normalized and normalized != "unknown":
         # Not noise: an ingestion path writing a value this module does not know is
         # a notification silently losing its specificity, and the only way to see it
@@ -110,10 +111,10 @@ def _media_label(media_type: Optional[str]) -> str:
             logger,
             logging.WARNING,
             "push_notification.media_ready_unlabelled_type",
-            "No notification label for this media_type; using the generic one",
+            "No notification category for this media_type; using the generic one",
             media_type=normalized,
         )
-    return GENERIC_MEDIA_LABEL
+    return GENERIC_MEDIA_CATEGORY
 
 
 async def enqueue_media_ready_notification(
@@ -129,7 +130,7 @@ async def enqueue_media_ready_notification(
     second is what a tap would open.
 
     ``media_type`` is the job's own weakly-typed value and is allowed to be absent:
-    it only picks the word in the body, through :func:`_media_label`, and a media
+    it only picks the category the body names, through :func:`_media_category`, and a media
     whose category is unknown is still worth announcing.
 
     Whether the account has a registered device at all is not asked here — the
@@ -154,14 +155,12 @@ async def enqueue_media_ready_notification(
             message_body={
                 "notification_type": "send",
                 "user_id": user_id,
-                # English, like the Digest notification: the backend does not know
-                # the reader's app language, and task-404 keeps a per-account locale
-                # out of scope (§7.10). The Android channel name the app creates is
-                # translated and must keep saying the same thing as this title
-                # (`notifications.mediaReadyChannel` in `mobile/src/i18n/`).
-                "title": "Ready to deepen",
-                "body": f"Your {_media_label(media_type)} has been processed.",
-                "channel_id": ANDROID_CHANNEL_MEDIA_READY,
+                # Rendered per device language by the consumer
+                # (`push_notification_copy.render_media_ready`).
+                "notification": {
+                    "kind": NOTIFICATION_TYPE_MEDIA_READY,
+                    "media_category": _media_category(media_type),
+                },
                 "data": {
                     "type": NOTIFICATION_TYPE_MEDIA_READY,
                     "media_item_id": media_item_id,

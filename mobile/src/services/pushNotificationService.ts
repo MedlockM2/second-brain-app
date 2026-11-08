@@ -27,7 +27,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { apiRequest } from "./apiClient";
 import { Config } from "../constants/config";
-import { t } from "../i18n";
+import { t, type SupportedLocale } from "../i18n";
 
 /**
  * What one registration attempt concluded.
@@ -172,13 +172,24 @@ async function ensurePermission(): Promise<boolean> {
 }
 
 /**
- * Register this device for the signed-in account.
+ * Register this device for the signed-in account, in the interface language it
+ * is rendered in.
+ *
+ * The backend writes every notification for this device in `locale` (TASK-619):
+ * it is the app's own language — the in-app choice, or the device's — and not the
+ * account's `reading_language`, which picks the language of the content. A new
+ * call with another locale overwrites the stored one, which is how a language
+ * change in the settings reaches the notifications. The Android channels are
+ * re-created on the way, under names in the same language, so the category the
+ * system settings show keeps saying what the notifications in it say.
  *
  * Throws only on a failure of the API call itself — a network error, or a session
  * the backend refused. The caller treats that as "not registered yet" and tries
  * again on the next return to the foreground.
  */
-export async function registerForPushNotifications(): Promise<PushRegistrationOutcome> {
+export async function registerForPushNotifications(
+  locale: SupportedLocale,
+): Promise<PushRegistrationOutcome> {
   const platform = devicePlatform();
   if (!platform || !Config.EAS_PROJECT_ID) return "unavailable";
 
@@ -202,7 +213,7 @@ export async function registerForPushNotifications(): Promise<PushRegistrationOu
 
   await apiRequest<void>("/api/push-token", {
     method: "POST",
-    body: { expo_push_token: token, platform },
+    body: { expo_push_token: token, platform, locale },
   });
   registeredToken = token;
   return "registered";

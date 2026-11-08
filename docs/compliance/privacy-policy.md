@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-11-06
+**Last updated:** 2026-11-08
 **Effective date:** 2026-11-03
 
 ## 1. Introduction
@@ -39,7 +39,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 - **Server logs** - our servers record each request, including your IP address, the time and the endpoint called, to operate and secure the Service
 - **Continue learning** - the identifiers of the artifacts and conversations you open or start, and the time of your last activity on each, to let you resume them across devices
 - **Usage accounting** - processing operations, capacity reservations and their final usage, including token counts, audio duration and document units needed to enforce processing limits
-- **Push notification token** - only if you allow notifications (section 4.5)
+- **Push notification token** - only if you allow notifications (section 4.5), stored with the app's interface language on that device so its notifications are written in that language
 
 ### 2.5 What We Do NOT Collect
 
@@ -58,7 +58,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 | Answering your questions in the chat | Chat messages, your saved content |
 | Resuming your learning | Artifact and conversation identifiers, last activity time |
 | Search within your library | Your content and generated content |
-| Notifications (digests, content ready) | Push notification token, time zone |
+| Notifications (digests, content ready) | Push notification token, app language, time zone |
 | Access and processing limits | Beta access or purchase status, usage accounting |
 | Support and feedback | Email, messages and reports you send us |
 | Stability and security | Crash reports, server logs |

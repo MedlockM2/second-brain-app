@@ -77,7 +77,7 @@ function SplashGate(): null {
 }
 
 /**
- * Registers this device for Digest push notifications, and routes a tap on one.
+ * Registers this device for push notifications, and routes a tap on one.
  *
  * Next to `SplashGate` and for the same reason: it has to be mounted for every
  * entry point, including a cold start driven by a share — which never mounts the

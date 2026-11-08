@@ -140,10 +140,11 @@ export const en = {
   // tab's own name; this one names the event, because there is no screen called
   // after it. Never shown inside the app.
   //
-  // Must keep saying what the notifications it carries say: the backend producer
-  // titles them "Ready to deepen" (`core/services/push_notification_dispatch.py`),
-  // and a channel labelled otherwise would make Android's settings name the
-  // category differently from the notifications inside it (task-407).
+  // Must keep saying what the notifications it carries say: the backend titles
+  // them with this same string in each of the eleven languages
+  // (`core/services/push_notification_copy.py`, `_MEDIA_READY_TITLE`), and a
+  // channel labelled otherwise would make Android's settings name the category
+  // differently from the notifications inside it (task-407). Change both together.
   "notifications.mediaReadyChannel": "Ready to deepen",
 
   // --- Actions on a media item: long press in Library, `…` on its own page ---

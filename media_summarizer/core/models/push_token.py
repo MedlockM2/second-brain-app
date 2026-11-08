@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -66,17 +66,25 @@ class PushToken(BaseModel):
     user_id: str
     push_token: str
     platform: PushTokenPlatform
+    #: The app's interface language on this device, as sent at registration and
+    #: normalised to a supported locale (``push_notification_copy``). ``None`` for a
+    #: row written before the app sent one: rendered in English until the device
+    #: registers again, which it does on its next launch.
+    locale: Optional[str] = None
     created_at: str = Field(default_factory=_now_iso)
     last_seen_at: str = Field(default_factory=_now_iso)
 
     def to_dynamodb_item(self) -> Dict[str, Any]:
-        return {
+        item = {
             "user_id": self.user_id,
             "push_token": self.push_token,
             "platform": self.platform.value,
             "created_at": self.created_at,
             "last_seen_at": self.last_seen_at,
         }
+        if self.locale:
+            item["locale"] = self.locale
+        return item
 
     @classmethod
     def from_dynamodb_item(cls, item: Dict[str, Any]) -> "PushToken":
@@ -84,6 +92,7 @@ class PushToken(BaseModel):
             user_id=item["user_id"],
             push_token=item["push_token"],
             platform=PushTokenPlatform(item.get("platform", "ios")),
+            locale=item.get("locale"),
             created_at=item.get("created_at", _now_iso()),
             last_seen_at=item.get("last_seen_at", _now_iso()),
         )
