@@ -3,10 +3,11 @@ id: TASK-601
 title: >-
   Mettre à disposition l’environnement et les accès des recettes navigateur
   agent
-status: To Do
+status: Done
 assignee:
   - owner
 created_date: '2026-11-04 19:29'
+updated_date: '2026-11-09 16:20'
 labels:
   - web
   - extension
@@ -19,7 +20,6 @@ references:
 priority: high
 type: task
 ordinal: 208000
-dispatchable: false
 ---
 
 ## Description
@@ -42,3 +42,9 @@ Livrable : docs/validation/environnement-recette-agent/README.md, expurgé de to
 - [ ] #2 Les navigateurs et surfaces web/extension effectivement pilotables, profil de recette et permissions disponibles sont décrits avec les limites explicites ; aucun contrôle désactivé n’est contourné.
 - [ ] #3 Les modalités d’accès hors dépôt aux comptes/fixtures autorisés, périmètre des mutations et interventions ponctuelles du propriétaire sont documentées sans valeur d’authentification ni donnée personnelle.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**2026-11-09 — clôture par décision du propriétaire.** Dit par l'owner : « les tests ont déjà été réalisés et validés tu peux la passer en done, tout fonctionne comme attendu ». La fiche `docs/validation/environnement-recette-agent/README.md` n'a pas été produite : les AC, qui la décrivent, restent non cochés.
+<!-- SECTION:NOTES:END -->

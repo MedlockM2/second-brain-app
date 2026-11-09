@@ -3,11 +3,11 @@ id: TASK-591
 title: >-
   Mettre en service la web app bêta sur le domaine et renseigner sa
   configuration publique
-status: To Do
+status: Done
 assignee:
   - owner
 created_date: '2026-11-04 19:11'
-updated_date: '2026-11-06 15:51'
+updated_date: '2026-11-09 16:20'
 labels:
   - web
   - v1-launch
@@ -43,13 +43,47 @@ Contraintes : aucun nouveau test automatisé. Ne pas modifier le sync Spotify, l
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le compte rendu identifie environnement bêta, domaines effectivement utilisés, révision/paquet publié et configuration publique vérifiée, sans dump d’environnement ni donnée de compte.
-- [ ] #2 Les opérations DNS/TLS, origines API/S3/chat et callbacks OAuth sont consignées avec leurs observations ou limites ; les liens bêta et légaux ne sont pas remplacés par des URLs publiques fictives.
-- [ ] #3 Le compte rendu décrit ouverture initiale, rechargement d’une route profonde, paquet servi après mise à jour et procédure de retour arrière disponible ; tout élément manquant est identifié comme blocage ou limite explicite.
+- [x] #1 Le compte rendu identifie environnement bêta, domaines effectivement utilisés, révision/paquet publié et configuration publique vérifiée, sans dump d’environnement ni donnée de compte.
+- [x] #2 Les opérations DNS/TLS, origines API/S3/chat et callbacks OAuth sont consignées avec leurs observations ou limites ; les liens bêta et légaux ne sont pas remplacés par des URLs publiques fictives.
+- [x] #3 Le compte rendu décrit ouverture initiale, rechargement d’une route profonde, paquet servi après mise à jour et procédure de retour arrière disponible ; tout élément manquant est identifié comme blocage ou limite explicite.
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 Le propriétaire a autorisé une publication préalable sans domaine le 2026-11-06, réalisée dans TASK-605 : web app dev sur https://d3n3qjz3si2rme.cloudfront.net avec proxy /api de même origine. Voir docs/validation/task-605-web-cloudfront/README.md. La présente tâche reste la bascule ultérieure sur le domaine et ses autres prérequis ; elle n’est pas déclarée terminée par cette publication.
+
+**2026-11-09 — compte rendu de mise en service (session principale, avec l'owner).**
+
+**#1 Environnement et configuration.**
+- Environnement bêta : **dev** (compte dev). Prod n'est ni réveillée ni ouverte.
+- Domaines : web app `https://dev.deepn.app`, sur le domaine nu par décision owner du 2026-11-09 (TASK-443) ; API `https://api.dev.deepn.app` ; Cognito `https://auth.dev.deepn.app` ; pages statiques `https://www.dev.deepn.app`.
+- Révision publiée : `0dc34874` (Deploy Web App réussi), lue dans `release.json`, mode `beta`.
+- Configuration publique vérifiée dans `release.json` :
+  - `VITE_API_BASE_URL=https://dev.deepn.app` (proxy `/api` de même origine) ;
+  - streaming du chat sur sa porte `execute-api` ;
+  - liens testeurs : TestFlight `testflight.apple.com/join/…` et page d'acceptation du test Play ;
+  - un identifiant d'extension Chrome.
+- `VITE_SITE_URL` et `VITE_FEEDBACK_URL` sont laissés vides : la page `/extension` du site n'existe pas encore, et Canny reste joint par l'API.
+
+**#2 DNS, TLS, origines, OAuth.**
+- DNS et TLS :
+  - `dev.deepn.app` délégué depuis la zone prod ;
+  - certificats ACM validés par DNS : us-east-1 pour l'apex, `www.` et `auth.`, eu-west-3 pour `api.` ;
+  - les quatre noms résolvent ; `app.dev.deepn.app` ne résout plus.
+- Origines : le pré-vol CORS de l'API renvoie `access-control-allow-origin: https://dev.deepn.app`. Les règles CORS S3 d'upload et le CORS du streaming suivent `web_app_origin` (apply Terraform Dev réussi).
+- OAuth :
+  - retour web Cognito : `https://dev.deepn.app/auth/callback` (lu sur le client Cognito) ;
+  - retours Google et Apple : `https://auth.dev.deepn.app/oauth2/idpresponse`, enregistrés par l'owner, contrôlés par redirection sans erreur ;
+  - connexion validée sur appareil par l'owner (TASK-528).
+- Lien de confidentialité : `https://www.dev.deepn.app/privacy` répond 200. Les consoles stores gardent l'adresse CloudFront jusqu'à la gate de TASK-454. Aucune URL fictive.
+- Limite, lien Play : le bouton Google Play pointe vers l'acceptation du test, qui exige d'avoir rejoint le groupe testeurs. Le message d'invitation de l'owner reste le point d'entrée Android.
+
+**#3 Ouverture, routes, mise à jour, retour arrière.**
+- `/` répond 200. Les routes profondes `/library` et `/folders/x` répondent 200 (réécriture SPA). L'index est servi `cache-control: no-store`.
+- Après la dernière mise à jour, le paquet servi est bien la révision `0dc34874`.
+- Retour arrière : archives `_releases/<releaseId>.tar.gz` présentes dans le bucket app. Procédure dans `docs/WEB_RELEASE.md`, « Retour à un paquet précédent ».
+- Le paquet précédent n'a pas été restauré pour cette clôture.
+
+Les recettes fonctionnelles restent celles de TASK-440.1 à 440.4.
 <!-- SECTION:NOTES:END -->
