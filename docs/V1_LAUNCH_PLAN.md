@@ -445,7 +445,7 @@ un staging ou une soumission.
 | Branding app | `task-186` | Deepn choisi le 2026-10-10 ; rebrand mobile et consoles restant à appliquer |
 | App icons | `task-180` | Remplacer les placeholders avant soumission |
 | RevenueCat / IAP | **Plus un bloquant : la facturation tourne sur les deux stores.** `task-262`, `task-238` (Android) et `task-261` (iOS) sont `Done`. Ne reste que des métadonnées de soumission, portées par Phase 6 item 3 et Phase 10 : les 13 localisations ASC, la capture de vérification, et l’application du nom Deepn (`task-186`) | Prouvé par des achats réels sur les deux stores, pas par de la configuration. **iOS, 2026-09-02** : `INITIAL_PURCHASE` 15:42:41, `PRODUCT_CHANGE` 15:43:00, `RENEWAL` 15:43:00 pour un même utilisateur, et `subscriptions-dev` porte `com.secondbrainlabs.core.mix_monthly` / `platform: ios` / `tier: M` / `status: active` / `auto_renew_status: true`. Le `PRODUCT_CHANGE` n'était pas demandé et vaut cher : il valide le **changement de formule dans le groupe**, donc les niveaux 1/2/3 réglés en ASC. **Android, 2026-09-01** : cycle complet `INITIAL_PURCHASE` → 5 × `RENEWAL` → `CANCELLATION` → `EXPIRATION`, tier `L` résolu depuis l'entitlement. `revenucat_events-dev` contient 32 items, plus 0. Le `REVENUCAT_WEBHOOK_SECRET` est donc validé par l'usage et non plus par une sonde `401`. Les 3 entitlements de tier, l'offering `default` et les 3 packages existent, **chaque tier portant trois produits, un par store**. Côté iOS les trois drapeaux sont verts (`app_store_connect_api_key_configured`, vendor number, `subscription_key_configured`) ; les 3 produits gardent `subscription.duration: null`, ce qui ne gêne rien — voir Phase 6 item 4. Disposition détaillée : `docs/REVENUECAT_ENTITLEMENTS.md` |
-| Domaine production | Phase 10 §0bis | 🛑 **Aucun domaine n'est possédé** — énoncé par l'owner le 2026-09-03. `secondbrainlabs.com` appartient à un tiers (`301` vers `sbl.so`, qui refuse la connexion) et `mediasummarizer.com` est en `NXDOMAIN`. **Un achat est un prérequis dur** de la soumission stores : Apple et Google exigent une politique de confidentialité publiquement hébergée. Le profil EAS `production` pointe sur `api.mediasummarizer.com`, qui n'existe pas |
+| Domaine production | Phase 10 §0bis | ✅ **`deepn.app` acheté le 2026-11-09** (task-443), compte prod ; `dev.deepn.app` délégué au compte dev. Configuration Terraform et clients : task-445, task-528 ; mise en service : `docs/PRODUCTION_RELEASE_RUNBOOK.md`, « Domain bring-up (deepn.app) ». `secondbrainlabs.com` et `mediasummarizer.com` n'appartiennent pas au projet. |
 | Store/legal | Phase 10 | Les textes existent au dépôt (`docs/compliance/privacy-policy.md`, `terms-of-service.md`, `apple-app-privacy.md`, `google-play-data-safety.md`, `CHECKLIST.md`) mais **ne peuvent pas encore être hébergés : il n'y a pas de domaine** (cf. ligne au-dessus). Ils désignent en outre `privacy@mediasummarizer.com` comme canal RGPD, adresse morte sur un domaine inexistant. Liens in-app absents, listings/screenshots/review accounts à finaliser |
 
 ### Prérequis de lancement propres au compte prod (issus de `task-248`)
@@ -1987,10 +1987,13 @@ préparer en amont, sans attendre cette phase.
 0. **Appliquer le nom définitif Deepn** (cf. task-186) — l'app utilise actuellement le nom legacy `Media Summarizer` partout (display name, slug Expo, scheme deep link, share extension iOS). À exécuter **avant** la sous-étape 1 ci-dessous : tous les textes Apple App Store Connect (App Information, screenshots) et Google Play Console + Google OAuth Branding consomment le nom marketing définitif. Coût ~30 min en pré-distribution, beaucoup plus élevé une fois publié. Ne touche pas le bundle id `com.secondbrainlabs.core` (figé). Voir `task-186` pour la checklist exacte des 8-9 endroits à mettre à jour.
 
 0bis. **Acheter un domaine, puis couper l'API dessus** — pendant le dev (Phase 5), l'app mobile + Apple Sign-In Service ID + `APPLE_REDIRECT_URI` côté backend tapent tous l'URL brute API Gateway `https://jji077bi8e.execute-api.eu-west-3.amazonaws.com`. En Phase 10, on bascule sur un custom domain. Étapes :
-   - 🛑 **PRÉALABLE ABSOLU, énoncé par l'owner le 2026-09-03 : il ne possède
-     AUCUN domaine.** Ni `secondbrainlabs.com`, ni `mediasummarizer.com`, ni
-     aucun autre. Toutes les étapes ci-dessous supposent un achat qui n'a pas eu
-     lieu, et **aucune ne peut être exécutée avant.**
+   - ✅ **Domaine acheté le 2026-11-09 : `deepn.app`** (task-443), enregistré
+     sur le compte prod ; `dev.deepn.app` est délégué au compte dev. Le
+     découpage des noms, les certificats et l'ordre de mise en service sont
+     dans `docs/PRODUCTION_RELEASE_RUNBOOK.md`, section « Domain bring-up
+     (deepn.app) » (task-445, task-528). Les étapes historiques ci-dessous
+     (`api_custom_domain`, Cloudflare, `APPLE_REDIRECT_URI`) sont remplacées
+     par ce runbook.
    - **`secondbrainlabs.com` appartient à un tiers.** Ne jamais l'écrire dans un
      dashboard, un document légal ou un secret. Relevé le 2026-09-03 :
      `secondbrainlabs.com` résout et renvoie `301` vers `sbl.so`, qui
@@ -2007,24 +2010,8 @@ préparer en amont, sans attendre cette phase.
      vers un domaine étranger était le signal contraire. Ne jamais déduire la
      propriété d'un domaine d'une réponse DNS : la seule preuve est la facture du
      registrar.
-   - Une fois un domaine acheté, remplacer partout ci-dessous
-     `<domaine>` par celui retenu. Le sous-domaine API doit être créé **et** les
-     pages `/privacy` et `/terms` réellement servies sur ce même domaine : Apple
-     et Google exigent une URL de politique de confidentialité publiquement
-     atteignable, un `404` ou une connexion refusée est un motif de rejet.
-   - Le support Terraform existe déjà dans `infrastructure/terraform/modules/platform/lambda_api.tf` (`api_custom_domain`, `api_zone_id`, `aws_acm_certificate`, API Gateway domain mapping, Route53 record conditionnel) : les ressources sont conditionnées par `count` sur ces deux variables, donc vides tant qu'elles ne sont pas renseignées.
-   - Passer `api_custom_domain = "api.<domaine>"` et `api_zone_id` au bloc `module "platform"` de `infrastructure/terraform/envs/prod/main.tf`, puis `terraform -chdir=infrastructure/terraform/envs/prod apply`.
-   - Créer/valider le DNS Cloudflare ou Route53 selon la zone réellement utilisée. Si Cloudflare reste le DNS autoritaire, créer le CNAME vers le `target_domain_name` exposé par Terraform.
-   - `terraform apply` puis vérifier `curl https://api.<domaine>/api/auth/apple/callback` → HTTP 302.
-   - **Apple Developer Portal** → Identifiers → Service IDs → `com.secondbrainlabs.core.signinwithapple` → Configure → ajouter Domain `<domaine>` et Return URL `https://api.<domaine>/api/auth/apple/callback`, **retirer** les entrées `jji077bi8e.execute-api.*` ajoutées en Phase 5. ⚠️ **À revérifier dans le dashboard** : les versions précédentes de ce plan annonçaient ces deux entrées « déjà présentes » pour `secondbrainlabs.com`. Or Apple exige, pour valider un domaine de Sign in with Apple, d'héberger `apple-developer-domain-association.txt` sous `/.well-known/` du domaine — impossible sur un domaine tiers. Soit l'entrée n'existe pas, soit elle existe **non vérifiée** et ne fonctionne pas.
-   - **AWS Secrets Manager** → mettre à jour `APPLE_REDIRECT_URI` et `GOOGLE_REDIRECT_URI` du secret **prod** vers `https://api.<domaine>/api/auth/{apple,google}/callback`. **État au 2026-09-03** : les deux valeurs pointent sur l'API Gateway de prod (`f45y1buebe.execute-api.eu-west-3.amazonaws.com`), en miroir de dev qui pointe sur la sienne. C'est correct et inerte : ces deux clés ne sont lues que par `/{apple,google}/login` et `/{apple,google}/callback` dans `auth_social.py`, le flux **web**, alors que l'app mobile n'appelle que `/{apple,google}/native` — qui valide l'`id_token` contre `APPLE_NATIVE_AUDIENCE` / les audiences Google et n'utilise aucun redirect URI.
-   - **`mobile/eas.json`** → profile `development` et `preview` :
-     `EXPO_PUBLIC_API_BASE_URL` passe à `https://api.<domaine>`. Attention : le
-     profile `production` pointe vers `https://api.mediasummarizer.com`, domaine
-     **inexistant et non détenu** — un binaire store construit sur ce profil
-     aujourd'hui ne joindrait aucun backend. À aligner sur le domaine acheté
-     avant tout build production.
-   - Rebuild EAS dev + preview pour propager la nouvelle URL aux binaires.
+   - Les pages `/privacy` (et plus tard `/terms`) doivent être servies sur
+     `www.deepn.app` avant la soumission en production : gate de task-454.
 
 1. **Apple App Store Connect** (appstoreconnect.apple.com) :
    - **App Information** : nom marketing affiché aux users : `Deepn` (choisi le 2026-10-10 ; ≠ Bundle ID `com.secondbrainlabs.core`), sous-titre (30 chars max), catégorie primaire/secondaire, contact info, copyright. C'est l'équivalent Apple du "Branding" Google OAuth.

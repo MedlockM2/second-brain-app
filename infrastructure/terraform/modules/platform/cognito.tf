@@ -87,9 +87,49 @@ resource "aws_cognito_user_pool" "users" {
     }
   }
 }
-resource "aws_cognito_user_pool_domain" "users" {
-  domain       = "deepn-${data.aws_caller_identity.current.account_id}${local.suffix}"
+# auth.<public_domain> when the environment has a domain (task-528), so the iOS
+# session alert and Google's consent page show Deepn's domain. The prefix
+# domain exists only for an environment without one; there is never both.
+# Two resources rather than one with a conditional name: replacing a single
+# domain resource in place ties its destroy into a dependency cycle with the
+# certificate, CloudFront and the Lambdas. The certificate is the environment's
+# us-east-1 one (modules/web_certificate), and Cognito refuses the custom domain
+# until its parent -- the apex record in web_hosting.tf -- resolves.
+moved {
+  from = aws_cognito_user_pool_domain.users
+  to   = aws_cognito_user_pool_domain.prefix[0]
+}
+resource "aws_cognito_user_pool_domain" "prefix" {
+  count        = local.public_domain_enabled ? 0 : 1
+  domain       = local.cognito_prefix
   user_pool_id = aws_cognito_user_pool.users.id
+}
+# Managed login (version 2), not the classic hosted UI: only managed login
+# forwards `prompt=select_account` to Google, which lets a person pick another
+# Google account after signing out of Deepn (task-528). Every flow skips its
+# pages (identity_provider is always set), but a client created through the API
+# still needs a branding style before managed login serves it. The resource for
+# it only exists in AWS provider v6; until this repository moves to v6, the
+# owner creates Cognito's default style once per client with the CLI
+# (docs/PRODUCTION_RELEASE_RUNBOOK.md, "Domain bring-up (deepn.app)").
+resource "aws_cognito_user_pool_domain" "custom" {
+  count                 = local.public_domain_enabled ? 1 : 0
+  domain                = local.auth_domain
+  certificate_arn       = var.web_certificate_arn
+  managed_login_version = 2
+  user_pool_id          = aws_cognito_user_pool.users.id
+  depends_on            = [aws_route53_record.apex]
+}
+resource "aws_route53_record" "auth" {
+  for_each = local.public_domain_enabled ? toset(["A", "AAAA"]) : toset([])
+  zone_id  = var.public_zone_id
+  name     = local.auth_domain
+  type     = each.value
+  alias {
+    name                   = aws_cognito_user_pool_domain.custom[0].cloudfront_distribution
+    zone_id                = aws_cognito_user_pool_domain.custom[0].cloudfront_distribution_zone_id
+    evaluate_target_health = false
+  }
 }
 resource "aws_cognito_identity_provider" "google" {
   count         = nonsensitive(var.cognito_google != null) ? 1 : 0
@@ -141,7 +181,10 @@ resource "aws_cognito_identity_provider" "apple" {
   # do not ignore it, or a key rotation in Secrets Manager would be discarded.
 }
 locals {
-  cognito_domain          = "https://${aws_cognito_user_pool_domain.users.domain}.auth.${var.aws_region}.amazoncognito.com"
+  # Not read from the domain resource: it waits for the web records, which wait
+  # (through CloudFront and the chat stream) for the Lambda environment below.
+  cognito_prefix          = "deepn-${data.aws_caller_identity.current.account_id}${local.suffix}"
+  cognito_domain          = local.public_domain_enabled ? "https://${local.auth_domain}" : "https://${local.cognito_prefix}.auth.${var.aws_region}.amazoncognito.com"
   cognito_mobile_callback = "media-summarizer://auth-callback"
   cognito_clients = merge({ mobile = {
     callback = local.cognito_mobile_callback, refresh_days = 365

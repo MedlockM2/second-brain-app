@@ -4,18 +4,6 @@
 # Variables
 # =============================================================================
 
-variable "api_custom_domain" {
-  description = "Custom domain for the API (e.g. api.media-summarizer.app)"
-  type        = string
-  default     = ""
-}
-
-variable "api_zone_id" {
-  description = "Route53 hosted zone ID for the API domain"
-  type        = string
-  default     = ""
-}
-
 variable "api_image_tag" {
   description = "Bootstrap tag for the dedicated API image; CI deploys immutable image digests afterwards."
   type        = string
@@ -252,12 +240,12 @@ resource "aws_lambda_permission" "api_warmup" {
 }
 
 # =============================================================================
-# Custom Domain (optional, only created when api_custom_domain is set)
+# Custom domain api.<public_domain> (task-445), only when the environment has one
 # =============================================================================
 
 resource "aws_acm_certificate" "api" {
-  count             = var.api_custom_domain != "" ? 1 : 0
-  domain_name       = var.api_custom_domain
+  count             = local.public_domain_enabled ? 1 : 0
+  domain_name       = local.api_domain
   validation_method = "DNS"
 
   tags = {
@@ -269,12 +257,29 @@ resource "aws_acm_certificate" "api" {
   }
 }
 
+resource "aws_route53_record" "api_validation" {
+  for_each = local.public_domain_enabled ? {
+    for option in aws_acm_certificate.api[0].domain_validation_options : option.domain_name => option
+  } : {}
+  zone_id = var.public_zone_id
+  name    = each.value.resource_record_name
+  type    = each.value.resource_record_type
+  records = [each.value.resource_record_value]
+  ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "api" {
+  count                   = local.public_domain_enabled ? 1 : 0
+  certificate_arn         = aws_acm_certificate.api[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.api_validation : record.fqdn]
+}
+
 resource "aws_apigatewayv2_domain_name" "api" {
-  count       = var.api_custom_domain != "" ? 1 : 0
-  domain_name = var.api_custom_domain
+  count       = local.public_domain_enabled ? 1 : 0
+  domain_name = local.api_domain
 
   domain_name_configuration {
-    certificate_arn = aws_acm_certificate.api[0].arn
+    certificate_arn = aws_acm_certificate_validation.api[0].certificate_arn
     endpoint_type   = "REGIONAL"
     security_policy = "TLS_1_2"
   }
@@ -285,16 +290,16 @@ resource "aws_apigatewayv2_domain_name" "api" {
 }
 
 resource "aws_apigatewayv2_api_mapping" "api" {
-  count       = var.api_custom_domain != "" ? 1 : 0
+  count       = local.public_domain_enabled ? 1 : 0
   api_id      = aws_apigatewayv2_api.main.id
   domain_name = aws_apigatewayv2_domain_name.api[0].id
   stage       = aws_apigatewayv2_stage.default.id
 }
 
 resource "aws_route53_record" "api" {
-  count   = var.api_custom_domain != "" && var.api_zone_id != "" ? 1 : 0
-  zone_id = var.api_zone_id
-  name    = var.api_custom_domain
+  count   = local.public_domain_enabled ? 1 : 0
+  zone_id = var.public_zone_id
+  name    = local.api_domain
   type    = "A"
 
   alias {
@@ -309,8 +314,8 @@ resource "aws_route53_record" "api" {
 # =============================================================================
 
 output "api_endpoint" {
-  description = "API Gateway endpoint URL"
-  value       = aws_apigatewayv2_api.main.api_endpoint
+  description = "Public API base URL: api.<public_domain> when the environment has a domain, otherwise the API Gateway default endpoint."
+  value       = local.public_domain_enabled ? "https://${local.api_domain}" : aws_apigatewayv2_api.main.api_endpoint
 }
 
 output "api_function_name" {

@@ -13,21 +13,20 @@ Aucun apply, réveil de prod ou changement du site légal publié n'est exécut�
 - `platform/web_hosting.tf` déclare le bucket `app` privé, chiffrement AES256,
   public-access block, propriété BucketOwnerEnforced et policy de lecture limitée
   à l'ARN de sa distribution par OAC SigV4. Ces ressources restent désactivées
-  tant que `web_public_domain` est vide.
-- `modules/web_certificate` crée un certificat ACM `app` + SAN `www` et sa
-  validation DNS. Chaque root lui passe son provider `aws.us_east_1`, dans le même
+  tant que `public_domain` est vide.
+- `modules/web_certificate` crée un certificat ACM `app` + SAN apex, `www` et
+  `auth` (domaine Cognito, task-528) et sa validation DNS. Chaque root lui passe son provider `aws.us_east_1`, dans le même
   compte que ce root. Aucun provider de plateforme n'est configuré dans les modules.
   Le provider secondaire de prod garde son `allowed_account_ids` existant.
-- `web_public_domain` et `web_public_zone_id` sont vides par défaut, et doivent être
-  renseignés ensemble. La zone Route 53 doit être dans le compte de l'environnement
-  retenu et déléguée publiquement. Aucune zone, acquisition ou délégation inventée.
-  Si la zone actuelle est dans un autre compte, le propriétaire prépare une
-  délégation/adaptation IAM explicite avant ce raccordement ; ne pas passer un ID
-  de zone inaccessible en espérant qu'ACM puisse la modifier.
+- `public_domain` et `public_zone_id` vont ensemble : le domaine de base de
+  l'environnement et sa zone Route 53, dans le compte de cet environnement. Depuis
+  le 2026-11-09 (task-443, task-445) : dev = `dev.deepn.app` (zone du compte dev,
+  déléguée depuis la zone prod), prod = `deepn.app` (zone du compte prod) ; staging
+  reste vide. L'apex, `app.`, `www.`, `api.` et `auth.` en dérivent.
 
 Lorsqu'ils sont renseignés, le certificat validé en `us-east-1` est attaché aux deux
-distributions (SNI, TLSv1.2_2021), avec les alias `app`/`www` et les records Route 53
-A/AAAA. Le choix de région suit [l'exigence CloudFront pour ACM](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html).
+distributions (SNI, TLSv1.2_2021), avec les alias `app`, `www` et apex (sur `www`) et
+les records Route 53 A/AAAA. Le choix de région suit [l'exigence CloudFront pour ACM](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html).
 Les roots transmettent alors `https://app.<domaine choisi>` comme origine web à la
 plateforme, à la place de localhost dev ou de l'origine vide prod/staging. Ce
 changement attend l'activation volontaire du domaine ; les défauts ne l'activent pas.
@@ -59,14 +58,14 @@ un build valide ne prouve pas que les CORS/presigned PUT/OAuth fonctionnent.
 
 ## Raccordement propriétaire
 
-1. Acquérir/déléguer le domaine et vérifier la zone du compte choisi (TASK-443).
-2. Livrer le domaine API et le domaine auth avec leurs réglages OAuth (TASK-445/528).
-   Le certificat CloudFront couvre app/www ; il ne remplace pas les certificats
-   régionaux API ni le raccordement Cognito.
-3. Dans le root de l'environnement retenu, renseigner `web_public_domain` et
-   `web_public_zone_id` avec les valeurs approuvées, et les éventuelles
-   `web_connect_origins`. Ne pas écrire d'identité de compte ou credential dans
-   un fichier suivi. Utiliser le workflow Terraform et le profil de ce root.
+1. Domaine acquis et délégué (TASK-443) ; domaines de base et zones renseignés
+   dans les roots dev et prod (TASK-445). L'ordre de mise en service et les
+   réglages OAuth sont dans `docs/PRODUCTION_RELEASE_RUNBOOK.md`, section
+   « Domain bring-up (deepn.app) ».
+2. Le certificat us-east-1 couvre l'apex, app, www et auth ; `api.` a son
+   certificat régional eu-west-3 (`lambda_api.tf`).
+3. Ajouter si besoin des `web_connect_origins`. Ne pas écrire d'identité de compte
+   ou credential dans un fichier suivi.
 4. Revoir le plan : conservation de `aws_cloudfront_distribution.www` et de son
    bucket existant, créations app attendues, certificat uniquement us-east-1,
    zone et compte voulus, origine API/S3/streaming cohérente. Appliquer volontairement.

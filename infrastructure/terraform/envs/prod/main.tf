@@ -65,8 +65,8 @@ provider "aws" {
 module "platform" {
   source = "../../modules/platform"
 
-  web_public_domain   = var.web_public_domain
-  web_public_zone_id  = var.web_public_zone_id
+  public_domain       = var.public_domain
+  public_zone_id      = var.public_zone_id
   web_certificate_arn = module.web_certificate.certificate_arn
   web_connect_origins = var.web_connect_origins
 
@@ -77,7 +77,7 @@ module "platform" {
 
   # https://app.<domain> once the domain exists (task-443, task-445); no browser
   # origin until then.
-  web_app_origin = var.web_public_domain == "" ? "" : "https://app.${var.web_public_domain}"
+  web_app_origin = var.public_domain == "" ? "" : "https://app.${var.public_domain}"
 
   # MOTHBALLED until launch — owner decision of 2026-08-12, applied by task-248.
   #

@@ -97,7 +97,7 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 
 resource "aws_cloudfront_distribution" "www" {
   default_root_object = "index.html"
-  aliases             = local.web_domains_enabled ? ["www.${var.web_public_domain}"] : []
+  aliases             = local.public_domain_enabled ? ["www.${var.public_domain}", var.public_domain] : []
   enabled             = true
   comment             = "${var.project_name}-www${local.suffix}"
   is_ipv6_enabled     = true
@@ -127,10 +127,10 @@ resource "aws_cloudfront_distribution" "www" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = !local.web_domains_enabled
-    acm_certificate_arn            = local.web_domains_enabled ? var.web_certificate_arn : null
-    ssl_support_method             = local.web_domains_enabled ? "sni-only" : null
-    minimum_protocol_version       = local.web_domains_enabled ? "TLSv1.2_2021" : "TLSv1"
+    cloudfront_default_certificate = !local.public_domain_enabled
+    acm_certificate_arn            = local.public_domain_enabled ? var.web_certificate_arn : null
+    ssl_support_method             = local.public_domain_enabled ? "sni-only" : null
+    minimum_protocol_version       = local.public_domain_enabled ? "TLSv1.2_2021" : "TLSv1"
   }
 
   tags = {
@@ -177,5 +177,5 @@ output "www_distribution_id" {
 
 output "www_base_url" {
   description = "Public base URL: configured www alias, otherwise the existing CloudFront name."
-  value       = local.web_domains_enabled ? "https://www.${var.web_public_domain}" : "https://${aws_cloudfront_distribution.www.domain_name}"
+  value       = local.public_domain_enabled ? "https://www.${var.public_domain}" : "https://${aws_cloudfront_distribution.www.domain_name}"
 }

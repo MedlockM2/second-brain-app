@@ -1,3 +1,8 @@
+# One us-east-1 certificate for every CloudFront-fronted name of an environment:
+# app. and www. (and the apex) on the two distributions, auth. on Cognito's
+# managed-login distribution (task-528). api. is a regional API Gateway domain
+# and takes its own eu-west-3 certificate in modules/platform/lambda_api.tf.
+#
 # The root supplies its us-east-1 AWS provider. Route 53 is global, so DNS
 # validation uses that same account/provider without a second region alias here.
 terraform {
@@ -31,7 +36,7 @@ variable "zone_id" {
 resource "aws_acm_certificate" "web" {
   count                     = var.domain == "" ? 0 : 1
   domain_name               = "app.${var.domain}"
-  subject_alternative_names = ["www.${var.domain}"]
+  subject_alternative_names = [var.domain, "www.${var.domain}", "auth.${var.domain}"]
   validation_method         = "DNS"
   lifecycle {
     create_before_destroy = true

@@ -121,19 +121,15 @@ session n’est mise en cache ; cookies, Authorization, X-Session-Transport et q
 strings sont transmis. La réécriture SPA est une fonction attachée seulement au
 comportement S3 ; les erreurs de l’API conservent leur code et leur corps.
 
-La première création se fait en deux étapes : créer la distribution, puis renseigner
-la variable dev `web_app_origin` avec son URL et appliquer les origines et callbacks.
-Cette entrée explicite évite le cycle Terraform CloudFront → API Gateway → CORS →
-CloudFront. Elle est conservée dans la configuration dev pour les applies suivants.
-Le build utilise cette même URL pour `VITE_API_BASE_URL`, le streaming gardant sa
-porte dédiée et ses autorisations CORS. L’API et les comptes mobiles restent sur
-leurs ressources existantes.
-
-Après achat du domaine, renseigner `web_public_domain`/`web_public_zone_id`, appliquer
-le certificat et les alias existants, reconstruire avec la nouvelle `app_base_url`,
-puis publier le paquet. Le routage `/api/*` reste en place ; vérifier les callbacks
-Cognito et les origines d’upload/streaming. Une reconnexion est nécessaire sur la
-nouvelle adresse. La publication de `www` et les liens légaux gardent leur workflow.
+Depuis l'achat du domaine (task-443, task-445), l'origine de la web app est dérivée
+du domaine de base, `https://app.dev.deepn.app` en dev, et non lue sur CloudFront :
+cela évite le cycle Terraform CloudFront → API Gateway → CORS → CloudFront. Le build
+utilise cette même URL pour `VITE_API_BASE_URL` (`web/.env.beta`), le streaming
+gardant sa porte dédiée et ses autorisations CORS. Le routage `/api/*` reste en
+place. L'ancien nom CloudFront sert encore les fichiers, mais Cognito n'y accepte
+plus de connexion. Ordre de mise en service : `docs/PRODUCTION_RELEASE_RUNBOOK.md`,
+« Domain bring-up (deepn.app) ». La publication de `www` et les liens légaux gardent
+leur workflow.
 
 ## Retour à un paquet précédent — propriétaire uniquement
 

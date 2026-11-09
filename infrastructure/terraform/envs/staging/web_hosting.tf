@@ -7,13 +7,13 @@ provider "aws" {
   }
 }
 
-variable "web_public_domain" {
+variable "public_domain" {
   description = "Owner's domain; empty keeps existing hosting unchanged."
   type        = string
   default     = ""
 }
-variable "web_public_zone_id" {
-  description = "Route 53 zone in this environment's account; paired with web_public_domain."
+variable "public_zone_id" {
+  description = "Route 53 zone in this environment's account; paired with public_domain."
   type        = string
   default     = ""
 }
@@ -24,6 +24,6 @@ variable "web_connect_origins" {
 module "web_certificate" {
   source    = "../../modules/web_certificate"
   providers = { aws = aws.us_east_1 }
-  domain    = var.web_public_domain
-  zone_id   = var.web_public_zone_id
+  domain    = var.public_domain
+  zone_id   = var.public_zone_id
 }

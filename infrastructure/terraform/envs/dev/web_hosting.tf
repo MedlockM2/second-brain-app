@@ -7,28 +7,25 @@ provider "aws" {
   }
 }
 
-variable "web_public_domain" {
-  description = "Owner's domain; empty keeps existing hosting unchanged."
+# deepn.app is registered in the prod account; dev.deepn.app is a zone of this
+# (dev) account, delegated by an NS record in the prod zone (task-443).
+variable "public_domain" {
+  description = "Base domain of this environment: apex, app., www., api. and auth. derive from it."
   type        = string
-  default     = ""
+  default     = "dev.deepn.app"
 }
-variable "web_public_zone_id" {
-  description = "Route 53 zone in this environment's account; paired with web_public_domain."
+variable "public_zone_id" {
+  description = "Route 53 zone of public_domain, in this environment's account."
   type        = string
-  default     = ""
+  default     = "Z03725523GTB1KBX1FVIH"
 }
 variable "web_connect_origins" {
   type    = list(string)
   default = []
 }
-variable "web_app_origin" {
-  description = "Current dev CloudFront origin; explicit to avoid an API/CORS dependency cycle."
-  type        = string
-  default     = "https://d3n3qjz3si2rme.cloudfront.net"
-}
 module "web_certificate" {
   source    = "../../modules/web_certificate"
   providers = { aws = aws.us_east_1 }
-  domain    = var.web_public_domain
-  zone_id   = var.web_public_zone_id
+  domain    = var.public_domain
+  zone_id   = var.public_zone_id
 }

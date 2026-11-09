@@ -47,8 +47,8 @@ data "terraform_remote_state" "shared" {
 module "platform" {
   source = "../../modules/platform"
 
-  web_public_domain       = var.web_public_domain
-  web_public_zone_id      = var.web_public_zone_id
+  public_domain           = var.public_domain
+  public_zone_id          = var.public_zone_id
   web_certificate_arn     = module.web_certificate.certificate_arn
   web_connect_origins     = var.web_connect_origins
   web_app_hosting_enabled = true
@@ -58,9 +58,9 @@ module "platform" {
   environment        = "dev" # literal #2
   ecr_repository_url = data.terraform_remote_state.shared.outputs.lambda_ecr_repository_url
 
-  # Kept as an explicit input: deriving this from CloudFront here would create
-  # a dependency cycle with API Gateway's CORS and the distribution's API origin.
-  web_app_origin = var.web_public_domain == "" ? var.web_app_origin : "https://app.${var.web_public_domain}"
+  # Derived from the domain, not from CloudFront: reading the distribution here
+  # would create a dependency cycle with API Gateway's CORS and its API origin.
+  web_app_origin = "https://app.${var.public_domain}"
 
   # dev hosts the beta, so its alarms are on (≈ $3.30/mo measured): a suspended
   # provider, a full loss reserve or an approached operator ceiling must reach

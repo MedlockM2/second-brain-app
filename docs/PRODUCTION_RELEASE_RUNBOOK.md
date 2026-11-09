@@ -10,6 +10,7 @@ iOS App Store and Google Play Store, including hotfix procedures and rollback st
 1. [Release Overview](#release-overview)
 2. [Version Numbering Strategy](#version-numbering-strategy)
 3. [Pre-Release Checklist](#pre-release-checklist)
+   - [Domain bring-up (deepn.app)](#domain-bring-up-deepnapp)
 4. [Production Release Process](#production-release-process)
 5. [Post-Release Verification](#post-release-verification)
 6. [Hotfix Release Process](#hotfix-release-process)
@@ -138,6 +139,122 @@ Complete every item before creating a production tag.
 - [ ] `version` field updated in `mobile/app.config.ts`
 - [ ] "What's New" text updated for this version (both stores)
 - [ ] Changes committed and pushed to `main`
+
+---
+
+## Domain bring-up (deepn.app)
+
+Owner operations that put an environment on its own domain (task-443, task-445,
+task-528). The code is in the repository; everything below happens outside it.
+
+### Layout
+
+`deepn.app` is registered in the **prod** account, which holds its apex zone.
+`dev.deepn.app` is a zone of the **dev** account, delegated by an `NS` record in
+the prod zone. Each Terraform root takes one base domain and the zone of its own
+account (`public_domain`, `public_zone_id` in `envs/<env>/web_hosting.tf`), and
+every name derives from it:
+
+| | dev (beta) | prod |
+|---|---|---|
+| Static site, apex | `dev.deepn.app` | `deepn.app` |
+| Static site | `www.dev.deepn.app` | `www.deepn.app` |
+| Web app | `app.dev.deepn.app` | `app.deepn.app` |
+| API | `api.dev.deepn.app` | `api.deepn.app` |
+| Cognito | `auth.dev.deepn.app` | `auth.deepn.app` |
+
+Certificates: one us-east-1 certificate for the apex, `app.`, `www.` and `auth.`
+(`modules/web_certificate`, used by both CloudFront distributions and by
+Cognito), one eu-west-3 certificate for `api.` (`modules/platform/lambda_api.tf`).
+All are validated by DNS in the environment's zone; nothing is created by hand.
+
+The chat stream keeps its `execute-api` URL (`EXPO_PUBLIC_CHAT_STREAM_URL`,
+`VITE_CHAT_STREAM_URL`). It is a separate REST API with response streaming, and
+a custom-domain mapping would put an unexercised hop in front of streaming for a
+URL no user ever sees. The web CSP and CORS already list it.
+
+No secret depends on the domain: the API reads the Cognito domain and the web
+callback from the Lambda environment, which Terraform derives. The former
+`APPLE_REDIRECT_URI` / `GOOGLE_REDIRECT_URI` keys are no longer read by any code.
+Webhooks registered at RevenueCat and Apify keep the API Gateway default
+endpoint, which stays enabled.
+
+### dev (beta), in this order
+
+1. **Push the Terraform change on its own** and let `Terraform Dev` apply it.
+   It creates the certificates and records, `api.dev.deepn.app`, the Cognito
+   domain `auth.dev.deepn.app` (deleting the `deepn-<account>-dev` prefix domain
+   in the same apply), and moves the web client's callback to
+   `https://app.dev.deepn.app/auth/callback`. Cognito can take up to an hour
+   before its custom domain serves.
+   From this apply until step 2, Google and Apple sign-in through Cognito fail
+   (the providers still expect the old return URL). Password sign-in, native
+   Apple on iOS and native Google on Android are unaffected.
+
+   Then give each app client Cognito's default managed-login style, once. The
+   custom domain uses managed login (needed to forward `prompt=select_account`
+   to Google), which serves no client without a style, and AWS provider v5
+   cannot create one:
+   ```bash
+   cd infrastructure/terraform/envs/dev
+   export AWS_PROFILE=second-brain-app AWS_REGION=eu-west-3
+   POOL=$(terraform output -json cognito_configuration | jq -r .user_pool_id)
+   for CLIENT in $(terraform output -json cognito_configuration | jq -r '.mobile_client_id, .web_client_id'); do
+     aws cognito-idp create-managed-login-branding --user-pool-id "$POOL" \
+       --client-id "$CLIENT" --use-cognito-provided-values
+   done
+   ```
+   A client recreated later needs the same command again.
+2. **Provider return URLs**, replacing the old `amazoncognito.com` entries:
+   - Google Cloud → the Web OAuth client used by Cognito → Authorized redirect
+     URIs: `https://auth.dev.deepn.app/oauth2/idpresponse`.
+   - Apple Developer → Services ID used by Cognito → Domains and Subdomains:
+     `auth.dev.deepn.app`; Return URLs:
+     `https://auth.dev.deepn.app/oauth2/idpresponse`.
+3. **Check** before shipping any client:
+   ```bash
+   dig +short api.dev.deepn.app auth.dev.deepn.app app.dev.deepn.app
+   curl -sS -o /dev/null -w '%{http_code}\n' https://api.dev.deepn.app/api/health/
+   AWS_PROFILE=second-brain-app aws cognito-idp describe-user-pool-domain \
+     --domain auth.dev.deepn.app --region eu-west-3 --query DomainDescription.Status
+   ```
+   Expected: three answers, `200`, `ACTIVE`.
+   Then, after the client change below has reached a device, check account
+   switching (task-528) with two distinct accounts per provider: Google on iOS
+   lists the Safari accounts and lets you pick the other one after a Deepn
+   logout; Apple on Android lets you enter another Apple Account's credentials
+   from the Apple button after a Deepn logout. If Apple silently reuses the
+   previous account, record it in task-528 rather than working around it.
+4. **Push the client change.** `deploy-web.yml` publishes the web app, now
+   served on `https://app.dev.deepn.app`. The mobile workflow runs
+   `scripts/mobile_release_check.sh internal`, which refuses to ship while
+   `api.dev.deepn.app` does not resolve; it then publishes an OTA or builds,
+   depending on the fingerprint.
+5. **Native builds for testers** (`internal` profile) carry the new API URL
+   from their own `env` block; build them as usual once step 3 passes.
+6. **Extensions**: package with `--api https://api.dev.deepn.app --web
+   https://app.dev.deepn.app` (`extension/scripts/package_release.py`,
+   task-592/593).
+
+The old CloudFront name of the web app keeps serving files, but its sign-in no
+longer works: Cognito only accepts the `app.dev.deepn.app` callback.
+
+### prod, when it is woken up (task-446)
+
+The prod root already declares `deepn.app` and its zone; its first apply creates
+the same set of names under `deepn.app`. Before it:
+
+- If `www.deepn.app` was attached to the dev `www` distribution for the legal
+  pages (task-454 gate), remove that alias from dev first: a CloudFront alternate
+  name can belong to only one distribution, across accounts.
+- After the apply, create the managed-login style of each prod client (dev
+  step 1 command, from `envs/prod` with `AWS_PROFILE=prod`).
+- Register `https://auth.deepn.app/oauth2/idpresponse` with the prod Google
+  client and the prod Services ID, as in dev step 2.
+- Add `EXPO_PUBLIC_CHAT_STREAM_URL` to the `production` profile of
+  `mobile/eas.json` from the prod `chat_stream_url` output.
+- `production` already points at `https://api.deepn.app`;
+  `mobile_release_check.sh production` passes once that name resolves.
 
 ---
 

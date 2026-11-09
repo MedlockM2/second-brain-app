@@ -4,20 +4,25 @@ variable "web_app_hosting_enabled" {
   default = false
 }
 
-variable "web_public_domain" {
-  type    = string
-  default = ""
+# One base domain per environment (task-443): dev.deepn.app in the dev account,
+# deepn.app in the prod account. Every public name derives from it -- the apex,
+# app., www., api. and auth. -- and lives in this environment's own zone.
+variable "public_domain" {
+  description = "Base domain of this environment; empty keeps the AWS default hostnames."
+  type        = string
+  default     = ""
 }
-variable "web_public_zone_id" {
-  type    = string
-  default = ""
+variable "public_zone_id" {
+  description = "Route 53 zone of public_domain, in this environment's account."
+  type        = string
+  default     = ""
 }
 variable "web_certificate_arn" {
   type    = string
   default = ""
   validation {
-    condition = var.web_public_domain == "" ? var.web_certificate_arn == "" : (
-      var.web_public_zone_id != "" && can(regex("^arn:aws:acm:us-east-1:[0-9]{12}:certificate/", var.web_certificate_arn))
+    condition = var.public_domain == "" ? var.web_certificate_arn == "" : (
+      var.public_zone_id != "" && can(regex("^arn:aws:acm:us-east-1:[0-9]{12}:certificate/", var.web_certificate_arn))
     )
     error_message = "A public domain requires its Route 53 zone and a validated ACM certificate in us-east-1."
   }
@@ -33,8 +38,10 @@ variable "web_connect_origins" {
 }
 
 locals {
-  web_domains_enabled = var.web_public_domain != ""
-  web_app_enabled     = var.web_app_hosting_enabled || local.web_domains_enabled
+  public_domain_enabled = var.public_domain != ""
+  api_domain            = local.public_domain_enabled ? "api.${var.public_domain}" : ""
+  auth_domain           = local.public_domain_enabled ? "auth.${var.public_domain}" : ""
+  web_app_enabled       = var.web_app_hosting_enabled || local.public_domain_enabled
   web_connect_sources = distinct(concat([
     aws_apigatewayv2_api.main.api_endpoint,
     "https://${aws_api_gateway_rest_api.chat_stream.id}.execute-api.${var.aws_region}.amazonaws.com",
@@ -44,7 +51,7 @@ locals {
     "https://${aws_s3_bucket.documents.bucket}.s3.amazonaws.com",
     "https://${aws_s3_bucket.audio.bucket}.s3.amazonaws.com",
     "https://${aws_s3_bucket.bug_reports.bucket}.s3.amazonaws.com",
-  ], var.api_custom_domain == "" ? [] : ["https://${var.api_custom_domain}"], var.web_connect_origins))
+  ], local.api_domain == "" ? [] : ["https://${local.api_domain}"], var.web_connect_origins))
 }
 
 resource "aws_s3_bucket" "app" {
@@ -149,7 +156,7 @@ resource "aws_cloudfront_distribution" "app" {
   count               = local.web_app_enabled ? 1 : 0
   enabled             = true
   comment             = "${var.project_name}-app${local.suffix}"
-  aliases             = local.web_domains_enabled ? ["app.${var.web_public_domain}"] : []
+  aliases             = local.public_domain_enabled ? ["app.${var.public_domain}"] : []
   default_root_object = "index.html"
   is_ipv6_enabled     = true
   http_version        = "http2and3"
@@ -208,10 +215,10 @@ resource "aws_cloudfront_distribution" "app" {
     geo_restriction { restriction_type = "none" }
   }
   viewer_certificate {
-    cloudfront_default_certificate = !local.web_domains_enabled
-    acm_certificate_arn            = local.web_domains_enabled ? var.web_certificate_arn : null
-    ssl_support_method             = local.web_domains_enabled ? "sni-only" : null
-    minimum_protocol_version       = local.web_domains_enabled ? "TLSv1.2_2021" : "TLSv1"
+    cloudfront_default_certificate = !local.public_domain_enabled
+    acm_certificate_arn            = local.public_domain_enabled ? var.web_certificate_arn : null
+    ssl_support_method             = local.public_domain_enabled ? "sni-only" : null
+    minimum_protocol_version       = local.public_domain_enabled ? "TLSv1.2_2021" : "TLSv1"
   }
   tags = { Name = "${var.project_name}-app${local.suffix}" }
 }
@@ -240,18 +247,33 @@ resource "aws_s3_bucket_policy" "app" {
 }
 
 resource "aws_route53_record" "web" {
-  for_each = local.web_domains_enabled ? {
+  for_each = local.public_domain_enabled ? {
     app_a    = { host = "app", type = "A" }
     app_aaaa = { host = "app", type = "AAAA" }
     www_a    = { host = "www", type = "A" }
     www_aaaa = { host = "www", type = "AAAA" }
   } : {}
-  zone_id = var.web_public_zone_id
-  name    = "${each.value.host}.${var.web_public_domain}"
+  zone_id = var.public_zone_id
+  name    = "${each.value.host}.${var.public_domain}"
   type    = each.value.type
   alias {
     name                   = each.value.host == "app" ? aws_cloudfront_distribution.app[0].domain_name : aws_cloudfront_distribution.www.domain_name
     zone_id                = each.value.host == "app" ? aws_cloudfront_distribution.app[0].hosted_zone_id : aws_cloudfront_distribution.www.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+# The apex serves the static site, like www. It is its own resource because
+# Cognito requires the parent of auth.<domain> -- this apex -- to resolve before
+# it accepts the custom domain, and the app records would drag the whole
+# app distribution into that ordering (dependency cycle through the Lambdas).
+resource "aws_route53_record" "apex" {
+  for_each = local.public_domain_enabled ? toset(["A", "AAAA"]) : toset([])
+  zone_id  = var.public_zone_id
+  name     = var.public_domain
+  type     = each.value
+  alias {
+    name                   = aws_cloudfront_distribution.www.domain_name
+    zone_id                = aws_cloudfront_distribution.www.hosted_zone_id
     evaluate_target_health = false
   }
 }
@@ -260,5 +282,5 @@ output "app_distribution_id" { value = try(aws_cloudfront_distribution.app[0].id
 output "app_bucket_arn" { value = try(aws_s3_bucket.app[0].arn, null) }
 output "app_distribution_arn" { value = try(aws_cloudfront_distribution.app[0].arn, null) }
 output "app_base_url" {
-  value = local.web_app_enabled ? (local.web_domains_enabled ? "https://app.${var.web_public_domain}" : "https://${aws_cloudfront_distribution.app[0].domain_name}") : null
+  value = local.web_app_enabled ? (local.public_domain_enabled ? "https://app.${var.public_domain}" : "https://${aws_cloudfront_distribution.app[0].domain_name}") : null
 }
