@@ -33,7 +33,7 @@ Renseigner avant le build :
 - `VITE_API_BASE_URL` : l'origine de l'API dev. Récupérer l'URL avec
   `terraform output -raw api_endpoint` depuis `infrastructure/terraform/envs/dev`.
 - `VITE_WEB_APP_ORIGIN` : l'origine exacte de l'app web qui appaire l'extension,
-  par exemple `http://localhost:5173` en local, puis `https://app.<domaine>`.
+  par exemple `http://localhost:5173` en local, puis `https://dev.deepn.app` (bêta) ou `https://deepn.app` (prod).
 
 Ces deux valeurs sont publiques, intégrées au manifeste et au bundle. Ne jamais
 mettre de secret dans une variable `VITE_*`. Utiliser les mêmes API dev et origine

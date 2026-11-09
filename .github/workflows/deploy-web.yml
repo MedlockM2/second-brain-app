@@ -1,4 +1,4 @@
-# Build and publish the dev web app (https://app.dev.deepn.app) on every
+# Build and publish the dev web app (https://dev.deepn.app) on every
 # push to main that changes it (TASK-608).
 #
 # Before this workflow the publication was a manual runbook step, so the web code on
@@ -46,7 +46,7 @@ env:
   # another resource.
   WEB_BUCKET: media-summarizer-app-125313707865-dev
   WEB_DISTRIBUTION: E31Z5U8Y6RDUWR
-  WEB_URL: https://app.dev.deepn.app
+  WEB_URL: https://dev.deepn.app
 
 jobs:
   deploy:
