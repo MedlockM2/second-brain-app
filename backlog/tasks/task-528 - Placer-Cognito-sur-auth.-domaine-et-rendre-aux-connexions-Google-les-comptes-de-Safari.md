@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-10-18 15:11'
-updated_date: '2026-11-09 13:20'
+updated_date: '2026-11-09 14:56'
 labels:
   - infrastructure
   - mobile
@@ -122,4 +122,20 @@ Précision propriétaire finale : Apple Android peut redemander une adresse et u
 - Vérifier sur appareil, avec deux comptes par fournisseur : la sélection Google sur iOS, la saisie d’un autre compte Apple sur Android.
 - Le changement mobile sort par OTA (aucun module natif), après le push Terraform.
 - À vérifier aussi après l’apply : que la connexion Apple native iOS (`CUSTOM_AUTH` via l’API) fonctionne toujours. La doc AWS indique que les pages du managed login ne prennent pas en charge les triggers d’authentification personnalisée ; l’API n’est pas concernée, mais ce n’est pas encore vérifié.
+
+**2026-11-09 — mise en service dev, étapes 1 et 2 du runbook.**
+- Commit d'infrastructure `9d7d5690` poussé seul. `Terraform Dev` (run 42625202250) : apply réussi.
+- Styles de managed login créés pour les clients mobile et web (styles Cognito par défaut).
+- Domaine `auth.dev.deepn.app` : `ACTIVE`, managed login version 2.
+- Les cinq noms résolvent. `api.dev.deepn.app/api/health/`, `app.dev.deepn.app` et `www.dev.deepn.app/privacy` répondent 200.
+- `/oauth2/authorize` avec `identity_provider=Google&prompt=select_account` redirige vers Google avec `prompt=select_account` : la transmission est confirmée.
+- Apple redirige vers `appleid.apple.com`. `/logout` renvoie 302 vers `media-summarizer://auth-callback`.
+- Reste, côté owner : remplacer les retours Google et Apple (runbook, étape 2), puis pousser le commit clients `1eb6bdd2`.
+
+**2026-11-09 — étapes 3 et 4 du runbook.**
+- Retours Google et Apple remplacés par l'owner. Cognito redirige maintenant sans erreur vers la page de connexion Google, et vers la page Apple.
+- Commit clients `1eb6bdd2` poussé : Deploy Web App, Mobile OTA or Build et Main Branch Checks réussis.
+- La web app sert la révision `1eb6bdd2` sur `app.dev.deepn.app`, et son bundle contient `select_account`.
+- L'empreinte native a changé : le workflow a lancé des builds natifs iOS et Android au lieu d'une OTA.
+- Reste : vérification sur appareil avec deux comptes par fournisseur (AC #7).
 <!-- SECTION:NOTES:END -->
