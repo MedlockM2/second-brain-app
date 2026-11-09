@@ -281,6 +281,19 @@ déclarées dans `.env.example`, donc injectées.
 
 Tout autre nom listé par `skipped:` est un vrai manque à investiguer.
 
+Un credential d'outillage vit à part, dans le secret `media-summarizer-devbox`
+plutôt que dans le secret runtime, parce qu'aucune Lambda ne doit le lire :
+`CANNY_API_KEY`, la clé API **admin** de Canny (Settings > API & Webhooks), qui
+sert à changer le statut d'un post depuis le terminal. Le widget de l'app n'en a
+pas besoin, il n'utilise que `CANNY_BOARD_TOKEN` et `CANNY_SSO_PRIVATE_KEY`.
+
+```bash
+printf 'CANNY_API_KEY=%s\n' "$(AWS_PROFILE=second-brain-app aws secretsmanager \
+  get-secret-value --secret-id media-summarizer-devbox --region eu-west-3 \
+  --query SecretString --output text \
+  | .venv/bin/python -c 'import json, sys; print(json.load(sys.stdin)["CANNY_API_KEY"])')" >> .env
+```
+
 Deux règles qui évitent des heures de débogage :
 
 - **Ne jamais mettre de commentaire sur la même ligne qu'une valeur entre
