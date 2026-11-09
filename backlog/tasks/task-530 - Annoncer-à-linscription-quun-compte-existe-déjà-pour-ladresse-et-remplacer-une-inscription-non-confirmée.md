@@ -3,10 +3,10 @@ id: TASK-530
 title: >-
   Dire à l'inscription, à la connexion et à la récupération qu'un compte existe
   déjà ou n'a pas de mot de passe, et remplacer une inscription non confirmée
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-20 09:40'
-updated_date: '2026-10-20 09:59'
+updated_date: '2026-11-09 15:45'
 labels:
   - auth
   - security
@@ -123,4 +123,6 @@ Sur un compte exclusivement social, les trois répondent 409 `AUTH_SOCIAL_ONLY`.
 **Apps.** Mobile et web affichent `error.emailAlreadyExists` (clé existante, mêmes mots que demandés) avec « Se connecter » et « Mot de passe oublié ? », l'adresse pré-remplie, sans écran de code. La connexion et la récupération affichent `auth.socialOnly`.
 
 **Vérifications.** Identiques à task-529 : ruff, mypy, typecheck, lint, build web et Terraform propres, sans test automatisé ni déploiement.
+
+**2026-11-09 — validation propriétaire sur appareil :** « tout bon ». Tâche close.
 <!-- SECTION:NOTES:END -->

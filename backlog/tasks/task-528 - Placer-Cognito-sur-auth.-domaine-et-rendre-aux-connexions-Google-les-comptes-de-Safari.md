@@ -3,10 +3,10 @@ id: TASK-528
 title: >-
   Placer Cognito sur auth.<domaine> et permettre le changement de compte Google
   iOS et Apple Android
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-18 15:11'
-updated_date: '2026-11-09 14:56'
+updated_date: '2026-11-09 15:45'
 labels:
   - infrastructure
   - mobile
@@ -86,7 +86,7 @@ Le changement Google iOS décrit ici se distribue par OTA, sans nouveau module n
 - [x] #4 `docs/AUTHENTICATION_SETUP.md` décrit le domaine personnalisé, son certificat us-east-1, le prérequis d’enregistrement A du domaine parent, et les retours Google/Apple à mettre à jour ; le paragraphe sur la session privée est remplacé.
 - [x] #5 Typecheck et lint mobile passent.
 - [x] #6 Google sur iOS conserve les sessions Google de Safari et utilise un mécanisme documenté de sélection du compte. Les boutons Google et Apple existants sont conservés, sans bouton Deepn supplémentaire pour changer de compte.
-- [ ] #7 Le parcours Apple Android permet de choisir ou saisir les identifiants d’un autre compte sur les pages officielles Apple après déconnexion Deepn, sans effacement manuel des données de Chrome. Une liste de comptes mémorisés et la conservation de la session Apple ne sont pas exigées.
+- [x] #7 Le parcours Apple Android permet de choisir ou saisir les identifiants d’un autre compte sur les pages officielles Apple après déconnexion Deepn, sans effacement manuel des données de Chrome. Une liste de comptes mémorisés et la conservation de la session Apple ne sont pas exigées.
 - [x] #8 Le runbook décrit le mécanisme retenu et son raccordement Cognito pour chaque fournisseur, ainsi que les contraintes navigateur et les limites établies. Aucun paramètre Apple non documenté ni la seule fermeture Cognito n’est présenté comme une garantie de changement de compte.
 <!-- AC:END -->
 
@@ -138,4 +138,6 @@ Précision propriétaire finale : Apple Android peut redemander une adresse et u
 - La web app sert la révision `1eb6bdd2` sur `app.dev.deepn.app`, et son bundle contient `select_account`.
 - L'empreinte native a changé : le workflow a lancé des builds natifs iOS et Android au lieu d'une OTA.
 - Reste : vérification sur appareil avec deux comptes par fournisseur (AC #7).
+
+**2026-11-09 — validation propriétaire sur appareil :** « tout bon ». Validé : choix du compte Google sur iOS après déconnexion, saisie d'un autre compte Apple sur Android après déconnexion, connexion Apple native iOS toujours fonctionnelle. AC #7 coché sur cette base.
 <!-- SECTION:NOTES:END -->

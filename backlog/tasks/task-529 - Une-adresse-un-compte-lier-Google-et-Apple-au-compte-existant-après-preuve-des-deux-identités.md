@@ -3,10 +3,10 @@ id: TASK-529
 title: >-
   Une adresse, un compte : lier Google et Apple au compte existant après preuve
   des deux identités
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-20 09:39'
-updated_date: '2026-10-20 09:59'
+updated_date: '2026-11-09 15:45'
 labels:
   - auth
   - security
@@ -162,4 +162,6 @@ Réalisé le 2026-10-20 dans la session propriétaire, en même temps que task-5
 **Limites connues.**
 - Un profil fédéré laissé par une liaison abandonnée compte comme titulaire : la liste des méthodes peut alors contenir ce fournisseur. Une liaison relancée depuis le compte principal le supprime et le relie.
 - `CUSTOM_AUTH` sur une destination fédérée (iOS natif lié à un compte Google) repose sur le même mécanisme que task-527 : à valider sur appareil.
+
+**2026-11-09 — validation propriétaire sur appareil :** « tout bon ». Tâche close.
 <!-- SECTION:NOTES:END -->
