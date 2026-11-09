@@ -131,7 +131,7 @@ resource "aws_apigatewayv2_api" "main" {
   # cookie to nor accepts a credentialed answer from an API that allows origin "*"
   # — so the origin is named, credentials are allowed, and so are the headers: a
   # credentialed preflight reads "*" as a literal header name. An empty origin
-  # (staging, prod until app.<domain> exists) means no browser origin at all.
+  # (staging, prod until its domain exists) means no browser origin at all.
   cors_configuration {
     allow_origins     = var.web_app_origin == "" ? [] : [var.web_app_origin]
     allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]

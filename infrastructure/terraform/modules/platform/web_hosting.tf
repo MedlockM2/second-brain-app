@@ -5,8 +5,10 @@ variable "web_app_hosting_enabled" {
 }
 
 # One base domain per environment (task-443): dev.deepn.app in the dev account,
-# deepn.app in the prod account. Every public name derives from it -- the apex,
-# app., www., api. and auth. -- and lives in this environment's own zone.
+# deepn.app in the prod account. The web app is served on the domain itself
+# (owner decision of 2026-11-09, replacing app.<domain> of task-424); www. holds
+# the static pages, api. the API, auth. Cognito. All live in this environment's
+# own zone.
 variable "public_domain" {
   description = "Base domain of this environment; empty keeps the AWS default hostnames."
   type        = string
@@ -153,10 +155,13 @@ resource "aws_cloudfront_function" "app_routes" {
 }
 
 resource "aws_cloudfront_distribution" "app" {
-  count               = local.web_app_enabled ? 1 : 0
+  count = local.web_app_enabled ? 1 : 0
+  # An alternate name belongs to one distribution at a time: when the apex moves
+  # from www to the app (2026-11-09), www must release it first.
+  depends_on          = [aws_cloudfront_distribution.www]
   enabled             = true
   comment             = "${var.project_name}-app${local.suffix}"
-  aliases             = local.public_domain_enabled ? ["app.${var.public_domain}"] : []
+  aliases             = local.public_domain_enabled ? [var.public_domain] : []
   default_root_object = "index.html"
   is_ipv6_enabled     = true
   http_version        = "http2and3"
@@ -246,34 +251,35 @@ resource "aws_s3_bucket_policy" "app" {
   depends_on = [aws_s3_bucket_public_access_block.app]
 }
 
-resource "aws_route53_record" "web" {
-  for_each = local.public_domain_enabled ? {
-    app_a    = { host = "app", type = "A" }
-    app_aaaa = { host = "app", type = "AAAA" }
-    www_a    = { host = "www", type = "A" }
-    www_aaaa = { host = "www", type = "AAAA" }
-  } : {}
-  zone_id = var.public_zone_id
-  name    = "${each.value.host}.${var.public_domain}"
-  type    = each.value.type
+moved {
+  from = aws_route53_record.web["www_a"]
+  to   = aws_route53_record.www["A"]
+}
+moved {
+  from = aws_route53_record.web["www_aaaa"]
+  to   = aws_route53_record.www["AAAA"]
+}
+resource "aws_route53_record" "www" {
+  for_each = local.public_domain_enabled ? toset(["A", "AAAA"]) : toset([])
+  zone_id  = var.public_zone_id
+  name     = "www.${var.public_domain}"
+  type     = each.value
   alias {
-    name                   = each.value.host == "app" ? aws_cloudfront_distribution.app[0].domain_name : aws_cloudfront_distribution.www.domain_name
-    zone_id                = each.value.host == "app" ? aws_cloudfront_distribution.app[0].hosted_zone_id : aws_cloudfront_distribution.www.hosted_zone_id
+    name                   = aws_cloudfront_distribution.www.domain_name
+    zone_id                = aws_cloudfront_distribution.www.hosted_zone_id
     evaluate_target_health = false
   }
 }
-# The apex serves the static site, like www. It is its own resource because
-# Cognito requires the parent of auth.<domain> -- this apex -- to resolve before
-# it accepts the custom domain, and the app records would drag the whole
-# app distribution into that ordering (dependency cycle through the Lambdas).
+# The apex is the web app. Cognito also requires it -- the parent of
+# auth.<domain> -- to resolve before it accepts the custom domain.
 resource "aws_route53_record" "apex" {
   for_each = local.public_domain_enabled ? toset(["A", "AAAA"]) : toset([])
   zone_id  = var.public_zone_id
   name     = var.public_domain
   type     = each.value
   alias {
-    name                   = aws_cloudfront_distribution.www.domain_name
-    zone_id                = aws_cloudfront_distribution.www.hosted_zone_id
+    name                   = aws_cloudfront_distribution.app[0].domain_name
+    zone_id                = aws_cloudfront_distribution.app[0].hosted_zone_id
     evaluate_target_health = false
   }
 }
@@ -282,5 +288,5 @@ output "app_distribution_id" { value = try(aws_cloudfront_distribution.app[0].id
 output "app_bucket_arn" { value = try(aws_s3_bucket.app[0].arn, null) }
 output "app_distribution_arn" { value = try(aws_cloudfront_distribution.app[0].arn, null) }
 output "app_base_url" {
-  value = local.web_app_enabled ? (local.public_domain_enabled ? "https://app.${var.public_domain}" : "https://${aws_cloudfront_distribution.app[0].domain_name}") : null
+  value = local.web_app_enabled ? (local.public_domain_enabled ? "https://${var.public_domain}" : "https://${aws_cloudfront_distribution.app[0].domain_name}") : null
 }

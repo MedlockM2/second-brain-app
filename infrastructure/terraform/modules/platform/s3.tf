@@ -301,7 +301,7 @@ output "covers_bucket_name" {
 # of the web app's origin is allowed: downloads stay presigned GETs that no
 # page needs to read through CORS. The Content-Type is not part of the
 # signature, so it is the one request header to allow. No origin (staging,
-# prod until app.<domain> exists) means no rule at all.
+# prod until its domain exists) means no rule at all.
 resource "aws_s3_bucket_cors_configuration" "documents_upload" {
   count  = var.web_app_origin == "" ? 0 : 1
   bucket = aws_s3_bucket.documents.id

@@ -47,8 +47,10 @@ Vérification de marque Google : elle commence dès l’achat, par la preuve de 
 | Domaine de base / zone | `dev.deepn.app`, compte dev | `deepn.app`, compte prod |
 | API | `api.dev.deepn.app` | `api.deepn.app` |
 | Cognito | `auth.dev.deepn.app` | `auth.deepn.app` |
-| Web app | `app.dev.deepn.app` | `app.deepn.app` |
+| Web app | `dev.deepn.app` | `deepn.app` |
 | Site et pages légales | voir ci-dessous | `www.deepn.app` |
+
+**Décision owner du 2026-11-09 — web app sur le domaine nu.** La web app est servie sur `deepn.app` (prod) et `dev.deepn.app` (dev), et non plus sur `app.<domaine>`. Cette décision remplace le point 9 de la validation de task-424 du 2026-10-11. `www.` garde les pages statiques (pages légales, `.well-known`), pour que l'URL de confidentialité donnée aux stores ne dépende ni de la web app ni de prod. `app.<domaine>` n'a plus d'enregistrement DNS.
 
 **Pages légales :** une seule adresse publique, `https://www.deepn.app/privacy` (et `#delete-account`). Selon l'amendement du 2026-10-30 du README de task-357, elle est servie par la distribution `www` de **dev**, qui publie déjà la page, tant que prod dort. On ajoute donc l'alias `www.deepn.app` sur cette distribution : enregistrement dans la zone prod, certificat ACM us-east-1 du compte dev validé par un CNAME dans la zone prod. Cette bascule reste la gate de TASK-454. `www.dev.deepn.app` n'est jamais communiqué publiquement.
 
@@ -82,7 +84,7 @@ Les contacts du titulaire et la preuve d’achat restent hors dépôt. Les ident
 - Route 53 : zones `deepn.app` (prod) et `dev.deepn.app` (dev), délégation faite. Certificats ACM et enregistrements `api.`/`auth.`/`app.` : Terraform, TASK-445/TASK-528, appliqué par TASK-591.
 - Google Cloud : URI de retour du client OAuth web vers `https://auth.dev.deepn.app/oauth2/idpresponse` (TASK-528, note owner) ; domaines autorisés, branding et preuve de propriété dans Search Console (TASK-451).
 - Apple Developer : URL de retour et domaine du Services ID Sign in with Apple (web et Android) vers `auth.dev.deepn.app` (TASK-528, note owner).
-- Cognito : URL de callback et de déconnexion web vers `app.dev.deepn.app` (Terraform, TASK-528/TASK-591).
+- Cognito : URL de callback et de déconnexion web vers `dev.deepn.app` (Terraform, TASK-528/TASK-591).
 - EAS : profils et variables d'environnement de l'API (TASK-445).
 - GitHub Actions : URL de la web app dans `deploy-web.yml` et URL de l'API dans `mobile-e2e-maestro.yml` (TASK-445/TASK-591).
 - App Store Connect : Privacy Policy URL, Support URL, adresse de contact et formulaire commerçant DSA ; Play Console : politique de confidentialité, URL de suppression de compte, contact (gate TASK-454).

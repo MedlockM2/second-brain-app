@@ -27,7 +27,7 @@ variable "project_name" {
 }
 
 variable "web_app_origin" {
-  description = "Origin of the web app allowed by the HTTP API's CORS, e.g. https://app.<domain>. Empty for no browser origin."
+  description = "Origin of the web app allowed by the HTTP API's CORS, e.g. https://<domain>. Empty for no browser origin."
   type        = string
 
   # No default on purpose: every environment states which browser origin may
@@ -43,7 +43,7 @@ variable "web_app_origin" {
   # plain http: staging and prod name their https app origin or nothing.
   validation {
     condition     = var.environment == "dev" || !can(regex("^http://|://(localhost|127\\.0\\.0\\.1)(:|$)", var.web_app_origin))
-    error_message = "web_app_origin may be http:// or localhost only in dev; staging and prod take https://app.<domain> or nothing."
+    error_message = "web_app_origin may be http:// or localhost only in dev; staging and prod take https://<domain> or nothing."
   }
 }
 

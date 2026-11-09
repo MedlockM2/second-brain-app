@@ -27,7 +27,7 @@ Aucun apply, réveil de prod ou changement du site légal publié n'est exécut�
 Lorsqu'ils sont renseignés, le certificat validé en `us-east-1` est attaché aux deux
 distributions (SNI, TLSv1.2_2021), avec les alias `app`, `www` et apex (sur `www`) et
 les records Route 53 A/AAAA. Le choix de région suit [l'exigence CloudFront pour ACM](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html).
-Les roots transmettent alors `https://app.<domaine choisi>` comme origine web à la
+Les roots transmettent alors `https://<domaine de base>` comme origine web à la
 plateforme, à la place de localhost dev ou de l'origine vide prod/staging. Ce
 changement attend l'activation volontaire du domaine ; les défauts ne l'activent pas.
 

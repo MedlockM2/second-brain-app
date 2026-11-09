@@ -122,7 +122,7 @@ strings sont transmis. La réécriture SPA est une fonction attachée seulement 
 comportement S3 ; les erreurs de l’API conservent leur code et leur corps.
 
 Depuis l'achat du domaine (task-443, task-445), l'origine de la web app est dérivée
-du domaine de base, `https://app.dev.deepn.app` en dev, et non lue sur CloudFront :
+du domaine de base, `https://dev.deepn.app` en dev, et non lue sur CloudFront :
 cela évite le cycle Terraform CloudFront → API Gateway → CORS → CloudFront. Le build
 utilise cette même URL pour `VITE_API_BASE_URL` (`web/.env.beta`), le streaming
 gardant sa porte dédiée et ses autorisations CORS. Le routage `/api/*` reste en

@@ -79,7 +79,7 @@ module "platform" {
   ecr_repository_url = data.terraform_remote_state.shared.outputs.lambda_ecr_repository_url
 
   # No web app is served against staging.
-  web_app_origin = var.public_domain == "" ? "" : "https://app.${var.public_domain}"
+  web_app_origin = var.public_domain == "" ? "" : "https://${var.public_domain}"
 
   # The three metered extras stay off in this blueprint. When staging existed they
   # cost, measured on Cost Explorer, ~$7.60/month for an environment with zero

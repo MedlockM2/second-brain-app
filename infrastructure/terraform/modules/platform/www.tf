@@ -97,7 +97,7 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 
 resource "aws_cloudfront_distribution" "www" {
   default_root_object = "index.html"
-  aliases             = local.public_domain_enabled ? ["www.${var.public_domain}", var.public_domain] : []
+  aliases             = local.public_domain_enabled ? ["www.${var.public_domain}"] : []
   enabled             = true
   comment             = "${var.project_name}-www${local.suffix}"
   is_ipv6_enabled     = true

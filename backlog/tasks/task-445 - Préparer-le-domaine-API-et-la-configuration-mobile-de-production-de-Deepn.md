@@ -5,7 +5,7 @@ status: Done
 assignee:
   - agent
 created_date: '2026-10-10 15:13'
-updated_date: '2026-11-09 13:20'
+updated_date: '2026-11-09 15:16'
 labels:
   - v1-launch
   - release
@@ -84,4 +84,8 @@ Fichiers à reprendre : voir les notes de TASK-443, section « #3 — Recensemen
 **Documentation.** Mises à jour : `docs/WEB_HOSTING.md`, `docs/WEB_RELEASE.md`, `mobile/MOBILE_CI_CD.md`, `mobile/app.config.ts` (commentaire), `docs/V1_LAUNCH_PLAN.md` (statut du domaine, étapes historiques remplacées par le runbook).
 
 **Note owner (hors critères).** Deux commits à pousser séparément : d’abord Terraform et docs, attendre l’apply, ensuite les clients. Le push Terraform casse les connexions Google et Apple via Cognito jusqu’à la mise à jour des retours chez Google et Apple (runbook, étape 2).
+
+**2026-11-09 — décision owner : web app sur le domaine nu.** Elle passe de `app.<domaine>` à `dev.deepn.app` / `deepn.app` (TASK-443). Les notes ci-dessus qui citent `app.dev.deepn.app` décrivent l'état avant cette décision.
+- L'apex pointe désormais vers la distribution de la web app. `www.` garde les pages statiques. Les enregistrements `app.` sont supprimés.
+- Le certificat us-east-1 garde `app.` comme nom principal : le changer remplacerait le certificat, puis forcerait le remplacement du domaine Cognito personnalisé, en create-before-destroy qui entrerait en conflit avec `auth.dev.deepn.app` déjà en service.
 <!-- SECTION:NOTES:END -->

@@ -1,6 +1,6 @@
 # One us-east-1 certificate for every CloudFront-fronted name of an environment:
-# app. and www. (and the apex) on the two distributions, auth. on Cognito's
-# managed-login distribution (task-528). api. is a regional API Gateway domain
+# the apex (web app) and www. (static pages) on the two distributions, auth. on
+# Cognito's managed-login distribution (task-528). api. is a regional API Gateway domain
 # and takes its own eu-west-3 certificate in modules/platform/lambda_api.tf.
 #
 # The root supplies its us-east-1 AWS provider. Route 53 is global, so DNS
@@ -34,7 +34,13 @@ variable "zone_id" {
 }
 
 resource "aws_acm_certificate" "web" {
-  count                     = var.domain == "" ? 0 : 1
+  count = var.domain == "" ? 0 : 1
+  # app.<domain> is no longer served (the web app moved to the apex on
+  # 2026-11-09) but stays the certificate's primary name on purpose: changing
+  # it replaces the certificate, and the AWS provider then forces Cognito's
+  # custom domain to be replaced too -- create-before-destroy, which collides
+  # with the live auth.<domain>. A name in a certificate serves nothing; it has
+  # no DNS record.
   domain_name               = "app.${var.domain}"
   subject_alternative_names = [var.domain, "www.${var.domain}", "auth.${var.domain}"]
   validation_method         = "DNS"

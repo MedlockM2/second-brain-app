@@ -157,13 +157,17 @@ every name derives from it:
 
 | | dev (beta) | prod |
 |---|---|---|
-| Static site, apex | `dev.deepn.app` | `deepn.app` |
-| Static site | `www.dev.deepn.app` | `www.deepn.app` |
-| Web app | `app.dev.deepn.app` | `app.deepn.app` |
+| Web app | `dev.deepn.app` | `deepn.app` |
+| Static pages (legal, `.well-known`) | `www.dev.deepn.app` | `www.deepn.app` |
 | API | `api.dev.deepn.app` | `api.deepn.app` |
 | Cognito | `auth.dev.deepn.app` | `auth.deepn.app` |
 
-Certificates: one us-east-1 certificate for the apex, `app.`, `www.` and `auth.`
+The web app is on the domain itself, by owner decision of 2026-11-09 (it was
+`app.<domain>` under task-424); `www.` keeps the static pages, so the privacy
+policy URL given to the stores does not depend on the web app or on prod.
+
+Certificates: one us-east-1 certificate for the apex, `www.` and `auth.` (its
+primary name is still the retired `app.`, see `modules/web_certificate`)
 (`modules/web_certificate`, used by both CloudFront distributions and by
 Cognito), one eu-west-3 certificate for `api.` (`modules/platform/lambda_api.tf`).
 All are validated by DNS in the environment's zone; nothing is created by hand.
@@ -185,7 +189,7 @@ endpoint, which stays enabled.
    It creates the certificates and records, `api.dev.deepn.app`, the Cognito
    domain `auth.dev.deepn.app` (deleting the `deepn-<account>-dev` prefix domain
    in the same apply), and moves the web client's callback to
-   `https://app.dev.deepn.app/auth/callback`. Cognito can take up to an hour
+   `https://dev.deepn.app/auth/callback`. Cognito can take up to an hour
    before its custom domain serves.
    From this apply until step 2, Google and Apple sign-in through Cognito fail
    (the providers still expect the old return URL). Password sign-in, native
@@ -213,7 +217,7 @@ endpoint, which stays enabled.
      `https://auth.dev.deepn.app/oauth2/idpresponse`.
 3. **Check** before shipping any client:
    ```bash
-   dig +short api.dev.deepn.app auth.dev.deepn.app app.dev.deepn.app
+   dig +short api.dev.deepn.app auth.dev.deepn.app dev.deepn.app
    curl -sS -o /dev/null -w '%{http_code}\n' https://api.dev.deepn.app/api/health/
    AWS_PROFILE=second-brain-app aws cognito-idp describe-user-pool-domain \
      --domain auth.dev.deepn.app --region eu-west-3 --query DomainDescription.Status
@@ -226,18 +230,18 @@ endpoint, which stays enabled.
    from the Apple button after a Deepn logout. If Apple silently reuses the
    previous account, record it in task-528 rather than working around it.
 4. **Push the client change.** `deploy-web.yml` publishes the web app, now
-   served on `https://app.dev.deepn.app`. The mobile workflow runs
+   served on `https://dev.deepn.app`. The mobile workflow runs
    `scripts/mobile_release_check.sh internal`, which refuses to ship while
    `api.dev.deepn.app` does not resolve; it then publishes an OTA or builds,
    depending on the fingerprint.
 5. **Native builds for testers** (`internal` profile) carry the new API URL
    from their own `env` block; build them as usual once step 3 passes.
 6. **Extensions**: package with `--api https://api.dev.deepn.app --web
-   https://app.dev.deepn.app` (`extension/scripts/package_release.py`,
+   https://dev.deepn.app` (`extension/scripts/package_release.py`,
    task-592/593).
 
 The old CloudFront name of the web app keeps serving files, but its sign-in no
-longer works: Cognito only accepts the `app.dev.deepn.app` callback.
+longer works: Cognito only accepts the `dev.deepn.app` callback.
 
 ### prod, when it is woken up (task-446)
 

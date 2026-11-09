@@ -60,7 +60,7 @@ module "platform" {
 
   # Derived from the domain, not from CloudFront: reading the distribution here
   # would create a dependency cycle with API Gateway's CORS and its API origin.
-  web_app_origin = "https://app.${var.public_domain}"
+  web_app_origin = "https://${var.public_domain}"
 
   # dev hosts the beta, so its alarms are on (≈ $3.30/mo measured): a suspended
   # provider, a full loss reserve or an approached operator ceiling must reach
