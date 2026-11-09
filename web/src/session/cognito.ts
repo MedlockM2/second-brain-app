@@ -1,5 +1,5 @@
 import { createHttpError, parseErrorResponse } from "@media-summarizer/core/api/httpError";
-import { COGNITO_SCOPES, hostedUiRefusal, pendingLinkFrom, type AuthCodeAction, type CognitoOAuthConfig, type PendingLink, type SocialProvider } from "@media-summarizer/core/auth/cognito";
+import { COGNITO_SCOPES, hostedUiRefusal, providerAuthorizeParams, pendingLinkFrom, type AuthCodeAction, type CognitoOAuthConfig, type PendingLink, type SocialProvider } from "@media-summarizer/core/auth/cognito";
 import { apiRequest } from "../api";
 import { openSession, reportedAuthFetch } from "./sessionStore";
 
@@ -57,7 +57,7 @@ export async function startSocialSignIn(provider: SocialProvider, purpose: Purpo
   sessionStorage.setItem(OAUTH_KEY, JSON.stringify(pending));
   const url = new URL(`${config.domain}/oauth2/authorize`);
   url.search = new URLSearchParams({ client_id: config.client_id, redirect_uri: config.redirect_uri,
-    response_type: "code", scope: COGNITO_SCOPES.join(" "), identity_provider: provider,
+    response_type: "code", scope: COGNITO_SCOPES.join(" "), ...providerAuthorizeParams(provider),
     state, code_challenge: challenge, code_challenge_method: "S256" }).toString();
   window.location.assign(url);
 }

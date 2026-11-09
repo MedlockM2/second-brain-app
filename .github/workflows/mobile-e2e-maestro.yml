@@ -136,7 +136,7 @@ jobs:
       - name: Compute Android E2E fingerprints
         id: fingerprints
         env:
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://api.dev.deepn.app' }}
           EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY: ${{ secrets.E2E_REVENUECAT_TEST_KEY }}
         run: |
           app_fingerprint=$(
@@ -187,7 +187,7 @@ jobs:
         env:
           E2E_EMBED_DEBUG_BUNDLE: "1"
           EXPO_PUBLIC_E2E_MODE: "true"
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://api.dev.deepn.app' }}
           EXPO_PUBLIC_REVENUCAT_GOOGLE_KEY: ${{ secrets.E2E_REVENUECAT_TEST_KEY }}
           # No Sentry here (task-413): no EXPO_PUBLIC_SENTRY_DSN, so the app
           # never initialises it, and no source-map upload from sentry.gradle —
@@ -242,7 +242,7 @@ jobs:
           TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
           MAESTRO_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-android
           SEARCH_TEST_TERM: ${{ secrets.E2E_SEARCH_TEST_TERM }}
-          API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
+          API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://api.dev.deepn.app' }}
           SHARE_TEST_URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ
         with:
           api-level: ${{ matrix.api-level }}
@@ -355,7 +355,7 @@ jobs:
       - name: Compute iOS E2E fingerprints
         id: fingerprints
         env:
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://api.dev.deepn.app' }}
           EXPO_PUBLIC_REVENUCAT_APPLE_KEY: ${{ secrets.E2E_REVENUECAT_TEST_KEY }}
         run: |
           app_fingerprint=$(
@@ -384,7 +384,7 @@ jobs:
         env:
           E2E_EMBED_DEBUG_BUNDLE: "1"
           EXPO_PUBLIC_E2E_MODE: "true"
-          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://api.dev.deepn.app' }}
           EXPO_PUBLIC_REVENUCAT_APPLE_KEY: ${{ secrets.E2E_REVENUECAT_TEST_KEY }}
           # No Sentry here (task-413): no EXPO_PUBLIC_SENTRY_DSN, so the app
           # never initialises it. And this one is load-bearing: the build below
@@ -452,7 +452,7 @@ jobs:
           TEST_USER_PASSWORD: ${{ secrets.E2E_TEST_USER_PASSWORD }}
           MAESTRO_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}-ios
           SEARCH_TEST_TERM: ${{ secrets.E2E_SEARCH_TEST_TERM }}
-          API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://jji077bi8e.execute-api.eu-west-3.amazonaws.com' }}
+          API_BASE_URL: ${{ secrets.E2E_API_BASE_URL || 'https://api.dev.deepn.app' }}
           SHARE_TEST_URL: https://www.youtube.com/watch?v=dQw4w9WgXcQ
         run: bash .github/scripts/run-ios-maestro.sh
 

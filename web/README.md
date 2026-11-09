@@ -49,7 +49,7 @@ and `packages/core` keep their own typecheck and lint jobs.
 
 ## Running against the -dev API
 
-The deployed dev app is https://d3n3qjz3si2rme.cloudfront.net (TASK-605).
+The deployed dev app is https://app.dev.deepn.app (TASK-605).
 AWS dev now authorizes that origin and its Cognito callback. The local instructions
 below require deliberately switching dev's `web_app_origin` back to localhost and
 applying that configuration; direct local calls do not share the hosted session.

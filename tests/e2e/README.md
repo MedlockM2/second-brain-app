@@ -8,7 +8,7 @@ Suite pytest qui valide la chaîne API + ingestion + génération d'artifacts co
 
 ## Prérequis
 
-1. **Lambda déployée et joignable** : par défaut `https://jji077bi8e.execute-api.eu-west-3.amazonaws.com`. Override via `API_BASE_URL`.
+1. **Lambda déployée et joignable** : par défaut `https://api.dev.deepn.app`. Override via `API_BASE_URL`.
 2. **`.env` racine pointé sur AWS dev** : `AWS_REGION=eu-west-3`, `AWS_ENDPOINT_URL=` vide, `USE_LOCALSTACK=0`. C'est le default depuis la déprécation de LocalStack (cf. task-130).
 3. **Credentials AWS valides** : soit statiques (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` dans `.env`), soit un profil (`AWS_PROFILE`) résolu via la chaîne standard. Mêmes credentials qu'utilise `scripts/check_job_status.py`.
 4. **Permissions DynamoDB** : le teardown supprime des items dans `users`, `auth_tokens`, `processing_jobs`, `media_artifacts`, `user_folders`. L'identité IAM doit avoir `Query`, `Scan`, `DeleteItem` sur ces tables.

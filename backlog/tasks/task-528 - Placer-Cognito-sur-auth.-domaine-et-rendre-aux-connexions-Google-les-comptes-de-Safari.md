@@ -3,10 +3,10 @@ id: TASK-528
 title: >-
   Placer Cognito sur auth.<domaine> et permettre le changement de compte Google
   iOS et Apple Android
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-18 15:11'
-updated_date: '2026-10-26 22:56'
+updated_date: '2026-11-09 13:20'
 labels:
   - infrastructure
   - mobile
@@ -80,14 +80,14 @@ Le changement Google iOS décrit ici se distribue par OTA, sans nouveau module n
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `cognito.tf` déclare un certificat ACM us-east-1 validé par DNS, un `aws_cognito_user_pool_domain` sur le domaine personnalisé et son enregistrement alias, selon le motif optionnel de `api_custom_domain` ; le domaine préfixe Cognito est supprimé pour l’environnement concerné, sans double domaine.
-- [ ] #2 `local.cognito_domain`, la sortie `cognito_configuration` et `COGNITO_DOMAIN` désignent `https://auth.<domaine>` lorsque le domaine personnalisé est défini ; `terraform fmt -check` et `terraform validate` passent pour dev et prod.
-- [ ] #3 Le parcours Google iOS n’utilise plus preferEphemeralSession ; la déconnexion mobile ferme la session navigateur Cognito par un chemin branché. La solution et son effet sur l’alerte iOS sont justifiés. Cette contrainte de session partagée ne s’impose pas au parcours Apple Android.
-- [ ] #4 `docs/AUTHENTICATION_SETUP.md` décrit le domaine personnalisé, son certificat us-east-1, le prérequis d’enregistrement A du domaine parent, et les retours Google/Apple à mettre à jour ; le paragraphe sur la session privée est remplacé.
-- [ ] #5 Typecheck et lint mobile passent.
-- [ ] #6 Google sur iOS conserve les sessions Google de Safari et utilise un mécanisme documenté de sélection du compte. Les boutons Google et Apple existants sont conservés, sans bouton Deepn supplémentaire pour changer de compte.
+- [x] #1 `cognito.tf` déclare un certificat ACM us-east-1 validé par DNS, un `aws_cognito_user_pool_domain` sur le domaine personnalisé et son enregistrement alias, selon le motif optionnel de `api_custom_domain` ; le domaine préfixe Cognito est supprimé pour l’environnement concerné, sans double domaine.
+- [x] #2 `local.cognito_domain`, la sortie `cognito_configuration` et `COGNITO_DOMAIN` désignent `https://auth.<domaine>` lorsque le domaine personnalisé est défini ; `terraform fmt -check` et `terraform validate` passent pour dev et prod.
+- [x] #3 Le parcours Google iOS n’utilise plus preferEphemeralSession ; la déconnexion mobile ferme la session navigateur Cognito par un chemin branché. La solution et son effet sur l’alerte iOS sont justifiés. Cette contrainte de session partagée ne s’impose pas au parcours Apple Android.
+- [x] #4 `docs/AUTHENTICATION_SETUP.md` décrit le domaine personnalisé, son certificat us-east-1, le prérequis d’enregistrement A du domaine parent, et les retours Google/Apple à mettre à jour ; le paragraphe sur la session privée est remplacé.
+- [x] #5 Typecheck et lint mobile passent.
+- [x] #6 Google sur iOS conserve les sessions Google de Safari et utilise un mécanisme documenté de sélection du compte. Les boutons Google et Apple existants sont conservés, sans bouton Deepn supplémentaire pour changer de compte.
 - [ ] #7 Le parcours Apple Android permet de choisir ou saisir les identifiants d’un autre compte sur les pages officielles Apple après déconnexion Deepn, sans effacement manuel des données de Chrome. Une liste de comptes mémorisés et la conservation de la session Apple ne sont pas exigées.
-- [ ] #8 Le runbook décrit le mécanisme retenu et son raccordement Cognito pour chaque fournisseur, ainsi que les contraintes navigateur et les limites établies. Aucun paramètre Apple non documenté ni la seule fermeture Cognito n’est présenté comme une garantie de changement de compte.
+- [x] #8 Le runbook décrit le mécanisme retenu et son raccordement Cognito pour chaque fournisseur, ainsi que les contraintes navigateur et les limites établies. Aucun paramètre Apple non documenté ni la seule fermeture Cognito n’est présenté comme une garantie de changement de compte.
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -96,4 +96,30 @@ Le changement Google iOS décrit ici se distribue par OTA, sans nouveau module n
 Clarification propriétaire du 2026-10-26 consignée : conserver les comptes du navigateur et permettre le choix du compte via le bouton fournisseur existant, pour Google iOS comme Apple Android. Les recommandations précédentes de session privée systématique et de bouton supplémentaire sont écartées. Google documente select_account ; le contrat Apple consulté ne liste aucun équivalent. Ne pas confondre fermeture Cognito, fermeture fournisseur et sélection de compte. La tâche reste To Do avec sa dépendance domaine pour la partie Google iOS ; aucun changement applicatif ni réglage fournisseur effectué dans cette clarification.
 
 Précision propriétaire finale : Apple Android peut redemander une adresse et un mot de passe Apple si aucun sélecteur équivalent à Google n’existe. L’exigence obligatoire est de pouvoir changer de compte depuis le bouton Apple existant. Les contraintes précédentes de conservation absolue des sessions Apple et d’interdiction d’un contexte privé sont remplacées par cette précision ; elles restent pertinentes pour Google iOS, qui doit proposer les comptes de Safari. Description, titre et critères alignés. Aucun changement applicatif ni réglage fournisseur effectué dans cette mise à jour.
+
+**2026-11-09 — implémenté dans la session principale (Claude), avec TASK-445.**
+
+**Infrastructure** (`modules/platform/cognito.tf`).
+- Deux ressources remplacent l’ancienne : `prefix`, pour un environnement sans domaine (staging), et `custom`, pour `auth.<domaine>`. Un bloc `moved` reprend l’ancienne adresse. Avec une seule ressource renommée en place, sa destruction formait un cycle de dépendances avec le certificat, CloudFront et les Lambdas.
+- Le certificat est celui de l’environnement, en us-east-1, avec le SAN `auth.`. L’alias A/AAAA pointe vers la distribution de Cognito. Le domaine personnalisé dépend de l’enregistrement apex (`aws_route53_record.apex`), parent exigé par Cognito.
+- `local.cognito_domain`, la sortie `cognito_configuration` et `COGNITO_DOMAIN` valent `https://auth.<domaine>`. Plan dev : création de `auth.dev.deepn.app`, destruction du domaine préfixe.
+
+**Managed login (version 2).** C’est la seule version de Cognito qui transmet `prompt` à Google (doc AWS de l’endpoint authorize : « Available in the managed login branding version only, not in the classic hosted UI »). Le domaine dev était en version 1, et le pool est en ESSENTIALS. Chaque client créé par API a besoin d’un style de managed login, ce que le provider AWS v5 ne sait pas faire (`aws_cognito_managed_login_branding` n’existe qu’en v6) : commande CLI propriétaire dans le runbook.
+
+**Google iOS.** `preferEphemeralSession` est retiré : la session est partagée avec Safari. `prompt=select_account` est envoyé via `providerAuthorizeParams` (`packages/core`), dont le web profite aussi.
+
+**Déconnexion mobile.**
+- Après une session ouverte par la page Cognito (drapeau `hosted_ui_session` dans le trousseau), `logout()` ouvre `/logout` de Cognito avec le retour mobile déjà enregistré. L’ouverture ne se fait que dans ce cas, pour éviter l’alerte iOS après un mot de passe, Apple natif ou Google natif.
+- Effet sur l’alerte iOS : elle apparaît aussi à la déconnexion, et nomme `auth.<domaine>`.
+- Cette déconnexion ferme la session Cognito, pas celle de Google ni d’Apple : c’est `select_account` qui permet de changer de compte Google.
+
+**Apple Android : non établi.** Apple ne documente aucun paramètre de choix de compte (rien ne lui est envoyé). Aucune source n’établit si la page Apple, dans un Custom Tab qui partage la session Apple de Chrome, laisse saisir un autre identifiant après déconnexion Deepn. Expo ne propose pas de contexte privé sur Android. AC #7 reste donc **non coché** : il dépend de la vérification sur appareil. Si Apple réutilise le compte précédent sans choix, c’est un écart à signaler avant toute substitution, comme le demande la clarification du 2026-10-26.
+
+**Vérifications.** Typecheck et lint passent sur `packages/core`, mobile et web ; le seul avertissement, sur `purchaseService.ts`, existait déjà. `terraform fmt -check` et `validate` passent sur dev, prod et staging. Aucun test automatisé, apply ni build.
+
+**Note owner (hors critères).**
+- Après l’apply : créer les styles de managed login, puis remplacer les retours Google et Apple par `https://auth.dev.deepn.app/oauth2/idpresponse`.
+- Vérifier sur appareil, avec deux comptes par fournisseur : la sélection Google sur iOS, la saisie d’un autre compte Apple sur Android.
+- Le changement mobile sort par OTA (aucun module natif), après le push Terraform.
+- À vérifier aussi après l’apply : que la connexion Apple native iOS (`CUSTOM_AUTH` via l’API) fonctionne toujours. La doc AWS indique que les pages du managed login ne prennent pas en charge les triggers d’authentification personnalisée ; l’API n’est pas concernée, mais ce n’est pas encore vérifié.
 <!-- SECTION:NOTES:END -->

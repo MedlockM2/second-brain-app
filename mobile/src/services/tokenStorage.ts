@@ -5,6 +5,9 @@ const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
 const TOKEN_EXPIRY_KEY = "token_expiry";
 const USER_KEY = "auth_user";
+// Set when the session went through the Cognito Hosted UI, whose browser cookie
+// logout must then clear (task-528).
+const HOSTED_UI_KEY = "hosted_ui_session";
 
 /**
  * Secure session storage using expo-secure-store.
@@ -55,10 +58,19 @@ export const TokenStorage = {
     return Number.isNaN(parsed) ? null : parsed;
   },
 
+  async markHostedUiSession(): Promise<void> {
+    await SecureStore.setItemAsync(HOSTED_UI_KEY, "1");
+  },
+
+  async hasHostedUiSession(): Promise<boolean> {
+    return (await SecureStore.getItemAsync(HOSTED_UI_KEY)) === "1";
+  },
+
   async clearAll(): Promise<void> {
     await SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY);
     await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     await SecureStore.deleteItemAsync(TOKEN_EXPIRY_KEY);
     await SecureStore.deleteItemAsync(USER_KEY);
+    await SecureStore.deleteItemAsync(HOSTED_UI_KEY);
   },
 } as const;

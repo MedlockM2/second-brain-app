@@ -94,10 +94,9 @@ const withEmbeddedDebugBundle: ConfigPlugin = (config) => {
  * resolve here, while node builtins do.
  *
  * The `internal` profile and not `production`: `production` points at
- * `api.mediasummarizer.com`, a domain the project does not own, which is the
- * exact host this file went out of its way to stop defaulting to. `internal` is
- * the `-dev` API Gateway — a host we control, and the one every other profile
- * already uses.
+ * `api.deepn.app`, which serves nothing until prod is woken up (task-446).
+ * `internal` is `api.dev.deepn.app`, the dev API every other profile already
+ * uses.
  */
 const apiBaseUrlFromEasJson = (projectRoot: string): string | undefined => {
   try {

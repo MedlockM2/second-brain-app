@@ -255,7 +255,7 @@ What fixed it, from the owner's machine:
 
 ```bash
 cd mobile
-EXPO_PUBLIC_API_BASE_URL=https://jji077bi8e.execute-api.eu-west-3.amazonaws.com \
+EXPO_PUBLIC_API_BASE_URL=https://api.dev.deepn.app \
   eas credentials --platform ios
 #   → Build Credentials: Manage everything needed to build your project
 #   → All: Set up all the required credentials to build your project
@@ -614,8 +614,9 @@ never substituted, see [Submit Profiles](#submit-profiles).
 | `internal` | Testers via TestFlight / Play internal track | IPA (App Store) | AAB | No | `internal` | `production` |
 | `production` | **Unusable** — see below | IPA (App Store) | AAB | No | `production` | `production` |
 
-`internal` and `production` differ only in `EXPO_PUBLIC_API_BASE_URL`: `internal`
-points at the **dev** API, `production` at a host that does not exist. Every
+`internal` and `production` differ only in their API URLs: `internal` points at
+the **dev** API (`api.dev.deepn.app`), `production` at `api.deepn.app`, which
+serves nothing until prod is woken up. Every
 build and every submission goes through `internal` today, testers included.
 
 ### Why a `mobile-v*` tag push is blocked today
@@ -623,11 +624,11 @@ build and every submission goes through `internal` today, testers included.
 `production` is not mis-configured, it is unusable by construction, and both of
 its halves are missing:
 
-- **The host has no DNS.** `EXPO_PUBLIC_API_BASE_URL` for `production` is
-  `https://api.mediasummarizer.com`. Measured 2026-09-03: no A record, and — the
-  load-bearing part — `dig +short mediasummarizer.com NS` is **empty**. There is no
-  delegated zone at all for the apex, so this is not a record someone forgot to add
-  inside an existing zone.
+- **The host does not resolve yet.** `EXPO_PUBLIC_API_BASE_URL` for `production` is
+  `https://api.deepn.app`. The domain is owned since 2026-11-09 (task-443) and its
+  zone lives in the prod account, but `api.deepn.app` gets its record only from the
+  prod Terraform apply that wakes prod up (task-446). Until then the name has no
+  address.
 - **There is no production API behind it either.** AWS `prod` is a dormant shell
   that has never served traffic. Repointing the profile at the dev
   `execute-api` host is *not* the fix: it would silently redefine "production" as
@@ -667,8 +668,8 @@ bash scripts/mobile_release_check.sh              # general pre-flight, DNS as a
 **There is no hard-coded fallback host, deliberately (task-354).** `app.config.ts`
 and `src/constants/config.ts` both used to default to
 `https://api.mediasummarizer.com` when `EXPO_PUBLIC_API_BASE_URL` was unset — the
-`api.` host of a domain **this project does not own**, as the empty `NS` answer
-above shows. A missing variable would therefore have addressed authenticated
+`api.` host of a domain **this project does not own** (measured 2026-09-03: no
+`NS` answer at all for `mediasummarizer.com`). A missing variable would therefore have addressed authenticated
 requests, access tokens included, to a host controlled by whoever holds that
 domain, silently. Both defaults are gone:
 
@@ -711,18 +712,17 @@ profile's URL.** The fallback points at `internal`, i.e. the `-dev` API — so a
 profile that declares no URL of its own would build, submit and install pointing
 every request at `-dev`, with nothing throwing. Do not weaken that check.
 
-Keeping `api.mediasummarizer.com` as the `production` profile's declared value is
-a separate matter and stays: it is a *declared, gated* target the DNS check above
-refuses to build, not a silent default.
+The `production` profile declares `https://api.deepn.app` (task-445): a host the
+project owns, declared and gated — the DNS check above refuses to build it until
+it resolves.
 
-**Two conditions unblock the `mobile-v*` path**, both owner work and neither in
-this repo:
+**Two conditions unblock the `mobile-v*` path**, both owner work:
 
-1. `mediasummarizer.com` (or whichever domain is chosen instead) is **registered
-   and delegated** — a zone answering `NS`, with `api.<domain>` resolving to the
-   production API Gateway.
+1. ~~The domain is registered and delegated~~ — done 2026-11-09: `deepn.app` in
+   the prod account, `dev.deepn.app` delegated to the dev account (task-443).
+   `api.deepn.app` resolves once the prod Terraform apply creates its record.
 2. A **production API actually serves** on that host: the AWS `prod` environment
-   deployed and answering, not the dormant shell it is today.
+   deployed and answering, not the dormant shell it is today (task-446).
 
 Until both hold, do not push a `mobile-v*` tag and do not select `production` in
 a manual dispatch.

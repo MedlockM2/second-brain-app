@@ -47,7 +47,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
-DEFAULT_API_URL = "https://jji077bi8e.execute-api.eu-west-3.amazonaws.com"
+DEFAULT_API_URL = "https://api.dev.deepn.app"
 ARTICLE_FIXTURE_URL = "https://en.wikipedia.org/wiki/Personal_knowledge_management"
 
 

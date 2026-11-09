@@ -15,7 +15,7 @@ env:
   TEST_USER_EMAIL: ""
   TEST_USER_PASSWORD: ""
   # API base URL for test environment
-  API_BASE_URL: "https://jji077bi8e.execute-api.eu-west-3.amazonaws.com"
+  API_BASE_URL: "https://api.dev.deepn.app"
   # CI overrides this with github.run_id/run_attempt for unique registration.
   MAESTRO_RUN_ID: "local"
   # The E2E account must contain an indexed transcript matching this term.

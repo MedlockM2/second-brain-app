@@ -52,7 +52,7 @@ Vérification de marque Google : elle commence dès l’achat, par la preuve de 
 
 **Pages légales :** une seule adresse publique, `https://www.deepn.app/privacy` (et `#delete-account`). Selon l'amendement du 2026-10-30 du README de task-357, elle est servie par la distribution `www` de **dev**, qui publie déjà la page, tant que prod dort. On ajoute donc l'alias `www.deepn.app` sur cette distribution : enregistrement dans la zone prod, certificat ACM us-east-1 du compte dev validé par un CNAME dans la zone prod. Cette bascule reste la gate de TASK-454. `www.dev.deepn.app` n'est jamais communiqué publiquement.
 
-Les identifiants de zone, les contacts du titulaire et la preuve d’achat restent hors dépôt. La commande d’achat est une opération propriétaire : aucun agent n’enregistre le domaine.
+Les contacts du titulaire et la preuve d’achat restent hors dépôt. Les identifiants de zone ne sont pas des secrets (`AGENTS.md`, « Resource identifiers that Terraform needs ») : ils figurent dans `envs/*/web_hosting.tf`, que la CI dev applique sans variable externe. La commande d’achat est une opération propriétaire : aucun agent n’enregistre le domaine.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
@@ -70,7 +70,7 @@ Les identifiants de zone, les contacts du titulaire et la preuve d’achat reste
 - `deepn.app` enregistré sur Route 53, compte prod : statut `ACTIVE`, expiration 2027-11-09, renouvellement automatique et masquage des contacts activés. Email du titulaire vérifié (ICANN) le jour même. Titulaire de type personne ; un transfert vers une société éventuelle est gratuit sur Route 53.
 - Zone apex `deepn.app` créée par Route 53 sur le compte prod. Zone `dev.deepn.app` créée sur le compte dev. Enregistrement `NS dev.deepn.app` (TTL 172800) ajouté dans la zone prod.
 - Vérification : un serveur de la zone `deepn.app` interrogé sans récursion renvoie pour `dev.deepn.app` les quatre serveurs de la zone dev, et `dig SOA dev.deepn.app` répond depuis la zone dev.
-- Identifiants des deux zones transmis à l’owner pour les tfvars de TASK-445, non consignés ici.
+- Identifiants des deux zones : valeurs par défaut de `public_zone_id` dans `infrastructure/terraform/envs/dev/web_hosting.tf` et `envs/prod/web_hosting.tf` (TASK-445).
 
 **#1 — Répartition.** Domaine acquis : `deepn.app`. API, Cognito et web app : tableau de la description, un domaine de base par environnement. Site et pages légales : `www.deepn.app`, servi par la distribution `www` de dev jusqu'au réveil de prod (description, TASK-454). Support : canal email ci-dessous ; feedback bêta sur Canny (`docs/community/feedback-channels.md`), dont un éventuel `feedback.deepn.app` (CNAME, offre payante) n'est pas décidé. Preuve d'achat : compte prod Route 53 et email de confirmation AWS, hors dépôt.
 

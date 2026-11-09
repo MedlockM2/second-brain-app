@@ -33,6 +33,25 @@ export function authErrorKey(error: unknown): TranslationKey {
 
 export const COGNITO_SCOPES = ["openid", "email", "aws.cognito.signin.user.admin"];
 
+/**
+ * Provider parameters of a Hosted UI authorization (task-528). Google gets
+ * `prompt=select_account`, which Cognito's managed login forwards: Google then
+ * lists the accounts the browser already holds instead of reusing the last one,
+ * so another account can be chosen after signing out of Deepn. Apple documents no
+ * equivalent, so nothing is sent to it.
+ */
+export function providerAuthorizeParams(provider: SocialProvider): Record<string, string> {
+  return provider === "Google"
+    ? { identity_provider: provider, prompt: "select_account" }
+    : { identity_provider: provider };
+}
+
+/** Cognito's sign-out endpoint: clears its browser session cookie, then returns to `redirect_uri`. */
+export function cognitoLogoutUrl(config: CognitoOAuthConfig): string {
+  const query = new URLSearchParams({ client_id: config.client_id, logout_uri: config.redirect_uri });
+  return `${config.domain}/logout?${query.toString()}`;
+}
+
 export type SignInMethod = "password" | "apple" | "google";
 const METHODS: SignInMethod[] = ["password", "apple", "google"];
 

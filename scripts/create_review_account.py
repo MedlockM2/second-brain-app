@@ -38,7 +38,7 @@ import sys
 import boto3
 import requests
 
-API = "https://jji077bi8e.execute-api.eu-west-3.amazonaws.com"
+API = "https://api.dev.deepn.app"
 USER_POOL_ID = "eu-west-3_kvjrhVwnV"
 REGION = "eu-west-3"
 SECRET_ID = "deepn-review-accounts"

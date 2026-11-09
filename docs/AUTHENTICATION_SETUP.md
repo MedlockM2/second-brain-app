@@ -9,8 +9,27 @@ changent pas pour une fixture rattachée explicitement.
 ## Infrastructure et configuration
 
 `infrastructure/terraform/modules/platform/cognito.tf` définit un pool par
-environnement, un domaine Cognito AWS et deux clients publics sans secret : mobile
-et web. Le client web existe lorsque `web_app_origin` est renseigné. Chaque client
+environnement, son domaine et deux clients publics sans secret : mobile et web.
+
+**Domaine Cognito (task-528).** Un environnement doté d'un domaine de base
+(`public_domain`) sert Cognito sur `auth.<domaine>` : `auth.dev.deepn.app` en dev,
+`auth.deepn.app` en prod. Le domaine préfixe `deepn-<compte>-<env>.auth…amazoncognito.com`
+n'existe que pour un environnement sans domaine (staging) ; il n'y a jamais les
+deux. Le domaine personnalisé utilise :
+- le certificat us-east-1 de l'environnement (`modules/web_certificate`, SAN `auth.`),
+  exigence de Cognito ;
+- un alias Route 53 A/AAAA vers la distribution CloudFront que Cognito fournit ;
+- l'apex du domaine de base comme parent : Cognito refuse un domaine personnalisé
+  tant que son parent n'a pas d'enregistrement A résolvable. L'apex pointe vers la
+  distribution `www` (`aws_route53_record.apex`), créé avant le domaine Cognito ;
+- le **managed login** (version 2), et non l'ancienne interface hébergée : seul le
+  managed login transmet `prompt=select_account` à Google. Chaque client doit avoir
+  un style de managed login ; le provider AWS v5 du dépôt ne sait pas le créer,
+  le propriétaire le crée une fois par client (runbook ci-dessous).
+
+`local.cognito_domain`, la sortie `cognito_configuration` et `COGNITO_DOMAIN`
+valent `https://auth.<domaine>`. Mise en service et réglages Google/Apple :
+`docs/PRODUCTION_RELEASE_RUNBOOK.md`, « Domain bring-up (deepn.app) ». Le client web existe lorsque `web_app_origin` est renseigné. Chaque client
 n’accepte que son retour exact : `media-summarizer://auth-callback` pour le mobile,
 `<web_app_origin>/auth/callback` pour le web. Aucune wildcard ni grant implicite.
 Le module est appelé par dev, staging et prod ; staging reste une référence
@@ -346,15 +365,34 @@ endroits décrits dans « Une adresse, un compte ».
 Google et Apple restent accessibles depuis l’inscription et la connexion. Les
 boutons utilisant le navigateur lancent `/oauth2/authorize` avec le fournisseur explicite, un état aléatoire
 et PKCE S256. Le navigateur mobile est géré par `expo-auth-session`, qui vérifie
-l’état et conserve le vérificateur pendant la demande. Sur iOS, la session est
-privée (`preferEphemeralSession`) : sans partage de cookies avec Safari, iOS
-n’affiche plus l’alerte « Deepn souhaite utiliser <domaine Cognito> », et aucun
-cookie Cognito ne rouvre le dernier compte après déconnexion. En contrepartie, la
-page Google ne reprend pas les comptes déjà connectés dans Safari. La page Google
-affiche encore le domaine Cognito (« Accéder à l’application … ») : Google montre
-l’hôte du retour OAuth. Le remplacer exige un domaine Cognito personnalisé (domaine
-Deepn, certificat ACM us-east-1) et la vérification de marque de l’écran de
-consentement Google. Sur le web, état,
+l’état et conserve le vérificateur pendant la demande.
+
+**Choix du compte et session partagée (task-528).** La session du navigateur
+mobile est partagée avec Safari (iOS) et Chrome (Android), plus privée. Pour
+Google, l'autorisation envoie `prompt=select_account` (`providerAuthorizeParams`,
+`packages/core/src/auth/cognito.ts`, utilisé aussi par le web), que le managed
+login transmet à Google : Google liste les comptes déjà connectés dans le
+navigateur et laisse en choisir un, ou en ajouter un autre, au lieu de reprendre
+le dernier. Sur iOS, la session partagée affiche d'abord l'alerte système
+« Deepn souhaite utiliser auth.<domaine> », qui nomme désormais le domaine Deepn.
+Apple ne documente aucun équivalent à `prompt=select_account` : rien ne lui est
+envoyé. Sur Android, la page Apple s'ouvre dans un Custom Tab qui partage la
+session Apple de Chrome. Que cette page laisse saisir un autre identifiant Apple
+après une déconnexion Deepn n'est documenté nulle part : c'est la vérification sur
+appareil de task-528 qui l'établit.
+
+**Déconnexion.** Une session ouverte par la page Cognito (Google sur iOS, Apple
+sur Android, et les liaisons qui passent par elle) laisse un cookie Cognito d'une
+heure dans le navigateur partagé. La déconnexion mobile ouvre alors l'endpoint
+`/logout` de Cognito (`cognitoLogoutUrl`) avec le retour déjà enregistré
+`media-summarizer://auth-callback`, ce qui efface ce cookie. Elle ne ferme ni la
+session Google ni la session Apple du navigateur : c'est `prompt=select_account`
+qui permet de changer de compte Google. Sur iOS, cette ouverture affiche la même
+alerte que la connexion ; elle n'a lieu qu'après une session de ce type
+(`hosted_ui_session` dans le trousseau), jamais après un mot de passe, Apple natif
+ou Google natif. La page Google « Accéder à l’application … » affiche le domaine
+de retour, `auth.<domaine>`, tant que la marque n'est pas vérifiée (TASK-451).
+Sur le web, état,
 vérificateur et date vivent uniquement dans `sessionStorage` pendant au plus dix
 minutes ; le retour les consomme une seule fois, vérifie l’état, efface l’URL puis
 échange le code. Aucun jeton de session ne va dans le stockage du navigateur.
@@ -547,8 +585,13 @@ Vérification réelle après enregistrement, pour les configurations publiques m
 et web : Cognito répond 302 vers Apple, qui répond 200 avec la page de connexion
 « Sign in to Apple Account », sans `invalid_request` ni `Invalid web redirect url`.
 Aucune connexion utilisateur complète n’a été exécutée ; elle reste à valider sur
-appareil. Ce réglage concerne le dev ; il devra suivre le domaine effectivement
-déployé si task-528 change le domaine Cognito.
+appareil.
+
+**Depuis task-528**, Cognito dev est servi sur `auth.dev.deepn.app` : le domaine
+et le retour ci-dessus sont remplacés par `auth.dev.deepn.app` et
+`https://auth.dev.deepn.app/oauth2/idpresponse`, chez Apple comme dans le client
+Google Web (runbook « Domain bring-up (deepn.app) », étape 2). Le tableau garde
+la valeur du 2026-10-26 pour l'historique.
 
 Sources : [configuration Apple des Services IDs](https://developer.apple.com/help/account/capabilities/configure-sign-in-with-apple-for-the-web),
 [retour Apple vers Cognito](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-social-idp-apple.html).

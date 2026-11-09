@@ -5,7 +5,7 @@ import { Platform } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import type { AuthCodeAction, CognitoOAuthConfig, SocialProvider } from "@media-summarizer/core/auth/cognito";
-import { COGNITO_SCOPES, hostedUiRefusal } from "@media-summarizer/core/auth/cognito";
+import { COGNITO_SCOPES, cognitoLogoutUrl, hostedUiRefusal, providerAuthorizeParams } from "@media-summarizer/core/auth/cognito";
 import {
   RegisterRequest,
   LoginRequest,
@@ -110,6 +110,7 @@ export class AuthService {
       "/api/auth/oauth/token", grant, "Authentication failed",
     );
     await SessionManager.persistSession(result);
+    await TokenStorage.markHostedUiSession();
     return result;
   }
 
@@ -135,6 +136,7 @@ export class AuthService {
     const grant = await this.authorize(provider);
     if (!grant) return false;
     await apiRequest("/api/auth/link/complete", { method: "POST", body: grant });
+    await TokenStorage.markHostedUiSession();
     return true;
   }
 
@@ -154,7 +156,7 @@ export class AuthService {
   }
 
   /** Hosted UI authorization (Google off Android, Apple off iOS); null when cancelled. */
-  private static async authorize(provider: SocialProvider, retried = false): Promise<{ code: string; code_verifier: string } | null> {
+  private static async oauthConfig(): Promise<CognitoOAuthConfig> {
     const response = await fetchReportingFailures(
       "auth",
       "/api/auth/oauth/config",
@@ -163,7 +165,11 @@ export class AuthService {
     if (!response.ok) {
       throw createHttpError("Authentication unavailable", response.status, "AUTH_UNAVAILABLE");
     }
-    const config = await response.json() as CognitoOAuthConfig;
+    return await response.json() as CognitoOAuthConfig;
+  }
+
+  private static async authorize(provider: SocialProvider, retried = false): Promise<{ code: string; code_verifier: string } | null> {
+    const config = await this.oauthConfig();
     const discovery = {
       authorizationEndpoint: `${config.domain}/oauth2/authorize`,
       tokenEndpoint: `${config.domain}/oauth2/token`,
@@ -171,13 +177,16 @@ export class AuthService {
     const request = new AuthSession.AuthRequest({
       clientId: config.client_id, redirectUri: config.redirect_uri,
       responseType: AuthSession.ResponseType.Code, scopes: COGNITO_SCOPES,
-      usePKCE: true, extraParams: { identity_provider: provider },
+      usePKCE: true, extraParams: providerAuthorizeParams(provider),
     });
     await request.makeAuthUrlAsync(discovery);
-    // A shared-cookie session makes iOS ask « Deepn souhaite utiliser <Cognito
-    // domain> », exposing a technical host. A private session skips that alert and
-    // also keeps no Cognito cookie that would reopen the last account after logout.
-    const outcome = await request.promptAsync(discovery, { preferEphemeralSession: true });
+    // A shared session with Safari (iOS) or Chrome (Android), not a private one:
+    // Google then lists the accounts the browser already holds, and
+    // `prompt=select_account` lets the person pick one (task-528). iOS asks
+    // « Deepn souhaite utiliser auth.<domaine> » first; with Cognito on Deepn's
+    // own domain that alert names Deepn. The Cognito cookie this leaves is
+    // cleared at logout (logout() below).
+    const outcome = await request.promptAsync(discovery);
     if (outcome.type === "cancel" || outcome.type === "dismiss") return null;
     if (outcome.type === "error") {
       // The pre sign-up refusal travels in error_description; its raw text is never shown.
@@ -246,6 +255,25 @@ export class AuthService {
         // Ignore network errors during logout - we clear tokens regardless
       }
     }
+    await this.closeHostedUiSession();
     await SessionManager.clearSession();
+  }
+
+  /**
+   * Clear the Cognito cookie a Hosted UI sign-in left in the shared browser, so
+   * the next Google or Apple sign-in cannot silently reopen this account
+   * (task-528). Only after a Hosted UI session: a password, native Apple (iOS)
+   * or native Google (Android) sign-in leaves no such cookie, and opening the
+   * browser would show iOS's « Deepn souhaite utiliser » alert for nothing. It
+   * closes Cognito's session only, not Google's or Apple's own.
+   */
+  private static async closeHostedUiSession(): Promise<void> {
+    if (!(await TokenStorage.hasHostedUiSession())) return;
+    try {
+      const config = await this.oauthConfig();
+      await WebBrowser.openAuthSessionAsync(cognitoLogoutUrl(config), config.redirect_uri);
+    } catch {
+      // Signing out of the device must not depend on the browser round trip.
+    }
   }
 }
