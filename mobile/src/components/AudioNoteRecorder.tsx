@@ -9,6 +9,7 @@ import { MAX_AUDIO_UPLOAD_SIZE_BYTES, type LocalUploadFile } from "@media-summar
 import { BorderRadius, Spacing, TouchTarget, Typography, type Theme } from "../constants/theme";
 import { useThemeColors, useThemedStyles } from "../contexts/ThemeContext";
 import { getActiveLocale, t } from "../i18n";
+import { PresentationSafeAreaProvider } from "./PresentationSafeAreaProvider";
 
 type Phase = "starting" | "recording" | "paused" | "finished" | "error";
 const OPTIONS = {
@@ -234,39 +235,43 @@ export function AudioNoteRecorder({ onClose, onRecorded }: {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onShow={() => { void start(); }} onRequestClose={requestClose} onDismiss={dismissed}>
-      <SafeAreaView style={styles.root}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t("recording.title")}</Text>
-          <Pressable style={styles.close} onPress={requestClose} accessibilityLabel={t("common.close")} accessibilityRole="button" disabled={phase === "starting"}>
-            <Ionicons name="close" size={28} color={colors.textMain} />
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.waveform} accessible={false} importantForAccessibility="no-hide-descendants">
-            {samples.map((sample, index) => <View key={index} style={[styles.bar, { height: Spacing.xs + sample * Spacing.xxl * 3 }]} />)}
+      {/* Presented in a view controller of its own: without this provider the
+          header's safe-area inset can stay at zero, the close button on the clock. */}
+      <PresentationSafeAreaProvider>
+        <SafeAreaView style={styles.root}>
+          <View style={styles.header}>
+            <Text style={styles.title}>{t("recording.title")}</Text>
+            <Pressable style={styles.close} onPress={requestClose} accessibilityLabel={t("common.close")} accessibilityRole="button" disabled={phase === "starting"}>
+              <Ionicons name="close" size={28} color={colors.textMain} />
+            </Pressable>
           </View>
-          <View style={styles.details}>
-            <Text style={styles.date}>{date.toLocaleString(getActiveLocale(), { dateStyle: "medium", timeStyle: "short" })}</Text>
-            <Text style={styles.timer} accessibilityLabel={formatRecordingDuration(elapsed)}>{formatRecordingDuration(elapsed)}</Text>
-            <Text style={styles.status} accessibilityLiveRegion="polite">{t(`recording.${phase === "error" ? "title" : phase}`)}</Text>
-            <View style={styles.controls}>
-              {phase === "starting" ? <ActivityIndicator color={colors.primaryInk} /> : phase === "error" ? (
-                <Pressable style={styles.primary} onPress={() => { void start(); }} accessibilityRole="button" accessibilityLabel={t("common.retry")}><Ionicons name="mic" size={28} color={colors.onPrimary} /></Pressable>
-              ) : phase !== "finished" ? (
-                <Pressable style={styles.primary} onPress={toggle} accessibilityRole="button" accessibilityLabel={t(phase === "recording" ? "recording.pause" : "recording.resume")}>
-                  <Ionicons name={phase === "recording" ? "pause" : "play"} size={28} color={colors.onPrimary} />
-                </Pressable>
-              ) : null}
-              <Pressable style={[styles.save, (phase === "starting" || phase === "error" || elapsed < 500) && styles.disabled]} onPress={() => { void save(); }} disabled={phase === "starting" || phase === "error" || elapsed < 500} accessibilityRole="button" accessibilityLabel={t("recording.save")}>
-                <Ionicons name="checkmark" size={32} color={colors.textMain} />
-              </Pressable>
+          <ScrollView contentContainerStyle={styles.content}>
+            <View style={styles.waveform} accessible={false} importantForAccessibility="no-hide-descendants">
+              {samples.map((sample, index) => <View key={index} style={[styles.bar, { height: Spacing.xs + sample * Spacing.xxl * 3 }]} />)}
             </View>
-            {message && <Text style={styles.notice} accessibilityLiveRegion="polite">{message}</Text>}
-            {permissionDenied && <Pressable style={styles.settings} onPress={() => { void Linking.openSettings().catch(() => {}); }} accessibilityRole="button" accessibilityLabel={t("recording.settings")}><Text style={styles.notice}>{t("recording.settings")}</Text></Pressable>}
-            <Text style={styles.hint}>{t("recording.limit")}</Text>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+            <View style={styles.details}>
+              <Text style={styles.date}>{date.toLocaleString(getActiveLocale(), { dateStyle: "medium", timeStyle: "short" })}</Text>
+              <Text style={styles.timer} accessibilityLabel={formatRecordingDuration(elapsed)}>{formatRecordingDuration(elapsed)}</Text>
+              <Text style={styles.status} accessibilityLiveRegion="polite">{t(`recording.${phase === "error" ? "title" : phase}`)}</Text>
+              <View style={styles.controls}>
+                {phase === "starting" ? <ActivityIndicator color={colors.primaryInk} /> : phase === "error" ? (
+                  <Pressable style={styles.primary} onPress={() => { void start(); }} accessibilityRole="button" accessibilityLabel={t("common.retry")}><Ionicons name="mic" size={28} color={colors.onPrimary} /></Pressable>
+                ) : phase !== "finished" ? (
+                  <Pressable style={styles.primary} onPress={toggle} accessibilityRole="button" accessibilityLabel={t(phase === "recording" ? "recording.pause" : "recording.resume")}>
+                    <Ionicons name={phase === "recording" ? "pause" : "play"} size={28} color={colors.onPrimary} />
+                  </Pressable>
+                ) : null}
+                <Pressable style={[styles.save, (phase === "starting" || phase === "error" || elapsed < 500) && styles.disabled]} onPress={() => { void save(); }} disabled={phase === "starting" || phase === "error" || elapsed < 500} accessibilityRole="button" accessibilityLabel={t("recording.save")}>
+                  <Ionicons name="checkmark" size={32} color={colors.textMain} />
+                </Pressable>
+              </View>
+              {message && <Text style={styles.notice} accessibilityLiveRegion="polite">{message}</Text>}
+              {permissionDenied && <Pressable style={styles.settings} onPress={() => { void Linking.openSettings().catch(() => {}); }} accessibilityRole="button" accessibilityLabel={t("recording.settings")}><Text style={styles.notice}>{t("recording.settings")}</Text></Pressable>}
+              <Text style={styles.hint}>{t("recording.limit")}</Text>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </PresentationSafeAreaProvider>
     </Modal>
   );
 }

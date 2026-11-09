@@ -28,6 +28,7 @@ import {
 } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveMediaTitle } from "../lib/mediaTitle";
 import { HeaderIconButton, ScreenHeader } from "./ScreenHeader";
+import { PresentationSafeAreaProvider } from "./PresentationSafeAreaProvider";
 
 export function ArtifactSourcePicker({
   sources,
@@ -91,127 +92,131 @@ export function ArtifactSourcePicker({
         animationType="slide"
         onRequestClose={close}
       >
-        <View style={styles.overlay}>
-          <Pressable
-            style={styles.backdrop}
-            onPress={close}
-            accessibilityRole="button"
-            accessibilityLabel={t("common.close")}
-          />
-          <SafeAreaView style={styles.sheet} edges={["bottom"]}>
-            <ScreenHeader
-              title={t("artifacts.customize.sources")}
-              trailing={
-                <HeaderIconButton
-                  icon="close"
-                  variant="plain"
-                  onPress={close}
-                  accessibilityLabel={t("common.close")}
-                />
-              }
+        {/* The modal is presented apart from the screen's provider: without
+            its own, the sheet's bottom inset can stay at zero. */}
+        <PresentationSafeAreaProvider>
+          <View style={styles.overlay}>
+            <Pressable
+              style={styles.backdrop}
+              onPress={close}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.close")}
             />
-            {!single ? (
-              <View style={styles.header}>
-                <Text style={styles.text}>
-                  {t("artifacts.customize.selectedSources", {
-                    selected: draft?.size ?? 0,
-                    total: sources.length,
-                  })}
-                </Text>
-                <Pressable
-                  style={styles.control}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("artifacts.customize.selectAll")}
-                  onPress={() =>
-                    setDraft(new Set(sources.map((s) => s.media_item_id)))
-                  }
-                >
+            <SafeAreaView style={styles.sheet} edges={["bottom"]}>
+              <ScreenHeader
+                title={t("artifacts.customize.sources")}
+                trailing={
+                  <HeaderIconButton
+                    icon="close"
+                    variant="plain"
+                    onPress={close}
+                    accessibilityLabel={t("common.close")}
+                  />
+                }
+              />
+              {!single ? (
+                <View style={styles.header}>
                   <Text style={styles.text}>
-                    {t("artifacts.customize.selectAll")}
+                    {t("artifacts.customize.selectedSources", {
+                      selected: draft?.size ?? 0,
+                      total: sources.length,
+                    })}
                   </Text>
-                </Pressable>
-              </View>
-            ) : null}
-            <ScrollView contentContainerStyle={styles.list}>
-              {sources.map((source) => {
-                const checked = draft?.has(source.media_item_id) ?? false;
-                return (
                   <Pressable
-                    key={source.media_item_id}
-                    style={styles.row}
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={resolveMediaTitle(source)}
-                    accessibilityState={{ checked, disabled: single }}
-                    disabled={single}
+                    style={styles.control}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("artifacts.customize.selectAll")}
                     onPress={() =>
-                      setDraft((current) => {
-                        const next = new Set(current);
-                        if (next.has(source.media_item_id))
-                          next.delete(source.media_item_id);
-                        else next.add(source.media_item_id);
-                        return next;
-                      })
+                      setDraft(new Set(sources.map((s) => s.media_item_id)))
                     }
                   >
-                    {source.media_image ? (
-                      <Image
-                        source={{ uri: source.media_image }}
-                        style={styles.cover}
-                      />
-                    ) : (
-                      <View style={styles.cover}>
-                        <Ionicons
-                          name={
-                            mediaTypeIconName(
-                              source.media_type,
-                            ) as keyof typeof Ionicons.glyphMap
-                          }
-                          size={24}
-                          color={colors.textMain}
-                        />
-                      </View>
-                    )}
-                    <View style={styles.grow}>
-                      <Text style={styles.text} numberOfLines={2}>
-                        {resolveMediaTitle(source)}
-                      </Text>
-                      <Text style={styles.meta}>
-                        {t(mediaTypeLabelKey(source.media_type))}
-                        {source.duration_seconds
-                          ? ` · ${formatDuration(source.duration_seconds)}`
-                          : ""}
-                      </Text>
-                    </View>
-                    <Ionicons
-                      name={checked ? "checkbox" : "square-outline"}
-                      size={24}
-                      color={colors.textMain}
-                    />
+                    <Text style={styles.text}>
+                      {t("artifacts.customize.selectAll")}
+                    </Text>
                   </Pressable>
-                );
-              })}
-            </ScrollView>
-            <Pressable
-              style={styles.confirm}
-              accessibilityRole="button"
-              accessibilityLabel={t("artifacts.customize.confirmSources", {
-                count: draft?.size ?? 0,
-              })}
-              accessibilityState={{ disabled: !draft?.size }}
-              disabled={!draft?.size}
-              onPress={() => {
-                if (draft?.size) onChange(draft);
-                close();
-              }}
-            >
-              <Text style={styles.confirmText}>
-                {t("artifacts.customize.confirmSources", {
+                </View>
+              ) : null}
+              <ScrollView contentContainerStyle={styles.list}>
+                {sources.map((source) => {
+                  const checked = draft?.has(source.media_item_id) ?? false;
+                  return (
+                    <Pressable
+                      key={source.media_item_id}
+                      style={styles.row}
+                      accessibilityRole="checkbox"
+                      accessibilityLabel={resolveMediaTitle(source)}
+                      accessibilityState={{ checked, disabled: single }}
+                      disabled={single}
+                      onPress={() =>
+                        setDraft((current) => {
+                          const next = new Set(current);
+                          if (next.has(source.media_item_id))
+                            next.delete(source.media_item_id);
+                          else next.add(source.media_item_id);
+                          return next;
+                        })
+                      }
+                    >
+                      {source.media_image ? (
+                        <Image
+                          source={{ uri: source.media_image }}
+                          style={styles.cover}
+                        />
+                      ) : (
+                        <View style={styles.cover}>
+                          <Ionicons
+                            name={
+                              mediaTypeIconName(
+                                source.media_type,
+                              ) as keyof typeof Ionicons.glyphMap
+                            }
+                            size={24}
+                            color={colors.textMain}
+                          />
+                        </View>
+                      )}
+                      <View style={styles.grow}>
+                        <Text style={styles.text} numberOfLines={2}>
+                          {resolveMediaTitle(source)}
+                        </Text>
+                        <Text style={styles.meta}>
+                          {t(mediaTypeLabelKey(source.media_type))}
+                          {source.duration_seconds
+                            ? ` · ${formatDuration(source.duration_seconds)}`
+                            : ""}
+                        </Text>
+                      </View>
+                      <Ionicons
+                        name={checked ? "checkbox" : "square-outline"}
+                        size={24}
+                        color={colors.textMain}
+                      />
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable
+                style={styles.confirm}
+                accessibilityRole="button"
+                accessibilityLabel={t("artifacts.customize.confirmSources", {
                   count: draft?.size ?? 0,
                 })}
-              </Text>
-            </Pressable>
-          </SafeAreaView>
-        </View>
+                accessibilityState={{ disabled: !draft?.size }}
+                disabled={!draft?.size}
+                onPress={() => {
+                  if (draft?.size) onChange(draft);
+                  close();
+                }}
+              >
+                <Text style={styles.confirmText}>
+                  {t("artifacts.customize.confirmSources", {
+                    count: draft?.size ?? 0,
+                  })}
+                </Text>
+              </Pressable>
+            </SafeAreaView>
+          </View>
+        </PresentationSafeAreaProvider>
       </Modal>
     </>
   );

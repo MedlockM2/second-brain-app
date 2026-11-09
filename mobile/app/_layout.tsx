@@ -274,7 +274,10 @@ function AppNavigator() {
         {/* The "Personnaliser" step before a generation (task-535). Full
             screen, as the mockup draws it: the iOS card modal would inset it
             and round its corners, and its swipe down would drop whatever was
-            typed in the prompt. The close button is the way out. */}
+            typed in the prompt. The close button is the way out. Like
+            `review`, it wraps itself in `PresentationSafeAreaProvider`: a
+            full-screen modal leaves the root provider behind on iOS, and its
+            header would otherwise lay out under the status bar. */}
         <Stack.Screen
           name="artifacts/customize"
           options={{
