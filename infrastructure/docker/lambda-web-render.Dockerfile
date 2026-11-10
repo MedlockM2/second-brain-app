@@ -36,8 +36,12 @@ RUN uv export --frozen --no-dev --extra worker --extra render --no-emit-project 
     && rm /tmp/requirements.txt
 
 # Chromium and the Debian packages it links against, at the revision the locked
-# Playwright expects.
-RUN python -m playwright install --with-deps --no-shell chromium \
+# Playwright expects. libatomic1 first: the Node driver Playwright ships for
+# arm64 links against it, and the slim image lacks it, so the installer itself
+# could not start ("libatomic.so.1: cannot open shared object file").
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libatomic1 \
+    && python -m playwright install --with-deps --no-shell chromium \
     && rm -rf /var/lib/apt/lists/* \
     && chmod -R a+rX /ms-playwright
 
