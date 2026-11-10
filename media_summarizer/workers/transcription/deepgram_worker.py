@@ -761,6 +761,13 @@ async def process_deepgram_message(message_body: Dict[str, Any]) -> None:
         job.mark_transcribing()
         await database_async.update_processing_job(job)
 
+    web_page_plan_s3_key = message_body.get("web_page_plan_s3_key")
+    if web_page_plan_s3_key:
+        await _process_web_page(
+            message_body=message_body, job=job, job_id=job_id, plan_s3_key=str(web_page_plan_s3_key)
+        )
+        return
+
     plan_s3_key = message_body.get("conversation_plan_s3_key")
     if plan_s3_key:
         await _process_conversation(
@@ -1195,6 +1202,168 @@ async def _process_conversation(
         media_item_id=job_id,
         message_count=len(messages),
         voice_note_count=len(voice_keys),
+    )
+
+
+async def _process_web_page(
+    *, message_body: Dict[str, Any], job: Any, job_id: str, plan_s3_key: str
+) -> None:
+    """Transcribe the videos of a rendered web page and store page + videos as one text.
+
+    The render worker wrote the plan: the page's text and, in page order, each
+    video kept with its audio in ``AUDIO_BUCKET``. Each video is its own request
+    under its own budget part, exactly like a voice note of a shared conversation
+    (`_transcribe_voice_note`); the calls stay open until the text is stored, then
+    each is settled on what Deepgram billed. The text is Markdown
+    (`core/web_page.compose_sections`): a ``## [page]`` section, then one
+    ``## [video i/n ...]`` section per video, stored as ``{job_id}.md`` so the
+    raw-content reader keeps the headings. The audio is deleted once the event is
+    out: the page keeps the words, never the sound.
+    """
+    from media_summarizer.core.web_page import VideoSection, compose_sections
+    from media_summarizer.utils import database_async
+
+    if job is not None and job.status == JobStatus.COMPLETED and job.transcription_s3_key:
+        log_event(
+            logger,
+            logging.INFO,
+            "transcription.web_page_already_done",
+            "Web page already transcribed; redelivery acknowledged",
+            job_id=job_id,
+        )
+        return
+
+    plan = json.loads((await s3.download_file_to_memory(TRANSCRIPT_BUCKET, plan_s3_key)).decode("utf-8"))
+    page = plan.get("page") or {}
+    videos = plan.get("videos") or []
+
+    started = time.time()
+    open_calls: list = []
+    billed_seconds = 0.0
+    languages = []
+    sections = []
+    try:
+        for video in videos:
+            text, seconds, language, call, payload = await _transcribe_voice_note(
+                message_body=message_body, job=job, job_id=job_id, voice=video
+            )
+            if call is not None and payload is not None:
+                open_calls.append((call, payload))
+            billed_seconds += seconds
+            if language:
+                languages.append(language)
+            sections.append(
+                VideoSection(
+                    title=video.get("title"),
+                    text=text,
+                    duration_seconds=seconds or video.get("duration_seconds"),
+                    provider=video.get("provider"),
+                    thumbnail_url=video.get("thumbnail_url"),
+                )
+            )
+
+        page_text = str(page.get("text") or "")
+        if not page_text.strip() and not any(section.text.strip() for section in sections):
+            raise NonRetryableDeepgramError(
+                MediaFailureCode.NO_TRANSCRIPT_AVAILABLE, details="web_page_nothing_transcribed"
+            )
+        transcript_text = compose_sections(
+            page_title=page.get("title"), page_text=page_text, videos=sections
+        )
+        transcript_s3_key = f"{job_id}.md"
+        await upload_transcription(transcript_s3_key, transcript_text)
+        transcription_metadata = {
+            "provider": "deepgram",
+            "transcript_source": "web_page",
+            "deepgram_mode": "pull",
+            "model_used": DEEPGRAM_MODEL,
+            "language": languages[0] if languages else "unknown",
+            "segments_count": count_paragraphs(transcript_text),
+            # Not `audio_duration_seconds`: that key is the media's own length
+            # (`media_duration_seconds`), and a page is an article, not a 4-minute
+            # media because it holds three clips.
+            "videos_audio_seconds": billed_seconds,
+            "video_count": len(videos),
+            "videos_transcribed": sum(1 for section in sections if section.text.strip()),
+            "source_url": page.get("source_url"),
+            "transcribed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        if job:
+            job.set_transcription_location(transcript_s3_key)
+            job.set_transcription_metadata(transcription_metadata)
+            job.set_processing_duration("transcription", int(time.time() - started))
+            job.mark_completed()
+            await database_async.update_processing_job(job)
+    except BaseException as exc:
+        for call, payload in open_calls:
+            try:
+                cost: Optional[MeasuredCost] = await TranscriptionBudget(
+                    message_body=message_body, job=job, job_id=job_id
+                ).billed(payload)
+            except Exception:  # noqa: BLE001 - the bound stands in for an unreadable barème
+                cost = None
+            await call.release(operator_cost=cost)
+        if isinstance(exc, Exception) and not isinstance(exc, IngestionFailure):
+            raise NonRetryableDeepgramError(
+                MediaFailureCode.UNEXPECTED_ERROR,
+                details="web_page_store_failed",
+                exception_type=type(exc).__name__,
+            ) from exc
+        raise
+
+    for call, payload in open_calls:
+        try:
+            cost = await TranscriptionBudget(
+                message_body=message_body, job=job, job_id=job_id
+            ).billed(payload)
+        except Exception:  # noqa: BLE001 - the ledger's backstop releases it at its bound
+            log_event(
+                logger,
+                logging.ERROR,
+                "budget.transcription_unpriced",
+                "Transcript delivered but its cost could not be priced",
+                job_id=job_id,
+                attempt_id=call.attempt_id,
+            )
+            continue
+        await call.settle(cost, metric_source="deepgram_metadata_duration")
+
+    await sqs.send_message(
+        queue_name=EPISODE_COMPLETED_EVENTS_QUEUE,
+        message_body={
+            "event_type": "episode_completion_status",
+            "status": "success",
+            "media_key": message_body.get("media_key"),
+            "canonical_job_id": job_id,
+            "transcription_s3_key": transcript_s3_key,
+            "transcription_metadata": transcription_metadata,
+        },
+    )
+
+    for video in videos:
+        try:
+            await s3.delete_object(AUDIO_BUCKET, str(video["audio_s3_key"]))
+        except Exception as exc:  # noqa: BLE001 - the account sweep still covers it
+            log_event(
+                logger,
+                logging.WARNING,
+                "transcription.web_page_audio_not_deleted",
+                "Audio of a transcribed web page video could not be deleted",
+                job_id=job_id,
+                exc_info=exc,
+            )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "transcription.completed",
+        "Web page transcription completed",
+        provider="deepgram",
+        transcript_source="web_page",
+        job_id=job_id,
+        media_item_id=job_id,
+        video_count=len(videos),
+        audio_duration_seconds=billed_seconds,
     )
 
 

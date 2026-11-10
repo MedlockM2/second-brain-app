@@ -94,6 +94,81 @@ Ref: `core/ports/article_content.py::MEDIA_FAILURE_CODE_BY_ARTICLE_FETCH_ERROR`,
 
 Publishes to `EPISODE_COMPLETED_EVENTS_QUEUE` (terminates inline with success/failure event).
 
+### Pages a browser has to read, and the videos they embed
+
+The reader also inspects the HTML it downloaded (`core/web_page.py::inspect_static_html`,
+no extra request) and hands the page to the **web page render worker** when either:
+
+- **the text is drawn by JavaScript**: the static extraction is under 150 words *and* the
+  HTML shows why -- a framework marker (`self.__next_f`, `__NEXT_DATA__`, `__NUXT__`,
+  `window.__INITIAL_STATE__`, an empty `#root`/`#app`, a "enable JavaScript" `<noscript>`)
+  or less than 1 % of visible text per byte of HTML. Welcome to the Jungle's company page
+  serves 749 characters for 512 KB;
+- **the page embeds videos**: iframes or `<video>` of a known player, `og:video`, a JSON-LD
+  `VideoObject`.
+
+A shell's served HTML has no text to fingerprint, so its `media_key` is the URL-derived
+one, as for a page that could not be read; a static page with videos keeps the
+text-fingerprinted key. The API marks the job `extracting` and enqueues
+`WEB_PAGE_RENDER_QUEUE`; the RSS worker does the same for a feed item.
+
+**Worker**: `workers/web_page_render_worker.py`, function `media-summarizer-web-render-<env>`
+(its own image, `infrastructure/docker/lambda-web-render.Dockerfile`: the shared worker
+code plus Chromium; 2 GB memory, 2 GB `/tmp`, 300 s).
+
+1. Render the page in headless Chromium (`infrastructure/web_render/chromium_renderer.py`).
+   The full Chromium in its new headless mode, never Playwright's "headless shell": the
+   shell announces `HeadlessChrome` in its user agent *and* its `Sec-CH-UA` client hints,
+   and CloudFront-fronted sites answer it 403 (welcometothejungle.com, 2026-11-10). Images,
+   fonts and media are not downloaded; the JSON the page's scripts load is kept.
+2. Extract the text from the rendered DOM with the same trafilatura call as a static
+   article, and the title, publisher and cover with the same metadata reader.
+3. Find the videos (`core/web_page.py`): player URLs in the DOM and the frames, and
+   `{provider, id}` pairs in the JSON the page loaded -- a click-to-play gallery has no
+   iframe until clicked (Welcome to the Jungle sends `{"source": "vimeo",
+   "external_reference": "1181846851"}`). Known players: Vimeo, YouTube, Dailymotion,
+   Wistia, Loom, plus direct media files and HLS streams.
+4. Download each video's audio with yt-dlp (`infrastructure/web_render/video_audio.py`)
+   into `AUDIO_BUCKET` as `{job_id}.video-N.<ext>`. At most `WEB_PAGE_MAX_VIDEOS` (5)
+   videos, each up to `WEB_PAGE_MAX_VIDEO_DURATION_SECONDS` (1800 s) and 200 MB, and
+   `WEB_PAGE_MAX_TOTAL_VIDEO_SECONDS` (3600 s) in all. A video that cannot be had is left
+   out and logged (`web_page.video_skipped`); the page goes on without it. **YouTube is
+   skipped outright**: it asks every Lambda address to sign in (task-309). Measured from a
+   Lambda in eu-west-3 on 2026-11-10: Vimeo's player config, HLS playlists and segments,
+   and yt-dlp's full download all answered normally.
+5. **No video kept**: the text is admitted on the budget and stored as `{job_id}.txt`, like
+   an article. **Videos kept**: the plan (page text + videos) goes to `TRANSCRIPT_BUCKET` as
+   `{job_id}.web_page.json`, the transcription is admitted with one budget part per video
+   (`audio_quota_gate`, as for the voice notes of a shared conversation), and the Deepgram
+   worker gets `web_page_plan_s3_key`.
+
+The Deepgram worker (`deepgram_worker._process_web_page`) transcribes each video in pull
+mode under its own budget part, then stores page and videos as one Markdown text,
+`{job_id}.md` (`core/web_page.py::compose_sections`):
+
+```
+## [page] Frénésie : photos, vidéos, recrutement
+
+…the page's text…
+
+## [video 1/3 · 1:14 · vimeo · https://i.vimeocdn.com/…] Rencontrez Benoît, Co-fondateur
+
+…what is said in the video…
+```
+
+The `.md` suffix keeps `raw_content_service` from re-paragraphing the headings; the
+translation prompt keeps the bracketed tag as-is; the readers
+(`packages/core/src/media/transcriptSections.ts`, mobile `TranscriptReader`, web
+`ReadingBody`) draw each part under its own header (mockup
+`mobile-design-mockups/media_reading_sections/`). The audio is deleted once the success
+event is out.
+
+Failures: a render the browser could not load is `PROVIDER_UNAVAILABLE` (retried) or
+`MEDIA_UNAVAILABLE` (the page answered 4xx); a rendered page with neither text nor a
+usable video is `ARTICLE_TEXT_NOT_FOUND`; a budget refusal carries the budget's code.
+
+Ref: `core/web_page.py`, `workers/web_page_render_worker.py`, `deepgram_worker.py::_process_web_page`
+
 ---
 
 ## Podcast

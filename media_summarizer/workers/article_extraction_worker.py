@@ -48,6 +48,7 @@ logger = logging.getLogger(__name__)
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 ARTICLE_EXTRACTION_QUEUE = required_env("ARTICLE_EXTRACTION_QUEUE")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
+WEB_PAGE_RENDER_QUEUE = required_env("WEB_PAGE_RENDER_QUEUE")
 
 
 _content_fetcher: Optional[ArticleContentFetcherPort] = None
@@ -228,6 +229,32 @@ async def process_article_message(message_body: Dict[str, Any]) -> Dict[str, Any
     except ArticleFetchError as exc:
         raise _failure_from_fetch_error(exc) from exc
 
+    if article.signals is not None and article.signals.needs_render:
+        # Script-drawn text or embedded videos: the browser worker reads the page
+        # and completes this job, exactly as for a link a user saved.
+        await sqs.send_message(
+            queue_name=WEB_PAGE_RENDER_QUEUE,
+            message_body={
+                "job_id": job_id,
+                "user_id": job.user_id,
+                "media_key": job.media_key,
+                "normalized_url": normalized_url,
+                "page_title": article.title,
+                "render_reasons": article.signals.render_reasons,
+            },
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "worker.enqueued",
+            "Article handed to the web page renderer",
+            job_id=job_id,
+            queue=WEB_PAGE_RENDER_QUEUE,
+            render_reasons=article.signals.render_reasons,
+            static_video_count=len(article.signals.videos),
+        )
+        return {"job_id": job_id, "handed_off": True}
+
     transcript_s3_key = await _upload_transcript(job_id, article.text)
 
     extraction_metadata = article.extraction_metadata()
@@ -294,6 +321,8 @@ async def process_message(message: Dict[str, Any]) -> None:
 
     try:
         result = await process_article_message(body)
+        if result.get("handed_off"):
+            return
         await _publish_success_event(
             job_id=result["job_id"],
             media_key=result.get("media_key"),

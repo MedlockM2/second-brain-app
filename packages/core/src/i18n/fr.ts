@@ -437,6 +437,11 @@ export const fr: Catalog = {
   "preview.pending": "L'aperçu est en cours de rédaction…",
   "preview.unavailable": "Pas d'aperçu pour cette source.",
   "transcript.heading": "Texte complet",
+  "transcript.section.page": "Texte de la page",
+  "transcript.section.pageChip": "Page",
+  "transcript.section.video": "Vidéo {index} sur {count}",
+  "transcript.section.videoChip": "Vidéo {index}",
+  "transcript.section.jumpA11y": "Aller à : {label}",
   "transcript.empty": "Aucun texte disponible pour l'instant.",
   "transcript.emptyHint":
     "Le texte apparaîtra une fois le traitement terminé.",

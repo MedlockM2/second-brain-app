@@ -468,6 +468,7 @@ output "queue_urls" {
     podcastindex_resolution = aws_sqs_queue.rss_resolution.url
     article_extraction      = aws_sqs_queue.article_extraction.url
     x_ingestion             = aws_sqs_queue.x_ingestion.url
+    web_page_render         = aws_sqs_queue.web_page_render.url
     youtube_ingestion       = aws_sqs_queue.youtube_ingestion.url
     instagram_ingestion     = aws_sqs_queue.instagram_ingestion.url
     tiktok_ingestion        = aws_sqs_queue.tiktok_ingestion.url
@@ -488,6 +489,7 @@ output "dlq_arns" {
     podcastindex_resolution = aws_sqs_queue.rss_resolution_dlq.arn
     article_extraction      = aws_sqs_queue.article_extraction_dlq.arn
     x_ingestion             = aws_sqs_queue.x_ingestion_dlq.arn
+    web_page_render         = aws_sqs_queue.web_page_render_dlq.arn
     youtube_ingestion       = aws_sqs_queue.youtube_ingestion_dlq.arn
     instagram_ingestion     = aws_sqs_queue.instagram_ingestion_dlq.arn
     tiktok_ingestion        = aws_sqs_queue.tiktok_ingestion_dlq.arn

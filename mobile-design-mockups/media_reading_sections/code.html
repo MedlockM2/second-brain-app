@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecture en sections</title>
+<style>
+  :root {
+    --primary: #ffcb05; --primary-ink: #b88a00; --primary-tint: rgba(255,203,5,.05);
+    --background: #fcf9f6; --surface: #ffffff;
+    --sc: #f1edea; --sc-high: #ebe7e5; --sc-low: #f7f3f0;
+    --text-main: #2b2d42; --text-muted: #8d99ae; --text-subtle: #5c6880;
+    --outline: #78776f; --outline-variant: #c8c7bd;
+    --page: #ece8e3;
+  }
+  .dark {
+    --primary: #ffcb05; --primary-ink: #f0bf2a; --primary-tint: rgba(240,191,42,.05);
+    --background: #171511; --surface: #211e19;
+    --sc: #2d2a25; --sc-high: #37332c; --sc-low: #262320;
+    --text-main: #f1ebe1; --text-muted: #9aa3b4; --text-subtle: #c6cdd9;
+    --outline: #a8a69a; --outline-variant: #3d3932;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e4e0da; font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; color: #2b2d42; }
+  .sheet { max-width: 1240px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 26px; margin: 0 0 8px; }
+  .lede { font-size: 15px; line-height: 1.6; max-width: 820px; margin: 0 0 8px; color: #3b3d52; }
+  .notes { font-size: 14px; line-height: 1.6; max-width: 820px; color: #3b3d52; }
+  .notes code { background: #f1edea; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .row { display: flex; gap: 32px; flex-wrap: wrap; align-items: flex-start; margin: 32px 0; }
+  .frame-label { font-size: 13px; font-weight: 600; color: #5c6880; margin: 0 0 10px; }
+
+  /* ---- phone ---- */
+  .phone { width: 414px; height: 896px; border-radius: 44px; overflow: hidden; background: var(--background);
+           box-shadow: 0 0 0 10px #1c1b1a, 0 20px 50px rgba(0,0,0,.25); position: relative; color: var(--text-main); }
+  .phone.small { width: 320px; height: 568px; border-radius: 30px; }
+  .status { height: 44px; }
+  .small .status { height: 20px; }
+  .tabs { display: flex; gap: 8px; padding: 8px 16px 12px; border-bottom: 1px solid var(--outline-variant); }
+  .tab { font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 999px; color: var(--text-subtle); }
+  .tab.on { background: var(--primary); color: #1c1b1a; }
+  .scroll { position: absolute; top: 100px; bottom: 0; left: 0; right: 0; overflow: hidden; padding: 20px 16px; }
+  .small .scroll { top: 74px; }
+  .rhead { display: flex; align-items: center; margin-bottom: 16px; }
+  .rhead h2 { flex: 1; margin: 0; font-size: 20px; font-weight: 600; }
+  .pill { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 999px; background: var(--sc-high); color: var(--text-main); }
+
+  /* contents line */
+  .contents { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 7px 12px;
+          border-radius: 999px; border: 1px solid var(--outline-variant); color: var(--text-main); background: var(--surface); }
+  .chip svg { width: 14px; height: 14px; }
+
+  /* section header */
+  .sec { margin: 0 0 14px; }
+  .sec + p { margin-top: 0; }
+  .sec-kicker { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .08em;
+                text-transform: uppercase; color: var(--text-subtle); }
+  .sec-kicker svg { width: 16px; height: 16px; color: var(--primary-ink); flex: none; }
+  .sec-kicker .rule { flex: 1; height: 1px; background: var(--outline-variant); }
+  .sec-title { font-size: 17px; font-weight: 600; line-height: 1.35; margin: 8px 0 0; }
+  .sec-meta { font-size: 13px; color: var(--text-subtle); margin-top: 4px; }
+
+  .video-sec { margin-top: 32px; }
+  .vid { display: flex; gap: 12px; align-items: center; margin-top: 10px; }
+  .thumb { width: 96px; height: 54px; border-radius: 8px; flex: none; position: relative; overflow: hidden;
+           background: linear-gradient(135deg, #6b5a4a, #2f2a26); }
+  .thumb.b { background: linear-gradient(135deg, #4a5a6b, #262a2f); }
+  .thumb.c { background: linear-gradient(135deg, #6b4a5c, #2f2629); }
+  .thumb::after { content: ""; position: absolute; inset: 0; margin: auto; width: 22px; height: 22px; border-radius: 50%;
+                  background: rgba(255,255,255,.92); }
+  .thumb::before { content: ""; position: absolute; z-index: 1; left: 50%; top: 50%; margin: -5px 0 0 -2px;
+                   border-left: 8px solid #1c1b1a; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+  .vid .sec-title { margin: 0; font-size: 16px; }
+
+  p.par { font-size: 16px; line-height: 25.6px; margin: 0 0 16px; }
+  .speaker { color: var(--text-muted); font-weight: 600; }
+
+  .small .scroll { padding: 16px 12px; }
+  .small .thumb { width: 72px; height: 40px; }
+  .small .contents { margin-bottom: 20px; }
+
+  .legend { font-size: 13px; color: #5c6880; max-width: 414px; line-height: 1.5; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <h1>Onglet Lecture : une page qui contient des vidéos</h1>
+  <p class="lede">Une page web sauvegardée devient un seul média : d’abord le texte de la page, puis une section par vidéo
+  intégrée, avec sa transcription. Exemple réel : la page Welcome to the Jungle de Frénésie et ses trois vidéos
+  « Rencontrez… ». Les transcriptions affichées ici sont un texte d’exemple.</p>
+  <p class="notes">Le principe : chaque section commence par un en-tête au même dessin (une ligne en petites capitales
+  avec l’icône du type de contenu et un filet), et l’en-tête d’une vidéo reprend sa vignette, son titre et sa durée, pour
+  qu’on sache sans effort qu’on passe de l’écrit à l’oral. En haut, une ligne de pastilles résume ce que contient la page
+  et permet d’aller directement à une vidéo. Le corps du texte ne change pas. Un média sans vidéo s’affiche exactement
+  comme aujourd’hui : ni pastilles ni en-tête.</p>
+
+  <div class="row">
+    <!-- ============ 414, light, top ============ -->
+    <div>
+      <p class="frame-label">414 × 896, clair : haut de l’onglet</p>
+      <div class="phone">
+        <div class="status"></div>
+        <div class="tabs"><span class="tab on">Lecture</span><span class="tab">Cahier</span></div>
+        <div class="scroll">
+          <div class="rhead"><h2>Texte complet</h2></div>
+
+          <div class="contents">
+            <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Page</span>
+            <span class="chip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Benoît · 1:14</span>
+            <span class="chip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Romain · 1:32</span>
+            <span class="chip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Louise · 1:05</span>
+          </div>
+
+          <div class="sec">
+            <div class="sec-kicker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Texte de la page<span class="rule"></span></div>
+          </div>
+          <p class="par">Agence de Brand Experience, Frénésie relie les marques à leurs audiences et à la culture contemporaine.</p>
+          <p class="par">Frénésie est une agence créative qui allie stratégie, design et production pour faire naître des expériences physiques et digitales inédites. Elle imagine des activations de marque, des événements et des campagnes expérientielles mémorables et impactants.</p>
+          <p class="par">Stunts, activations de marque, événements PR, pop-ups, soirées immersives… Frénésie co-crée des expériences exclusives depuis plus de dix ans avec des marques renommées.</p>
+          <p class="par">Frénésie s’empare des univers de marque, les ancre dans la culture actuelle et leur donne une vie retentissante auprès de leurs publics. Ce qu’elle aime appeler un expérientiel émotionnel.</p>
+          <p class="par">Frénésie cherche à rencontrer des talents inspirants, des personnalités riches de leurs différences et des passionnés de culture.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 414, light, transition into a video ============ -->
+    <div>
+      <p class="frame-label">414 × 896, clair : passage du texte à une vidéo</p>
+      <div class="phone">
+        <div class="status"></div>
+        <div class="tabs"><span class="tab on">Lecture</span><span class="tab">Cahier</span></div>
+        <div class="scroll">
+          <p class="par">Les fondateurs de Frénésie ont d’abord eu un label de musique et aiment toujours passer derrière les platines. Les mélomanes sont nombreux dans notre équipe et les sound systems dans toutes les pièces.</p>
+          <p class="par">Est-ce la douce mélodie de la Frénésie qui s’envole des fenêtres ?</p>
+
+          <div class="sec video-sec">
+            <div class="sec-kicker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Vidéo 1 sur 3<span class="rule"></span></div>
+            <div class="vid">
+              <div class="thumb"></div>
+              <div>
+                <p class="sec-title">Rencontrez Benoît, Co-fondateur</p>
+                <div class="sec-meta">1 min 14 · Vimeo</div>
+              </div>
+            </div>
+          </div>
+          <p class="par">Je m’appelle Benoît, je suis co-fondateur de Frénésie. On a monté l’agence il y a dix ans, à la base on venait de la musique, on organisait des soirées…</p>
+          <p class="par">Ce qu’on cherche chez les gens qui nous rejoignent, c’est surtout la curiosité et l’envie de faire des choses ensemble.</p>
+
+          <div class="sec video-sec">
+            <div class="sec-kicker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Vidéo 2 sur 3<span class="rule"></span></div>
+            <div class="vid">
+              <div class="thumb b"></div>
+              <div>
+                <p class="sec-title">Rencontrez Romain, Directeur de Création</p>
+                <div class="sec-meta">1 min 32 · Vimeo</div>
+              </div>
+            </div>
+          </div>
+          <p class="par">Moi c’est Romain, je suis directeur de création chez Frénésie…</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 414, dark ============ -->
+    <div>
+      <p class="frame-label">414 × 896, sombre</p>
+      <div class="phone dark">
+        <div class="status"></div>
+        <div class="tabs"><span class="tab on">Lecture</span><span class="tab">Cahier</span></div>
+        <div class="scroll">
+          <p class="par">Est-ce la douce mélodie de la Frénésie qui s’envole des fenêtres ?</p>
+          <div class="sec video-sec">
+            <div class="sec-kicker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Vidéo 3 sur 3<span class="rule"></span></div>
+            <div class="vid">
+              <div class="thumb c"></div>
+              <div>
+                <p class="sec-title">Rencontrez Louise, Responsable de Projet</p>
+                <div class="sec-meta">1 min 05 · Vimeo</div>
+              </div>
+            </div>
+          </div>
+          <p class="par"><span class="speaker">Speaker 1 : </span>Je suis Louise, responsable de projet. Mon quotidien, c’est de faire le lien entre le client, la création et la production…</p>
+          <p class="par"><span class="speaker">Speaker 2 : </span>Et qu’est-ce que tu préfères dans ton métier ?</p>
+          <p class="par"><span class="speaker">Speaker 1 : </span>Le jour J. Voir l’événement prendre vie après des semaines de préparation.</p>
+          <p class="par"><span class="speaker">Speaker 2 : </span>Et l’ambiance dans l’équipe ?</p>
+          <p class="par"><span class="speaker">Speaker 1 : </span>On est une vingtaine, tout le monde se connaît. Il y a de la musique dans toutes les pièces, ça vient de l’histoire de l’agence : les fondateurs avaient un label avant de lancer Frénésie.</p>
+          <p class="par"><span class="speaker">Speaker 1 : </span>Si vous aimez la culture et que vous voulez fabriquer des moments que les gens retiennent, venez nous voir.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 320, light ============ -->
+    <div>
+      <p class="frame-label">320 × 568, clair</p>
+      <div class="phone small">
+        <div class="status"></div>
+        <div class="tabs"><span class="tab on">Lecture</span><span class="tab">Cahier</span></div>
+        <div class="scroll">
+          <div class="contents">
+            <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>Page</span>
+            <span class="chip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Benoît · 1:14</span>
+            <span class="chip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Romain · 1:32</span>
+            <span class="chip"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Louise · 1:05</span>
+          </div>
+          <div class="sec video-sec" style="margin-top:0">
+            <div class="sec-kicker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Vidéo 1 sur 3<span class="rule"></span></div>
+            <div class="vid">
+              <div class="thumb"></div>
+              <div>
+                <p class="sec-title">Rencontrez Benoît, Co-fondateur</p>
+                <div class="sec-meta">1 min 14 · Vimeo</div>
+              </div>
+            </div>
+          </div>
+          <p class="par">Je m’appelle Benoît, je suis co-fondateur de Frénésie. On a monté l’agence il y a dix ans…</p>
+        </div>
+      </div>
+      <p class="legend">À 320 pt, les pastilles passent sur deux lignes ; la vignette se réduit à 72 × 40 pour laisser au titre
+      deux lignes pleines.</p>
+    </div>
+  </div>
+
+  <p class="notes"><b>Ce qui ne change pas.</b> La taille, l’interligne et la couleur du texte ; les libellés
+  « Speaker N » ; la bascule de traduction dans l’en-tête. Les en-têtes de section restent dans la langue de l’app,
+  pas dans celle du contenu. <b>Côté données</b>, le texte stocké garde ses en-têtes sous forme de lignes lisibles
+  (pour le chat, la recherche et les résumés, qui savent alors ce qui vient de la page et ce qui vient d’une vidéo) ;
+  l’app les reconnaît et les dessine comme ci-dessus.</p>
+</div>
+</body>
+</html>

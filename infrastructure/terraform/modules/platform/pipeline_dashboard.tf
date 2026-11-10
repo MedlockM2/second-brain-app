@@ -48,10 +48,13 @@ locals {
   # they cannot drift again and they carry the environment suffix for free.
 
   # Worker Lambda function names, keyed by worker key (see local.workers).
-  worker_function_names = {
-    for k, fn in aws_lambda_function.worker : k => fn.function_name
-  }
-  lambda_workers = keys(local.workers)
+  # The web page render worker runs its own image outside local.workers
+  # (web_page_render.tf) but is watched like the others.
+  worker_function_names = merge(
+    { for k, fn in aws_lambda_function.worker : k => fn.function_name },
+    { web_page_render = aws_lambda_function.web_render.function_name },
+  )
+  lambda_workers = concat(keys(local.workers), ["web_page_render"])
 
   # API Gateway dimension value. The AWS/ApiGateway metrics for an HTTP API are
   # dimensioned by API ID, not by name, and API names are not unique across
@@ -67,6 +70,7 @@ locals {
     rss_resolution         = { queue = aws_sqs_queue.rss_resolution.name, dlq = aws_sqs_queue.rss_resolution_dlq.name }
     article_extraction     = { queue = aws_sqs_queue.article_extraction.name, dlq = aws_sqs_queue.article_extraction_dlq.name }
     x_ingestion            = { queue = aws_sqs_queue.x_ingestion.name, dlq = aws_sqs_queue.x_ingestion_dlq.name }
+    web_page_render        = { queue = aws_sqs_queue.web_page_render.name, dlq = aws_sqs_queue.web_page_render_dlq.name }
     youtube_ingestion      = { queue = aws_sqs_queue.youtube_ingestion.name, dlq = aws_sqs_queue.youtube_ingestion_dlq.name }
     instagram_ingestion    = { queue = aws_sqs_queue.instagram_ingestion.name, dlq = aws_sqs_queue.instagram_ingestion_dlq.name }
     tiktok_ingestion       = { queue = aws_sqs_queue.tiktok_ingestion.name, dlq = aws_sqs_queue.tiktok_ingestion_dlq.name }

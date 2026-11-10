@@ -959,6 +959,28 @@ export function CompletedDetailView({
     return () => clearTimeout(timer);
   }, [passageShown]);
 
+  // A chip of a page-with-videos text: its section, just under the collapsed
+  // bar. The reader has chosen where to go, so a passage stops being followed.
+  const jumpToSection = useCallback(
+    (node: View) => {
+      const content = scrollContentRef.current;
+      if (!content) return;
+      followPassageRef.current = false;
+      node.measureLayout(
+        content,
+        (_x, y) => {
+          const { content: contentSize, viewport } = scrollExtentRef.current;
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, Math.min(y - barHeight - PASSAGE_LEAD, contentSize - viewport)),
+            animated: true,
+          });
+        },
+        () => {},
+      );
+    },
+    [barHeight],
+  );
+
   const passageFocus = useMemo<SearchPassageFocus | null>(
     () =>
       focusPassage
@@ -1026,7 +1048,7 @@ export function CompletedDetailView({
   const transcript = (
     <>
       {refreshNotice}
-      <TranscriptReader {...readerProps} passageFocus={passageFocus} />
+      <TranscriptReader {...readerProps} passageFocus={passageFocus} onJumpTo={jumpToSection} />
     </>
   );
   const chatTranscript = (

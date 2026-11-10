@@ -58,6 +58,7 @@ locals {
     PODCASTINDEX_RESOLUTION_QUEUE = aws_sqs_queue.rss_resolution.name
     ARTICLE_EXTRACTION_QUEUE      = aws_sqs_queue.article_extraction.name
     X_INGESTION_QUEUE             = aws_sqs_queue.x_ingestion.name
+    WEB_PAGE_RENDER_QUEUE         = aws_sqs_queue.web_page_render.name
     YOUTUBE_INGESTION_QUEUE       = aws_sqs_queue.youtube_ingestion.name
     INSTAGRAM_INGESTION_QUEUE     = aws_sqs_queue.instagram_ingestion.name
     TIKTOK_INGESTION_QUEUE        = aws_sqs_queue.tiktok_ingestion.name

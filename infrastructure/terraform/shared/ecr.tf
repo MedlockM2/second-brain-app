@@ -105,6 +105,20 @@ resource "aws_ecr_lifecycle_policy" "lambda" {
         action = {
           type = "expire"
         }
+      },
+      {
+        # The web page render image (Chromium), built by deploy-lambda.yml.
+        rulePriority = 5
+        description  = "Keep the ${var.image_retention_count} most recent web render images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["web-render-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = var.image_retention_count
+        }
+        action = {
+          type = "expire"
+        }
       }
     ]
   })

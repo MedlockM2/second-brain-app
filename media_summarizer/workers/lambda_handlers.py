@@ -220,3 +220,9 @@ def budget_audit_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     module = importlib.import_module("media_summarizer.workers.budget_audit")
     return module.handle_event(event)
+
+# Its own function and image (lambda-web-render.Dockerfile): the browser it needs
+# is not in the shared worker image.
+web_page_render_handler = _build_handler(
+    "media_summarizer.workers.web_page_render_worker", fails_job=True
+)

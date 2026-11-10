@@ -26,6 +26,7 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from media_summarizer.core.models.failure_codes import MediaFailureCode
+from media_summarizer.core.web_page import PageSignals
 
 
 class ArticleFetchErrorCode(str, Enum):
@@ -109,6 +110,9 @@ class ArticleContent:
     paragraph_count: int = 0
     provider: str = ""
     extractor: str = ""
+    #: What the served HTML says beyond its text: whether the page has to be read
+    #: in a browser (script-drawn text, embedded videos). ``None`` when unread.
+    signals: Optional[PageSignals] = None
 
     def extraction_metadata(self) -> Dict[str, Any]:
         """The `ProcessingJob.extraction_metadata` shape, built in one place."""

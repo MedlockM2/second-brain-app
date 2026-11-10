@@ -55,6 +55,12 @@ worker = [
     # task-547 decision). Pure Python, no native wheel.
     "pypdf>=5.0.0",
 ]
+# The web page render worker only (lambda-web-render.Dockerfile): headless
+# Chromium to read pages whose text is drawn by JavaScript. Kept out of the shared
+# worker image so no other worker carries a browser.
+render = [
+    "playwright>=1.48.0",
+]
 dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",

@@ -292,6 +292,8 @@ def _build_system_prompt(*, source_language: str, target_language: str) -> str:
         "form when appropriate.\n"
         "- If timestamps or speaker labels are present, keep them exactly as-is "
         "(do not translate them).\n"
+        "- A line starting with '## [' is a section heading: keep the part in square "
+        "brackets exactly as-is and translate only the title after it.\n"
         "- Output ONLY the translated text. No commentary, no notes, no explanations."
     )
 

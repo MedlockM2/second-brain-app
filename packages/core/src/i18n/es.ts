@@ -416,6 +416,11 @@ export const es: Catalog = {
   "preview.pending": "Se está redactando la vista previa…",
   "preview.unavailable": "No hay vista previa para esta fuente.",
   "transcript.heading": "Texto completo",
+  "transcript.section.page": "Texto de la página",
+  "transcript.section.pageChip": "Página",
+  "transcript.section.video": "Vídeo {index} de {count}",
+  "transcript.section.videoChip": "Vídeo {index}",
+  "transcript.section.jumpA11y": "Ir a: {label}",
   "transcript.empty": "Aún no hay texto disponible.",
   "transcript.emptyHint":
     "El texto aparecerá cuando termine el procesamiento.",

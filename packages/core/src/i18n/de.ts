@@ -424,6 +424,11 @@ export const de: Catalog = {
   "preview.pending": "Die Vorschau wird geschrieben …",
   "preview.unavailable": "Keine Vorschau für diese Quelle.",
   "transcript.heading": "Volltext",
+  "transcript.section.page": "Text der Seite",
+  "transcript.section.pageChip": "Seite",
+  "transcript.section.video": "Video {index} von {count}",
+  "transcript.section.videoChip": "Video {index}",
+  "transcript.section.jumpA11y": "Gehe zu: {label}",
   "transcript.empty": "Noch kein Text verfügbar.",
   "transcript.emptyHint":
     "Der Text erscheint, sobald die Verarbeitung abgeschlossen ist.",

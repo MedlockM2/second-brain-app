@@ -20,6 +20,7 @@ on:
       - "infrastructure/docker/lambda-api.Dockerfile"
       - "infrastructure/docker/lambda.Dockerfile"
       - "infrastructure/docker/lambda-chat-stream.Dockerfile"
+      - "infrastructure/docker/lambda-web-render.Dockerfile"
       - ".github/workflows/deploy-lambda.yml"
       - ".github/scripts/lib/lambda-deploy.sh"
   # Production is never deployed automatically. It is promoted, by hand, from an
@@ -27,7 +28,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Tag suffix to promote to production: a git SHA already built by a main deploy, or 'latest'. The api-<tag>, worker-<tag> and chat-stream-<tag> images must all exist in the shared registry."
+        description: "Tag suffix to promote to production: a git SHA already built by a main deploy, or 'latest'. The api-<tag>, worker-<tag>, chat-stream-<tag> and web-render-<tag> images must all exist in the shared registry."
         required: true
         default: latest
 
@@ -56,6 +57,7 @@ jobs:
       api: ${{ steps.filter.outputs.api }}
       workers: ${{ steps.filter.outputs.workers }}
       chat_stream: ${{ steps.filter.outputs.chat_stream }}
+      web_render: ${{ steps.filter.outputs.web_render }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -97,6 +99,19 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - 'infrastructure/docker/lambda-chat-stream.Dockerfile'
+              - '.github/workflows/deploy-lambda.yml'
+              - '.github/scripts/lib/lambda-deploy.sh'
+            # The render worker runs the shared worker code in its own image
+            # (Chromium), so it rebuilds whenever the workers do.
+            web_render:
+              - 'media_summarizer/workers/**'
+              - 'media_summarizer/core/**'
+              - 'media_summarizer/utils/**'
+              - 'media_summarizer/infrastructure/**'
+              - 'media_summarizer/*.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'infrastructure/docker/lambda-web-render.Dockerfile'
               - '.github/workflows/deploy-lambda.yml'
               - '.github/scripts/lib/lambda-deploy.sh'
 
@@ -363,6 +378,86 @@ jobs:
           update_function_image "media-summarizer-chat-stream-${DEPLOY_ENVIRONMENT}" \
             "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.existing-chat-stream.outputs.digest || steps.build-chat-stream.outputs.digest }}"
 
+  # The web page render worker (Chromium): its own image, its own function,
+  # deployed by digest like the chat stream. Its name (media-summarizer-web-render-*)
+  # keeps it out of the workers' loop, which would put the shared image on it.
+  deploy-web-render:
+    needs: changes
+    if: needs.changes.outputs.web_render == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Authenticate public base-image pulls
+        uses: aws-actions/amazon-ecr-login@v2
+        env:
+          AWS_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+        with:
+          registry-type: public
+
+      - name: Find an image this commit already pushed
+        id: existing-web-render
+        run: |
+          source .github/scripts/lib/lambda-deploy.sh
+          DIGEST=$(existing_image_digest "$ECR_REPOSITORY" "web-render-${IMAGE_TAG}")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          if [ -n "$DIGEST" ]; then echo "web-render-${IMAGE_TAG} already pushed as $DIGEST: deploying it as is"; fi
+
+      - name: Set up Docker Buildx
+        if: steps.existing-web-render.outputs.digest == ''
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU for ARM64
+        if: steps.existing-web-render.outputs.digest == ''
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build and push web render image
+        id: build-web-render
+        if: steps.existing-web-render.outputs.digest == ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infrastructure/docker/lambda-web-render.Dockerfile
+          platforms: linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:web-render-latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:web-render-${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=lambda-web-render
+          cache-to: type=gha,mode=max,scope=lambda-web-render
+
+      # The function is created by Terraform from :web-render-latest, which this
+      # job is the first to push. On the very first push, Terraform Dev may run
+      # before the image exists and fail to create the function: rerun Terraform
+      # Dev once this job is green. Until the function exists there is nothing to
+      # update, so this step only warns.
+      - name: Deploy web render by immutable digest
+        run: |
+          source .github/scripts/lib/lambda-deploy.sh
+          FUNCTION="media-summarizer-web-render-${DEPLOY_ENVIRONMENT}"
+          if ! aws lambda get-function --function-name "$FUNCTION" >/dev/null 2>&1; then
+            echo "::warning::$FUNCTION does not exist yet; rerun Terraform Dev to create it from web-render-latest."
+            exit 0
+          fi
+          update_function_image "$FUNCTION" \
+            "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.existing-web-render.outputs.digest || steps.build-web-render.outputs.digest }}"
+
   release-validation:
     needs: [changes, deploy-api, deploy-workers]
     if: >-
@@ -476,7 +571,7 @@ jobs:
           # bytes dev validated. describe-images is a cross-account read against
           # the shared registry, allowed by ConsumerAccountImagePull in
           # shared/ecr.tf plus EcrPullSharedRepository in the prod role.
-          for KIND in api worker chat-stream; do
+          for KIND in api worker chat-stream web-render; do
             DIGEST=$(aws ecr describe-images \
               --registry-id "$ECR_REGISTRY_ACCOUNT_ID" \
               --repository-name "$ECR_REPOSITORY" \
@@ -545,6 +640,18 @@ jobs:
           aws lambda wait function-updated-v2 --function-name "$STREAM_FUNCTION"
           test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query State --output text)" = "Active"
           test "$(aws lambda get-function-configuration --function-name "$STREAM_FUNCTION" --query LastUpdateStatus --output text)" = "Successful"
+
+      - name: Promote the web render image
+        run: |
+          REGISTRY="${ECR_REGISTRY_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+          RENDER_FUNCTION="media-summarizer-web-render-${DEPLOY_ENVIRONMENT}"
+          aws lambda update-function-code \
+            --function-name "$RENDER_FUNCTION" \
+            --image-uri "${REGISTRY}/${ECR_REPOSITORY}@${{ steps.digests.outputs.web_render }}" \
+            --no-cli-pager
+          aws lambda wait function-updated-v2 --function-name "$RENDER_FUNCTION"
+          test "$(aws lambda get-function-configuration --function-name "$RENDER_FUNCTION" --query State --output text)" = "Active"
+          test "$(aws lambda get-function-configuration --function-name "$RENDER_FUNCTION" --query LastUpdateStatus --output text)" = "Successful"
 
       - name: Validate the prod health endpoint
         run: |

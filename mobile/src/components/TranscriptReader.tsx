@@ -22,13 +22,19 @@
 
 import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
 import { locateSearchPassage } from "@media-summarizer/core/media/searchPassage";
+import {
+  formatSectionClock,
+  parseTranscriptSections,
+  type TranscriptSection,
+} from "@media-summarizer/core/media/transcriptSections";
+import { Image } from "expo-image";
 import { MarkdownBody } from "./MarkdownBody";
 import {
   PassageMarks,
   useSearchPassageAnchor,
   type SearchPassageFocus,
 } from "./SearchPassage";
-import React, { memo, useMemo } from "react";
+import React, { memo, useCallback, useMemo, useRef } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -141,6 +147,11 @@ interface TranscriptReaderProps {
   translationToggle: TranscriptTranslationToggle | null;
   /** The search passage to highlight and report, or nothing outside a search. */
   passageFocus?: SearchPassageFocus | null;
+  /**
+   * Scroll the page to a part of a page-with-videos text (a chip was pressed).
+   * Only the page that scrolls passes it; without it the chips are not shown.
+   */
+  onJumpTo?: (node: View) => void;
 }
 
 export const TranscriptReader = memo(function TranscriptReader({
@@ -151,6 +162,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   onCheckTranslation,
   translationToggle,
   passageFocus,
+  onJumpTo,
 }: TranscriptReaderProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -209,6 +221,7 @@ export const TranscriptReader = memo(function TranscriptReader({
           onRetry={onRetry}
           onCheckTranslation={onCheckTranslation}
           passageFocus={passageFocus}
+          onJumpTo={onJumpTo}
         />
       ) : (
         <View style={styles.statusRow}>
@@ -297,6 +310,22 @@ function TranslationToggle({
  * its matched words are highlighted wherever they fall, and the paragraph holding
  * the first one is the anchor the page measures.
  */
+function TranscriptText({
+  content,
+  passageFocus,
+  onJumpTo,
+}: {
+  content: string;
+  passageFocus?: SearchPassageFocus | null;
+  onJumpTo?: (node: View) => void;
+}) {
+  const sections = useMemo(() => parseTranscriptSections(content), [content]);
+  if (sections) {
+    return <SectionedTranscript sections={sections} passageFocus={passageFocus} onJumpTo={onJumpTo} />;
+  }
+  return <TranscriptBody content={content} passageFocus={passageFocus} />;
+}
+
 function TranscriptBody({
   content,
   passageFocus,
@@ -360,23 +389,169 @@ function TranscriptBody({
   );
 }
 
+const PROVIDER_NAMES: Record<string, string> = {
+  vimeo: "Vimeo",
+  youtube: "YouTube",
+  dailymotion: "Dailymotion",
+  wistia: "Wistia",
+  loom: "Loom",
+};
+
+function SectionGlyph({ kind }: { kind: TranscriptSection["kind"] }) {
+  const Colors = useThemeColors();
+  return (
+    <Ionicons
+      name={kind === "page" ? "document-text-outline" : "play"}
+      size={16}
+      color={Colors.primaryInk}
+    />
+  );
+}
+
+/**
+ * A web page read with the videos it embeds (`parseTranscriptSections`): a row
+ * of chips naming what the page holds, then each part under its own heading —
+ * the page's text, then each video with its thumbnail, title and length — so the
+ * reader always knows whether they are reading the page or what was said in a
+ * video. Each part's body is drawn exactly like any other text.
+ *
+ * The chips jump to their section through `onJumpTo`, which only the page that
+ * scrolls can honour; without it (the chat's view of the source) they are left
+ * out.
+ */
+function SectionedTranscript({
+  sections,
+  passageFocus,
+  onJumpTo,
+}: {
+  sections: TranscriptSection[];
+  passageFocus?: SearchPassageFocus | null;
+  onJumpTo?: (node: View) => void;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const Colors = useThemeColors();
+  const nodes = useRef<(View | null)[]>([]);
+  const jump = useCallback(
+    (index: number) => {
+      const node = nodes.current[index];
+      if (node && onJumpTo) onJumpTo(node);
+    },
+    [onJumpTo],
+  );
+
+  return (
+    <View style={styles.body}>
+      {onJumpTo ? (
+        <View style={styles.sectionChips}>
+          {sections.map((section, index) => {
+            const label =
+              section.kind === "page"
+                ? t("transcript.section.pageChip")
+                : [
+                    t("transcript.section.videoChip", { index: section.index }),
+                    formatSectionClock(section.durationSeconds),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+            return (
+              <Pressable
+                key={index}
+                onPress={() => jump(index)}
+                accessibilityRole="button"
+                accessibilityLabel={t("transcript.section.jumpA11y", { label })}
+                style={({ pressed }) => [styles.sectionChip, pressed && styles.sectionChipPressed]}
+              >
+                <Ionicons
+                  name={section.kind === "page" ? "document-text-outline" : "play"}
+                  size={14}
+                  color={Colors.textMain}
+                />
+                <Text style={styles.sectionChipText}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {sections.map((section, index) => {
+        const kicker =
+          section.kind === "page"
+            ? t("transcript.section.page")
+            : t("transcript.section.video", { index: section.index, count: section.count });
+        const meta =
+          section.kind === "video"
+            ? [
+                formatSectionClock(section.durationSeconds),
+                section.provider ? PROVIDER_NAMES[section.provider] ?? null : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : "";
+        return (
+          <View
+            key={index}
+            ref={(node) => {
+              nodes.current[index] = node;
+            }}
+            style={index > 0 ? styles.sectionSpaced : undefined}
+          >
+            <View style={styles.sectionKicker} accessibilityRole="header">
+              <SectionGlyph kind={section.kind} />
+              <Text style={styles.sectionKickerText}>{kicker}</Text>
+              <View style={styles.sectionRule} />
+            </View>
+            {section.kind === "video" ? (
+              <View style={styles.sectionVideo}>
+                <View style={styles.sectionThumb}>
+                  {section.thumbnailUrl ? (
+                    <Image
+                      source={{ uri: section.thumbnailUrl }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      accessibilityIgnoresInvertColors
+                    />
+                  ) : null}
+                  <View style={styles.sectionPlay}>
+                    <Ionicons name="play" size={12} color={Colors.onPrimary} />
+                  </View>
+                </View>
+                <View style={styles.sectionVideoText}>
+                  {section.title ? (
+                    <Text style={styles.sectionVideoTitle} numberOfLines={2}>
+                      {section.title}
+                    </Text>
+                  ) : null}
+                  {meta ? <Text style={styles.sectionMeta}>{meta}</Text> : null}
+                </View>
+              </View>
+            ) : null}
+            <TranscriptBody content={section.body} passageFocus={passageFocus} />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 function TranscriptContent({
   state,
   onRetry,
   onCheckTranslation,
   passageFocus,
+  onJumpTo,
 }: {
   state: TranscriptContentState;
   onRetry: () => void;
   onCheckTranslation: () => void;
   passageFocus?: SearchPassageFocus | null;
+  onJumpTo?: (node: View) => void;
 }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   if (state.status === "ready") {
     return (
       <View>
-        <TranscriptBody content={state.content} passageFocus={passageFocus} />
+        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
       </View>
     );
   }
@@ -395,7 +570,7 @@ function TranscriptContent({
             {" "}{t("budget.automatic")}
           </Text>
         </View>
-        <TranscriptBody content={state.content} passageFocus={passageFocus} />
+        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
       </View>
     );
   }
@@ -432,7 +607,7 @@ function TranscriptContent({
             </Text>
           </Pressable>
         </View>
-        <TranscriptBody content={state.content} passageFocus={passageFocus} />
+        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
       </View>
     );
   }
@@ -451,7 +626,7 @@ function TranscriptContent({
             {t("transcript.translationFailed")}
           </Text>
         </View>
-        <TranscriptBody content={state.content} passageFocus={passageFocus} />
+        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
       </View>
     );
   }
@@ -627,6 +802,88 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     speaker: {
       color: Colors.textMuted,
       fontWeight: "600",
+    },
+    sectionChips: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.sm,
+      marginBottom: Spacing.lg,
+    },
+    sectionChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      minHeight: 32,
+      paddingHorizontal: 12,
+      borderRadius: BorderRadius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: Colors.outlineVariant,
+      backgroundColor: Colors.surface,
+    },
+    sectionChipPressed: {
+      backgroundColor: Colors.surfaceContainer,
+    },
+    sectionChipText: {
+      fontSize: Typography.small.fontSize,
+      fontWeight: "500",
+      color: Colors.textMain,
+    },
+    sectionSpaced: {
+      marginTop: Spacing.xl,
+    },
+    sectionKicker: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    sectionKickerText: {
+      fontSize: 12,
+      fontWeight: "600",
+      letterSpacing: 0.96,
+      textTransform: "uppercase",
+      color: Colors.textSubtle,
+    },
+    sectionRule: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: Colors.outlineVariant,
+    },
+    sectionVideo: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginTop: 10,
+    },
+    sectionThumb: {
+      width: 96,
+      aspectRatio: 16 / 9,
+      borderRadius: BorderRadius.md,
+      overflow: "hidden",
+      backgroundColor: Colors.surfaceContainerHigh,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sectionPlay: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: "rgba(255, 255, 255, 0.92)",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingLeft: 2,
+    },
+    sectionVideoText: {
+      flex: 1,
+      gap: 4,
+    },
+    sectionVideoTitle: {
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    sectionMeta: {
+      fontSize: Typography.small.fontSize,
+      color: Colors.textSubtle,
     },
     empty: {
       alignItems: "center",

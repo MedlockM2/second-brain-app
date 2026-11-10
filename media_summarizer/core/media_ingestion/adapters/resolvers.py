@@ -245,11 +245,19 @@ class ArticleResolver(ContentResolverPort):
         except ArticleFetchError as exc:
             return self._unreadable_page(context=context, error=exc)
 
-        content_fingerprint = article_content_fingerprint(article.text)
-        media_key = generate_article_media_key(
-            canonical_url=context.normalized_url,
-            content_fingerprint=content_fingerprint,
-        )
+        signals = article.signals
+        render = signals is not None and signals.needs_render
+        if render and not article.text:
+            # An application shell: its served HTML carries no text to fingerprint,
+            # so the URL is the identity -- as for a page that could not be read.
+            content_fingerprint = None
+            media_key = context.media_key
+        else:
+            content_fingerprint = article_content_fingerprint(article.text)
+            media_key = generate_article_media_key(
+                canonical_url=context.normalized_url,
+                content_fingerprint=content_fingerprint,
+            )
         resolved = ResolvedMedia(
             media_key=media_key,
             normalized_url=context.normalized_url,
@@ -257,13 +265,18 @@ class ArticleResolver(ContentResolverPort):
             media_type=MediaType.ARTICLE,
             source_platform=SourcePlatform.WEB,
             resolver_key=self.key,
-            title=article.title,
+            # A shell's own <title> and og tags are often the site's, not the
+            # page's: the render worker sets them from what the browser drew.
+            title=None if render and not article.text else article.title,
             creator_name=article.creator_name,
             cover_url=article.cover_url,
-            raw_text=article.text,
+            # A page to render has no final text yet: the render worker writes it.
+            raw_text=None if render else article.text,
             metadata={
                 "resolver_version": "v2",
-                "extraction_mode": "inline_fetch",
+                "extraction_mode": "browser_render" if render else "inline_fetch",
+                "web_page_render": render,
+                "page_signals": signals.as_metadata() if signals is not None else None,
                 "source_url": context.normalized_url,
                 "content_fingerprint": content_fingerprint,
                 "url_media_key": context.media_key,
@@ -280,7 +293,7 @@ class ArticleResolver(ContentResolverPort):
             source_platform=SourcePlatform.WEB.value,
             resolver_key=self.key,
             media_type=MediaType.ARTICLE.value,
-            fallback_strategy="inline_fetch",
+            fallback_strategy="browser_render" if render else "inline_fetch",
             media_key=media_key,
             content_fingerprint=content_fingerprint,
             char_count=article.char_count,

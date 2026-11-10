@@ -3,6 +3,11 @@ import { LOCALE_ENDONYMS, isSupportedLocale } from "@media-summarizer/core/i18n/
 import { mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveSourcePreviewState } from "@media-summarizer/core/media/sourcePreview";
 import { languageTag, resolveSourceLink, splitTranscriptParagraphs } from "@media-summarizer/core/media/transcript";
+import {
+  formatSectionClock,
+  parseTranscriptSections,
+  type TranscriptSection,
+} from "@media-summarizer/core/media/transcriptSections";
 import type { MediaItemContract, SourcePlatform } from "@media-summarizer/core/types/media";
 import { useRef, useState } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -278,10 +283,7 @@ function TranscriptText({
           ? t("transcript.translationFailed")
           : null;
   const content = originalText ?? state.content;
-  // Prose keeps its numbered paragraphs and speakers; a structured extraction
-  // (tables, headings, lists) is drawn by the shared Markdown reader (task-513).
-  const structured = hasStructuredMarkdown(content);
-  const paragraphs = structured ? [] : splitTranscriptParagraphs(content);
+  const sections = parseTranscriptSections(content);
   return (
     <>
       {notice && (
@@ -290,6 +292,18 @@ function TranscriptText({
           {state.status === "translation_pending" ? ` ${t("budget.automatic")}` : ""}
         </p>
       )}
+      {sections ? <SectionedText sections={sections} /> : <TextBody content={content} />}
+    </>
+  );
+}
+
+/** Prose keeps its numbered paragraphs and speakers; a structured extraction
+ * (tables, headings, lists) is drawn by the shared Markdown reader (task-513). */
+function TextBody({ content }: { content: string }) {
+  const structured = hasStructuredMarkdown(content);
+  const paragraphs = structured ? [] : splitTranscriptParagraphs(content);
+  return (
+    <>
       {structured && <MarkdownView text={content} transcript />}
       {paragraphs.map((paragraph, i) => (
         <p key={i}>
@@ -298,6 +312,91 @@ function TranscriptText({
           {paragraph.text}
         </p>
       ))}
+    </>
+  );
+}
+
+const PROVIDER_NAMES: Record<string, string> = {
+  vimeo: "Vimeo",
+  youtube: "YouTube",
+  dailymotion: "Dailymotion",
+  wistia: "Wistia",
+  loom: "Loom",
+};
+
+/**
+ * A web page read with the videos it embeds (`parseTranscriptSections`), the
+ * web side of the mobile `SectionedTranscript`: chips naming what the page holds
+ * and jumping to it, then each part under its own heading -- the page's text,
+ * then each video with its thumbnail, title and length.
+ */
+function SectionedText({ sections }: { sections: TranscriptSection[] }) {
+  const { t } = useI18n();
+  const nodes = useRef<(HTMLElement | null)[]>([]);
+  return (
+    <>
+      <div className="section-chips">
+        {sections.map((section, i) => {
+          const label =
+            section.kind === "page"
+              ? t("transcript.section.pageChip")
+              : [t("transcript.section.videoChip", { index: section.index }), formatSectionClock(section.durationSeconds)]
+                  .filter(Boolean)
+                  .join(" · ");
+          return (
+            <button
+              key={i}
+              type="button"
+              className="chip-btn"
+              aria-label={t("transcript.section.jumpA11y", { label })}
+              onClick={() => nodes.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              <Icon name={section.kind === "page" ? "document-text-outline" : "play"} size={14} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {sections.map((section, i) => {
+        const meta =
+          section.kind === "video"
+            ? [formatSectionClock(section.durationSeconds), section.provider ? PROVIDER_NAMES[section.provider] : null]
+                .filter(Boolean)
+                .join(" · ")
+            : "";
+        return (
+          <section
+            key={i}
+            className="text-section"
+            ref={(node) => {
+              nodes.current[i] = node;
+            }}
+          >
+            <h3 className="text-section-kicker">
+              <Icon name={section.kind === "page" ? "document-text-outline" : "play"} size={14} />
+              {section.kind === "page"
+                ? t("transcript.section.page")
+                : t("transcript.section.video", { index: section.index, count: section.count })}
+              <span className="rule" aria-hidden="true" />
+            </h3>
+            {section.kind === "video" && (
+              <div className="text-section-video">
+                <span className="thumb" aria-hidden="true">
+                  {section.thumbnailUrl && <img src={section.thumbnailUrl} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+                  <span className="play">
+                    <Icon name="play" size={14} />
+                  </span>
+                </span>
+                <span className="text-section-video-text">
+                  {section.title && <span className="title">{section.title}</span>}
+                  {meta && <span className="meta">{meta}</span>}
+                </span>
+              </div>
+            )}
+            <TextBody content={section.body} />
+          </section>
+        );
+      })}
     </>
   );
 }

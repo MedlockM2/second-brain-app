@@ -36,6 +36,7 @@ from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
     normalize_transcript_text,
 )
+from media_summarizer.core.web_page import inspect_static_html
 from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 
 logger = logging.getLogger(__name__)
@@ -122,8 +123,21 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
         fetched = await self._fetch_html(requested_url)
         html = fetched["html"]
         final_url = fetched.get("final_url") or requested_url
-        text = self._extract_clean_text(html)
-        title, creator_name, cover_url = self._extract_metadata(
+        try:
+            text = extract_clean_text(html)
+        except ArticleFetchError as exc:
+            # An application shell has no text in its HTML at all: that is not an
+            # unreadable page but one to render (`core/web_page.py`).
+            if exc.code != ArticleFetchErrorCode.EMPTY_TEXT:
+                raise
+            text = ""
+        signals = inspect_static_html(html, extracted_text=text)
+        if not text and not signals.needs_render:
+            raise ArticleFetchError(
+                ArticleFetchErrorCode.EMPTY_TEXT,
+                details="empty_text_after_extraction",
+            )
+        title, creator_name, cover_url = extract_page_metadata(
             html, requested_url=final_url
         )
 
@@ -142,6 +156,7 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
             paragraph_count=count_paragraphs(text),
             provider=self.provider_name,
             extractor="trafilatura",
+            signals=signals,
         )
 
     async def _fetch_html(self, url: str) -> Dict[str, Any]:
@@ -229,79 +244,80 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
                 exception_type=type(exc).__name__,
             ) from exc
 
-    def _extract_clean_text(self, html: str) -> str:
-        """The article body as paragraph-delimited plain text.
 
-        trafilatura already emits blank-line separated paragraphs, so the
-        normalizer is effectively a pass-through here -- a useful idempotence
-        canary for the shared formatter (task-231 option B). It runs all the same,
-        because this string is both what gets stored and what gets fingerprinted
-        into the media key: the two must be the same bytes.
-        """
-        import trafilatura
+def extract_clean_text(html: str) -> str:
+    """The article body as paragraph-delimited plain text.
 
-        try:
-            extracted = trafilatura.extract(
-                html,
-                output_format="txt",
-                include_comments=False,
-                include_tables=False,
-                include_links=False,
-            )
-        except Exception as exc:
-            raise ArticleFetchError(
-                ArticleFetchErrorCode.EXTRACTION_FAILED,
-                details="trafilatura_error",
-                exception_type=type(exc).__name__,
-            ) from exc
+    trafilatura already emits blank-line separated paragraphs, so the
+    normalizer is effectively a pass-through here -- a useful idempotence
+    canary for the shared formatter (task-231 option B). It runs all the same,
+    because this string is both what gets stored and what gets fingerprinted
+    into the media key: the two must be the same bytes.
+    """
+    import trafilatura
 
-        text = normalize_transcript_text(extracted, source="article")
-        if not text:
-            raise ArticleFetchError(
-                ArticleFetchErrorCode.EMPTY_TEXT,
-                details="empty_text_after_extraction",
-            )
-        return text
-
-    def _extract_metadata(
-        self, html: str, *, requested_url: str
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-        """``(title, creator_name, cover_url)`` for one page, or ``None`` each.
-
-        One `extract_metadata` call answers all three: trafilatura merges JSON-LD,
-        OpenGraph and the `<title>` tag, and its `Document` exposes `image` (mapped
-        from `og:image`/`twitter:image`), `sitename` and `author` (task-302 §2.3).
-        The site name is the creator, the byline only its fallback -- for an article
-        the publisher is what a reader recognises (task-302 §7.3).
-
-        Any parsing failure is swallowed: a missing headline, creator or cover means
-        a fallback, never a failed extraction.
-        """
-        import trafilatura
-
-        try:
-            document = trafilatura.extract_metadata(html, default_url=requested_url)
-        except Exception:
-            return None, None, None
-        if document is None:
-            return None, None, None
-
-        site_name = getattr(document, "sitename", None)
-        title = select_title(
-            [getattr(document, "title", None)],
-            authors=[getattr(document, "author", None)],
-            site_names=[
-                site_name,
-                getattr(document, "hostname", None),
-                requested_url,
-            ],
+    try:
+        extracted = trafilatura.extract(
+            html,
+            output_format="txt",
+            include_comments=False,
+            include_tables=False,
+            include_links=False,
         )
-        creator_name = select_creator(
-            [site_name, getattr(document, "author", None)],
-            title=title,
+    except Exception as exc:
+        raise ArticleFetchError(
+            ArticleFetchErrorCode.EXTRACTION_FAILED,
+            details="trafilatura_error",
+            exception_type=type(exc).__name__,
+        ) from exc
+
+    text = normalize_transcript_text(extracted, source="article")
+    if not text:
+        raise ArticleFetchError(
+            ArticleFetchErrorCode.EMPTY_TEXT,
+            details="empty_text_after_extraction",
         )
-        cover_url = normalize_cover_url(getattr(document, "image", None))
-        return title, creator_name, cover_url
+    return text
+
+def extract_page_metadata(
+    html: str, *, requested_url: str
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """``(title, creator_name, cover_url)`` for one page, or ``None`` each.
+
+    One `extract_metadata` call answers all three: trafilatura merges JSON-LD,
+    OpenGraph and the `<title>` tag, and its `Document` exposes `image` (mapped
+    from `og:image`/`twitter:image`), `sitename` and `author` (task-302 §2.3).
+    The site name is the creator, the byline only its fallback -- for an article
+    the publisher is what a reader recognises (task-302 §7.3).
+
+    Any parsing failure is swallowed: a missing headline, creator or cover means
+    a fallback, never a failed extraction.
+    """
+    import trafilatura
+
+    try:
+        document = trafilatura.extract_metadata(html, default_url=requested_url)
+    except Exception:
+        return None, None, None
+    if document is None:
+        return None, None, None
+
+    site_name = getattr(document, "sitename", None)
+    title = select_title(
+        [getattr(document, "title", None)],
+        authors=[getattr(document, "author", None)],
+        site_names=[
+            site_name,
+            getattr(document, "hostname", None),
+            requested_url,
+        ],
+    )
+    creator_name = select_creator(
+        [site_name, getattr(document, "author", None)],
+        title=title,
+    )
+    cover_url = normalize_cover_url(getattr(document, "image", None))
+    return title, creator_name, cover_url
 
 
 def build_api_article_content_fetcher() -> ArticleContentFetcherPort:

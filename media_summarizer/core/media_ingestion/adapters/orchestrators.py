@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_DEEPGRAM_TRANSCRIPTION_QUEUE = required_env("DEEPGRAM_TRANSCRIPTION_QUEUE")
 DEFAULT_PODCASTINDEX_RESOLUTION_QUEUE = required_env("PODCASTINDEX_RESOLUTION_QUEUE")
 DEFAULT_X_INGESTION_QUEUE = required_env("X_INGESTION_QUEUE")
+DEFAULT_WEB_PAGE_RENDER_QUEUE = required_env("WEB_PAGE_RENDER_QUEUE")
 DEFAULT_YOUTUBE_INGESTION_QUEUE = required_env("YOUTUBE_INGESTION_QUEUE")
 DEFAULT_TIKTOK_INGESTION_QUEUE = required_env("TIKTOK_INGESTION_QUEUE")
 DEFAULT_INSTAGRAM_INGESTION_QUEUE = required_env("INSTAGRAM_INGESTION_QUEUE")
@@ -392,6 +393,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         youtube_ingestion_queue: Optional[str] = None,
         tiktok_ingestion_queue: Optional[str] = None,
         instagram_ingestion_queue: Optional[str] = None,
+        web_page_render_queue: Optional[str] = None,
     ) -> None:
         self._deepgram_transcription_queue = (
             deepgram_transcription_queue
@@ -409,6 +411,9 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         )
         self._instagram_ingestion_queue = (
             instagram_ingestion_queue or DEFAULT_INSTAGRAM_INGESTION_QUEUE
+        )
+        self._web_page_render_queue = (
+            web_page_render_queue or DEFAULT_WEB_PAGE_RENDER_QUEUE
         )
 
     async def submit(
@@ -943,6 +948,41 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     queue=self._x_ingestion_queue,
                     resolver_key=resolved.resolver_key,
                     source_platform=resolved.source_platform.value,
+                )
+            elif resolved.resolver_key == "article.default" and resolved.metadata.get(
+                "web_page_render"
+            ):
+                # Script-drawn text or embedded videos: a browser has to read the
+                # page, and the videos have to be transcribed. Neither fits the
+                # API's 30 s ceiling, so the render worker completes the job.
+                job.mark_extracting()
+                await database_async.update_processing_job(job)
+                page_signals = resolved.metadata.get("page_signals") or {}
+                await sqs.send_message(
+                    queue_name=self._web_page_render_queue,
+                    message_body={
+                        "job_id": job.id,
+                        "user_id": command.user.user_id,
+                        "user_email": command.user.user_email,
+                        "media_key": resolved.media_key,
+                        "normalized_url": resolved.normalized_url,
+                        "page_title": title,
+                        "render_reasons": page_signals.get("render_reasons") or [],
+                    },
+                )
+                pipeline_enqueued = True
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "worker.enqueued",
+                    "Web page render enqueued",
+                    job_id=job.id,
+                    media_item_id=canonical_media_item_id,
+                    queue=self._web_page_render_queue,
+                    resolver_key=resolved.resolver_key,
+                    source_platform=resolved.source_platform.value,
+                    render_reasons=page_signals.get("render_reasons") or [],
+                    static_video_count=page_signals.get("static_video_count") or 0,
                 )
             elif resolved.resolver_key == "article.default":
                 # The article's text is already in hand: `ArticleResolver` read the
