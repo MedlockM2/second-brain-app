@@ -76,7 +76,9 @@ No fallback — failure is terminal.
 - Mark `ProcessingJob` as failed (`error_step="article_extraction"`)
 - Publish `episode_completion_status(status=failure)` to `EPISODE_COMPLETED_EVENTS_QUEUE`
 - `ArticleFetchErrorCode` (provider-level, in the port) → user-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
-  - `PROVIDER_UNAVAILABLE` ← `http_error` / `article_http_error` (+`http_status`, `final_url`), `transport_error` / `article_fetch_transport_error`
+  - `SOURCE_ACCESS_BLOCKED` ← `http_access_refused` / `article_http_error` on a 401 or 403 (+`http_status`, `final_url`): the page exists and the site refuses our reader; the detail screen offers to request support for the site
+  - `MEDIA_UNAVAILABLE` ← `http_client_error` / `article_http_error` on any other 4xx but 429 (+`http_status`, `final_url`)
+  - `PROVIDER_RATE_LIMITED` ← `http_rate_limited` (429); `PROVIDER_UNAVAILABLE` ← `http_server_error` / `article_http_error` (5xx), `transport_error` / `article_fetch_transport_error`
   - `NOT_AN_ARTICLE_PAGE` ← `not_html` / `article_unsupported_content_type` (+`content_type`, `final_url`)
   - `ARTICLE_TEXT_NOT_FOUND` ← `page_too_large` / `html_too_large`, `extraction_failed` / `trafilatura_error`, `empty_text` / `empty_text_after_extraction`
   - `PROVIDER_TIMED_OUT` ← `timeout` / `article_fetch_timeout` (+`timeout_seconds`)
@@ -164,7 +166,7 @@ translation prompt keeps the bracketed tag as-is; the readers
 event is out.
 
 Failures: a render the browser could not load is `PROVIDER_UNAVAILABLE` (retried) or
-`MEDIA_UNAVAILABLE` (the page answered 4xx); a rendered page with neither text nor a
+`SOURCE_ACCESS_BLOCKED` (the page answered 401 or 403) or `MEDIA_UNAVAILABLE` (any other 4xx); a rendered page with neither text nor a
 usable video is `ARTICLE_TEXT_NOT_FOUND`; a budget refusal carries the budget's code.
 
 Ref: `core/web_page.py`, `workers/web_page_render_worker.py`, `deepgram_worker.py::_process_web_page`
@@ -417,11 +419,12 @@ Ref: `instagram_apify_resolver.py::InstagramApifyResolver.resolve`, `instagram_a
 ### Terminal failure mode
 
 - User-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
-  - `NO_TRANSCRIBABLE_MEDIA` ← `instagram_content_type_unknown`, `instagram_reel_no_result`, `instagram_reel_no_media_url`, `instagram_post_no_result` (the resolver's own codes, carried by `NonRetryableProviderResolutionError`), `no_transcript_or_audio_url`
-  - `MEDIA_UNAVAILABLE` ← `instagram_reel_result_error`
+  - `NO_TRANSCRIBABLE_MEDIA` ← `instagram_content_type_unknown` (the resolver's own code, carried by `NonRetryableProviderResolutionError`)
+  - `MEDIA_UNAVAILABLE` ← `instagram_reel_result_error`, `instagram_reel_no_result`, `instagram_post_no_result` (the scraper found no post: private or deleted)
+  - `PROVIDER_RESULT_INVALID` ← `instagram_reel_no_media_url`, `no_transcript_or_audio_url` (the scraper returned the post without its media URL)
   - `PROVIDER_UNAVAILABLE` ← `apify_run_not_succeeded` (retryable)
   - `PROVIDER_RESULT_INVALID` ← `apify_result_invalid`
-  - `POST_TEXT_EMPTY` / `DOCUMENT_PARSE_FAILED` ← `instagram_image_post_no_text` (photo posts only: the first when the OCR ran and found no text and the post has no caption either, the second when the parsing chain itself failed on every image)
+  - `POST_TEXT_EMPTY` / `PROVIDER_UNAVAILABLE` ← `instagram_image_post_no_text` (photo posts only: the first when the OCR ran and found no text and the post has no caption either, the second when the parsing chain itself failed on every image)
   - `INVALID_JOB_MESSAGE` ← `missing_job_id`, `missing_normalized_url`, `processing_job_not_found`
   - `UNEXPECTED_ERROR` ← `unexpected_exception`, `instagram_image_transcript_store_failed` (permanent: the images are already parsed and billed)
 - A permanent failure at once, a retryable one on the queue's last delivery (`SQS_MAX_RECEIVE_COUNT`, 3): the job is marked failed (`error_step="instagram_ingestion"`) and a failure event is published — [how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)
@@ -478,7 +481,7 @@ Only the user's minutes are debited, once per job, through `record_document_cons
 Provider failures from the post-scraper actor (auth, quota, run not succeeded) use the same `InstagramIngestionError` taxonomy as Reels: `PROVIDER_UNAVAILABLE` / `PROVIDER_RESULT_INVALID`. The two failures specific to a photo post, both written with `reason="instagram_image_post_no_text"`:
 
 - `POST_TEXT_EMPTY` — every image was parsed successfully and none contained text, and the post has no caption either. The post is pictures without words; nothing is broken.
-- `DOCUMENT_PARSE_FAILED` — the parsing chain itself did not get to read the images: a download failed, both providers errored, or the budget ran out before any slide was parsed.
+- `PROVIDER_UNAVAILABLE` — the parsing chain itself did not get to read the images: a download failed, both providers errored, or the budget ran out before any slide was parsed. Our failure, not the post's, so the detail screen does not offer to request support for the source.
 
 ### Downstream dependencies
 
@@ -654,7 +657,7 @@ Ref: `infrastructure/resolvers/unstructured_resolver.py::UnstructuredResolver`
 
 - Both LlamaParse and Unstructured fail → `ParseError` with combined message (`provider="llamaparse+unstructured"`)
 - The worker raises a permanent failure (`DOCUMENT_PARSE_FAILED`, `reason` = the parser's code, `document_format` in `error_metadata`): both parsers have answered, another delivery gets the same result. The Lambda handler marks the job failed and publishes the failure event ([how a failed message is retried](#cross-cutting-how-a-failed-message-is-retried-task-573)). The provider's own wording goes to the `worker.document_parsing.failed` log only, never on the job.
-- Also permanent: an unsupported extension or an empty file (`DOCUMENT_PARSE_FAILED`), a malformed message (`INVALID_JOB_MESSAGE`), and a parsed text that could not be stored (`UNEXPECTED_ERROR` ← `parsed_document_store_failed`: the pages are billed, a redelivery would parse them again)
+- Also permanent: an unsupported extension (`DOCUMENT_PARSE_FAILED`), an empty file (`MEDIA_FILE_EMPTY` ← `document_file_empty`), a malformed message (`INVALID_JOB_MESSAGE`), and a parsed text that could not be stored (`UNEXPECTED_ERROR` ← `parsed_document_store_failed`: the pages are billed, a redelivery would parse them again)
 - Anything else (an S3 download error...) is retried; the job fails with `UNEXPECTED_ERROR` on the last delivery
 
 Ref: `document_parsing/worker.py::process_document_parsing_message`
@@ -704,9 +707,11 @@ Both error types derive from the common failure classes and carry a `MediaFailur
 
 - `NonRetryableDeepgramError` (permanent): the job fails at once
   - `PROVIDER_AUTH_FAILED` ← `deepgram_api_key_missing`, `deepgram_key_refused` (401); `PROVIDER_CREDITS_DEPLETED` ← `deepgram_credit_exhausted` (402)
-  - `NO_TRANSCRIPT_AVAILABLE` ← `deepgram_request_refused` (400/403/404/415/422), `deepgram_unexpected_status`, `deepgram_transcript_empty`
+  - `NO_TRANSCRIPT_AVAILABLE` ← `deepgram_request_refused` (400/404/415/422: Deepgram cannot read this audio), `deepgram_unexpected_status`
+  - `PROVIDER_RESULT_INVALID` ← `deepgram_request_forbidden` (403 that is not a remote-content block: our request, not the audio; does not trip the Deepgram circuit)
+  - `NO_SPEECH_DETECTED` ← `deepgram_transcript_empty` (the audio was transcribed and holds no words: silence, music, a muted microphone)
   - `MEDIA_UNAVAILABLE` ← `deepgram_remote_content_blocked_pull_mode` (the producer declared `pull` but the CDN blocks Deepgram: producer misrouted), `audio_download_blocked` / `audio_download_not_found` / `audio_download_failed` (push download)
-  - `NO_TRANSCRIBABLE_MEDIA` ← `audio_download_empty`, `audio_bytes_empty`; `ITEM_TOO_LARGE` ← `audio_too_large_for_push`
+  - `MEDIA_FILE_EMPTY` ← `audio_download_empty`, `audio_bytes_empty`; `ITEM_TOO_LARGE` ← `audio_too_large_for_push`
   - `INVALID_JOB_MESSAGE` ← `missing_job_id`, `invalid_job_id`, `invalid_deepgram_mode`, `missing_audio_source`, `invalid_audio_url`, `audio_url_is_feed`
   - After the request left, never retried by SQS because Deepgram may have billed it: `PROVIDER_RESULT_INVALID` ← `deepgram_invalid_json`; `PROVIDER_TIMED_OUT` / `PROVIDER_UNAVAILABLE` ← `deepgram_request_lost` (timeout or transport error on the last in-delivery try); `UNEXPECTED_ERROR` ← `transcript_store_failed`
 - Transient, back to SQS, the job failing on the last delivery: `RetryableDeepgramError` (`PROVIDER_RATE_LIMITED` ← `deepgram_rate_limited` on a 429, `PROVIDER_UNAVAILABLE` ← `deepgram_server_error` on a 5xx: nothing was processed), a connection that never opened, `audio_download_timeout` / `audio_download_transport_error` (push download, nothing billed yet)
@@ -1060,12 +1065,12 @@ Which `MediaFailureCode` each worker can emit:
 
 | Worker | Codes |
 |---|---|
-| `article_extraction_worker.py` | `NOT_AN_ARTICLE_PAGE`, `ARTICLE_TEXT_NOT_FOUND`, `PROVIDER_UNAVAILABLE`, `PROVIDER_TIMED_OUT`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
+| `article_extraction_worker.py` | `SOURCE_ACCESS_BLOCKED`, `MEDIA_UNAVAILABLE`, `NOT_AN_ARTICLE_PAGE`, `ARTICLE_TEXT_NOT_FOUND`, `PROVIDER_RATE_LIMITED`, `PROVIDER_UNAVAILABLE`, `PROVIDER_TIMED_OUT`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
 | `youtube_ingestion_worker.py` | `MEDIA_UNAVAILABLE`, `GEO_RESTRICTED`, `AGE_RESTRICTED`, `NO_TRANSCRIPT_AVAILABLE`, `PROVIDER_RESULT_INVALID`, `PROVIDER_UNAVAILABLE`, `PROVIDER_CONFIG_ERROR`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
-| `instagram_ingestion_worker.py` | `NO_TRANSCRIBABLE_MEDIA`, `POST_TEXT_EMPTY`, `DOCUMENT_PARSE_FAILED`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RESULT_INVALID`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
+| `instagram_ingestion_worker.py` | `MEDIA_UNAVAILABLE`, `NO_TRANSCRIBABLE_MEDIA`, `POST_TEXT_EMPTY`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RESULT_INVALID`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
 | `tiktok_ingestion_worker.py` | `MEDIA_UNAVAILABLE`, `LIVE_CONTENT_UNSUPPORTED`, `NO_TRANSCRIBABLE_MEDIA`, `NO_TRANSCRIPT_AVAILABLE`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`, `PROVIDER_TIMED_OUT`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
 | `x_ingestion_worker.py` | `MEDIA_UNAVAILABLE`, `POST_TEXT_EMPTY`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`, `PROVIDER_TIMED_OUT`, `PROVIDER_RESULT_INVALID`, `PROVIDER_AUTH_FAILED`, `PROVIDER_CREDITS_DEPLETED`, `PROVIDER_CONFIG_ERROR`, `INVALID_JOB_MESSAGE`, `UNEXPECTED_ERROR` |
-| `document_parsing/worker.py` | `DOCUMENT_PARSE_FAILED` |
+| `document_parsing/worker.py` | `DOCUMENT_PARSE_FAILED`, `MEDIA_FILE_EMPTY` |
 | `apify_orchestration.py` (callback backstop) | `PROVIDER_TIMED_OUT` |
 | Beta budget refusals (task-549): `audio_quota_gate.py`, `deepgram_worker.py`, `document_parsing/worker.py`, `apify_orchestration.py` (through `ingestion_failures`), `x_ingestion_worker.py`, `instagram_ingestion_worker.py` | `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE`, `BUDGET_UNAVAILABLE` |
 | `core/media_ingestion/adapters/orchestrators.py` | `SUBMISSION_FAILED` |

@@ -1187,6 +1187,9 @@ components:
             - LIVE_CONTENT_UNSUPPORTED
             - NO_TRANSCRIBABLE_MEDIA
             - NO_TRANSCRIPT_AVAILABLE
+            - NO_SPEECH_DETECTED
+            - MEDIA_FILE_EMPTY
+            - SOURCE_ACCESS_BLOCKED
             - POST_TEXT_EMPTY
             - NOT_AN_ARTICLE_PAGE
             - ARTICLE_TEXT_NOT_FOUND

@@ -81,6 +81,8 @@ def _http_failure(status_code: int) -> Tuple[ArticleFetchErrorCode, bool]:
     """
     if status_code == 429:
         return ArticleFetchErrorCode.HTTP_RATE_LIMITED, True
+    if status_code in (401, 403):
+        return ArticleFetchErrorCode.HTTP_ACCESS_REFUSED, False
     if status_code >= 500:
         return ArticleFetchErrorCode.HTTP_SERVER_ERROR, True
     return ArticleFetchErrorCode.HTTP_CLIENT_ERROR, False

@@ -274,7 +274,7 @@ async def process_document_parsing_message(message_body: Dict[str, Any]) -> None
 
             if not os.path.exists(local_path) or os.path.getsize(local_path) == 0:
                 raise PermanentIngestionFailure(
-                    MediaFailureCode.DOCUMENT_PARSE_FAILED, details="document_file_empty"
+                    MediaFailureCode.MEDIA_FILE_EMPTY, details="document_file_empty"
                 )
 
             # A photo is its own cover, and here it is already on disk -- so the

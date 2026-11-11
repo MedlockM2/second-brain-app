@@ -241,7 +241,7 @@ class InstagramApifyResolver(ContentResolverPort):
         """
         if not results:
             raise NonRetryableProviderResolutionError(
-                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_reel_no_result"
+                MediaFailureCode.MEDIA_UNAVAILABLE, details="instagram_reel_no_result"
             )
 
         item = results[0]
@@ -260,7 +260,7 @@ class InstagramApifyResolver(ContentResolverPort):
         chosen_url = audio_url or video_url
         if not chosen_url:
             raise NonRetryableProviderResolutionError(
-                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_reel_no_media_url"
+                MediaFailureCode.PROVIDER_RESULT_INVALID, details="instagram_reel_no_media_url"
             )
 
         duration_seconds: Optional[float] = None
@@ -349,7 +349,7 @@ class InstagramApifyResolver(ContentResolverPort):
         """
         if not results:
             raise NonRetryableProviderResolutionError(
-                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="instagram_post_no_result"
+                MediaFailureCode.MEDIA_UNAVAILABLE, details="instagram_post_no_result"
             )
 
         item = results[0]

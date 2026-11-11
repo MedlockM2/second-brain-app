@@ -134,6 +134,31 @@ def _raise_for_account(status: int, response_text: str) -> None:
         raise DeepgramAccountRefusedError(details="deepgram_key_refused", status=status, provider_detail=response_text[:300])
 
 
+def _deepgram_request_refused(status: int, response_text: str) -> DeepgramRefusedError:
+    """A 4xx about this request, once the account answers are ruled out.
+
+    A 403 left here is Deepgram refusing *our* request, not the audio, so it must
+    not tell the reader the source is unsupported. It reads as an unusable
+    provider answer rather than `PROVIDER_AUTH_FAILED`: that code trips the
+    Deepgram circuit (TASK-566), which only a refused key (401) should do. The
+    other statuses (400, 404, 415, 422) are Deepgram unable to read this audio --
+    a format we could learn to convert.
+    """
+    if status == 403:
+        return DeepgramRefusedError(
+            MediaFailureCode.PROVIDER_RESULT_INVALID,
+            details="deepgram_request_forbidden",
+            status=status,
+            provider_detail=response_text[:300],
+        )
+    return DeepgramRefusedError(
+        MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
+        details="deepgram_request_refused",
+        status=status,
+        provider_detail=response_text[:300],
+    )
+
+
 TRANSCRIPT_BUCKET = required_env("TRANSCRIPT_BUCKET")
 AUDIO_BUCKET = required_env("AUDIO_BUCKET")
 EPISODE_COMPLETED_EVENTS_QUEUE = required_env("EPISODE_COMPLETED_EVENTS_QUEUE")
@@ -290,12 +315,7 @@ async def call_deepgram_api(
                 status=status,
                 provider_detail=response_text[:300],
             )
-        raise DeepgramRefusedError(
-            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
-            details="deepgram_request_refused",
-            status=status,
-            provider_detail=response_text[:300],
-        )
+        raise _deepgram_request_refused(status, response_text)
     if status == 429 or status >= 500:
         raise RetryableDeepgramError(status=status, provider_detail=provider_text[:300])
     if status >= 300:
@@ -425,7 +445,7 @@ async def _download_audio_for_push_fallback(
         audio_bytes = response.content
         if not audio_bytes:
             raise NonRetryableDeepgramError(
-                MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="audio_download_empty"
+                MediaFailureCode.MEDIA_FILE_EMPTY, details="audio_download_empty"
             )
         if len(audio_bytes) > _PUSH_MODE_MAX_BYTES:
             raise NonRetryableDeepgramError(
@@ -479,7 +499,7 @@ async def call_deepgram_api_from_bytes(
     if not DEEPGRAM_API_KEY:
         raise DeepgramAccountRefusedError(details="deepgram_api_key_missing")
     if not audio_bytes:
-        raise DeepgramRefusedError(MediaFailureCode.NO_TRANSCRIBABLE_MEDIA, details="audio_bytes_empty")
+        raise DeepgramRefusedError(MediaFailureCode.MEDIA_FILE_EMPTY, details="audio_bytes_empty")
 
     query_params = _build_deepgram_query_params()
     headers = {
@@ -501,12 +521,7 @@ async def call_deepgram_api_from_bytes(
 
     _raise_for_account(status, response.text)
     if status in (401, 403, 400, 404, 415, 422):
-        raise DeepgramRefusedError(
-            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE,
-            details="deepgram_request_refused",
-            status=status,
-            provider_detail=response.text[:300],
-        )
+        raise _deepgram_request_refused(status, response.text)
     if status == 429 or status >= 500:
         raise RetryableDeepgramError(status=status, provider_detail=response.text[:300])
     if status >= 300:
@@ -562,7 +577,7 @@ def extract_transcript(payload: Dict[str, Any]) -> Dict[str, Any]:
     transcript_text = deepgram_transcript_text(alt, utterances)
     if not transcript_text:
         raise NonRetryableDeepgramError(
-            MediaFailureCode.NO_TRANSCRIPT_AVAILABLE, details="deepgram_transcript_empty"
+            MediaFailureCode.NO_SPEECH_DETECTED, details="deepgram_transcript_empty"
         )
 
     metadata = payload.get("metadata") or {}

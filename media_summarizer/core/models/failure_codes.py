@@ -44,6 +44,15 @@ class MediaFailureCode(str, Enum):
     NO_TRANSCRIBABLE_MEDIA = "NO_TRANSCRIBABLE_MEDIA"
     #: There is media, but no transcript could be obtained from it.
     NO_TRANSCRIPT_AVAILABLE = "NO_TRANSCRIPT_AVAILABLE"
+    #: The audio was transcribed and holds no words: silence, music, a muted
+    #: microphone. The source is supported; this recording has nothing to read.
+    NO_SPEECH_DETECTED = "NO_SPEECH_DETECTED"
+    #: The file we received, uploaded or downloaded, has zero bytes.
+    MEDIA_FILE_EMPTY = "MEDIA_FILE_EMPTY"
+    #: The site answered 401 or 403 to our reader: the page exists, the
+    #: publisher refuses us. Unlike `MEDIA_UNAVAILABLE`, this is a limit of ours
+    #: that support for the site could lift.
+    SOURCE_ACCESS_BLOCKED = "SOURCE_ACCESS_BLOCKED"
     #: A text post whose text is empty once markup is stripped.
     POST_TEXT_EMPTY = "POST_TEXT_EMPTY"
     #: A URL that resolves, but not to a readable article.

@@ -84,6 +84,9 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
   LIVE_CONTENT_UNSUPPORTED: "mediaError.liveContentUnsupported",
   NO_TRANSCRIBABLE_MEDIA: "mediaError.noTranscribableMedia",
   NO_TRANSCRIPT_AVAILABLE: "mediaError.noTranscriptAvailable",
+  NO_SPEECH_DETECTED: "mediaError.noSpeechDetected",
+  MEDIA_FILE_EMPTY: "mediaError.mediaFileEmpty",
+  SOURCE_ACCESS_BLOCKED: "mediaError.sourceAccessBlocked",
   POST_TEXT_EMPTY: "mediaError.postTextEmpty",
   NOT_AN_ARTICLE_PAGE: "mediaError.notAnArticlePage",
   ARTICLE_TEXT_NOT_FOUND: "mediaError.articleTextNotFound",
@@ -119,21 +122,26 @@ const ERROR_CODE_MESSAGES: Record<string, TranslationKey> = {
 /**
  * The failure codes for which "this media source isn't supported yet" is a true
  * sentence — and therefore the only ones the detail screen offers to request
- * support for (task-381).
+ * support for (task-381). The test for membership: a request we receive could
+ * lead us to add something (a site, a format, a kind of post). A code that also
+ * covers cases where it could not is split on the backend, not tolerated here.
  *
- * Seven of the twenty-four `MediaFailureCode` members. The seventeen left out are
+ * Seven of the twenty-seven `MediaFailureCode` members. The twenty left out are
  * left out for a reason, and each reason is a different one:
  *
  * - `MEDIA_UNAVAILABLE`, `GEO_RESTRICTED`, `AGE_RESTRICTED` — the source *is*
  *   supported; this particular item is out of reach.
+ * - `NO_SPEECH_DETECTED`, `MEDIA_FILE_EMPTY`, `POST_TEXT_EMPTY` — the source is
+ *   supported and was read; this item has nothing in it (a muted microphone, a
+ *   zero-byte file, a photo with no legible words).
  * - `BUDGET_EXHAUSTED`, `ITEM_TOO_LARGE`, `BUDGET_UNAVAILABLE` — the reader's own allowance. There is
  *   nothing to add support for.
  * - the eight `PROVIDER_*` codes, `INVALID_JOB_MESSAGE`, `SUBMISSION_FAILED`,
  *   `UNEXPECTED_ERROR` — a passing outage, our budget or our bug. A retry may be
  *   all it takes.
  *
- * Offering the block on all of them would turn three requests out of four into a
- * request for a source that already works, prompted by a sentence that was false.
+ * Offering the block on any of them would ask the reader to request a source
+ * that already works, prompted by a sentence that was false.
  */
 const SOURCE_SUPPORT_REQUESTABLE_CODES: ReadonlySet<string> = new Set([
   "LIVE_CONTENT_UNSUPPORTED",
@@ -142,7 +150,7 @@ const SOURCE_SUPPORT_REQUESTABLE_CODES: ReadonlySet<string> = new Set([
   "DOCUMENT_PARSE_FAILED",
   "NO_TRANSCRIBABLE_MEDIA",
   "NO_TRANSCRIPT_AVAILABLE",
-  "POST_TEXT_EMPTY",
+  "SOURCE_ACCESS_BLOCKED",
 ]);
 
 /**

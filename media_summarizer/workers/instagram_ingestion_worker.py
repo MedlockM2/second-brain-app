@@ -619,11 +619,11 @@ async def _complete_image_post(
         # Nothing readable and nothing written: the two ways that happens get the
         # two codes the app already words. `only_empty_results` means the providers
         # answered and found no text (a photo with no legible words); anything else
-        # means the chain itself failed on every image.
+        # means the chain itself failed on every image -- our outage, not the post.
         raise InstagramIngestionError(
             MediaFailureCode.POST_TEXT_EMPTY
             if parsed.only_empty_results
-            else MediaFailureCode.DOCUMENT_PARSE_FAILED,
+            else MediaFailureCode.PROVIDER_UNAVAILABLE,
             details="instagram_image_post_no_text",
             instagram_content_type=resolved_content_type,
             post_type=resolver_metadata.get("post_type"),
@@ -994,10 +994,10 @@ async def process_instagram_message(message_body: Dict[str, Any]) -> Dict[str, A
             "routed_to": "deepgram_queue",
         }
 
-    # If we reach here, the resolver returned no audio URL for a video post.
-    # There is nothing to transcribe — fail hard.
+    # If we reach here, the resolver returned no audio URL for a video post: the
+    # scraper's answer is incomplete, the post itself is a supported video.
     raise InstagramIngestionError(
-        MediaFailureCode.NO_TRANSCRIBABLE_MEDIA,
+        MediaFailureCode.PROVIDER_RESULT_INVALID,
         details="no_transcript_or_audio_url",
         instagram_content_type=resolved_content_type,
     )

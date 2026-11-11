@@ -37,12 +37,16 @@ class ArticleFetchErrorCode(str, Enum):
     while the reader only needs to know whether to retry or to give up.
     """
 
-    #: The page answered 4xx: it is gone, forbidden, or refuses the method. The
-    #: same answer is what the next attempt gets, so it is a verdict, not an
-    #: outage -- and it is the *page* that is unavailable, not our extraction
-    #: chain, which is why 403/404/405/410/451 read as `MEDIA_UNAVAILABLE`
+    #: The page answered 4xx other than 401/403/429: it is gone or refuses the
+    #: method. The same answer is what the next attempt gets, so it is a verdict,
+    #: not an outage -- and it is the *page* that is unavailable, not our
+    #: extraction chain, which is why 404/405/410/451 read as `MEDIA_UNAVAILABLE`
     #: rather than "service unavailable" (task-399).
     HTTP_CLIENT_ERROR = "http_client_error"
+    #: The page answered 401 or 403: it exists, and the site refuses our reader
+    #: (bot wall, login wall). Reads as `SOURCE_ACCESS_BLOCKED`, the one 4xx the
+    #: reader can usefully ask us to support.
+    HTTP_ACCESS_REFUSED = "http_access_refused"
     #: The page answered 429. Throttling, not a verdict: worth another try.
     HTTP_RATE_LIMITED = "http_rate_limited"
     #: The page answered 5xx. The publisher is having a bad minute.
@@ -69,6 +73,7 @@ MEDIA_FAILURE_CODE_BY_ARTICLE_FETCH_ERROR: Dict[
     ArticleFetchErrorCode, MediaFailureCode
 ] = {
     ArticleFetchErrorCode.HTTP_CLIENT_ERROR: MediaFailureCode.MEDIA_UNAVAILABLE,
+    ArticleFetchErrorCode.HTTP_ACCESS_REFUSED: MediaFailureCode.SOURCE_ACCESS_BLOCKED,
     ArticleFetchErrorCode.HTTP_RATE_LIMITED: MediaFailureCode.PROVIDER_RATE_LIMITED,
     ArticleFetchErrorCode.HTTP_SERVER_ERROR: MediaFailureCode.PROVIDER_UNAVAILABLE,
     ArticleFetchErrorCode.NOT_HTML: MediaFailureCode.NOT_AN_ARTICLE_PAGE,

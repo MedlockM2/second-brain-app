@@ -118,7 +118,12 @@ def _render_failure(exc: PageRenderError) -> Exception:
         return TransientIngestionFailure(
             MediaFailureCode.PROVIDER_UNAVAILABLE, details=f"render_{exc.details}", http_status=exc.status
         )
-    code = MediaFailureCode.MEDIA_UNAVAILABLE if exc.status else MediaFailureCode.ARTICLE_TEXT_NOT_FOUND
+    if exc.status in (401, 403):
+        code = MediaFailureCode.SOURCE_ACCESS_BLOCKED
+    elif exc.status:
+        code = MediaFailureCode.MEDIA_UNAVAILABLE
+    else:
+        code = MediaFailureCode.ARTICLE_TEXT_NOT_FOUND
     return PermanentIngestionFailure(code, details=f"render_{exc.details}", http_status=exc.status)
 
 
