@@ -14,6 +14,7 @@ reels was removed by task-310: it was IP-blocked on 6 attempts out of 6 between
 from __future__ import annotations
 
 import logging
+import re
 from enum import Enum
 from typing import Any, Optional
 from urllib.parse import urlsplit
@@ -117,6 +118,42 @@ def _extract_image_urls_from_post_result(item: dict[str, Any]) -> list[str]:
             unique_urls.append(url)
 
     return unique_urls
+
+
+#: "age" as a word of the actor's reason: matches "age-restricted" and "based on
+#: your age", never "page" or "usage".
+_AGE_GATE_PATTERN = re.compile(r"\bage\b")
+
+
+def _reel_error_failure(item: dict[str, Any]) -> NonRetryableProviderResolutionError:
+    """The failure an error item of the Reel Scraper amounts to for a reader.
+
+    The actor answers a reel it cannot read with one item carrying ``error``
+    (``restricted_page``, ...) and a free-form ``errorDescription``; only the
+    description names the gate. An age-restricted reel reads "Restricted
+    access, only partial data available. Reason: This content is age-restricted
+    based on your age or account settings." -- partial data being the caption
+    and the cover, never the audio or the video. Instagram shows such a reel only
+    to a signed-in adult account, which an anonymous scraper never is, so it is
+    ``AGE_RESTRICTED``: the reel still exists, and no retry gets past the gate.
+    Any other error item stays ``MEDIA_UNAVAILABLE``.
+
+    The ``error`` token travels in the failure context as ``actor_error``: it
+    is unversioned actor wording, not part of the details token.
+    """
+    actor_error = str(item.get("error") or "").strip() or None
+    description = str(item.get("errorDescription") or "").lower()
+    if _AGE_GATE_PATTERN.search(description):
+        return NonRetryableProviderResolutionError(
+            MediaFailureCode.AGE_RESTRICTED,
+            details="instagram_reel_age_restricted",
+            actor_error=actor_error,
+        )
+    return NonRetryableProviderResolutionError(
+        MediaFailureCode.MEDIA_UNAVAILABLE,
+        details="instagram_reel_result_error",
+        actor_error=actor_error,
+    )
 
 
 def _extract_caption(item: dict[str, Any]) -> Optional[str]:
@@ -246,9 +283,7 @@ class InstagramApifyResolver(ContentResolverPort):
 
         item = results[0]
         if item.get("error"):
-            raise NonRetryableProviderResolutionError(
-                MediaFailureCode.MEDIA_UNAVAILABLE, details="instagram_reel_result_error"
-            )
+            raise _reel_error_failure(item)
 
         audio_url_raw = item.get("audioUrl")
         video_url_raw = item.get("videoUrl")
