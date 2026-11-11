@@ -36,7 +36,10 @@ from media_summarizer.core.services.transcript_formatting import (
     count_paragraphs,
     normalize_transcript_text,
 )
-from media_summarizer.core.web_page import inspect_static_html
+from media_summarizer.core.web_page import (
+    inspect_static_html,
+    without_javascript_prompts,
+)
 from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 
 logger = logging.getLogger(__name__)
@@ -75,13 +78,17 @@ def _is_supported_content_type(content_type: str) -> bool:
 def _http_failure(status_code: int) -> Tuple[ArticleFetchErrorCode, bool]:
     """``(code, retryable)`` for an HTTP status the page answered with.
 
-    Three cases, and they are three different sentences for the reader: 429 is
-    throttling and worth retrying, a 5xx is a passing outage, and any other 4xx is
-    the publisher's answer -- the same answer the next attempt would get.
+    Four cases, and they are four different sentences for the reader: 429 is
+    throttling and worth retrying, a 5xx is a passing outage, 401/402/403 is the
+    site refusing our reader, and any other 4xx is the publisher's answer about
+    the page -- the same answer the next attempt would get. 402 is how paywalls and
+    bot walls refuse a reader too: on 2026-11-11 a news site answered an httpx
+    client 402 with "your traffic has been identified as automated (bot)", for an
+    article it serves a browser.
     """
     if status_code == 429:
         return ArticleFetchErrorCode.HTTP_RATE_LIMITED, True
-    if status_code in (401, 403):
+    if status_code in (401, 402, 403):
         return ArticleFetchErrorCode.HTTP_ACCESS_REFUSED, False
     if status_code >= 500:
         return ArticleFetchErrorCode.HTTP_SERVER_ERROR, True
@@ -142,6 +149,14 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
         title, creator_name, cover_url = extract_page_metadata(
             html, requested_url=final_url
         )
+        if signals.access_challenge:
+            # An anti-bot edge answered with its challenge instead of the page:
+            # its sentence, its <title> ("Client Challenge") and its logo are the
+            # vendor's. Nothing of it is kept -- not as the text, not as the
+            # identity, not as the title -- and the browser worker gets the page.
+            text = ""
+            title = None
+            cover_url = None
 
         return ArticleContent(
             text=text,
@@ -255,12 +270,17 @@ def extract_clean_text(html: str) -> str:
     canary for the shared formatter (task-231 option B). It runs all the same,
     because this string is both what gets stored and what gets fingerprinted
     into the media key: the two must be the same bytes.
+
+    The ``<noscript>`` blocks asking for JavaScript are removed first: trafilatura
+    reads them like any markup, and their sentence ("JavaScript is disabled in
+    your browser") is what a challenge page or an application shell would
+    otherwise be stored as (`core/web_page.without_javascript_prompts`).
     """
     import trafilatura
 
     try:
         extracted = trafilatura.extract(
-            html,
+            without_javascript_prompts(html),
             output_format="txt",
             include_comments=False,
             include_tables=False,

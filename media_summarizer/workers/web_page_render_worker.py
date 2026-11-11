@@ -7,7 +7,9 @@ by JavaScript, or the page embeds videos whose words belong to it.
 
 Pipeline:
 - Consumes messages from WEB_PAGE_RENDER_QUEUE
-- Renders the page in headless Chromium (`infrastructure/web_render/chromium_renderer`)
+- Renders the page in headless Chromium (`infrastructure/web_render/chromium_renderer`),
+  giving an anti-bot challenge time to clear; one that never does fails the job
+  as `SOURCE_ACCESS_BLOCKED`, its words stored nowhere
 - Extracts the text from the rendered DOM with trafilatura, the same extractor as
   a static article, so both paths agree on what a page's text is
 - Finds the videos in the rendered DOM, its frames and the JSON its scripts loaded
@@ -118,7 +120,7 @@ def _render_failure(exc: PageRenderError) -> Exception:
         return TransientIngestionFailure(
             MediaFailureCode.PROVIDER_UNAVAILABLE, details=f"render_{exc.details}", http_status=exc.status
         )
-    if exc.status in (401, 403):
+    if exc.status in (401, 402, 403):
         code = MediaFailureCode.SOURCE_ACCESS_BLOCKED
     elif exc.status:
         code = MediaFailureCode.MEDIA_UNAVAILABLE
@@ -264,6 +266,16 @@ async def process_web_page_message(body: Dict[str, Any]) -> None:
         rendered = await render_page(url)
     except PageRenderError as exc:
         raise _render_failure(exc) from exc
+    if rendered.access_challenge:
+        # The browser was shown the anti-bot challenge too, and it never let the
+        # browser through: the site refuses our reader. The vendor's sentence is
+        # not stored, summarised or translated as the page.
+        raise PermanentIngestionFailure(
+            MediaFailureCode.SOURCE_ACCESS_BLOCKED,
+            details="render_access_challenge",
+            http_status=rendered.status,
+            access_challenge=rendered.access_challenge,
+        )
 
     try:
         text = extract_clean_text(rendered.html)

@@ -76,7 +76,7 @@ No fallback — failure is terminal.
 - Mark `ProcessingJob` as failed (`error_step="article_extraction"`)
 - Publish `episode_completion_status(status=failure)` to `EPISODE_COMPLETED_EVENTS_QUEUE`
 - `ArticleFetchErrorCode` (provider-level, in the port) → user-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
-  - `SOURCE_ACCESS_BLOCKED` ← `http_access_refused` / `article_http_error` on a 401 or 403 (+`http_status`, `final_url`): the page exists and the site refuses our reader; the detail screen offers to request support for the site
+  - `SOURCE_ACCESS_BLOCKED` ← `http_access_refused` / `article_http_error` on a 401, 402 or 403 (+`http_status`, `final_url`): the page exists and the site refuses our reader (a bot wall can answer 402: a news site did to an httpx client on 2026-11-11); the detail screen offers to request support for the site
   - `MEDIA_UNAVAILABLE` ← `http_client_error` / `article_http_error` on any other 4xx but 429 (+`http_status`, `final_url`)
   - `PROVIDER_RATE_LIMITED` ← `http_rate_limited` (429); `PROVIDER_UNAVAILABLE` ← `http_server_error` / `article_http_error` (5xx), `transport_error` / `article_fetch_transport_error`
   - `NOT_AN_ARTICLE_PAGE` ← `not_html` / `article_unsupported_content_type` (+`content_type`, `final_url`)
@@ -103,15 +103,30 @@ no extra request) and hands the page to the **web page render worker** when eith
 
 - **the text is drawn by JavaScript**: the static extraction is under 150 words *and* the
   HTML shows why -- a framework marker (`self.__next_f`, `__NEXT_DATA__`, `__NUXT__`,
-  `window.__INITIAL_STATE__`, an empty `#root`/`#app`, a "enable JavaScript" `<noscript>`)
-  or less than 1 % of visible text per byte of HTML. Welcome to the Jungle's company page
-  serves 749 characters for 512 KB;
+  `window.__INITIAL_STATE__`, an empty `#root`/`#app`, a `<noscript>` whose text asks to
+  enable JavaScript, in any markup) or less than 1 % of visible text per byte of HTML.
+  Welcome to the Jungle's company page serves 749 characters for 512 KB;
 - **the page embeds videos**: iframes or `<video>` of a known player, `og:video`, a JSON-LD
-  `VideoObject`.
+  `VideoObject`;
+- **an anti-bot edge answered with its challenge** (`core/web_page.py::access_challenge`):
+  at most 200 visible words *and* a vendor's interstitial marker (Cloudflare `_cf_chl_opt`,
+  DataDome `captcha-delivery.com`, HUMAN `px-captcha`, Akamai `/_sec/cp_challenge/`, AWS
+  WAF `gokuProps`, Imperva's incident id, Sucuri's JS challenge, a captcha widget), a
+  challenge title (`Client Challenge`, `Just a moment...`, `Access Denied`, `Accès
+  restreint`...), a sentence asking to prove you are human or to disable an ad blocker, or
+  a visible plea to enable JavaScript. Never a site's domain. Such a page often answers
+  **200**: on 2026-11-11 a news site served its Fastly "Client Challenge" to the API's
+  fetch, and before this check its "JavaScript is disabled in your browser" was stored,
+  summarised and translated as the article. Nothing of a challenge is kept -- no text, no
+  title, no cover -- and the browser worker gets the page.
 
-A shell's served HTML has no text to fingerprint, so its `media_key` is the URL-derived
-one, as for a page that could not be read; a static page with videos keeps the
-text-fingerprinted key. The API marks the job `extracting` and enqueues
+The `<noscript>` blocks asking for JavaScript are removed before any extraction, static or
+rendered (`core/web_page.py::without_javascript_prompts`): trafilatura reads them like any
+markup, and their sentence is never the page's.
+
+A shell's or a challenge's served HTML has no text to fingerprint, so its `media_key` is
+the URL-derived one, as for a page that could not be read; a static page with videos keeps
+the text-fingerprinted key. The API marks the job `extracting` and enqueues
 `WEB_PAGE_RENDER_QUEUE`; the RSS worker does the same for a feed item.
 
 **Worker**: `workers/web_page_render_worker.py`, function `media-summarizer-web-render-<env>`
@@ -122,7 +137,13 @@ code plus Chromium; 2 GB memory, 2 GB `/tmp`, 300 s).
    The full Chromium in its new headless mode, never Playwright's "headless shell": the
    shell announces `HeadlessChrome` in its user agent *and* its `Sec-CH-UA` client hints,
    and CloudFront-fronted sites answer it 403 (welcometothejungle.com, 2026-11-10). Images,
-   fonts and media are not downloaded; the JSON the page's scripts load is kept.
+   fonts and media are not downloaded; the JSON the page's scripts load is kept. A page the
+   browser is shown as a challenge -- with a 200, or a 4xx whose body is a challenge -- is
+   given `WEB_RENDER_CHALLENGE_WAIT_SECONDS` (15 s) to run its checks and reload into the
+   page, and is then read with the status of its last main-frame navigation; one that is
+   still a challenge fails the job (`SOURCE_ACCESS_BLOCKED`, `render_access_challenge`,
+   +`access_challenge` naming its kind). `external_call.succeeded` carries
+   `access_challenge` and `challenge_cleared`.
 2. Extract the text from the rendered DOM with the same trafilatura call as a static
    article, and the title, publisher and cover with the same metadata reader.
 3. Find the videos (`core/web_page.py`): player URLs in the DOM and the frames, and
@@ -166,8 +187,10 @@ translation prompt keeps the bracketed tag as-is; the readers
 event is out.
 
 Failures: a render the browser could not load is `PROVIDER_UNAVAILABLE` (retried) or
-`SOURCE_ACCESS_BLOCKED` (the page answered 401 or 403) or `MEDIA_UNAVAILABLE` (any other 4xx); a rendered page with neither text nor a
-usable video is `ARTICLE_TEXT_NOT_FOUND`; a budget refusal carries the budget's code.
+`SOURCE_ACCESS_BLOCKED` (the page answered 401, 402 or 403, or its anti-bot challenge never
+let the browser through) or `MEDIA_UNAVAILABLE` (any other 4xx); a rendered page with
+neither text nor a usable video is `ARTICLE_TEXT_NOT_FOUND`; a budget refusal carries the
+budget's code.
 
 Ref: `core/web_page.py`, `workers/web_page_render_worker.py`, `deepgram_worker.py::_process_web_page`
 

@@ -1,12 +1,18 @@
 """What a web page holds beyond its static HTML: script-rendered text and videos.
 
-Three pure pieces, shared by the API (which decides) and the render worker (which
+Four pure pieces, shared by the API (which decides) and the render worker (which
 does the work):
 
 - :func:`inspect_static_html` reads the HTML the API already downloaded and says
   whether the page has to be rendered in a browser: either its text is drawn by
   JavaScript (the served HTML is an application shell), or it embeds videos whose
-  words belong to the page. It costs nothing -- no request, no browser.
+  words belong to the page, or an anti-bot edge served its challenge in place of
+  the page. It costs nothing -- no request, no browser.
+- :func:`access_challenge` recognises that challenge, or the block page that
+  follows it, from what every vendor's interstitial shares: a sentence or two
+  instead of a page, asking the reader to prove it is a person. Its words are
+  never stored: the static path hands the page to the browser, and a browser that
+  is still shown the challenge fails the job as ``SOURCE_ACCESS_BLOCKED``.
 - :func:`video_from_url` and :func:`videos_in_json` recognise a video from what a
   page exposes: an embed URL in its DOM, or a ``{provider, id}`` pair in the JSON
   its scripts load. The second is what makes the detection general rather than
@@ -37,7 +43,10 @@ SHELL_MAX_EXTRACTED_WORDS = 150
 #: page is 749 characters for 512 KB (0.15 %).
 SHELL_MAX_TEXT_RATIO = 0.01
 
-#: Markers a client-rendered application leaves in the HTML it serves.
+#: Markers a client-rendered application leaves in the HTML it serves. The fallback
+#: a page shows without JavaScript (``noscript_required``) is read from the text of
+#: its ``<noscript>`` blocks (:func:`inspect_static_html`), not with a pattern here:
+#: that text sits in nested markup, often after an inline image.
 _SHELL_MARKERS = (
     ("next_flight", re.compile(r"self\.__next_f\b")),
     ("next_data", re.compile(r"__NEXT_DATA__")),
@@ -45,12 +54,82 @@ _SHELL_MARKERS = (
     ("initial_state", re.compile(r"window\.__(?:INITIAL|PRELOADED|APOLLO)_STATE__")),
     ("angular", re.compile(r"\bng-version=")),
     ("empty_root", re.compile(r"<div[^>]+id=[\"'](?:root|app|__next|__nuxt)[\"'][^>]*>\s*</div>", re.I)),
-    ("noscript_required", re.compile(r"<noscript[^>]*>[^<]{0,200}(?:enable|activer|activez)\s+javascript", re.I)),
 )
 
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style|noscript|template|svg)\b.*?</\1\s*>", re.I | re.S)
+_NOSCRIPT_RE = re.compile(r"<noscript\b[^>]*>(.*?)</noscript\s*>", re.I | re.S)
+_TITLE_RE = re.compile(r"<title\b[^>]*>(.*?)</title\s*>", re.I | re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 _SPACE_RE = re.compile(r"\s+")
+
+#: A sentence asking the reader to turn JavaScript on, in the languages the
+#: publishers we read write in. It is what a page shows a reader without scripts
+#: (a ``<noscript>`` fallback), never what the page says.
+_JS_REQUIRED_RE = re.compile(
+    r"\b(?:enable|activate|turn\s+on|activer|activez|aktivieren\s+sie|habilit(?:a|ar|e)|activ(?:a|ar)"
+    r"|abilit(?:a|are)|ative|schakel)\s+(?:(?:the|your|votre|le|o|el|il|uw)\s+)?javascript\b"
+    r"|\bjavascript\s+(?:is|est|ist|está|è|wurde)\s+(?:currently\s+|actuellement\s+)?"
+    r"(?:disabled|turned\s+off|required|désactivé|requis|nécessaire|deaktiviert|erforderlich"
+    r"|desactivado|desativado|disabilitato|necessario|uitgeschakeld)"
+    r"|\bjavascript\s+(?:must\s+be\s+enabled|aktivieren|inschakelen)\b"
+    r"|\b(?:requires?|needs?|nécessite|benötigt|richiede|requiere)\s+javascript\b",
+    re.I,
+)
+
+#: Above this many visible words a page is not an interstitial, whatever it says:
+#: a challenge or a block page is a sentence or two and a vendor's footer (the
+#: wordiest seen, a bilingual block page, is about 110), while an article page,
+#: menus and footer included, is several hundred.
+CHALLENGE_MAX_VISIBLE_WORDS = 200
+
+#: The title an interstitial carries, at the start of ``<title>`` (``Access
+#: Denied | Example``). Every vendor localises a few of them.
+_CHALLENGE_TITLE_RE = re.compile(
+    r"^\s*(?:client\s+challenge|just\s+a\s+moment|one\s+moment,?\s+please|attention\s+required"
+    r"|access\s+denied|access\s+to\s+this\s+page\s+has\s+been\s+denied|are\s+you\s+a\s+(?:robot|human)"
+    r"|robot\s+check|security\s+check|bot\s+(?:check|verification|detection)|human\s+verification"
+    r"|verify(?:ing)?\s+(?:that\s+)?(?:you\s+are\s+)?(?:a\s+)?human|please\s+wait|one\s+more\s+step"
+    r"|pardon\s+our\s+interruption|request\s+(?:rejected|blocked)|checking\s+your\s+browser|ddos-guard"
+    r"|captcha|un\s+instant|accès\s+(?:refusé|restreint|interdit|bloqué)|vérification\s+(?:de\s+sécurité|en\s+cours)"
+    r"|einen\s+moment|zugriff\s+verweigert|un\s+momento|acceso\s+denegado|accesso\s+negato|een\s+moment)\b",
+    re.I,
+)
+
+#: What an interstitial asks of its reader, anywhere in its visible text.
+_CHALLENGE_TEXT_RE = re.compile(
+    r"\bverify(?:ing)?\s+(?:that\s+)?you\s+are\s+(?:a\s+)?human"
+    r"|\bconfirm\s+(?:that\s+)?you\s+are\s+(?:a\s+)?human"
+    r"|\bnot\s+a\s+robot\b|\bare\s+you\s+(?:a\s+)?(?:robot|human)\b"
+    r"|\bchecking\s+(?:your\s+browser|if\s+the\s+site\s+connection\s+is\s+secure)"
+    r"|\bsecurity\s+of\s+your\s+connection\b|\bpress\s+(?:&|and)\s+hold\b|\bunusual\s+traffic\b"
+    r"|\b(?:identified|detected|flagged)\s+as\s+(?:automated|a\s+bot|bot)\b"
+    r"|\bautomated\s+(?:\(bot\)|bot|traffic|queries|requests|access)\b"
+    r"|\byou\s+(?:have\s+been|were|are)\s+blocked\b|\baccess\s+to\s+this\s+page\s+has\s+been\s+denied\b"
+    r"|\byou\s+don['’]t\s+have\s+permission\s+to\s+access\b|\brequest\s+(?:was\s+|has\s+been\s+)?blocked\b"
+    r"|\bdisable\s+(?:any\s+|your\s+)?ad[\s-]?blockers?\b|\bhuman\s+verification\b"
+    r"|\bbot\s+(?:verification|detection|protection)\b|\bddos\s+protection\b"
+    r"|\bvérifi\w*\s+que\s+vous\s+(?:êtes|etes)\s+(?:un\s+)?humain|\bpas\s+un\s+robot\b"
+    r"|\b(?:identifié|détecté)\s+comme\s+(?:automatisé|un\s+robot|robot|bot)\b"
+    r"|\btrafic\s+(?:\w+\s+){0,3}automatisé|\bdésactivez\s+(?:vos\s+|votre\s+)?bloqueurs?\s+de\s+publicité"
+    r"|\bkein\s+roboter\b|\bungewöhnlichen?\s+datenverkehr|\bno\s+(?:eres|soy)\s+un\s+robot\b"
+    r"|\btráfico\s+inusual\b|\bnon\s+sei\s+un\s+robot\b|\btraffico\s+insolito\b",
+    re.I,
+)
+
+#: What a vendor's interstitial carries and its protected pages do not -- the
+#: scripts its edge injects into every page (Cloudflare's ``jsd``, Imperva's
+#: ``_Incapsula_Resource``, DataDome's ``tags.js``) are deliberately absent. These
+#: name the vendor, never the site: any site behind it serves the same markup.
+_CHALLENGE_MARKERS = (
+    ("cloudflare", re.compile(r"_cf_chl_opt|/cdn-cgi/challenge-platform/h/[a-z]/orchestrate/")),
+    ("datadome", re.compile(r"captcha-delivery\.com")),
+    ("human", re.compile(r"id=[\"']px-captcha")),
+    ("akamai", re.compile(r"/_sec/cp_challenge/|\bbm-verify\b")),
+    ("aws_waf", re.compile(r"\bgokuProps\b")),
+    ("imperva", re.compile(r"Incapsula\s+incident\s+ID", re.I)),
+    ("sucuri", re.compile(r"sucuri_cloudproxy_js")),
+    ("captcha_widget", re.compile(r"class=[\"'][^\"']*\b(?:g-recaptcha|h-captcha|cf-turnstile|frc-captcha)\b")),
+)
 
 
 @dataclass(frozen=True)
@@ -73,16 +152,20 @@ class PageSignals:
 
     render_reasons: List[str] = field(default_factory=list)
     videos: List[EmbeddedVideo] = field(default_factory=list)
+    #: The kind of anti-bot interstitial served in place of the page
+    #: (:func:`access_challenge`), or ``None``. Its text is not the page's.
+    access_challenge: Optional[str] = None
 
     @property
     def needs_render(self) -> bool:
-        """Render in a browser: the text is script-drawn, or videos are embedded."""
+        """Render in a browser: the text is script-drawn, videos are embedded, or a challenge stands in the way."""
         return bool(self.render_reasons) or bool(self.videos)
 
     def as_metadata(self) -> dict:
         return {
             "render_reasons": list(self.render_reasons),
             "static_video_count": len(self.videos),
+            "access_challenge": self.access_challenge,
         }
 
 
@@ -93,25 +176,99 @@ def visible_text(html: str) -> str:
     return _SPACE_RE.sub(" ", html_lib.unescape(stripped)).strip()
 
 
+def _markup_text(fragment: str) -> str:
+    return _SPACE_RE.sub(" ", html_lib.unescape(_TAG_RE.sub(" ", fragment or ""))).strip()
+
+
+def noscript_text(html: str) -> str:
+    """What the page shows a reader whose browser runs no script."""
+    return " ".join(_markup_text(block) for block in _NOSCRIPT_RE.findall(html or "")).strip()
+
+
+def without_javascript_prompts(html: str) -> str:
+    """The HTML without its ``<noscript>`` blocks that ask for JavaScript.
+
+    Such a block is the page telling a script-less reader it cannot show itself
+    ("JavaScript is disabled in your browser"), never something the page says.
+    The text extractor reads ``<noscript>`` like any other markup, so left in, that
+    sentence is what an application shell or an anti-bot challenge is stored as.
+    A ``<noscript>`` holding anything else (a tracking pixel, a text copy of the
+    page) is kept.
+    """
+    return _NOSCRIPT_RE.sub(
+        lambda match: " " if _JS_REQUIRED_RE.search(_markup_text(match.group(1))) else match.group(0),
+        html or "",
+    )
+
+
+def page_title(html: str) -> str:
+    """The text of the HTML's ``<title>``, or an empty string."""
+    match = _TITLE_RE.search(html or "")
+    return _markup_text(match.group(1)) if match else ""
+
+
+def access_challenge(html: str) -> Optional[str]:
+    """The kind of anti-bot interstitial this HTML is, or ``None`` for a page.
+
+    An anti-bot edge (Fastly, Cloudflare, Akamai, DataDome, HUMAN, AWS WAF...)
+    answers a client it does not trust with a challenge page -- often with a 200,
+    so nothing in the HTTP answer gives it away -- and, when the challenge fails,
+    with a block page. Both are recognised by their shape, never by the site they
+    stand in front of: at most :data:`CHALLENGE_MAX_VISIBLE_WORDS` visible words,
+    *and* one of a vendor's interstitial markers, a challenge title (``Client
+    Challenge``, ``Just a moment...``, ``Access Denied``), a sentence asking the
+    reader to prove it is a person or to turn off its ad blocker, or a visible
+    plea to enable JavaScript. A page that shows that plea to a browser running
+    scripts has refused to draw itself for it.
+
+    The word ceiling is what keeps an article that *mentions* a captcha, or embeds
+    one in its comment form, from ever reading as a challenge.
+    """
+    html = html or ""
+    text = visible_text(html)
+    if len(text.split()) > CHALLENGE_MAX_VISIBLE_WORDS:
+        return None
+    for name, pattern in _CHALLENGE_MARKERS:
+        if pattern.search(html):
+            return name
+    if _CHALLENGE_TITLE_RE.search(page_title(html)):
+        return "challenge_title"
+    if _CHALLENGE_TEXT_RE.search(text):
+        return "challenge_text"
+    if _JS_REQUIRED_RE.search(text):
+        return "javascript_required"
+    return None
+
+
 def inspect_static_html(html: str, *, extracted_text: str) -> PageSignals:
     """Decide from the served HTML whether the page needs a browser.
 
     A shell is a page whose static extraction is thin *and* which shows why: a
-    framework marker, or almost no visible text for its weight. Thin alone is not
-    enough -- a short static page is just short -- and a marker alone is not
-    either: plenty of server-rendered Next.js articles carry ``self.__next_f`` and
-    read perfectly without a browser.
+    framework marker, a ``<noscript>`` fallback asking for JavaScript, or almost
+    no visible text for its weight. Thin alone is not enough -- a short static page
+    is just short -- and a marker alone is not either: plenty of server-rendered
+    Next.js articles carry ``self.__next_f`` and read perfectly without a browser.
+
+    An anti-bot challenge (:func:`access_challenge`) goes to the browser too: a
+    JavaScript challenge is built to be passed by one, and its own words are not
+    the page's (the caller drops them).
     """
     signals = PageSignals()
     html = html or ""
     words = len((extracted_text or "").split())
     if words < SHELL_MAX_EXTRACTED_WORDS:
         markers = [name for name, pattern in _SHELL_MARKERS if pattern.search(html)]
+        if _JS_REQUIRED_RE.search(noscript_text(html)):
+            markers.append("noscript_required")
         ratio = len(visible_text(html)) / max(1, len(html))
         if markers:
             signals.render_reasons.extend(f"shell_marker:{name}" for name in markers)
         if ratio < SHELL_MAX_TEXT_RATIO:
             signals.render_reasons.append("low_text_ratio")
+    challenge = access_challenge(html)
+    if challenge:
+        signals.access_challenge = challenge
+        signals.render_reasons.append(f"access_challenge:{challenge}")
     signals.videos = videos_in_html(html)
     return signals
 
