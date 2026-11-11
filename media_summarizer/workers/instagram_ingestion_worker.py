@@ -805,7 +805,22 @@ async def process_instagram_message(message_body: Dict[str, Any]) -> Dict[str, A
                 provider="apify",
                 provider_detail=exc.detail or None,
             ) from exc
-        except (ValueError, NonRetryableProviderResolutionError) as exc:
+        except NonRetryableProviderResolutionError as exc:
+            # The resolver has already named the failure from what the actor
+            # answered -- an age gate, a deleted reel, a reel without its media
+            # URL -- and that code is what the reader is told. Rewriting it to
+            # PROVIDER_RESULT_INVALID told an age-gated reel's reader to try
+            # again later.
+            raise InstagramIngestionError(
+                exc.code,
+                details=exc.details,
+                **{
+                    **exc.context,
+                    "provider": "apify",
+                    "exception_type": type(exc).__name__,
+                },
+            ) from exc
+        except ValueError as exc:
             raise InstagramIngestionError(
                 MediaFailureCode.PROVIDER_RESULT_INVALID,
                 details="apify_result_invalid",

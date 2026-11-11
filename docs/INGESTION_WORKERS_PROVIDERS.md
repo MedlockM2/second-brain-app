@@ -419,11 +419,14 @@ Ref: `instagram_apify_resolver.py::InstagramApifyResolver.resolve`, `instagram_a
 ### Terminal failure mode
 
 - User-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
-  - `NO_TRANSCRIBABLE_MEDIA` ← `instagram_content_type_unknown` (the resolver's own code, carried by `NonRetryableProviderResolutionError`)
-  - `MEDIA_UNAVAILABLE` ← `instagram_reel_result_error`, `instagram_reel_no_result`, `instagram_post_no_result` (the scraper found no post: private or deleted)
-  - `PROVIDER_RESULT_INVALID` ← `instagram_reel_no_media_url`, `no_transcript_or_audio_url` (the scraper returned the post without its media URL)
+  - Every code the resolver raises through `NonRetryableProviderResolutionError` reaches the job unchanged, on the first message as on the Apify callback; on the callback its context (`actor_error`, the actor's raw `error` token) lands in `error_metadata`:
+    - `NO_TRANSCRIBABLE_MEDIA` ← `instagram_content_type_unknown`
+    - `AGE_RESTRICTED` ← `instagram_reel_age_restricted` (the actor answered `restricted_page` with an age-gate reason: Instagram shows the reel to signed-in adult accounts only, and the item carries the caption and cover but no audio or video)
+    - `MEDIA_UNAVAILABLE` ← `instagram_reel_result_error` (any other actor error item), `instagram_reel_no_result`, `instagram_post_no_result` (the scraper found no post: private or deleted)
+    - `PROVIDER_RESULT_INVALID` ← `instagram_reel_no_media_url` (the scraper returned the reel without its media URL)
+  - `PROVIDER_RESULT_INVALID` ← `no_transcript_or_audio_url` (a resolved video post without an audio URL)
   - `PROVIDER_UNAVAILABLE` ← `apify_run_not_succeeded` (retryable)
-  - `PROVIDER_RESULT_INVALID` ← `apify_result_invalid`
+  - `PROVIDER_RESULT_INVALID` ← `apify_result_invalid` (the callback's stored content type does not parse)
   - `POST_TEXT_EMPTY` / `PROVIDER_UNAVAILABLE` ← `instagram_image_post_no_text` (photo posts only: the first when the OCR ran and found no text and the post has no caption either, the second when the parsing chain itself failed on every image)
   - `INVALID_JOB_MESSAGE` ← `missing_job_id`, `missing_normalized_url`, `processing_job_not_found`
   - `UNEXPECTED_ERROR` ← `unexpected_exception`, `instagram_image_transcript_store_failed` (permanent: the images are already parsed and billed)
