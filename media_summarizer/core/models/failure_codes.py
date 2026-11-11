@@ -49,9 +49,10 @@ class MediaFailureCode(str, Enum):
     NO_SPEECH_DETECTED = "NO_SPEECH_DETECTED"
     #: The file we received, uploaded or downloaded, has zero bytes.
     MEDIA_FILE_EMPTY = "MEDIA_FILE_EMPTY"
-    #: The site answered 401 or 403 to our reader: the page exists, the
-    #: publisher refuses us. Unlike `MEDIA_UNAVAILABLE`, this is a limit of ours
-    #: that support for the site could lift.
+    #: The site answered 401, 402 or 403 to our reader, or kept showing its
+    #: anti-bot challenge to our browser: the page exists, the publisher refuses
+    #: us. Unlike `MEDIA_UNAVAILABLE`, this is a limit of ours that support for
+    #: the site could lift.
     SOURCE_ACCESS_BLOCKED = "SOURCE_ACCESS_BLOCKED"
     #: A text post whose text is empty once markup is stripped.
     POST_TEXT_EMPTY = "POST_TEXT_EMPTY"

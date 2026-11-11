@@ -43,9 +43,11 @@ class ArticleFetchErrorCode(str, Enum):
     #: extraction chain, which is why 404/405/410/451 read as `MEDIA_UNAVAILABLE`
     #: rather than "service unavailable" (task-399).
     HTTP_CLIENT_ERROR = "http_client_error"
-    #: The page answered 401 or 403: it exists, and the site refuses our reader
-    #: (bot wall, login wall). Reads as `SOURCE_ACCESS_BLOCKED`, the one 4xx the
-    #: reader can usefully ask us to support.
+    #: The page answered 401, 402 or 403: it exists, and the site refuses our
+    #: reader (bot wall, login wall, paywall). Reads as `SOURCE_ACCESS_BLOCKED`,
+    #: the one 4xx the reader can usefully ask us to support. An anti-bot
+    #: challenge served with a 200 is not an error here: the page goes to the
+    #: browser worker (`core/web_page.access_challenge`).
     HTTP_ACCESS_REFUSED = "http_access_refused"
     #: The page answered 429. Throttling, not a verdict: worth another try.
     HTTP_RATE_LIMITED = "http_rate_limited"
