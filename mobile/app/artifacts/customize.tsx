@@ -11,12 +11,13 @@
  *     [            ✦ Generate            ]
  *
  * A full-screen modal over the media or folder page, opened with the scope and
- * the format in its route. Each format shows only the options the API accepts
- * for it (`formatOptionsOf`): the length for the summary, the number and the
- * difficulty for the flashcards and the quiz, nothing but the prompt for the
- * learning notes. Every option starts on its default, marked as such, so a
- * single tap on Generate asks for exactly what a tile asked for before this
- * screen existed — the same request, hence the same entry.
+ * the format in its route, with a safe-area provider of its own
+ * (`PresentationSafeAreaProvider`). Each format shows only the options the API
+ * accepts for it (`formatOptionsOf`): the length for the summary, the number
+ * and the difficulty for the flashcards and the quiz, nothing but the prompt
+ * for the learning notes. Every option starts on its default, marked as such,
+ * so a single tap on Generate asks for exactly what a tile asked for before
+ * this screen existed — the same request, hence the same entry.
  *
  * Generate sends the request **and waits for its answer** before closing,
  * because a refusal has to be read where it was asked: a quota reached, a
@@ -85,6 +86,7 @@ import {
   HeaderIconButton,
   ScreenHeader,
 } from "../../src/components/ScreenHeader";
+import { PresentationSafeAreaProvider } from "../../src/components/PresentationSafeAreaProvider";
 import { KeyboardViewport, type KeyboardViewportHandle } from "../../src/components/KeyboardViewport";
 import { useFocusedInputScroll } from "../../src/hooks/useFocusedInputScroll";
 import {
@@ -156,34 +158,38 @@ export default function CustomizeArtifactScreen(): React.JSX.Element {
     else router.replace("/(tabs)/inbox");
   }, [router]);
 
+  // A `fullScreenModal` leaves the root safe-area provider behind on iOS: this
+  // one is what keeps the close button under the status bar.
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={["top", "bottom"]}
-      testID="artifact-customize-screen"
-    >
-      {scope && scopeId && format ? (
-        <CustomizeForm
-          key={`${scope}:${scopeId}:${format.type}`}
-          scope={scope}
-          scopeId={scopeId}
-          format={format}
-          onClose={close}
-        />
-      ) : (
-        // Only a malformed link lands here: nothing to customize, a way out.
-        <ScreenHeader
-          trailing={
-            <HeaderIconButton
-              icon="close"
-              variant="plain"
-              onPress={close}
-              accessibilityLabel={t("common.close")}
-            />
-          }
-        />
-      )}
-    </SafeAreaView>
+    <PresentationSafeAreaProvider>
+      <SafeAreaView
+        style={styles.container}
+        edges={["top", "bottom"]}
+        testID="artifact-customize-screen"
+      >
+        {scope && scopeId && format ? (
+          <CustomizeForm
+            key={`${scope}:${scopeId}:${format.type}`}
+            scope={scope}
+            scopeId={scopeId}
+            format={format}
+            onClose={close}
+          />
+        ) : (
+          // Only a malformed link lands here: nothing to customize, a way out.
+          <ScreenHeader
+            trailing={
+              <HeaderIconButton
+                icon="close"
+                variant="plain"
+                onPress={close}
+                accessibilityLabel={t("common.close")}
+              />
+            }
+          />
+        )}
+      </SafeAreaView>
+    </PresentationSafeAreaProvider>
   );
 }
 
