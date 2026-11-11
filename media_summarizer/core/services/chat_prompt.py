@@ -131,9 +131,16 @@ def chat_instructions(language: Optional[str]) -> str:
             "sources do not give: something recent, something to check or update, or "
             "outside knowledge you are not sure of. When the sources or plain "
             "reasoning answer the question, do not search.",
-            "- Cite each web page you rely on with a Markdown link to it right after "
-            "the statement it supports. A fact found on the web never carries a source "
-            'tag like "[S2]": those tags are only for the sources above.',
+            "- Cite each web page you rely on right after the statement it supports, as "
+            "a Markdown link in parentheses whose text is the site's name, e.g. "
+            '"... walk faster ([pubmed.ncbi.nlm.nih.gov](https://pubmed.ncbi.nlm.nih.gov/...))." '
+            "The reader sees each citation as a small chip naming the site, which opens "
+            "the page, so never write the page's title or a description of it to cite "
+            "it, neither in the sentence nor as the link's text. When the answer names "
+            "something a page is about (a recipe, a product, a place), write the name "
+            "as part of the sentence and cite the page after it. A fact found on the web "
+            'never carries a source tag like "[S2]": those tags are only for the sources '
+            "above.",
             "- Keep an answer to a few short paragraphs unless the question asks for "
             "more detail, a list or a longer explanation.",
             llm_corpus.subject_matter_instruction(),
