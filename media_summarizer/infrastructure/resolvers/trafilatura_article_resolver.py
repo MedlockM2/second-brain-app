@@ -37,6 +37,7 @@ from media_summarizer.core.services.transcript_formatting import (
     normalize_transcript_text,
 )
 from media_summarizer.core.web_page import (
+    PageSignals,
     inspect_static_html,
     without_javascript_prompts,
 )
@@ -45,6 +46,7 @@ from media_summarizer.infrastructure.resolvers.article_markdown import (
     article_markdown,
 )
 from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
+from media_summarizer.utils.logging_config import log_event
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +135,12 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
                 details="missing_article_url",
             )
 
-        fetched = await self._fetch_html(requested_url)
+        try:
+            fetched = await self._fetch_html(requested_url)
+        except ArticleFetchError as exc:
+            if exc.code != ArticleFetchErrorCode.HTTP_ACCESS_REFUSED:
+                raise
+            return self._refused_page(requested_url, exc)
         html = fetched["html"]
         final_url = fetched.get("final_url") or requested_url
         try:
@@ -178,6 +185,37 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
             provider=self.provider_name,
             extractor="trafilatura",
             signals=signals,
+        )
+
+    def _refused_page(self, requested_url: str, error: ArticleFetchError) -> ArticleContent:
+        """A page whose site refused our reader (401/402/403): the browser's to read.
+
+        The refusal is about the client, not the page: an anti-bot edge scores an
+        httpx request -- its TLS and HTTP/2 fingerprint, the Lambda's address -- and
+        lets a real browser through. Measured from a Lambda in eu-west-3 on
+        2026-11-12: melenchon2027.fr (Cloudflare) and leboncoin.fr (DataDome)
+        answered 403 and lemonde.fr 402 to this reader, and 200 with the real page
+        to the render worker; the same Cloudflare page answered 200 to a reader on
+        another Lambda address. So the page goes to the browser like an application
+        shell -- no text, no title, the URL as its identity -- and only a browser
+        that is refused too fails the job as `SOURCE_ACCESS_BLOCKED`.
+        """
+        status = error.context.get("http_status")
+        log_event(
+            logger,
+            logging.INFO,
+            "resolver.access_refused",
+            "Page refused the static reader; handing it to the browser",
+            http_status=status,
+        )
+        return ArticleContent(
+            text="",
+            requested_url=requested_url,
+            final_url=error.context.get("final_url"),
+            http_status=status,
+            provider=self.provider_name,
+            extractor="trafilatura",
+            signals=PageSignals(render_reasons=[f"http_access_refused:{status}"]),
         )
 
     async def _fetch_html(self, url: str) -> Dict[str, Any]:

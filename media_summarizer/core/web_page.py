@@ -240,6 +240,35 @@ def access_challenge(html: str) -> Optional[str]:
     return None
 
 
+#: A page that says it is not there, in its ``<title>``: ``404``, ``Error 404``,
+#: ``Page not found``, ``Page introuvable``... Matched at the start or as the whole
+#: phrase, never a bare number inside a headline ("404 morts sur les routes").
+_NOT_FOUND_TITLE_RE = re.compile(
+    r"^\s*(?:error\s*|erreur\s*)?404(?:\s*$|\s*[-–—|:.!]|\s+(?:error|erreur|not\s+found|page)\b)"
+    r"|\b(?:page|article|content|contenu)\s+(?:not\s+found|introuvable|non\s+trouvée|n['’]existe\s+pas)\b"
+    r"|\bseite\s+nicht\s+gefunden\b|\bpágina\s+no\s+encontrada\b|\bpagina\s+non\s+trovata\b"
+    r"|\bpágina\s+não\s+encontrada\b|\bpagina\s+niet\s+gevonden\b",
+    re.I,
+)
+#: Above this many visible words the page is an article whatever its title says.
+#: Medium's "PAGE NOT FOUND", menus and footer included, is about 240.
+NOT_FOUND_MAX_VISIBLE_WORDS = 400
+
+
+def not_found_page(html: str) -> bool:
+    """Whether this HTML is a site's "page not found", served with a 200.
+
+    A single-page application answers every URL 200 and draws its own 404 in the
+    browser: on 2026-11-12, a Medium URL that does not exist rendered as "PAGE NOT
+    FOUND", 240 words, status 200. Recognised by its title and its brevity, so a
+    long article that merely has "404" in its headline is never one.
+    """
+    html = html or ""
+    if not _NOT_FOUND_TITLE_RE.search(page_title(html)):
+        return False
+    return len(visible_text(html).split()) <= NOT_FOUND_MAX_VISIBLE_WORDS
+
+
 def inspect_static_html(html: str, *, extracted_text: str) -> PageSignals:
     """Decide from the served HTML whether the page needs a browser.
 

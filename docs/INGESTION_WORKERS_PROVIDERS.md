@@ -76,7 +76,7 @@ No fallback — failure is terminal.
 - Mark `ProcessingJob` as failed (`error_step="article_extraction"`)
 - Publish `episode_completion_status(status=failure)` to `EPISODE_COMPLETED_EVENTS_QUEUE`
 - `ArticleFetchErrorCode` (provider-level, in the port) → user-facing `error_code` → observability `reason` (see [how a failure is written down](#cross-cutting-how-a-failure-is-written-down-task-359)):
-  - `SOURCE_ACCESS_BLOCKED` ← `http_access_refused` / `article_http_error` on a 401, 402 or 403 (+`http_status`, `final_url`): the page exists and the site refuses our reader (a bot wall can answer 402: a news site did to an httpx client on 2026-11-11); the detail screen offers to request support for the site
+  - a 401, 402 or 403 is **not** a failure here: the site refuses our static reader, not the page, and the page goes to the browser worker (see [below](#pages-a-browser-has-to-read-and-the-videos-they-embed)); only a browser that is refused too fails the job as `SOURCE_ACCESS_BLOCKED`
   - `MEDIA_UNAVAILABLE` ← `http_client_error` / `article_http_error` on any other 4xx but 429 (+`http_status`, `final_url`)
   - `PROVIDER_RATE_LIMITED` ← `http_rate_limited` (429); `PROVIDER_UNAVAILABLE` ← `http_server_error` / `article_http_error` (5xx), `transport_error` / `article_fetch_transport_error`
   - `NOT_AN_ARTICLE_PAGE` ← `not_html` / `article_unsupported_content_type` (+`content_type`, `final_url`)
@@ -118,7 +118,16 @@ no extra request) and hands the page to the **web page render worker** when eith
   **200**: on 2026-11-11 a news site served its Fastly "Client Challenge" to the API's
   fetch, and before this check its "JavaScript is disabled in your browser" was stored,
   summarised and translated as the article. Nothing of a challenge is kept -- no text, no
-  title, no cover -- and the browser worker gets the page.
+  title, no cover -- and the browser worker gets the page;
+- **the site refused the static reader with a 401, 402 or 403**
+  (`trafilatura_article_resolver.py::_refused_page`, render reason
+  `http_access_refused:<status>`). The static request is always made first, and an edge
+  that scores its fingerprint or the Lambda's address often lets a real browser through.
+  Measured from a Lambda in eu-west-3 on 2026-11-12: melenchon2027.fr (Cloudflare) and
+  leboncoin.fr (DataDome) answered 403 and lemonde.fr 402 to the static reader, and 200
+  with the real page to the browser (10-18 s); reddit.com, lequipe.fr (Akamai) and
+  seloger.com (DataDome) refused the browser too. The same Cloudflare page answered the
+  static reader 200 from another Lambda address: the refusal depends on the address.
 
 The `<noscript>` blocks asking for JavaScript are removed before any extraction, static or
 rendered (`core/web_page.py::without_javascript_prompts`): trafilatura reads them like any
@@ -188,7 +197,9 @@ event is out.
 
 Failures: a render the browser could not load is `PROVIDER_UNAVAILABLE` (retried) or
 `SOURCE_ACCESS_BLOCKED` (the page answered 401, 402 or 403, or its anti-bot challenge never
-let the browser through) or `MEDIA_UNAVAILABLE` (any other 4xx); a rendered page with
+let the browser through) or `MEDIA_UNAVAILABLE` (any other 4xx, or a site's own "page not
+found" drawn with a 200: a short page titled `404`, `Page not found`, `Page introuvable`...,
+`render_not_found_page`, `core/web_page.py::not_found_page`); a rendered page with
 neither text nor a usable video is `ARTICLE_TEXT_NOT_FOUND`; a budget refusal carries the
 budget's code.
 

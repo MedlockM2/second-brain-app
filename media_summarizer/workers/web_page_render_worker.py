@@ -47,6 +47,7 @@ from media_summarizer.core.services.transcript_formatting import count_paragraph
 from media_summarizer.core.web_page import (
     EmbeddedVideo,
     dedupe_videos,
+    not_found_page,
     video_from_url,
     videos_in_html,
     videos_in_json,
@@ -275,6 +276,15 @@ async def process_web_page_message(body: Dict[str, Any]) -> None:
             details="render_access_challenge",
             http_status=rendered.status,
             access_challenge=rendered.access_challenge,
+        )
+
+    if not_found_page(rendered.html):
+        # The site drew its own "page not found" and answered 200 (an application
+        # does): the page is gone, and its apology is not an article.
+        raise PermanentIngestionFailure(
+            MediaFailureCode.MEDIA_UNAVAILABLE,
+            details="render_not_found_page",
+            http_status=rendered.status,
         )
 
     try:

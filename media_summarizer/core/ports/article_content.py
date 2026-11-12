@@ -44,10 +44,12 @@ class ArticleFetchErrorCode(str, Enum):
     #: rather than "service unavailable" (task-399).
     HTTP_CLIENT_ERROR = "http_client_error"
     #: The page answered 401, 402 or 403: it exists, and the site refuses our
-    #: reader (bot wall, login wall, paywall). Reads as `SOURCE_ACCESS_BLOCKED`,
-    #: the one 4xx the reader can usefully ask us to support. An anti-bot
-    #: challenge served with a 200 is not an error here: the page goes to the
-    #: browser worker (`core/web_page.access_challenge`).
+    #: reader (bot wall, login wall, paywall). `TrafilaturaArticleResolver.fetch`
+    #: does not raise it: the page goes to the browser worker, which a bot wall
+    #: often lets through (`_refused_page`), as does an anti-bot challenge served
+    #: with a 200 (`core/web_page.access_challenge`). Reads as
+    #: `SOURCE_ACCESS_BLOCKED` -- the one 4xx the reader can usefully ask us to
+    #: support -- for a caller of the raw fetch.
     HTTP_ACCESS_REFUSED = "http_access_refused"
     #: The page answered 429. Throttling, not a verdict: worth another try.
     HTTP_RATE_LIMITED = "http_rate_limited"
