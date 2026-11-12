@@ -47,4 +47,23 @@ Ce répertoire contient des extraits d'articles de presse. Ne pas le committer t
 
 ## Décision de l'owner
 
-En attente.
+Go le 2026-11-12, implémenté sur `main` le même jour :
+
+- **Backend :** `media_summarizer/infrastructure/resolvers/article_markdown.py`, appelé par `extract_clean_text` (article statique et rendu navigateur).
+- **Lecteurs :** `splitArticleText` (`packages/core/src/media/transcript.ts`), mobile et web.
+
+Le rendu réel de la page du *Monde* dans Chromium a fait corriger le prototype sur quatre points avant l'implémentation :
+
+- **Page vidée par la règle de consentement :** le `<html>` porte la classe `popin-gdpr-no-scroll`, donc la règle retirait toute la page. Un élément qui contient l'article n'est jamais retiré.
+- **Chapô absent du texte extrait :** il est dans l'en-tête de la page, hors de ce que lit trafilatura, et la description déclarée le précède de « CHRONIQUE. ». Le chapô est maintenant le paragraphe de la page que la description reprend, avec au plus 3 mots devant. Il est remis en tête du texte s'il manque.
+- **Encart « Lire aussi » et ligne « Il vous reste 65.98 % » :**
+  - un paragraphe fait à 80 % ou plus de texte de lien est retiré ;
+  - sur une page déclarée payante (`isAccessibleForFree: false`), le dernier paragraphe d'un bloc, s'il est entièrement en gras, est retiré.
+- **Mise en forme de trafilatura :** activée, elle coupait des paragraphes et collait des mots (« testis » chez Joel). Elle est désactivée.
+
+Ce que stocke la nouvelle extraction :
+
+- **Chapô :** le premier paragraphe, entièrement en gras.
+- **Article payant :** le texte se termine par la ligne `## [incomplete]`.
+
+Les lecteurs reconnaissent ces deux formes. Un article déjà importé garde son ancien texte : il faut le repartager après le déploiement.

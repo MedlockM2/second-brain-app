@@ -383,6 +383,10 @@ export const nl: Catalog = {
   "transcript.status.ready": "De tekst is klaar.",
   "transcript.status.failed": "Het voorbereiden van de tekst is mislukt.",
   "transcript.loading": "Tekst laden…",
+  "transcript.incomplete.title": "Onvolledige tekst",
+  "transcript.incomplete.body":
+    "De site houdt de rest van dit artikel voor abonnees. Deepn kon alleen dit begin lezen; de samenvatting en de chat gaan over dit deel.",
+  "transcript.incomplete.open": "Lees de rest op de site",
   "transcript.notAvailable": "De volledige tekst is niet beschikbaar voor dit item.",
   "transcript.retryA11y": "Tekst opnieuw laden",
   "auth.email": "E-mail",

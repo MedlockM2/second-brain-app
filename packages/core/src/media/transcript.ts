@@ -29,6 +29,40 @@ export function splitTranscriptParagraphs(content: string): TranscriptParagraph[
     });
 }
 
+/**
+ * Closes the text of a web article whose page reserves the rest to subscribers
+ * (`media_summarizer/infrastructure/resolvers/article_markdown.py`). A `## [`
+ * heading like the sections of a page with videos, so a translation keeps it.
+ */
+const INCOMPLETE_MARKER = /^[ \t]*## \[incomplete\][ \t]*$/m;
+/** A first paragraph entirely in bold: the standfirst the page declared. */
+const LEAD = /^\*\*([^*\n]+)\*\*[ \t]*(?:\n[ \t]*\n+|$)/;
+
+export type ArticleText = {
+  /** The standfirst, without its bold markers, drawn larger than the body. */
+  lead: string | null;
+  /** The rest of the text, to draw as any text. */
+  body: string;
+  /** The page reserves the rest of the article: the text stops where it does. */
+  incomplete: boolean;
+};
+
+/**
+ * The parts of a text the readers draw apart from its body: the standfirst of a
+ * web article and the mark that the article goes on behind a paywall (TestFlight
+ * feedback ANPCT7VWg0qWWuHgKePMPXA). Any other text comes back whole as `body`.
+ */
+export function splitArticleText(content: string): ArticleText {
+  const incomplete = INCOMPLETE_MARKER.test(content);
+  const text = (incomplete ? content.replace(INCOMPLETE_MARKER, "") : content).trim();
+  const lead = LEAD.exec(text);
+  return {
+    lead: lead ? lead[1].trim() : null,
+    body: lead ? text.slice(lead[0].length).trim() : text,
+    incomplete,
+  };
+}
+
 /** The primary subtag of a language code, upper-cased ("EN"), or null. */
 export function languageTag(code: string | null | undefined): string | null {
   const primary = code?.trim().split(/[-_]/)[0]?.toUpperCase();

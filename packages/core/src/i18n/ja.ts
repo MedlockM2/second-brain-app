@@ -378,6 +378,10 @@ export const ja: Catalog = {
   "transcript.status.ready": "本文の準備ができました。",
   "transcript.status.failed": "本文の準備に失敗しました。",
   "transcript.loading": "本文を読み込み中…",
+  "transcript.incomplete.title": "不完全なテキスト",
+  "transcript.incomplete.body":
+    "このサイトは記事の続きを購読者限定にしています。Deepnが読めたのはこの冒頭部分のみで、要約とチャットはこの部分を対象にしています。",
+  "transcript.incomplete.open": "続きをサイトで読む",
   "transcript.notAvailable": "この項目の全文は利用できません。",
   "transcript.retryA11y": "本文を再読み込み",
   "auth.email": "メールアドレス",

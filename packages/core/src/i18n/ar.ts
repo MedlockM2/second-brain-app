@@ -380,6 +380,10 @@ export const ar: Catalog = {
   "transcript.status.ready": "النص جاهز.",
   "transcript.status.failed": "فشل تحضير النص.",
   "transcript.loading": "جارٍ تحميل النص…",
+  "transcript.incomplete.title": "نص غير مكتمل",
+  "transcript.incomplete.body":
+    "يخصص الموقع بقية هذا المقال لمشتركيه. لم يتمكن Deepn إلا من قراءة هذه البداية، ويتناول الملخص والمحادثة هذا الجزء فقط.",
+  "transcript.incomplete.open": "اقرأ البقية على الموقع",
   "transcript.notAvailable": "النص الكامل غير متاح لهذا العنصر.",
   "transcript.retryA11y": "إعادة تحميل النص",
   "auth.email": "البريد الإلكتروني",

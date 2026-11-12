@@ -454,6 +454,10 @@ export const fr: Catalog = {
   "transcript.status.ready": "Le texte est prêt.",
   "transcript.status.failed": "La préparation du texte a échoué.",
   "transcript.loading": "Chargement du texte…",
+  "transcript.incomplete.title": "Texte incomplet",
+  "transcript.incomplete.body":
+    "Le site réserve la suite de cet article à ses abonnés. Deepn n’a pu lire que ce début ; le résumé et le chat portent sur cette partie.",
+  "transcript.incomplete.open": "Lire la suite sur le site",
   "transcript.notAvailable":
     "Le texte complet n'est pas disponible pour cet élément.",
   "transcript.retryA11y": "Réessayer de charger le texte",

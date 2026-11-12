@@ -369,6 +369,10 @@ export const zh: Catalog = {
   "transcript.status.ready": "正文已就绪。",
   "transcript.status.failed": "正文准备失败。",
   "transcript.loading": "正在加载正文…",
+  "transcript.incomplete.title": "文本不完整",
+  "transcript.incomplete.body":
+    "该网站将本文的其余部分保留给订阅用户。Deepn 只能读取开头这部分，摘要和对话仅涉及这部分内容。",
+  "transcript.incomplete.open": "在网站上阅读全文",
   "transcript.notAvailable": "该条目没有可用的全文内容。",
   "transcript.retryA11y": "重新加载正文",
   "auth.email": "邮箱",

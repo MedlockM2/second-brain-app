@@ -2,7 +2,7 @@ import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
 import { LOCALE_ENDONYMS, isSupportedLocale } from "@media-summarizer/core/i18n/locales";
 import { mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveSourcePreviewState } from "@media-summarizer/core/media/sourcePreview";
-import { languageTag, resolveSourceLink, splitTranscriptParagraphs } from "@media-summarizer/core/media/transcript";
+import { languageTag, resolveSourceLink, splitArticleText, splitTranscriptParagraphs } from "@media-summarizer/core/media/transcript";
 import {
   formatSectionClock,
   parseTranscriptSections,
@@ -148,7 +148,12 @@ export function ReadingBody({
                 {t("transcript.originalLoadFailed")}
               </div>
             )}
-            <TranscriptText state={transcript.state} originalText={showingOriginal ? original.content : null} onRetry={transcript.retry} />
+            <TranscriptText
+              state={transcript.state}
+              originalText={showingOriginal ? original.content : null}
+              onRetry={transcript.retry}
+              sourceUrl={link?.url ?? null}
+            />
           </section>
         </>
       )}
@@ -256,10 +261,12 @@ function TranscriptText({
   state,
   originalText,
   onRetry,
+  sourceUrl,
 }: {
   state: ReturnType<typeof useTranscript>["state"];
   originalText: string | null;
   onRetry: () => void;
+  sourceUrl: string | null;
 }) {
   const { t } = useI18n();
   if (state.status === "loading") return <p className="small muted">{t("transcript.loading")}</p>;
@@ -292,19 +299,23 @@ function TranscriptText({
           {state.status === "translation_pending" ? ` ${t("budget.automatic")}` : ""}
         </p>
       )}
-      {sections ? <SectionedText sections={sections} /> : <TextBody content={content} />}
+      {sections ? <SectionedText sections={sections} sourceUrl={sourceUrl} /> : <TextBody content={content} sourceUrl={sourceUrl} />}
     </>
   );
 }
 
 /** Prose keeps its numbered paragraphs and speakers; a structured extraction
- * (tables, headings, lists) is drawn by the shared Markdown reader (task-513). */
-function TextBody({ content }: { content: string }) {
-  const structured = hasStructuredMarkdown(content);
-  const paragraphs = structured ? [] : splitTranscriptParagraphs(content);
+ * (tables, headings, lists) is drawn by the shared Markdown reader (task-513).
+ * A web article's standfirst opens it one size up, and an article whose page
+ * reserves the rest ends on a notice saying so (`splitArticleText`). */
+function TextBody({ content, sourceUrl }: { content: string; sourceUrl: string | null }) {
+  const article = splitArticleText(content);
+  const structured = hasStructuredMarkdown(article.body);
+  const paragraphs = structured ? [] : splitTranscriptParagraphs(article.body);
   return (
     <>
-      {structured && <MarkdownView text={content} transcript />}
+      {article.lead && <p className="lead">{article.lead}</p>}
+      {structured && <MarkdownView text={article.body} transcript />}
       {paragraphs.map((paragraph, i) => (
         <p key={i}>
           <span className="pn">§{i + 1}</span>
@@ -312,7 +323,28 @@ function TextBody({ content }: { content: string }) {
           {paragraph.text}
         </p>
       ))}
+      {article.incomplete && <IncompleteNotice sourceUrl={sourceUrl} />}
     </>
+  );
+}
+
+/** The end of an article whose page reserves the rest to its subscribers. */
+function IncompleteNotice({ sourceUrl }: { sourceUrl: string | null }) {
+  const { t } = useI18n();
+  return (
+    <aside className="incomplete">
+      <Icon name="lock-closed-outline" size={18} />
+      <div>
+        <div className="incomplete-title">{t("transcript.incomplete.title")}</div>
+        <p>{t("transcript.incomplete.body")}</p>
+        {sourceUrl && (
+          <a href={sourceUrl} target="_blank" rel="noopener noreferrer">
+            <Icon name="open-outline" size={14} />
+            {t("transcript.incomplete.open")}
+          </a>
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -330,7 +362,7 @@ const PROVIDER_NAMES: Record<string, string> = {
  * and jumping to it, then each part under its own heading -- the page's text,
  * then each video with its thumbnail, title and length.
  */
-function SectionedText({ sections }: { sections: TranscriptSection[] }) {
+function SectionedText({ sections, sourceUrl }: { sections: TranscriptSection[]; sourceUrl: string | null }) {
   const { t } = useI18n();
   const nodes = useRef<(HTMLElement | null)[]>([]);
   return (
@@ -393,7 +425,7 @@ function SectionedText({ sections }: { sections: TranscriptSection[] }) {
                 </span>
               </div>
             )}
-            <TextBody content={section.body} />
+            <TextBody content={section.body} sourceUrl={sourceUrl} />
           </section>
         );
       })}

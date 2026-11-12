@@ -441,6 +441,10 @@ export const de: Catalog = {
   "transcript.status.ready": "Der Text ist fertig.",
   "transcript.status.failed": "Die Aufbereitung des Textes ist fehlgeschlagen.",
   "transcript.loading": "Text wird geladen …",
+  "transcript.incomplete.title": "Unvollständiger Text",
+  "transcript.incomplete.body":
+    "Die Website behält den Rest dieses Artikels ihren Abonnenten vor. Deepn konnte nur diesen Anfang lesen; Zusammenfassung und Chat beziehen sich auf diesen Teil.",
+  "transcript.incomplete.open": "Weiterlesen auf der Website",
   "transcript.notAvailable":
     "Der Volltext ist für dieses Element nicht verfügbar.",
   "transcript.retryA11y": "Text erneut laden",

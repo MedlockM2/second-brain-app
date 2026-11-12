@@ -22,6 +22,7 @@
 
 import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
 import { locateSearchPassage } from "@media-summarizer/core/media/searchPassage";
+import { splitArticleText } from "@media-summarizer/core/media/transcript";
 import {
   formatSectionClock,
   parseTranscriptSections,
@@ -152,6 +153,11 @@ interface TranscriptReaderProps {
    * Only the page that scrolls passes it; without it the chips are not shown.
    */
   onJumpTo?: (node: View) => void;
+  /**
+   * Open the source in the browser, from the notice of an article whose page
+   * reserves the rest to subscribers; `null` when the source cannot be opened.
+   */
+  onOpenSource?: (() => void) | null;
 }
 
 export const TranscriptReader = memo(function TranscriptReader({
@@ -163,6 +169,7 @@ export const TranscriptReader = memo(function TranscriptReader({
   translationToggle,
   passageFocus,
   onJumpTo,
+  onOpenSource,
 }: TranscriptReaderProps): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -222,6 +229,7 @@ export const TranscriptReader = memo(function TranscriptReader({
           onCheckTranslation={onCheckTranslation}
           passageFocus={passageFocus}
           onJumpTo={onJumpTo}
+          onOpenSource={onOpenSource}
         />
       ) : (
         <View style={styles.statusRow}>
@@ -314,28 +322,49 @@ function TranscriptText({
   content,
   passageFocus,
   onJumpTo,
+  onOpenSource,
 }: {
   content: string;
   passageFocus?: SearchPassageFocus | null;
   onJumpTo?: (node: View) => void;
+  onOpenSource?: (() => void) | null;
 }) {
   const sections = useMemo(() => parseTranscriptSections(content), [content]);
   if (sections) {
-    return <SectionedTranscript sections={sections} passageFocus={passageFocus} onJumpTo={onJumpTo} />;
+    return (
+      <SectionedTranscript
+        sections={sections}
+        passageFocus={passageFocus}
+        onJumpTo={onJumpTo}
+        onOpenSource={onOpenSource}
+      />
+    );
   }
-  return <TranscriptBody content={content} passageFocus={passageFocus} />;
+  return <TranscriptBody content={content} passageFocus={passageFocus} onOpenSource={onOpenSource} />;
 }
 
+/**
+ * A web article's standfirst opens the text one size up, and an article whose
+ * page reserves the rest ends on a notice saying so (`splitArticleText`). In
+ * prose the standfirst is the first paragraph the search passage is looked for
+ * in; above a structured text it stands on its own.
+ */
 function TranscriptBody({
   content,
   passageFocus,
+  onOpenSource,
 }: {
   content: string;
   passageFocus?: SearchPassageFocus | null;
+  onOpenSource?: (() => void) | null;
 }) {
   const styles = useThemedStyles(makeStyles);
-  const paragraphs = useMemo(() => splitTranscriptParagraphs(content), [content]);
-  const structured = useMemo(() => hasStructuredMarkdown(content), [content]);
+  const article = useMemo(() => splitArticleText(content), [content]);
+  const structured = useMemo(() => hasStructuredMarkdown(article.body), [article.body]);
+  const paragraphs = useMemo(() => {
+    const body = splitTranscriptParagraphs(article.body);
+    return article.lead && !structured ? [{ speaker: null, text: article.lead }, ...body] : body;
+  }, [article, structured]);
   const passage = passageFocus?.passage ?? null;
   const located = useMemo(
     () =>
@@ -348,12 +377,23 @@ function TranscriptBody({
     passageFocus,
     located?.anchor.offset ?? null,
   );
+  const notice = article.incomplete ? <IncompleteNotice onOpenSource={onOpenSource} /> : null;
   if (structured) {
-    return <MarkdownBody text={content} transcript passageFocus={passageFocus} />;
+    return (
+      <>
+        {article.lead ? (
+          <Text selectable style={[styles.paragraph, styles.lead]}>
+            {article.lead}
+          </Text>
+        ) : null}
+        <MarkdownBody text={article.body} transcript passageFocus={passageFocus} />
+        {notice}
+      </>
+    );
   }
 
   if (paragraphs.length === 0) {
-    return null;
+    return notice;
   }
 
   return (
@@ -366,6 +406,7 @@ function TranscriptBody({
             selectable
             style={[
               styles.paragraph,
+              index === 0 && article.lead !== null && styles.lead,
               index === paragraphs.length - 1 && styles.paragraphLast,
             ]}
             {...(located?.anchor.unit === index ? anchor : {})}
@@ -385,6 +426,36 @@ function TranscriptBody({
           </Text>
         );
       })}
+      {notice}
+    </View>
+  );
+}
+
+/**
+ * The end of an article whose page reserves the rest to its subscribers: the
+ * text stops there, the summary and the chat cover only that part, and the rest
+ * is on the site.
+ */
+function IncompleteNotice({ onOpenSource }: { onOpenSource?: (() => void) | null }) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <View style={styles.incomplete}>
+      <Ionicons name="lock-closed-outline" size={20} color={Colors.textSubtle} />
+      <View style={styles.incompleteText}>
+        <Text style={styles.incompleteTitle}>{t("transcript.incomplete.title")}</Text>
+        <Text style={styles.incompleteBody}>{t("transcript.incomplete.body")}</Text>
+        {onOpenSource ? (
+          <Pressable
+            onPress={onOpenSource}
+            accessibilityRole="link"
+            style={({ pressed }) => [styles.incompleteLink, pressed && styles.incompleteLinkPressed]}
+          >
+            <Ionicons name="open-outline" size={16} color={Colors.textMain} />
+            <Text style={styles.incompleteLinkText}>{t("transcript.incomplete.open")}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -423,10 +494,12 @@ function SectionedTranscript({
   sections,
   passageFocus,
   onJumpTo,
+  onOpenSource,
 }: {
   sections: TranscriptSection[];
   passageFocus?: SearchPassageFocus | null;
   onJumpTo?: (node: View) => void;
+  onOpenSource?: (() => void) | null;
 }) {
   const styles = useThemedStyles(makeStyles);
   const Colors = useThemeColors();
@@ -525,7 +598,7 @@ function SectionedTranscript({
                 </View>
               </View>
             ) : null}
-            <TranscriptBody content={section.body} passageFocus={passageFocus} />
+            <TranscriptBody content={section.body} passageFocus={passageFocus} onOpenSource={onOpenSource} />
           </View>
         );
       })}
@@ -539,19 +612,26 @@ function TranscriptContent({
   onCheckTranslation,
   passageFocus,
   onJumpTo,
+  onOpenSource,
 }: {
   state: TranscriptContentState;
   onRetry: () => void;
   onCheckTranslation: () => void;
   passageFocus?: SearchPassageFocus | null;
   onJumpTo?: (node: View) => void;
+  onOpenSource?: (() => void) | null;
 }) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   if (state.status === "ready") {
     return (
       <View>
-        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
+        <TranscriptText
+          content={state.content}
+          passageFocus={passageFocus}
+          onJumpTo={onJumpTo}
+          onOpenSource={onOpenSource}
+        />
       </View>
     );
   }
@@ -570,7 +650,12 @@ function TranscriptContent({
             {" "}{t("budget.automatic")}
           </Text>
         </View>
-        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
+        <TranscriptText
+          content={state.content}
+          passageFocus={passageFocus}
+          onJumpTo={onJumpTo}
+          onOpenSource={onOpenSource}
+        />
       </View>
     );
   }
@@ -607,7 +692,12 @@ function TranscriptContent({
             </Text>
           </Pressable>
         </View>
-        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
+        <TranscriptText
+          content={state.content}
+          passageFocus={passageFocus}
+          onJumpTo={onJumpTo}
+          onOpenSource={onOpenSource}
+        />
       </View>
     );
   }
@@ -626,7 +716,12 @@ function TranscriptContent({
             {t("transcript.translationFailed")}
           </Text>
         </View>
-        <TranscriptText content={state.content} passageFocus={passageFocus} onJumpTo={onJumpTo} />
+        <TranscriptText
+          content={state.content}
+          passageFocus={passageFocus}
+          onJumpTo={onJumpTo}
+          onOpenSource={onOpenSource}
+        />
       </View>
     );
   }
@@ -798,6 +893,50 @@ const makeStyles = ({ colors: Colors }: Theme) =>
     },
     paragraphLast: {
       marginBottom: 0,
+    },
+    // A web article's standfirst: one step above the body, medium weight.
+    lead: {
+      fontSize: 18,
+      lineHeight: 28,
+      fontWeight: "500",
+    },
+    incomplete: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 12,
+      marginTop: Spacing.lg,
+      padding: Spacing.md,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: Colors.surfaceContainerLow,
+    },
+    incompleteText: {
+      flex: 1,
+      gap: 4,
+    },
+    incompleteTitle: {
+      fontSize: 15,
+      fontWeight: "600",
+      color: Colors.textMain,
+    },
+    incompleteBody: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: Colors.textSubtle,
+    },
+    incompleteLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      alignSelf: "flex-start",
+      gap: 6,
+      minHeight: TouchTarget.minimum,
+    },
+    incompleteLinkPressed: {
+      opacity: 0.6,
+    },
+    incompleteLinkText: {
+      fontSize: Typography.label.fontSize,
+      fontWeight: "600",
+      color: Colors.textMain,
     },
     speaker: {
       color: Colors.textMuted,

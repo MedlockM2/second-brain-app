@@ -1042,6 +1042,7 @@ export function CompletedDetailView({
     onRetry: fetchRawContent,
     onCheckTranslation: translationRefresh.rearm,
     translationToggle,
+    onOpenSource: sourceLink ? handleOpenSource : null,
   };
   // Drawn twice: on the page, which is where the search passage is shown, and as
   // the chat's view of its source, which never carries it.

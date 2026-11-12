@@ -93,7 +93,7 @@ def _error_extraction_metadata(
     """The `extraction_metadata` shape for a page that could not be read."""
     return {
         "extractor": "trafilatura",
-        "extractor_version": "v1",
+        "extractor_version": "v2",
         "requested_url": requested_url,
         "final_url": None,
         "http_status": None,

@@ -275,6 +275,13 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .reader p { margin: 0 0 16px; font-size: 15.5px; max-width: 68ch; }
 .reader .pn { font-size: 12px; color: var(--text-muted); margin-inline-end: 8px; font-variant-numeric: tabular-nums; user-select: none; }
 .reader .speaker { font-weight: 600; }
+/* A web article's standfirst, and the notice that ends a paywalled one (mockup lecture_article_lisible). */
+.reader p.lead { font-size: 18px; line-height: 1.55; font-weight: 500; }
+.reader .incomplete { display: flex; gap: 12px; align-items: flex-start; max-width: 68ch; margin: 24px 0 0; padding: 16px; border-radius: var(--r-lg); background: var(--surface-container-low); }
+.reader .incomplete > .ico { flex: none; margin-top: 2px; color: var(--text-subtle); }
+.reader .incomplete-title { font-weight: 600; font-size: 15px; }
+.reader .incomplete p { margin: 4px 0 0; font-size: 14px; color: var(--text-subtle); }
+.reader .incomplete a { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 14px; font-weight: 600; color: var(--text-main); }
 /* A web page read with its videos: the page, then one section per video (mockup media_reading_sections). */
 .reader .section-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
 .reader .section-chips .chip-btn { color: var(--text-main); cursor: pointer; }

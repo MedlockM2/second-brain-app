@@ -25,7 +25,7 @@ bulb-outline help-circle-outline close-circle refresh-outline sparkles-outline a
 information-circle-outline eye-outline eye-off-outline time-outline cloud-upload-outline
 create-outline arrow-up arrow-down stop download newspaper remove-circle-outline
 play pause mic-outline school-outline desktop-outline mail-open-outline
-person-circle-outline logo-apple logo-google ellipse-outline warning-outline
+person-circle-outline logo-apple logo-google ellipse-outline warning-outline lock-closed-outline
 """.split()))
 
 ROOT = pathlib.Path.cwd()

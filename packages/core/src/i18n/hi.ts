@@ -382,6 +382,10 @@ export const hi: Catalog = {
   "transcript.status.ready": "पाठ तैयार है।",
   "transcript.status.failed": "पाठ की तैयारी विफल रही।",
   "transcript.loading": "पाठ लोड हो रहा है…",
+  "transcript.incomplete.title": "अधूरा पाठ",
+  "transcript.incomplete.body":
+    "यह साइट इस लेख का शेष भाग अपने सब्सक्राइबर्स के लिए आरक्षित रखती है। Deepn केवल यह शुरुआती हिस्सा पढ़ सका; सारांश और चैट इसी हिस्से पर आधारित हैं।",
+  "transcript.incomplete.open": "बाकी साइट पर पढ़ें",
   "transcript.notAvailable": "इस आइटम के लिए पूरा पाठ उपलब्ध नहीं है।",
   "transcript.retryA11y": "पाठ फिर से लोड करें",
   "auth.email": "ईमेल",

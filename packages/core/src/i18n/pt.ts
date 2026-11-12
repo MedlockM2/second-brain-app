@@ -383,6 +383,10 @@ export const pt: Catalog = {
   "transcript.status.ready": "O texto está pronto.",
   "transcript.status.failed": "A preparação do texto falhou.",
   "transcript.loading": "A carregar o texto…",
+  "transcript.incomplete.title": "Texto incompleto",
+  "transcript.incomplete.body":
+    "O site reserva o resto deste artigo aos assinantes. O Deepn só conseguiu ler este início; o resumo e o chat tratam desta parte.",
+  "transcript.incomplete.open": "Ler o resto no site",
   "transcript.notAvailable": "O texto completo não está disponível para este item.",
   "transcript.retryA11y": "Tentar carregar novamente o texto",
   "auth.email": "E-mail",

@@ -433,6 +433,10 @@ export const es: Catalog = {
   "transcript.status.ready": "El texto está listo.",
   "transcript.status.failed": "La preparación del texto ha fallado.",
   "transcript.loading": "Cargando el texto…",
+  "transcript.incomplete.title": "Texto incompleto",
+  "transcript.incomplete.body":
+    "El sitio reserva el resto de este artículo a sus suscriptores. Deepn solo pudo leer este comienzo; el resumen y el chat tratan sobre esta parte.",
+  "transcript.incomplete.open": "Leer el resto en el sitio",
   "transcript.notAvailable":
     "El texto completo no está disponible para este elemento.",
   "transcript.retryA11y": "Reintentar la carga del texto",

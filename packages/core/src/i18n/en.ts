@@ -527,6 +527,10 @@ export const en = {
   "transcript.status.ready": "The text is ready.",
   "transcript.status.failed": "Preparing the text failed.",
   "transcript.loading": "Loading the text…",
+  "transcript.incomplete.title": "Incomplete text",
+  "transcript.incomplete.body":
+    "The site reserves the rest of this article for its subscribers. Deepn could only read this beginning; the summary and the chat cover this part.",
+  "transcript.incomplete.open": "Read the rest on the site",
   "transcript.notAvailable": "The full text is not available for this item.",
   "transcript.retryA11y": "Retry loading the text",
   // --- Sign in / sign up ---

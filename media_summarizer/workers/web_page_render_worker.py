@@ -308,7 +308,7 @@ async def process_web_page_message(body: Dict[str, Any]) -> None:
         job.media_image = cover_url
     render_meta = {
         "extractor": "chromium+trafilatura",
-        "extractor_version": "v1",
+        "extractor_version": "v2",
         "requested_url": url,
         "final_url": rendered.final_url,
         "http_status": rendered.status,

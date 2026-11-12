@@ -125,7 +125,7 @@ class ArticleContent:
         """The `ProcessingJob.extraction_metadata` shape, built in one place."""
         return {
             "extractor": self.extractor or self.provider,
-            "extractor_version": "v1",
+            "extractor_version": "v2",
             "requested_url": self.requested_url,
             "final_url": self.final_url,
             "http_status": self.http_status,

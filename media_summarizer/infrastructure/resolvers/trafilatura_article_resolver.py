@@ -40,6 +40,10 @@ from media_summarizer.core.web_page import (
     inspect_static_html,
     without_javascript_prompts,
 )
+from media_summarizer.infrastructure.resolvers.article_markdown import (
+    INCOMPLETE_MARKER,
+    article_markdown,
+)
 from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 
 logger = logging.getLogger(__name__)
@@ -263,29 +267,22 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
 
 
 def extract_clean_text(html: str) -> str:
-    """The article body as paragraph-delimited plain text.
+    """The article body as Markdown: paragraphs apart, headings, quotes and lists kept.
 
-    trafilatura already emits blank-line separated paragraphs, so the
-    normalizer is effectively a pass-through here -- a useful idempotence
-    canary for the shared formatter (task-231 option B). It runs all the same,
-    because this string is both what gets stored and what gets fingerprinted
-    into the media key: the two must be the same bytes.
+    The rules (overlays and link blocks out, standfirst, paywall) are in
+    `article_markdown`. The normalizer runs on the result because this string is
+    both what gets stored and what gets fingerprinted into the media key: the two
+    must be the same bytes. A paywalled page's text is closed by
+    `INCOMPLETE_MARKER` after that, so a prose text is still cut into readable
+    paragraphs first.
 
     The ``<noscript>`` blocks asking for JavaScript are removed first: trafilatura
     reads them like any markup, and their sentence ("JavaScript is disabled in
     your browser") is what a challenge page or an application shell would
     otherwise be stored as (`core/web_page.without_javascript_prompts`).
     """
-    import trafilatura
-
     try:
-        extracted = trafilatura.extract(
-            without_javascript_prompts(html),
-            output_format="txt",
-            include_comments=False,
-            include_tables=False,
-            include_links=False,
-        )
+        markdown, paywalled = article_markdown(without_javascript_prompts(html))
     except Exception as exc:
         raise ArticleFetchError(
             ArticleFetchErrorCode.EXTRACTION_FAILED,
@@ -293,13 +290,13 @@ def extract_clean_text(html: str) -> str:
             exception_type=type(exc).__name__,
         ) from exc
 
-    text = normalize_transcript_text(extracted, source="article")
+    text = normalize_transcript_text(markdown, source="article")
     if not text:
         raise ArticleFetchError(
             ArticleFetchErrorCode.EMPTY_TEXT,
             details="empty_text_after_extraction",
         )
-    return text
+    return f"{text}\n\n{INCOMPLETE_MARKER}" if paywalled else text
 
 def extract_page_metadata(
     html: str, *, requested_url: str
