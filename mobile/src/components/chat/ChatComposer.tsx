@@ -21,8 +21,8 @@
  *
  * The globe at the left is a toggle, where chat apps put their tools: on, the
  * next question makes the model search the web instead of deciding on its own.
- * It is the globe of the web citations, in their ink blue; on, it sits on their
- * `webCitation` wash, so the two states never rely on colour alone.
+ * It is the globe of the web citations: grey while off; on, it takes their ink
+ * blue on their `webCitation` wash, so the two states never rely on colour alone.
  */
 
 import { Ionicons } from "@expo/vector-icons";
@@ -110,7 +110,7 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
           <Ionicons
             name="globe-outline"
             size={22}
-            color={Colors.onWebCitation}
+            color={forceWebSearch ? Colors.onWebCitation : Colors.textSubtle}
           />
         </Pressable>
         <View style={styles.field}>
