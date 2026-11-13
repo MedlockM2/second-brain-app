@@ -3,7 +3,7 @@ import { ArtifactService } from "../../src/services/artifactService";
 import { AnchoredContextMenu, type AnchorRect } from "../../src/components/AnchoredContextMenu";
 import { RenameDialog } from "../../src/components/RenameDialog";
 import { engagementDisplay } from "@media-summarizer/core/engagements/display";
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -156,6 +156,37 @@ export default function InboxScreen() {
   useEffect(() => {
     settlePendingSaves(new Set(items.map((item) => item.media_item_id)));
   }, [items, pendingSaves]);
+
+  /**
+   * An import sends "Recently added" back to its first tile.
+   *
+   * Its vignette is drawn at the head of the row the moment it leaves
+   * (`buildRecentlyAdded`), and a row the user had swiped along kept its offset,
+   * so the one tile that says "processing" sat off screen, before the first tile
+   * in view. Every import — a share from another app, the camera, the
+   * microphone, the "+" sheet, a retry — goes through `beginPendingSave`, and
+   * that is the only thing that puts a new key in this store: hanging the reset
+   * on a key not seen before covers all of them, and leaves a re-read of the
+   * list (focus, pull-to-refresh, the processing schedule) where the user left
+   * the row.
+   *
+   * Without animation: the share confirmation modal stands in front of this
+   * screen when an import leaves, so nobody watches the row move, and a jump
+   * does not need the row to be in the window to play out the way an animation
+   * does. The screen is not frozen behind the modal or behind another tab
+   * (`NativeTabs` mounts it with `freezeContents` off, and freezing is not
+   * enabled for the stack), so this also runs for a share received from another
+   * app, before Home comes back to the front.
+   */
+  const recentRowRef = useRef<FlatList<HomeTileItem>>(null);
+  const previousSaves = useRef(pendingSaves);
+  useEffect(() => {
+    const knownKeys = new Set(previousSaves.current.map((save) => save.key));
+    previousSaves.current = pendingSaves;
+    if (pendingSaves.some((save) => !knownKeys.has(save.key))) {
+      recentRowRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }
+  }, [pendingSaves]);
 
   /**
    * Whether a tile of "Recently added" is still being processed.
@@ -347,6 +378,7 @@ export default function InboxScreen() {
         {recentTiles.length > 0 && (
           <TileRow
             testID="home-recently-added-row"
+            listRef={recentRowRef}
             icon="download"
             title={t("home.recentlyAdded")}
             tiles={recentTiles}
@@ -471,6 +503,8 @@ function UnsortedReviewButton({ count, onPress }: UnsortedReviewButtonProps) {
 
 interface TileRowProps {
   testID: string;
+  /** Only "Recently added" holds one: an import sends that row back to its start. */
+  listRef?: React.Ref<FlatList<HomeTileItem>>;
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   tiles: HomeTileItem[];
@@ -499,6 +533,7 @@ interface TileRowProps {
  */
 function TileRow({
   testID,
+  listRef,
   icon,
   title,
   tiles,
@@ -516,6 +551,7 @@ function TileRow({
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       <FlatList
+        ref={listRef}
         testID={testID}
         data={tiles}
         keyExtractor={(tile) => tile.learning ? `${tile.learning.kind}:${tile.learning.id}` : `${tile.kind}:${tile.id}`}
