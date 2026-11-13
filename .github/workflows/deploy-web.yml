@@ -49,8 +49,26 @@ env:
   WEB_URL: https://dev.deepn.app
 
 jobs:
+  # The one check that blocks this deploy (owner decision of 2026-11-13): a pushed
+  # commit that changes the mobile app without keeping the web in step
+  # (scripts/check_web_parity.py, AGENTS.md "Web parity") ships nothing. Compilation
+  # checks stay in main.yml and never block a deploy. Same job in mobile-ota-or-build.yml: keep
+  # the two in sync.
+  web-parity:
+    name: Web parity (blocks the deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard — mobile commits keep the web in step
+        run: python3 scripts/check_web_parity.py "${{ github.event.before }}..${{ github.sha }}"
+
   deploy:
     name: Publish the beta package on dev
+    needs: web-parity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

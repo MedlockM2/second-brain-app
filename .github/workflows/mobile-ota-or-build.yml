@@ -79,8 +79,26 @@ env:
   EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
 jobs:
+  # The one check that blocks this deploy (owner decision of 2026-11-13): a pushed
+  # commit that changes the mobile app without keeping the web in step
+  # (scripts/check_web_parity.py, AGENTS.md "Web parity") ships nothing. Compilation
+  # checks stay in main.yml and never block a deploy. Same job in deploy-web.yml: keep
+  # the two in sync.
+  web-parity:
+    name: Web parity (blocks the deploy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard — mobile commits keep the web in step
+        run: python3 scripts/check_web_parity.py "${{ github.event.before }}..${{ github.sha }}"
+
   ota-or-build:
     name: ${{ matrix.platform }} — OTA or native build
+    needs: web-parity
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

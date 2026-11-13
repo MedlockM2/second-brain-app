@@ -93,6 +93,11 @@ It fails on a mobile change with neither, on `Web: done` when the commit does no
 a task that does not exist, and on `n/a` without a reason. Whether the web change is the *same*
 change stays the reviewer's call.
 
+**It is the only check that blocks a deploy**: `deploy-web.yml` and `mobile-ota-or-build.yml` run it
+first and publish nothing when a pushed commit fails it. The compilation checks of `main.yml` (lint,
+typecheck, Terraform) report but never block, by owner decision of 2026-11-13. A blocked push is
+unblocked by a later commit that brings the web side; that commit's deploy ships both.
+
 Decide on **behaviour, not pixels**: a fix to what the app shows or does (a bug, a missing state,
 a rule on folders, the chat, search, the Digest) applies to the web; a fix to how a native control
 lays out or reacts does not. When unsure, create the task rather than write `n/a`. The cheapest
