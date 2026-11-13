@@ -61,6 +61,32 @@ export function mediaTypeLabelKey(type: MediaType | string | null | undefined): 
   }
 }
 
+/**
+ * Catalogue key of the one line a media page shows while its text is being
+ * prepared, worded after what the media *is*.
+ *
+ * Only a source with sound is transcribed, so only an audio or a video says so;
+ * everything that is read — an article, a document, a photo post, a note, a
+ * type not resolved yet — has its content extracted. The type is what decides,
+ * never the job's stage: the API reports `extracting` for an article too, which
+ * is how a web page once announced "Extracting audio content…" (TestFlight
+ * feedback AM6k6fv3QCFz8rAOZnqS9KM). Nor the platform: a YouTube link and an
+ * audio file reached by a direct URL are told apart by their type alone.
+ */
+export function mediaProcessingLabelKey(type: MediaType | string | null | undefined): TranslationKey {
+  switch (type) {
+    case "podcast_episode":
+    case "audio_file":
+    case "audio":
+      return "media.processing.audio";
+    case "youtube_video":
+    case "short_video":
+      return "media.processing.video";
+    default:
+      return "media.processing.extracting";
+  }
+}
+
 export type MediaStatusMarker = "failed" | "processing" | null;
 
 /**

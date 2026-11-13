@@ -37,16 +37,12 @@ function MediaDetailScreen() {
   // `passage`: the excerpt of the search hit this page was opened from, if any.
   const { id, passage, conversationId } = useLocalSearchParams<{ id: string; passage?: string; conversationId?: string }>();
   const router = useRouter();
-  const { state, mediaData, fetchError, processingError, processingMessage, refresh } = useMediaDetailPolling(id);
+  const { state, mediaData, fetchError, notice, refresh } = useMediaDetailPolling(id);
   if (mediaData) {
     return <CompletedDetailView key={id} mediaData={mediaData} passage={passage}
       conversationId={conversationId} onConversationOpened={() => router.setParams({ conversationId: undefined })}
       onBack={() => router.back()} onDeleted={() => router.back()}
-      processingNotice={state === "completed" ? undefined : {
-        message: state === "failed" ? (processingError ?? t("media.failedFallback"))
-          : state === "timeout" ? t("media.timeoutHint") : processingMessage,
-        failed: state === "failed", retry: refresh,
-      }} />;
+      processingNotice={notice} />;
   }
   return <SafeAreaView style={styles.container} edges={["top"]}>
     <MediaDetailHeader onBack={() => router.back()} />

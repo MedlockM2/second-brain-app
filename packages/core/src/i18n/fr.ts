@@ -196,7 +196,6 @@ export const fr: Catalog = {
   "artifacts.type.flashcards": "Cartes mémo",
   "artifacts.type.quiz": "Quiz",
   "artifacts.a11yGenerate": "Générer {label}",
-  "artifacts.processing": "Traitement…",
   "artifacts.panel.generateHeading": "Générer",
   "artifacts.panel.retryA11y": "Réessayer de charger le contenu généré",
   "artifacts.customize.title.summaryShort": "Personnaliser le résumé",
@@ -445,11 +444,6 @@ export const fr: Catalog = {
   "transcript.empty": "Aucun texte disponible pour l'instant.",
   "transcript.emptyHint":
     "Le texte apparaîtra une fois le traitement terminé.",
-  "transcript.status.pending": "La préparation du texte va bientôt commencer.",
-  "transcript.status.extracting": "Extraction du contenu audio…",
-  "transcript.status.transcribing": "Conversion de l'audio en texte…",
-  "transcript.status.ready": "Le texte est prêt.",
-  "transcript.status.failed": "La préparation du texte a échoué.",
   "transcript.loading": "Chargement du texte…",
   "transcript.incomplete.title": "Texte incomplet",
   "transcript.incomplete.body":
@@ -668,7 +662,6 @@ export const fr: Catalog = {
   "media.retryA11y": "Réessayer de charger les détails du média",
   "media.processingHint": "Cela prend généralement moins d'une minute.",
   "media.timeoutTitle": "Cela prend plus de temps que d'habitude.",
-  "media.timeoutHint": "Tirez pour actualiser ou revenez plus tard.",
   "media.sending.file": "Envoi de votre fichier…",
   "media.sending.other": "Envoi vers votre bibliothèque…",
   "media.sending.hint": "Cette page affichera votre contenu dès son arrivée.",
@@ -680,7 +673,6 @@ export const fr: Catalog = {
   "media.processing.audio": "Transcription de l'audio…",
   "media.processing.video": "Transcription de la vidéo…",
   "media.processing.extracting": "Extraction du contenu…",
-  "media.processing.generating": "Génération du texte…",
   "media.transcriptLoadFailed":
     "Impossible de charger le texte pour le moment.",
   "media.movedToNamed": "Déplacé vers « {name} »",
