@@ -12,41 +12,27 @@
 #   ./scripts/testflight_session.sh logs
 #
 # Deux sujets distincts ci-dessous : ce que la commande de démarrage doit porter
-# (notes 1 à 5), puis pourquoi savoir si la session vit est un problème en soi.
+# (notes 1 à 3), puis pourquoi savoir si la session vit est un problème en soi.
 #
-# La commande brute est plus subtile qu'il n'y paraît : cinq éléments sont
+# La commande brute est plus subtile qu'il n'y paraît : trois éléments sont
 # indispensables et chacun a été établi en le cassant d'abord.
 #
-# 1. `env -u CLAUDE_CODE_USE_BEDROCK -u AWS_BEARER_TOKEN_BEDROCK -u ANTHROPIC_MODEL`
-#    Lancée depuis une session `claude-bedrock`, la commande hérite de ces trois
-#    variables et la session « Pro » démarre en réalité sur Bedrock — ce qui vide de
-#    son sens le partage du travail (le lourd sur Bedrock, le pilotage sur Pro).
-#    Inoffensif depuis un terminal ordinaire, où elles ne sont pas définies.
-#
-# 2. `--model claude-opus-5`, l'identifiant complet et non l'alias `opus`.
-#    `claude` et `claude-bedrock` partagent ~/.claude.json, dont un cache
-#    (`clientDataCacheSlots`) mémorise le dernier modèle utilisé. En mode Bedrock il
-#    y inscrit `us.anthropic.claude-opus-5`, que la session Pro reprend et que
-#    l'API Claude.ai refuse — la session démarre, affiche « Claude Pro », puis chaque
-#    tour meurt sur « issue with the selected model ». L'identifiant explicite
-#    court-circuite le cache.
-#
-# 3. `--name` ET `--remote-control` séparément, avec le même libellé.
+# 1. `--name` ET `--remote-control` séparément, avec le même libellé.
 #    `--remote-control [nom]` ne nomme que la session côté téléphone. Le nom
 #    d'adressage inter-sessions — celui que `ListAgents` affiche et que
 #    `SendMessage` prend — vient de `--name`. Sans lui, il est auto-généré depuis le
 #    contenu de la conversation (observé : « feedback triage review ») et change à
 #    chaque relance : le triage de 9h00 ne retrouverait pas sa cible.
 #
-# 4. `--agent feedback-decisions`
+# 2. `--agent feedback-decisions`
 #    Le contexte d'une session qui vit des jours finit compacté. La procédure de
 #    go/no-go doit donc être une définition d'agent, relue à chaque tour, pas un
 #    prompt de démarrage qui s'évapore.
 #
-# 5. `CLAUDE_CONFIG_DIR`, ajouté le 2026-09-15.
+# 3. `CLAUDE_CONFIG_DIR`, ajouté le 2026-09-15.
 #    Sur ce poste, le profil par défaut (~/.claude) est authentifié sur le compte
 #    Mirakl de l'employeur — c'est désormais lui qui porte le travail lourd
-#    (scripts/testflight_triage.sh, `claude` nu, plus de claude-bedrock). Sans cette
+#    (scripts/testflight_triage.sh, `claude` nu). Sans cette
 #    variable, cette session « Pro » démarrerait donc sur le compte Mirakl et non
 #    sur l'abonnement personnel. CLAUDE_CONFIG_DIR isole entièrement credentials,
 #    settings et MCP user-scope dans un répertoire à part.
@@ -106,10 +92,9 @@ PRO_CONFIG_DIR="${HOME}/.claude-personal"
 DELIVER_OK_TOKEN="REMISE_CONFIRMEE"
 DELIVER_FAIL_TOKEN="REMISE_ECHOUEE"
 
-# Le compte Pro perso, jamais Mirakl ni Bedrock : cf. notes 1 et 5 ci-dessus.
+# Le compte Pro perso, jamais Mirakl : cf. note 3 ci-dessus.
 claude_pro() {
-  env -u CLAUDE_CODE_USE_BEDROCK -u AWS_BEARER_TOKEN_BEDROCK -u ANTHROPIC_MODEL \
-    CLAUDE_CONFIG_DIR="${PRO_CONFIG_DIR}" claude "$@"
+  CLAUDE_CONFIG_DIR="${PRO_CONFIG_DIR}" claude "$@"
 }
 
 # `claude agents --json` rend deux identifiants distincts et non interchangeables :
@@ -242,7 +227,7 @@ start_session() {
 }
 
 # Point d'entrée du triage (feedback-triage.md, Phase 7). Ne jamais laisser ce
-# dernier appeler ListAgents/SendMessage lui-même : cf. note 5 plus haut, ça ne
+# dernier appeler ListAgents/SendMessage lui-même : cf. note 3 plus haut, ça ne
 # peut pas fonctionner depuis son profil. Deux cas :
 #   - session absente (le cas normal, puisqu'on ne la démarre plus qu'ici) :
 #     démarrage à froid avec le rapport comme prompt initial, aucun SendMessage ;

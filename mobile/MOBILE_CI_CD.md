@@ -1610,8 +1610,7 @@ Manager*. No new key to generate.
 Registered at **user scope**, deliberately not in the repo: `.mcp.json` is tracked and
 the repo is public, and `.claude/settings.local.json` is gitignored so it is absent
 from agent worktrees — a `${VAR}` depending on it would break for implementers. User
-scope also means both `claude` and `claude-bedrock` see the server, since they share
-`~/.claude/settings.json`.
+scope also means every session of the default profile sees the server.
 
 ```
 claude mcp add --scope user asc-testflight \
@@ -1655,7 +1654,7 @@ a report on build 4 while 6 is live may already be fixed, and the report must sa
 
 `scripts/testflight_triage.sh` is the timer's entry point, shaped like
 `scripts/dispatch_backlog.sh` including its fatal guards. It ends in
-`claude-bedrock --agent feedback-triage`. Two deliberate divergences from the
+`claude --agent feedback-triage`. Two deliberate divergences from the
 dispatcher:
 
 - **No dirty-tree guard.** The dispatcher demands a clean tree because it merges.
@@ -1691,36 +1690,27 @@ reads every comment *and looks at every screenshot* before deciding.
 background **Pro** session (`claude agents`, not a terminal to leave open) whose
 procedure lives in `.claude/agents/feedback-decisions.md`. It receives the report,
 which is what pushes the notification (Claude pushes when it needs a decision to
-continue), and executes the owner's go/no-go. The triage run itself is on Bedrock, so
-the heavy work never touches the Pro quota; cross-session `SendMessage` crosses that
+continue), and executes the owner's go/no-go. The triage run itself is on the machine's default
+profile, so the heavy work never touches the Pro quota; cross-session `SendMessage` crosses that
 authentication boundary — verified.
 
-Four things about its launch command are non-obvious, each established by breaking it
+Three things about its launch command are non-obvious, each established by breaking it
 first. They are documented in the script's header; the summary:
 
-1. **`env -u CLAUDE_CODE_USE_BEDROCK -u AWS_BEARER_TOKEN_BEDROCK -u ANTHROPIC_MODEL`** —
-   started from a `claude-bedrock` session it inherits these and the "Pro" session
-   actually runs on Bedrock, defeating the whole split.
-2. **`--model claude-opus-5`, the full id and not the `opus` alias.** `claude` and
-   `claude-bedrock` share `~/.claude.json`, whose `clientDataCacheSlots` remembers the
-   last model used — `us.anthropic.claude-opus-5` under Bedrock, which the Claude.ai
-   API rejects. The session starts, displays "Claude Pro", then every turn dies on
-   *"issue with the selected model"*. The explicit id bypasses the cache.
-3. **`--name` and `--remote-control` both, with the same label.**
+1. **`--name` and `--remote-control` both, with the same label.**
    `--remote-control [name]` names only the phone-side session; the cross-session
    address that `ListAgents` shows and `SendMessage` takes comes from `--name`.
    Without it the name is auto-generated from conversation content and changes on
    every relaunch, so the 09:00 run would lose its target.
-4. **`--agent feedback-decisions`** — a session that lives for days gets its context
+2. **`--agent feedback-decisions`** — a session that lives for days gets its context
    compacted. The go/no-go procedure must be an agent definition, re-read every turn,
    not a start prompt that evaporates.
 
 **The wrapper starts that session itself** when it is down, before launching the run.
 It has to: the session does not survive a reboot, and on 2026-09-05 and -06 the runs
 prepared code nobody saw while on -07 the report reached nobody, each time because the
-session had simply died. The triage agent cannot do this — from its Bedrock environment
-the session would come up on the wrong account — but `testflight_session.sh` disarms
-exactly those variables, so the wrapper can.
+session had simply died. The triage agent cannot do this — `ListAgents`/`SendMessage` only see sessions
+of their own `CLAUDE_CONFIG_DIR` — so the wrapper does.
 
 If delivery still fails, the run leaves the report on disk and **exits non-zero**, so the
 failure is visible in `systemctl --user status testflight-triage`. That verdict is read

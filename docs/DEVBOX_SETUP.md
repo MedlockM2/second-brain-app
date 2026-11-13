@@ -113,29 +113,14 @@ LocalStack (déprécié par task-130).
 | AWS, compte prod `866874944541` | Aucune clé propre : assumption de rôle depuis les clés dev (§4) |
 | GitHub | `gh auth login` |
 | Expo / EAS | `eas login` — donne accès aux variables d'environnement et aux credentials de build |
-| Bedrock, pour les agents | `~/.config/claude-bedrock/env` : `AWS_BEARER_TOKEN_BEDROCK`, `AWS_REGION`, `ANTHROPIC_MODEL`. Le token se régénère dans la console Bedrock ; les deux autres valeurs se relisent ici |
 
 ### Outillage des agents, hors repo
 
 `scripts/dispatch_backlog.sh` et `scripts/testflight_triage.sh` sont versionnés,
-mais trois de leurs dépendances vivent hors du dépôt et ne suivent pas le clone.
+mais deux de leurs dépendances vivent hors du dépôt et ne suivent pas le clone.
 Aucune n'est un secret irremplaçable ; toutes bloquent le script si elles
 manquent.
 
-- **`~/.local/bin/claude-bedrock`** — prérequis dur des deux scripts
-  (`command -v claude-bedrock`, sinon arrêt). Wrapper d'une dizaine de lignes :
-  il source `~/.config/claude-bedrock/env`, exporte `CLAUDE_CODE_USE_BEDROCK=1`
-  et `CLAUDE_CONFIG_DIR="$HOME/.claude-bedrock"`, puis fait `exec claude "$@"`.
-  À réécrire à la main, avec `chmod +x` et `mkdir -p ~/.claude-bedrock`.
-  Troisième profil, isolé de `~/.claude` (compte Mirakl par défaut, §3) et de
-  `~/.claude-personal` (abonnement personnel — l'alias `claude-perso` du `~/.zshrc`
-  et `scripts/testflight_session.sh` partagent ce même répertoire) :
-  les trois partageraient sinon `~/.claude.json`, dont le cache
-  `clientDataCacheSlots` retient le dernier modèle utilisé — `us.anthropic.claude-opus-5`
-  sous Bedrock, que l'API Claude.ai des deux autres profils refuse ensuite (même
-  piège que `testflight_session.sh`, notes 2 et 5). Aucun `claude auth login` à
-  faire dans ce profil : l'auth Bedrock passe par `AWS_BEARER_TOKEN_BEDROCK`, pas
-  par un compte Claude.ai.
 - **La registration MCP `asc-testflight`** dans `~/.claude.json` — porte
   `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY_PATH`, `ASC_READ_ONLY` et
   `ASC_REDACT_PII`. C'est aussi, à défaut de variables d'environnement, la source
@@ -329,38 +314,30 @@ repo.
 
 Créé à la main le 2026-09-11, **hors Terraform**, et lu par personne : ni Lambda,
 ni Terraform, ni code applicatif. Sa seule raison d'être est qu'un humain remonte
-une machine. Il porte **dix-neuf clés** : les **huit** `EXPO_PUBLIC_*` ci-dessus
+une machine. Il porte **dix-sept clés** : les **huit** `EXPO_PUBLIC_*` ci-dessus
 (dont `EXPO_PUBLIC_SENTRY_DSN`, ajouté le 2026-09-29), les deux clés Apple de §1
-avec leur Key ID, les trois valeurs de `claude-bedrock`, et les trois clés Sentry
-(`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`).
+avec leur Key ID, les trois clés Sentry
+(`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`) et `CANNY_API_KEY`.
 
 **Note sur les scopes du token Sentry** : le token stocké porte 16 scopes incluant
 `org:admin`, `project:admin` et `event:admin`. Avant toute utilisation en
 production, vérifier que les scopes sont restreints au minimum requis (`project:read`
 + `event:read` suffisent pour `scripts/sentry_issue.py`).
 
-Restaurer les deux `.p8` et le wrapper Bedrock, sans qu'aucune valeur ne passe
+Restaurer les deux `.p8`, sans qu'aucune valeur ne passe
 par un fichier intermédiaire ni par la ligne de commande :
 
 ```bash
-mkdir -p ~/.appstoreconnect/private_keys ~/.config/claude-bedrock
+mkdir -p ~/.appstoreconnect/private_keys
 aws secretsmanager get-secret-value --secret-id media-summarizer-devbox \
   --region eu-west-3 --query SecretString --output text \
 | python3 -c '
 import json, os, stat, sys
 s = json.load(sys.stdin)
 home = os.path.expanduser("~")
-# AWS_REGION, pas BEDROCK_AWS_REGION : le wrapper doit exporter le nom que lit le
-# SDK. La cle est renommee DANS le secret pour quun export naif de lensemble ne
-# repointe pas tout le projet sur la region de Bedrock. Valeurs entre guillemets,
-# comme loriginal.
-env = ("export AWS_BEARER_TOKEN_BEDROCK=\"" + s["AWS_BEARER_TOKEN_BEDROCK"] + "\"\n"
-       "export AWS_REGION=\"" + s["BEDROCK_AWS_REGION"] + "\"\n"
-       "export ANTHROPIC_MODEL=\"" + s["ANTHROPIC_MODEL"] + "\"\n")
 targets = [
     (home + "/.appstoreconnect/private_keys/AuthKey_" + s["ASC_KEY_ID"] + ".p8", s["ASC_PRIVATE_KEY"]),
     (home + "/Documents/SubscriptionKey_" + s["APPLE_IAP_KEY_ID"] + ".p8", s["APPLE_IAP_PRIVATE_KEY"]),
-    (home + "/.config/claude-bedrock/env", env),
 ]
 for path, content in targets:
     open(path, "w").write(content)
@@ -376,13 +353,6 @@ dans la forme ci-dessus — une f-string ne peut pas contenir de backslash
 (`SyntaxError` en 3.10/3.11, d'où les concaténations), et comparer le résultat
 avec `diff` **imprime la clé privée dans le terminal** : utiliser `cmp -s`.
 
-**Le piège de la région.** `claude-bedrock` exporte `AWS_REGION=us-east-1`, la
-région de Bedrock, alors que l'infra du projet est en `eu-west-3`. Un shell qui
-a sourcé cet `env` fait lire au code la mauvaise région, et l'erreur se présente
-comme une table DynamoDB absente. C'est pourquoi la clé est stockée sous
-`BEDROCK_AWS_REGION` dans le secret : elle ne peut pas repeupler `AWS_REGION` par
-accident, seul le wrapper la remet sous son vrai nom.
-
 ### Le secret `media-summarizer-devbox-mobile-env`
 
 Créé en même temps que `media-summarizer-devbox`, ce secret de secours porte 8 clés
@@ -390,7 +360,7 @@ Créé en même temps que `media-summarizer-devbox`, ce secret de secours porte 
 sert de secours mobile isolé : si les variables d'environnement EAS sont perdues ou
 corrompues, `eas env:pull` peut être remplacé par une injection depuis ce secret
 AWS, exactement comme §6 le fait pour le `.env` racine. Il ne porte ni les clés
-Apple, ni Sentry, ni Bedrock — seulement les valeurs publiques du build mobile.
+Apple, ni Sentry — seulement les valeurs publiques du build mobile.
 
 ---
 

@@ -14,7 +14,7 @@
 #   --no-deliver      Écrit le rapport sur disque sans le pousser à la session Pro.
 #
 # Prérequis:
-#   - claude sur le PATH. Depuis le 2026-09-15, remplace claude-bedrock : c'est le
+#   - claude sur le PATH. C'est le
 #     profil par défaut de ce poste (~/.claude), authentifié sur le compte Mirakl,
 #     qui porte le travail lourd. La session de délivrance (testflight_session.sh)
 #     est isolée dans un CLAUDE_CONFIG_DIR séparé, sur le compte Pro perso — voir
@@ -65,12 +65,11 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_ROOT}"
 
-# `claude-bedrock` n'est qu'un wrapper qui fait `exec claude`, et sur cette machine
-# ~/.local/bin/claude est un lien vers ~/snap/code/<révision>/.local/share/claude/
+# Sur cette machine, ~/.local/bin/claude est un lien vers ~/snap/code/<révision>/.local/share/claude/
 # — l'installation a tourné dans le bac à sable du snap VS Code, où $HOME est
 # remappé. snapd ne conserve que deux révisions : deux rafraîchissements de VS Code
-# et la cible disparaît. Le wrapper passerait quand même `command -v`, et le timer
-# échouerait chaque matin sur un `exec` introuvable. On nomme la cause ici plutôt
+# et la cible disparaît : le timer échouerait chaque matin sur un binaire
+# introuvable. On nomme la cause ici plutôt
 # que de la laisser deviner depuis un journal.
 CLAUDE_BIN="$(command -v claude || true)"
 if [ -z "${CLAUDE_BIN}" ] || [ ! -x "$(readlink -f "${CLAUDE_BIN}")" ]; then
@@ -172,16 +171,13 @@ fi
 RUN_LOG="$(mktemp)"
 trap 'rm -f "${RUN_LOG}"' EXIT
 
-# `claude`, plus `claude-bedrock` depuis le 2026-09-15 : ce run tourne désormais sur
-# le profil par défaut de ce poste (~/.claude, compte Mirakl), pas sur Bedrock. Les
+# `claude` nu : ce run tourne sur
+# le profil par défaut de ce poste (~/.claude, compte Mirakl). Les
 # agents task-mobile qui écrivent les correctifs sont lancés *dans ce processus* par
 # l'outil Agent et héritent donc du même profil — aucune variable à désarmer ici,
 # contrairement à testflight_session.sh qui isole son propre compte (Pro perso) via
 # CLAUDE_CONFIG_DIR pour ne jamais retomber sur ce profil par défaut.
 #
-# `model: opus` dans les définitions task-mobile reste un **alias** : sous ce profil
-# il se résout normalement, sans le piège de résolution Bedrock documenté par
-# ailleurs pour scripts/testflight_session.sh.
 set +e
 claude --agent feedback-triage \
   --dangerously-skip-permissions \
