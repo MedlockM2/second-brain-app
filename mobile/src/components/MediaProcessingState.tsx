@@ -8,11 +8,13 @@
  * preview's spinner and the transcript's spinner, the last one announcing audio
  * extraction on a web article (TestFlight feedback AM6k6fv3QCFz8rAOZnqS9KM).
  *
- * - `processing`: the breathing dot of the chat (`BreathingDot`) and the line
- *   `mediaProcessingLabelKey` words after the media's type. No action: the host
- *   reads the item every three seconds, so a refresh would add nothing.
- * - `timeout`: the host's poll has given up, so the dot goes — nothing is moving
- *   any more — for a still clock, and the one action that starts it again.
+ * - `processing`: the line `mediaProcessingLabelKey` words after the media's
+ *   type, behind a pulsing amber dot, over the shape of the text to come
+ *   (`TextSkeleton`) — variant C of `mobile-design-mockups/chargement_import_media/`,
+ *   retained by the owner on 2026-11-13. No action: the host reads the item
+ *   every three seconds, so a refresh would add nothing.
+ * - `timeout`: the host's poll has given up, so the skeleton goes — nothing is
+ *   moving any more — for a still clock, and the one action that starts it again.
  * - `failed`: why, in the reader's words. The host adds the request for source
  *   support under it on the page; a refresh would read the same failure again.
  *
@@ -20,10 +22,11 @@
  * and the same notice is drawn on the page and as the chat's view of its source.
  */
 
-import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { BreathingDot } from "./BreathingDot";
+import { TextSkeleton } from "./TextSkeleton";
+import { useReduceMotion } from "../hooks/useReduceMotion";
 import {
   BorderRadius,
   Spacing,
@@ -40,7 +43,7 @@ export type MediaProcessingNotice =
   | { status: "timeout"; retry: () => void }
   | { status: "failed"; message: string };
 
-/** The size of the still glyphs: the box the breathing dot is drawn in. */
+/** The size of the still glyphs of a timeout and of a failure. */
 const GLYPH_SIZE = Spacing.lg;
 
 export function MediaProcessingState({
@@ -50,6 +53,25 @@ export function MediaProcessingState({
 }): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  if (notice.status === "processing") {
+    return (
+      <View style={styles.processing}>
+        <View
+          style={styles.processingLabel}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={notice.message}
+          accessibilityState={{ busy: true }}
+          accessibilityLiveRegion="polite"
+        >
+          <PulsingDot />
+          <Text style={styles.processingText}>{notice.message}</Text>
+        </View>
+        <TextSkeleton />
+      </View>
+    );
+  }
+
   const message =
     notice.status === "timeout" ? t("media.timeoutTitle") : notice.message;
 
@@ -58,22 +80,11 @@ export function MediaProcessingState({
       <View
         style={styles.status}
         accessible
-        accessibilityRole={
-          notice.status === "processing"
-            ? "progressbar"
-            : notice.status === "failed"
-              ? "alert"
-              : "text"
-        }
+        accessibilityRole={notice.status === "failed" ? "alert" : "text"}
         accessibilityLabel={message}
-        accessibilityState={
-          notice.status === "processing" ? { busy: true } : undefined
-        }
         accessibilityLiveRegion="polite"
       >
-        {notice.status === "processing" ? (
-          <BreathingDot />
-        ) : notice.status === "timeout" ? (
+        {notice.status === "timeout" ? (
           <Ionicons name="time-outline" size={GLYPH_SIZE} color={Colors.textMuted} />
         ) : (
           <Ionicons name="alert-circle-outline" size={GLYPH_SIZE} color={Colors.error} />
@@ -102,8 +113,65 @@ export function MediaProcessingState({
   );
 }
 
+const PULSE_HALF_MS = 600;
+
+/** The amber dot before the line: fades in and out, still under reduced motion. */
+function PulsingDot(): React.JSX.Element {
+  const styles = useThemedStyles(makeStyles);
+  const reduceMotion = useReduceMotion();
+  const opacity = useMemo(() => new Animated.Value(1), []);
+
+  useEffect(() => {
+    opacity.setValue(1);
+    if (reduceMotion) return;
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: PULSE_HALF_MS,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: PULSE_HALF_MS,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+          isInteraction: false,
+        }),
+      ]),
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [opacity, reduceMotion]);
+
+  return <Animated.View style={[styles.pulsingDot, { opacity }]} />;
+}
+
 const makeStyles = ({ colors: Colors }: Theme) =>
   StyleSheet.create({
+    // Where the text will be: aligned on the Reader's text, not centred.
+    processing: {
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xl,
+    },
+    processingLabel: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    pulsingDot: {
+      width: 7,
+      height: 7,
+      borderRadius: BorderRadius.full,
+      backgroundColor: Colors.primary,
+    },
+    processingText: {
+      fontSize: Typography.label.fontSize,
+      color: Colors.textSubtle,
+    },
     // Centred in a band of air under the tabs: a state of the page, not one
     // more paragraph of it.
     container: {
