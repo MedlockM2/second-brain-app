@@ -11,12 +11,9 @@ export const pt: Catalog = {
   "artifactActions.deleteBody": "“{title}” será excluído. Suas fontes serão mantidas. Esta ação não pode ser desfeita.",
   "artifactActions.deleteFailed": "Não foi possível excluir este artefato. Tente novamente.",
 
-  "budget.forecastOver": "Esta reserva estimada excede a capacidade atualmente disponível.",
   "budget.available": "{percent} disponível",
   "budget.reserved": "{percent} reservado para operações em curso",
   "budget.uses": "Importações, pré-visualizações, traduções, criações de IA e chat consomem capacidade. Ler, organizar e abrir resultados existentes não.",
-  "budget.forecast": "Reserva estimada: até {percent}. O consumo final depende do processamento realizado.",
-  "budget.automatic": "Preparar uma fonte também pode gerar a sua pré-visualização e traduzir o seu texto.",
   "budget.warning": "{percent} consumido. A capacidade renova-se em {date}.",
 
   "budget.title": "Processamento indisponível",

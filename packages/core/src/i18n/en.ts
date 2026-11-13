@@ -22,12 +22,9 @@ export const en = {
   "artifactActions.deleteBody": "“{title}” will be deleted. Its sources will be kept. This cannot be undone.",
   "artifactActions.deleteFailed": "This artifact could not be deleted. Try again.",
 
-  "budget.forecastOver": "This estimated reservation exceeds the capacity currently available.",
   "budget.available": "{percent} available",
   "budget.reserved": "{percent} reserved for operations in progress",
   "budget.uses": "Imports, previews, translations, AI creations and chat use capacity. Reading, organising and opening existing results do not.",
-  "budget.forecast": "Estimated reservation: up to {percent}. Final usage depends on the processing performed.",
-  "budget.automatic": "Preparing a source can also generate its preview and translate its text.",
   "budget.warning": "{percent} used. Capacity renews on {date}.",
 
   "budget.title": "Processing unavailable",

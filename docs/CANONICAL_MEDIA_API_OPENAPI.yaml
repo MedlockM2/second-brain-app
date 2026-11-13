@@ -23,28 +23,6 @@ paths:
                 $ref: '#/components/schemas/EntitlementStatus'
         '401':
           $ref: '#/components/responses/SessionExpired'
-  /api/entitlements/forecast:
-    post:
-      operationId: forecastBudget
-      tags: [entitlements]
-      description: Read-only reservation estimate. No hold or provider call; actual admission remains atomic.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BudgetForecastRequest'
-      responses:
-        '200':
-          description: An estimate, a per-item refusal, or explicit unavailable state with null figures
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BudgetForecast'
-        '401':
-          $ref: '#/components/responses/SessionExpired'
-        '422':
-          $ref: '#/components/responses/ValidationError'
   /api/media/ingest-url:
     post:
       operationId: ingestMediaUrl
@@ -661,74 +639,6 @@ components:
           type: [boolean, 'null']
         budget:
           $ref: '#/components/schemas/BudgetState'
-    BudgetForecastRequest:
-      type: object
-      required: [operation]
-      properties:
-        operation:
-          type: string
-          enum: [audio_import, document_import, generation, chat_turn]
-        duration_seconds:
-          type: [number, 'null']
-          exclusiveMinimum: 0
-        document_units:
-          type: [integer, 'null']
-          minimum: 1
-        document_unit:
-          type: string
-          enum: [page, sheet]
-          default: page
-        input_tokens:
-          type: [integer, 'null']
-          minimum: 1
-          description: Complete LLM request including instructions, schema and chat history
-        include_translation:
-          type: boolean
-          default: true
-        scope:
-          type: [string, 'null']
-          enum: [media, folder, null]
-        scope_id:
-          type: [string, 'null']
-          maxLength: 256
-        artifact_type:
-          type: [string, 'null']
-          enum: [summary_short, notes, flashcards, quiz, null]
-        parameters:
-          type: object
-          description: Same options and source selection as POST /api/artifacts
-          additionalProperties: true
-        conversation_id:
-          type: [string, 'null']
-          maxLength: 256
-        question:
-          type: [string, 'null']
-          maxLength: 64000
-    BudgetForecast:
-      type: object
-      required: [state, reservation_percent, available_percent, fits_available, refusal, params, resets_at]
-      properties:
-        state:
-          type: string
-          enum: [estimated, unavailable, refused]
-        reservation_percent:
-          type: [number, 'null']
-          description: Advisory reservation bound, never final consumption or an admission guarantee
-        available_percent:
-          type: [number, 'null']
-          minimum: 0
-        fits_available:
-          type: [boolean, 'null']
-        refusal:
-          type: [string, 'null']
-          enum: [budget_exhausted, item_too_large, budget_unavailable, not_entitled, null]
-        params:
-          type: object
-          additionalProperties:
-            type: [string, integer]
-        resets_at:
-          type: string
-          format: date-time
     IngestUrlRequest:
       type: object
       required: [url]

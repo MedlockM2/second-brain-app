@@ -1,13 +1,9 @@
-"""Authenticated capacity reads and advisory forecasts from the common budget."""
+"""Authenticated capacity reads from the common budget."""
 
 from fastapi import APIRouter, Depends
 
 from media_summarizer.api.dependencies.auth import require_verified_email
-from media_summarizer.core.models.budget_contracts import (
-    BudgetForecast,
-    EntitlementStatus,
-    ForecastRequest,
-)
+from media_summarizer.core.models.budget_contracts import EntitlementStatus
 from media_summarizer.core.services import budget_capacity, quota_enforcer
 
 router = APIRouter()
@@ -26,9 +22,3 @@ async def get_entitlements_status(current_user=Depends(require_verified_email)):
         auto_renew_status=snapshot.auto_renew,
         budget=await budget_capacity.get_capacity(current_user.id),
     )
-
-
-@router.post("/entitlements/forecast", response_model=BudgetForecast)
-async def forecast_budget(request: ForecastRequest, current_user=Depends(require_verified_email)):
-    """No provider request or reservation: actual admission remains atomic later."""
-    return await budget_capacity.forecast(current_user.id, request, reading_language=current_user.reading_language)

@@ -29,14 +29,3 @@ export interface EntitlementStatus {
   auto_renew_status: boolean | null;
   budget: BudgetState;
 }
-
-export interface BudgetForecast {
-  state: "estimated" | "unavailable" | "refused";
-  /** A maximum reservation estimate, never the final consumption. */
-  reservation_percent: number | null;
-  available_percent: number | null;
-  fits_available: boolean | null;
-  refusal: BudgetRefusalCode | null;
-  params: Record<string, string | number>;
-  resets_at: string;
-}

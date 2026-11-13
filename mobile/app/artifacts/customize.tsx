@@ -36,8 +36,6 @@
  * Sources and language are added under these options by task-536.
  */
 
-import { artifactForecast } from "@media-summarizer/core/api/entitlements";
-import { BudgetForecastNotice } from "../../src/components/BudgetForecastNotice";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -505,7 +503,6 @@ function CustomizeForm({
       </ScrollView>
 
       <View style={styles.footer}>
-        <BudgetForecastNotice request={sources && selected.size && !sourceError ? artifactForecast(scope, scopeId, format.type, parameters) : null} />
         {refusal ? (
           <View
             style={styles.refusalBanner}

@@ -110,44 +110,11 @@ work whose holds stay in its original month. The counter is strongly consistent;
 counts use the sparse open-attempt index and are eventually consistent. They are
 not a transactionally frozen snapshot and never authorize an operation.
 
-`POST /api/entitlements/forecast` is authenticated and read-only. Its request has
-`operation` (`audio_import`, `document_import`, `generation`, `chat_turn`), and
-the known metadata: positive `duration_seconds`; positive `document_units` with
-`document_unit: page|sheet`; or positive `input_tokens` for the **complete** LLM
-request including instructions, schema and history. `include_translation`
-defaults to true for imports; false is appropriate only when no translation is
-needed. Unknown quantities reserve the configured ceiling in the estimate.
-Models, prices, output ceilings, conversion and component rounding come from
-the same builders as actual admission; callers cannot supply a price or model.
-For an artifact, callers send `scope`, `scope_id`, `artifact_type`, and
-`parameters` instead of estimating prompt tokens in the app (TASK-551). The server
-checks ownership, resolves the selected sources, reads the text and builds the
-same prompt/schema as the worker, without creating an entry or holding capacity.
-For an existing chat, `conversation_id` and `question` use the account's snapshot
-and history with the same estimator as turn admission. Missing/unready sources
-or a conversation not yet opened give an unavailable estimate. A forecast of a
-new generation is an upper reservation estimate; an existing reusable result can
-cost less, without making this estimate a promise of final consumption.
-Imports include the automatic preview and translation. Sheet text uses the
-document text ceiling. This estimate covers the named path, not an arbitrary
-URL's unknown collector/fallback chain or a prediction of actual billed tokens.
-For paths whose metadata/route is not yet known, clients must display no forecast.
-Absent, pending and unavailable estimates render no message or reserved space;
-clients do not display zero or disable submission (TASK-577). Informative forecasts appear in the existing import,
-customization and chat surfaces, without adding a confirmation step. Responses
-for older drafts are discarded. Pending translation copy identifies the automatic
-processing while the original remains readable. Account warnings use the configured
-backend threshold; the web's account pane carries its warning (the desktop Home
-has no allowance banner by the owner's layout decision).
-
-The response has `state: estimated|refused|unavailable`, nullable
-`reservation_percent`, `available_percent`, `fits_available`, nullable `refusal`,
-`params` and `resets_at`. A known estimate can have `fits_available: false` and
-`refusal: budget_exhausted`. Unknown pricing/counter state is `unavailable`, with
-null figures, never zero. Per-item excess is `refused/item_too_large`. This is
-an advisory reservation bound, not final consumption or an admission guarantee:
-no provider call or hold is created. Only the later conditional ledger write
-admits work; final provider metrics settle it and release unused capacity.
+Clients show no consumption estimate before an operation: the only budget
+messages are the account capacity, the settled-usage warning and the refusals
+below. Account warnings use the configured backend threshold; the web's account
+pane carries its warning (the desktop Home has no allowance banner by the owner's
+layout decision).
 
 All synchronous budget refusals carry `X-Quota-Error-Code` and a structured
 `detail` with `error_code`: `budget_exhausted` (403, optional `period_end`),

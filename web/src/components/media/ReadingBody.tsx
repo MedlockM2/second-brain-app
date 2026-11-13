@@ -296,7 +296,6 @@ function TranscriptText({
       {notice && (
         <p className="small subtle" role="status">
           {notice}
-          {state.status === "translation_pending" ? ` ${t("budget.automatic")}` : ""}
         </p>
       )}
       {sections ? <SectionedText sections={sections} sourceUrl={sourceUrl} /> : <TextBody content={content} sourceUrl={sourceUrl} />}

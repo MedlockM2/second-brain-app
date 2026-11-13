@@ -647,7 +647,6 @@ function TranscriptContent({
           />
           <Text style={styles.translationPendingText}>
             {t("transcript.translating")}
-            {" "}{t("budget.automatic")}
           </Text>
         </View>
         <TranscriptText

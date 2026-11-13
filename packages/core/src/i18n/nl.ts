@@ -11,12 +11,9 @@ export const nl: Catalog = {
   "artifactActions.deleteBody": "“{title}” wordt verwijderd. De bronnen blijven behouden. Dit kan niet ongedaan worden gemaakt.",
   "artifactActions.deleteFailed": "Dit artefact kon niet worden verwijderd. Probeer het opnieuw.",
 
-  "budget.forecastOver": "Deze geschatte reservering overschrijdt de momenteel beschikbare capaciteit.",
   "budget.available": "{percent} beschikbaar",
   "budget.reserved": "{percent} gereserveerd voor lopende bewerkingen",
   "budget.uses": "Importeren, voorvertoningen, vertalingen, AI-creaties en chat verbruiken capaciteit. Lezen, ordenen en bestaande resultaten openen niet.",
-  "budget.forecast": "Geschatte reservering: maximaal {percent}. Het uiteindelijke verbruik hangt af van de verwerking.",
-  "budget.automatic": "Een bron voorbereiden kan ook een voorvertoning maken en de tekst vertalen.",
   "budget.warning": "{percent} verbruikt. De capaciteit wordt op {date} vernieuwd.",
 
   "budget.title": "Verwerking niet beschikbaar",

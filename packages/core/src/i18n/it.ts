@@ -11,12 +11,9 @@ export const it: Catalog = {
   "artifactActions.deleteBody": "«{title}» verrà eliminato. Le fonti saranno conservate. L’azione è irreversibile.",
   "artifactActions.deleteFailed": "Impossibile eliminare questo artefatto. Riprova.",
 
-  "budget.forecastOver": "Questa prenotazione stimata supera la capacità attualmente disponibile.",
   "budget.available": "{percent} disponibile",
   "budget.reserved": "{percent} riservato alle operazioni in corso",
   "budget.uses": "Importazioni, anteprime, traduzioni, creazioni IA e chat consumano capacità. Leggere, organizzare e aprire risultati esistenti no.",
-  "budget.forecast": "Prenotazione stimata: fino al {percent}. Il consumo finale dipende dall’elaborazione effettuata.",
-  "budget.automatic": "Preparare una fonte può anche generare la sua anteprima e tradurne il testo.",
   "budget.warning": "{percent} consumato. La capacità si rinnova il {date}.",
 
   "budget.title": "Elaborazione non disponibile",

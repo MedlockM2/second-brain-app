@@ -11,12 +11,9 @@ export const ja: Catalog = {
   "artifactActions.deleteBody": "「{title}」を削除します。ソースは保持されます。この操作は取り消せません。",
   "artifactActions.deleteFailed": "成果物を削除できませんでした。もう一度お試しください。",
 
-  "budget.forecastOver": "この確保容量の見積もりは、現在利用可能な容量を超えています。",
   "budget.available": "利用可能：{percent}",
   "budget.reserved": "処理中の操作のために{percent}を確保",
   "budget.uses": "取り込み、プレビュー、翻訳、AI作成、チャットは容量を使用します。閲覧、整理、既存の結果を開く操作は使用しません。",
-  "budget.forecast": "確保容量の見積もり：最大{percent}。最終的な使用量は実行した処理によります。",
-  "budget.automatic": "ソースの準備では、プレビューの生成やテキストの翻訳も行う場合があります。",
   "budget.warning": "使用済み：{percent}。容量は{date}に更新されます。",
 
   "budget.title": "処理を利用できません",

@@ -1,14 +1,5 @@
-import type { ApiClient } from "../api/apiClient";
-import { createEntitlementsService, type ForecastRequest } from "../api/entitlements";
 import { formatDate, formatNumber, t } from "../i18n/runtime";
-import type { BudgetForecast, BudgetState } from "../types/entitlements";
-import { getQuotaErrorMessage } from "../errors/quotaError";
-
-export function percentage(value: number): string {
-  // A tiny positive reservation must never look free after rounding.
-  if (value > 0 && value < 0.001) return `<${formatNumber(0.001, { maximumFractionDigits: 3 })}%`;
-  return `${formatNumber(value, { maximumFractionDigits: 3 })}%`;
-}
+import type { BudgetState } from "../types/entitlements";
 
 /** Capacity labels round for readability; admission and gauges keep raw values. */
 export function capacityPercentage(value: number): string {
@@ -29,31 +20,4 @@ export function capacityLines(budget: BudgetState): string[] {
     }));
   }
   return lines;
-}
-
-export function forecastLine(forecast: BudgetForecast | null): string | null {
-  if (forecast?.state === "refused" && forecast.refusal) {
-    return getQuotaErrorMessage({ details: forecast.params }, forecast.refusal);
-  }
-  if (forecast?.reservation_percent == null || forecast.state !== "estimated") return null;
-  const estimate = t("budget.forecast", { percent: percentage(forecast.reservation_percent) });
-  return forecast.fits_available === false
-    ? `${estimate} ${t("budget.forecastOver")}`
-    : estimate;
-}
-
-/** Debounce metadata edits and discard late replies; never gates or submits work. */
-export function watchForecast(
-  request: ForecastRequest | null,
-  api: Pick<ApiClient, "apiRequest">,
-  publish: (forecast: BudgetForecast | null) => void,
-): () => void {
-  let active = true;
-  const timer = setTimeout(() => {
-    if (!request) return;
-    void createEntitlementsService(api).forecast(request)
-      .then((value) => { if (active) publish(value); })
-      .catch(() => { if (active) publish(null); });
-  }, 600);
-  return () => { active = false; clearTimeout(timer); };
 }

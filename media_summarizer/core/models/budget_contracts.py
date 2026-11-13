@@ -1,10 +1,8 @@
 """Public capacity, never prices or currency amounts (TASK-550)."""
 
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
-
-from media_summarizer.core.models.beta_budget import BudgetRefusal
+from pydantic import BaseModel
 
 
 class BudgetState(BaseModel):
@@ -27,29 +25,3 @@ class EntitlementStatus(BaseModel):
     is_beta_access: bool
     auto_renew_status: Optional[bool] = None
     budget: BudgetState
-
-
-class ForecastRequest(BaseModel):
-    operation: Literal["audio_import", "document_import", "generation", "chat_turn"]
-    duration_seconds: Optional[float] = Field(default=None, gt=0, allow_inf_nan=False)
-    document_units: Optional[int] = Field(default=None, gt=0)
-    document_unit: Literal["page", "sheet"] = "page"
-    # Complete request, including instructions, schema and (for chat) history.
-    input_tokens: Optional[int] = Field(default=None, gt=0)
-    include_translation: bool = True
-    scope: Optional[Literal["media", "folder"]] = None
-    scope_id: Optional[str] = Field(default=None, max_length=256)
-    artifact_type: Optional[Literal["summary_short", "notes", "flashcards", "quiz"]] = None
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    conversation_id: Optional[str] = Field(default=None, max_length=256)
-    question: Optional[str] = Field(default=None, max_length=64000)
-
-
-class BudgetForecast(BaseModel):
-    state: Literal["estimated", "unavailable", "refused"]
-    reservation_percent: Optional[float] = None
-    available_percent: Optional[float] = None
-    fits_available: Optional[bool] = None
-    refusal: Optional[BudgetRefusal] = None
-    params: Dict[str, Union[str, int]] = Field(default_factory=dict)
-    resets_at: str

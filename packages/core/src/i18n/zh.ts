@@ -11,12 +11,9 @@ export const zh: Catalog = {
   "artifactActions.deleteBody": "将删除“{title}”。来源将保留。此操作无法撤销。",
   "artifactActions.deleteFailed": "无法删除此成果，请重试。",
 
-  "budget.forecastOver": "此预计预留量超过当前可用容量。",
   "budget.available": "可用容量：{percent}",
   "budget.reserved": "进行中的操作已预留{percent}",
   "budget.uses": "导入、预览、翻译、AI创建和聊天会消耗容量。阅读、整理和打开已有结果不消耗容量。",
-  "budget.forecast": "预计预留：最多{percent}。最终用量取决于实际执行的处理。",
-  "budget.automatic": "准备来源时也可能生成预览并翻译其文本。",
   "budget.warning": "已用{percent}。容量将于{date}更新。",
 
   "budget.title": "无法处理",

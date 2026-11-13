@@ -24,12 +24,9 @@ export const fr: Catalog = {
   "artifactActions.deleteBody": "« {title} » sera supprimé. Ses sources seront conservées. Cette action est irréversible.",
   "artifactActions.deleteFailed": "Impossible de supprimer cet artefact. Réessayez.",
 
-  "budget.forecastOver": "Cette réservation estimée dépasse la capacité actuellement disponible.",
   "budget.available": "{percent} disponibles",
   "budget.reserved": "{percent} réservés aux traitements en cours",
   "budget.uses": "Imports, aperçus, traductions, créations IA et chat consomment de la capacité. Lire, ranger et ouvrir des résultats existants n’en consomment pas.",
-  "budget.forecast": "Réservation estimée : jusqu’à {percent}. La consommation finale dépend du traitement réalisé.",
-  "budget.automatic": "Préparer une source peut aussi générer son aperçu et traduire son texte.",
   "budget.warning": "{percent} consommés. La capacité se renouvelle le {date}.",
 
   "budget.title": "Traitement indisponible",

@@ -11,12 +11,9 @@ export const de: Catalog = {
   "artifactActions.deleteBody": "„{title}“ wird gelöscht. Die Quellen bleiben erhalten. Dies kann nicht rückgängig gemacht werden.",
   "artifactActions.deleteFailed": "Dieses Artefakt konnte nicht gelöscht werden. Versuche es erneut.",
 
-  "budget.forecastOver": "Diese geschätzte Reservierung übersteigt die derzeit verfügbare Kapazität.",
   "budget.available": "{percent} verfügbar",
   "budget.reserved": "{percent} für laufende Vorgänge reserviert",
   "budget.uses": "Importe, Vorschauen, Übersetzungen, KI-Erstellungen und Chat verbrauchen Kapazität. Lesen, Organisieren und Öffnen vorhandener Ergebnisse nicht.",
-  "budget.forecast": "Geschätzte Reservierung: bis zu {percent}. Der endgültige Verbrauch hängt von der Verarbeitung ab.",
-  "budget.automatic": "Die Vorbereitung einer Quelle kann auch ihre Vorschau erstellen und ihren Text übersetzen.",
   "budget.warning": "{percent} verbraucht. Die Kapazität wird am {date} erneuert.",
 
   "budget.title": "Verarbeitung nicht verfügbar",
