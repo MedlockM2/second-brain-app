@@ -522,7 +522,7 @@ function DigestPage({
 }): React.JSX.Element {
   const Colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const { state, mediaData, fetchError, processingError, processingMessage, refresh } =
+  const { state, mediaData, fetchError, notice, refresh } =
     useMediaDetailPolling(mediaItemId);
 
   const handleDeleted = useCallback(
@@ -539,11 +539,7 @@ function DigestPage({
           onDeleted={handleDeleted}
           underStatusBar={false}
           translationBudgets={translationBudgets}
-          processingNotice={state === "completed" ? undefined : {
-            message: state === "failed" ? (processingError ?? t("media.failedFallback"))
-              : state === "timeout" ? t("media.timeoutHint") : processingMessage,
-            failed: state === "failed", retry: refresh,
-          }}
+          processingNotice={notice}
         />
       </View>
     );

@@ -7,6 +7,11 @@
  * lets the screen keep loading (and keep a translation poll alive) while the
  * user is looking at another tab.
  *
+ * Drawn only once the media is readable. Before that the job's stage is no
+ * reader's business — it reads `extracting` on a web article as much as on a
+ * podcast — and the Reader tab shows `MediaProcessingState` in this section's
+ * place.
+ *
  * The title row can carry one control, `translationToggle`: on a media served
  * translated, the way back to what was actually said (task-419).
  *
@@ -192,18 +197,6 @@ export const TranscriptReader = memo(function TranscriptReader({
     );
   }
 
-  const statusMessages: Record<string, string> = {
-    pending: t("transcript.status.pending"),
-    extracting: t("transcript.status.extracting"),
-    transcribing: t("transcript.status.transcribing"),
-    ready: t("transcript.status.ready"),
-    failed: t("transcript.status.failed"),
-  };
-
-  const isReady = transcript.status === "ready";
-  const isFailed = transcript.status === "failed";
-  const isProcessing = !isReady && !isFailed;
-
   return (
     <View style={styles.container}>
       {/* The title, and to its right the switch between the translation and the
@@ -219,42 +212,14 @@ export const TranscriptReader = memo(function TranscriptReader({
         ) : null}
       </View>
 
-      {/* When the transcript is ready, surface the actual content inline.
-          Until it's ready (or if fetching the body fails), keep the status row
-          so the user knows where things stand. */}
-      {isReady ? (
-        <TranscriptContent
-          state={content}
-          onRetry={onRetry}
-          onCheckTranslation={onCheckTranslation}
-          passageFocus={passageFocus}
-          onJumpTo={onJumpTo}
-          onOpenSource={onOpenSource}
-        />
-      ) : (
-        <View style={styles.statusRow}>
-          {isProcessing && (
-            <ActivityIndicator
-              size="small"
-              color={Colors.primary}
-              style={styles.statusGlyph}
-            />
-          )}
-          {isFailed && (
-            <Ionicons
-              name="close-circle"
-              size={16}
-              color={Colors.error}
-              style={styles.statusGlyph}
-            />
-          )}
-          <Text
-            style={[styles.statusText, isFailed && styles.statusTextFailed]}
-          >
-            {statusMessages[transcript.status] || t("artifacts.processing")}
-          </Text>
-        </View>
-      )}
+      <TranscriptContent
+        state={content}
+        onRetry={onRetry}
+        onCheckTranslation={onCheckTranslation}
+        passageFocus={passageFocus}
+        onJumpTo={onJumpTo}
+        onOpenSource={onOpenSource}
+      />
     </View>
   );
 });

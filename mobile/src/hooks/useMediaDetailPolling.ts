@@ -6,33 +6,14 @@ import { useResourceSnapshot } from "../contexts/ResourceCacheContext";
 import { MediaService } from "../services/mediaService";
 import { resourceKeys } from "../services/resourceCache";
 import { isResourceSuperseded } from "@media-summarizer/core/cache/resourceCache";
+import { mediaProcessingLabelKey } from "@media-summarizer/core/media/mediaDisplay";
 import { getFriendlyErrorMessage } from "../lib/getFriendlyErrorMessage";
 import { t } from "../i18n";
-import type {
-  MediaStatusResponse,
-  SourcePlatform,
-} from "@media-summarizer/core/types/media";
+import type { MediaProcessingNotice } from "../components/MediaProcessingState";
+import type { MediaStatusResponse } from "@media-summarizer/core/types/media";
 
 const POLL_INTERVAL_MS = 3000;
 const TIMEOUT_MS = 5 * 60 * 1000;
-function getProcessingMessage(source?: SourcePlatform): string {
-  switch (source) {
-    case "spotify":
-    case "apple_podcasts":
-    case "deezer":
-    case "rss":
-    case "podcast_index":
-      return t("media.processing.audio");
-    case "youtube":
-      return t("media.processing.video");
-    case "instagram":
-    case "tiktok":
-    case "x":
-      return t("media.processing.extracting");
-    default:
-      return t("media.processing.generating");
-  }
-}
 export type MediaDetailPollingState =
   | "loading"
   | "processing"
@@ -44,8 +25,12 @@ export interface UseMediaDetailPollingResult {
   state: MediaDetailPollingState;
   mediaData: MediaStatusResponse | null;
   fetchError: string | null;
-  processingError: string | null;
-  processingMessage: string;
+  /**
+   * What the page shows in place of the text while the item is not readable —
+   * on its way, overdue, or failed — and `null` once it is (`completed`) or
+   * before there is an item to speak of (`loading`, `error`).
+   */
+  notice: MediaProcessingNotice | null;
   timedOut: boolean;
   refresh: () => Promise<void>;
 }
@@ -124,16 +109,23 @@ export function useMediaDetailPolling(
           fallback: t("media.loadFailed"),
         })
       : null,
-    processingError:
-      state === "failed"
-        ? getFriendlyErrorMessage(
-            { code: mediaData?.processing_job.error_code },
-            { fallback: t("media.failedFallback") },
-          )
-        : null,
-    processingMessage: getProcessingMessage(
-      mediaData?.media_item.source_platform,
-    ),
+    notice:
+      state === "processing"
+        ? {
+            status: "processing",
+            message: t(mediaProcessingLabelKey(mediaData?.media_item.media_type)),
+          }
+        : state === "timeout"
+          ? { status: "timeout", retry: refresh }
+          : state === "failed"
+            ? {
+                status: "failed",
+                message: getFriendlyErrorMessage(
+                  { code: mediaData?.processing_job.error_code },
+                  { fallback: t("media.failedFallback") },
+                ),
+              }
+            : null,
     refresh,
   };
 }

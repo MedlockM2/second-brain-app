@@ -1,6 +1,6 @@
 import { hasStructuredMarkdown } from "@media-summarizer/core/chat/markdown";
 import { LOCALE_ENDONYMS, isSupportedLocale } from "@media-summarizer/core/i18n/locales";
-import { mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
+import { mediaProcessingLabelKey, mediaTypeIconName } from "@media-summarizer/core/media/mediaDisplay";
 import { resolveSourcePreviewState } from "@media-summarizer/core/media/sourcePreview";
 import { languageTag, resolveSourceLink, splitArticleText, splitTranscriptParagraphs } from "@media-summarizer/core/media/transcript";
 import {
@@ -8,7 +8,7 @@ import {
   parseTranscriptSections,
   type TranscriptSection,
 } from "@media-summarizer/core/media/transcriptSections";
-import type { MediaItemContract, SourcePlatform } from "@media-summarizer/core/types/media";
+import type { MediaItemContract } from "@media-summarizer/core/types/media";
 import { useRef, useState } from "react";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { MediaDetailState } from "../../media/useMediaDetail";
@@ -23,26 +23,6 @@ function describeLanguage(code: string | null | undefined): string | null {
   const primary = code?.trim().split(/[-_]/)[0]?.toLowerCase();
   if (!primary) return null;
   return isSupportedLocale(primary) ? LOCALE_ENDONYMS[primary] : primary.toUpperCase();
-}
-
-/** What the job is doing, worded after the platform (the mobile `getProcessingMessage`). */
-function processingKey(platform?: SourcePlatform | string) {
-  switch (platform) {
-    case "spotify":
-    case "apple_podcasts":
-    case "deezer":
-    case "rss":
-    case "podcast_index":
-      return "media.processing.audio" as const;
-    case "youtube":
-      return "media.processing.video" as const;
-    case "instagram":
-    case "tiktok":
-    case "x":
-      return "media.processing.extracting" as const;
-    default:
-      return "media.processing.generating" as const;
-  }
 }
 
 /**
@@ -101,7 +81,7 @@ export function ReadingBody({
             <Icon name="sync-outline" />
           </span>
           <div>
-            <div style={{ fontWeight: 600 }}>{t(processingKey(item.source_platform))}</div>
+            <div style={{ fontWeight: 600 }}>{t(mediaProcessingLabelKey(item.media_type))}</div>
             <p className="small subtle">{t("media.processingHint")}</p>
           </div>
         </div>

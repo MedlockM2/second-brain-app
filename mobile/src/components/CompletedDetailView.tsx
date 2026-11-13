@@ -24,6 +24,9 @@ import { isResourceGone } from "@media-summarizer/core/cache/resourceCache";
  *     "L'essentiel" (Callout Aside)      ← `SourcePreview`
  *     Full text                          ← `TranscriptReader`
  *
+ * Until the text is readable, the last two give way to one state, the host's
+ * `processingNotice` drawn by `MediaProcessingState`.
+ *
  * Once the Reader | AI segment has scrolled under the top edge, `MediaReaderBar`
  * fades in over the top: back, a thumbnail, the title, the segment folded to two glyphs, and the reading
  * progress. It replaces the header and the sticky segment the page used to keep
@@ -46,9 +49,6 @@ import React, {
 } from "react";
 import {
   Animated,
-  ActivityIndicator,
-  Pressable,
-  Text,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -97,6 +97,10 @@ import {
   resolveSourcePreviewState,
   type SourcePreviewState,
 } from "./SourcePreview";
+import {
+  MediaProcessingState,
+  type MediaProcessingNotice,
+} from "./MediaProcessingState";
 import type { SearchPassageFocus, SearchPassageTarget } from "./SearchPassage";
 import { SEARCH_PASSAGE_HIGHLIGHT_MS } from "@media-summarizer/core/media/searchPassage";
 import { Spacing, Typography, type Theme } from "../constants/theme";
@@ -282,7 +286,13 @@ export interface CompletedDetailViewProps {
    * else differs between the two: both carry the back and `…` buttons.
    */
   underStatusBar?: boolean;
-  processingNotice?: { message: string; failed: boolean; retry: () => void };
+  /**
+   * Where the item stands while its text is not readable, from the host's poll;
+   * `null` or absent once it is. While it is set, the Reader tab — and the chat's
+   * view of its source — show this one state, in place of the preview and the
+   * full text.
+   */
+  processingNotice?: MediaProcessingNotice | null;
   /**
    * Where the budget of the translation poll is kept, for a host that mounts
    * and unmounts this page while its screen stays open — the Digest carousel,
@@ -315,7 +325,7 @@ export function CompletedDetailView({
 }: CompletedDetailViewProps): React.JSX.Element {
   // `mode` for the status bar glyphs below, which are a prop rather than a
   // style and so cannot come from the sheet.
-  const { mode, colors: Colors } = useTheme();
+  const { mode } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { isAuthenticated } = useAuth();
   const { media_item, processing_job } = mediaData;
@@ -1055,7 +1065,11 @@ export function CompletedDetailView({
   const chatTranscript = (
     <>
       {refreshNotice}
-      <TranscriptReader {...readerProps} />
+      {processingNotice ? (
+        <MediaProcessingState notice={processingNotice} />
+      ) : (
+        <TranscriptReader {...readerProps} />
+      )}
     </>
   );
 
@@ -1154,24 +1168,32 @@ export function CompletedDetailView({
               readerContentTop.current = event.nativeEvent.layout.y;
             }}
           >
-            {/* What this source is about, before the source itself. */}
-            {processingNotice ? <View style={{ gap: Spacing.md, paddingVertical: Spacing.md }}>
-              {!processingNotice.failed ? <ActivityIndicator color={Colors.primary} /> : null}
-              <Text style={{ color: Colors.textMain }}>{processingNotice.message}</Text>
-              {processingNotice.failed ? <SourceSupportRequestCard mediaItemId={media_item.media_item_id}
-                errorCode={processing_job.error_code} /> : null}
-              <Pressable onPress={processingNotice.retry} accessibilityRole="button">
-                <Text style={{ color: Colors.textMain }}>{t("media.refresh")}</Text>
-              </Pressable>
-            </View> : null}
-            <SourcePreview state={mediaReady ? preview : { status: processingNotice?.failed ? "unavailable" : "pending" }} />
-            <View
-              onLayout={(event) => {
-                transcriptTop.current = event.nativeEvent.layout.y;
-              }}
-            >
-              {transcript}
-            </View>
+            {processingNotice ? (
+              // Not readable yet: one state for the whole tab. The request for
+              // source support only exists on the page, under a failure.
+              <>
+                {refreshNotice}
+                <MediaProcessingState notice={processingNotice} />
+                {processingNotice.status === "failed" ? (
+                  <SourceSupportRequestCard
+                    mediaItemId={media_item.media_item_id}
+                    errorCode={processing_job.error_code}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <>
+                {/* What this source is about, before the source itself. */}
+                <SourcePreview state={preview} />
+                <View
+                  onLayout={(event) => {
+                    transcriptTop.current = event.nativeEvent.layout.y;
+                  }}
+                >
+                  {transcript}
+                </View>
+              </>
+            )}
           </View>
         ) : (
           // No "N sources" line: a media item is a single source.
