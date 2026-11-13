@@ -79,14 +79,19 @@ The web app (`web/`) offers the same functions as the mobile app, laid out for a
 built on 2026-10-11; four days of mobile fixes later it had drifted, because no step ever asked
 whether the web needed the same change (task-525 catches up).
 
-**Every non-merge commit touching `mobile/app/` or `mobile/src/` ends with one `Web:` line**,
-checked by `scripts/check_web_parity.py` in both `main.yml` and `pr.yml`:
+**Every non-merge commit touching `mobile/app/` or `mobile/src/` either changes `web/` too, or
+ends with one `Web:` line that says why not.** `scripts/check_web_parity.py` checks it on the
+diff, in both `main.yml` and `pr.yml`:
 
-| Line | When |
+| Commit | Passes when |
 |---|---|
-| `Web: done` | the same commit makes the change in `web/` too |
-| `Web: task-NNN` | a backlog task (existing, or created in the same run) carries the web side |
+| changes `web/` too | always — parity is in the diff; a `Web: done` line is optional |
+| `Web: task-NNN` | the task exists in `backlog/` (create it in the same run) and carries the web side |
 | `Web: n/a (<reason>)` | nothing to do on the web: iOS keyboard, native rendering, touch-only gesture, store or build config |
+
+It fails on a mobile change with neither, on `Web: done` when the commit does not touch `web/`, on
+a task that does not exist, and on `n/a` without a reason. Whether the web change is the *same*
+change stays the reviewer's call.
 
 Decide on **behaviour, not pixels**: a fix to what the app shows or does (a bug, a missing state,
 a rule on folders, the chat, search, the Digest) applies to the web; a fix to how a native control

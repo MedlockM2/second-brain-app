@@ -6,10 +6,10 @@ on:
       - main
 
 jobs:
-  # Every commit touching mobile/app or mobile/src says what happens on the web
-  # (AGENTS.md, "Web parity"). Same job in pr.yml: keep the two in sync.
+  # Every commit touching mobile/app or mobile/src changes web/ too, or says why
+  # not (AGENTS.md, "Web parity"). Same job in pr.yml: keep the two in sync.
   web-parity:
-    name: Web parity (Web trailer on mobile commits)
+    name: Web parity (mobile commits change web/ or say why not)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -17,10 +17,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard — mobile commits carry a Web line
+      - name: Guard — mobile commits keep the web in step
         run: python3 scripts/check_web_parity.py "${{ github.event.before }}..${{ github.sha }}"
 
-  # Compilation checks only. web-parity separately checks mobile commit trailers.
+  # Compilation checks only. web-parity separately checks that mobile commits keep the web in step.
   web:
     name: Web (lint + typecheck + build)
     runs-on: ubuntu-latest
