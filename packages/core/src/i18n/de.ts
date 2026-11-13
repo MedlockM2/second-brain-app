@@ -644,7 +644,6 @@ export const de: Catalog = {
   "media.sectionsA11y": "Medienbereiche",
   "media.loadFailed": "Die Mediendetails konnten nicht geladen werden.",
   "media.retryA11y": "Mediendetails erneut laden",
-  "media.processingHint": "Das dauert meist weniger als eine Minute.",
   "media.timeoutTitle": "Das dauert länger als gewöhnlich.",
   "media.sending.file": "Deine Datei wird hochgeladen…",
   "media.sending.other": "Wird an deine Bibliothek gesendet…",

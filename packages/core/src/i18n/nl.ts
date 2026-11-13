@@ -563,7 +563,6 @@ export const nl: Catalog = {
   "media.sectionsA11y": "Onderdelen van het item",
   "media.loadFailed": "De details van dit item konden niet worden geladen.",
   "media.retryA11y": "Details van het item opnieuw laden",
-  "media.processingHint": "Dit duurt meestal minder dan een minuut.",
   "media.timeoutTitle": "Dit duurt langer dan gewoonlijk.",
   "media.sending.file": "Je bestand wordt geüpload…",
   "media.sending.other": "Wordt naar je bibliotheek verzonden…",

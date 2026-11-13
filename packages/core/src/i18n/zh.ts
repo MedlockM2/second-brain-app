@@ -543,7 +543,6 @@ export const zh: Catalog = {
   "media.sectionsA11y": "媒体分区",
   "media.loadFailed": "无法加载媒体详情。",
   "media.retryA11y": "重新加载媒体详情",
-  "media.processingHint": "通常不到一分钟。",
   "media.timeoutTitle": "这次花的时间比平常长。",
   "media.sending.file": "正在上传你的文件…",
   "media.sending.other": "正在发送到你的资料库…",

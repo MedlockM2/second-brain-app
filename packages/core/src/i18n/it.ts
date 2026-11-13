@@ -562,7 +562,6 @@ export const it: Catalog = {
   "media.sectionsA11y": "Sezioni del contenuto",
   "media.loadFailed": "Impossibile caricare i dettagli del contenuto.",
   "media.retryA11y": "Riprova a caricare i dettagli del contenuto",
-  "media.processingHint": "Di solito ci vuole meno di un minuto.",
   "media.timeoutTitle": "Sta impiegando più del solito.",
   "media.sending.file": "Invio del file in corso…",
   "media.sending.other": "Invio alla tua libreria…",

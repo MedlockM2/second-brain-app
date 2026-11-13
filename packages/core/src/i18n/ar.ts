@@ -557,7 +557,6 @@ export const ar: Catalog = {
   "media.sectionsA11y": "أقسام العنصر",
   "media.loadFailed": "تعذّر تحميل تفاصيل العنصر.",
   "media.retryA11y": "إعادة تحميل تفاصيل العنصر",
-  "media.processingHint": "يستغرق ذلك عادةً أقل من دقيقة.",
   "media.timeoutTitle": "يستغرق هذا وقتًا أطول من المعتاد.",
   "media.sending.file": "جارٍ رفع ملفك…",
   "media.sending.other": "جارٍ الإرسال إلى مكتبتك…",

@@ -755,7 +755,6 @@ export const en = {
   "media.sectionsA11y": "Media sections",
   "media.loadFailed": "Unable to load media details.",
   "media.retryA11y": "Retry loading media details",
-  "media.processingHint": "This usually takes less than a minute.",
   "media.timeoutTitle": "This is taking longer than usual.",
   "media.sending.file": "Uploading your file…",
   "media.sending.other": "Sending to your library…",

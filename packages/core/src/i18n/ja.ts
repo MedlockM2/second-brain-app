@@ -551,7 +551,6 @@ export const ja: Catalog = {
   "media.sectionsA11y": "メディアのセクション",
   "media.loadFailed": "メディアの詳細を読み込めませんでした。",
   "media.retryA11y": "メディアの詳細を再読み込み",
-  "media.processingHint": "通常は 1 分もかかりません。",
   "media.timeoutTitle": "いつもより時間がかかっています。",
   "media.sending.file": "ファイルをアップロードしています…",
   "media.sending.other": "ライブラリに送信しています…",

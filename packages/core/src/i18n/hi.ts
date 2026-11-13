@@ -563,7 +563,6 @@ export const hi: Catalog = {
   "media.sectionsA11y": "मीडिया के अनुभाग",
   "media.loadFailed": "मीडिया का विवरण लोड नहीं हो सका।",
   "media.retryA11y": "मीडिया का विवरण फिर से लोड करें",
-  "media.processingHint": "आम तौर पर इसमें एक मिनट से भी कम लगता है।",
   "media.timeoutTitle": "इसमें सामान्य से ज़्यादा समय लग रहा है।",
   "media.sending.file": "आपकी फ़ाइल अपलोड हो रही है…",
   "media.sending.other": "आपकी लाइब्रेरी में भेजा जा रहा है…",

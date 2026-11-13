@@ -305,6 +305,17 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; }
 .spin { animation: spin 1.2s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+/* A media still being imported: the shape of its text (variant C of chargement_import_media) */
+.text-wait-label { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-subtle); margin-bottom: 18px; }
+.text-wait-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); flex: none; animation: text-wait-pulse 1.2s ease-in-out infinite alternate; }
+@keyframes text-wait-pulse { from { opacity: 1; } to { opacity: .3; } }
+.text-skeleton { display: flex; flex-direction: column; gap: 12px; }
+.text-skeleton i { display: block; height: 14px; border-radius: 7px; background: linear-gradient(90deg, var(--surface-container) 0%, var(--surface-container) 35%, var(--surface-container-high) 50%, var(--surface-container) 65%, var(--surface-container) 100%); background-size: 300% 100%; animation: text-skeleton-sweep 1.6s ease-in-out infinite; }
+.text-skeleton i.title { width: 46%; height: 22px; border-radius: 8px; margin-bottom: 8px; }
+.text-skeleton .gap { height: 14px; }
+@keyframes text-skeleton-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+[dir="rtl"] .text-skeleton i { animation-direction: reverse; }
+@media (prefers-reduced-motion: reduce) { .text-wait-dot, .text-skeleton i { animation: none; } }
 
 /* AI pane (useAiPane), on the mobile AI tab (task-534, mobile-design-mockups/ai_tab_notebooklm/):
    the "Generate" grid, then a single list — generations in progress, then every entry. */

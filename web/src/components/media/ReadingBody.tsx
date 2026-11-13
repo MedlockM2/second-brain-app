@@ -19,6 +19,13 @@ import { ICON_PATHS } from "../icons.generated";
 import { MarkdownView } from "../MarkdownView";
 
 /** A language by its own name ("English"), or its tag when the app does not ship it. */
+/** Line widths of the text skeleton, in reading order; `null` separates two paragraphs. */
+const SKELETON_LINES: (string | null)[] = [
+  "100%", "96%", "99%", "72%", null,
+  "98%", "100%", "94%", "58%", null,
+  "97%", "88%",
+];
+
 function describeLanguage(code: string | null | undefined): string | null {
   const primary = code?.trim().split(/[-_]/)[0]?.toLowerCase();
   if (!primary) return null;
@@ -76,13 +83,19 @@ export function ReadingBody({
       <Hero item={item} title={title} link={link} />
 
       {state === "processing" && (
-        <div className="state-card" role="status">
-          <span className="spin" style={{ display: "inline-flex" }}>
-            <Icon name="sync-outline" />
-          </span>
-          <div>
-            <div style={{ fontWeight: 600 }}>{t(mediaProcessingLabelKey(item.media_type))}</div>
-            <p className="small subtle">{t("media.processingHint")}</p>
+        // Variant C of mobile-design-mockups/chargement_import_media/, as on mobile
+        // (MediaProcessingState): one line after the media type, over the shape of
+        // the text to come.
+        <div className="text-wait" role="status" aria-busy="true">
+          <div className="text-wait-label">
+            <span className="text-wait-dot" aria-hidden="true" />
+            {t(mediaProcessingLabelKey(item.media_type))}
+          </div>
+          <div className="text-skeleton" aria-hidden="true">
+            <i className="title" />
+            {SKELETON_LINES.map((width, index) =>
+              width === null ? <span key={index} className="gap" /> : <i key={index} style={{ width }} />,
+            )}
           </div>
         </div>
       )}
