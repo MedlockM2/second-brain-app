@@ -30,7 +30,10 @@ export type HandledFailure = {
   mediaType?: string;
   /** The `X-Request-ID` of the call that failed (task-610). */
   requestId?: string;
-  /** `error` for a 5xx and a failed import; `warning` otherwise. */
+  /**
+   * `error` for a 5xx the API Gateway sent and a failed import; `warning`
+   * otherwise.
+   */
   level?: "warning" | "error";
 };
 
@@ -84,7 +87,39 @@ export function failureCauseOf(error: unknown): string | null {
   return "unexpected";
 }
 
-/** What a platform's reporter sends to Sentry for one handled failure. */
+/**
+ * The header API Gateway puts on every response it sends, its own 5xx
+ * included. A 5xx without it was made on the way, by a proxy, a VPN or a
+ * carrier gateway, and the request never reached the API.
+ */
+export const GATEWAY_REQUEST_ID_HEADER = "apigw-requestid";
+
+/**
+ * What to report for an answer from the API: nothing below 500; `http_<status>`
+ * at `error` when the API Gateway sent the 5xx; `network` at `warning` when it
+ * did not, since the device's network failed, not the server. The status stays
+ * on the event either way.
+ */
+export function serverFailureOf(response: {
+  status: number;
+  headers: Pick<Headers, "has">;
+}): Pick<HandledFailure, "cause" | "status" | "level"> | null {
+  const { status } = response;
+  if (status < 500) return null;
+  if (response.headers.has(GATEWAY_REQUEST_ID_HEADER)) {
+    return { cause: `http_${status}`, status, level: "error" };
+  }
+  return { cause: "network", status, level: "warning" };
+}
+
+/**
+ * What a platform's reporter sends to Sentry for one handled failure.
+ *
+ * The fingerprint keeps the route apart for a server fault, so one broken
+ * route makes one issue. A `network` failure leaves it out: a device that
+ * loses its connection fails every call it has in flight, and that is one
+ * event to look at, not one issue per route.
+ */
 export function describeHandledFailure(failure: HandledFailure): {
   message: string;
   level: "warning" | "error";
@@ -104,6 +139,9 @@ export function describeHandledFailure(failure: HandledFailure): {
     message: `${failure.operation} failed: ${failure.cause}${failure.route ? ` (${failure.route})` : ""}`,
     level: failure.level ?? "warning",
     tags,
-    fingerprint: ["handled-failure", failure.operation, failure.route ?? "-", failure.cause],
+    fingerprint:
+      failure.cause === "network"
+        ? ["handled-failure", failure.operation, failure.cause]
+        : ["handled-failure", failure.operation, failure.route ?? "-", failure.cause],
   };
 }

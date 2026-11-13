@@ -12,6 +12,7 @@ import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation
 import {
   describeHandledFailure,
   routeOf,
+  serverFailureOf,
   type HandledFailure,
 } from "@media-summarizer/core/errors/handledFailure";
 
@@ -333,9 +334,8 @@ export async function fetchReportingFailures(
     if (!isNormalCancellation(error)) captureHandledFailure({ operation, cause: "network", route });
     throw error;
   }
-  if (response.status >= 500) {
-    captureHandledFailure({ operation, cause: `http_${response.status}`, route, status: response.status, level: "error" });
-  }
+  const serverFailure = serverFailureOf(response);
+  if (serverFailure) captureHandledFailure({ operation, route, ...serverFailure });
   return response;
 }
 

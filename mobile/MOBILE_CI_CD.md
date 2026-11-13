@@ -2079,7 +2079,7 @@ mobile and web; a no-op without a DSN, never throws) from a few central points:
 
 | Operation (`failure.operation`) | Sent from | When |
 |---|---|---|
-| `api.request` | the shared API client (`packages/core/src/api/apiClient.ts`) | a call with no answer (offline, timeout: cause `network`) or a 5xx (`http_<status>`). The expected 401, 402, 404 and 429, and every other 4xx, stay breadcrumbs |
+| `api.request` | the shared API client (`packages/core/src/api/apiClient.ts`) | a call with no answer (offline, timeout: cause `network`) or a 5xx (`http_<status>`). A 5xx without API Gateway's `apigw-requestid` header was made by a proxy on the way: it counts as `network`, status kept. The expected 401, 402, 404 and 429, and every other 4xx, stay breadcrumbs |
 | `upload` | `stageUpload` (`presignedUpload.ts`), `addFile` on web | the device-only steps of a direct upload: `read_file`, `put_network`, `put_rejected` (with S3's `<Code>` when it sent one, as `put_rejected:<Code>`) |
 | `import` | `reportSaveFailed` (`ShareIntentContext.tsx`), `addLink`/`addNote`/`addFile` on web | an import the user saw fail, except a quota refusal, an expired session, content the app refused before sending, and an upload step already reported above |
 | `chat.stream` | `followStream` (mobile `chatService.ts`, web `chatClient.ts`) | the stream could not be opened: no answer or an unexpected status. It does not go through `apiRequest` |
@@ -2100,9 +2100,12 @@ Never a signed URL, a query string, a file name, typed text or media content.
 | `media.type` | `url`, `shared_text`, `audio_file`, `document`, `audio`… when the failure concerns a media |
 | `request_id` | the failed call's `X-Request-ID`, when the API was called (see above) |
 
-Level `error` for a 5xx and for a failed upload or import, `warning` otherwise.
-The fingerprint is `["handled-failure", operation, route, cause]`, so one
-outage of one route makes one issue, however many users hit it.
+Level `error` for a 5xx sent by API Gateway and for a failed upload or import,
+`warning` otherwise. The fingerprint is `["handled-failure", operation, route,
+cause]`, so one outage of one route makes one issue, however many users hit it.
+A `network` failure leaves the route out (`["handled-failure", operation,
+"network"]`): a phone that loses its connection fails every call in flight, and
+that makes one issue, not one per route. The route stays a tag.
 
 Filtering in Sentry (Issues or Discover):
 

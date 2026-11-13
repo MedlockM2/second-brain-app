@@ -132,11 +132,13 @@ resource "aws_apigatewayv2_api" "main" {
   # — so the origin is named, credentials are allowed, and so are the headers: a
   # credentialed preflight reads "*" as a literal header name. An empty origin
   # (staging, prod until its domain exists) means no browser origin at all.
+  # apigw-requestid is exposed so the web app can tell a 5xx from API Gateway
+  # from one made by a proxy on the way (serverFailureOf in packages/core).
   cors_configuration {
     allow_origins     = var.web_app_origin == "" ? [] : [var.web_app_origin]
     allow_methods     = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
     allow_headers     = ["authorization", "content-type", "x-request-id", "x-session-transport"]
-    expose_headers    = ["X-Request-ID", "X-Quota-Error-Code"]
+    expose_headers    = ["X-Request-ID", "X-Quota-Error-Code", "apigw-requestid"]
     max_age           = 3600
     allow_credentials = true
   }

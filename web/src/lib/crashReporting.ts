@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/browser";
 import { requestIdOf } from "@media-summarizer/core/api/apiClient";
 import { bugReportDiagnostics, type BugReportDiagnostics } from "@media-summarizer/core/api/bugReportDiagnostics";
 import { isNormalCancellation } from "@media-summarizer/core/errors/cancellation";
-import { describeHandledFailure, routeOf, type HandledFailure } from "@media-summarizer/core/errors/handledFailure";
+import { describeHandledFailure, routeOf, serverFailureOf, type HandledFailure } from "@media-summarizer/core/errors/handledFailure";
 import { Config } from "../config";
 
 /**
@@ -118,9 +118,8 @@ export async function fetchReportingFailures(
     if (!isNormalCancellation(error)) captureHandledFailure({ operation, cause: "network", route });
     throw error;
   }
-  if (response.status >= 500) {
-    captureHandledFailure({ operation, cause: `http_${response.status}`, route, status: response.status, level: "error" });
-  }
+  const serverFailure = serverFailureOf(response);
+  if (serverFailure) captureHandledFailure({ operation, route, ...serverFailure });
   return response;
 }
 

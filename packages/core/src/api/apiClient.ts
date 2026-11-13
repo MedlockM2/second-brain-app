@@ -1,6 +1,6 @@
 import { createHttpError, parseErrorResponse, type HttpError } from "./httpError";
 import { isNormalCancellation } from "../errors/cancellation";
-import { routeOf, type HandledFailure } from "../errors/handledFailure";
+import { routeOf, serverFailureOf, type HandledFailure } from "../errors/handledFailure";
 
 /**
  * The header that ties one app call to the server's log lines for it
@@ -177,14 +177,13 @@ export function createApiClient(platform: ApiClientPlatform): ApiClient {
       }
     });
 
-    if (response.status >= 500) {
+    const serverFailure = serverFailureOf(response);
+    if (serverFailure) {
       reportFailure({
         operation: "api.request",
-        cause: `http_${response.status}`,
         route: routeOf(method, path),
-        status: response.status,
         requestId,
-        level: "error",
+        ...serverFailure,
       });
     }
 
