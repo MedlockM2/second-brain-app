@@ -43,7 +43,9 @@ announces the end, Decision point 3):
   partial text -- shown text is never taken back (complement C1.11).
 
 **Web search** (task-614). The request carries the hosted ``web_search`` tool,
-bounded by ``chat_prompt.MAX_WEB_SEARCHES_PER_TURN``. While a search runs the
+bounded by ``chat_prompt.MAX_WEB_SEARCHES_PER_TURN``; a question sent with the
+composer's web search button on (``ChatUserMessage.force_web_search``) requires
+a search (``chat_prompt.FORCED_WEB_SEARCH_TOOL_CHOICE``). While a search runs the
 attempt carries ``web_search_started_at``, which the stream door turns into a
 ``search`` event. The model's inline links to web pages are rewritten into
 ``[W#]`` tags as the text streams (``chat_web_citations``); every fragment written
@@ -392,6 +394,7 @@ async def _stream_with_retries(
     *,
     state: _StreamState,
     prompt_cache_key: str,
+    force_web_search: bool = False,
 ) -> llm_client.LlmStreamResult:
     """Stream the answer, retrying briefly a transient failure before any text.
 
@@ -421,6 +424,7 @@ async def _stream_with_retries(
                 prompt_cache_key=prompt_cache_key,
                 tools=[chat_prompt.WEB_SEARCH_TOOL],
                 max_tool_calls=chat_prompt.MAX_WEB_SEARCHES_PER_TURN,
+                tool_choice=chat_prompt.FORCED_WEB_SEARCH_TOOL_CHOICE if force_web_search else None,
                 on_web_search=state.on_web_search,
                 call=WORKER_NAME,
             )
@@ -574,15 +578,15 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
         return
 
     history_messages = await chat_db.list_messages(user_id, conversation_id)
-    question = next(
+    question_message = next(
         (
-            item.text
+            item
             for item in history_messages
             if isinstance(item, ChatUserMessage) and item.turn_index == turn_index
         ),
         None,
     )
-    if question is None:
+    if question_message is None:
         await _seal(**seal_kwargs, status=ChatTurnStatus.FAILED, error_code="question_missing")
         return
     history = chat_prompt.history_turns(
@@ -606,7 +610,7 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
         corpus_sources=corpus_sources,
         language=conversation.language,
         history=history,
-        question=question,
+        question=question_message.text,
     )
     estimated_tokens = chat_prompt.estimate_input_tokens(messages)
     if not chat_prompt.fits_context_budget(estimated_tokens):
@@ -625,6 +629,7 @@ async def _answer(*, attempt: ChatAttempt, conversation: ChatConversation, state
             messages,
             state=state,
             prompt_cache_key=chat_prompt.prompt_cache_key(conversation),
+            force_web_search=question_message.force_web_search,
         )
     except BudgetRefusedError as refusal:
         # A retry the month no longer covers, or a counter that cannot be read:

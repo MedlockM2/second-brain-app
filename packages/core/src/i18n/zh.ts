@@ -781,6 +781,8 @@ export const zh: Catalog = {
   "chat.composer.hint": "回车键换行；发送按钮发送。",
   "chat.composer.sendA11y": "发送问题",
   "chat.composer.stopA11y": "停止回答",
+  "chat.composer.webSearchA11y": "搜索网络",
+  "chat.composer.webSearchHint": "开启后，下一个回答将基于网络搜索。",
   "chat.thread.copy": "复制回答",
   "chat.thread.copied": "已复制",
   "chat.thread.copyFailed": "复制失败，请重试。",

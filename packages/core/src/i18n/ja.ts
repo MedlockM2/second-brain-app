@@ -796,6 +796,8 @@ export const ja: Catalog = {
   "chat.composer.hint": "改行キーで改行し、送信ボタンで送信します。",
   "chat.composer.sendA11y": "質問を送信",
   "chat.composer.stopA11y": "回答を停止",
+  "chat.composer.webSearchA11y": "ウェブを検索",
+  "chat.composer.webSearchHint": "オンにすると、次の回答はウェブ検索に基づきます。",
   "chat.thread.copy": "回答をコピー",
   "chat.thread.copied": "コピーしました",
   "chat.thread.copyFailed": "コピーできませんでした。もう一度お試しください。",

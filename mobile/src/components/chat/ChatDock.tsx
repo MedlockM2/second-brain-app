@@ -73,6 +73,9 @@ export function ChatDock({
   const { session } = chat;
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  // The composer's globe: the next question makes the model search the web.
+  // It goes back off once that question is accepted, like the draft it went with.
+  const [forceWebSearch, setForceWebSearch] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const savedOffset = useRef(0);
   const [focusOnOpen, setFocusOnOpen] = useState(true);
@@ -184,8 +187,9 @@ export function ChatDock({
   const ask = async (question: string) => {
     const text = question.trim();
     if (!text) return;
-    if (await chat.sendQuestion(text, scope === "media" && !sourceReady)) {
+    if (await chat.sendQuestion(text, scope === "media" && !sourceReady, forceWebSearch)) {
       setDraft((current) => (current.trim() === text ? "" : current));
+      setForceWebSearch(false);
     }
   };
 
@@ -291,6 +295,8 @@ export function ChatDock({
           conversationId={conversation?.conversation_id}
           draft={draft}
           onChangeDraft={setDraft}
+          forceWebSearch={forceWebSearch}
+          onToggleWebSearch={() => setForceWebSearch((value) => !value)}
           onSend={() => void ask(draft)}
           onStop={() => void stop()}
           onCancelPending={chat.cancelPending}
@@ -340,6 +346,7 @@ export function ChatDock({
             chat.dismissError();
             chat.clearActive();
             setDraft("");
+            setForceWebSearch(false);
             setHistoryOpen(false);
             setResetKey((value) => value + 1);
           }}

@@ -75,11 +75,14 @@ export const chatClient = {
   deleteConversation: (conversationId: string) =>
     apiRequest<void>(conversationPath(conversationId), { method: "DELETE" }),
 
-  /** The same `clientRequestId` on a retry of one question: the server answers the turn it already made. */
-  sendTurn: (conversationId: string, question: string, clientRequestId: string) =>
+  /**
+   * The same `clientRequestId` on a retry of one question: the server answers the turn it already made.
+   * `forceWebSearch` is the composer's globe: the model searches the web before answering.
+   */
+  sendTurn: (conversationId: string, question: string, clientRequestId: string, forceWebSearch = false) =>
     apiRequest<ChatTurnAccepted>(`${conversationPath(conversationId)}/turns`, {
       method: "POST",
-      body: { question, client_request_id: clientRequestId },
+      body: { question, client_request_id: clientRequestId, force_web_search: forceWebSearch },
     }),
 
   stopTurn: (conversationId: string, generation: ChatGeneration) =>

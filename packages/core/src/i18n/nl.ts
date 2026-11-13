@@ -824,6 +824,8 @@ export const nl: Catalog = {
   "chat.composer.hint": "Enter voegt een regel toe; de verzendknop verzendt.",
   "chat.composer.sendA11y": "Vraag verzenden",
   "chat.composer.stopA11y": "Antwoord stoppen",
+  "chat.composer.webSearchA11y": "Zoeken op het web",
+  "chat.composer.webSearchHint": "Als dit aan staat, steunt het volgende antwoord op een zoekopdracht op het web.",
   "chat.thread.copy": "Antwoord kopiëren",
   "chat.thread.copied": "Gekopieerd",
   "chat.thread.copyFailed": "Kopiëren mislukt. Probeer het opnieuw.",

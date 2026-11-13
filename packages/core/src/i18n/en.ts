@@ -1073,6 +1073,8 @@ export const en = {
   "chat.composer.hint": "Return adds a new line; the send button sends.",
   "chat.composer.sendA11y": "Send the question",
   "chat.composer.stopA11y": "Stop the answer",
+  "chat.composer.webSearchA11y": "Search the web",
+  "chat.composer.webSearchHint": "When on, the next answer draws on a web search.",
   "chat.thread.copy": "Copy answer",
   "chat.thread.copied": "Copied",
   "chat.thread.copyFailed": "Could not copy. Try again.",

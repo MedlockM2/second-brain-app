@@ -256,6 +256,7 @@ def request_payload(
     max_output_tokens: Optional[int] = LLM_MAX_OUTPUT_TOKENS,
     tools: Optional[Sequence[Dict[str, Any]]] = None,
     max_tool_calls: Optional[int] = None,
+    tool_choice: Optional[str] = None,
 ) -> Dict[str, Any]:
     """The body of one ``POST /v1/responses``.
 
@@ -263,8 +264,9 @@ def request_payload(
     (``{"type": "json_schema", "name", "strict", "schema"}``), sent as
     ``text.format``. ``max_output_tokens=None`` is the full-text translation's
     request: no ceiling but the model's. ``tools`` are hosted tools the model may
-    call (``tool_choice`` stays the provider's ``auto``); only the chat passes any,
-    with ``max_tool_calls`` bounding the calls of one response.
+    call (``tool_choice`` stays the provider's ``auto`` unless one is given); only
+    the chat passes any, with ``max_tool_calls`` bounding the calls of one
+    response and ``tool_choice="required"`` when the user forced a web search.
     """
     payload: Dict[str, Any] = {
         **response_parameters(max_output_tokens=max_output_tokens),
@@ -278,6 +280,8 @@ def request_payload(
         payload["tools"] = list(tools)
         if max_tool_calls is not None:
             payload["max_tool_calls"] = max_tool_calls
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
     return payload
 
 
@@ -558,6 +562,7 @@ async def stream(
     prompt_cache_key: Optional[str] = None,
     tools: Optional[Sequence[Dict[str, Any]]] = None,
     max_tool_calls: Optional[int] = None,
+    tool_choice: Optional[str] = None,
     on_web_search: Optional[WebSearchCallback] = None,
     **log_fields: Any,
 ) -> LlmStreamResult:
@@ -573,8 +578,8 @@ async def stream(
     the text delivered so far and an estimated usage (the usage only comes with
     the terminal event).
 
-    ``tools`` / ``max_tool_calls`` are passed to the request (the chat's web
-    search, task-614). ``on_web_search`` follows the ``response.web_search_call.*``
+    ``tools`` / ``max_tool_calls`` / ``tool_choice`` are passed to the request
+    (the chat's web search, task-614). ``on_web_search`` follows the ``response.web_search_call.*``
     events; the ``url_citation`` annotations and the number of searches come back
     on the result.
 
@@ -593,6 +598,7 @@ async def stream(
         prompt_cache_key=prompt_cache_key,
         tools=tools,
         max_tool_calls=max_tool_calls,
+        tool_choice=tool_choice,
     )
     payload["stream"] = True
 

@@ -32,6 +32,8 @@ export type ChatPhase = "idle" | "sending" | "streaming" | "polling";
 export interface PendingQuestion {
   question: string;
   clientRequestId: string;
+  /** Sent with the composer's globe on; a retry of the same question keeps it. */
+  forceWebSearch: boolean;
   createdAt: string;
   status: "waiting_for_source" | "sending" | "failed";
 }
@@ -269,7 +271,7 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
   );
 
   const send = useCallback(
-    async (raw: string): Promise<boolean> => {
+    async (raw: string, forceWebSearch = false): Promise<boolean> => {
       const question = raw.trim();
       const current = stateRef.current;
       if (!question || sendingRef.current || current.generation || current.phase === "sending") return false;
@@ -278,7 +280,13 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
       const pending: PendingQuestion =
         current.pending?.question === question
           ? { ...current.pending, status: "sending" }
-          : { question, clientRequestId: crypto.randomUUID(), createdAt: new Date().toISOString(), status: "sending" };
+          : {
+              question,
+              clientRequestId: crypto.randomUUID(),
+              forceWebSearch,
+              createdAt: new Date().toISOString(),
+              status: "sending",
+            };
       if (scope === "media" && !sourceReady) {
         update({ pending: { ...pending, status: "waiting_for_source" }, error: null });
         return true;
@@ -292,7 +300,12 @@ export function useChat(scope: ChatScope, scopeId: string, sourceReady: boolean,
           if (epochRef.current !== epoch) return false;
           update({ conversation });
         }
-        const turn = await chatClient.sendTurn(conversation.conversation_id, question, pending.clientRequestId);
+        const turn = await chatClient.sendTurn(
+          conversation.conversation_id,
+          question,
+          pending.clientRequestId,
+          pending.forceWebSearch,
+        );
         if (epochRef.current !== epoch) return false;
         // Draw the question and its empty answer now; the next read replaces them.
         const shown = stateRef.current.conversation ?? conversation;

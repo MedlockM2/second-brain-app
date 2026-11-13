@@ -366,6 +366,7 @@ async def accept_turn(
     question_text: str,
     turn_id: Optional[str] = None,
     idempotency_token: Optional[str] = None,
+    force_web_search: bool = False,
 ) -> AcceptedTurn:
     """Record a turn and its attempt in one transaction.
 
@@ -402,6 +403,7 @@ async def accept_turn(
         turn_id=turn_id,
         turn_index=turn_index,
         text=question_text,
+        force_web_search=force_web_search,
         created_at=now,
     )
     answer = ChatAssistantMessage(

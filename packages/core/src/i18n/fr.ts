@@ -948,6 +948,8 @@ export const fr: Catalog = {
   "chat.composer.hint": "Entrée ajoute une ligne ; le bouton d'envoi envoie.",
   "chat.composer.sendA11y": "Envoyer la question",
   "chat.composer.stopA11y": "Arrêter la réponse",
+  "chat.composer.webSearchA11y": "Rechercher sur le web",
+  "chat.composer.webSearchHint": "Activé, la prochaine réponse s'appuie sur une recherche web.",
   "chat.thread.copy": "Copier la réponse",
   "chat.thread.copied": "Copié",
   "chat.thread.copyFailed": "La copie a échoué. Réessayez.",

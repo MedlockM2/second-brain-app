@@ -18,6 +18,11 @@
  * send time. Send and stop are two different buttons, never one that changes
  * meaning under the thumb: send while nothing is in flight, stop while an
  * answer is being written. Return inserts a line; only the button sends.
+ *
+ * The globe at the left is a toggle, where chat apps put their tools: on, the
+ * next question makes the model search the web instead of deciding on its own.
+ * It is the globe of the web citations, in their ink blue; on, it sits on their
+ * `webCitation` wash, so the two states never rely on colour alone.
  */
 
 import { Ionicons } from "@expo/vector-icons";
@@ -49,6 +54,9 @@ export interface ChatComposerProps {
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
+  /** The globe is on: the next question makes the model search the web. */
+  forceWebSearch: boolean;
+  onToggleWebSearch: () => void;
   onSend: () => void;
   onStop: () => void;
   /** An answer is in flight: stop is offered, send is not. */
@@ -60,7 +68,18 @@ export interface ChatComposerProps {
 
 export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
   function ChatComposer(
-    { value, onChangeText, placeholder, onSend, onStop, generating, sending, blocked = false },
+    {
+      value,
+      onChangeText,
+      placeholder,
+      forceWebSearch,
+      onToggleWebSearch,
+      onSend,
+      onStop,
+      generating,
+      sending,
+      blocked = false,
+    },
     ref,
   ) {
     const Colors = useThemeColors();
@@ -75,6 +94,25 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
 
     return (
       <View style={styles.composer}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.webSearch,
+            forceWebSearch && styles.webSearchOn,
+            pressed && styles.pressed,
+          ]}
+          onPress={onToggleWebSearch}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: forceWebSearch }}
+          accessibilityLabel={t("chat.composer.webSearchA11y")}
+          accessibilityHint={t("chat.composer.webSearchHint")}
+          testID="chat-composer-web-search"
+        >
+          <Ionicons
+            name="globe-outline"
+            size={22}
+            color={Colors.onWebCitation}
+          />
+        </Pressable>
         <View style={styles.field}>
           <View
             style={styles.sample}
@@ -174,6 +212,16 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       paddingTop: 0,
       paddingBottom: 0,
       textAlignVertical: "top",
+    },
+    webSearch: {
+      width: TouchTarget.minimum,
+      height: TouchTarget.minimum,
+      borderRadius: BorderRadius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    webSearchOn: {
+      backgroundColor: Colors.webCitation,
     },
     send: {
       width: TouchTarget.minimum,

@@ -919,6 +919,8 @@ export const es: Catalog = {
   "chat.composer.hint": "Intro añade una línea; el botón de envío envía.",
   "chat.composer.sendA11y": "Enviar la pregunta",
   "chat.composer.stopA11y": "Detener la respuesta",
+  "chat.composer.webSearchA11y": "Buscar en la web",
+  "chat.composer.webSearchHint": "Si está activado, la próxima respuesta se basa en una búsqueda web.",
   "chat.thread.copy": "Copiar respuesta",
   "chat.thread.copied": "Copiado",
   "chat.thread.copyFailed": "No se pudo copiar. Inténtalo de nuevo.",

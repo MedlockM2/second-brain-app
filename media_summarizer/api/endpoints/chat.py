@@ -60,6 +60,13 @@ class TurnCreateRequest(BaseModel):
             "same id answers with the turn it already created, never a second one"
         ),
     )
+    force_web_search: bool = Field(
+        False,
+        description=(
+            "The composer's web search button: the model searches the web before "
+            "answering, instead of deciding on its own whether to"
+        ),
+    )
 
 
 class TurnCreateResponse(BaseModel):
@@ -408,6 +415,7 @@ async def send_turn(
             conversation_id=conversation_id,
             question=payload.question,
             client_request_id=payload.client_request_id,
+            force_web_search=payload.force_web_search,
         )
     except chat_service.ChatBudgetRefusedError as exc:
         # The typed refusal of the beta budget, with its public figures only:

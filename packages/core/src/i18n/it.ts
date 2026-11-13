@@ -823,6 +823,8 @@ export const it: Catalog = {
   "chat.composer.hint": "Invio aggiunge una riga; il pulsante di invio invia.",
   "chat.composer.sendA11y": "Invia la domanda",
   "chat.composer.stopA11y": "Interrompi la risposta",
+  "chat.composer.webSearchA11y": "Cerca sul web",
+  "chat.composer.webSearchHint": "Se attivo, la prossima risposta si basa su una ricerca web.",
   "chat.thread.copy": "Copia risposta",
   "chat.thread.copied": "Copiato",
   "chat.thread.copyFailed": "Impossibile copiare. Riprova.",

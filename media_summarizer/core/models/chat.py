@@ -411,6 +411,10 @@ class ChatUserMessage(_ChatItem):
     turn_index: int
     role: ChatRole = ChatRole.USER
     text: str
+    #: The user asked this question with the composer's web search button on:
+    #: the worker makes the model search the web before it answers, instead of
+    #: leaving the choice to it (``chat_prompt.FORCED_WEB_SEARCH_TOOL_CHOICE``).
+    force_web_search: bool = False
     created_at: datetime = Field(default_factory=_now_utc)
 
     def sort_key(self) -> str:

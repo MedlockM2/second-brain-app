@@ -822,6 +822,8 @@ export const hi: Catalog = {
   "chat.composer.hint": "एंटर नई पंक्ति जोड़ता है; भेजें बटन भेजता है।",
   "chat.composer.sendA11y": "सवाल भेजें",
   "chat.composer.stopA11y": "जवाब रोकें",
+  "chat.composer.webSearchA11y": "वेब पर खोजें",
+  "chat.composer.webSearchHint": "चालू होने पर, अगला जवाब वेब खोज पर आधारित होगा।",
   "chat.thread.copy": "जवाब कॉपी करें",
   "chat.thread.copied": "कॉपी हो गया",
   "chat.thread.copyFailed": "कॉपी नहीं हो सका। फिर से कोशिश करें।",

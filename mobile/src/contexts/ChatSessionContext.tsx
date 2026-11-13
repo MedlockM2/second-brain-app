@@ -34,6 +34,8 @@ export type ChatSessionPhase = "idle" | "sending" | "streaming" | "polling";
 export interface PendingChatQuestion {
   question: string;
   clientRequestId: string;
+  /** Sent with the composer's globe on; a retry of the same question keeps it. */
+  forceWebSearch: boolean;
   createdAt: string;
   status: "waiting_for_source" | "sending" | "failed";
 }
@@ -59,7 +61,13 @@ interface ChatSessionContextValue {
   sessions: ReadonlyMap<string, ChatSession>;
   selectConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<boolean>;
   /** Resolves at acceptance, never waits for generation; false on failure or a superseded send. */
-  sendQuestion: (scope: ChatScope, scopeId: string, question: string, waitForSource?: boolean) => Promise<boolean>;
+  sendQuestion: (
+    scope: ChatScope,
+    scopeId: string,
+    question: string,
+    waitForSource?: boolean,
+    forceWebSearch?: boolean,
+  ) => Promise<boolean>;
   cancelPending: (scope: ChatScope, scopeId: string) => void;
   stopGeneration: (scope: ChatScope, scopeId: string) => Promise<void>;
   deleteConversation: (scope: ChatScope, scopeId: string, conversationId: string) => Promise<void>;
@@ -437,7 +445,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
   useEffect(() => { awaitSourceRef.current = awaitSource; }, [awaitSource]);
 
   const sendQuestion = useCallback(
-    async (scope: ChatScope, scopeId: string, question: string, waitForSource = false) => {
+    async (scope: ChatScope, scopeId: string, question: string, waitForSource = false, forceWebSearch = false) => {
       question = question.trim();
       const key = scopeKey(scope, scopeId);
       const entry = follower(key);
@@ -454,6 +462,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           : {
               question,
               clientRequestId: ChatService.newClientRequestId(),
+              forceWebSearch,
               createdAt: new Date().toISOString(),
               status: "sending",
             };
@@ -476,6 +485,7 @@ export function ChatSessionProvider({ children }: { children: React.ReactNode })
           conversation.conversation_id,
           question,
           pending.clientRequestId,
+          pending.forceWebSearch,
         );
         if (!isCurrent(key, entry, epoch)) return false;
         // Adopt the server identity immediately. The next durable read replaces
@@ -679,7 +689,8 @@ export function useChatSession(scope: ChatScope, scopeId: string) {
     session,
     selectConversation: (conversationId: string) =>
       context.selectConversation(scope, scopeId, conversationId),
-    sendQuestion: (question: string, waitForSource = false) => context.sendQuestion(scope, scopeId, question, waitForSource),
+    sendQuestion: (question: string, waitForSource = false, forceWebSearch = false) =>
+      context.sendQuestion(scope, scopeId, question, waitForSource, forceWebSearch),
     cancelPending: () => context.cancelPending(scope, scopeId),
     stopGeneration: () => context.stopGeneration(scope, scopeId),
     deleteConversation: (conversationId: string) =>

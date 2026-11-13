@@ -928,6 +928,8 @@ export const de: Catalog = {
   "chat.composer.hint": "Eingabe fügt eine Zeile hinzu; die Senden-Taste sendet.",
   "chat.composer.sendA11y": "Frage senden",
   "chat.composer.stopA11y": "Antwort stoppen",
+  "chat.composer.webSearchA11y": "Im Web suchen",
+  "chat.composer.webSearchHint": "Wenn an, stützt sich die nächste Antwort auf eine Websuche.",
   "chat.thread.copy": "Antwort kopieren",
   "chat.thread.copied": "Kopiert",
   "chat.thread.copyFailed": "Kopieren fehlgeschlagen. Versuche es erneut.",

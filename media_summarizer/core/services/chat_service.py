@@ -533,8 +533,13 @@ async def send_turn(
     conversation_id: str,
     question: str,
     client_request_id: str,
+    force_web_search: bool = False,
 ) -> AcceptedChatTurn:
     """Accept a turn, in the order the checks must run, and admit it once.
+
+    ``force_web_search`` is the composer's web search button: stored on the
+    question, it makes the worker require a search before the answer. The
+    admission already reserves the turn's maximum searches either way.
 
     1. The ceilings, as typed refusals: question length, turns per conversation,
        one turn in flight per account.
@@ -617,6 +622,7 @@ async def send_turn(
             expected_turn_count=conversation.turn_count,
             question_text=text,
             turn_id=turn_id,
+            force_web_search=force_web_search,
         )
     except TurnNotAcceptedError as exc:
         if exc.reason in ("conversation_not_found", "turn_in_progress", "account_turn_in_flight"):

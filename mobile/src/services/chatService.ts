@@ -184,18 +184,22 @@ export class ChatService {
     return Crypto.randomUUID();
   }
 
-  /** POST /api/chat/conversations/{id}/turns. */
+  /**
+   * POST /api/chat/conversations/{id}/turns. `forceWebSearch` is the composer's
+   * globe: the model searches the web before answering instead of deciding.
+   */
   static async sendTurn(
     conversationId: string,
     question: string,
     clientRequestId: string,
+    forceWebSearch = false,
   ): Promise<ChatTurnAccepted> {
     const owner = mutationOwner();
     const result = await apiRequest<ChatTurnAccepted>(
       `/api/chat/conversations/${encodeURIComponent(conversationId)}/turns`,
       {
         method: "POST",
-        body: { question, client_request_id: clientRequestId },
+        body: { question, client_request_id: clientRequestId, force_web_search: forceWebSearch },
       },
     );
     historyChanged(owner);

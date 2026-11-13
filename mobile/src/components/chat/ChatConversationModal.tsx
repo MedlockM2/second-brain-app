@@ -61,6 +61,9 @@ export interface ChatConversationModalProps {
   conversationId?: string;
   draft: string;
   onChangeDraft: (value: string) => void;
+  /** The composer's globe is on: the next question makes the model search the web. */
+  forceWebSearch: boolean;
+  onToggleWebSearch: () => void;
   onSend: () => void;
   onStop: () => void;
   onCancelPending: () => void;
@@ -484,6 +487,8 @@ export function ChatConversationModal(
               value={props.draft}
               onChangeText={props.onChangeDraft}
               placeholder={props.placeholder}
+              forceWebSearch={props.forceWebSearch}
+              onToggleWebSearch={props.onToggleWebSearch}
               onSend={() => {
                 userScrolling.current = false;
                 restoreOffset.current = null;

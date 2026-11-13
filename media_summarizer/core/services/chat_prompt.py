@@ -26,7 +26,10 @@ chat, sends the hosted ``web_search`` tool of the Responses API with the
 provider's ``tool_choice: auto``: the model searches when it needs to. The
 instructions say when, and keep the corpus tags ``[S#]`` for the corpus. The
 pages it cites become ``[W#]`` tags (``chat_web_citations``); a past answer goes
-back to the model with them expanded to ``([title](url))``.
+back to the model with them expanded to ``([title](url))``. When the user turns
+on the composer's web search button, the turn is sent with
+``tool_choice: required`` instead (:data:`FORCED_WEB_SEARCH_TOOL_CHOICE`): the
+only tool is the search, so the model searches before it answers.
 """
 
 from __future__ import annotations
@@ -84,6 +87,11 @@ MAX_WEB_SEARCHES_PER_TURN = 3
 #: The hosted web search tool, as the chat sends it. Default search context and
 #: no domain filter: the model is told when to search, not where.
 WEB_SEARCH_TOOL: Dict[str, Any] = {"type": "web_search"}
+
+#: ``tool_choice`` of a turn whose question was sent with the web search button
+#: on. ``web_search`` is the chat's only tool, so ``required`` means a search;
+#: ``max_tool_calls`` still bounds the turn at :data:`MAX_WEB_SEARCHES_PER_TURN`.
+FORCED_WEB_SEARCH_TOOL_CHOICE = "required"
 
 #: Bytes allowed per source for its corpus header (tag, title, language, dates),
 #: used only when the corpus text is not in hand -- the API checks the budget from

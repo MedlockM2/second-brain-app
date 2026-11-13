@@ -873,6 +873,8 @@ export const ar: Catalog = {
   "chat.composer.hint": "مفتاح الإدخال يضيف سطرًا؛ زر الإرسال يرسل.",
   "chat.composer.sendA11y": "إرسال السؤال",
   "chat.composer.stopA11y": "إيقاف الإجابة",
+  "chat.composer.webSearchA11y": "البحث على الويب",
+  "chat.composer.webSearchHint": "عند التفعيل، تعتمد الإجابة التالية على بحث على الويب.",
   "chat.thread.copy": "نسخ الإجابة",
   "chat.thread.copied": "تم النسخ",
   "chat.thread.copyFailed": "تعذّر النسخ. حاول مرة أخرى.",

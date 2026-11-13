@@ -49,6 +49,9 @@ export function useChatPane({
   const requestedConversationId = params.get("conversationId");
   const chat = useChat(scope, scopeId, sourceReady, requestedConversationId);
   const [draft, setDraft] = useState("");
+  // The composer's globe: the next question makes the model search the web.
+  // It goes back off once that question is accepted.
+  const [forceWebSearch, setForceWebSearch] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { state } = chat;
 
@@ -61,13 +64,15 @@ export function useChatPane({
     const question = draft;
     if (!question.trim()) return;
     setDraft("");
-    const accepted = await chat.send(question);
+    const accepted = await chat.send(question, forceWebSearch);
     // A refused question goes back to the field, so nothing typed is lost.
     if (!accepted) setDraft((current) => current || question);
+    else setForceWebSearch(false);
   };
 
   const startNew = () => {
     setHistoryOpen(false);
+    setForceWebSearch(false);
     chat.newConversation();
     setParams(current => { const next = new URLSearchParams(current); next.delete("conversationId"); return next; });
   };
@@ -190,6 +195,8 @@ export function useChatPane({
         <Composer
           value={draft}
           onChange={setDraft}
+          forceWebSearch={forceWebSearch}
+          onToggleWebSearch={() => setForceWebSearch((value) => !value)}
           placeholder={t(scope === "media" ? "chat.dock.askMedia" : "chat.dock.askFolder")}
           generating={generating}
           sending={sending}
@@ -335,6 +342,8 @@ function Thread({
 function Composer({
   value,
   onChange,
+  forceWebSearch,
+  onToggleWebSearch,
   placeholder,
   generating,
   sending,
@@ -343,6 +352,9 @@ function Composer({
 }: {
   value: string;
   onChange: (value: string) => void;
+  /** The globe is on: the next question makes the model search the web. */
+  forceWebSearch: boolean;
+  onToggleWebSearch: () => void;
   placeholder: string;
   generating: boolean;
   sending: boolean;
@@ -370,6 +382,17 @@ function Composer({
 
   return (
     <div className="composer">
+      {/* Where chat apps put their tools: the globe of the web citations, a toggle. */}
+      <button
+        type="button"
+        className={forceWebSearch ? "web-search on" : "web-search"}
+        aria-pressed={forceWebSearch}
+        aria-label={t("chat.composer.webSearchA11y")}
+        title={t("chat.composer.webSearchHint")}
+        onClick={onToggleWebSearch}
+      >
+        <Icon name="globe-outline" size={18} />
+      </button>
       <textarea
         ref={field}
         rows={1}
