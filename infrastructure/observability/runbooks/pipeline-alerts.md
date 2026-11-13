@@ -1,7 +1,10 @@
-# Pipeline Alerts Runbook
+# Diagnostic du pipeline
 
-Operational runbook for the Media Summarizer pipeline alerts (Lambda architecture).
-Each section corresponds to a specific CloudWatch alarm defined in `infrastructure/terraform/pipeline_alerts.tf`.
+La politique active et les seules alarmes à notifier sont dans
+[PRODUCT_ALERTING.md](../../../docs/PRODUCT_ALERTING.md). TASK-628 a retiré les
+alarmes par composant : les recettes ci-dessous servent au diagnostic des causes,
+pas à recréer les anciennes alertes. Les noms/seuils historiques indiqués dans
+ces sections ne définissent plus de ressources Terraform.
 
 ---
 

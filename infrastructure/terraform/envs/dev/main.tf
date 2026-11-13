@@ -62,13 +62,9 @@ module "platform" {
   # would create a dependency cycle with API Gateway's CORS and its API origin.
   web_app_origin = "https://${var.public_domain}"
 
-  # dev hosts the beta, so its alarms are on (≈ $3.30/mo measured): a suspended
-  # provider, a full loss reserve or an approached operator ceiling must reach
-  # the owner without a tester reporting it (task-567). dev otherwise stays
-  # cheap: no dashboard (~$3.00/mo; CloudTrail showed no console view in 90
-  # days, only Terraform refreshes) and unreserved API concurrency. The worker
-  # SQS polling stays ON — dev is the environment actually being worked in. See
-  # envs/staging/main.tf for the mothballed counterpart.
+  # dev hosts the beta. Only actionable product incidents and safeguards notify
+  # (TASK-628, docs/PRODUCT_ALERTING.md); no latency or per-worker alarm spam.
+  # The diagnostic dashboard stays off and worker polling stays on.
   enable_alarms    = true
   enable_dashboard = false
 

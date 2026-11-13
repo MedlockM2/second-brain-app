@@ -8,30 +8,26 @@ locals {
   )
   budget_anomalies = {
     control = {
-      pattern   = "{ ($.event = \"beta_budget.unavailable\") || ($.event = \"budget_guard.*_unavailable\") || ($.event = \"budget_guard.*_failed\") || ($.event = \"budget_guard.no_payer\") || ($.event = \"beta_budget.observation_failed\") || ($.event = \"beta_budget.settle_after_release\") || ($.event = \"beta_budget.release_after_settle\") || ($.event = \"beta_budget.settle_missing\") || ($.event = \"beta_budget.expiry_sweep_failed\") }"
-      threshold = 0
-    }
-    measurement = {
-      pattern   = "{ $.event = \"beta_budget.measurement_missing\" }"
-      threshold = 0
-    }
-    overrun = {
-      pattern   = "{ $.event = \"beta_budget.overrun\" }"
-      threshold = 0
+      pattern     = "{ ($.event = \"beta_budget.unavailable\") || ($.event = \"budget_guard.*_unavailable\") || ($.event = \"budget_guard.*_failed\") || ($.event = \"budget_guard.no_payer\") || ($.event = \"beta_budget.settle_after_release\") || ($.event = \"beta_budget.release_after_settle\") || ($.event = \"beta_budget.settle_missing\") || ($.event = \"beta_budget.expiry_sweep_failed\") || ($.event = \"operator.bound_missing\") || ($.event = \"operator.circuit_update_failed\") }"
+      period      = 300
+      evaluations = 1
+      threshold   = 0
     }
     stale = {
-      pattern   = "{ $.event = \"beta_budget.audit_stale\" }"
-      threshold = 0
+      pattern     = "{ $.event = \"beta_budget.audit_succeeded\" }"
+      period      = 1800
+      evaluations = 2
+      threshold   = 0
     }
-    # TASK-566: a provider suspended, a send refused by an operator ceiling, a
-    # ceiling unreadable (all new spend paused), a circuit update lost.
-    operator = {
-      pattern   = "{ ($.event = \"operator.suspended\") || ($.event = \"operator.limit_refused\") || ($.event = \"operator.bound_missing\") || ($.event = \"operator.circuit_update_failed\") }"
-      threshold = 0
+    refused = {
+      pattern     = "{ $.event = \"operator.limit_refused\" }"
+      period      = 900
+      evaluations = 2
+      threshold   = 0
     }
   }
   budget_filters = { for pair in setproduct(keys(local.budget_log_groups), keys(local.budget_anomalies)) :
-    "${pair[0]}-${pair[1]}" => { source = pair[0], kind = pair[1] }
+    "${pair[0]}-${pair[1]}" => { source = pair[0], kind = pair[1] } if pair[1] != "stale" || pair[0] == "audit"
   }
 }
 
@@ -115,26 +111,25 @@ resource "aws_cloudwatch_log_metric_filter" "budget_anomaly" {
   log_group_name = local.budget_log_groups[each.value.source]
   pattern        = local.budget_anomalies[each.value.kind].pattern
   metric_transformation {
-    name      = "BetaBudget${title(each.value.kind)}Anomalies"
-    namespace = local.metrics_namespace
-    value     = "1"
+    name          = "BetaBudget${title(each.value.kind)}Anomalies"
+    namespace     = local.metrics_namespace
+    value         = each.value.kind == "stale" ? "$.stale_reservations" : "1"
+    default_value = each.value.kind == "stale" ? null : 0
   }
 }
 
 resource "aws_cloudwatch_metric_alarm" "budget_anomaly" {
   for_each            = var.enable_alarms ? local.budget_anomalies : {}
   alarm_name          = "${var.project_name}-budget-${each.key}${local.suffix}"
-  alarm_description   = "Beta budget ${each.key} anomaly. No automatic capacity reset. Runbook: docs/BETA_BUDGET_REPORTING.md"
+  alarm_description   = "Condition sans notification : ${each.key}. Consommee par l’incident de capacite. Guide : ${local.alert_runbook}#capacite"
   comparison_operator = "GreaterThanThreshold"
   threshold           = each.value.threshold
-  evaluation_periods  = 1
-  period              = 300
-  statistic           = "Sum"
+  evaluation_periods  = each.value.evaluations
+  period              = each.value.period
+  statistic           = each.key == "stale" ? "Maximum" : "Sum"
   metric_name         = "BetaBudget${title(each.key)}Anomalies"
   namespace           = local.metrics_namespace
   treat_missing_data  = "notBreaching"
-  alarm_actions       = [aws_sns_topic.pipeline_alerts[0].arn]
-  ok_actions          = [aws_sns_topic.pipeline_alerts[0].arn]
 }
 
 resource "aws_cloudwatch_log_metric_filter" "budget_audit_completed" {
@@ -151,7 +146,7 @@ resource "aws_cloudwatch_log_metric_filter" "budget_audit_completed" {
 resource "aws_cloudwatch_metric_alarm" "budget_audit_missing" {
   count               = var.enable_alarms ? 1 : 0
   alarm_name          = "${var.project_name}-budget-audit-missing${local.suffix}"
-  alarm_description   = "The read-only budget reservation audit has not completed for an hour. Runbook: docs/BETA_BUDGET_REPORTING.md"
+  alarm_description   = "${local.alert_prefix} : aucun audit de capacite et de depense complet depuis 1 h. Le suivi de capacite et de depense n’est plus rafraichi ; les plafonds restent appliques. Action : reparer le worker budget-audit, sans remettre les capacites a zero. Guide : ${local.alert_runbook}#controles"
   comparison_operator = "LessThanThreshold"
   threshold           = 1
   evaluation_periods  = 2
