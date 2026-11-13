@@ -49,9 +49,17 @@ export function HomePage() {
     failed: false,
   }));
 
-  const loadRecent = useCallback(() => {
+  // Bumped when the list read after an import is drawn: the import is the head
+  // of "Recently added", so the row goes back to its first tile (`TileRow`).
+  // A focus read or the processing schedule leaves the row where the user put it.
+  const [recentRestart, setRecentRestart] = useState(0);
+
+  const loadRecent = useCallback((afterSave = false) => {
     readCached(RECENT_PATH, () => apiRequest<ListMediaResponse>(RECENT_PATH))
-      .then((response) => setRecent({ items: response.items, failed: false }))
+      .then((response) => {
+        setRecent({ items: response.items, failed: false });
+        if (afterSave) setRecentRestart((n) => n + 1);
+      })
       // A failed re-read keeps what is on screen.
       .catch(() => setRecent((current) => ({ items: current.items, failed: current.items === null })));
   }, []);
@@ -67,11 +75,11 @@ export function HomePage() {
     loadContinuing();
   }, [loadRecent, loadContinuing]);
 
-  const reloadAll = useCallback(() => {
-    loadRecent();
+  const reloadAfterSave = useCallback(() => {
+    loadRecent(true);
     loadContinuing();
   }, [loadRecent, loadContinuing]);
-  useOnMediaSaved(reloadAll);
+  useOnMediaSaved(reloadAfterSave);
 
   const processing = (recent.items ?? []).some((item) => mediaStatusMarker(item.status) === "processing");
   useProcessingRefresh(processing, loadRecent);
@@ -135,7 +143,7 @@ export function HomePage() {
     <main className="page home">
       <h1 className="display">{t("tabs.home")}</h1>
       {recentItems.length > 0 && (
-        <TileRow icon="download" title={t("home.recentlyAdded")}>
+        <TileRow icon="download" title={t("home.recentlyAdded")} restartKey={recentRestart}>
           {recentItems.map((item) => (
             <MediaTile
               key={item.media_item_id}
