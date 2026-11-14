@@ -33,7 +33,7 @@ import hashlib
 import re
 from enum import Enum
 from typing import Dict, List, Tuple
-from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit
 
 _TRACKING_QUERY_PREFIXES = ("utm_",)
 _TRACKING_QUERY_KEYS = {
@@ -152,8 +152,12 @@ def _normalize_path(path: str) -> str:
         raw = "/" + raw
     if raw != "/" and raw.endswith("/"):
         raw = raw[:-1]
-    # Quote each segment to keep deterministic escaping.
-    return "/".join(quote(seg, safe=":@+") for seg in raw.split("/"))
+    # Quote each segment to keep deterministic escaping. A segment is decoded
+    # first: a shared link usually arrives already percent-encoded (`%C3%A0`),
+    # and quoting it as-is escapes the `%` itself (`%25C3%25A0`) -- a different
+    # URL, which the publisher answers with a 404. Decoding first also gives a
+    # link with raw accents and its encoded form the same canonical URL.
+    return "/".join(quote(unquote(seg), safe=":@+") for seg in raw.split("/"))
 
 
 def _path_segments(path: str) -> Tuple[str, ...]:
@@ -178,11 +182,17 @@ def spotify_path_segments(path: str) -> Tuple[str, ...]:
 
 
 def _path_looks_like_feed(path: str) -> bool:
-    return (
-        path.endswith(".rss")
-        or path.endswith(".xml")
-        or "feed" in _path_segments(path)
-    )
+    """Whether a path names a feed rather than a page.
+
+    A `feed` segment makes a feed only at the end of the path or followed by one
+    format segment (`/feed`, `/category/x/feed`, `/feed/rss2`, `/feed/podcast`,
+    `/feed/@author`). Anywhere else it is a word of the site's own routing:
+    `linkedin.com/feed/update/urn:li:activity:<id>` is a post, not a feed.
+    """
+    if path.endswith(".rss") or path.endswith(".xml"):
+        return True
+    segments = _path_segments(path)
+    return "feed" in segments[-2:]
 
 
 def _path_looks_like_audio_file(path: str) -> bool:
