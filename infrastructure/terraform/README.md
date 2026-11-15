@@ -132,6 +132,13 @@ be trustworthy.
 `describe-table` without an explicit region silently reports "not found". Pass
 `AWS_REGION=eu-west-3` (or `--region`) on every ad-hoc AWS CLI call.
 
+## Alerting produit
+
+Depuis TASK-628, la politique active est [PRODUCT_ALERTING.md](../../docs/PRODUCT_ALERTING.md) :
+30 alarmes par environnement actif, dont 11 notifiantes et 19 conditions
+consommées par des composites. Les alarmes de latence et par worker sont retirées.
+Les racines prod/staging restent en veille ; aucune fixture de paiement ne change.
+
 ## Plan and apply
 
 ```bash

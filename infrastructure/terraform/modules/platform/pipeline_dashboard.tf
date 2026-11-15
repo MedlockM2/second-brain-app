@@ -15,17 +15,7 @@ variable "alert_email" {
   default     = ""
 }
 
-variable "api_slow_request_threshold_ms" {
-  description = "Threshold in ms for API p95 latency alarm"
-  type        = number
-  default     = 3000
-}
 
-variable "llamaparse_fallback_threshold_per_hour" {
-  description = "Max Unstructured fallback invocations per hour before alarm fires"
-  type        = number
-  default     = 20
-}
 
 # -----------------------------------------------------------------------------
 # Locals: Lambda function names and queue definitions
@@ -140,17 +130,6 @@ resource "aws_cloudwatch_log_metric_filter" "parser_unstructured_fallback" {
   }
 }
 
-resource "aws_cloudwatch_log_metric_filter" "unstructured_fallback_triggered" {
-  name           = "unstructured-fallback-triggered${local.suffix}"
-  log_group_name = aws_cloudwatch_log_group.lambda_worker["document_parsing"].name
-  pattern        = "{ $.event = \"document_parsing.primary_failed\" }"
-
-  metric_transformation {
-    name      = "UnstructuredFallbackTriggered"
-    namespace = local.metrics_namespace
-    value     = "1"
-  }
-}
 
 # =============================================================================
 # LOG METRIC FILTERS -- Apify Provider Calls

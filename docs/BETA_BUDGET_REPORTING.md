@@ -83,20 +83,13 @@ refusal rows is **not** proof of an unused service or lossless collection.
 
 ## Alarms and response
 
-`infrastructure/terraform/modules/platform/beta_budget_alerts.tf` filters the API,
-every SQS worker, and the audit Lambda into separate, undimensioned metrics in the
-existing namespace. No high-cardinality user/operation dimensions are introduced.
-When `enable_alarms` is on, ALARM and OK go to the existing `pipeline_alerts` SNS
-topic and its configured operational recipients. Retrieve recipients through the
-environment's Terraform/SNS configuration; no address is recorded here.
-
-| Alarm / metric | Trigger and response |
-|---|---|
-| `budget-control` / `BetaBudgetControlAnomalies` | Any ledger/config/settlement/observation failure, missing payer, unknown settlement or conflicting close in 5 minutes. Inspect the structured event; restore the counter's storage/permissions/configuration before allowing paid calls. Never turn failure into free admission. |
-| `budget-measurement` / `BetaBudgetMeasurementAnomalies` | Any settled estimated usage or failed in-flight call with no cost metric in 5 minutes. Inspect `metric_source`, `cost_basis`, provider logs and the attempt; reconcile the operator's valuation. A bounded estimate is not a measured invoice. |
-| `budget-overrun` / `BetaBudgetOverrunAnomalies` | Any measured settlement above its hold in 5 minutes. Residual overruns are accepted by rule 8: investigate the measurement/barème, do not mask the actual cost or add capacity. |
-| `budget-stale` / `BetaBudgetStaleAnomalies` | An open reservation older than the configured `hold_expiry_minutes`. Inspect its worker/DLQ and the existing release/backstop path. No silent deletion or direct counter edit. |
-| `budget-audit-missing` / `BetaBudgetAuditCompleted` | No completed audit in two consecutive 30-minute periods. Check schedule, image, IAM, duration and logs. Missing monitoring is not healthy monitoring. |
+La politique de notification active est [PRODUCT_ALERTING.md](PRODUCT_ALERTING.md).
+Les observations de coût restent dans ce rapport et les logs ; `measurement` et
+`overrun` n’ont plus d’alarme ni de filtre métrique sans lecteur. Les défauts du
+contrôle, les réservations expirées persistantes et les refus prolongés du
+plafond alimentent l’incident commun de capacité. Les observations analytiques
+non écrites seules ne déclenchent pas cet incident. Le heartbeat de l’audit est
+conservé ; l’absence de nouvel événement ne produit aucun mail de réparation.
 
 The audit runs every 30 minutes, paginates **only** the sparse open-attempt index,
 and reads the `beta_access` config row to use the same expiry as the admission
@@ -112,7 +105,7 @@ reservation or changes a user's capacity.
 
 - Apply the environment Terraform, deploy the shared image including the audit
   entrypoint, and confirm the 30-minute schedule produces its heartbeat.
-- Exercise the alarm/OK notifications through the existing operational channel.
+- Confirm the incident notification and the actual audit-heartbeat recovery through the existing operational channel, with the recipient informed.
   Verify filters and the missing-heartbeat alarm against real CloudWatch events.
 - Enroll/classify beta accounts and fixtures in the private cohort manifest, run
   the report outside Git, and inspect measured/estimated/unknown breakdowns.

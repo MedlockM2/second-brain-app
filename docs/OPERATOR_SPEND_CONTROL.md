@@ -134,39 +134,28 @@ the scope and reason stay in the logs. Mobile and web word it from
 available. Reading, organising and every delivered result never come through the
 control. The tester's percentage is unchanged.
 
-## 5. Alerts
+## 5. Alertes produit (TASK-628, décision propriétaire du 13 novembre 2026)
 
-| Alarm (`operator_control_alerts.tf`, `beta_budget_alerts.tf`) | Fires when |
-|---|---|
-| `operator-exposure-50`, `operator-exposure-80` | month's exposure reaches 50 % / 80 % of `monthly_cap_eur` |
-| `operator-loss-day`, `operator-loss-month` | failures + open commitments reach 80 % of a loss reserve |
-| `operator-drift` | month's spend ÷ active accounts above `per_active_account_alert_eur` |
-| `operator-circuits` | a circuit or the manual pause is not closed at the audit |
-| `budget-operator` | any `operator.suspended`, `operator.limit_refused`, `operator.bound_missing`, `operator.circuit_update_failed` line |
+La politique active est [PRODUCT_ALERTING.md](PRODUCT_ALERTING.md#capacite).
+L’exposition mensuelle à 80 % produit un avertissement de planification. Le
+contrôle défaillant, les réservations anciennes persistantes, les refus durables
+et un compte fournisseur nécessitant une action alimentent **un seul incident
+composite de capacité**. Le message donne l’impact et l’action en français.
 
-The first five are read every 30 minutes by the budget audit Lambda
-(`operator.spend_level`); `budget-audit-missing` already alarms when it stops. The
-last one is immediate, from every Lambda's logs. All notify the `pipeline_alerts`
-SNS topic. The drift alert tells "each account costs more" apart from "more
-accounts": the 500 EUR ceiling alone cannot.
+Les alarmes à 50 %, de coût par compte, de réserves de perte incluant des appels
+encore en cours et de tout circuit ouvert sont supprimées. Une pause manuelle
+et un 429 de débit ne déclenchent plus un mail. Les plafonds, réserves et circuits
+eux-mêmes restent intégralement appliqués par le contrôle de dépense.
 
-**How an alert reaches the owner.** Alarms are on in dev since TASK-567
-(`enable_alarms = true` in `envs/dev/main.tf`, ≈ 3.30 USD/month). Every alarm in
-the table, and the other pipeline alarms of the module, publish to the SNS topic
-`media-summarizer-pipeline-alerts-dev` on `ALARM` and again on `OK`.
-The topic delivers by email to one address, which is never committed (the
-repository is public):
+Les lectures viennent de l’audit toutes les trente minutes et des événements
+existants. L’absence d’audit reste surveillée. Aucun nouveau service d’envoi
+n’est créé : le topic `media-summarizer-pipeline-alerts-<env>` et son abonnement
+confirmé sont conservés. Les transitions `OK` des compteurs n’envoient pas de
+mail ; seul le heartbeat d’audit rétabli justifie une notification de retour.
 
-- **Subscribe**: pass the address on the apply that creates the topic,
-  `terraform apply -var alert_email=<address>` in `envs/dev`, which creates the
-  `pipeline_alerts_email` subscription, then click the confirmation link AWS sends.
-  Until it is confirmed, nothing is delivered. Without `alert_email`, subscribe
-  out-of-band (`aws sns subscribe --protocol email`), and confirm the same way.
-- **Delay**: the five audit-driven alarms reach `ALARM` at the first audit after the
-  threshold is crossed, so within about 30 minutes; `budget-operator` fires within
-  5 minutes of the log line (its period is 300 s).
-- **Check end to end**: `aws cloudwatch set-alarm-state --state-value ALARM` on one
-  operator alarm must produce an email; the next evaluation brings it back to `OK`.
+Ne pas enregistrer l’adresse de souscription dans Git. La souscription hors
+bande ou la variable `alert_email` fonctionne comme précédemment. La réception
+réelle se confirme avec le propriétaire, sans forcer une alerte à son insu.
 
 ## 6. Guarantees and residual limits
 

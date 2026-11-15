@@ -2,19 +2,19 @@
 
 ## Overview
 
-Bug reports submitted through the mobile app's "Report a Bug" feature are persisted to the `bug_reports` DynamoDB table and trigger an alert email when received.
+Les signalements envoyés depuis l’app sont conservés dans `bug_reports`. Depuis TASK-628, ils ne déclenchent plus d’alarme CloudWatch ni de mail ALARM/OK : ils relèvent du triage produit. Voir [PRODUCT_ALERTING.md](../PRODUCT_ALERTING.md).
 
 ## Where reports go
 
 | Step | System | Details |
 |------|--------|---------|
 | Persistence | DynamoDB `bug_reports` table | Permanent record with ticket ID |
-| Real-time alert | SNS email notification | Subject, description, platform, version, and media context (if report is about a specific item) |
+| Triage produit | Consultation des signalements ouverts | Sujet, description, plateforme, version et contexte média dans DynamoDB ; aucun envoi automatique |
 | Attachments | S3 `media-summarizer-bug-reports-*` bucket | Presigned PUT URL upload, server-side validation |
 
 ## Who responds
 
-During V1 soft-launch, the owner receives alert emails when reports arrive and triages directly by reading the `bug_reports` DynamoDB table via AWS Console or CLI.
+Le propriétaire consulte les signalements ouverts pendant sa revue des retours, via la console AWS ou le CLI. Cette refonte ne crée ni ingestion automatique vers le backlog ni nouveau canal de notification.
 Future: dedicated dashboard or Linear integration.
 
 ## SLA targets (soft-launch)
@@ -34,11 +34,11 @@ These are aspirational targets for the soft-launch phase, not contractual commit
 - **Attachments** (S3): automatically purged 90 days after upload via S3 lifecycle rule.
   - If the bug is resolved before 90 days, the attachment is still retained until the lifecycle triggers.
   - If the user requests data deletion under GDPR Article 17, the attachment and report are deleted immediately.
-- **Alert emails**: stored in the owner's inbox per normal email retention policies.
+- **Historical alert emails**: stored in the owner's inbox per normal email retention policies; no new report alarm email is generated.
 
 ## How to triage (for the owner)
 
-1. An alert email arrives notifying of a new report.
+1. Consulter les signalements ouverts dans la console DynamoDB (`bug_reports-dev`), puis relever l’identifiant du rapport à traiter. Aucun mail ne constitue désormais le déclencheur de cette revue.
 2. Read the report from the DynamoDB `bug_reports` table:
    ```bash
    aws dynamodb get-item --region eu-west-3 \

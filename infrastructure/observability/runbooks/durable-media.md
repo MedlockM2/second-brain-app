@@ -1,5 +1,9 @@
 # Durable Media Library Runbook
 
+Politique active : [PRODUCT_ALERTING.md](../../../docs/PRODUCT_ALERTING.md#bibliotheque).
+Les noms et severites historiques ci-dessous sont des reperes de diagnostic ;
+les notifications sont regroupees par integrite et suppression depuis TASK-628.
+
 Operational runbook for the `user_media` durable library table (task-240) and its
 deletion / backup lifecycle (task-243, §6.2 + §6.4 + §6.5). Alarms are defined in
 `infrastructure/terraform/modules/platform/durable_media_alerts.tf`.
