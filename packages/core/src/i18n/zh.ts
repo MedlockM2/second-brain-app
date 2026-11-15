@@ -749,6 +749,7 @@ export const zh: Catalog = {
   "folder.section.sources": "来源 · {count}",
   "folder.subfolderA11y": "打开文件夹 {name}，{items}",
   "folder.subfolderWithChildrenA11y": "打开文件夹 {name}，{items}，{folders}",
+  // One line beside the globe: fits 184 (360 dp) and 238 pt (414 pt) at the default size; see en.ts.
 
   "chat.dock.askMedia": "就此来源提问…",
   "chat.dock.askFolder": "就此文件夹提问…",

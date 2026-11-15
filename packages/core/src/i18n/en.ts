@@ -1042,8 +1042,14 @@ export const en = {
   "folder.subfolderWithChildrenA11y": "Open folder {name}, {items}, {folders}",
 
   // --- The chat composer and its conversation modal (task-502) ---
-  "chat.dock.askMedia": "Ask a question about this source…",
-  "chat.dock.askFolder": "Ask a question about this folder…",
+  // The chat field's invitation, the same words in the resting dock and in the
+  // open composer, where it shares one line with the web search globe and the
+  // send button. It must fit that line at the default text size: about 184 wide
+  // on a 360 dp Android phone and 238 pt on a 414 pt iPhone (measured: the
+  // longest English one is 165). Past that, the composer ellipsizes it; it
+  // never wraps.
+  "chat.dock.askMedia": "Ask about this source…",
+  "chat.dock.askFolder": "Ask about this folder…",
   "chat.dock.openA11y": "Opens the conversation",
   "chat.conversation.jumpToBottom": "Jump to the latest message",
   "chat.conversation.closeA11y": "Close the conversation",

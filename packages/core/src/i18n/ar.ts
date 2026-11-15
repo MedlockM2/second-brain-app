@@ -841,9 +841,10 @@ export const ar: Catalog = {
   "folder.section.sources": "المصادر · {count}",
   "folder.subfolderA11y": "فتح المجلد {name}، {items}",
   "folder.subfolderWithChildrenA11y": "فتح المجلد {name}، {items}، {folders}",
+  // One line beside the globe: fits 184 (360 dp) and 238 pt (414 pt) at the default size; see en.ts.
 
-  "chat.dock.askMedia": "اطرح سؤالًا عن هذا المصدر…",
-  "chat.dock.askFolder": "اطرح سؤالًا عن هذا المجلد…",
+  "chat.dock.askMedia": "اسأل هذا المصدر…",
+  "chat.dock.askFolder": "اسأل هذا المجلد…",
   "chat.dock.openA11y": "يفتح المحادثة",
   "chat.conversation.jumpToBottom": "الانتقال إلى آخر رسالة",
   "chat.conversation.closeA11y": "إغلاق المحادثة",

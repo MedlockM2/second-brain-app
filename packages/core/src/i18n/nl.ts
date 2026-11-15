@@ -792,9 +792,10 @@ export const nl: Catalog = {
   "folder.section.sources": "Bronnen · {count}",
   "folder.subfolderA11y": "Map {name} openen, {items}",
   "folder.subfolderWithChildrenA11y": "Map {name} openen, {items}, {folders}",
+  // One line beside the globe: fits 184 (360 dp) and 238 pt (414 pt) at the default size; see en.ts.
 
-  "chat.dock.askMedia": "Stel een vraag over deze bron…",
-  "chat.dock.askFolder": "Stel een vraag over deze map…",
+  "chat.dock.askMedia": "Deze bron bevragen…",
+  "chat.dock.askFolder": "Deze map bevragen…",
   "chat.dock.openA11y": "Opent het gesprek",
   "chat.conversation.jumpToBottom": "Naar het laatste bericht",
   "chat.conversation.closeA11y": "Gesprek sluiten",

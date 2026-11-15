@@ -271,9 +271,7 @@ export function ChatDock({
           resetKey={resetKey}
           onClose={close}
           title={title}
-          placeholder={
-            isFolder ? t("chat.dock.askFolder") : t("chat.dock.askMedia")
-          }
+          placeholder={restingLabel}
           messages={openingConversation ? [] : conversation?.messages ?? []}
           pendingQuestion={session.pendingQuestion}
           sources={conversation?.sources ?? []}
