@@ -14,6 +14,16 @@
  * the one-line and four-line bounds follow the system text size. The box clips
  * its content: the text never draws outside it.
  *
+ * The placeholder is drawn by the composer, not by the input: the native
+ * placeholder of a multiline field wraps, and the one-line empty field cut its
+ * second line off mid-sentence once the globe took its share of the width. It
+ * holds one line and ends in an ellipsis when it cannot fit (a long language, a
+ * large text size, a narrow phone); the catalogues keep it short so that it
+ * normally fits whole. It is the dock's resting invitation, word for word: one
+ * gesture, one sentence, whether the field is closed or open. It sits on the origin of the typed text, which is why
+ * the input sets its horizontal padding: Android would otherwise add the
+ * theme's. The input keeps the sentence as its accessibility label.
+ *
  * Drafts are never cut: the server checks the question and context budgets at
  * send time. Send and stop are two different buttons, never one that changes
  * meaning under the thumb: send while nothing is in flight, stop while an
@@ -124,24 +134,40 @@ export const ChatComposer = forwardRef<TextInput, ChatComposerProps>(
               {LINE_SAMPLE}
             </Text>
           </View>
-          <TextInput
-            ref={ref}
-            style={[
-              styles.text,
-              styles.input,
-              { minHeight: lineHeight, maxHeight: lineHeight * MAX_LINES },
-              value.length === 0 && { height: lineHeight },
-            ]}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={Colors.textMuted}
-            multiline
-            scrollEnabled
-            accessibilityLabel={placeholder}
-            accessibilityHint={t("chat.composer.hint")}
-            testID="chat-composer-input"
-          />
+          <View>
+            <TextInput
+              ref={ref}
+              style={[
+                styles.text,
+                styles.input,
+                { minHeight: lineHeight, maxHeight: lineHeight * MAX_LINES },
+                value.length === 0 && { height: lineHeight },
+              ]}
+              value={value}
+              onChangeText={onChangeText}
+              multiline
+              scrollEnabled
+              accessibilityLabel={placeholder}
+              accessibilityHint={t("chat.composer.hint")}
+              testID="chat-composer-input"
+            />
+            {value.length === 0 ? (
+              <View
+                style={styles.placeholder}
+                pointerEvents="none"
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+              >
+                <Text
+                  style={[styles.text, styles.placeholderText]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {placeholder}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
         {generating ? (
           <Pressable
@@ -211,7 +237,15 @@ const makeStyles = ({ colors: Colors }: Theme) =>
       color: Colors.textMain,
       paddingTop: 0,
       paddingBottom: 0,
+      paddingHorizontal: 0,
       textAlignVertical: "top",
+    },
+    // Over the input, on the origin of its first line.
+    placeholder: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    placeholderText: {
+      color: Colors.textMuted,
     },
     webSearch: {
       width: TouchTarget.minimum,

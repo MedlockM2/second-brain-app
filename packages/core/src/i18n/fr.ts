@@ -916,9 +916,10 @@ export const fr: Catalog = {
   "folder.section.sources": "Sources · {count}",
   "folder.subfolderA11y": "Ouvrir le dossier {name}, {items}",
   "folder.subfolderWithChildrenA11y": "Ouvrir le dossier {name}, {items}, {folders}",
+  // One line beside the globe: fits 184 (360 dp) and 238 pt (414 pt) at the default size; see en.ts.
 
-  "chat.dock.askMedia": "Poser une question sur cette source…",
-  "chat.dock.askFolder": "Poser une question sur ce dossier…",
+  "chat.dock.askMedia": "Interroger cette source…",
+  "chat.dock.askFolder": "Interroger ce dossier…",
   "chat.dock.openA11y": "Ouvre la conversation",
   "chat.conversation.jumpToBottom": "Revenir au dernier message",
   "chat.conversation.closeA11y": "Fermer la conversation",

@@ -764,9 +764,10 @@ export const ja: Catalog = {
   "folder.section.sources": "ソース · {count}",
   "folder.subfolderA11y": "フォルダ {name} を開く、{items}",
   "folder.subfolderWithChildrenA11y": "フォルダ {name} を開く、{items}、{folders}",
+  // One line beside the globe: fits 184 (360 dp) and 238 pt (414 pt) at the default size; see en.ts.
 
-  "chat.dock.askMedia": "このソースについて質問する…",
-  "chat.dock.askFolder": "このフォルダについて質問する…",
+  "chat.dock.askMedia": "このソースに質問…",
+  "chat.dock.askFolder": "このフォルダに質問…",
   "chat.dock.openA11y": "会話を開きます",
   "chat.conversation.jumpToBottom": "最新のメッセージへ移動",
   "chat.conversation.closeA11y": "会話を閉じる",
