@@ -20,6 +20,7 @@ import { usePagedMedia } from "../media/usePagedMedia";
 import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { mediaPath } from "../routes";
+import { isPendingImportKey, useMediaWithPendingImports } from "../media/pendingImports";
 
 /**
  * /folders/:folderId — a folder in three panes (owner's mockup, captures 12 to
@@ -58,6 +59,7 @@ function FolderView({ folderId }: { folderId: string }) {
 
   const found = folders.folders?.find((candidate) => candidate.id === folderId) ?? null;
   const folder = renamed ?? found;
+  const displayedSources = useMediaWithPendingImports(sources, { id: folderId, isDefault: folder?.is_default ?? false });
   const count = sourceList.total ?? folder?.media_count ?? 0;
   const chat = useChatPane({
     scope: "folder",
@@ -102,25 +104,25 @@ function FolderView({ folderId }: { folderId: string }) {
           {tw("folder.addSources")}
         </button>
       </div>
-      {sources === null && sourcesFailed ? (
+      {sources === null && sourcesFailed && displayedSources.length === 0 ? (
         <div className="section-error" role="alert">
           <span className="subtle">{t("folder.loadFailed")}</span>
           <button type="button" className="btn tonal" onClick={loadSources}>
             {t("common.retry")}
           </button>
         </div>
-      ) : sources && sources.length === 0 ? (
+      ) : sources && displayedSources.length === 0 ? (
         <PaneEmpty icon="folder-outline">
           <div style={{ fontWeight: 600 }}>{t("folder.empty")}</div>
           <p>{t("folder.emptyHint")}</p>
         </PaneEmpty>
       ) : (
-        (sources ?? []).map((item) => (
+        displayedSources.map((item) => (
           <SourceRow
             key={item.media_item_id}
             item={item}
             actions={
-              <MediaActions
+              !isPendingImportKey(item.media_item_id) && <MediaActions
                 mediaId={item.media_item_id}
                 title={resolveMediaTitle(item)}
                 folderId={item.folder_id ?? folderId}
@@ -185,10 +187,7 @@ function FolderView({ folderId }: { folderId: string }) {
           folder={{ id: folder.id, name }}
           initialRecording={adding === "audio"}
           onClose={() => setAdding(null)}
-          onAdded={() => {
-            toast.show(tw("add.added"));
-            loadSources();
-          }}
+          onStarted={() => setAdding(null)}
         />
       )}
       {toast.node}

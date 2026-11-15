@@ -20,7 +20,7 @@ export function TileRow({
    * and a row scrolled along — or re-snapped by `scroll-snap` onto the tile that
    * used to be first — would hide it.
    */
-  restartKey?: number;
+  restartKey?: number | string;
   children: ReactNode;
 }) {
   const { tw } = useI18n();

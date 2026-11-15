@@ -15,8 +15,8 @@ function passageOf(state: unknown): string | null {
 
 /**
  * /media/:mediaId — a media of the library, in its three panes. Opened from the
- * add dialog while a file is still uploading (task-603), the id is the import's
- * key: the page waits for the upload, then takes the real id in place.
+ * provisional tile while a save is still being sent, the id is the import's
+ * key: the page follows its outcome, then takes the real id in place.
  */
 export function MediaPage() {
   const { mediaId = "" } = useParams();
@@ -28,8 +28,7 @@ export function MediaPage() {
 }
 
 /**
- * A file on its way to S3: no media yet, so nothing to file, discuss, share or
- * delete, and no request to the API with a key that is not an id.
+ * An unanswered submission: no request to the API with a provisional key.
  */
 function PendingImportView({ importKey }: { importKey: string }) {
   const { t } = useI18n();
@@ -64,7 +63,7 @@ function PendingImportView({ importKey }: { importKey: string }) {
             <Icon name="sync-outline" />
           </span>
           <div>
-            <div style={{ fontWeight: 600 }}>{t("media.sending.file")}</div>
+            <div style={{ fontWeight: 600 }}>{t(outcome?.state === "sending" && outcome.kind === "file" ? "media.sending.file" : "media.sending.other")}</div>
             <p className="small subtle">{t("media.sending.hint")}</p>
           </div>
         </div>

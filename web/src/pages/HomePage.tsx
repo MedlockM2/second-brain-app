@@ -17,6 +17,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { useOnMediaSaved } from "../lib/mediaSaved";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
+import { useMediaWithPendingImports } from "../media/pendingImports";
 
 /**
  * Accueil = the mobile Home (`app/(tabs)/inbox.tsx`), per the owner's mockup:
@@ -93,13 +94,13 @@ export function HomePage() {
       return { ...current, items };
     });
   };
-  const recentItems = recent.items ?? [];
+  const recentItems = useMediaWithPendingImports(recent.items);
   const continueItems = continuing.items ?? [];
   const settled = (recent.items !== null || recent.failed) && (continuing.items !== null || continuing.failed);
 
-  if (!settled) return <main className="page" aria-busy="true" />;
+  if (!settled && recentItems.length === 0) return <main className="page" aria-busy="true" />;
 
-  if (recent.failed && continuing.failed) {
+  if (recent.failed && continuing.failed && recentItems.length === 0) {
     return (
       <main className="page">
         <div className="section-error" role="alert">
@@ -143,8 +144,8 @@ export function HomePage() {
     <main className="page home">
       <h1 className="display">{t("tabs.home")}</h1>
       {recentItems.length > 0 && (
-        <TileRow icon="download" title={t("home.recentlyAdded")} restartKey={recentRestart}>
-          {recentItems.map((item) => (
+        <TileRow icon="download" title={t("home.recentlyAdded")} restartKey={`${recentRestart}:${recentItems[0]?.media_item_id ?? ""}`}>
+          {recentItems.slice(0, RECENTLY_ADDED_LIMIT).map((item) => (
             <MediaTile
               key={item.media_item_id}
               id={item.media_item_id}

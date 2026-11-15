@@ -3,10 +3,12 @@ import { createContext, useCallback, useContext, useState } from "react";
 import { apiRequest } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import { useFolders } from "../media/useFolders";
+import { filePendingImport, isPendingImportKey, usePendingImportOutcome } from "../media/pendingImports";
+import { mediaPath } from "../routes";
+import { Link } from "react-router";
 import { AddSourceDialog } from "./AddSourceDialog";
 import { Dialog } from "./Dialog";
 import { FolderPickerDialog } from "./FolderPicker";
-import { useToast } from "./Toast";
 
 /**
  * The bar's "Add": the add dialog, then — the source being on its way to
@@ -19,10 +21,11 @@ type Step =
   | { kind: "offer"; mediaId: string }
   | { kind: "pick"; mediaId: string };
 
-export function useAddFlow(onAdded?: () => void) {
-  const { tw } = useI18n();
-  const toast = useToast();
+export function useAddFlow() {
+  const { t, tw } = useI18n();
   const [step, setStep] = useState<Step>({ kind: "closed" });
+  const outcome = usePendingImportOutcome(step.kind === "offer" || step.kind === "pick" ? step.mediaId : "");
+  const failed = outcome?.state === "failed";
 
   const open = useCallback((preset?: { file?: File | null; text?: string; recordAudio?: boolean }) => {
     // A new nonce remounts the dialog, so a second drop replaces the first.
@@ -40,13 +43,19 @@ export function useAddFlow(onAdded?: () => void) {
           initialText={step.text}
           initialRecording={step.recordAudio}
           onClose={() => setStep((current) => (current.kind === "add" ? { kind: "closed" } : current))}
-          onAdded={(mediaId) => {
-            onAdded?.();
+          onStarted={(mediaId) => {
             setStep({ kind: "offer", mediaId });
           }}
         />
       )}
-      {step.kind === "offer" && (
+      {(step.kind === "offer" || step.kind === "pick") && failed && (
+        <Dialog title={t("share.saveFailed")} onClose={close} footer={
+          <button type="button" className="btn primary" onClick={close}>{t("common.close")}</button>
+        }>
+          <p role="alert">{outcome.message}</p>
+        </Dialog>
+      )}
+      {step.kind === "offer" && !failed && (
         <Dialog
           title={tw("add.afterTitle")}
           onClose={close}
@@ -55,6 +64,9 @@ export function useAddFlow(onAdded?: () => void) {
               <button type="button" className="btn ghost" onClick={close}>
                 {tw("add.leaveUnsorted")}
               </button>
+              <Link className="btn ghost" to={mediaPath(step.mediaId)} onClick={close}>
+                {tw("add.openWhileUploading")}
+              </Link>
               <button type="button" className="btn primary" autoFocus onClick={() => setStep({ kind: "pick", mediaId: step.mediaId })}>
                 {tw("add.chooseFolder")}
               </button>
@@ -64,12 +76,9 @@ export function useAddFlow(onAdded?: () => void) {
           <p style={{ margin: 0 }}>{tw("add.afterBody")}</p>
         </Dialog>
       )}
-      {step.kind === "pick" && <FilePicker mediaId={step.mediaId} onDone={(name) => {
-        close();
-        if (name) toast.show(tw("add.filed", { name }));
-        onAdded?.();
+      {step.kind === "pick" && !failed && <FilePicker mediaId={step.mediaId} onDone={() => {
+        setStep(current => current.kind === "pick" && current.mediaId === step.mediaId ? { kind: "closed" } : current);
       }} />}
-      {toast.node}
     </>
   );
 
@@ -81,7 +90,8 @@ export function FilePicker({ mediaId, onDone }: { mediaId: string; onDone: (fold
   const { tw } = useI18n();
   const folders = useFolders();
   const file = async (folder: Folder) => {
-    await apiRequest(`/api/media/${encodeURIComponent(mediaId)}`, { method: "PATCH", body: { folder_id: folder.id } });
+    if (isPendingImportKey(mediaId)) filePendingImport(mediaId, folder.id);
+    else await apiRequest(`/api/media/${encodeURIComponent(mediaId)}`, { method: "PATCH", body: { folder_id: folder.id } });
     onDone(folder.is_default ? tw("nav.unsortedNoCount") : folder.name);
   };
   return (
