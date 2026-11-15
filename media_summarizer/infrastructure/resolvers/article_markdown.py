@@ -17,8 +17,15 @@ its site:
   "read also", tags) and a paragraph that is nearly all link (an inline "read
   also") are navigation, not text. The share is measured on the HTML for lists
   and on trafilatura's ``<ref>`` for paragraphs.
+- **Captions in.** A ``<figure>`` that opens a list item is usually a portrait
+  and its ``<figcaption>`` the name of who the item speaks for (a comparator of
+  candidates: photo, name, then their proposals). trafilatura extracts without
+  images and drops the caption with them, so the caption becomes a paragraph of
+  the item first, and the item's heading in the text.
 - **Markdown in.** trafilatura's XML is converted here: a blank line between
-  paragraphs, ``##``/``###`` headings, ``>`` quotes, ``-`` lists, and no inline
+  paragraphs, ``##``/``###`` headings, ``>`` quotes, ``-`` and ``1.`` lists
+  nested as on the page (each paragraph of an item on its own line under it),
+  and no inline
   formatting: its own Markdown output leaves stray ``*`` in the text, and with
   formatting on, its XML splits a paragraph at a bold run and glues the words
   either side of an italic one. The page's
@@ -151,6 +158,89 @@ def _drop_link_lists(tree: Any) -> None:
             listing.getparent().remove(listing)
 
 
+#: Wrappers a theme puts between a list item and the figure that opens it.
+_FIGURE_WRAPPERS = ("div", "span", "a")
+
+
+def _leading_figure(item: Any) -> Optional[Any]:
+    """The ``<figure>`` an item opens on, before any text of its own."""
+    node = item
+    while not (node.text or "").strip():
+        first = next((child for child in node if isinstance(child.tag, str)), None)
+        if first is None:
+            return None
+        if first.tag == "figure":
+            return first
+        if first.tag not in _FIGURE_WRAPPERS:
+            return None
+        node = first
+    return None
+
+
+def _captions_to_headings(tree: Any) -> None:
+    """Replace the figure opening a list item by a paragraph of its caption."""
+    from lxml import html as lxml_html
+
+    for item in tree.xpath("//li"):
+        figure = _leading_figure(item)
+        if figure is None:
+            continue
+        caption = " ".join(_flat(node) for node in figure.xpath(".//figcaption"))
+        if not caption.strip():
+            continue
+        paragraph = lxml_html.Element("p")
+        paragraph.text = " ".join(caption.split())
+        paragraph.tail = figure.tail
+        figure.getparent().replace(figure, paragraph)
+
+
+_ITEM_BLOCKS = ("p", "head", "quote")
+
+
+def _item_paragraphs(item: Any) -> List[str]:
+    """The item's own text, one entry per paragraph; inline links stay in their sentence."""
+    parts: List[str] = []
+    run = [item.text or ""]
+    for child in item:
+        if child.tag in _ITEM_BLOCKS:
+            parts.append("".join(run))
+            parts.append("".join(child.itertext()))
+            run = []
+        elif child.tag != "list":
+            run.append("".join(child.itertext()))
+        run.append(child.tail or "")
+    parts.append("".join(run))
+    return [text for text in (" ".join(part.split()) for part in parts) if text]
+
+
+def _list_lines(listing: Any, indent: str) -> List[str]:
+    """A trafilatura ``<list>`` as Markdown lines, its nested lists indented under their item.
+
+    An item's paragraphs each get a line of their own, under its marker; its
+    nested lists follow, indented to the item's text as CommonMark wants. An
+    item with no text of its own has nothing to show under a marker: its nested
+    lists take its place, at its level.
+    """
+    lines: List[str] = []
+    ordered = listing.get("rend") == "ol"
+    number = 0
+    for item in listing.findall("item"):
+        own = _item_paragraphs(item)
+        nested = [child for child in item if child.tag == "list"]
+        if not own:
+            for child in nested:
+                lines.extend(_list_lines(child, indent))
+            continue
+        number += 1
+        marker = f"{number}. " if ordered else "- "
+        inner = indent + " " * len(marker)
+        lines.append(indent + marker + own[0])
+        lines.extend(inner + text for text in own[1:])
+        for child in nested:
+            lines.extend(_list_lines(child, inner))
+    return lines
+
+
 def _blocks(main: Any) -> List[Tuple[str, str]]:
     """``(kind, markdown)`` for each block of trafilatura's XML body."""
     blocks: List[Tuple[str, str]] = []
@@ -168,7 +258,7 @@ def _blocks(main: Any) -> List[Tuple[str, str]]:
             linked = [item for item in items if _link_share(item, ".//ref") >= _LINK_SHARE]
             if not items or len(linked) >= _LINK_SHARE * len(items):
                 continue
-            blocks.append(("list", "\n".join("- " + _flat(item) for item in items)))
+            blocks.append(("list", "\n".join(_list_lines(element, ""))))
         elif element.tag == "quote":
             blocks.append(("quote", "> " + text))
         elif _link_share(element, ".//ref") >= _LINK_SHARE:
@@ -202,6 +292,7 @@ def article_markdown(html: str) -> Tuple[str, bool]:
     paywalled = _declared_paywalled(tree)
     _drop_overlays(tree)
     _drop_link_lists(tree)
+    _captions_to_headings(tree)
     if paywalled:
         _drop_closing_calls_to_subscribe(tree)
 
