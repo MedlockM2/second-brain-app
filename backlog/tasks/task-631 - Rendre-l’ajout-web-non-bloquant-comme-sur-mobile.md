@@ -1,11 +1,11 @@
 ---
 id: TASK-631
 title: Rendre l’ajout web non bloquant comme sur mobile
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-11-15 19:45'
-updated_date: '2026-11-15 20:02'
+updated_date: '2026-11-15 20:09'
 labels:
   - web
   - parity
@@ -42,8 +42,7 @@ Décision du propriétaire du 15 novembre 2026 : l’ajout d’un lien sur le we
 2. Faire passer immédiatement l’ajout global à la question de classement ; mémoriser le dossier choisi et ne l’envoyer qu’après réception de l’identifiant réel. Fermer immédiatement l’ajout contextuel au dossier.
 3. Afficher les imports provisoires dans l’accueil, la bibliothèque et les dossiers, avec ouverture de leur page pendant l’attente et remplacement sans doublon à l’arrivée des listes serveur.
 4. Réutiliser les libellés et contrôles existants, documenter les limites (navigation dans le même onglet ; aucune réduction du temps serveur) et vérifier typecheck, lint, build et diff. Aucun test automatisé ajouté ou exécuté.
-
-5. Préparer un commit et un paquet beta identifiés, sans publication distante ; demander l’autorisation explicite de publier dev selon docs/WEB_RELEASE.md. Après publication autorisée, effectuer la recette navigateur des parcours d’ajout avant de cocher les AC 1 à 4.
+5. Après autorisation explicite de publication (« oui vas y », 15 novembre 2026), fusionner et pousser main puis suivre le déploiement CI et vérifier le manifeste et les fichiers servis. Le propriétaire demande ensuite « Publier sans recette navigateur » ; conserver les AC d’interaction non vérifiés et documenter cette limite.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
@@ -52,4 +51,14 @@ Décision du propriétaire du 15 novembre 2026 : l’ajout d’un lien sur le we
 Implémentation prête dans le worktree fix/web-background-imports : saisie libérée immédiatement, état de chaque import indépendant de la fenêtre, choix de dossier différé jusqu’à l’identifiant serveur, vignettes provisoires sur accueil/bibliothèque/dossier, page d’attente pour liens et fichiers, erreurs persistantes dans l’app et protection contre les résultats tardifs après changement de compte. Les reprises de liste avant la réponse POST et pendant un déplacement ont été revues pour éviter les doublons ; un échec de classement ne fait pas disparaître une sauvegarde réussie.
 
 Vérifications locales : TypeScript via build, ESLint et compilation Vite mode ci réussis ; vérificateur du paquet en mode compilation-only réussi ; git diff --check propre. Aucun test automatisé ajouté ou exécuté. Avertissement Vite de taille du bundle déjà présent, sans nouvelle dépendance. Les AC 1 à 4 restent non cochés : les chemins UI sont implémentés et relus, mais aucune recette interactive sur la nouvelle version n’a encore été réalisée ; le runbook docs/WEB_RELEASE.md exige une instruction explicite de publication pour les opérations distantes. Ne pas assimiler la compilation à une validation en navigateur.
+
+Publication autorisée par le propriétaire le 15 novembre 2026 (« oui vas y »). Commit fonctionnel 96863508 fusionné sur main (17887453), puis poussé. Workflow de déploiement dev lancé : https://github.com/MedlockM2/second-brain-app/actions/runs/43756170128 . Le pilotage du navigateur retourne « browser access host is unavailable » ; le propriétaire choisit explicitement « Publier sans recette navigateur ». Cette décision dispense de recette interactive pour cette livraison ; elle ne constitue pas une preuve de validation des AC 1 à 4.
+
+Déploiement dev terminé avec succès le 15 novembre 2026 : https://github.com/MedlockM2/second-brain-app/actions/runs/43756170128 . La CI a validé la parité, TypeScript, ESLint, le build beta et le paquet, publié les fichiers puis terminé l’invalidation CloudFront. Vérification distante indépendante : https://dev.deepn.app/release.json annonce la révision 17887453889d6694d5b6ff83c9badf6a5a77178b, mode beta distribuable ; les cinq fichiers servis (index, JS, CSS et icônes) correspondent à leurs empreintes SHA-256. La livraison est clôturée avec la dispense explicite de recette navigateur du propriétaire. Les AC 1 à 4 restent volontairement non cochés pour ne pas faire passer cette preuve de publication pour une validation des interactions.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+L’ajout web libère immédiatement la saisie et suit chaque import hors de la fenêtre, avec vignette provisoire, ouverture avant l’identifiant serveur, classement différé et erreurs persistantes. Le suivi couvre liens, notes, fichiers et enregistrements ; le temps d’extraction backend reste inchangé. Commit 96863508 fusionné et publié sur dev après autorisation explicite du propriétaire. CI de publication réussie ; révision et empreintes des cinq fichiers servis vérifiées indépendamment. Recette navigateur non effectuée à la demande explicite du propriétaire (« Publier sans recette navigateur ») : les AC d’interaction 1 à 4 restent non cochés. Aucun test automatisé ajouté ou exécuté.
+<!-- SECTION:FINAL_SUMMARY:END -->
