@@ -79,6 +79,27 @@ Local Vite with direct calls to the dev API:
   current `web_app_origin` is applied (`aws_s3_bucket_cors_configuration` in
   `infrastructure/terraform/modules/platform/s3.tf`); before that, a link imports but a file does not.
 
+## Imports without waiting on the server
+
+Like mobile, validating Add starts one import and immediately releases the entry
+dialog. A global add offers filing while the request is in flight; a folder add
+already carries its destination. Links, notes, files and recorded audio share the
+same lifecycle (`src/media/pendingImports.ts`). Home, Library and the destination
+folder show an openable provisional source until the server list takes over.
+Its page waits for the real media id; no API call receives a provisional key.
+
+A folder picked before the save exists is remembered, then applied to its real
+id. Closing the picker or navigating does not cancel the import or its filing.
+Failures stay in a dismissible app-level banner, linked to the affected source;
+a failed filing does not turn a successful save into a failed import. Session
+closure/account change clears this state and ignores late callbacks.
+
+This tracking lives in the current tab, as on mobile in the current process:
+reloading or closing the tab loses the local progress view and may interrupt an
+upload. A source already accepted by the server remains in the library. This
+change frees the interface; it does not shorten backend extraction time. Finished
+placeholders outside a list's loaded range expire after two minutes.
+
 ## Deployment
 
 Build-time configuration validation, package identity, S3/CloudFront cache settings

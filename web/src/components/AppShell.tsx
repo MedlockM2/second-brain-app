@@ -2,12 +2,14 @@ import type { UnsortedCountResponse } from "@media-summarizer/core/types/organiz
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from "react-router";
 import { apiRequest } from "../api";
-import { notifyMediaSaved, useOnMediaSaved } from "../lib/mediaSaved";
+import { useOnMediaSaved } from "../lib/mediaSaved";
 import { AddFlowContext, useAddFlow } from "./AddFlow";
 import { useI18n } from "../i18n/I18nProvider";
 import { useTheme } from "../theme";
 import { Icon } from "./Icon";
 import { LogoMark } from "./Logo";
+import { dismissImportNotice, useImportNotices } from "../media/pendingImports";
+import { mediaPath } from "../routes";
 
 /**
  * The horizontal bar of the owner's direction (mockup `appbar()` in
@@ -19,7 +21,8 @@ export function AppShell() {
   const { scheme, toggle } = useTheme();
   const location = useLocation();
   const unsorted = useUnsortedCount(location.pathname);
-  const add = useAddFlow(notifyMediaSaved);
+  const add = useAddFlow();
+  const importNotices = useImportNotices();
   useDropAndPaste(add.open);
 
   const tab = (to: string, label: string, end = false) => (
@@ -70,6 +73,15 @@ export function AppShell() {
           <Icon name="person-outline" size={18} />
         </NavLink>
       </header>
+      {importNotices.slice(0, 1).map(notice => (
+        <div key={notice.id} className="banner-err" role="alert">
+          <Icon name="alert-circle-outline" size={18} />
+          <Link className="grow" to={mediaPath(notice.importKey)}>{notice.message}</Link>
+          <button type="button" className="icon-btn" aria-label={t("common.close")} onClick={() => dismissImportNotice(notice.id)}>
+            <Icon name="close" size={18} />
+          </button>
+        </div>
+      ))}
       <div className="shell-body">
         <AddFlowContext.Provider value={add.open}>
           <Outlet />

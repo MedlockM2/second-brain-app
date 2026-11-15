@@ -16,6 +16,7 @@ import { usePagedMedia } from "../media/usePagedMedia";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
 import { BackToTop } from "../components/BackToTop";
+import { useMediaWithPendingImports } from "../media/pendingImports";
 
 /**
  * Bibliothèque = the mobile Library (`app/(tabs)/search.tsx`), per the owner's
@@ -37,6 +38,7 @@ export function LibraryPage() {
 
   const mediaList = usePagedMedia(PAGE_SIZE);
   const { items: media, failed: mediaFailed, total, cursor, loadingMore, reload: loadMedia, loadMore } = mediaList;
+  const displayedMedia = useMediaWithPendingImports(media);
 
   const loadFolders = useCallback(() => {
     apiRequest<FolderListResponse>("/api/folders")
@@ -130,14 +132,14 @@ export function LibraryPage() {
         {media && <span className="count">{tCount("common.itemCount", total ?? 0)}</span>}
       </div>
 
-      {mediaFailed && !media ? (
+      {mediaFailed && !media && displayedMedia.length === 0 ? (
         <div className="section-error" role="alert">
           <span className="subtle">{t("search.libraryLoadFailed")}</span>
           <button type="button" className="btn tonal" onClick={loadMedia}>
             {t("common.retry")}
           </button>
         </div>
-      ) : media && media.length === 0 ? (
+      ) : media && displayedMedia.length === 0 ? (
         <div className="empty">
           <p className="headline">{t("search.emptyLibrary")}</p>
           <p className="subtle">{tw("home.emptyHint")}</p>
@@ -145,7 +147,7 @@ export function LibraryPage() {
       ) : (
         <>
           <div className="mgrid">
-            {(media ?? []).map((item) => (
+            {displayedMedia.map((item) => (
               <MediaCard key={item.media_item_id} item={item} />
             ))}
           </div>
