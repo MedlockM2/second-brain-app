@@ -50,6 +50,8 @@ module "platform" {
   public_domain           = var.public_domain
   public_zone_id          = var.public_zone_id
   web_certificate_arn     = module.web_certificate.certificate_arn
+  www_public_alias        = var.www_public_alias
+  www_certificate_arn     = aws_acm_certificate_validation.www_public.certificate_arn
   web_connect_origins     = var.web_connect_origins
   web_app_hosting_enabled = true
 

@@ -29,3 +29,34 @@ module "web_certificate" {
   domain    = var.public_domain
   zone_id   = var.public_zone_id
 }
+
+# www.deepn.app is the one public address of the legal pages (task-443). While prod
+# sleeps, this dev distribution serves it next to www.dev.deepn.app, with a
+# certificate of its own: adding the name to module.web_certificate would replace
+# that certificate, and with it Cognito's custom domain. The name's zone is in the
+# prod account, which this root cannot write, so two records there are owner
+# records: the certificate's validation CNAME and www.deepn.app itself
+# (docs/PRODUCTION_RELEASE_RUNBOOK.md, "Domain bring-up"). Remove the alias before
+# prod's first apply: a CloudFront alternate name belongs to one distribution only.
+variable "www_public_alias" {
+  description = "Public name of the legal pages, served by dev's www distribution while prod sleeps."
+  type        = string
+  default     = "www.deepn.app"
+}
+resource "aws_acm_certificate" "www_public" {
+  provider                  = aws.us_east_1
+  domain_name               = var.www_public_alias
+  subject_alternative_names = ["www.${var.public_domain}"]
+  validation_method         = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+# Waits until both names are validated: www.dev.deepn.app by the record that
+# module.web_certificate already keeps in this account's zone (ACM asks the same
+# record of a name across an account's certificates), www.deepn.app by the owner
+# record in the prod zone.
+resource "aws_acm_certificate_validation" "www_public" {
+  provider        = aws.us_east_1
+  certificate_arn = aws_acm_certificate.www_public.arn
+}
