@@ -3,7 +3,7 @@
     "message": "Deepn"
   },
   "extDescription": {
-    "message": "Speichere die Seite, die du liest, oder eine Auswahl in deiner Deepn-Bibliothek."
+    "message": "Speichere Seiten, Links oder Auswahlen in Deepn, lies ihre Zusammenfassung und führe ein Gespräch darüber."
   },
   "actionTitle": {
     "message": "In Deepn speichern"
@@ -11,14 +11,11 @@
   "menuSaveSelection": {
     "message": "Auswahl in Deepn speichern"
   },
-  "savePage": {
-    "message": "Diese Seite speichern"
-  },
   "saving": {
     "message": "Wird gespeichert…"
   },
   "saved": {
-    "message": "Gespeichert. Die Verarbeitung hat begonnen."
+    "message": "Gespeichert"
   },
   "folder": {
     "message": "Ordner"
@@ -62,12 +59,6 @@
   "signOut": {
     "message": "Abmelden"
   },
-  "linked": {
-    "message": "Mit deinem Deepn-Konto verknüpft"
-  },
-  "selectionSaved": {
-    "message": "Auswahl in Deepn gespeichert"
-  },
   "selectionFailed": {
     "message": "Die Auswahl konnte nicht gespeichert werden."
   },
@@ -102,9 +93,291 @@
     "message": "Netzwerkfehler. Prüfe deine Verbindung und versuche es erneut."
   },
   "sourceRefused": {
-    "message": "Dieser Link wird noch nicht unterstützt. Versuche eine andere Quelle."
+    "message": "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen, YouTube- und TikTok-Videos, Instagram- und X-Beiträge, Webartikel und Audiodateien."
   },
-  "selectionRetryHint": {
-    "message": "Wähle zum erneuten Versuch den Text aus und nutze das Kontextmenü noch einmal."
+  "retry": {
+    "message": "Wiederholen"
+  },
+  "dismiss": {
+    "message": "Ausblenden"
+  },
+  "loading": {
+    "message": "Wird geladen …"
+  },
+  "continue": {
+    "message": "Weiter"
+  },
+  "done": {
+    "message": "Fertig"
+  },
+  "moreActions": {
+    "message": "Aktionen für diese Quelle"
+  },
+  "statusProcessing": {
+    "message": "Wird verarbeitet"
+  },
+  "statusFailed": {
+    "message": "Verarbeitung fehlgeschlagen"
+  },
+  "folderMoveFailed": {
+    "message": "Ordner konnte nicht gespeichert werden"
+  },
+  "folderCreateFailed": {
+    "message": "Ordner konnte nicht erstellt werden"
+  },
+  "folderNoMatches": {
+    "message": "Kein Ordner passt zu deiner Suche"
+  },
+  "folderDuplicate": {
+    "message": "Hier gibt es bereits einen Ordner mit diesem Namen. Wähle einen anderen Namen."
+  },
+  "panelLoadFailed": {
+    "message": "Die Mediendetails konnten nicht geladen werden."
+  },
+  "tabReader": {
+    "message": "Lesen"
+  },
+  "tabNotebook": {
+    "message": "Notizbuch"
+  },
+  "essentials": {
+    "message": "Das Wichtigste"
+  },
+  "previewPending": {
+    "message": "Die Vorschau wird geschrieben …"
+  },
+  "previewUnavailable": {
+    "message": "Keine Vorschau für diese Quelle."
+  },
+  "fullText": {
+    "message": "Volltext"
+  },
+  "fullTextPreparing": {
+    "message": "In Vorbereitung"
+  },
+  "fullTextEmpty": {
+    "message": "Noch kein Text verfügbar."
+  },
+  "fullTextFailed": {
+    "message": "Der Text kann gerade nicht geladen werden."
+  },
+  "viewOriginal": {
+    "message": "Original ansehen ({language})"
+  },
+  "viewTranslation": {
+    "message": "Übersetzung ansehen ({language})"
+  },
+  "translating": {
+    "message": "Text wird übersetzt …"
+  },
+  "translationFailed": {
+    "message": "Die Übersetzung ist fehlgeschlagen. Es wird der Originaltext angezeigt."
+  },
+  "incompleteTitle": {
+    "message": "Unvollständiger Text"
+  },
+  "incompleteBody": {
+    "message": "Die Website behält den Rest dieses Artikels ihren Abonnenten vor. Deepn konnte nur diesen Anfang lesen; Zusammenfassung und Chat beziehen sich auf diesen Teil."
+  },
+  "panelChat": {
+    "message": "Gespräch"
+  },
+  "chatAsk": {
+    "message": "Diese Quelle befragen…"
+  },
+  "chatSend": {
+    "message": "Frage senden"
+  },
+  "chatNew": {
+    "message": "Neue Unterhaltung"
+  },
+  "chatWriting": {
+    "message": "Die Antwort wird geschrieben."
+  },
+  "chatSearchingWeb": {
+    "message": "Suche im Web…"
+  },
+  "chatFailed": {
+    "message": "Es konnte keine Antwort erzeugt werden."
+  },
+  "chatInterruptedCancelled": {
+    "message": "Gestoppt. Die Antwort oben ist unvollständig."
+  },
+  "chatInterruptedOutputLimit": {
+    "message": "Die Antwort hat ihre Höchstlänge erreicht und endet hier."
+  },
+  "chatInterruptedError": {
+    "message": "Ein Fehler hat die Antwort unterbrochen. Was angekommen ist, bleibt erhalten."
+  },
+  "chatQuestionTooLong": {
+    "message": "Diese Frage hat {length} Zeichen; die Grenze liegt bei {max}. Kürze sie und versuche es erneut. Dein Entwurf bleibt erhalten."
+  },
+  "chatConversationFull": {
+    "message": "Diese Unterhaltung hat {max} Fragen erreicht. Beginne eine neue, um weiterzumachen."
+  },
+  "chatContextBudget": {
+    "message": "Die Frage und die Unterhaltung überschreiten den verfügbaren Kontext. Kürze deine Frage oder beginne eine neue Unterhaltung. Dein Entwurf bleibt erhalten."
+  },
+  "chatTurnInFlight": {
+    "message": "Eine Antwort ist noch unterwegs. Warte darauf, bevor du erneut fragst."
+  },
+  "chatTurnCountChanged": {
+    "message": "Die Unterhaltung hat sich inzwischen geändert. Versuche es erneut."
+  },
+  "chatNotFound": {
+    "message": "Diese Unterhaltung existiert nicht mehr."
+  },
+  "chatRefusalGeneric": {
+    "message": "Die Frage konnte nicht gesendet werden. Versuche es erneut."
+  },
+  "generateHeading": {
+    "message": "Erstellen"
+  },
+  "typeSummary": {
+    "message": "Zusammenfassung"
+  },
+  "typeNotes": {
+    "message": "Lernnotizen"
+  },
+  "typeFlashcards": {
+    "message": "Lernkarten"
+  },
+  "typeQuiz": {
+    "message": "Quiz"
+  },
+  "generating": {
+    "message": "Wird erstellt …"
+  },
+  "generatingMeta": {
+    "message": "{type} · Wenige Sekunden · du kannst diesen Bildschirm verlassen"
+  },
+  "generationFailed": {
+    "message": "Erstellung fehlgeschlagen"
+  },
+  "generationRetry": {
+    "message": "Erneut versuchen"
+  },
+  "notebookLoadFailed": {
+    "message": "Erstellte Inhalte konnten nicht geladen werden. Bitte versuche es erneut."
+  },
+  "artifactLoadFailed": {
+    "message": "Dieser erstellte Inhalt konnte nicht geladen werden."
+  },
+  "artifactMediaEmpty": {
+    "message": "Dieses Element hat noch kein Transkript, also gibt es nichts, woraus etwas erstellt werden könnte."
+  },
+  "artifactTooMuchText": {
+    "message": "Hier ist zu viel Text für eine einzelne Erstellung. Erstelle es auf einem kleineren Unterordner."
+  },
+  "artifactRefusalGeneric": {
+    "message": "Diese Erstellung konnte nicht gestartet werden. Bitte versuche es erneut."
+  },
+  "sectionKeyPoints": {
+    "message": "Kernpunkte"
+  },
+  "sectionTakeaway": {
+    "message": "Fazit"
+  },
+  "sectionQuotes": {
+    "message": "Bemerkenswerte Zitate"
+  },
+  "sectionObjectives": {
+    "message": "Ziele"
+  },
+  "sectionConcepts": {
+    "message": "Konzepte"
+  },
+  "sectionActionItems": {
+    "message": "Aufgaben"
+  },
+  "sectionGlossary": {
+    "message": "Glossar"
+  },
+  "importanceCore": {
+    "message": "Zentral"
+  },
+  "importanceSupporting": {
+    "message": "Ergänzend"
+  },
+  "artifactQuestion": {
+    "message": "FRAGE"
+  },
+  "artifactAnswer": {
+    "message": "ANTWORT"
+  },
+  "artifactExplanation": {
+    "message": "ERKLÄRUNG"
+  },
+  "questionPosition": {
+    "message": "Frage {index} von {total}"
+  },
+  "cardPosition": {
+    "message": "Karte {index} von {total}"
+  },
+  "noFlashcards": {
+    "message": "Keine Lernkarten in diesem Inhalt."
+  },
+  "noQuestions": {
+    "message": "Keine Fragen in diesem Inhalt."
+  },
+  "flashReveal": {
+    "message": "Antwort zeigen"
+  },
+  "flashAgain": {
+    "message": "Wiederholen"
+  },
+  "flashKnown": {
+    "message": "Gewusst"
+  },
+  "flashDoneTitle": {
+    "message": "Runde beendet"
+  },
+  "flashScoreTotal": {
+    "message": "von {total}"
+  },
+  "flashDoneAll": {
+    "message": "Du kanntest alle Karten."
+  },
+  "flashDoneSome": {
+    "message": "Wiederhole die verpassten jetzt, solange es frisch ist."
+  },
+  "flashReviewMissed": {
+    "message": "Verpasste Karten wiederholen"
+  },
+  "flashRestart": {
+    "message": "Neu beginnen"
+  },
+  "panelEmpty": {
+    "message": "Klicke auf das Deepn-Symbol oder drücke Alt+S, um die Seite zu speichern, die du liest: Das Wichtigste, der vollständige Text und das Notizbuch erscheinen hier."
+  },
+  "chatEmpty": {
+    "message": "Stell eine Frage: Die Antwort stützt sich auf den Text dieser Seite."
+  },
+  "notebookInApp": {
+    "message": "Einträge in Deepn anpassen, umbenennen oder löschen"
+  },
+  "menuSaveLink": {
+    "message": "Diesen Link in Deepn speichern"
+  },
+  "linkFailed": {
+    "message": "Dieser Link konnte nicht gespeichert werden."
+  },
+  "alreadySaved": {
+    "message": "Bereits in deiner Bibliothek"
+  },
+  "openInDeepn": {
+    "message": "In Deepn öffnen"
+  },
+  "folderSearch": {
+    "message": "Ordner suchen oder erstellen"
+  },
+  "folderCreate": {
+    "message": "„{name}“ erstellen"
+  },
+  "shortcutHint": {
+    "message": "Tastenkürzel: {keys}"
+  },
+  "chatWaiting": {
+    "message": "Das Gespräch ist möglich, sobald die Verarbeitung abgeschlossen ist."
   }
 }

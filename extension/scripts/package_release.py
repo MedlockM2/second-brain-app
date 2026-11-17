@@ -47,12 +47,13 @@ def inspect_package(package: Path, firefox: bool) -> None:
         if any(".env" in Path(name).parts or Path(name).name.startswith(".env") for name in names):
             raise ValueError("Environment file in packaged extension")
         manifest = json.loads(archive.read("manifest.json"))
-        if manifest.get("manifest_version") != 3 or sorted(manifest.get("permissions", [])) != [
-            "activeTab",
-            "contextMenus",
-            "storage",
-        ]:
+        # Chromium's side panel is a permission; Firefox's sidebar is a manifest key.
+        expected = ["activeTab", "contextMenus", "scripting", "storage"] + ([] if firefox else ["sidePanel"])
+        if manifest.get("manifest_version") != 3 or sorted(manifest.get("permissions", [])) != sorted(expected):
             raise ValueError("Unexpected extension permissions/version")
+        panel = manifest.get("sidebar_action", {}).get("default_panel") if firefox else manifest.get("side_panel", {}).get("default_path")
+        if panel != "sidepanel.html" or manifest.get("action", {}).get("default_popup"):
+            raise ValueError("Side panel missing, or a popup that would swallow the button's click")
         if (
             manifest.get("host_permissions") != [pattern(api)]
             or manifest.get("content_scripts")

@@ -107,6 +107,10 @@ class IngestUrlRequest:
     transcript_language: Optional[str] = None
     idempotency_key: Optional[str] = None
     folder_id: Optional[str] = None
+    #: The page as the reader's browser drew it, cleaned by the extension. Read by
+    #: the article resolver only, instead of downloading the page; ignored by every
+    #: other resolver. Never stored: only the text extracted from it is.
+    page_html: Optional[str] = None
 
 
 @dataclass(frozen=True)

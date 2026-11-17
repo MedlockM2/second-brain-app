@@ -1,10 +1,34 @@
 # Extension Deepn — Chrome, Edge et Firefox
 
 Extension Manifest V3 en WXT (task-487/488), un zip commun pour Chrome et Edge,
-et une cible Firefox dédiée. Elle
-sauvegarde l'adresse de l'onglet ou le texte sélectionné avec son adresse
-d'origine ; elle ne lit jamais le contenu de la page. Les pages payantes ou
-privées restent hors du périmètre V1.
+et une cible Firefox dédiée.
+
+- **Un clic ouvre le panneau et enregistre.** Il n'y a pas de popup : cliquer sur
+  l'icône, ou `Alt+S`, ouvre le panneau latéral (barre latérale sur Firefox) et
+  enregistre l'onglet dans le dernier dossier utilisé (`lib/save.ts`, dans le
+  service worker). Une page déjà enregistrée ne l'est pas deux fois : l'en-tête dit
+  « Déjà dans votre bibliothèque » (`GET /api/media?url=`).
+- **La page telle qu'on la voit.** Au clic seulement, l'extension lit l'onglet et
+  envoie son HTML nettoyé avec l'adresse (`page_html`) : une page payante ou
+  derrière une connexion arrive en entier. Décision de l'owner du 2026-11-17, qui
+  reprend la voie A de `docs/research/task-490-paywalled-page-capture/README.md`
+  (abandonnée le 2026-10-11). Le serveur l'extrait comme une page qu'il télécharge ;
+  sans texte exploitable, il télécharge lui-même la page.
+- **Clic droit** : « Enregistrer la sélection » (une note qui garde son adresse et
+  ses sauts de ligne) et « Enregistrer ce lien » (sans ouvrir la page).
+- **Le panneau reprend la page média de l'app** (maquette
+  `mobile-design-mockups/extension_panneau_lateral/`) :
+  - en-tête : le média, son état, son dossier (modifiable sur place, avec recherche
+    et création), « Ouvrir dans Deepn », le menu « … » (raccourci, déconnexion) ;
+  - **Lecture** : l'essentiel, le texte complet replié (un clic le déroule, « Voir
+    l'original » s'il est traduit), la discussion avec le média ;
+  - **Cahier** : les quatre formats générés d'un clic avec les réglages par défaut,
+    la liste des fiches (génération en cours, échec à relancer), la fiche ouverte
+    dans le panneau (résumé, notes, révision des cartes mémo, quiz). Personnaliser,
+    renommer et supprimer restent dans l'app.
+- **Le panneau garde sa page.** Sans la permission `tabs`, il ne voit pas l'onglet
+  où l'on passe ; un nouveau clic sur l'icône enregistre la page courante et l'affiche.
+  Chrome ne laisse pas l'extension fixer la largeur du panneau : l'utilisateur la règle.
 
 ## Installation et configuration
 
@@ -48,14 +72,23 @@ web dans les deux applications. Le build refuse une origine vide ou un chemin.
    (liste séparée par des virgules). Redémarrer Vite pour prendre la configuration.
 4. Dans l'app web connectée, ouvrir Mon compte › Extension navigateur, puis
    « Relier cette extension ». Si le navigateur ne permet pas l'appairage direct,
-   afficher un code, puis saisir ce code et l'e-mail du compte dans la popup.
-5. Ouvrir une page publique `https`, cliquer sur l'extension, choisir un dossier
-   et enregistrer. Les sous-dossiers portent le chemin de leurs parents.
-6. Sélectionner du texte sur une page, puis clic droit › Enregistrer la sélection
-   dans Deepn. Le dossier choisi dans la popup est aussi celui du menu contextuel ;
-   sans choix, le serveur utilise Non classés. Le badge ✓ confirme la sauvegarde ;
-   ! indique un échec. Aucun nouvel essai automatique d'une sauvegarde échouée.
-7. Vérifier dans la bibliothèque dev la page et la note, puis `origin_url` sur la
+   afficher un code, puis saisir ce code et l'e-mail du compte dans le panneau.
+5. Ouvrir une page publique `https` et cliquer sur l'extension (ou `Alt+S`) : le
+   panneau s'ouvre et la page est enregistrée sans autre clic. Changer de dossier
+   dans l'en-tête, en cherchant puis en créant un dossier. Recliquer sur l'icône sur
+   la même page : « Déjà dans votre bibliothèque », sans doublon.
+6. Ouvrir un article réservé aux abonnés avec un compte abonné, l'enregistrer, et
+   vérifier dans Deepn que le texte complet est là (`extraction_mode:
+   "client_html"` dans les métadonnées du job).
+7. Sélectionner du texte sur plusieurs paragraphes, puis clic droit › Enregistrer
+   la sélection dans Deepn : la note garde ses sauts de ligne. Clic droit sur un
+   lien › Enregistrer ce lien dans Deepn. Le badge ✓ confirme ; en cas d'échec, un
+   « ! » reste sur l'icône et le panneau affiche la raison avec « Réessayer » (sauf
+   refus définitif).
+8. Dans le panneau : l'essentiel quand il est prêt, le texte complet déroulé puis
+   replié, une question. Dans le Cahier, générer chaque format, ouvrir chaque fiche,
+   réviser les cartes, faire le quiz, relancer une génération échouée.
+9. Vérifier dans la bibliothèque dev la page et la note, puis `origin_url` sur la
    note. Révoquer depuis Mon compte et vérifier la demande de ré-appairage lors du
    prochain rafraîchissement. Essayer aussi le code depuis un autre profil.
 
@@ -73,26 +106,35 @@ pas cette restriction locale : l'extension ne contient aucun script de contenu. 
 usage unique : aucune fenêtre de rejeu de 60 secondes n’existe sur ce parcours.
 Le serveur décide de l’expiration (90 jours d’inactivité, plafond d’un an) ; un 401 de refresh efface
 les jetons et demande de relier l'extension. « Se déconnecter » révoque la lignée
-par `/api/auth/logout`. Si le réseau empêche la révocation, la popup affiche une
+par `/api/auth/logout`. Si le réseau empêche la révocation, le panneau affiche une
 erreur et conserve la session pour réessayer ; Mon compte permet aussi de révoquer.
 
 Le manifeste demande :
 
 | Permission | Justification pour les stores |
 | --- | --- |
-| `activeTab` | Lire l'adresse et le titre de l'onglet lorsque l'utilisateur ouvre la popup. |
-| `contextMenus` | Proposer l'enregistrement du texte sélectionné au clic droit. |
-| `storage` | Garder la session propre à cette extension et le dossier choisi. |
-| Hôte exact de l'API | Envoyer les sauvegardes et gérer la session auprès de Deepn. Aucun autre hôte. |
+| `activeTab` | Accéder à l'onglet sur lequel l'utilisateur vient d'agir (icône, `Alt+S`, menu contextuel), et à lui seul. |
+| `scripting` | Lire, sur ce clic, la page à enregistrer (son HTML nettoyé) ou le texte sélectionné avec ses sauts de ligne. Jamais avant, jamais un autre onglet. |
+| `contextMenus` | Proposer au clic droit l'enregistrement de la sélection et d'un lien. |
+| `sidePanel` (Chromium) | Afficher l'aperçu, le résumé et la discussion de la page enregistrée. Firefox utilise `sidebar_action`, sans permission. |
+| `storage` | Garder la session propre à cette extension, le dossier choisi, et le temps de la session du navigateur la page montrée par le panneau et un enregistrement échoué à réessayer. |
+| Hôte exact de l'API | Envoyer les sauvegardes, lire le résumé et la discussion, gérer la session auprès de Deepn. Aucun autre hôte. |
 
 `externally_connectable` n'autorise que l'hôte de l'app web. Le service worker
 vérifie en plus `sender.origin` exactement, port compris, avant toute écriture.
-Il n'y a ni script de contenu, ni permission `scripting`, ni `<all_urls>`, ni code
-chargé à distance. Version minimale Chromium : 140 (`storage.local.setAccessLevel`). Le code de secours est à usage
+Il n'y a ni script de contenu, ni `<all_urls>`, ni permission d'hôte sur les
+sites, ni code chargé à distance : `scripting` n'atteint que l'onglet que
+`activeTab` ouvre, au moment du geste. Le raccourci `Alt+S` (`commands`,
+`_execute_action`) se modifie dans `chrome://extensions/shortcuts`. Version minimale Chromium : 140 (`storage.local.setAccessLevel`). Le code de secours est à usage
 unique ; l'app web masque le code à son expiration.
 
 Les libellés utilisent les 11 catalogues `_locales` : ar, de, en, es, fr, hi, it,
-ja, nl, pt_PT, zh_CN. Pour les régénérer : `python3 scripts/messages.py`.
+ja, nl, pt_PT, zh_CN. Pour les régénérer : `python3 scripts/messages.py`. Les icônes du
+panneau sont celles de l'app web, recopiées par `python3 scripts/icons.py` dans
+`lib/icons.generated.ts`. Les
+libellés que l'app possède déjà (statuts, refus du chat et des artefacts, dossiers)
+sont recopiés de `packages/core/src/i18n` par ce script (`CORE_MESSAGES`) au lieu
+d'être retraduits : les modifier dans l'app, puis relancer le script.
 Les icônes se régénèrent avec `python3 scripts/make_icons.py` (Pillow).
 
 ## Même zip pour les deux stores
@@ -123,11 +165,15 @@ la description et les captures, les déclarations de données et les justificati
 des permissions. Sur Microsoft Partner Center, créer la fiche Edge Add-ons,
 importer le même zip et remplir notamment Privacy :
 
-- Objet unique : sauvegarder une page ou une sélection dans la bibliothèque Deepn.
+- Objet unique : sauvegarder une page, un lien ou une sélection dans la bibliothèque
+  Deepn, et en afficher le résumé et une discussion dans le panneau latéral.
 - Permissions : reprendre les justifications du tableau ci-dessus.
 - Code distant : aucun, tout le JavaScript est dans le paquet.
-- Données : adresse et titre affiché localement ; adresse et sélection envoyées
-  seulement sur action explicite ; jetons de session stockés dans l'extension.
+- Données : adresse et titre affiché localement ; adresse, contenu de la page
+  (HTML nettoyé) et sélection envoyés seulement sur action explicite, pour en
+  extraire le texte ; le HTML n'est pas conservé par Deepn, seul le texte extrait
+  l'est. Questions posées dans le panneau envoyées sur action explicite. Jetons de
+  session stockés dans l'extension.
   L'e-mail et le code ne sont envoyés que pour l'appairage de secours.
 - URL de confidentialité : `https://www.<domaine>/privacy`, publiée et accessible
   avant soumission. Reprendre les déclarations conformes aux pages légales validées.
@@ -156,7 +202,8 @@ La déclaration `data_collection_permissions.required` couvre :
 - `authenticationInfo` : code et jetons d'appairage/session ;
 - `personallyIdentifyingInfo` : e-mail fourni pour le code de secours ;
 - `browsingActivity` : adresse enregistrée sur action explicite ;
-- `websiteContent` : texte sélectionné envoyé sur action explicite.
+- `websiteContent` : contenu de la page et texte sélectionné, envoyés sur action
+  explicite.
 
 Aucune télémétrie n'est ajoutée. Le minimum 140 évite une interface de consentement
 pour les versions antérieures. Les permissions et l'hôte API restent les mêmes.
@@ -166,11 +213,10 @@ Le libellé du navigateur dans Mon compte distingue Firefox.
 confirme que ni `runtime.connect` ni `runtime.sendMessage` depuis une page web
 ne sont pris en charge sur Firefox. La cible Firefox n'émet donc pas de clé
 `externally_connectable` et n'enregistre aucun listener de message externe.
-La popup Firefox propose directement « Afficher un code » depuis Mon compte ;
-les consignes Chromium gardent le bouton d’appairage et le code de secours.
-Depuis Mon compte › Extension navigateur, afficher un code ; dans la popup de
-Firefox, saisir le code et l'e-mail du compte. Le bouton de la popup ouvre cette
-page de compte. Ne pas ajouter l'ID Gecko à `VITE_EXTENSION_IDS` (Chrome/Edge seuls).
+Sur Firefox, la barre latérale propose directement « Afficher un code » depuis Mon
+compte ; les consignes Chromium gardent le bouton d’appairage et le code de secours.
+Depuis Mon compte › Extension navigateur, afficher un code ; dans la barre latérale
+de Firefox, saisir le code et l'e-mail du compte. Son bouton ouvre cette page de compte. Ne pas ajouter l'ID Gecko à `VITE_EXTENSION_IDS` (Chrome/Edge seuls).
 Source consultée le 11 octobre 2026 :
 [Mozilla — externally_connectable](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/externally_connectable).
 
@@ -224,20 +270,21 @@ Références officielles consultées le 11 octobre 2026 :
 
 ## Refus et reprise d'une sauvegarde
 
-La popup distingue réseau, session à relier, source refusée, capacité épuisée,
-limite par élément, traitement fermé et fournisseur suspendu. Elle reprend les
+Le panneau distingue réseau, session à relier, source refusée, capacité épuisée,
+limite par élément, traitement fermé et fournisseur suspendu. Il reprend les
 libellés budgétaires mobile/web, avec la date de renouvellement quand elle est
-connue, sans prix ni achat. Un refus garde le dossier choisi et réactive le bouton
-pour un nouvel essai explicite. Une session révoquée demande de relier l'extension.
-Les erreurs du code d'appairage restent neutres sur l'existence du compte.
+connue, sans prix ni achat. Une sauvegarde par l'icône qui échoue garde dans
+`storage.session` ce qu'elle aurait envoyé, page comprise (elle ne peut être relue
+sans un nouveau clic), et le panneau propose « Réessayer », sauf refus définitif
+(capacité épuisée, élément trop gros, traitement fermé, source refusée). Une session
+révoquée demande de relier l'extension. Les erreurs du code d'appairage restent
+neutres sur l'existence du compte.
 
-Le menu contextuel montre ✓ seulement après acceptation de la sauvegarde, et !
-sur échec. Après !, ouvrir la popup pour lire l'explication du dernier refus.
-Seuls son code autorisé et, éventuellement, la date de renouvellement validée sont
-conservés temporairement dans `storage.session`, puis retirés à la lecture. Aucun
-texte sélectionné, URL, compte ou credential n'est ajouté à ce diagnostic ; il n'y
-a ni journal ni historique. Pour reprendre, sélectionner à nouveau le texte et
-utiliser le menu contextuel : aucune sauvegarde n'est rejouée automatiquement.
+Le menu contextuel montre ✓ seulement après acceptation de la sauvegarde, et un !
+qui reste sur l'icône en cas d'échec. Le panneau affiche alors un bandeau avec la
+raison et « Réessayer », qui renvoie la même sélection ou le même lien ; ils sont
+gardés dans `storage.session` (mémoire, fermée aux pages) jusqu'à ce que le bandeau
+soit fermé ou la sauvegarde réussie. Aucune sauvegarde n'est rejouée automatiquement.
 La génération des `_locales` réutilise les phrases des catalogues de core ; elle
 échoue si une traduction attendue manque.
 

@@ -2,7 +2,7 @@
   "name": "@media-summarizer/extension",
   "version": "1.0.0",
   "private": true,
-  "description": "Deepn browser extension: save a page or selection on Chrome, Edge and Firefox.",
+  "description": "Deepn browser extension: save a page, a link or a selection, then read its summary and chat with it, on Chrome, Edge and Firefox.",
   "type": "module",
   "scripts": {
     "dev": "wxt",

@@ -33,6 +33,7 @@ from media_summarizer.core.media_ingestion.media_metadata import (
 from media_summarizer.core.media_ingestion.ports import ContentResolverPort
 from media_summarizer.core.media_ingestion.title_derivation import select_title
 from media_summarizer.core.ports.article_content import (
+    ArticleContent,
     ArticleContentFetcherPort,
     ArticleFetchError,
 )
@@ -240,6 +241,14 @@ class ArticleResolver(ContentResolverPort):
         return self._content_fetcher
 
     async def resolve(self, context: ResolveContext) -> ResolvedMedia:
+        page_html = context.command.request.page_html
+        if page_html:
+            from_browser = self._fetcher().read_html(
+                page_html, url=context.normalized_url
+            )
+            if from_browser is not None:
+                return self._read_in_browser(context=context, article=from_browser)
+
         try:
             article = await self._fetcher().fetch(context.normalized_url)
         except ArticleFetchError as exc:
@@ -299,6 +308,60 @@ class ArticleResolver(ContentResolverPort):
             char_count=article.char_count,
         )
         return resolved
+
+    def _read_in_browser(
+        self, *, context: ResolveContext, article: ArticleContent
+    ) -> ResolvedMedia:
+        """A page the extension read as the reader saw it: a paid or signed-in page.
+
+        Its identity is the URL *and* the fingerprint of the text, like any page
+        read here (task-490 §3): another account that saves the same link gets
+        what the server reads -- a paywall's teaser, a login wall -- whose
+        fingerprint differs, so it never receives this text. Only an account that
+        sends the very same text meets this media, i.e. one that already had it.
+        """
+        content_fingerprint = article_content_fingerprint(article.text)
+        media_key = generate_article_media_key(
+            canonical_url=context.normalized_url,
+            content_fingerprint=content_fingerprint,
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "resolver.completed",
+            "Article resolver read the page sent by the browser",
+            source_platform=SourcePlatform.WEB.value,
+            resolver_key=self.key,
+            media_type=MediaType.ARTICLE.value,
+            fallback_strategy="client_html",
+            media_key=media_key,
+            content_fingerprint=content_fingerprint,
+            char_count=article.char_count,
+        )
+        return ResolvedMedia(
+            media_key=media_key,
+            normalized_url=context.normalized_url,
+            media_family=MediaFamily.ARTICLE,
+            media_type=MediaType.ARTICLE,
+            source_platform=SourcePlatform.WEB,
+            resolver_key=self.key,
+            title=article.title,
+            creator_name=article.creator_name,
+            cover_url=article.cover_url,
+            raw_text=article.text,
+            metadata={
+                "resolver_version": "v2",
+                "extraction_mode": "client_html",
+                "web_page_render": False,
+                "page_signals": None,
+                "source_url": context.normalized_url,
+                "content_fingerprint": content_fingerprint,
+                "url_media_key": context.media_key,
+                "extraction_metadata": article.extraction_metadata(),
+                "transcript_provider": article.provider,
+                "transcript_extractor": article.extractor,
+            },
+        )
 
     def _unreadable_page(
         self,

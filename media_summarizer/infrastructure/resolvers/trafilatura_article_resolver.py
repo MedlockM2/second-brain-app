@@ -187,6 +187,41 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
             signals=signals,
         )
 
+    def read_html(self, html: str, *, url: str) -> Optional[ArticleContent]:
+        """The article of a page the browser extension read on the reader's click.
+
+        The same extraction, title, publisher and cover as a downloaded page, so
+        a page reads the same whoever fetched it. What differs is what counts as
+        unusable: a page with no text, or an anti-bot challenge drawn instead of
+        the page, is ``None`` rather than a page to render -- the browser already
+        rendered it -- and the resolver then downloads the page as if no HTML had
+        come. Over the size ceiling is ``None`` too: the client must not send it,
+        and a truncated document reads badly.
+        """
+        if not html or len(html.encode("utf-8")) > self._max_html_bytes:
+            return None
+        try:
+            text = extract_clean_text(html)
+        except ArticleFetchError:
+            return None
+        if inspect_static_html(html, extracted_text=text).access_challenge:
+            return None
+        title, creator_name, cover_url = extract_page_metadata(html, requested_url=url)
+        return ArticleContent(
+            text=text,
+            requested_url=url,
+            content_type="text/html",
+            title=title,
+            creator_name=creator_name,
+            cover_url=cover_url,
+            language=None,
+            char_count=len(text),
+            word_count=_word_count(text),
+            paragraph_count=count_paragraphs(text),
+            provider=self.provider_name,
+            extractor="trafilatura",
+        )
+
     def _refused_page(self, requested_url: str, error: ArticleFetchError) -> ArticleContent:
         """A page whose site refused our reader (401/402/403): the browser's to read.
 
