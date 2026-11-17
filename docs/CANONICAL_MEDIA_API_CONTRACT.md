@@ -177,6 +177,26 @@ Request (`IngestUrlRequest`):
 the backend assigns the user's default Uncategorized folder. A provided folder id
 must belong to the authenticated user.
 
+**`page_html` (optional, browser extension).** The page as the reader's browser drew it,
+read on the click and cleaned by the extension (`script`, `style`, `noscript`, `svg`,
+`iframe`, `template`, `link` and `style` attributes removed), at most
+`ARTICLE_EXTRACT_MAX_HTML_BYTES` of UTF-8 (2 000 000 by default, the same ceiling as a
+page the server downloads). Past it the request is refused `413 PAGE_HTML_TOO_LARGE`; the
+extension never sends it, and sends the address alone instead. It is what makes a paid
+or signed-in page arrive whole (owner decision of 2026-11-17, way A of
+`docs/research/task-490-paywalled-page-capture/README.md`):
+
+- read only when the URL is a web page (the article resolver); a YouTube, TikTok or
+  podcast URL ignores it and keeps its own path;
+- extractable: no download. Text, title, publisher and cover come from the same
+  trafilatura extraction as a downloaded page, and the identity is
+  `generate_article_media_key(url, sha256(text))`, never the URL alone: an account that
+  saves the same link gets what the server reads, whose fingerprint differs, so it never
+  receives this text. Metadata says `extraction_mode: "client_html"`;
+- no text, or an anti-bot challenge instead of the page: as if the field were absent —
+  the server downloads the page;
+- the HTML is never stored, only the text extracted from it.
+
 `transcript_language` is a **per-submission override**. When omitted, the backend defaults to the
 authenticated user's `reading_language` preference (set during onboarding, editable in Settings via
 `PATCH /api/auth/me`). Clients should therefore send it only when the user explicitly wants a
@@ -919,6 +939,39 @@ Semantics (task-264 for the folder half, task-346 for the title half):
 - a rename also refreshes the `title` denormalized onto that media's search chunks (selected by the `media_item_id` filter), so results stop matching and displaying the old name. That refresh is best-effort: a search-index failure is logged as `user_media.rename_search_failed` and does not fail the request — the library row is the source of truth
 - a rename touches the user-facing title only: `media_key`, `saved_at`, dedup identity and artifacts are untouched
 - the path parameter is spelled `media_id` on this route; it carries the same durable library id as `{media_item_id}` elsewhere
+
+### 9) GET /api/media?url= — the saves of one address
+
+The library list (`GET /api/media`, the same `items` and pagination as its other filters)
+takes a `url` filter: the saves whose content locator (`source_url`) is that address. Both
+sides go through `canonicalize_media_url`, so tracking parameters, a fragment or a YouTube
+timestamp do not hide a save. It is what the browser extension reads to say "already in
+your library" instead of saving a duplicate (every save is a fresh `media_item_id`, §1):
+`?url=<tab address>&limit=1`, newest first.
+
+- a note selected on a page is **not** a save of that page: its page is `origin_url`, which
+  this filter does not read;
+- an address that cannot be canonicalized matches nothing (`items: []`), never everything.
+
+### The browser extension's token
+
+An `ext_a_` access token (`media_summarizer/api/endpoints/extension_tokens.py`) is confined
+to the routes of `EXTENSION_ROUTES` (`api/dependencies/auth.py`), matched on the route
+**template** FastAPI resolved (`/api/media/{media_item_id}`), never on the concrete path:
+
+| What the extension does | Routes |
+|---|---|
+| Save a page, a link, a selection | `POST /api/media/ingest-url`, `POST /api/media/ingest-shared-content` |
+| Find the saves of the page being read | `GET /api/media` (with `url`) |
+| Follow a save, move it, create its folder | `GET /api/media/{media_item_id}`, `PATCH /api/media/{media_id}`, `GET /api/folders`, `POST /api/folders` |
+| Side panel, Lecture: full text | `GET /api/media/{media_item_id}/raw-content` |
+| Side panel, Cahier: generate with the default options, retry, read | `GET /api/artifacts`, `POST /api/artifacts`, `POST /api/artifacts/{artifact_id}/retry`, `GET /api/artifacts/{artifact_id}/content` |
+| Side panel, Lecture: conversation | `GET` and `POST /api/chat/conversations`, `GET /api/chat/conversations/{conversation_id}`, `POST /api/chat/conversations/{conversation_id}/turns` |
+| Sign out | `POST /api/auth/logout` |
+
+Every other route answers `403` to this token: deleting or renaming anything, the account,
+the subscription, other devices, and the chat stream door. The side panel follows an answer by
+reading the conversation (every 2 s, as the web app does when no stream URL is configured).
 
 ## Continue learning activity (TASK-582)
 

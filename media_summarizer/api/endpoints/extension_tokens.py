@@ -6,9 +6,12 @@ signed in on the web app, and gets the refresh token of a lineage of its own, of
 kind ``browser_extension``:
 
 - **Reduced scope.** Opaque ``ext_a_`` access tokens refer to the parent grant,
-  which the authentication dependency confines to saving a page, saving a selection,
-  listing the folders and signing the extension out (``EXTENSION_ROUTES`` in
-  api/dependencies/auth.py). Everything else answers 403.
+  which the authentication dependency confines to what the popup and the side
+  panel do: save a page, a link or a selection, find the saves of a page, move a
+  save to a folder or create one, read a media's state, its summary and a
+  conversation about it, and sign the extension out (``EXTENSION_ROUTES`` in
+  api/dependencies/auth.py, matched on route templates). Everything else answers
+  403: deleting, the account, the subscription, the other devices.
 - **Durations.** Renewed at every /refresh, dead after 90 days without one, and
   a year after the pairing at the latest (``EXTENSION_REFRESH_*`` in
   utils/auth_utils.py). Then the extension asks to be paired again.

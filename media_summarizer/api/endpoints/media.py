@@ -650,6 +650,15 @@ class IngestUrlRequest(BaseModel):
     folder_id: Optional[str] = Field(
         None, description="Optional folder ID to assign to the media item"
     )
+    page_html: Optional[str] = Field(
+        None,
+        description=(
+            "The page as the browser drew it, cleaned by the extension (no script, "
+            "style, svg, iframe...), at most ARTICLE_EXTRACT_MAX_HTML_BYTES of UTF-8 "
+            "(2 000 000 by default; 413 beyond). Read instead of downloading the page "
+            "when the URL is a web page, ignored for every other source. Never stored."
+        ),
+    )
 
 
 class IngestUrlResponse(BaseModel):
@@ -1356,6 +1365,7 @@ async def search_media(
     source: Optional[str] = None,
     type: Optional[str] = None,
     status_filter: Optional[str] = None,
+    url: Optional[str] = None,
     cursor: Optional[str] = None,
     limit: int = 20,
     sort: SortDirection = DEFAULT_SORT_DIRECTION,
@@ -1369,6 +1379,8 @@ async def search_media(
         source: Filter by source platform (youtube, tiktok, web, audio, etc.)
         type: Filter by media type (video, article, podcast, audio)
         status_filter: Filter by job status (pending, completed, failed, etc.)
+        url: The saves of this address, compared canonically -- what the browser
+            extension asks to say "already in your library" (task-487 follow-up)
         cursor: Pagination cursor from previous response
         limit: Page size (1-100, default 20)
         sort: Chronological direction -- "desc" (default, newest first) or "asc"
@@ -1383,6 +1395,7 @@ async def search_media(
             source=source,
             media_type=type,
             status=status_filter,
+            url=url,
         )
 
         result = await media_search_service.search_media(
@@ -1432,10 +1445,21 @@ async def ingest_url(
     from media_summarizer.core.media_ingestion.wiring import (
         build_default_ingest_url_use_case,
     )
+    from media_summarizer.infrastructure.resolvers.trafilatura_article_resolver import (
+        DEFAULT_ARTICLE_MAX_HTML_BYTES,
+    )
 
     url = (payload.url or "").strip()
     if not url:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="url is required")
+    # A page read by the browser has no right to more than a page read by the
+    # server (task-490 §2). The extension measures before sending and sends the
+    # URL alone past this, so only a client that ignores the rule gets here.
+    if payload.page_html and len(payload.page_html.encode("utf-8")) > DEFAULT_ARTICLE_MAX_HTML_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"error_code": "PAGE_HTML_TOO_LARGE", "max_bytes": DEFAULT_ARTICLE_MAX_HTML_BYTES},
+        )
 
     token = bind_log_context(user_id=current_user.id)
     try:
@@ -1487,6 +1511,7 @@ async def ingest_url(
             transcript_language=transcript_language,
             idempotency_key=payload.idempotency_key,
             folder_id=resolved_folder_id,
+            page_html=payload.page_html or None,
         )
         command = IngestUrlCommand(
             user=UserContext(user_id=current_user.id, user_email=user.email),

@@ -197,6 +197,17 @@ class ArticleContentFetcherPort(ABC):
         """
         ...
 
+    @abstractmethod
+    def read_html(self, html: str, *, url: str) -> Optional[ArticleContent]:
+        """Extract the article from a page the reader's browser already drew.
+
+        The same extraction as :meth:`fetch`, without the download. ``None`` when
+        nothing usable comes out of it -- no text, or an anti-bot challenge
+        instead of the page: the caller then reads the page itself, so content
+        sent by a client never lands under the URL-only identity.
+        """
+        ...
+
     @property
     @abstractmethod
     def provider_name(self) -> str:

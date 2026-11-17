@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Literal, Optional
 from media_summarizer.core.media_ingestion.media_metadata import parse_cover_locator
 from media_summarizer.core.models.user_media import UserMediaRecord
 from media_summarizer.core.services.folder_service import _get_descendant_ids
+from media_summarizer.core.services.media_identity import canonicalize_media_url
 from media_summarizer.utils import database_async, s3
 from media_summarizer.utils import user_media as user_media_store
 
@@ -56,6 +57,10 @@ class SearchFilters:
     source: Optional[str] = None  # Source platform filter
     media_type: Optional[str] = None  # Media type filter
     status: Optional[str] = None  # Library processing status filter
+    # The saves of one address (the browser extension's "already in your library"):
+    # compared canonically on both sides, so tracking parameters, a fragment or a
+    # YouTube timestamp do not hide a save.
+    url: Optional[str] = None
 
 
 @dataclass
@@ -173,6 +178,14 @@ def _sort_key(record: UserMediaRecord) -> tuple:
     return (record.saved_at.isoformat(), record.media_item_id)
 
 
+def _canonical(url: str) -> Optional[str]:
+    """The canonical form of an address, or ``None`` when it is not one."""
+    try:
+        return canonicalize_media_url(url)
+    except ValueError:
+        return None
+
+
 def _apply_filters(
     records: List[UserMediaRecord],
     filters: SearchFilters,
@@ -186,6 +199,9 @@ def _apply_filters(
     source_lower = filters.source.lower().strip() if filters.source else None
     media_type_lower = filters.media_type.lower().strip() if filters.media_type else None
     status_lower = filters.status.lower().strip() if filters.status else None
+    canonical_url = _canonical(filters.url) if filters.url else None
+    if filters.url and canonical_url is None:
+        return []
 
     for record in records:
         # Title search (case-insensitive substring match)
@@ -213,6 +229,12 @@ def _apply_filters(
         if status_lower:
             current = record.processing_status.value if record.processing_status else None
             if current is None or current.lower() != status_lower:
+                continue
+
+        # Address filter. A shared text's page is its `origin_url`, not its
+        # locator: a note taken on a page is not that page saved.
+        if canonical_url is not None:
+            if not record.source_url or _canonical(record.source_url) != canonical_url:
                 continue
 
         result.append(record)

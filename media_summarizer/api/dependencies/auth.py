@@ -13,14 +13,44 @@ from media_summarizer.utils.database_async import DynamoDBConnection, get_db
 
 logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+#: What the browser extension's token may call, as (method, route template): the
+#: template is the matched route's declared path (``/api/media/{media_item_id}``),
+#: never the concrete URL, so an id in a path cannot widen or dodge the list.
+#:
+#: Saving (a page, a link, a selection), finding the saves of the page being read,
+#: moving one to a folder and creating that folder; then the side panel, a copy of
+#: the app's media page: the media's state, preview and full text, its notebook
+#: (generate with the default options, retry, read) and a conversation about it.
+#: Nothing that deletes or renames, nothing about the account, the subscription or
+#: other devices.
 EXTENSION_ROUTES = frozenset(
     {
         ("POST", "/api/media/ingest-url"),
         ("POST", "/api/media/ingest-shared-content"),
+        ("GET", "/api/media"),
+        ("GET", "/api/media/{media_item_id}"),
+        ("GET", "/api/media/{media_item_id}/raw-content"),
+        ("PATCH", "/api/media/{media_id}"),
         ("GET", "/api/folders"),
+        ("POST", "/api/folders"),
+        ("GET", "/api/artifacts"),
+        ("POST", "/api/artifacts"),
+        ("POST", "/api/artifacts/{artifact_id}/retry"),
+        ("GET", "/api/artifacts/{artifact_id}/content"),
+        ("GET", "/api/chat/conversations"),
+        ("POST", "/api/chat/conversations"),
+        ("GET", "/api/chat/conversations/{conversation_id}"),
+        ("POST", "/api/chat/conversations/{conversation_id}/turns"),
         ("POST", "/api/auth/logout"),
     }
 )
+
+
+def _route_template(request: Request) -> str:
+    """The declared path of the route FastAPI matched, or the URL path without one."""
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    return (template if isinstance(template, str) else request.url.path).rstrip("/")
 
 
 async def get_current_user(
@@ -35,7 +65,7 @@ async def get_current_user(
         parent = await database_async.get_auth_token_by_id(grant.lineage_id)
         if parent is None or parent.token_type != TokenType.REFRESH_TOKEN or not parent.is_valid() or parent.user_id != grant.user_id:
             raise cognito_auth.refuse("INVALID_CREDENTIALS", 401)
-        if (request.method, request.url.path.rstrip("/")) not in EXTENSION_ROUTES:
+        if (request.method, _route_template(request)) not in EXTENSION_ROUTES:
             raise HTTPException(status_code=403, detail="This token cannot be used here")
         user = await database_async.get_user_by_id(grant.user_id)
         if user is None or not user.cognito_sub:

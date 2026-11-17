@@ -487,9 +487,14 @@ Son refresh rend un access token opaque `ext_a_…`, haché également et valabl
 minutes. Le secret de renouvellement est stable, renouvelé jusqu’à 90 jours
 d’inactivité, plafonné à un an après appairage. Il ne devient jamais une session
 Cognito. Chaque accès relit le grant parent de façon cohérente pour appliquer
-immédiatement sa révocation. Les seules routes autorisées restent :
-`POST /api/media/ingest-url`, `POST /api/media/ingest-shared-content`,
-`GET /api/folders`, `POST /api/auth/logout`. Toute autre route est interdite.
+immédiatement sa révocation. Les routes autorisées sont celles du panneau latéral :
+enregistrer, retrouver les enregistrements d'une adresse, suivre et déplacer un
+enregistrement, créer un dossier, lire le texte complet, générer, relancer et lire
+les fiches du Cahier, discuter avec le média, se déconnecter. La liste fait foi dans `EXTENSION_ROUTES`
+(`media_summarizer/api/dependencies/auth.py`), comparée au gabarit de la route
+(`/api/media/{media_item_id}`) et non au chemin concret ; elle est détaillée dans
+`docs/CANONICAL_MEDIA_API_CONTRACT.md`, « The browser extension's token ». Toute
+autre route est interdite : suppressions, renommages, compte, abonnement, autres appareils.
 La déconnexion web ne délie pas l’extension. Supprimer le compte révoque les deux.
 
 ## Bascule et validation propriétaire après fusion
