@@ -1,11 +1,11 @@
 ---
 id: TASK-444
 title: Publier les pages légales et valider les coordonnées de contact de Deepn
-status: To Do
+status: Done
 assignee:
   - owner
 created_date: '2026-10-10 15:13'
-updated_date: '2026-10-30 12:00'
+updated_date: '2026-11-17 23:22'
 labels:
   - v1-launch
   - release
@@ -17,7 +17,6 @@ documentation:
   - docs/compliance/CHECKLIST.md
 priority: high
 ordinal: 51000
-dispatchable: false
 ---
 
 ## Description
@@ -47,9 +46,29 @@ Lire l'amendement du 2026-10-30 sous **Owner Validation** du README de task-357.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 L’approbation des textes et la décision d’hébergement sont consignées, avec la référence au README autoritatif.
-- [ ] #2 Les URLs publiques finales et le compte rendu de leur consultation sans authentification depuis un réseau externe sont documentés.
-- [ ] #3 Les contacts publics correspondent au canal approuvé ; aucune adresse de compte cloud ni aucun credential n’apparaît dans les fichiers suivis.
-- [ ] #4 La checklist compliance identifie les liens transmis à task-358 et les questionnaires à reporter dans les stores.
-- [ ] #5 L'URL de la section de suppression de compte (`…#delete-account`) est consignée pour la Play Console.
+- [x] #1 L’approbation des textes et la décision d’hébergement sont consignées, avec la référence au README autoritatif.
+- [x] #2 Les URLs publiques finales et le compte rendu de leur consultation sans authentification depuis un réseau externe sont documentés.
+- [x] #3 Les contacts publics correspondent au canal approuvé ; aucune adresse de compte cloud ni aucun credential n’apparaît dans les fichiers suivis.
+- [x] #4 La checklist compliance identifie les liens transmis à task-358 et les questionnaires à reporter dans les stores.
+- [x] #5 L'URL de la section de suppression de compte (`…#delete-account`) est consignée pour la Play Console.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Publication sur `www.deepn.app` le 2026-11-18.** Adresse publique unique décidée dans TASK-443 : `https://www.deepn.app`, servie par la distribution `www` de dev tant que prod dort (`www.dev.deepn.app` n'est jamais communiquée). Certificat us-east-1 propre à cette distribution (`aws_acm_certificate.www_public`, `envs/dev/web_hosting.tf`), pour ne jamais remplacer celui que partage Cognito. La zone `deepn.app` est dans le compte prod : deux enregistrements y sont faits à la main, la validation du certificat et le CNAME `www.deepn.app` → `d118p1z5xvufnz.cloudfront.net`, consignés dans `docs/PRODUCTION_RELEASE_RUNBOOK.md` (« `www.deepn.app` on the dev `www` distribution »), avec leur retrait avant le premier apply de prod. Terraform Dev (run 44197686329) a ajouté l'alias.
+
+**Textes.** Avant publication, la politique (§2.2, §3, §6) et la page `/extension` ont été alignées sur l'extension à panneau latéral (cb947ffe, 8f972793), qui envoie la page telle que le navigateur l'affiche, pages payantes et connectées comprises ; elles affirmaient le contraire. La politique publiée intègre aussi TASK-610, 612 et 619, restés hors ligne depuis le 2026-11-03. L'owner a demandé le 2026-11-18 de publier sans relecture préalable.
+
+**Publié** avec `scripts/publish_legal_site.sh dev` (configuration publique : `web_app_url` = `https://dev.deepn.app`, liens stores vides tant que les fiches ne sont pas ouvertes) : `https://www.deepn.app/` (accueil exigé par la vérification de marque Google, TASK-451), `https://www.deepn.app/privacy`, `#delete-account`, `#delete-data`, `https://www.deepn.app/extension`. Vérifié sans authentification depuis un réseau extérieur à AWS : HTTP 200, `text/html; charset=utf-8` (`image/svg+xml` pour l'icône), date 2026-11-18, ancres présentes, lien canonique `https://www.deepn.app/privacy`. L'adresse CloudFront dev sert la même page. Contact publié : `deepn.support@gmail.com`, canal approuvé dans TASK-443.
+
+**Copie prod** (`https://d3fc24zfw6pew8.cloudfront.net/privacy`, gardée pour les binaires antérieurs à `3109ecf5`) : remplacée par la même version (2026-11-18, canonique `www.deepn.app`). Sa racine `/` répond 403 : la distribution prod date d'avant `default_root_object`.
+
+**Reste hors de cette tâche** : basculer `legal.ts`, App Store Connect et la Play Console sur `www.deepn.app` (gate TASK-454) ; vérification de marque Google (TASK-451) ; fiches des extensions (TASK-592, Firefox), puis republier `/extension` avec les liens des stores dans la configuration publique.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Pages publiques publiées sur `https://www.deepn.app` (accueil, `/privacy` avec `#delete-account` et `#delete-data`, `/extension`), servies par la distribution `www` de dev avec un certificat dédié et deux enregistrements manuels dans la zone prod documentés dans le runbook. Politique et page `/extension` alignées sur l'extension qui envoie la page affichée ; copie prod rafraîchie. Bascule des consoles et de l'app laissée au gate TASK-454.
+<!-- SECTION:FINAL_SUMMARY:END -->

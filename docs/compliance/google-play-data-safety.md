@@ -26,7 +26,7 @@ AWS_PROFILE=second-brain-app terraform -chdir=infrastructure/terraform/envs/dev 
 - **Data deletion without account deletion URL:** append `/privacy#delete-data` to that base URL. This section explains in-app deletion and an email request path for selected saved items and chat conversations.
 - **Privacy/deletion contact:** deepn.support@gmail.com.
 
-Verify the public page loads without sign-in and that its deletion section is directly reachable. Use the same privacy URL in the app. Published on the dev `www` distribution since 2026-11-01 (only dev is in use until production): privacy **https://d118p1z5xvufnz.cloudfront.net/privacy**, account deletion **https://d118p1z5xvufnz.cloudfront.net/privacy#delete-account**.
+Verify the public page loads without sign-in and that its deletion section is directly reachable. Use the same privacy URL in the app. Published on the dev `www` distribution since 2026-11-01 (only dev is in use until production), at its public address since 2026-11-18: privacy **https://www.deepn.app/privacy**, account deletion **https://www.deepn.app/privacy#delete-account**. The provisional **https://d118p1z5xvufnz.cloudfront.net/privacy** (and `#delete-account`) serves the same page and stays in the app and the Play Console until the TASK-454 gate.
 
 ## Data Collected
 
