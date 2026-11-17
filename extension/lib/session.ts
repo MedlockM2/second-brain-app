@@ -12,14 +12,14 @@ import { API_BASE_URL } from "./config";
  *   browser). Both are closed to content scripts — the extension has none, but
  *   the access level says so rather than relying on it.
  * - `refresh()` renews that grant’s idle deadline and gets a new five-minute
- *   access token. The grant itself stays the same; popup/background requests
+ *   access token. The grant itself stays the same; panel/background requests
  *   do not rotate a single-use token. `inflight` only coalesces local calls.
  * - A 401 on /refresh means the lineage is over (expired or unlinked): the
- *   tokens are dropped and `expired` is set, so the popup asks to pair again.
+ *   tokens are dropped and `expired` is set, so the side panel asks to pair again.
  */
 // No expiry is kept here: the idle window slides at every use and /refresh does
 // not say where it now ends, so a local date would go stale. The server decides
-// (a 401), and the popup learns it from there.
+// (a 401), and the side panel learns it from there.
 type StoredRefresh = { token: string };
 type StoredAccess = { token: string; expiresAtMs: number };
 

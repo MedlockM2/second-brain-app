@@ -10,10 +10,14 @@ export function msg(key: string): string {
   return browser.i18n.getMessage(key as keyof typeof messages) || key;
 }
 
-/** Fill every element carrying `data-msg` (text) or `data-msg-placeholder`. */
+/** Fill every element carrying `data-msg` (text), `data-msg-label` (an icon's name) or `data-msg-placeholder`. */
 export function localize(root: ParentNode): void {
   root.querySelectorAll<HTMLElement>("[data-msg]").forEach((element) => {
     element.textContent = msg(element.dataset.msg!);
+  });
+  root.querySelectorAll<HTMLElement>("[data-msg-label]").forEach((element) => {
+    element.setAttribute("aria-label", msg(element.dataset.msgLabel!));
+    element.title = msg(element.dataset.msgLabel!);
   });
   root.querySelectorAll<HTMLInputElement>("[data-msg-placeholder]").forEach((element) => {
     element.placeholder = msg(element.dataset.msgPlaceholder!);

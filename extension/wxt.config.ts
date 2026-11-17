@@ -5,13 +5,18 @@ import { loadEnv } from "vite";
 /**
  * Deepn's Chromium and Firefox targets (task-487/488).
  *
- * The manifest asks for as little as the job needs (owner decision, point 4 —
- * the extension does what the apps do): `activeTab` to read the current tab's
- * address when the toolbar button is pressed, `contextMenus` for "save the
- * selection", `storage` for the session. No `<all_urls>`, no broad host
+ * The toolbar button has no popup: a click (or Alt+S) opens the side panel
+ * (`entrypoints/sidepanel`; `sidePanel` on Chromium, `sidebar_action` on Firefox,
+ * both added by WXT) and saves the tab.
+ *
+ * The manifest asks for as little as the job needs: `activeTab` and `scripting`
+ * to read the tab the reader clicked on — its address, its page, its selection —
+ * on that click only (the toolbar button, Alt+S, the context menu); never before,
+ * never another tab (owner decision of 2026-11-17, way A of task-490).
+ * `contextMenus` for "save the selection" and "save this link", `storage` for the
+ * session. No content script, no `<all_urls>`, no `tabs`, no broad host
  * permission: the one host is the API's own, so the extension can call it
- * without the API's CORS naming an extension origin. It never reads a page's
- * content.
+ * without the API's CORS naming an extension origin.
  *
  * `externally_connectable` lets the web app — and only it — hand the
  * extension its token in one click (complement §7).
@@ -77,9 +82,11 @@ export default defineConfig({
       name: "__MSG_extName__",
       description: "__MSG_extDescription__",
       default_locale: "en",
-      permissions: ["activeTab", "contextMenus", "storage"],
+      permissions: ["activeTab", "contextMenus", "scripting", "storage"],
       host_permissions: [matchPattern(api)],
       action: { default_title: "__MSG_actionTitle__" },
+      // The shortcut is the click on the button: it opens the panel and saves.
+      commands: { _execute_action: { suggested_key: { default: "Alt+S" } } },
     };
   },
 });

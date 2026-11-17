@@ -3,7 +3,7 @@
     "message": "Deepn"
   },
   "extDescription": {
-    "message": "احفظ الصفحة التي تقرؤها، أو جزءًا محددًا منها، في مكتبة Deepn."
+    "message": "احفظ صفحة أو رابطًا أو جزءًا محددًا في Deepn، ثم اقرأ ملخّصها وتحاور حولها."
   },
   "actionTitle": {
     "message": "الحفظ في Deepn"
@@ -11,14 +11,11 @@
   "menuSaveSelection": {
     "message": "حفظ التحديد في Deepn"
   },
-  "savePage": {
-    "message": "حفظ هذه الصفحة"
-  },
   "saving": {
     "message": "جارٍ الحفظ…"
   },
   "saved": {
-    "message": "تم الحفظ. بدأت المعالجة."
+    "message": "تم الحفظ"
   },
   "folder": {
     "message": "المجلد"
@@ -62,12 +59,6 @@
   "signOut": {
     "message": "تسجيل الخروج"
   },
-  "linked": {
-    "message": "مرتبطة بحساب Deepn الخاص بك"
-  },
-  "selectionSaved": {
-    "message": "حُفظ التحديد في Deepn"
-  },
   "selectionFailed": {
     "message": "تعذّر حفظ التحديد."
   },
@@ -102,9 +93,291 @@
     "message": "خطأ في الشبكة. تحقق من اتصالك وحاول مرة أخرى."
   },
   "sourceRefused": {
-    "message": "هذا الرابط غير مدعوم بعد. جرّب مصدرًا آخر."
+    "message": "هذا الرابط غير مدعوم. الروابط المدعومة: حلقات البودكاست، ومقاطع فيديو YouTube وTikTok، ومنشورات Instagram وX، ومقالات الويب، والملفات الصوتية."
   },
-  "selectionRetryHint": {
-    "message": "للمحاولة مجددًا، حدّد النص واستخدم قائمة السياق مرة أخرى."
+  "retry": {
+    "message": "إعادة المحاولة"
+  },
+  "dismiss": {
+    "message": "إخفاء"
+  },
+  "loading": {
+    "message": "جارٍ التحميل…"
+  },
+  "continue": {
+    "message": "متابعة"
+  },
+  "done": {
+    "message": "تم"
+  },
+  "moreActions": {
+    "message": "إجراءات هذا المصدر"
+  },
+  "statusProcessing": {
+    "message": "جارٍ المعالجة"
+  },
+  "statusFailed": {
+    "message": "فشلت المعالجة"
+  },
+  "folderMoveFailed": {
+    "message": "تعذّر حفظ المجلد"
+  },
+  "folderCreateFailed": {
+    "message": "تعذّر إنشاء المجلد"
+  },
+  "folderNoMatches": {
+    "message": "لا يوجد مجلد يطابق بحثك"
+  },
+  "folderDuplicate": {
+    "message": "يوجد مجلد بهذا الاسم هنا. اختر اسمًا آخر."
+  },
+  "panelLoadFailed": {
+    "message": "تعذّر تحميل تفاصيل العنصر."
+  },
+  "tabReader": {
+    "message": "القراءة"
+  },
+  "tabNotebook": {
+    "message": "دفتر"
+  },
+  "essentials": {
+    "message": "الخلاصة"
+  },
+  "previewPending": {
+    "message": "جارٍ كتابة النظرة السريعة…"
+  },
+  "previewUnavailable": {
+    "message": "لا توجد نظرة سريعة لهذا المصدر."
+  },
+  "fullText": {
+    "message": "النص الكامل"
+  },
+  "fullTextPreparing": {
+    "message": "قيد التحضير"
+  },
+  "fullTextEmpty": {
+    "message": "لا يوجد نص بعد."
+  },
+  "fullTextFailed": {
+    "message": "تعذّر تحميل النص في الوقت الحالي."
+  },
+  "viewOriginal": {
+    "message": "عرض النص الأصلي ({language})"
+  },
+  "viewTranslation": {
+    "message": "عرض الترجمة ({language})"
+  },
+  "translating": {
+    "message": "جارٍ ترجمة النص…"
+  },
+  "translationFailed": {
+    "message": "فشلت الترجمة. يُعرض النص الأصلي."
+  },
+  "incompleteTitle": {
+    "message": "نص غير مكتمل"
+  },
+  "incompleteBody": {
+    "message": "يخصص الموقع بقية هذا المقال لمشتركيه. لم يتمكن Deepn إلا من قراءة هذه البداية، ويتناول الملخص والمحادثة هذا الجزء فقط."
+  },
+  "panelChat": {
+    "message": "محادثة"
+  },
+  "chatAsk": {
+    "message": "اسأل هذا المصدر…"
+  },
+  "chatSend": {
+    "message": "إرسال السؤال"
+  },
+  "chatNew": {
+    "message": "محادثة جديدة"
+  },
+  "chatWriting": {
+    "message": "جارٍ كتابة الإجابة."
+  },
+  "chatSearchingWeb": {
+    "message": "جارٍ البحث على الويب…"
+  },
+  "chatFailed": {
+    "message": "تعذّر إنتاج إجابة."
+  },
+  "chatInterruptedCancelled": {
+    "message": "تم الإيقاف. الإجابة أعلاه غير مكتملة."
+  },
+  "chatInterruptedOutputLimit": {
+    "message": "بلغت الإجابة حدها الأقصى من الطول وتتوقف هنا."
+  },
+  "chatInterruptedError": {
+    "message": "قاطع خطأ الإجابة. يُحتفظ بما وصل منها."
+  },
+  "chatQuestionTooLong": {
+    "message": "يتكوّن هذا السؤال من {length} حرفًا، والحد الأقصى {max}. اختصره ثم حاول مجددًا. تبقى مسودتك محفوظة."
+  },
+  "chatConversationFull": {
+    "message": "بلغت هذه المحادثة {max} سؤالًا. ابدأ محادثة جديدة للمتابعة."
+  },
+  "chatContextBudget": {
+    "message": "يتجاوز السؤال والمحادثة السياق المتاح. اختصر سؤالك أو ابدأ محادثة جديدة. تبقى مسودتك محفوظة."
+  },
+  "chatTurnInFlight": {
+    "message": "لا تزال هناك إجابة قيد الإعداد. انتظرها قبل أن تسأل مجددًا."
+  },
+  "chatTurnCountChanged": {
+    "message": "تغيّرت المحادثة في الأثناء. حاول مجددًا."
+  },
+  "chatNotFound": {
+    "message": "لم تعد هذه المحادثة موجودة."
+  },
+  "chatRefusalGeneric": {
+    "message": "تعذّر إرسال السؤال. حاول مجددًا."
+  },
+  "generateHeading": {
+    "message": "إنشاء"
+  },
+  "typeSummary": {
+    "message": "ملخّص"
+  },
+  "typeNotes": {
+    "message": "ملاحظات دراسية"
+  },
+  "typeFlashcards": {
+    "message": "بطاقات مراجعة"
+  },
+  "typeQuiz": {
+    "message": "اختبار"
+  },
+  "generating": {
+    "message": "جارٍ الإنشاء…"
+  },
+  "generatingMeta": {
+    "message": "{type} · بضع ثوانٍ · يمكنك مغادرة هذه الشاشة"
+  },
+  "generationFailed": {
+    "message": "فشل الإنشاء"
+  },
+  "generationRetry": {
+    "message": "إعادة المحاولة"
+  },
+  "notebookLoadFailed": {
+    "message": "تعذّر تحميل المحتوى المُنشأ. يرجى المحاولة مرة أخرى."
+  },
+  "artifactLoadFailed": {
+    "message": "تعذّر تحميل هذا المحتوى المُنشأ."
+  },
+  "artifactMediaEmpty": {
+    "message": "لا يوجد نص مكتوب لهذا العنصر بعد، لذا لا شيء يمكن الإنشاء منه."
+  },
+  "artifactTooMuchText": {
+    "message": "النص هنا أكثر من أن تستوعبه عملية إنشاء واحدة. أنشئ على مجلد فرعي أصغر."
+  },
+  "artifactRefusalGeneric": {
+    "message": "تعذّر بدء هذا الإنشاء. يرجى المحاولة مرة أخرى."
+  },
+  "sectionKeyPoints": {
+    "message": "النقاط الأساسية"
+  },
+  "sectionTakeaway": {
+    "message": "الخلاصة"
+  },
+  "sectionQuotes": {
+    "message": "اقتباسات لافتة"
+  },
+  "sectionObjectives": {
+    "message": "الأهداف"
+  },
+  "sectionConcepts": {
+    "message": "المفاهيم"
+  },
+  "sectionActionItems": {
+    "message": "إجراءات للتنفيذ"
+  },
+  "sectionGlossary": {
+    "message": "مسرد المصطلحات"
+  },
+  "importanceCore": {
+    "message": "أساسي"
+  },
+  "importanceSupporting": {
+    "message": "تكميلي"
+  },
+  "artifactQuestion": {
+    "message": "السؤال"
+  },
+  "artifactAnswer": {
+    "message": "الإجابة"
+  },
+  "artifactExplanation": {
+    "message": "الشرح"
+  },
+  "questionPosition": {
+    "message": "السؤال {index} من {total}"
+  },
+  "cardPosition": {
+    "message": "البطاقة {index} من {total}"
+  },
+  "noFlashcards": {
+    "message": "لا توجد بطاقات مراجعة في هذا المحتوى."
+  },
+  "noQuestions": {
+    "message": "لا توجد أسئلة في هذا المحتوى."
+  },
+  "flashReveal": {
+    "message": "إظهار الإجابة"
+  },
+  "flashAgain": {
+    "message": "للمراجعة"
+  },
+  "flashKnown": {
+    "message": "كنت أعرفها"
+  },
+  "flashDoneTitle": {
+    "message": "انتهت الجلسة"
+  },
+  "flashScoreTotal": {
+    "message": "من {total}"
+  },
+  "flashDoneAll": {
+    "message": "كنت تعرف كل البطاقات."
+  },
+  "flashDoneSome": {
+    "message": "راجع البطاقات التي فاتتك الآن، ما دامت حاضرة في ذهنك."
+  },
+  "flashReviewMissed": {
+    "message": "مراجعة البطاقات الفائتة"
+  },
+  "flashRestart": {
+    "message": "البدء من جديد"
+  },
+  "panelEmpty": {
+    "message": "انقر على أيقونة Deepn أو اضغط Alt+S لحفظ الصفحة التي تقرؤها: ستظهر هنا الخلاصة والنص الكامل والدفتر."
+  },
+  "chatEmpty": {
+    "message": "اطرح سؤالًا: تستند الإجابة إلى نص هذه الصفحة."
+  },
+  "notebookInApp": {
+    "message": "خصّص بطاقة أو أعد تسميتها أو احذفها في Deepn"
+  },
+  "menuSaveLink": {
+    "message": "حفظ هذا الرابط في Deepn"
+  },
+  "linkFailed": {
+    "message": "تعذّر حفظ هذا الرابط."
+  },
+  "alreadySaved": {
+    "message": "موجود بالفعل في مكتبتك"
+  },
+  "openInDeepn": {
+    "message": "فتح في Deepn"
+  },
+  "folderSearch": {
+    "message": "ابحث عن مجلد أو أنشئ واحدًا"
+  },
+  "folderCreate": {
+    "message": "إنشاء «{name}»"
+  },
+  "shortcutHint": {
+    "message": "الاختصار: {keys}"
+  },
+  "chatWaiting": {
+    "message": "تُفتح المحادثة بعد انتهاء المعالجة."
   }
 }

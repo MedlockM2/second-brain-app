@@ -3,7 +3,7 @@
     "message": "Deepn"
   },
   "extDescription": {
-    "message": "Enregistrez la page que vous lisez, ou une sélection, dans votre bibliothèque Deepn."
+    "message": "Enregistrez une page, un lien ou une sélection dans Deepn, puis lisez son résumé et discutez avec elle."
   },
   "actionTitle": {
     "message": "Enregistrer dans Deepn"
@@ -11,14 +11,11 @@
   "menuSaveSelection": {
     "message": "Enregistrer la sélection dans Deepn"
   },
-  "savePage": {
-    "message": "Enregistrer cette page"
-  },
   "saving": {
     "message": "Enregistrement…"
   },
   "saved": {
-    "message": "Enregistré. Le traitement a commencé."
+    "message": "Enregistré"
   },
   "folder": {
     "message": "Dossier"
@@ -62,12 +59,6 @@
   "signOut": {
     "message": "Se déconnecter"
   },
-  "linked": {
-    "message": "Reliée à votre compte Deepn"
-  },
-  "selectionSaved": {
-    "message": "Sélection enregistrée dans Deepn"
-  },
   "selectionFailed": {
     "message": "La sélection n'a pas pu être enregistrée."
   },
@@ -102,9 +93,291 @@
     "message": "Erreur réseau. Vérifiez votre connexion et réessayez."
   },
   "sourceRefused": {
-    "message": "Ce lien n'est pas encore pris en charge. Essayez une autre source."
+    "message": "Ce lien n'est pas pris en charge. Liens acceptés : épisodes de podcast, vidéos YouTube et TikTok, publications Instagram et X, articles web, fichiers audio."
   },
-  "selectionRetryHint": {
-    "message": "Pour réessayer, sélectionnez le texte et utilisez à nouveau le menu contextuel."
+  "retry": {
+    "message": "Réessayer"
+  },
+  "dismiss": {
+    "message": "Fermer"
+  },
+  "loading": {
+    "message": "Chargement…"
+  },
+  "continue": {
+    "message": "Continuer"
+  },
+  "done": {
+    "message": "Terminé"
+  },
+  "moreActions": {
+    "message": "Actions pour cette source"
+  },
+  "statusProcessing": {
+    "message": "Traitement en cours"
+  },
+  "statusFailed": {
+    "message": "Le traitement a échoué"
+  },
+  "folderMoveFailed": {
+    "message": "Impossible d'enregistrer le dossier"
+  },
+  "folderCreateFailed": {
+    "message": "Impossible de créer le dossier"
+  },
+  "folderNoMatches": {
+    "message": "Aucun dossier ne correspond à votre recherche"
+  },
+  "folderDuplicate": {
+    "message": "Un dossier porte déjà ce nom ici. Choisissez un autre nom."
+  },
+  "panelLoadFailed": {
+    "message": "Impossible de charger les détails du média."
+  },
+  "tabReader": {
+    "message": "Lecture"
+  },
+  "tabNotebook": {
+    "message": "Cahier"
+  },
+  "essentials": {
+    "message": "L'essentiel"
+  },
+  "previewPending": {
+    "message": "L'aperçu est en cours de rédaction…"
+  },
+  "previewUnavailable": {
+    "message": "Pas d'aperçu pour cette source."
+  },
+  "fullText": {
+    "message": "Texte complet"
+  },
+  "fullTextPreparing": {
+    "message": "En préparation"
+  },
+  "fullTextEmpty": {
+    "message": "Aucun texte disponible pour l'instant."
+  },
+  "fullTextFailed": {
+    "message": "Impossible de charger le texte pour le moment."
+  },
+  "viewOriginal": {
+    "message": "Voir l'original ({language})"
+  },
+  "viewTranslation": {
+    "message": "Voir la traduction ({language})"
+  },
+  "translating": {
+    "message": "Traduction du texte…"
+  },
+  "translationFailed": {
+    "message": "La traduction a échoué. Affichage du texte original."
+  },
+  "incompleteTitle": {
+    "message": "Texte incomplet"
+  },
+  "incompleteBody": {
+    "message": "Le site réserve la suite de cet article à ses abonnés. Deepn n’a pu lire que ce début ; le résumé et le chat portent sur cette partie."
+  },
+  "panelChat": {
+    "message": "Discussion"
+  },
+  "chatAsk": {
+    "message": "Interroger cette source…"
+  },
+  "chatSend": {
+    "message": "Envoyer la question"
+  },
+  "chatNew": {
+    "message": "Nouvelle conversation"
+  },
+  "chatWriting": {
+    "message": "La réponse s'écrit."
+  },
+  "chatSearchingWeb": {
+    "message": "Recherche sur le web…"
+  },
+  "chatFailed": {
+    "message": "Aucune réponse n'a pu être produite."
+  },
+  "chatInterruptedCancelled": {
+    "message": "Arrêtée. La réponse ci-dessus est incomplète."
+  },
+  "chatInterruptedOutputLimit": {
+    "message": "La réponse a atteint sa longueur maximale et s'arrête ici."
+  },
+  "chatInterruptedError": {
+    "message": "Une erreur a interrompu la réponse. Ce qui est arrivé est conservé."
+  },
+  "chatQuestionTooLong": {
+    "message": "Cette question fait {length} caractères ; la limite est de {max}. Raccourcissez-la puis réessayez. Votre brouillon est conservé."
+  },
+  "chatConversationFull": {
+    "message": "Cette conversation a atteint {max} questions. Commencez-en une nouvelle pour continuer."
+  },
+  "chatContextBudget": {
+    "message": "La question et la conversation dépassent le contexte disponible. Raccourcissez votre question ou commencez une nouvelle conversation. Votre brouillon est conservé."
+  },
+  "chatTurnInFlight": {
+    "message": "Une réponse est encore en cours. Attendez-la avant de poser une autre question."
+  },
+  "chatTurnCountChanged": {
+    "message": "La conversation a changé entre-temps. Réessayez."
+  },
+  "chatNotFound": {
+    "message": "Cette conversation n'existe plus."
+  },
+  "chatRefusalGeneric": {
+    "message": "La question n'a pas pu être envoyée. Réessayez."
+  },
+  "generateHeading": {
+    "message": "Générer"
+  },
+  "typeSummary": {
+    "message": "Résumé"
+  },
+  "typeNotes": {
+    "message": "Notes de cours"
+  },
+  "typeFlashcards": {
+    "message": "Cartes mémo"
+  },
+  "typeQuiz": {
+    "message": "Quiz"
+  },
+  "generating": {
+    "message": "Génération…"
+  },
+  "generatingMeta": {
+    "message": "{type} · Quelques secondes · vous pouvez quitter l'écran"
+  },
+  "generationFailed": {
+    "message": "Échec de la génération"
+  },
+  "generationRetry": {
+    "message": "Relancer"
+  },
+  "notebookLoadFailed": {
+    "message": "Impossible de charger le contenu généré. Veuillez réessayer."
+  },
+  "artifactLoadFailed": {
+    "message": "Impossible de charger ce contenu généré."
+  },
+  "artifactMediaEmpty": {
+    "message": "Cet élément n'a pas encore de transcription : il n'y a rien à générer."
+  },
+  "artifactTooMuchText": {
+    "message": "Il y a trop de texte ici pour une seule génération. Générez sur un sous-dossier plus petit."
+  },
+  "artifactRefusalGeneric": {
+    "message": "Impossible de lancer cette génération. Veuillez réessayer."
+  },
+  "sectionKeyPoints": {
+    "message": "Points clés"
+  },
+  "sectionTakeaway": {
+    "message": "À retenir"
+  },
+  "sectionQuotes": {
+    "message": "Citations marquantes"
+  },
+  "sectionObjectives": {
+    "message": "Objectifs"
+  },
+  "sectionConcepts": {
+    "message": "Concepts"
+  },
+  "sectionActionItems": {
+    "message": "Actions à mener"
+  },
+  "sectionGlossary": {
+    "message": "Glossaire"
+  },
+  "importanceCore": {
+    "message": "Essentiel"
+  },
+  "importanceSupporting": {
+    "message": "Complémentaire"
+  },
+  "artifactQuestion": {
+    "message": "QUESTION"
+  },
+  "artifactAnswer": {
+    "message": "RÉPONSE"
+  },
+  "artifactExplanation": {
+    "message": "EXPLICATION"
+  },
+  "questionPosition": {
+    "message": "Question {index} sur {total}"
+  },
+  "cardPosition": {
+    "message": "Carte {index} sur {total}"
+  },
+  "noFlashcards": {
+    "message": "Aucune carte mémo dans ce contenu."
+  },
+  "noQuestions": {
+    "message": "Aucune question dans ce contenu."
+  },
+  "flashReveal": {
+    "message": "Voir la réponse"
+  },
+  "flashAgain": {
+    "message": "À revoir"
+  },
+  "flashKnown": {
+    "message": "Je savais"
+  },
+  "flashDoneTitle": {
+    "message": "Session terminée"
+  },
+  "flashScoreTotal": {
+    "message": "sur {total}"
+  },
+  "flashDoneAll": {
+    "message": "Vous connaissiez toutes les cartes."
+  },
+  "flashDoneSome": {
+    "message": "Revoyez celles qui vous ont échappé, tant que c’est frais."
+  },
+  "flashReviewMissed": {
+    "message": "Revoir les cartes manquées"
+  },
+  "flashRestart": {
+    "message": "Tout recommencer"
+  },
+  "panelEmpty": {
+    "message": "Cliquez sur l'icône de Deepn, ou appuyez sur Alt+S, pour enregistrer la page que vous lisez : son essentiel, son texte complet et son cahier s'afficheront ici."
+  },
+  "chatEmpty": {
+    "message": "Posez une question : la réponse s'appuie sur le texte de cette page."
+  },
+  "notebookInApp": {
+    "message": "Personnaliser, renommer ou supprimer une fiche dans Deepn"
+  },
+  "menuSaveLink": {
+    "message": "Enregistrer ce lien dans Deepn"
+  },
+  "linkFailed": {
+    "message": "Ce lien n'a pas pu être enregistré."
+  },
+  "alreadySaved": {
+    "message": "Déjà dans votre bibliothèque"
+  },
+  "openInDeepn": {
+    "message": "Ouvrir dans Deepn"
+  },
+  "folderSearch": {
+    "message": "Rechercher ou créer un dossier"
+  },
+  "folderCreate": {
+    "message": "Créer « {name} »"
+  },
+  "shortcutHint": {
+    "message": "Raccourci : {keys}"
+  },
+  "chatWaiting": {
+    "message": "La discussion s'ouvre une fois le traitement terminé."
   }
 }

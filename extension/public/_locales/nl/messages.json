@@ -3,7 +3,7 @@
     "message": "Deepn"
   },
   "extDescription": {
-    "message": "Bewaar de pagina die je leest, of een selectie, in je Deepn-bibliotheek."
+    "message": "Bewaar een pagina, een link of een selectie in Deepn, lees de samenvatting en voer er een gesprek over."
   },
   "actionTitle": {
     "message": "Bewaren in Deepn"
@@ -11,14 +11,11 @@
   "menuSaveSelection": {
     "message": "Selectie bewaren in Deepn"
   },
-  "savePage": {
-    "message": "Deze pagina bewaren"
-  },
   "saving": {
     "message": "Bezig met bewaren…"
   },
   "saved": {
-    "message": "Bewaard. De verwerking is begonnen."
+    "message": "Bewaard"
   },
   "folder": {
     "message": "Map"
@@ -62,12 +59,6 @@
   "signOut": {
     "message": "Uitloggen"
   },
-  "linked": {
-    "message": "Gekoppeld aan je Deepn-account"
-  },
-  "selectionSaved": {
-    "message": "Selectie bewaard in Deepn"
-  },
   "selectionFailed": {
     "message": "De selectie kon niet worden bewaard."
   },
@@ -102,9 +93,291 @@
     "message": "Netwerkfout. Controleer je verbinding en probeer het opnieuw."
   },
   "sourceRefused": {
-    "message": "Deze link wordt nog niet ondersteund. Probeer een andere bron."
+    "message": "Deze link wordt niet ondersteund. Ondersteunde links: podcastafleveringen, YouTube- en TikTok-video's, Instagram- en X-posts, webartikelen en audiobestanden."
   },
-  "selectionRetryHint": {
-    "message": "Selecteer de tekst en gebruik het contextmenu opnieuw om het nogmaals te proberen."
+  "retry": {
+    "message": "Opnieuw"
+  },
+  "dismiss": {
+    "message": "Sluiten"
+  },
+  "loading": {
+    "message": "Laden…"
+  },
+  "continue": {
+    "message": "Doorgaan"
+  },
+  "done": {
+    "message": "Klaar"
+  },
+  "moreActions": {
+    "message": "Acties voor deze bron"
+  },
+  "statusProcessing": {
+    "message": "Wordt verwerkt"
+  },
+  "statusFailed": {
+    "message": "Verwerking mislukt"
+  },
+  "folderMoveFailed": {
+    "message": "De map kon niet worden opgeslagen"
+  },
+  "folderCreateFailed": {
+    "message": "De map kon niet worden aangemaakt"
+  },
+  "folderNoMatches": {
+    "message": "Geen map komt overeen met je zoekopdracht"
+  },
+  "folderDuplicate": {
+    "message": "Hier bestaat al een map met deze naam. Kies een andere naam."
+  },
+  "panelLoadFailed": {
+    "message": "De details van dit item konden niet worden geladen."
+  },
+  "tabReader": {
+    "message": "Lezen"
+  },
+  "tabNotebook": {
+    "message": "Notitieboek"
+  },
+  "essentials": {
+    "message": "De kern"
+  },
+  "previewPending": {
+    "message": "Het voorbeeld wordt geschreven…"
+  },
+  "previewUnavailable": {
+    "message": "Geen voorbeeld voor deze bron."
+  },
+  "fullText": {
+    "message": "Volledige tekst"
+  },
+  "fullTextPreparing": {
+    "message": "In voorbereiding"
+  },
+  "fullTextEmpty": {
+    "message": "Nog geen tekst beschikbaar."
+  },
+  "fullTextFailed": {
+    "message": "De tekst kan nu niet worden geladen."
+  },
+  "viewOriginal": {
+    "message": "Origineel bekijken ({language})"
+  },
+  "viewTranslation": {
+    "message": "Vertaling bekijken ({language})"
+  },
+  "translating": {
+    "message": "Tekst wordt vertaald…"
+  },
+  "translationFailed": {
+    "message": "De vertaling is mislukt. De oorspronkelijke tekst wordt getoond."
+  },
+  "incompleteTitle": {
+    "message": "Onvolledige tekst"
+  },
+  "incompleteBody": {
+    "message": "De site houdt de rest van dit artikel voor abonnees. Deepn kon alleen dit begin lezen; de samenvatting en de chat gaan over dit deel."
+  },
+  "panelChat": {
+    "message": "Gesprek"
+  },
+  "chatAsk": {
+    "message": "Deze bron bevragen…"
+  },
+  "chatSend": {
+    "message": "Vraag verzenden"
+  },
+  "chatNew": {
+    "message": "Nieuw gesprek"
+  },
+  "chatWriting": {
+    "message": "Het antwoord wordt geschreven."
+  },
+  "chatSearchingWeb": {
+    "message": "Zoeken op het web…"
+  },
+  "chatFailed": {
+    "message": "Er kon geen antwoord worden gemaakt."
+  },
+  "chatInterruptedCancelled": {
+    "message": "Gestopt. Het antwoord hierboven is onvolledig."
+  },
+  "chatInterruptedOutputLimit": {
+    "message": "Het antwoord heeft de maximale lengte bereikt en stopt hier."
+  },
+  "chatInterruptedError": {
+    "message": "Een fout heeft het antwoord onderbroken. Wat binnenkwam, blijft bewaard."
+  },
+  "chatQuestionTooLong": {
+    "message": "Deze vraag is {length} tekens lang; de limiet is {max}. Maak de vraag korter en probeer het opnieuw. Je concept blijft bewaard."
+  },
+  "chatConversationFull": {
+    "message": "Dit gesprek heeft {max} vragen bereikt. Begin een nieuw gesprek om verder te gaan."
+  },
+  "chatContextBudget": {
+    "message": "De vraag en het gesprek overschrijden de beschikbare context. Maak je vraag korter of begin een nieuw gesprek. Je concept blijft bewaard."
+  },
+  "chatTurnInFlight": {
+    "message": "Er is nog een antwoord onderweg. Wacht daarop voordat je opnieuw vraagt."
+  },
+  "chatTurnCountChanged": {
+    "message": "Het gesprek is intussen veranderd. Probeer het opnieuw."
+  },
+  "chatNotFound": {
+    "message": "Dit gesprek bestaat niet meer."
+  },
+  "chatRefusalGeneric": {
+    "message": "De vraag kon niet worden verzonden. Probeer het opnieuw."
+  },
+  "generateHeading": {
+    "message": "Genereren"
+  },
+  "typeSummary": {
+    "message": "Samenvatting"
+  },
+  "typeNotes": {
+    "message": "Studienotities"
+  },
+  "typeFlashcards": {
+    "message": "Flashcards"
+  },
+  "typeQuiz": {
+    "message": "Quiz"
+  },
+  "generating": {
+    "message": "Genereren…"
+  },
+  "generatingMeta": {
+    "message": "{type} · Een paar seconden · je kunt dit scherm verlaten"
+  },
+  "generationFailed": {
+    "message": "Genereren mislukt"
+  },
+  "generationRetry": {
+    "message": "Opnieuw proberen"
+  },
+  "notebookLoadFailed": {
+    "message": "De gegenereerde inhoud kon niet worden geladen. Probeer het opnieuw."
+  },
+  "artifactLoadFailed": {
+    "message": "Deze gegenereerde inhoud kon niet worden geladen."
+  },
+  "artifactMediaEmpty": {
+    "message": "Dit item heeft nog geen transcript, dus er is niets om uit te genereren."
+  },
+  "artifactTooMuchText": {
+    "message": "Er staat hier te veel tekst voor één generatie. Genereer op een kleinere submap."
+  },
+  "artifactRefusalGeneric": {
+    "message": "Deze generatie kon niet worden gestart. Probeer het opnieuw."
+  },
+  "sectionKeyPoints": {
+    "message": "Kernpunten"
+  },
+  "sectionTakeaway": {
+    "message": "Om te onthouden"
+  },
+  "sectionQuotes": {
+    "message": "Opvallende citaten"
+  },
+  "sectionObjectives": {
+    "message": "Doelen"
+  },
+  "sectionConcepts": {
+    "message": "Begrippen"
+  },
+  "sectionActionItems": {
+    "message": "Actiepunten"
+  },
+  "sectionGlossary": {
+    "message": "Woordenlijst"
+  },
+  "importanceCore": {
+    "message": "Essentieel"
+  },
+  "importanceSupporting": {
+    "message": "Aanvullend"
+  },
+  "artifactQuestion": {
+    "message": "VRAAG"
+  },
+  "artifactAnswer": {
+    "message": "ANTWOORD"
+  },
+  "artifactExplanation": {
+    "message": "UITLEG"
+  },
+  "questionPosition": {
+    "message": "Vraag {index} van {total}"
+  },
+  "cardPosition": {
+    "message": "Kaart {index} van {total}"
+  },
+  "noFlashcards": {
+    "message": "Geen flashcards in deze inhoud."
+  },
+  "noQuestions": {
+    "message": "Geen vragen in deze inhoud."
+  },
+  "flashReveal": {
+    "message": "Antwoord tonen"
+  },
+  "flashAgain": {
+    "message": "Nog eens"
+  },
+  "flashKnown": {
+    "message": "Wist ik"
+  },
+  "flashDoneTitle": {
+    "message": "Sessie klaar"
+  },
+  "flashScoreTotal": {
+    "message": "van {total}"
+  },
+  "flashDoneAll": {
+    "message": "Je kende alle kaarten."
+  },
+  "flashDoneSome": {
+    "message": "Herhaal de gemiste kaarten nu, nu het nog vers is."
+  },
+  "flashReviewMissed": {
+    "message": "Gemiste kaarten herhalen"
+  },
+  "flashRestart": {
+    "message": "Opnieuw beginnen"
+  },
+  "panelEmpty": {
+    "message": "Klik op het Deepn-pictogram of druk op Alt+S om de pagina die je leest te bewaren: de kern, de volledige tekst en het notitieboek verschijnen hier."
+  },
+  "chatEmpty": {
+    "message": "Stel een vraag: het antwoord steunt op de tekst van deze pagina."
+  },
+  "notebookInApp": {
+    "message": "Een item aanpassen, hernoemen of verwijderen in Deepn"
+  },
+  "menuSaveLink": {
+    "message": "Deze link bewaren in Deepn"
+  },
+  "linkFailed": {
+    "message": "Deze link kon niet worden bewaard."
+  },
+  "alreadySaved": {
+    "message": "Staat al in je bibliotheek"
+  },
+  "openInDeepn": {
+    "message": "Openen in Deepn"
+  },
+  "folderSearch": {
+    "message": "Zoek of maak een map"
+  },
+  "folderCreate": {
+    "message": "‘{name}’ maken"
+  },
+  "shortcutHint": {
+    "message": "Sneltoets: {keys}"
+  },
+  "chatWaiting": {
+    "message": "Het gesprek opent zodra de verwerking klaar is."
   }
 }

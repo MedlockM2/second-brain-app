@@ -1,0 +1,59 @@
+/* The web app's tokens (web/src/styles.css), light and dark, and the side panel's base elements. */
+:root {
+  --primary: #ffcb05; --on-primary: #1c1b1a; --background: #fcf9f6; --surface: #ffffff; --surface-container: #f1edea;
+  --text-main: #2b2d42; --text-muted: #8d99ae; --text-subtle: #5c6880; --outline-variant: #c8c7bd;
+  --error: #ba1a1a; --error-tint: rgba(186, 26, 26, 0.1); --success: #2e7d4f; --success-tint: rgba(46, 125, 79, 0.11);
+  --essential: #fdf6e3; --sheen: rgba(255, 203, 5, 0.28); --web-citation: #dfe8fa; --on-web-citation: #24406e;
+  --short-video-container: #d6e4fd; --audio-container: #d4e9d2; --image-post-container: #f3dcf2; --article-container: #c1ebec;
+  --artifact-summary-tint: #fff3c4; --artifact-summary-ink: #9c7400; --artifact-notes-tint: #e3eee4; --artifact-notes-ink: #3f7048;
+  --artifact-flashcards-tint: #f5e1e1; --artifact-flashcards-ink: #9b4a52; --artifact-quiz-tint: #e2e8f4; --artifact-quiz-ink: #46598a;
+  --shadow: 0 8px 24px rgba(43, 45, 66, 0.06);
+  --font-head: "Plus Jakarta Sans", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #f0bf2a; --background: #171511; --surface: #211e19; --surface-container: #2d2a25;
+    --text-main: #f1ebe1; --text-muted: #9aa3b4; --text-subtle: #c6cdd9; --outline-variant: #3d3932;
+    --error: #ffb4ab; --error-tint: rgba(255, 180, 171, 0.08); --success: #7fd3a1; --success-tint: rgba(127, 211, 161, 0.12);
+    --essential: #2a2418; --sheen: rgba(240, 191, 42, 0.28); --web-citation: #22344f; --on-web-citation: #c9dafb;
+    --short-video-container: #1a4975; --audio-container: #275029; --image-post-container: #603962; --article-container: #0b4f51;
+    --artifact-summary-tint: #3f331a; --artifact-summary-ink: #e2b55a; --artifact-notes-tint: #28392b; --artifact-notes-ink: #93c89a;
+    --artifact-flashcards-tint: #472e2f; --artifact-flashcards-ink: #faa4a9; --artifact-quiz-tint: #2a3546; --artifact-quiz-ink: #a9baf4;
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--text-main); font: 400 14px/1.55 var(--font-body); -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+input, textarea { width: 100%; border: 0; background: var(--surface-container); color: var(--text-main); font: inherit; }
+input { height: 42px; padding: 0 16px; border-radius: 9999px; }
+input:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.btn { width: 100%; height: 44px; border-radius: 9999px; border: 0; background: var(--surface-container); color: var(--text-main); font: inherit; font-weight: 600; cursor: pointer; margin-top: 10px; }
+.btn.primary { background: var(--primary); color: var(--on-primary); }
+.btn:disabled { opacity: .6; cursor: default; }
+.btn:focus-visible { outline: 2px solid var(--text-main); outline-offset: 2px; }
+.link { background: none; border: 0; padding: 0; color: var(--text-subtle); cursor: pointer; font: inherit; }
+.link:focus-visible { outline: 2px solid var(--primary); border-radius: 4px; }
+.small { font-size: 12px; }
+.muted { color: var(--text-muted); }
+.status { margin: 8px 0 0; font-size: 13px; color: var(--text-subtle); }
+.status.error { color: var(--error); }
+.status:empty { margin: 0; }
+
+/* Folder picker (lib/folderPicker.ts) */
+.picker { position: relative; min-width: 0; }
+.picker.busy { opacity: .6; pointer-events: none; }
+.picker-search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 9999px; background: var(--surface-container); color: var(--text-subtle); margin-bottom: 6px; }
+.picker-search input { height: 36px; padding: 0; background: none; border-radius: 0; }
+.picker-search input:focus { outline: none; }
+.picker-search:focus-within { outline: 2px solid var(--primary); }
+.picker-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.picker-row, .picker-empty { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-row { cursor: pointer; }
+.picker-row[aria-selected="true"] { background: var(--surface-container); }
+.picker-row.current { font-weight: 600; }
+.picker-create { color: var(--text-subtle); font-weight: 600; }
+.picker-empty { color: var(--text-muted); }

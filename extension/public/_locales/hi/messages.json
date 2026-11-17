@@ -3,7 +3,7 @@
     "message": "Deepn"
   },
   "extDescription": {
-    "message": "जो पेज आप पढ़ रहे हैं, या उसका चुना हुआ हिस्सा, अपनी Deepn लाइब्रेरी में सहेजें।"
+    "message": "कोई पेज, लिंक या चुना हुआ हिस्सा Deepn में सहेजें, फिर उसका सारांश पढ़ें और उस पर बातचीत करें।"
   },
   "actionTitle": {
     "message": "Deepn में सहेजें"
@@ -11,14 +11,11 @@
   "menuSaveSelection": {
     "message": "चयन को Deepn में सहेजें"
   },
-  "savePage": {
-    "message": "यह पेज सहेजें"
-  },
   "saving": {
     "message": "सहेजा जा रहा है…"
   },
   "saved": {
-    "message": "सहेज लिया गया। प्रोसेसिंग शुरू हो गई है।"
+    "message": "सहेज लिया गया"
   },
   "folder": {
     "message": "फ़ोल्डर"
@@ -62,12 +59,6 @@
   "signOut": {
     "message": "साइन आउट"
   },
-  "linked": {
-    "message": "आपके Deepn खाते से जुड़ा है"
-  },
-  "selectionSaved": {
-    "message": "चयन Deepn में सहेजा गया"
-  },
   "selectionFailed": {
     "message": "चयन सहेजा नहीं जा सका।"
   },
@@ -102,9 +93,291 @@
     "message": "नेटवर्क त्रुटि। अपना कनेक्शन जाँचकर फिर कोशिश करें।"
   },
   "sourceRefused": {
-    "message": "यह लिंक अभी समर्थित नहीं है। कोई और स्रोत आज़माएँ।"
+    "message": "यह लिंक समर्थित नहीं है। समर्थित लिंक: पॉडकास्ट एपिसोड, YouTube और TikTok वीडियो, Instagram और X पोस्ट, वेब लेख और ऑडियो फ़ाइलें।"
   },
-  "selectionRetryHint": {
-    "message": "फिर कोशिश करने के लिए टेक्स्ट चुनें और संदर्भ मेन्यू का दोबारा उपयोग करें।"
+  "retry": {
+    "message": "पुनः प्रयास"
+  },
+  "dismiss": {
+    "message": "हटाएँ"
+  },
+  "loading": {
+    "message": "लोड हो रहा है…"
+  },
+  "continue": {
+    "message": "जारी रखें"
+  },
+  "done": {
+    "message": "हो गया"
+  },
+  "moreActions": {
+    "message": "इस स्रोत के लिए क्रियाएँ"
+  },
+  "statusProcessing": {
+    "message": "प्रोसेस हो रहा है"
+  },
+  "statusFailed": {
+    "message": "प्रोसेसिंग विफल रही"
+  },
+  "folderMoveFailed": {
+    "message": "फ़ोल्डर सहेजा नहीं जा सका"
+  },
+  "folderCreateFailed": {
+    "message": "फ़ोल्डर नहीं बनाया जा सका"
+  },
+  "folderNoMatches": {
+    "message": "आपकी खोज से मेल खाता कोई फ़ोल्डर नहीं"
+  },
+  "folderDuplicate": {
+    "message": "यहाँ इस नाम का फ़ोल्डर पहले से मौजूद है। दूसरा नाम चुनें।"
+  },
+  "panelLoadFailed": {
+    "message": "मीडिया का विवरण लोड नहीं हो सका।"
+  },
+  "tabReader": {
+    "message": "पढ़ें"
+  },
+  "tabNotebook": {
+    "message": "नोटबुक"
+  },
+  "essentials": {
+    "message": "मुख्य बातें"
+  },
+  "previewPending": {
+    "message": "झलक लिखी जा रही है…"
+  },
+  "previewUnavailable": {
+    "message": "इस स्रोत के लिए कोई झलक नहीं है।"
+  },
+  "fullText": {
+    "message": "पूरा पाठ"
+  },
+  "fullTextPreparing": {
+    "message": "तैयार हो रहा है"
+  },
+  "fullTextEmpty": {
+    "message": "अभी कोई पाठ उपलब्ध नहीं है।"
+  },
+  "fullTextFailed": {
+    "message": "अभी पाठ लोड नहीं हो सका।"
+  },
+  "viewOriginal": {
+    "message": "मूल पाठ देखें ({language})"
+  },
+  "viewTranslation": {
+    "message": "अनुवाद देखें ({language})"
+  },
+  "translating": {
+    "message": "पाठ अनूदित हो रहा है…"
+  },
+  "translationFailed": {
+    "message": "अनुवाद विफल रहा। मूल पाठ दिखाया जा रहा है।"
+  },
+  "incompleteTitle": {
+    "message": "अधूरा पाठ"
+  },
+  "incompleteBody": {
+    "message": "यह साइट इस लेख का शेष भाग अपने सब्सक्राइबर्स के लिए आरक्षित रखती है। Deepn केवल यह शुरुआती हिस्सा पढ़ सका; सारांश और चैट इसी हिस्से पर आधारित हैं।"
+  },
+  "panelChat": {
+    "message": "बातचीत"
+  },
+  "chatAsk": {
+    "message": "इस स्रोत से पूछें…"
+  },
+  "chatSend": {
+    "message": "सवाल भेजें"
+  },
+  "chatNew": {
+    "message": "नई बातचीत"
+  },
+  "chatWriting": {
+    "message": "जवाब लिखा जा रहा है।"
+  },
+  "chatSearchingWeb": {
+    "message": "वेब पर खोज रहे हैं…"
+  },
+  "chatFailed": {
+    "message": "कोई जवाब नहीं बन सका।"
+  },
+  "chatInterruptedCancelled": {
+    "message": "रोका गया। ऊपर का जवाब अधूरा है।"
+  },
+  "chatInterruptedOutputLimit": {
+    "message": "जवाब अपनी अधिकतम लंबाई तक पहुँच गया और यहीं रुकता है।"
+  },
+  "chatInterruptedError": {
+    "message": "एक त्रुटि ने जवाब बीच में रोक दिया। जो आया वह सहेजा गया है।"
+  },
+  "chatQuestionTooLong": {
+    "message": "यह सवाल {length} अक्षरों का है; सीमा {max} है। इसे छोटा करके फिर कोशिश करें। आपका ड्राफ़्ट सुरक्षित है।"
+  },
+  "chatConversationFull": {
+    "message": "यह बातचीत {max} सवालों तक पहुँच गई है। जारी रखने के लिए नई बातचीत शुरू करें।"
+  },
+  "chatContextBudget": {
+    "message": "सवाल और बातचीत उपलब्ध संदर्भ से अधिक हैं। सवाल छोटा करें या नई बातचीत शुरू करें। आपका ड्राफ़्ट सुरक्षित है।"
+  },
+  "chatTurnInFlight": {
+    "message": "एक जवाब अभी आ रहा है। दोबारा पूछने से पहले उसका इंतज़ार करें।"
+  },
+  "chatTurnCountChanged": {
+    "message": "इस बीच बातचीत बदल गई। फिर से कोशिश करें।"
+  },
+  "chatNotFound": {
+    "message": "यह बातचीत अब मौजूद नहीं है।"
+  },
+  "chatRefusalGeneric": {
+    "message": "सवाल भेजा नहीं जा सका। फिर से कोशिश करें।"
+  },
+  "generateHeading": {
+    "message": "बनाएँ"
+  },
+  "typeSummary": {
+    "message": "सारांश"
+  },
+  "typeNotes": {
+    "message": "अध्ययन नोट्स"
+  },
+  "typeFlashcards": {
+    "message": "फ़्लैशकार्ड"
+  },
+  "typeQuiz": {
+    "message": "क्विज़"
+  },
+  "generating": {
+    "message": "बन रहा है…"
+  },
+  "generatingMeta": {
+    "message": "{type} · कुछ सेकंड · आप यह स्क्रीन छोड़ सकते हैं"
+  },
+  "generationFailed": {
+    "message": "बनाना विफल रहा"
+  },
+  "generationRetry": {
+    "message": "फिर कोशिश करें"
+  },
+  "notebookLoadFailed": {
+    "message": "बनाई गई सामग्री लोड नहीं हो सकी। कृपया फिर से कोशिश करें।"
+  },
+  "artifactLoadFailed": {
+    "message": "यह बनाई गई सामग्री लोड नहीं हो सकी।"
+  },
+  "artifactMediaEmpty": {
+    "message": "इस आइटम का अभी ट्रांसक्रिप्ट नहीं है, इसलिए बनाने के लिए कुछ नहीं है।"
+  },
+  "artifactTooMuchText": {
+    "message": "एक बार में बनाने के लिए यहाँ बहुत ज़्यादा टेक्स्ट है। किसी छोटे सबफ़ोल्डर पर बनाएँ।"
+  },
+  "artifactRefusalGeneric": {
+    "message": "यह जनरेशन शुरू नहीं की जा सकी। कृपया फिर से कोशिश करें।"
+  },
+  "sectionKeyPoints": {
+    "message": "मुख्य बिंदु"
+  },
+  "sectionTakeaway": {
+    "message": "निचोड़"
+  },
+  "sectionQuotes": {
+    "message": "उल्लेखनीय उद्धरण"
+  },
+  "sectionObjectives": {
+    "message": "उद्देश्य"
+  },
+  "sectionConcepts": {
+    "message": "अवधारणाएँ"
+  },
+  "sectionActionItems": {
+    "message": "करने योग्य काम"
+  },
+  "sectionGlossary": {
+    "message": "शब्दावली"
+  },
+  "importanceCore": {
+    "message": "मुख्य"
+  },
+  "importanceSupporting": {
+    "message": "पूरक"
+  },
+  "artifactQuestion": {
+    "message": "प्रश्न"
+  },
+  "artifactAnswer": {
+    "message": "उत्तर"
+  },
+  "artifactExplanation": {
+    "message": "व्याख्या"
+  },
+  "questionPosition": {
+    "message": "प्रश्न {index} / {total}"
+  },
+  "cardPosition": {
+    "message": "कार्ड {index} / {total}"
+  },
+  "noFlashcards": {
+    "message": "इस सामग्री में कोई फ़्लैशकार्ड नहीं है।"
+  },
+  "noQuestions": {
+    "message": "इस सामग्री में कोई प्रश्न नहीं है।"
+  },
+  "flashReveal": {
+    "message": "उत्तर देखें"
+  },
+  "flashAgain": {
+    "message": "फिर से देखें"
+  },
+  "flashKnown": {
+    "message": "मुझे पता था"
+  },
+  "flashDoneTitle": {
+    "message": "सत्र पूरा हुआ"
+  },
+  "flashScoreTotal": {
+    "message": "/ {total}"
+  },
+  "flashDoneAll": {
+    "message": "आपको सभी कार्ड याद थे।"
+  },
+  "flashDoneSome": {
+    "message": "जो छूट गए उन्हें अभी दोहराएँ, जब तक याद ताज़ा है।"
+  },
+  "flashReviewMissed": {
+    "message": "छूटे कार्ड दोहराएँ"
+  },
+  "flashRestart": {
+    "message": "फिर से शुरू करें"
+  },
+  "panelEmpty": {
+    "message": "जो पेज आप पढ़ रहे हैं उसे सहेजने के लिए Deepn आइकन पर क्लिक करें या Alt+S दबाएँ: उसका सार, पूरा टेक्स्ट और नोटबुक यहाँ दिखेंगे।"
+  },
+  "chatEmpty": {
+    "message": "कोई सवाल पूछें: जवाब इस पेज के टेक्स्ट पर आधारित होगा।"
+  },
+  "notebookInApp": {
+    "message": "Deepn में किसी आइटम को कस्टमाइज़ करें, नाम बदलें या हटाएँ"
+  },
+  "menuSaveLink": {
+    "message": "यह लिंक Deepn में सहेजें"
+  },
+  "linkFailed": {
+    "message": "यह लिंक सहेजा नहीं जा सका।"
+  },
+  "alreadySaved": {
+    "message": "पहले से आपकी लाइब्रेरी में है"
+  },
+  "openInDeepn": {
+    "message": "Deepn में खोलें"
+  },
+  "folderSearch": {
+    "message": "फ़ोल्डर खोजें या बनाएँ"
+  },
+  "folderCreate": {
+    "message": "“{name}” बनाएँ"
+  },
+  "shortcutHint": {
+    "message": "शॉर्टकट: {keys}"
+  },
+  "chatWaiting": {
+    "message": "प्रोसेसिंग पूरी होने पर बातचीत शुरू होगी।"
   }
 }

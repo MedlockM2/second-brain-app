@@ -4,3 +4,6 @@ export const WEB_APP_ORIGIN = String(import.meta.env.VITE_WEB_APP_ORIGIN ?? "").
 
 /** Where the web app pairs the extension in one click. */
 export const ACCOUNT_EXTENSION_URL = `${WEB_APP_ORIGIN}/account/extension`;
+
+/** A save's page in the web app (`mediaPath` in web/src/routes.ts). */
+export const mediaUrl = (mediaItemId: string) => `${WEB_APP_ORIGIN}/media/${encodeURIComponent(mediaItemId)}`;
