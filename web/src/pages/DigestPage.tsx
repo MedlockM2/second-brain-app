@@ -15,6 +15,9 @@ import { useDigest, type DigestRow } from "../media/useDigest";
  * fit on one screen, so choosing one shows its content. Daily and Weekly are two
  * columns, each with the pile of its first three covers, its count, "Read" and
  * its full table of contents; every line opens the reading at that media.
+ *
+ * Both are rolling windows ending at the read, as on mobile: Daily is the last
+ * 24 hours, Weekly the last 7 days (`digest_service.get_current_digest`).
  */
 const PERIODS: readonly DigestPeriod[] = ["daily", "weekly"];
 

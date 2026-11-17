@@ -6,8 +6,11 @@
  * title: the period segment that used to sit above the reading screen lives here
  * now, as the two things to choose between, and a tap on a pack pushes the
  * carousel of that period (`[period].tsx`). No dates on this screen — for the
- * record, the weekly pack is the Monday-to-Sunday week already *over*, the one
- * the Monday 09:30 send announced, not the week in progress (`digestService.ts`).
+ * record, the packs are rolling windows ending at the read: the daily one the
+ * last 24 hours, the weekly one the last 7 days. So opened after a Digest
+ * notification, a pack holds what that notification announced, and it is never
+ * empty merely because a calendar day or week has just started
+ * (`digest_service.get_current_digest`).
  *
  * ## What is read, and when
  *
