@@ -15,6 +15,26 @@
 # and nothing else can. Content is uploaded by scripts/publish_legal_site.sh,
 # not by Terraform -- the page is generated from docs/compliance/privacy-policy.md.
 
+# A public name served next to www.<public_domain>, with the us-east-1 certificate
+# covering both. dev sets www.deepn.app here while prod sleeps (task-443): the legal
+# pages have one public address, and dev's distribution is the one serving it.
+variable "www_public_alias" {
+  description = "Extra name served by the www distribution and its public base URL; empty serves www.<public_domain> only."
+  type        = string
+  default     = ""
+}
+variable "www_certificate_arn" {
+  description = "us-east-1 certificate covering www.<public_domain> and www_public_alias; supplied with the alias only."
+  type        = string
+  default     = ""
+  validation {
+    condition = var.www_public_alias == "" ? var.www_certificate_arn == "" : (
+      var.public_domain != "" && can(regex("^arn:aws:acm:us-east-1:[0-9]{12}:certificate/", var.www_certificate_arn))
+    )
+    error_message = "www_public_alias needs public_domain and a us-east-1 www_certificate_arn; both stay empty otherwise."
+  }
+}
+
 resource "aws_s3_bucket" "www" {
   bucket = "${var.project_name}-www-${data.aws_caller_identity.current.account_id}-${var.environment}"
   tags = {
@@ -97,7 +117,7 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 
 resource "aws_cloudfront_distribution" "www" {
   default_root_object = "index.html"
-  aliases             = local.public_domain_enabled ? ["www.${var.public_domain}"] : []
+  aliases             = local.public_domain_enabled ? compact(["www.${var.public_domain}", var.www_public_alias]) : []
   enabled             = true
   comment             = "${var.project_name}-www${local.suffix}"
   is_ipv6_enabled     = true
@@ -128,7 +148,7 @@ resource "aws_cloudfront_distribution" "www" {
 
   viewer_certificate {
     cloudfront_default_certificate = !local.public_domain_enabled
-    acm_certificate_arn            = local.public_domain_enabled ? var.web_certificate_arn : null
+    acm_certificate_arn            = !local.public_domain_enabled ? null : var.www_certificate_arn != "" ? var.www_certificate_arn : var.web_certificate_arn
     ssl_support_method             = local.public_domain_enabled ? "sni-only" : null
     minimum_protocol_version       = local.public_domain_enabled ? "TLSv1.2_2021" : "TLSv1"
   }
@@ -176,6 +196,9 @@ output "www_distribution_id" {
 }
 
 output "www_base_url" {
-  description = "Public base URL: configured www alias, otherwise the existing CloudFront name."
-  value       = local.public_domain_enabled ? "https://www.${var.public_domain}" : "https://${aws_cloudfront_distribution.www.domain_name}"
+  description = "Public base URL: the public alias, else the www alias of public_domain, else the CloudFront name."
+  value = (
+    var.www_public_alias != "" ? "https://${var.www_public_alias}" :
+    local.public_domain_enabled ? "https://www.${var.public_domain}" : "https://${aws_cloudfront_distribution.www.domain_name}"
+  )
 }

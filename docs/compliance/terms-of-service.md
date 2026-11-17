@@ -1,7 +1,7 @@
 # Terms of Service
 
 **Deepn**
-**Last updated:** 2026-05-19
+**Last updated:** 2026-11-17
 **Effective date:** 2026-05-19
 
 ## 1. Acceptance of Terms
@@ -62,6 +62,7 @@ You are solely responsible for the URLs and content you submit to the Service. W
 - You retain all ownership rights to the URLs you submit and any original content associated with them
 - By submitting content, you grant us a limited license to process, store, and display it back to you as part of the Service
 - This license terminates when you delete the content or your account
+- We may also use aggregated, de-identified information about what accounts save, such as how many accounts saved a given public article, video or podcast episode, to operate and improve the Service and to recommend content within it. This information never identifies you and never reveals the contents of your library to other users. Because it no longer relates to you, it is not removed when you delete content or your account
 
 ### 5.2 Generated Artifacts
 

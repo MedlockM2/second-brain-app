@@ -170,7 +170,8 @@ Certificates: one us-east-1 certificate for the apex, `www.` and `auth.` (its
 primary name is still the retired `app.`, see `modules/web_certificate`)
 (`modules/web_certificate`, used by both CloudFront distributions and by
 Cognito), one eu-west-3 certificate for `api.` (`modules/platform/lambda_api.tf`).
-All are validated by DNS in the environment's zone; nothing is created by hand.
+All are validated by DNS in the environment's zone; nothing is created by hand,
+except for the dev certificate of `www.deepn.app` (section below).
 
 The chat stream keeps its `execute-api` URL (`EXPO_PUBLIC_CHAT_STREAM_URL`,
 `VITE_CHAT_STREAM_URL`). It is a separate REST API with response streaming, and
@@ -243,13 +244,36 @@ endpoint, which stays enabled.
 The old CloudFront name of the web app keeps serving files, but its sign-in no
 longer works: Cognito only accepts the `dev.deepn.app` callback.
 
+### `www.deepn.app` on the dev `www` distribution (done 2026-11-18)
+
+The legal pages have one public address, `https://www.deepn.app` (task-443);
+`www.dev.deepn.app` is never communicated. While prod sleeps, the dev `www`
+distribution serves both names with a certificate of its own
+(`aws_acm_certificate.www_public` in `envs/dev/web_hosting.tf`), so that
+`module.web_certificate`, shared with Cognito, is never replaced. The dev root
+cannot write the prod zone, so two records there were created by hand with
+`AWS_PROFILE=prod aws route53 change-resource-record-sets` and are not in any
+Terraform state:
+
+| Name | Type | Value |
+|---|---|---|
+| `_29e37f11357461f08b1d478455873c73.www.deepn.app` | CNAME | `_3ffc6935c60d2e501cce6adf9bd992c6.wzccmgtwzk.acm-validations.aws` (validation of the dev certificate) |
+| `www.deepn.app` | CNAME | the dev `www` distribution, `d118p1z5xvufnz.cloudfront.net` |
+
+`www.dev.deepn.app` reuses the validation record `module.web_certificate`
+already keeps in the dev zone: ACM asks the same record of a name across an
+account's certificates. `scripts/publish_legal_site.sh dev` reads
+`https://www.deepn.app` from the `www_base_url` output.
+
 ### prod, when it is woken up (task-446)
 
 The prod root already declares `deepn.app` and its zone; its first apply creates
 the same set of names under `deepn.app`. Before it:
 
-- If `www.deepn.app` was attached to the dev `www` distribution for the legal
-  pages (task-454 gate), remove that alias from dev first: a CloudFront alternate
+- `www.deepn.app` is attached to the dev `www` distribution for the legal
+  pages (section above): set `www_public_alias` to `""` in `envs/dev`, delete
+  `aws_acm_certificate.www_public` and its validation there, and delete the two
+  hand-made records of the prod zone first: a CloudFront alternate
   name can belong to only one distribution, across accounts.
 - After the apply, create the managed-login style of each prod client (dev
   step 1 command, from `envs/prod` with `AWS_PROFILE=prod`).
