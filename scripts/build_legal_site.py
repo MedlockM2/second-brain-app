@@ -187,10 +187,14 @@ def extension_page(config: dict[str, str]) -> str:
     return page(
         "Browser extension",
         """<h1>Save from your browser</h1>
-<p>Save the current page’s address, or select text and choose Save the selection to Deepn from the context menu.
-Choose a folder in the popup to keep your sources organised.</p>
-<p>The extension sends only the address or the text you explicitly select with its source address.
-It does not read a page’s full content or your browsing history. It does not unlock private or paywalled pages.</p>
+<p>Click the Deepn icon, or press Alt+S, to save the page you are reading. A side panel opens with its essentials,
+its full text and its notebook, and you can ask questions about it there. Right-click a link to save it without
+opening it, or select text and choose Save the selection to Deepn. Each save goes into the folder you used last,
+and you can change it from the panel.</p>
+<p>The extension reads nothing until you click its icon, press its shortcut or choose one of its menu items.
+It then sends the page as your browser displays it, so an article you can read because you are subscribed or
+signed in is saved in full. It never reads your other tabs or your browsing history.
+See the <a href="/privacy">Privacy Policy</a> for details.</p>
 """
         + "".join(sections)
         + "<p>Install only the official store package linked here when available. "

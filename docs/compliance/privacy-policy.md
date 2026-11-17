@@ -1,7 +1,7 @@
 # Privacy Policy
 
 **Deepn**
-**Last updated:** 2026-11-08
+**Last updated:** 2026-11-18
 **Effective date:** 2026-11-03
 
 ## 1. Introduction
@@ -24,7 +24,7 @@ Contact for any privacy question or request: **deepn.support@gmail.com**.
 - **Files you share or import** - documents (such as PDFs), images, photos you take with the camera to import a page, and audio files
 - **Audio notes you record** - when you open the recorder and allow microphone access, you can record a spoken note. Only recordings you choose to save are uploaded for transcription; discarding a recording sends no audio to our servers
 - **Text you share** - text passages you send to the app, including the source address when you save a browser selection
-- **Browser extension** - on your explicit action, the extension reads the current tab’s address and title locally. It sends the address you choose to save, or the text you select with its source address, and your chosen folder. It does not read the full page or your browsing history
+- **Browser extension** - the extension reads nothing until you click its icon, press its shortcut or choose one of its menu items. It then reads the current tab: its address, its title and the page as your browser displays it, without its scripts and styles, including a page you can see because you are subscribed or signed in. It sends that address with the page, the address of a link you chose, or the text you selected with its source address, together with your chosen folder. A page can contain personal information it shows you, such as your name on a site where you are signed in. Our servers extract the text of the page and do not keep the page itself. The extension never reads your other tabs or your browsing history
 - **Chat messages** - the questions you ask the in-app assistant and its answers
 - **Organisation** - folders, review settings, digest settings and your time zone
 - **Feedback and bug reports** - the subject and description you write, any file you choose to attach, the app version, build and update, the platform or browser information attached to the report, and the identifier of the last crash or error report the app sent (section 2.4), so we can find what happened just before
@@ -54,7 +54,7 @@ From your content, the Service creates and stores transcripts, translations, sum
 | Purpose | Data used |
 |---------|-----------|
 | Sign-in and account management | Email, sign-in identifiers |
-| Processing what you share (transcription, extraction, AI-generated content) | Links, files, text, transcripts |
+| Processing what you share (transcription, extraction, AI-generated content) | Links, pages sent by the browser extension, files, text, transcripts |
 | Answering your questions in the chat | Chat messages, your saved content |
 | Resuming your learning | Artifact and conversation identifiers, last activity time |
 | Search within your library | Your content and generated content |
@@ -118,7 +118,7 @@ Notifications are optional. If you allow them, we send two kinds: digest alerts 
 
 - **Your account and library** - kept until you delete them. We never delete your library on our own
 - **An item you delete** - disappears from your library and search immediately, and is permanently erased about 30 days later (this window lets us restore it if you ask). Technical processing records of the item, such as the link submitted, are kept until you delete your account
-- **Content shared by several accounts** - the transcript and files of a public media (for example a YouTube video) are kept as long as at least one account still has that media in its library; they are no longer linked to you once you delete it
+- **Content shared by several accounts** - the transcript and files of a public media (for example a YouTube video) are kept as long as at least one account still has that media in its library; they are no longer linked to you once you delete it. The text of a page sent by the browser extension is shared only with accounts that obtained exactly the same text, so no account receives the text of a page it could not read itself
 - **Chat conversations** - kept until you delete the conversation or your account
 - **Continue learning activity** - used for 90 days after your last activity on each artifact or conversation, then automatically deleted shortly afterwards. Deleted destinations are excluded immediately; deleting your account erases these activity records. Expiry of an activity record never deletes the artifact or conversation itself
 - **Usage accounting** - up to 400 days, then deleted
