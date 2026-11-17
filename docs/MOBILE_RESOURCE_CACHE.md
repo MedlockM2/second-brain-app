@@ -142,24 +142,29 @@ pas de génération et n’est conservée que dans la session de l’application
 Détails de livraison et mesures : [correctifs TestFlight du 15 octobre](TESTFLIGHT_2026_10_15_FIXES.md).
 
 
-## Périodes Digest courantes (TASK-575)
+## Fenêtres Digest glissantes (retour TestFlight du 17 novembre)
 
-Depuis le retour TestFlight du 29 octobre, les lectures `/api/digest/daily` et
-`/api/digest/weekly` couvrent respectivement la journée locale depuis minuit et
-la semaine ISO locale depuis lundi minuit, jusqu’au début de leur composition.
-Elles sont disponibles indépendamment des réglages de notification. La zone du
-profil s’applique ; sans zone valide, la lecture utilise UTC.
+Les lectures `/api/digest/daily` et `/api/digest/weekly` couvrent une fenêtre
+glissante qui se termine au moment de la lecture : les dernières 24 heures et
+les 7 derniers jours. Elles remplacent la journée et la semaine calendaires de
+TASK-575, qui laissaient l’onglet vide le lundi matin alors que la notification
+de 9h30 annonçait la semaine écoulée (feedback `AGAd5cCwZDGiyc9np_wjdec`).
+Ouverte peu après un envoi, la fenêtre couvre la période annoncée ; elle n’est
+jamais vide du seul fait qu’une période calendaire vient de commencer.
+Les lectures restent indépendantes des réglages de notification.
 
-Le serveur réutilise une composition DynamoDB pendant cinq minutes au maximum
-à la prochaine lecture, même vide. Deux emplacements remplacés par période et
-fuseau (`daily#current#<zone>` et `weekly#current#<zone>`) évitent d’accumuler un
-cache par ouverture ou par date. Le changement de jour/semaine ignore aussitôt
-la composition précédente. Un nouvel ajout peut donc attendre cinq minutes
-avant d’apparaître lors d’une réouverture ; un écran laissé ouvert ne s’actualise
-pas automatiquement. Les suppressions sont toujours filtrées en lecture cohérente.
-Le client conserve son cache de session et la liste capturée du carrousel ouvert.
+`period_key` vaut `last-24h` ou `last-7d` : une fenêtre glissante n’a pas
+d’identité calendaire, et le client ne s’en sert que pour reconnaître une
+composition du même Digest. Le serveur réutilise une composition DynamoDB
+pendant cinq minutes au maximum, même vide, dans un emplacement unique par type
+(`daily#rolling`, `weekly#rolling`). Un nouvel ajout peut donc attendre cinq
+minutes avant d’apparaître lors d’une réouverture ; un écran laissé ouvert ne
+s’actualise pas automatiquement. Les suppressions sont toujours filtrées en
+lecture cohérente. Le client conserve son cache de session et la liste capturée
+du carrousel ouvert.
 
 Les notifications gardent leurs captures fermées et leurs horaires (18h30 et
 lundi 9h30), avec leurs clés et claims distincts. Ouvrir une notification mène
-au Digest courant, qui peut donc différer de la période annoncée. Aucune
-composition ne génère d’artefact ni ne fait d’appel fournisseur.
+au sous-onglet correspondant (quotidien ou hebdomadaire), qui affiche la même
+fenêtre glissante. Aucune composition ne génère d’artefact ni ne fait d’appel
+fournisseur.

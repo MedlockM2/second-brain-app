@@ -45,12 +45,12 @@ export class DigestService {
     return response;
   }
 
-  /** Current local calendar day, cached server-side for up to five minutes. */
+  /** The last 24 hours, cached server-side for up to five minutes. */
   static async getDailyDigest(): Promise<Digest> {
     return this.getDigest("daily");
   }
 
-  /** Current local ISO week, cached server-side for up to five minutes. */
+  /** The last 7 days, cached server-side for up to five minutes. */
   static async getWeeklyDigest(): Promise<Digest> {
     return this.getDigest("weekly");
   }

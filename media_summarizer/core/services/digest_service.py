@@ -1,13 +1,20 @@
 """Digest compositions, with no provider calls or automatic artifact generation.
 
-The tab reads the current local calendar day and ISO week, cached in DynamoDB
-for five minutes (including empty results). Each type/zone has one replaceable
-cache slot; the local period key prevents yesterday's/week's data being reused.
-The read-start timestamp bounds freshness even if two rebuilds overlap.
+The tab reads a rolling window ending now: the last 24 hours (daily) and the
+last 7 days (weekly), cached in DynamoDB for five minutes (including empty
+results) in one replaceable slot per type. The read-start timestamp bounds
+freshness even if two rebuilds overlap.
+
+Rolling rather than calendar periods so that the tab and a Digest notification
+show the same media: the Monday 09:30 notification announces the week that just
+closed, which a "current ISO week" tab no longer held nine hours into Monday
+(TestFlight feedback AGAd5cCwZDGiyc9np_wjdec). Opened shortly after a send, the
+rolling window covers the announced period; it is never empty merely because a
+calendar period has just started.
 
 Notifications still use closed windows and immutable captures: the 24 hours
 before 18:30, and the elapsed Monday-to-Sunday week announced on Monday 09:30.
-Their keys and publication claims are separate from the current-period cache.
+Their keys and publication claims are separate from the tab's cache slot.
 """
 
 from __future__ import annotations
@@ -37,6 +44,23 @@ DAILY_SEND_TIME = time(hour=18, minute=30)
 WEEKLY_SEND_TIME = time(hour=9, minute=30)
 
 CURRENT_DIGEST_MAX_AGE = timedelta(minutes=5)
+
+#: How far back the tab reads, ending at the read instant.
+ROLLING_WINDOWS = {
+    DigestType.DAILY: timedelta(hours=24),
+    DigestType.WEEKLY: timedelta(days=7),
+}
+
+#: The ``period_key`` the tab's reads answer. Stable per type: a rolling window
+#: has no calendar identity, and the clients only use the key to tell one
+#: composition of the same Digest from another.
+ROLLING_PERIOD_KEYS = {
+    DigestType.DAILY: "last-24h",
+    DigestType.WEEKLY: "last-7d",
+}
+
+#: The DynamoDB slot the tab's composition is cached in, one per type.
+ROLLING_CACHE_SLOT = "rolling"
 
 
 def resolve_zone(iana_timezone: Optional[str]) -> tzinfo:
@@ -220,31 +244,28 @@ async def get_or_assemble_for_window(
 async def get_current_digest(
     user_id: str, digest_type: DigestType, *, iana_timezone: Optional[str]
 ) -> DigestRecord:
-    """Current local period, reused across opens and API Lambda instances.
+    """The rolling window ending now, reused across opens and API Lambda instances.
 
-    Notification preferences control sends only. Reading the current library
-    period remains available even when its notification is disabled.
+    Notification preferences control sends only. Reading the window remains
+    available even when its notification is disabled. The zone only stamps the
+    record: a window measured back from an instant is the same in every zone.
     """
     now = local_now(iana_timezone)
-    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    if digest_type is DigestType.WEEKLY:
-        start -= timedelta(days=now.weekday())
-        year, week, _ = start.isocalendar()
-        period_key = f"{year}-W{week:02d}"
-    else:
-        period_key = start.date().isoformat()
-    # The slot is stable across dates. A changed time zone must not reuse a
-    # composition built from another local midnight, even with the same date.
-    cache_slot = f"current#{now.tzinfo}"
+    period_key = ROLLING_PERIOD_KEYS[digest_type]
     cached = await digest_db.get_digest(
-        user_id, digest_type, period_key, cache_slot=cache_slot
+        user_id, digest_type, period_key, cache_slot=ROLLING_CACHE_SLOT
     )
     if cached is not None and cached.period_key == period_key:
         age = now - datetime.fromisoformat(cached.created_at)
         if timedelta(0) <= age < CURRENT_DIGEST_MAX_AGE:
             return cached
 
-    window = DigestWindow(period_key=period_key, start=start, end=now, send_at=now)
+    window = DigestWindow(
+        period_key=period_key,
+        start=now - ROLLING_WINDOWS[digest_type],
+        end=now,
+        send_at=now,
+    )
     items = await _collect_window_items(user_id, window)
     record = DigestRecord(
         user_id=user_id,
@@ -254,8 +275,8 @@ async def get_current_digest(
         created_at=now.astimezone(timezone.utc).isoformat(),
     )
     # Empty results must be cached too, otherwise an empty library is assembled
-    # on every open. These are cache slots, never publication candidates.
-    await digest_db.save_digest(record, cache_slot=cache_slot)
+    # on every open. This is a cache slot, never a publication candidate.
+    await digest_db.save_digest(record, cache_slot=ROLLING_CACHE_SLOT)
     return record
 
 

@@ -66,7 +66,7 @@ class DigestSettingsUpdateRequest(BaseModel):
 async def get_daily_digest(
     current_user: AuthUser = Depends(get_current_user),
 ):
-    """Read the current local day, independently of notification times."""
+    """Read the last 24 hours, independently of notification times."""
     token = bind_log_context(user_id=current_user.id)
     try:
         digest = await digest_service.get_current_digest(
@@ -118,7 +118,7 @@ async def get_daily_digest(
 async def get_weekly_digest(
     current_user: AuthUser = Depends(get_current_user),
 ):
-    """Read the current local ISO week, independently of notification times."""
+    """Read the last 7 days, independently of notification times."""
     token = bind_log_context(user_id=current_user.id)
     try:
         digest = await digest_service.get_current_digest(

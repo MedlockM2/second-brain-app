@@ -11,7 +11,7 @@ export type DigestPeriod = "daily" | "weekly";
 
 export interface Digest {
   digest_type: DigestPeriod;
-  /** Current local calendar date for daily, current ISO week for weekly. */
+  /** Rolling window identity: `last-24h` for daily, `last-7d` for weekly. */
   period_key: string;
   /** The media of the period, oldest first. Empty when the period held none. */
   media_item_ids: string[];
