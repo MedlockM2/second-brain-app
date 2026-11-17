@@ -21,6 +21,7 @@ This checklist tracks readiness for Apple App Store and Google Play submission.
 ### Privacy Policy and Terms Hosting
 
 - [x] Host privacy policy at `https://d118p1z5xvufnz.cloudfront.net/privacy` (dev `www` distribution since 2026-11-01, the only environment in use until production; account deletion section at `#delete-account`)
+- [x] Serve it at its public address `https://www.deepn.app/privacy` (same distribution, since 2026-11-18), with the home page `https://www.deepn.app/` and `https://www.deepn.app/extension`. The app's legal links (`packages/core/src/constants/legal.ts`, read by the task-358 paywall), App Store Connect and the Play Console keep the CloudFront address until the TASK-454 gate; the extension store listings and Google's brand verification (TASK-451) take `www.deepn.app`
 - [x] No terms of service page for the beta: the Terms link points to Apple's standard EULA (task-357 README, owner amendment of 2026-10-30)
 - [x] Verify the URL is publicly accessible (no authentication required)
 - [ ] Verify the page renders correctly on mobile browsers
