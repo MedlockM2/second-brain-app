@@ -65,6 +65,8 @@ From your content, the Service creates and stores transcripts, translations, sum
 
 We do not use your content to train AI models, and we do not sell or rent your data.
 
+Deepn’s use of data collected through its Chrome extension complies with the [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/limited-use), including the Limited Use requirements.
+
 ## 4. Third-Party Services, Including AI
 
 ### 4.1 Third-party AI
