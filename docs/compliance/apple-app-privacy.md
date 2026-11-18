@@ -1,7 +1,7 @@
 # Apple App Privacy Disclosures
 
 **Deepn — Second Brain Labs**
-**Last updated:** 2026-10-30
+**Last updated:** 2026-11-18
 
 Reference answers for App Store Connect, aligned with [Privacy Policy](privacy-policy.md). Editing this file does not update App Store Connect.
 
@@ -32,7 +32,7 @@ All rows below are **collected** and **not used for tracking**. Select the purpo
 | Contact Info / Email Address | Yes | App Functionality | Account email or Apple private relay address; support contact; email sent to Canny when the feedback board is opened |
 | Contact Info / Name | Yes | App Functionality | Display name sent to Canny when the feedback board is opened; the current backend derives it from the email prefix |
 | User Content / Photos or Videos | Yes | App Functionality | Images imported from the photo picker, camera or share sheet, including images attached to bug reports; this does not mean access to the entire photo library |
-| User Content / Audio Data | Yes | App Functionality; Other Purposes | Audio files imported and microphone notes saved for transcription; provider model improvement as described in privacy policy section 4.3 |
+| User Content / Audio Data | Yes | App Functionality | Audio files imported and microphone notes saved for transcription |
 | User Content / Emails or Text Messages | Yes | App Functionality | Questions and answers stored in the in-app chat |
 | User Content / Customer Support | Yes | App Functionality | Support requests, bug reports, descriptions and attachments, and feedback board submissions |
 | User Content / Other User Content | Yes | App Functionality | Submitted links, text, documents and file metadata; transcripts, translations, summaries, notes, flashcards, review prompts and digests; folders, followed feeds and settings |
@@ -78,7 +78,7 @@ The complete recipient inventory and data flows are in privacy policy sections 4
 |----------|---------------|-----|
 | Amazon Web Services, including Cognito | Stored account/content data, files, sign-in and server logs | Hosting, storage and authentication |
 | OpenAI | Content text, transcripts and chat messages | AI-generated content and chat |
-| Deepgram | Audio from submitted media and imported files | Transcription; retention/model improvement described in policy section 4.3 |
+| Deepgram | Audio from submitted media and imported files | Transcription with opt-out from Deepgram’s Model Improvement Program (privacy policy section 4.3) |
 | LlamaParse, Unstructured | Imported documents and images | Text extraction |
 | Apify, X API, public websites and podcast directories | Submitted public links or search titles | Retrieving public content |
 | Algolia | Account ownership identifier, titles, creators, transcripts and search queries | Library search |

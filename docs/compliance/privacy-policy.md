@@ -94,10 +94,10 @@ To find the public content behind a link, our servers also query public sources 
 
 ### 4.3 How these providers protect your data
 
-Each provider must protect your data at least as well as this policy does, and uses it only to provide its service to us, with the exception stated for Deepgram below.
+Each provider must protect your data at least as well as this policy does and uses it only to provide its service to us.
 
 - **OpenAI** does not use data sent through its API to train its models.
-- **Deepgram** may retain audio sent to it and use it to improve its speech recognition models, unless a request is opted out of its Model Improvement Program.
+- **Deepgram** receives audio to transcribe it. Deepn opts each transcription request out of Deepgram’s Model Improvement Program. Deepgram retains the audio and transcript only as long as needed to process the request. Deepgram still records request metadata and usage logs.
 
 ### 4.4 Data location and transfers
 

@@ -1,7 +1,7 @@
 # Google Play Data Safety Declaration
 
 **Deepn — Second Brain Labs**
-**Last updated:** 2026-10-30
+**Last updated:** 2026-11-18
 
 Reference answers for Play Console, aligned with [Privacy Policy](privacy-policy.md). Editing this file does not update Play Console.
 
@@ -40,9 +40,9 @@ Every row below is **collected** and **not processed only ephemerally**. Stored 
 | Financial info / Purchase history | No | Optional | App functionality; Account management | Purchase and subscription status received through RevenueCat when present; no payment-card details |
 | Messages / Other in-app messages | No | Optional | App functionality | Questions and answers in the in-app assistant chat |
 | Photos and videos / Photos | No | Optional | App functionality | Images selected, captured or shared for import, plus image attachments to bug reports |
-| Audio files / Voice or sound recordings | Yes | Optional | App functionality | Imported recordings and saved microphone notes sent for transcription |
-| Audio files / Music files | Yes | Optional | App functionality | User-provided music files accepted by the audio import flow |
-| Audio files / Other audio files | Yes | Optional | App functionality | Other imported audio files accepted for transcription |
+| Audio files / Voice or sound recordings | No | Optional | App functionality | Imported recordings and saved microphone notes sent for transcription |
+| Audio files / Music files | No | Optional | App functionality | User-provided music files accepted by the audio import flow |
+| Audio files / Other audio files | No | Optional | App functionality | Other imported audio files accepted for transcription |
 | Files and docs / Files and docs | No | Optional | App functionality | Imported documents, file names and support attachments |
 | App activity / App interactions | No | Required | App functionality; Analytics | Processing usage for plan limits; recent screens and events in Sentry diagnostics |
 | App activity / In-app search history | No | Optional | App functionality | Transcript queries sent to the backend and Algolia; query text also appears in backend search logs |
@@ -63,13 +63,13 @@ Every row below is **collected** and **not processed only ephemerally**. Stored 
 
 “Shared” in the Play form is narrower than “sent to another company.” A transfer to a provider acting only on Deepn's instructions can qualify for Google's service-provider exception, while still counting as collection. The **No** entries above use that exception for the service-provider flows described by the privacy policy. Expo push delivery therefore does not require a blanket **Shared: Yes** answer for device IDs.
 
-The audio rows use **Shared: Yes** because policy section 4.3 permits Deepgram to retain audio for its own model improvement. Do not apply the service-provider exception to that independent purpose. For those rows, select **Analytics** as the sharing purpose for model improvement, in addition to **App functionality** for transcription. These reference answers follow the currently disclosed practice; they do not change provider settings.
+The audio rows apply the service-provider exception because Deepn opts each Deepgram request out of model improvement. Audio collected for transcription is still declared under **App functionality**. Use these answers in Play Console once the opt-out covers the backend used by all distributed app versions.
 
 | Provider / recipient | Data transferred | Function |
 |----------------------|------------------|----------|
 | Amazon Web Services, including Cognito | Account, stored content/files, sign-in and server logs | Hosting, storage and authentication |
 | OpenAI | Content text, transcripts and chat messages | AI generation and chat |
-| Deepgram | Media audio and imported audio files | Transcription; retention/model improvement as disclosed in policy section 4.3 |
+| Deepgram | Media audio and imported audio files | Transcription with opt-out from Deepgram’s Model Improvement Program (privacy policy section 4.3) |
 | LlamaParse, Unstructured | Documents and images | Text extraction |
 | Apify, X API, public websites and podcast directories | Public links or titles needed to find content | Public content retrieval |
 | Algolia | Account ownership identifier, titles, creators, transcripts and search queries | Library search |

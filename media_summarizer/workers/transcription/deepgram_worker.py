@@ -210,6 +210,7 @@ FORCE_DEEPGRAM_PUSH_MODE = os.environ.get("FORCE_DEEPGRAM_PUSH_MODE", "").strip(
 def _build_deepgram_query_params() -> Dict[str, str]:
     params = {
         "model": DEEPGRAM_MODEL,
+        "mip_opt_out": "true",
         "detect_language": str(DEEPGRAM_DETECT_LANGUAGE).lower(),
         "smart_format": str(DEEPGRAM_SMART_FORMAT).lower(),
         "punctuate": str(DEEPGRAM_PUNCTUATE).lower(),
