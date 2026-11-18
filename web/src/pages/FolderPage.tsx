@@ -134,6 +134,7 @@ function FolderView({ folderId }: { folderId: string }) {
                 }}
                 onRenamed={(title) => sourceList.patch(item.media_item_id, { title })}
                 onDeleted={() => drop(item.media_item_id)}
+                contextMenu
               />
             }
           />

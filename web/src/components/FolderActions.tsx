@@ -5,6 +5,7 @@ import { apiRequest } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
 import { Dialog } from "./Dialog";
 import { Icon } from "./Icon";
+import { useContextMenuAt } from "./useContextMenuAt";
 
 /**
  * The `…` of a folder: Rename and Delete, and nothing else — folders have one
@@ -16,14 +17,18 @@ export function FolderActions({
   folder,
   onRenamed,
   onDeleted,
+  contextMenu = false,
 }: {
   folder: Folder;
   onRenamed: (folder: Folder) => void;
   onDeleted: () => void;
+  /** A right click anywhere on the parent element opens the menu at the cursor. */
+  contextMenu?: boolean;
 }) {
   const { t, tw } = useI18n();
   const [open, setOpen] = useState<null | "menu" | "rename" | "delete">(null);
   const anchor = useRef<HTMLDivElement>(null);
+  const menuAt = useContextMenuAt(anchor, contextMenu, open === "menu", () => setOpen("menu"));
   const path = `/api/folders/${encodeURIComponent(folder.id)}`;
 
   useEffect(() => {
@@ -31,8 +36,15 @@ export function FolderActions({
     const close = (event: MouseEvent) => {
       if (!anchor.current?.contains(event.target as Node)) setOpen(null);
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(null);
+    };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open]);
 
   return (
@@ -44,12 +56,15 @@ export function FolderActions({
         title={t("folderActions.moreA11y")}
         aria-haspopup="menu"
         aria-expanded={open === "menu"}
-        onClick={() => setOpen(open === "menu" ? null : "menu")}
+        onClick={() => {
+          menuAt.reset();
+          setOpen(open === "menu" ? null : "menu");
+        }}
       >
         <Icon name="ellipsis-horizontal" />
       </button>
       {open === "menu" && (
-        <div className="menu" role="menu">
+        <div className="menu" role="menu" style={menuAt.style}>
           <button type="button" role="menuitem" onClick={() => setOpen("rename")}>
             <Icon name="pencil-outline" size={18} />
             {t("folderActions.rename.label")}

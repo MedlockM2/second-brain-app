@@ -8,7 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { apiRequest } from "../api";
 import { MediaCover, TypeBadge } from "../components/Covers";
+import { FolderActions } from "../components/FolderActions";
 import { Icon } from "../components/Icon";
+import { MediaActions } from "../components/media/MediaActions";
+import { useToast } from "../components/Toast";
 import { NewFolderDialog } from "../components/NewFolderDialog";
 import { useI18n } from "../i18n/I18nProvider";
 import { useOnMediaSaved } from "../lib/mediaSaved";
@@ -16,7 +19,7 @@ import { usePagedMedia } from "../media/usePagedMedia";
 import { useProcessingRefresh } from "../lib/useProcessingRefresh";
 import { folderPath, mediaPath } from "../routes";
 import { BackToTop } from "../components/BackToTop";
-import { useMediaWithPendingImports } from "../media/pendingImports";
+import { isPendingImportKey, useMediaWithPendingImports } from "../media/pendingImports";
 
 /**
  * Bibliothèque = the mobile Library (`app/(tabs)/search.tsx`), per the owner's
@@ -35,6 +38,7 @@ export function LibraryPage() {
   const [foldersFailed, setFoldersFailed] = useState(false);
   const [foldersOpen, setFoldersOpen] = useState(true);
   const [creating, setCreating] = useState(false);
+  const toast = useToast();
 
   const mediaList = usePagedMedia(PAGE_SIZE);
   const { items: media, failed: mediaFailed, total, cursor, loadingMore, reload: loadMedia, loadMore } = mediaList;
@@ -113,17 +117,34 @@ export function LibraryPage() {
           </div>
         ) : (
           <div className="fgrid">
-            {roots.map((folder) => (
-              <Link key={folder.id} to={folderPath(folder.id)} className="ftile" title={folder.name}>
-                <span className={folder.is_default ? "ficon def" : "ficon"}>
-                  <Icon name={folder.is_default ? "file-tray-outline" : "folder"} size={24} />
-                </span>
-                <span className="fname clamp2">
-                  {folder.is_default ? t("folderPicker.unsorted") : folder.name}
-                </span>
-                <span className="fhint">{tCount("common.itemCount", folder.media_count)}</span>
-              </Link>
-            ))}
+            {roots.map((folder) => {
+              const tile = (
+                <Link to={folderPath(folder.id)} className="ftile" title={folder.name}>
+                  <span className={folder.is_default ? "ficon def" : "ficon"}>
+                    <Icon name={folder.is_default ? "file-tray-outline" : "folder"} size={24} />
+                  </span>
+                  <span className="fname clamp2">
+                    {folder.is_default ? t("folderPicker.unsorted") : folder.name}
+                  </span>
+                  <span className="fhint">{tCount("common.itemCount", folder.media_count)}</span>
+                </Link>
+              );
+              // Unsorted is the default folder: it can be neither renamed nor deleted.
+              if (folder.is_default) return <div key={folder.id}>{tile}</div>;
+              return (
+                <div key={folder.id} className="ctx-target">
+                  {tile}
+                  <FolderActions
+                    folder={folder}
+                    contextMenu
+                    onRenamed={(saved) =>
+                      setFolders((current) => (current ?? []).map((row) => (row.id === saved.id ? { ...row, ...saved } : row)))
+                    }
+                    onDeleted={reloadAll}
+                  />
+                </div>
+              );
+            })}
           </div>
         ))}
 
@@ -148,7 +169,19 @@ export function LibraryPage() {
         <>
           <div className="mgrid">
             {displayedMedia.map((item) => (
-              <MediaCard key={item.media_item_id} item={item} />
+              <MediaCard
+                key={item.media_item_id}
+                item={item}
+                roots={roots}
+                onFolderCreated={(folder) => setFolders((current) => [...(current ?? []), folder])}
+                onMoved={(target) => {
+                  loadFolders();
+                  loadMedia();
+                  toast.show(t("media.movedToNamed", { name: target.is_default ? tw("nav.unsortedNoCount") : target.name }));
+                }}
+                onRenamed={(title) => mediaList.patch(item.media_item_id, { title })}
+                onDeleted={reloadAll}
+              />
             ))}
           </div>
           {media && (mediaFailed || mediaList.refreshFailed) && (
@@ -184,15 +217,31 @@ export function LibraryPage() {
         />
       )}
       <BackToTop />
+      {toast.node}
     </main>
   );
 }
 
 /** MediaListCard: the 16:9 cover, type and age, the two-line title, the creator. */
-function MediaCard({ item }: { item: MediaListItem }) {
+function MediaCard({
+  item,
+  roots,
+  onFolderCreated,
+  onMoved,
+  onRenamed,
+  onDeleted,
+}: {
+  item: MediaListItem;
+  roots: Folder[];
+  onFolderCreated: (folder: Folder) => void;
+  onMoved: (folder: Folder) => void;
+  onRenamed: (title: string) => void;
+  onDeleted: () => void;
+}) {
   const { t, tw } = useI18n();
   const marker = mediaStatusMarker(item.status);
   const title = resolveMediaTitle(item);
+  const pending = isPendingImportKey(item.media_item_id);
   const subtitle =
     marker === "processing"
       ? t("mediaStatus.processingSubtitle")
@@ -200,20 +249,35 @@ function MediaCard({ item }: { item: MediaListItem }) {
         ? tw("home.importFailed")
         : (item.creator_name?.trim() ?? "");
   return (
-    <Link to={mediaPath(item.media_item_id)} className="mcard" title={title}>
-      <MediaCover imageUrl={item.media_image} mediaType={item.media_type} status={item.status} />
-      <div className="grow">
-        <div className="meta">
-          {marker === "failed" ? (
-            <span className="badge err">{t("mediaStatus.failedBadge")}</span>
-          ) : (
-            <TypeBadge type={item.media_type} />
-          )}
-          <span>{getRelativeTime(item.created_at)}</span>
+    <div className={pending ? undefined : "ctx-target"}>
+      <Link to={mediaPath(item.media_item_id)} className="mcard" title={title}>
+        <MediaCover imageUrl={item.media_image} mediaType={item.media_type} status={item.status} />
+        <div className="grow">
+          <div className="meta">
+            {marker === "failed" ? (
+              <span className="badge err">{t("mediaStatus.failedBadge")}</span>
+            ) : (
+              <TypeBadge type={item.media_type} />
+            )}
+            <span>{getRelativeTime(item.created_at)}</span>
+          </div>
+          <div className="t clamp2">{title}</div>
+          <div className="small muted ell">{subtitle}</div>
         </div>
-        <div className="t clamp2">{title}</div>
-        <div className="small muted ell">{subtitle}</div>
-      </div>
-    </Link>
+      </Link>
+      {!pending && (
+        <MediaActions
+          mediaId={item.media_item_id}
+          title={title}
+          folderId={item.folder_id ?? null}
+          roots={roots}
+          onFolderCreated={onFolderCreated}
+          onMoved={onMoved}
+          onRenamed={onRenamed}
+          onDeleted={onDeleted}
+          contextMenu
+        />
+      )}
+    </div>
   );
 }

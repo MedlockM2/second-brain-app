@@ -7,6 +7,7 @@ import { Dialog } from "../Dialog";
 import { FolderPickerDialog } from "../FolderPicker";
 import { Icon } from "../Icon";
 import { NewFolderDialog } from "../NewFolderDialog";
+import { useContextMenuAt } from "../useContextMenuAt";
 
 /**
  * The `…` of a media: file it in a folder (an existing one, or a new one at the
@@ -25,6 +26,7 @@ export function MediaActions({
   onMoved,
   onRenamed,
   onDeleted,
+  contextMenu = false,
 }: {
   mediaId: string;
   title: string;
@@ -35,10 +37,13 @@ export function MediaActions({
   onMoved: (folder: Folder) => void;
   onRenamed: (title: string) => void;
   onDeleted: () => void;
+  /** A right click anywhere on the parent element opens the menu at the cursor. */
+  contextMenu?: boolean;
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState<Open>(null);
   const anchor = useRef<HTMLDivElement>(null);
+  const menuAt = useContextMenuAt(anchor, contextMenu, open === "menu", () => setOpen("menu"));
   const path = `/api/media/${encodeURIComponent(mediaId)}`;
 
   useEffect(() => {
@@ -79,12 +84,15 @@ export function MediaActions({
         title={t("mediaActions.moreA11y")}
         aria-haspopup="menu"
         aria-expanded={open === "menu"}
-        onClick={() => setOpen(open === "menu" ? null : "menu")}
+        onClick={() => {
+          menuAt.reset();
+          setOpen(open === "menu" ? null : "menu");
+        }}
       >
         <Icon name="ellipsis-horizontal" />
       </button>
       {open === "menu" && (
-        <div className="menu" role="menu">
+        <div className="menu" role="menu" style={menuAt.style}>
           {item("move", "folder-outline", t("mediaActions.move.label"))}
           {item("new-folder", "add-circle-outline", t("mediaActions.newFolder.label"))}
           {item("rename", "pencil-outline", t("mediaActions.rename.label"))}

@@ -679,3 +679,9 @@ mark { background: #fff0b3; color: #1c1b1a; border-radius: 2px; padding: 0 1px; 
 .artifact-action-target.learning-actions { flex: 0 0 200px; width: 200px; }
 .learning-actions > .menu-anchor { position: absolute; top: 6px; inset-inline-end: 6px; border-radius: 50%; background: var(--surface); }
 .dialog .btn.danger { background: var(--error); color: var(--on-error); }
+
+/* The `…` of a tile or a card: shown on hover or focus, always on touch screens (no hover to reveal it). */
+.ctx-target { position: relative; min-width: 0; }
+.ctx-target > .menu-anchor { position: absolute; top: 6px; inset-inline-end: 6px; border-radius: 50%; background: var(--surface); opacity: 0; transition: opacity .12s; }
+.ctx-target:hover > .menu-anchor, .ctx-target:focus-within > .menu-anchor, .ctx-target > .menu-anchor:has([aria-expanded="true"]) { opacity: 1; }
+@media (hover: none) { .ctx-target > .menu-anchor { opacity: 1; } }

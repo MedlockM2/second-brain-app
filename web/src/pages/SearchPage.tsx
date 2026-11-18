@@ -167,6 +167,7 @@ function Results({ query }: { query: string }) {
                       setHits((current) => (current ?? []).map((row) => (row.media_item_id === hit.media_item_id ? { ...row, title } : row)))
                     }
                     onDeleted={() => drop(hit.media_item_id)}
+                    contextMenu
                   />
                 )}
               </div>
