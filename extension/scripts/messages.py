@@ -462,17 +462,44 @@ for locale, values in T.items():
 # as the rest of this table.
 EXTENSION_MESSAGES = {
     "panelEmpty": {
-        "en": "Click the Deepn icon, or press Alt+S, to save the page you are reading: its essentials, its full text and its notebook will appear here.",
-        "fr": "Cliquez sur l'icône de Deepn, ou appuyez sur Alt+S, pour enregistrer la page que vous lisez : son essentiel, son texte complet et son cahier s'afficheront ici.",
-        "es": "Haz clic en el icono de Deepn, o pulsa Alt+S, para guardar la página que estás leyendo: aquí aparecerán lo esencial, el texto completo y su cuaderno.",
-        "de": "Klicke auf das Deepn-Symbol oder drücke Alt+S, um die Seite zu speichern, die du liest: Das Wichtigste, der vollständige Text und das Notizbuch erscheinen hier.",
-        "it": "Fai clic sull'icona di Deepn, o premi Alt+S, per salvare la pagina che stai leggendo: qui compariranno l'essenziale, il testo completo e il quaderno.",
-        "pt_PT": "Clique no ícone do Deepn, ou prima Alt+S, para guardar a página que está a ler: o essencial, o texto completo e o caderno aparecem aqui.",
-        "nl": "Klik op het Deepn-pictogram of druk op Alt+S om de pagina die je leest te bewaren: de kern, de volledige tekst en het notitieboek verschijnen hier.",
-        "ja": "Deepn のアイコンをクリックするか Alt+S を押すと、読んでいるページを保存します。要点、全文、ノートがここに表示されます。",
+        "en": (
+            "Click the Deepn icon, or press Alt+S, to save the page you are reading: its essentials, "
+            "its full text and its notebook will appear here."
+        ),
+        "fr": (
+            "Cliquez sur l'icône de Deepn, ou appuyez sur Alt+S, pour enregistrer la page que vous lisez : son "
+            "essentiel, son texte complet et son cahier s'afficheront ici."
+        ),
+        "es": (
+            "Haz clic en el icono de Deepn, o pulsa Alt+S, para guardar la página que estás leyendo: aquí "
+            "aparecerán lo esencial, el texto completo y su cuaderno."
+        ),
+        "de": (
+            "Klicke auf das Deepn-Symbol oder drücke Alt+S, um die Seite zu speichern, die du liest: Das "
+            "Wichtigste, der vollständige Text und das Notizbuch erscheinen hier."
+        ),
+        "it": (
+            "Fai clic sull'icona di Deepn, o premi Alt+S, per salvare la pagina che stai leggendo: qui "
+            "compariranno l'essenziale, il testo completo e il quaderno."
+        ),
+        "pt_PT": (
+            "Clique no ícone do Deepn, ou prima Alt+S, para guardar a página que está a ler: o "
+            "essencial, o texto completo e o caderno aparecem aqui."
+        ),
+        "nl": (
+            "Klik op het Deepn-pictogram of druk op Alt+S om de pagina die je leest te bewaren: de kern, "
+            "de volledige tekst en het notitieboek verschijnen hier."
+        ),
+        "ja": (
+            "Deepn のアイコンをクリックするか Alt+S を押すと、読んでいるページを保存します。"
+            "要点、全文、ノートがここに表示されます。"
+        ),
         "zh_CN": "点击 Deepn 图标或按 Alt+S，即可保存你正在阅读的页面：要点、全文和笔记本会显示在这里。",
         "ar": "انقر على أيقونة Deepn أو اضغط Alt+S لحفظ الصفحة التي تقرؤها: ستظهر هنا الخلاصة والنص الكامل والدفتر.",
-        "hi": "जो पेज आप पढ़ रहे हैं उसे सहेजने के लिए Deepn आइकन पर क्लिक करें या Alt+S दबाएँ: उसका सार, पूरा टेक्स्ट और नोटबुक यहाँ दिखेंगे।",
+        "hi": (
+            "जो पेज आप पढ़ रहे हैं उसे सहेजने के लिए Deepn आइकन पर क्लिक करें या Alt+S दबाएँ: "
+            "उसका सार, पूरा टेक्स्ट और नोटबुक यहाँ दिखेंगे।"
+        ),
     },
     "chatEmpty": {
         "en": "Ask a question: the answer draws on the text of this page.",

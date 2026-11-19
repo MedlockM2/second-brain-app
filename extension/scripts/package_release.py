@@ -51,7 +51,11 @@ def inspect_package(package: Path, firefox: bool) -> None:
         expected = ["activeTab", "contextMenus", "scripting", "storage"] + ([] if firefox else ["sidePanel"])
         if manifest.get("manifest_version") != 3 or sorted(manifest.get("permissions", [])) != sorted(expected):
             raise ValueError("Unexpected extension permissions/version")
-        panel = manifest.get("sidebar_action", {}).get("default_panel") if firefox else manifest.get("side_panel", {}).get("default_path")
+        panel = (
+            manifest.get("sidebar_action", {}).get("default_panel")
+            if firefox
+            else manifest.get("side_panel", {}).get("default_path")
+        )
         if panel != "sidepanel.html" or manifest.get("action", {}).get("default_popup"):
             raise ValueError("Side panel missing, or a popup that would swallow the button's click")
         if (
