@@ -3,8 +3,9 @@
 # beta's API and web app), numbered 1.0.<run number>, then
 # extension/scripts/publish_stores.py compares it with what each store last
 # accepted and sends it only where it differs. A store still reviewing an earlier
-# submission is skipped and caught up by the next push. The store pages (listing,
-# visibility, privacy) are not touched: they stay as set in each dashboard.
+# submission is skipped, marked pending, and caught up by the next push or the
+# daily run. The store pages (listing, visibility, privacy) are not touched: they
+# stay as set in each dashboard.
 name: Deploy Extension
 
 on:
@@ -17,8 +18,8 @@ on:
       - "packages/core/**"
       - ".github/workflows/deploy-extension.yml"
   # Catches up a store that was skipped because it was still reviewing: without
-  # it, the skipped change waits for the next push touching the extension. A run
-  # with nothing new submits nothing.
+  # it, the skipped change waits for the next push touching the extension. The
+  # `pending` job stops it within seconds when no store is owed a submission.
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
@@ -43,8 +44,34 @@ env:
   VITE_WEB_APP_ORIGIN: https://dev.deepn.app
 
 jobs:
+  # Daily run only: reads the store state, and lets `publish` build only when
+  # publish_stores.py marked a store "pending" (skipped while it was reviewing).
+  pending:
+    name: Is a store owed a submission?
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    outputs:
+      owed: ${{ steps.state.outputs.owed }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Read the store state
+        id: state
+        run: |
+          STATE=$(aws ssm get-parameter --name /deepn/extension/store-state --query Parameter.Value --output text 2>/dev/null || echo '{}')
+          OWED=$(echo "$STATE" | python3 -c 'import json,sys; s=json.load(sys.stdin); print("true" if any(v.get("pending") for v in s.values()) else "false")')
+          echo "owed=$OWED" >> "$GITHUB_OUTPUT"
+          echo "Store owed a submission: $OWED" >> "$GITHUB_STEP_SUMMARY"
+
   publish:
     name: Submit the extension to the stores
+    needs: pending
+    # `pending` is skipped on push and manual runs, which always go ahead.
+    if: ${{ !cancelled() && (github.event_name != 'schedule' || needs.pending.outputs.owed == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

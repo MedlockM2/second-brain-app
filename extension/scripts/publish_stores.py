@@ -4,8 +4,9 @@ Run by .github/workflows/deploy-extension.yml after `npm run zip`. For each stor
 the package is compared with the last one that store accepted, by a fingerprint of
 its contents without the manifest's version (a version bump alone is not a change).
 Nothing is sent when they match. When a store still has a submission in review, it
-is skipped, and its fingerprint is left as it was: the next push sends everything
-that piled up meanwhile.
+is skipped, its fingerprint is left as it was, and it is marked "pending": the next
+push, or the daily run (which builds only when a store is pending), sends
+everything that piled up meanwhile.
 
 State: the SSM parameter given by --state ({"chrome": {...}, "edge": {...}}), on dev.
 
@@ -204,7 +205,12 @@ def main() -> None:
         try:
             outcome = PUBLISHERS[store](args.package)
         except Busy as busy:
-            summary.append(f"- {store}: skipped, {busy}; retried on the next push")
+            # Marks the store as owed a submission: the daily run of
+            # deploy-extension.yml builds only when some store carries this mark.
+            if previous.get("pending") != digest:
+                state[store] = {**previous, "pending": digest}
+                changed = True
+            summary.append(f"- {store}: skipped, {busy}; retried by the next run")
             continue
         state[store] = {"fingerprint": digest, "version": version, "commit": args.commit, "outcome": outcome}
         changed = True
