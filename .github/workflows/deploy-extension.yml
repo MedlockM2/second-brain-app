@@ -1,0 +1,108 @@
+# Submits the browser extension to the Chrome Web Store and Edge Add-ons when a push
+# to main changed what the extension ships. The package is built against dev (the
+# beta's API and web app), numbered 1.0.<run number>, then
+# extension/scripts/publish_stores.py compares it with what each store last
+# accepted and sends it only where it differs. A store still reviewing an earlier
+# submission is skipped and caught up by the next push. The store pages (listing,
+# visibility, privacy) are not touched: they stay as set in each dashboard.
+name: Deploy Extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extension/**"
+      # Bundled into the extension (API client, artifacts, chat), and the source of
+      # its translations (extension/scripts/messages.py).
+      - "packages/core/**"
+      - ".github/workflows/deploy-extension.yml"
+  workflow_dispatch:
+
+# One submission at a time: two runs racing would both read the same store state.
+concurrency:
+  group: deploy-extension
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_DEFAULT_REGION: eu-west-3
+  AWS_ACCOUNT_ID: "125313707865"
+  EXTENSION_API: https://api.dev.deepn.app
+  EXTENSION_WEB: https://dev.deepn.app
+
+jobs:
+  publish:
+    name: Submit the extension to the stores
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install standalone extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Guard — translations match their source
+        working-directory: extension
+        run: |
+          python3 scripts/messages.py
+          git diff --exit-code -- public/_locales || {
+            echo "::error::extension/public/_locales differ from scripts/messages.py: run it and commit"
+            exit 1
+          }
+
+      # Stores refuse a version they already have; the run number only grows.
+      - name: Number this build
+        working-directory: extension
+        run: |
+          npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
+          echo "Version 1.0.${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build the distribution package
+        working-directory: extension
+        run: |
+          npm run zip -- --api "$EXTENSION_API" --web "$EXTENSION_WEB"
+          PACKAGE=$(ls "$PWD"/.output/delivery/distribution/*/deepn-extension-1.0.${{ github.run_number }}-chrome.zip)
+          echo "PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Guard — dev account
+        run: |
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          test "$ACCOUNT" = "$AWS_ACCOUNT_ID" || {
+            echo "::error::Assumed role is in account $ACCOUNT, expected dev $AWS_ACCOUNT_ID"
+            exit 1
+          }
+
+      - name: Submit where the package changed
+        env:
+          CWS_SERVICE_ACCOUNT_JSON: ${{ secrets.CWS_SERVICE_ACCOUNT_JSON }}
+          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID }}
+          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY }}
+        run: |
+          uv run --no-project --python 3.10 \
+            --with boto3==1.38.27 --with requests==2.32.4 --with google-auth==2.38.0 \
+            python extension/scripts/publish_stores.py --package "$PACKAGE" --commit "$GITHUB_SHA"

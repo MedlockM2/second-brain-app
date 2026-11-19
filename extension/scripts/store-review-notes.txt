@@ -1,0 +1,18 @@
+Deepn is in beta. The extension saves the page the user is reading to their Deepn account, then shows its summary and a chat in the side panel. A Deepn account is required.
+
+TEST ACCOUNT (already verified, its library holds three items)
+Email: {email}
+Password: {password}
+
+LINK THE EXTENSION TO THE ACCOUNT
+1. Open https://dev.deepn.app and sign in with the email and password above.
+2. Go to My account > Browser extension and click "Link this extension". If it is not offered, click "Show a code".
+3. With a code: click the Deepn icon in the toolbar to open the side panel, type the 6-digit code and the account email, then click "Link". The code expires after 5 minutes.
+
+HOW TO TEST
+1. Open any article (e.g. https://en.wikipedia.org/wiki/Note-taking) and click the Deepn icon or press Alt+S: the page is saved and the side panel shows it.
+2. In the side panel: Reader shows the key points and full text, Discussion answers questions about the page, Notebook generates a summary, flashcards or a quiz.
+3. Right-click a link > "Save this link to Deepn", or select text and right-click > "Save the selection to Deepn".
+
+PRIVACY
+The extension reads a page only when the user clicks the icon, presses Alt+S or uses the context menu, and only that tab. It talks to https://api.dev.deepn.app only. No remote code. Privacy policy: https://www.deepn.app/privacy

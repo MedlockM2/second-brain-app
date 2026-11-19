@@ -87,6 +87,16 @@ jobs:
       - name: Run extension lint
         run: npm run lint
 
+      # The extension's _locales are generated from packages/core's catalogues; a
+      # change there without regenerating ships stale texts to the stores.
+      - name: Translations match their source
+        run: |
+          python3 scripts/messages.py
+          git diff --exit-code -- public/_locales || {
+            echo "::error::extension/public/_locales differ from scripts/messages.py: run it and commit"
+            exit 1
+          }
+
       - name: Inspect validation packages (not for store submission)
         run: npm run package:ci -- --api "$VITE_API_BASE_URL" --web "$VITE_WEB_APP_ORIGIN"
 

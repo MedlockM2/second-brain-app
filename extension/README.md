@@ -172,8 +172,9 @@ Livrable vérifié : `.output/delivery/distribution/<configuration>/deepn-extens
 avec `delivery.json` et son SHA-256 (version de `package.json`). Les sorties WXT brutes
 à la racine de `.output/` ne portent aucune preuve de distribution.
 Téléverser **ce même fichier** sur Chrome Web Store et Microsoft Edge Add-ons,
-sans reconstruire pour Edge. Incrémenter la version dans `package.json` avant
-chaque mise à jour, puis actualiser le lockfile autonome avec npm. Vérifier le
+sans reconstruire pour Edge. Ce dépôt manuel n'a servi qu'à la création des deux
+fiches : les mises à jour passent par la CI (« Publication automatique » ci-dessous),
+qui numérote elle-même les versions. Vérifier le
 manifeste : origines choisies, aucun localhost ni nom d’exemple. **L’API AWS dev
 est autorisée pendant la bêta**, si le propriétaire la retient. L’origine web doit
 être la véritable origine HTTPS publique ; le nom d’environnement de l’API ne
@@ -201,8 +202,36 @@ Après attribution des identifiants par les stores, renseigner les deux dans
 `VITE_EXTENSION_IDS` de l'app web et reconstruire celle-ci. Les identifiants sont
 publics ; aucun identifiant de compte développeur ni credential ne va dans le dépôt.
 L'app web essaie les identifiants dans l'ordre et s'arrête au premier qui confirme.
-La soumission aux stores et la vérification finale sur les deux navigateurs sont
-à effectuer par l'owner.
+La vérification finale sur les deux navigateurs reste à effectuer par l'owner.
+
+### Publication automatique
+
+`.github/workflows/deploy-extension.yml` tourne à chaque push sur `main` qui touche
+`extension/**` ou `packages/core/**`. Il vérifie que `_locales` correspond à
+`scripts/messages.py`, construit le paquet de distribution contre dev
+(`https://api.dev.deepn.app`, `https://dev.deepn.app`) en version
+`1.0.<numéro du run>`, puis `scripts/publish_stores.py` le soumet à chaque store
+**seulement si son contenu diffère** de la dernière version que ce store a acceptée.
+L'empreinte ignore le numéro de version ; elle est gardée dans le paramètre SSM dev
+`/deepn/extension/store-state`. Un store qui examine encore une soumission est
+sauté, sans échec ; le push suivant rattrape. Fiches, visibilité et déclarations ne
+sont pas touchées : elles restent celles des tableaux de bord.
+
+Identifiants, secrets GitHub du dépôt :
+
+- `CWS_SERVICE_ACCOUNT_JSON` : clé JSON du compte de service
+  `cws-publisher@media-summarizer-473920.iam.gserviceaccount.com` (projet Google
+  Cloud `media-summarizer-473920`, API Chrome Web Store activée), déclaré dans le
+  tableau de bord Chrome Web Store › Compte › Compte de service. Il n'a aucun rôle IAM.
+- `EDGE_CLIENT_ID`, `EDGE_API_KEY` : Partner Center › Edge › Publish API. **La clé
+  expire après 72 jours** (créée le 2026-11-19, donc vers le 2027-01-30) : en créer
+  une nouvelle sur la même page et remplacer le secret. Une clé expirée fait échouer
+  le workflow sur un 401 explicite.
+
+Edge exige des notes de certification à chaque soumission : `scripts/store-review-notes.txt`,
+complété avec le compte de démo `edge` du secret dev `deepn-review-accounts`
+(`scripts/create_review_account.py edge …`). Lancer le workflow à la main
+(`workflow_dispatch`) relance une soumission sautée sans attendre un push.
 
 Références officielles consultées le 11 octobre 2026 :
 [appairage externe Chrome](https://developer.chrome.com/docs/extensions/reference/manifest/externally-connectable),
@@ -349,5 +378,6 @@ de `packages/core` est donc aussi contrôlée. Ce job utilise Node 22, Python 3.
 `package:ci` pour les deux cibles et les sources Firefox. Les origines explicites
 `api.deepn-validation.invalid` / `app.deepn-validation.invalid` désignent uniquement
 la compilation. Aucun appel API, accès store, secret, publication ou test automatisé
-n’intervient. Les reçus restent sous `delivery/validation`, non distribuables.
+n’intervient ; il vérifie aussi que `public/_locales` correspond à `scripts/messages.py`.
+La publication est le workflow à part décrit plus haut. Les reçus restent sous `delivery/validation`, non distribuables.
 Les apps gardent leur installation racine, leurs checks et leur Node distincts.

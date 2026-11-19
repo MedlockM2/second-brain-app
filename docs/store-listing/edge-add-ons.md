@@ -23,3 +23,7 @@ ne connaît pas encore l'ID Edge.
 
 L'appairage en un clic sur Edge exige l'ID ci-dessus dans `VITE_EXTENSION_IDS`
 (`web/.env.beta`), déployé avec le web au prochain push sur `main`.
+
+Mises à jour : automatiques par `.github/workflows/deploy-extension.yml` (voir
+`extension/README.md`, « Publication automatique »). Tant que cette première soumission
+est en examen, le workflow saute Edge et le rattrape au push suivant.
