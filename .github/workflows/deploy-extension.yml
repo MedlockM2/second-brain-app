@@ -16,6 +16,11 @@ on:
       # its translations (extension/scripts/messages.py).
       - "packages/core/**"
       - ".github/workflows/deploy-extension.yml"
+  # Catches up a store that was skipped because it was still reviewing: without
+  # it, the skipped change waits for the next push touching the extension. A run
+  # with nothing new submits nothing.
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
 
 # One submission at a time: two runs racing would both read the same store state.

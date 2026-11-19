@@ -214,7 +214,7 @@ La vérification finale sur les deux navigateurs reste à effectuer par l'owner.
 **seulement si son contenu diffère** de la dernière version que ce store a acceptée.
 L'empreinte ignore le numéro de version ; elle est gardée dans le paramètre SSM dev
 `/deepn/extension/store-state`. Un store qui examine encore une soumission est
-sauté, sans échec ; le push suivant rattrape. Fiches, visibilité et déclarations ne
+sauté, sans échec ; le push suivant ou le passage quotidien (7 h UTC) rattrape. Fiches, visibilité et déclarations ne
 sont pas touchées : elles restent celles des tableaux de bord.
 
 Identifiants, secrets GitHub du dépôt :
