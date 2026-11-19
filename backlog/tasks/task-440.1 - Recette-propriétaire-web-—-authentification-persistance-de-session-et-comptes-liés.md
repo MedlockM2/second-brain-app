@@ -5,7 +5,7 @@ status: To Do
 assignee:
   - agent
 created_date: '2026-11-04 19:12'
-updated_date: '2026-11-04 19:29'
+updated_date: '2026-11-19 10:58'
 labels:
   - web
   - v1-launch
@@ -61,3 +61,13 @@ Prérequis de capacité : consulter TASK-601 avant exécution et employer la ses
 - [ ] #4 Le rapport décrit le contrôle navigateur/ordinateur effectivement utilisé, le préflight des accès, les versions et la révision réellement servie ; il distingue les constats UI des contrôles API/AWS complémentaires et des simples contrôles statiques.
 - [ ] #5 La matrice scénario/navigateur fournit résultats, preuves expurgées, cas non vérifiés et demandes ponctuelles d’intervention ; les anomalies sont reliées à leurs tâches et la conclusion technique ne se substitue pas au go/no-go propriétaire.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-19 — Run séquentiel du backlog (`/process-backlog`) : recette non exécutée, la tâche reste en To Do. Aucun parcours n'a été vérifié.
+
+Ce qui bloque : la session n'avait aucun contrôle navigateur capable d'agir. Les outils Claude in Chrome et le navigateur intégré n'étaient pas disponibles, et computer-use n'accorde aux navigateurs que le niveau « read », sans clic ni saisie. Par ailleurs, TASK-601 a été close sans produire `docs/validation/environnement-recette-agent/README.md` : aucun runtime équipé n'est consigné.
+
+Ce qu'il faut de l'owner : relancer cette tâche dans une session où Claude in Chrome est connecté (ou le navigateur intégré de l'app desktop), avec un profil de recette distinct et des comptes de recette sacrifiables désignés. Il faudra aussi être disponible pour les consentements Google/Apple et les codes de vérification.
+<!-- SECTION:NOTES:END -->
