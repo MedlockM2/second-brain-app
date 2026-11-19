@@ -1,4 +1,4 @@
-"""Create a ready-to-use demo account for App Store or Google Play review, on dev.
+"""Create a ready-to-use demo account for App Store, Google Play or Edge Add-ons review, on dev.
 
 Apple (guideline 2.1) and Google (App access declaration) both want working
 sign-in credentials, even though anyone can register in the app. This script
@@ -20,7 +20,7 @@ of the dev secret `deepn-review-accounts` -- the place to read the credentials
 from when filling App Store Connect or the Play Console. Never in a tracked file.
 
 Usage (dev credentials):
-    AWS_PROFILE=second-brain-app uv run python scripts/create_review_account.py <apple|google> <e-mail>
+    AWS_PROFILE=second-brain-app uv run python scripts/create_review_account.py <apple|google|edge> <e-mail>
 
 Use a "+" alias of the project mailbox, one per store, so the address really
 receives mail. The addresses themselves stay out of tracked files, like the
@@ -79,7 +79,7 @@ def seed_artifacts(headers: dict[str, str], media_ids: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("store", choices=("apple", "google"))
+    parser.add_argument("store", choices=("apple", "google", "edge"))
     parser.add_argument("email")
     args = parser.parse_args()
     email = args.email.strip().lower()
