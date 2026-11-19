@@ -251,7 +251,7 @@ export const es: Catalog = {
     "Este contenido generado no se ha encontrado o ya no está disponible.",
   "error.invalidUrl": "Este enlace no es válido. Prueba con otra URL.",
   "error.unsupportedUrl":
-    "Este enlace no es compatible. Enlaces admitidos: episodios de pódcast, vídeos de YouTube y TikTok, publicaciones de Instagram y X, artículos web y archivos de audio.",
+    "Este enlace no es compatible. Enlaces admitidos: episodios de pódcast, vídeos de YouTube y TikTok, publicaciones de Instagram, X y LinkedIn, hilos de Reddit, artículos web y archivos de audio.",
   "error.validation": "Rellena todos los campos obligatorios.",
   "error.rateLimited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
   "error.conflict":
@@ -983,8 +983,8 @@ export const es: Catalog = {
   "auth.method.apple": "Apple",
   "auth.method.google": "Google",
   "intro.share.title": "Guarda desde cualquier app",
-  "intro.share.bodyIos": "En YouTube, Instagram, Spotify o Safari, toca {share} y luego {app}. El contenido llega a tu biblioteca.",
-  "intro.share.bodyAndroid": "En YouTube, Instagram, Spotify o Chrome, toca {share} Compartir y luego {app}. El contenido llega a tu biblioteca.",
+  "intro.share.bodyIos": "En YouTube, Instagram, LinkedIn, Spotify o Safari, toca {share} y luego {app}. El contenido llega a tu biblioteca.",
+  "intro.share.bodyAndroid": "En YouTube, Instagram, LinkedIn, Spotify o Chrome, toca {share} Compartir y luego {app}. El contenido llega a tu biblioteca.",
   "intro.next": "Siguiente",
   "intro.start": "Empezar",
   "intro.worksWith": "Funciona con",

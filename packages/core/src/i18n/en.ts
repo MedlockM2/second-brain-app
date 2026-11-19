@@ -329,7 +329,7 @@ export const en = {
   "error.artifactNotFound": "This artifact was not found or is no longer available.",
   "error.invalidUrl": "This link is invalid. Please try another URL.",
   "error.unsupportedUrl":
-    "This link isn't supported. Supported links: podcast episodes, YouTube and TikTok videos, Instagram and X posts, web articles, audio files.",
+    "This link isn't supported. Supported links: podcast episodes, YouTube and TikTok videos, Instagram, X and LinkedIn posts, Reddit threads, web articles, audio files.",
   "error.validation": "Please fill in all required fields.",
   "error.rateLimited": "Too many requests. Please wait a moment and try again.",
   "error.conflict":
@@ -1142,8 +1142,8 @@ export const en = {
   "auth.method.apple": "Apple",
   "auth.method.google": "Google",
   "intro.share.title": "Save from any app",
-  "intro.share.bodyIos": "In YouTube, Instagram, Spotify or Safari, tap {share} then {app}. The media lands in your library.",
-  "intro.share.bodyAndroid": "In YouTube, Instagram, Spotify or Chrome, tap {share} Share, then {app}. The media lands in your library.",
+  "intro.share.bodyIos": "In YouTube, Instagram, LinkedIn, Spotify or Safari, tap {share} then {app}. The media lands in your library.",
+  "intro.share.bodyAndroid": "In YouTube, Instagram, LinkedIn, Spotify or Chrome, tap {share} Share, then {app}. The media lands in your library.",
   "intro.next": "Next",
   "intro.start": "Let’s go",
   "intro.worksWith": "Works with",

@@ -87,6 +87,7 @@ RECOGNISED_HOSTS: dict[SourcePlatform, frozenset[str]] = {
     SourcePlatform.INSTAGRAM: PLATFORM_HOSTS[MediaSourceType.INSTAGRAM],
     SourcePlatform.TIKTOK: PLATFORM_HOSTS[MediaSourceType.TIKTOK],
     SourcePlatform.X: PLATFORM_HOSTS[MediaSourceType.X],
+    SourcePlatform.REDDIT: PLATFORM_HOSTS[MediaSourceType.REDDIT],
 }
 
 #: Path extensions that turn any URL into a direct audio import. Published for

@@ -269,7 +269,7 @@ export const fr: Catalog = {
     "Ce contenu généré est introuvable ou n'est plus disponible.",
   "error.invalidUrl": "Ce lien est invalide. Essayez une autre URL.",
   "error.unsupportedUrl":
-    "Ce lien n'est pas pris en charge. Liens acceptés : épisodes de podcast, vidéos YouTube et TikTok, publications Instagram et X, articles web, fichiers audio.",
+    "Ce lien n'est pas pris en charge. Liens acceptés : épisodes de podcast, vidéos YouTube et TikTok, publications Instagram, X et LinkedIn, fils Reddit, articles web, fichiers audio.",
   "error.validation": "Veuillez remplir tous les champs obligatoires.",
   "error.rateLimited":
     "Trop de requêtes. Patientez un instant et réessayez.",
@@ -1012,8 +1012,8 @@ export const fr: Catalog = {
   "auth.method.apple": "Apple",
   "auth.method.google": "Google",
   "intro.share.title": "Enregistrez depuis n’importe quelle app",
-  "intro.share.bodyIos": "Dans YouTube, Instagram, Spotify ou Safari, touchez {share} puis {app}. Le média arrive dans votre bibliothèque.",
-  "intro.share.bodyAndroid": "Dans YouTube, Instagram, Spotify ou Chrome, touchez {share} Partager, puis {app}. Le média arrive dans votre bibliothèque.",
+  "intro.share.bodyIos": "Dans YouTube, Instagram, LinkedIn, Spotify ou Safari, touchez {share} puis {app}. Le média arrive dans votre bibliothèque.",
+  "intro.share.bodyAndroid": "Dans YouTube, Instagram, LinkedIn, Spotify ou Chrome, touchez {share} Partager, puis {app}. Le média arrive dans votre bibliothèque.",
   "intro.next": "Suivant",
   "intro.start": "C’est parti",
   "intro.worksWith": "Fonctionne avec",

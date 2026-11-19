@@ -25,6 +25,8 @@ const TILES: Record<string, ImageSourcePropType> = IS_ANDROID ? {
   tiktok: require("../../../assets/welcome/tiktok-android.png"),
   instagram: require("../../../assets/welcome/instagram-android.png"),
   x: require("../../../assets/welcome/x-android.png"),
+  reddit: require("../../../assets/welcome/reddit-android.png"),
+  linkedin: require("../../../assets/welcome/linkedin-android.png"),
   spotify: require("../../../assets/welcome/spotify-android.png"),
   deezer: require("../../../assets/welcome/deezer-android.png"),
   whatsapp: require("../../../assets/welcome/whatsapp-android.png"),
@@ -35,6 +37,8 @@ const TILES: Record<string, ImageSourcePropType> = IS_ANDROID ? {
   tiktok: require("../../../assets/welcome/tiktok-ios.png"),
   instagram: require("../../../assets/welcome/instagram-ios.png"),
   x: require("../../../assets/welcome/x-ios.png"),
+  reddit: require("../../../assets/welcome/reddit-ios.png"),
+  linkedin: require("../../../assets/welcome/linkedin-ios.png"),
   spotify: require("../../../assets/welcome/spotify-ios.png"),
   applepodcasts: require("../../../assets/welcome/applepodcasts-ios.png"),
   deezer: require("../../../assets/welcome/deezer-ios.png"),
@@ -64,8 +68,9 @@ const makeWorksWithStyles = ({ colors }: Theme) => StyleSheet.create({
   legend: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
   hairline: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.outlineVariant },
   legendText: { fontSize: 12, color: colors.textSubtle },
-  tiles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 6 },
-  tile: { width: 28, height: 28 },
+  // 24 pt and a 4 pt gap: twelve tiles (iOS) fit on one line of a 390 pt screen.
+  tiles: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 4 },
+  tile: { width: 24, height: 24 },
 });
 
 // ---------------------------------------------------------------------------

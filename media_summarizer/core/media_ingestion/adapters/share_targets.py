@@ -105,9 +105,7 @@ _ALIAS_FORMATS: frozenset[DocumentFormat] = frozenset({DocumentFormat.IMAGE_JPEG
 #: `UNKNOWN` is the sentinel a failed classification carries, so there is
 #: nothing to advertise. Anything else added to the enum has to be either
 #: offered below or listed here, on purpose — see `_assert_exhaustive`.
-#: ``REDDIT`` (TASK-633): threads are read through Apify since 2026-11-19, but
-#: adding a chip to the showcase is a visible change the owner has not decided yet.
-_WITHHELD_PLATFORMS: frozenset[SourcePlatform] = frozenset({SourcePlatform.UNKNOWN, SourcePlatform.REDDIT})
+_WITHHELD_PLATFORMS: frozenset[SourcePlatform] = frozenset({SourcePlatform.UNKNOWN})
 
 #: Everything the user can send, in the order the screen reads it.
 #:
@@ -137,6 +135,13 @@ SHARE_TARGETS: tuple[ShareTarget, ...] = (
     ShareTarget(id=SourcePlatform.DEEZER.value, group=GROUP_PLATFORM, label="Deezer"),
     ShareTarget(id=SourcePlatform.RSS.value, group=GROUP_PLATFORM, label="RSS"),
     ShareTarget(id=SourcePlatform.X.value, group=GROUP_PLATFORM, label="X"),
+    # Threads read through Apify, post and comments (TASK-633).
+    ShareTarget(id=SourcePlatform.REDDIT.value, group=GROUP_PLATFORM, label="Reddit"),
+    # A LinkedIn post or article has no worker of its own: it is a web page, read
+    # as one (the extension sends the page as the reader sees it). Named here
+    # because a newcomer looks for the brand, not for "web pages" (owner,
+    # 2026-11-19).
+    ShareTarget(id="linkedin", group=GROUP_PLATFORM, label="LinkedIn"),
     # Voice notes. Since task-380 a shared *text* is a note, not a WhatsApp
     # message: the platform never says which app the text came from, so the only
     # thing WhatsApp still claims here is the audio attachment.

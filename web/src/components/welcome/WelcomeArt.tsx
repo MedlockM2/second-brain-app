@@ -207,7 +207,8 @@ export function PhoneArt() {
       <div style={{ ...row, gap: 10, marginBottom: 12, fontSize: 12, color: "var(--text-subtle)" }}>
         <span style={{ flex: 1, height: 1, background: "var(--outline-variant)" }} />{t("intro.worksWith")}<span style={{ flex: 1, height: 1, background: "var(--outline-variant)" }} />
       </div>
-      <div style={{ ...row, gap: 6, justifyContent: "center" }}>{Object.keys(APP_LOGOS).map((name) => <AppTile key={name} name={name} size={28} />)}</div>
+      {/* 26 px and a 5 px gap: the eleven logos fit the 358 px between the margins. */}
+      <div style={{ ...row, gap: 5, justifyContent: "center" }}>{Object.keys(APP_LOGOS).map((name) => <AppTile key={name} name={name} size={26} />)}</div>
     </div>
   </>;
 }

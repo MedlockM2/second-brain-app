@@ -255,7 +255,7 @@ export const de: Catalog = {
     "Dieser erstellte Inhalt wurde nicht gefunden oder ist nicht mehr verfügbar.",
   "error.invalidUrl": "Dieser Link ist ungültig. Versuche eine andere URL.",
   "error.unsupportedUrl":
-    "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen, YouTube- und TikTok-Videos, Instagram- und X-Beiträge, Webartikel und Audiodateien.",
+    "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen, YouTube- und TikTok-Videos, Instagram-, X- und LinkedIn-Beiträge, Reddit-Threads, Webartikel und Audiodateien.",
   "error.validation": "Bitte fülle alle Pflichtfelder aus.",
   "error.rateLimited":
     "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
@@ -992,8 +992,8 @@ export const de: Catalog = {
   "auth.method.apple": "Apple",
   "auth.method.google": "Google",
   "intro.share.title": "Aus jeder App speichern",
-  "intro.share.bodyIos": "Tippe in YouTube, Instagram, Spotify oder Safari auf {share} und dann auf {app}. Das Medium landet in deiner Bibliothek.",
-  "intro.share.bodyAndroid": "Tippe in YouTube, Instagram, Spotify oder Chrome auf {share} Teilen und dann auf {app}. Das Medium landet in deiner Bibliothek.",
+  "intro.share.bodyIos": "Tippe in YouTube, Instagram, LinkedIn, Spotify oder Safari auf {share} und dann auf {app}. Das Medium landet in deiner Bibliothek.",
+  "intro.share.bodyAndroid": "Tippe in YouTube, Instagram, LinkedIn, Spotify oder Chrome auf {share} Teilen und dann auf {app}. Das Medium landet in deiner Bibliothek.",
   "intro.next": "Weiter",
   "intro.start": "Los geht’s",
   "intro.worksWith": "Funktioniert mit",
