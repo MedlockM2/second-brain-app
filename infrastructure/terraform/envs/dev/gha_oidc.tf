@@ -255,6 +255,26 @@ data "aws_iam_policy_document" "gha_deploy" {
       resources = [statement.value]
     }
   }
+
+  # deploy-extension.yml: the fingerprint of the package each store last accepted,
+  # read and rewritten by extension/scripts/publish_stores.py. The parameter is
+  # created by the first run, hence PutParameter on a name that may not exist yet.
+  statement {
+    sid       = "ExtensionStoreState"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:PutParameter"]
+    resources = ["arn:aws:ssm:${local.gha_aws_region}:${data.aws_caller_identity.current.account_id}:parameter/deepn/extension/store-state"]
+  }
+
+  # Same script: Edge wants certification notes with every submission, holding the
+  # `edge` demo account of this secret (scripts/create_review_account.py). Read only;
+  # the -?????? suffix is the one Secrets Manager appends to every secret ARN.
+  statement {
+    sid       = "ExtensionReviewAccount"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:${local.gha_aws_region}:${data.aws_caller_identity.current.account_id}:secret:deepn-review-accounts-??????"]
+  }
 }
 
 resource "aws_iam_role_policy" "gha_deploy" {
