@@ -2,6 +2,9 @@ name: Mobile Beta Distribution
 
 # Native builds and store processing can finish hours after --no-wait returns.
 # Reconcile store state rather than holding an Actions runner or uploading again.
+# The scheduled run first reads /deepn/mobile/beta-state/<platform> (written by
+# scripts/mobile_beta_distribute.mjs) and stops within seconds when the platform
+# is owed nothing; runs after a build, and manual ones, always go through.
 on:
   schedule:
     - cron: "8,38 * * * *"
@@ -18,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   distribute:
@@ -33,19 +37,41 @@ jobs:
       cancel-in-progress: false
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      BETA_STATE_PARAMETER: /deepn/mobile/beta-state
     steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-3
+
+      # An absent parameter counts as owed: the first runs, or after it was deleted.
+      - name: Is this platform owed a distribution?
+        id: gate
+        run: |
+          if [[ "${{ github.event_name }}" != "schedule" ]]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          STATE=$(aws ssm get-parameter --name "$BETA_STATE_PARAMETER/${{ matrix.platform }}" --query Parameter.Value --output text 2>/dev/null || echo '{"owed":true}')
+          GO=$(echo "$STATE" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("owed") else "false")')
+          echo "go=$GO" >> "$GITHUB_OUTPUT"
+          echo "- ${{ matrix.platform }}: owed a distribution: $GO" >> "$GITHUB_STEP_SUMMARY"
+
       # workflow_run must only run trusted default-branch code with store keys.
-      - uses: actions/checkout@v4
+      - if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@v4
         with:
           ref: main
-      - uses: actions/setup-node@v4
+      - if: steps.gate.outputs.go == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm install -g eas-cli@22.0.0
+      - if: steps.gate.outputs.go == 'true'
+        run: npm ci
+      - if: steps.gate.outputs.go == 'true'
+        run: npm install -g eas-cli@22.0.0
       - name: Reconcile external beta distribution
+        if: steps.gate.outputs.go == 'true'
         env:
           BETA_ASC_API_KEY_JSON: ${{ matrix.platform == 'ios' && secrets.BETA_ASC_API_KEY_JSON || '' }}
           BETA_GOOGLE_PLAY_API_KEY_JSON: ${{ matrix.platform == 'android' && secrets.BETA_GOOGLE_PLAY_API_KEY_JSON || '' }}

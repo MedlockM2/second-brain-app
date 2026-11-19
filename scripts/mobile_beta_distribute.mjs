@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 // Reconcile finished EAS internal builds with the existing external beta tracks.
-// No build/upload, credential files, tester identities, or persistent local state.
+// No build/upload, credential files or tester identities. The only state kept is
+// whether this platform is still owed a distribution (a build under way, Apple
+// processing, Google reviewing): the SSM parameter /deepn/mobile/beta-state/<platform>,
+// which the scheduled run of mobile-beta-distribute.yml reads to skip the work
+// when nothing is owed.
 import { execFileSync } from 'node:child_process';
 import { sign } from 'node:crypto';
 import { appendFileSync, readFileSync } from 'node:fs';
@@ -23,6 +27,10 @@ for (const note of notes) {
   // Play's 500-character limit is stricter than TestFlight's 4,000.
   if (!note.text || [...note.text].length > 500) throw new Error(`Invalid beta notes: ${note.language}`);
 }
+
+// Set wherever this run ends on "next run will retry".
+let owed = false;
+function retryLater(message) { owed = true; report(message); }
 
 function report(message) {
   console.log(`${platform}: ${message}`);
@@ -87,6 +95,15 @@ function candidate() {
     '--status', 'finished', '--limit', '1', '--json', '--non-interactive',
   ], { cwd: resolve(root, 'mobile'), encoding: 'utf8', timeout: 120_000 }));
   const build = builds[0];
+  // A build still on EAS's side is the next candidate: the run that follows its
+  // end has work to do, whatever happens to the finished one below.
+  for (const status of ['new', 'in-queue', 'in-progress']) {
+    const underway = JSON.parse(execFileSync('eas', [
+      'build:list', '--platform', platform, '--buildProfile', config.buildProfile,
+      '--status', status, '--limit', '1', '--json', '--non-interactive',
+    ], { cwd: resolve(root, 'mobile'), encoding: 'utf8', timeout: 120_000 }));
+    if (underway.length) { retryLater(`An internal build is ${status} on EAS; next run will pick it up.`); break; }
+  }
   if (!build) { report('No finished internal build.'); return null; }
   if (!/^\d+$/.test(build.appBuildVersion) || !build.appVersion) {
     throw new Error('EAS build has no valid store version / build number.');
@@ -130,13 +147,13 @@ async function ios(build) {
   const result = await api(`builds?${query}`);
   const versions = new Map((result.included ?? []).map(item => [item.id, item.attributes.version]));
   const matches = result.data.filter(item => versions.get(item.relationships.preReleaseVersion.data.id) === build.appVersion);
-  if (matches.length === 0) { report('Waiting for EAS upload / Apple processing; next run will retry.'); return; }
+  if (matches.length === 0) { retryLater('Waiting for EAS upload / Apple processing; next run will retry.'); return; }
   if (matches.length !== 1) throw new Error('Ambiguous TestFlight build.');
   const target = matches[0];
   if (target.attributes.expired) throw new Error('Candidate TestFlight build has expired.');
   if (target.attributes.processingState !== 'VALID') {
     if (target.attributes.processingState !== 'PROCESSING') throw new Error('Apple build processing failed.');
-    report('Apple is still processing the build; next run will retry.'); return;
+    retryLater('Apple is still processing the build; next run will retry.'); return;
   }
   // Do not expose an older build if someone already distributed a newer one.
   const groupBuilds = await all(`betaGroups/${groupId}/builds?limit=200`);
@@ -226,7 +243,7 @@ async function android(build) {
     }
     const available = (source.releases ?? []).some(release =>
       release.status === 'completed' && release.versionCodes?.includes(code));
-    if (!available) { report('Waiting for EAS submission to internal testing; next run will retry.'); return; }
+    if (!available) { retryLater('Waiting for EAS submission to internal testing; next run will retry.'); return; }
     if (dryRun) { report(`Would promote build ${code} to ${targetTrack}, with FR/EN welcome notes and review.`); return; }
     await api(`/${edit.id}/tracks/${targetTrack}`, { method: 'PUT', body: {
       track: targetTrack, releases: [{
@@ -239,7 +256,7 @@ async function android(build) {
     report(`Build ${code} submitted to Alpha for review; full rollout after approval (managed publishing must stay off).`);
   } catch (error) {
     if (error instanceof ApiError && error.codes.includes('CHANGES_ALREADY_IN_REVIEW')) {
-      report('Google already has changes in review; keeping that review and retrying next run.');
+      retryLater('Google already has changes in review; keeping that review and retrying next run.');
     } else throw error;
   } finally {
     if (!committed) {
@@ -252,6 +269,14 @@ async function android(build) {
 try {
   const build = candidate();
   if (build) await ({ ios, android })[platform](build);
+  // Written only after a complete pass: a failed run keeps the previous value, and
+  // the scheduled run keeps trying until one succeeds.
+  if (!dryRun && process.env.BETA_STATE_PARAMETER) {
+    execFileSync('aws', ['ssm', 'put-parameter', '--name', `${process.env.BETA_STATE_PARAMETER}/${platform}`,
+      '--type', 'String', '--overwrite', '--value', JSON.stringify({ owed, at: new Date().toISOString() })],
+    { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'ignore', 'inherit'] });
+    report(`Still owed a distribution: ${owed}.`);
+  }
 } catch (error) {
   // Do not serialize nested fetch / process errors (headers and env are private).
   const message = error instanceof ApiError ? error.message

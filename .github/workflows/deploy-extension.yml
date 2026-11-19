@@ -3,9 +3,9 @@
 # beta's API and web app), numbered 1.0.<run number>, then
 # extension/scripts/publish_stores.py compares it with what each store last
 # accepted and sends it only where it differs. A store still reviewing an earlier
-# submission is skipped, marked pending, and caught up by the next push or the
-# daily run. The store pages (listing, visibility, privacy) are not touched: they
-# stay as set in each dashboard.
+# submission is skipped, marked pending, and caught up by the next push or a
+# scheduled run. The store pages (listing, visibility, privacy) are not touched:
+# they stay as set in each dashboard.
 name: Deploy Extension
 
 on:
@@ -19,9 +19,11 @@ on:
       - ".github/workflows/deploy-extension.yml"
   # Catches up a store that was skipped because it was still reviewing: without
   # it, the skipped change waits for the next push touching the extension. The
-  # `pending` job stops it within seconds when no store is owed a submission.
+  # `pending` job stops it within seconds when no store is owed a submission, and
+  # a retry reuses the package its push built instead of building it again. Same
+  # cadence as mobile-beta-distribute.yml.
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "23,53 * * * *"
   workflow_dispatch:
 
 # One submission at a time: two runs racing would both read the same store state.
@@ -32,6 +34,8 @@ concurrency:
 permissions:
   id-token: write
   contents: read
+  # Download the package a previous run uploaded (scheduled retries).
+  actions: read
 
 env:
   AWS_DEFAULT_REGION: eu-west-3
@@ -44,7 +48,7 @@ env:
   VITE_WEB_APP_ORIGIN: https://dev.deepn.app
 
 jobs:
-  # Daily run only: reads the store state, and lets `publish` build only when
+  # Scheduled run only: reads the store state, and lets `publish` go on only when
   # publish_stores.py marked a store "pending" (skipped while it was reviewing).
   pending:
     name: Is a store owed a submission?
@@ -77,7 +81,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # A scheduled retry submits the package the last push built: the one whose
+      # fingerprint publish_stores.py marked pending. Building happens on a push or
+      # manual run, or when that artifact is gone (90-day retention).
+      - name: Reuse the last built package (scheduled retry)
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN=$(gh run list --workflow deploy-extension.yml --branch main --status success --limit 50 \
+            --json databaseId,event --jq '[.[] | select(.event != "schedule")][0].databaseId // empty')
+          if [ -n "$RUN" ] && gh run download "$RUN" --name extension-package --dir "$RUNNER_TEMP/package"; then
+            PACKAGE=$(ls "$RUNNER_TEMP"/package/deepn-extension-*-chrome.zip)
+            echo "PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
+            echo "Reused the package of run $RUN: $(basename "$PACKAGE")" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No reusable package; building one." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Set up Node.js 22
+        if: env.PACKAGE == ''
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -93,10 +116,12 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install standalone extension dependencies
+        if: env.PACKAGE == ''
         working-directory: extension
         run: npm ci
 
       - name: Guard — translations match their source
+        if: env.PACKAGE == ''
         working-directory: extension
         run: |
           python3 scripts/messages.py
@@ -107,17 +132,30 @@ jobs:
 
       # Stores refuse a version they already have; the run number only grows.
       - name: Number this build
+        if: env.PACKAGE == ''
         working-directory: extension
         run: |
           npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
           echo "Version 1.0.${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build the distribution package
+        if: env.PACKAGE == ''
         working-directory: extension
         run: |
           npm run zip -- --api "$EXTENSION_API" --web "$EXTENSION_WEB"
           PACKAGE=$(ls "$PWD"/.output/delivery/distribution/*/deepn-extension-1.0.${{ github.run_number }}-chrome.zip)
           echo "PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
+          echo "BUILT=true" >> "$GITHUB_ENV"
+
+      # Kept for the scheduled retries above.
+      - name: Keep the package
+        if: env.BUILT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-package
+          path: ${{ env.PACKAGE }}
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

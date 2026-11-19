@@ -25,6 +25,14 @@ scheduled retry is essential: `--no-wait` can finish hours before the binary and
 its auto-submission are ready. GitHub schedules can be delayed; 30 minutes is
 the polling interval, not a delivery SLA. Each platform has a concurrency lock.
 
+A scheduled run first reads `/deepn/mobile/beta-state/<platform>` (SSM, dev) and
+stops within seconds when that platform is owed nothing. The script writes it at
+the end of every complete, non-dry run: `owed` is true when the run ended on
+"next run will retry" (an internal build new, queued or in progress on EAS,
+upload or Apple processing not finished, Play internal submission not done,
+Google already reviewing). A missing parameter counts as owed. Runs that follow
+a build, and manual ones, always go through.
+
 - **iOS:** find the exact marketing version and build number in App Store
   Connect, wait for valid processing, set the FR/EN "What to Test" notes,
   enable automatic tester notification, assign the existing external group and
