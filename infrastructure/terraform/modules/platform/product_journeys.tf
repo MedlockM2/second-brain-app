@@ -4,13 +4,15 @@ locals {
   alert_queue_groups = {
     import_capture = {
       journey = "imports"
-      queues  = [aws_sqs_queue.x_ingestion, aws_sqs_queue.reddit_ingestion, aws_sqs_queue.youtube_ingestion, aws_sqs_queue.instagram_ingestion, aws_sqs_queue.tiktok_ingestion, aws_sqs_queue.web_page_render]
-      dlqs    = [aws_sqs_queue.x_ingestion_dlq, aws_sqs_queue.reddit_ingestion_dlq, aws_sqs_queue.youtube_ingestion_dlq, aws_sqs_queue.instagram_ingestion_dlq, aws_sqs_queue.tiktok_ingestion_dlq, aws_sqs_queue.web_page_render_dlq]
+      queues  = [aws_sqs_queue.x_ingestion, aws_sqs_queue.youtube_ingestion, aws_sqs_queue.instagram_ingestion, aws_sqs_queue.tiktok_ingestion, aws_sqs_queue.web_page_render]
+      dlqs    = [aws_sqs_queue.x_ingestion_dlq, aws_sqs_queue.youtube_ingestion_dlq, aws_sqs_queue.instagram_ingestion_dlq, aws_sqs_queue.tiktok_ingestion_dlq, aws_sqs_queue.web_page_render_dlq]
     }
+    # Reddit (TASK-633) sits here rather than with the other capture queues:
+    # import_capture already holds five queues, the ten-metric ceiling of one alarm.
     import_read = {
       journey = "imports"
-      queues  = [aws_sqs_queue.rss_resolution, aws_sqs_queue.article_extraction, aws_sqs_queue.deepgram_transcription, aws_sqs_queue.document_parsing]
-      dlqs    = [aws_sqs_queue.rss_resolution_dlq, aws_sqs_queue.article_extraction_dlq, aws_sqs_queue.deepgram_transcription_dlq, aws_sqs_queue.document_parsing_dlq]
+      queues  = [aws_sqs_queue.reddit_ingestion, aws_sqs_queue.rss_resolution, aws_sqs_queue.article_extraction, aws_sqs_queue.deepgram_transcription, aws_sqs_queue.document_parsing]
+      dlqs    = [aws_sqs_queue.reddit_ingestion_dlq, aws_sqs_queue.rss_resolution_dlq, aws_sqs_queue.article_extraction_dlq, aws_sqs_queue.deepgram_transcription_dlq, aws_sqs_queue.document_parsing_dlq]
     }
     import_finish = {
       journey = "imports"
