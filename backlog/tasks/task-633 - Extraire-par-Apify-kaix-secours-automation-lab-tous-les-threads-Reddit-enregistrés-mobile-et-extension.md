@@ -1,11 +1,12 @@
 ---
 id: TASK-633
 title: >-
-  Extraire par Apify (kaix, secours automation-lab) tous les threads Reddit enregistrés, mobile et extension
-status: To Do
+  Extraire par Apify (kaix, secours automation-lab) tous les threads Reddit
+  enregistrés, mobile et extension
+status: Done
 assignee: []
 created_date: '2026-11-19 11:07'
-updated_date: '2026-11-19 13:06'
+updated_date: '2026-11-19 13:45'
 labels:
   - backend
   - ingestion
@@ -82,13 +83,51 @@ Pour **tout lien Reddit, qu'il arrive avec ou sans `page_html`**, Apify est la *
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le classifieur reconnaît comme Reddit les threads `reddit.com`, `www.reddit.com` et `old.reddit.com`, les liens de partage `/r/<sub>/s/<code>` et `redd.it`, et les envoie vers ce nouveau traitement
-- [ ] #2 Tout lien Reddit, avec ou sans `page_html`, part d'abord vers Apify, sans téléchargement direct ni rendu Chromium. L'analyse locale de la page de TASK-632 ne sert que si les deux actors échouent et que `page_html` est présent ; sinon le job échoue
-- [ ] #3 L'actor `kaix~reddit-scraper` est appelé en premier, avec le fil complet ; `automation-lab~reddit-scraper` n'est appelé que si kaix échoue ou ne renvoie pas le post. Le token et les deux identifiants d'actor sont des variables d'environnement déclarées dans Terraform
-- [ ] #4 Le texte complet est produit par le rendu de `reddit_thread.py` (TASK-632), extrait pour être partagé avec l'analyse du HTML et non dupliqué : même Markdown (titre, contexte, post, `## Comments (N of total)`, en-têtes de commentaire avec niveau et marques pinned, moderator ou bot), commentaires supprimés ou vides omis
-- [ ] #5 Avant le rendu, le texte de chaque commentaire est nettoyé : les images Reddit `![…](<id>)` deviennent une mention `(image)`, l'indentation de début de ligne est retirée (automation-lab), les titres `#` deviennent du gras et les dates sont converties. Le texte produit pour le thread de test, avec chacun des deux actors, ne contient ni ligne lue comme du code ni image cassée
-- [ ] #6 Les métadonnées d'extraction nomment l'actor utilisé, le nombre de commentaires récupérés sur le nombre affiché et le coût du run ; `title` et `creator_name` suivent les règles de TASK-632
-- [ ] #7 Les prix des deux actors figurent sous `"apify"` dans `pricing_config_service.py` ; l'import est admis sur le budget avant l'appel, puis réglé au coût réel de chaque run lancé, secours compris
-- [ ] #8 Un vrai run de chaque actor, lancé depuis le poste de l'agent sur le thread de la description et sur un lien de partage `/s/` ou `redd.it`, est consigné dans les notes de la tâche : statut, nombre de commentaires et coût. On sait ainsi quel actor accepte quel format de lien
-- [ ] #9 `ruff`, `mypy` et `terraform validate` sont propres
+- [x] #1 Le classifieur reconnaît comme Reddit les threads `reddit.com`, `www.reddit.com` et `old.reddit.com`, les liens de partage `/r/<sub>/s/<code>` et `redd.it`, et les envoie vers ce nouveau traitement
+- [x] #2 Tout lien Reddit, avec ou sans `page_html`, part d'abord vers Apify, sans téléchargement direct ni rendu Chromium. L'analyse locale de la page de TASK-632 ne sert que si les deux actors échouent et que `page_html` est présent ; sinon le job échoue
+- [x] #3 L'actor `kaix~reddit-scraper` est appelé en premier, avec le fil complet ; `automation-lab~reddit-scraper` n'est appelé que si kaix échoue ou ne renvoie pas le post. Le token et les deux identifiants d'actor sont des variables d'environnement déclarées dans Terraform
+- [x] #4 Le texte complet est produit par le rendu de `reddit_thread.py` (TASK-632), extrait pour être partagé avec l'analyse du HTML et non dupliqué : même Markdown (titre, contexte, post, `## Comments (N of total)`, en-têtes de commentaire avec niveau et marques pinned, moderator ou bot), commentaires supprimés ou vides omis
+- [x] #5 Avant le rendu, le texte de chaque commentaire est nettoyé : les images Reddit `![…](<id>)` deviennent une mention `(image)`, l'indentation de début de ligne est retirée (automation-lab), les titres `#` deviennent du gras et les dates sont converties. Le texte produit pour le thread de test, avec chacun des deux actors, ne contient ni ligne lue comme du code ni image cassée
+- [x] #6 Les métadonnées d'extraction nomment l'actor utilisé, le nombre de commentaires récupérés sur le nombre affiché et le coût du run ; `title` et `creator_name` suivent les règles de TASK-632
+- [x] #7 Les prix des deux actors figurent sous `"apify"` dans `pricing_config_service.py` ; l'import est admis sur le budget avant l'appel, puis réglé au coût réel de chaque run lancé, secours compris
+- [x] #8 Un vrai run de chaque actor, lancé depuis le poste de l'agent sur le thread de la description et sur un lien de partage `/s/` ou `redd.it`, est consigné dans les notes de la tâche : statut, nombre de commentaires et coût. On sait ainsi quel actor accepte quel format de lien
+- [x] #9 `ruff`, `mypy` et `terraform validate` sont propres
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-19 — Fait dans la session principale (`/process-backlog`).
+
+**Chemin.** Le classifieur reconnaît `reddit.com`, `www.reddit.com`, `old.reddit.com` et `redd.it` (`MediaSourceType.REDDIT`, `SourcePlatform.REDDIT`). Formats acceptés : `/r/<sub>/comments/<id>/…`, `/comments/<id>`, `/r/<sub>/s/<code>`, `redd.it/<id>`. Un subreddit ou une page d'utilisateur est refusé (« Unsupported Reddit URL format. »). L'URL canonique garde la casse et le chemin tels quels : un lien `/s/` ne peut pas être résolu depuis AWS.
+- `RedditResolver` (`reddit.default`) n'appelle aucun fournisseur. Si l'extension a envoyé la page, il la lit avec `read_reddit_thread` : la ligne de bibliothèque reçoit son titre tout de suite, et l'orchestrateur dépose ce texte sur S3 (`<job>.reddit-page.md`) comme dernier recours.
+- Le worker `reddit_ingestion_worker.py`, avec sa file `reddit-ingestion-queue`, démarre kaix. Au callback, il lit tout le dataset, page par page. Si kaix échoue ou ne renvoie pas le post, il démarre automation-lab (`replace_active_run`). Si automation-lab échoue aussi, il enregistre la page de l'extension quand elle existe ; sinon le job échoue en `PROVIDER_UNAVAILABLE`.
+- Le texte de la page n'est plus lu par `TrafilaturaArticleResolver.read_html` : une URL Reddit n'y arrive plus.
+
+**Texte.** Le rendu `render_thread` est partagé entre la page et Apify. `reddit_apify.clean_body` nettoie chaque corps : images `![…](<id>)` → `(image)`, titres `#` → gras, séparateurs `---` retirés, indentation retirée pour automation-lab. Les commentaires sont remis dans l'ordre du fil d'après `parentId` ; ceux dont le parent manque restent à leur place. Les commentaires supprimés (`[deleted]`, `[removed]`) sont omis.
+
+**Budget.** Les tarifs « démarrage + par élément » sont ajoutés sous `provider_tariffs.apify`, avec `per_post` pour automation-lab ; le calcul est fait par `Tariffs.apify_run_usd`. L'import est admis avant le run kaix, réservé pour 1 001 éléments ; automation-lab est réservé pour `APIFY_REDDIT_FALLBACK_MAX_COMMENTS` + 1. Chaque run est clos par `budget_guard.close_apify_collection` au plus grand de deux montants : `usageTotalUsd`, et les `chargedEventCounts` valorisés au barème. Le run est réglé s'il a livré le fil, libéré en dépense opérateur sinon. Les deux runs sont comptés quand le secours tourne. Sur le pool Apify partagé, une lecture de fil compte pour une unité.
+
+**Runs réels (AC #8)**, lancés le 2026-11-19 depuis le poste de l'agent avec le compte Apify des tests de l'owner :
+
+| Actor | Lien | Statut | Éléments | Coût réel |
+|---|---|---|---|---|
+| kaix | thread www | SUCCEEDED | 1 post + 269 commentaires | 0,0069 $ |
+| kaix | `https://redd.it/1xuka2x` | SUCCEEDED | 1 post + 269 commentaires | 0,0069 $ |
+| automation-lab | thread www | SUCCEEDED | 1 post + 262 commentaires | 0,2007 $ |
+| automation-lab | `https://redd.it/1xuka2x` | SUCCEEDED, mais un seul élément `target-status: no-valid-reddit-targets` | 0 | 0 $ |
+
+Aucun lien `/s/` public n'a pu être trouvé : ce format n'a été testé avec aucun des deux actors. `usageTotalUsd` monte encore quelques secondes après la fin du run (0,0011 $ puis 0,0069 $ pour kaix) ; d'où le maximum avec les événements, qui sont définitifs.
+
+Texte produit sur le thread de test : kaix 263/269 commentaires, automation-lab 262/269. Dans les deux cas, 0 ligne lue comme du code et 0 image cassée.
+
+**Configuration.** Les identifiants d'actor et le plafond du secours sont déclarés dans Terraform, sur le worker `reddit_ingestion`. Le token `APIFY_REDDIT_API_TOKEN` est une clé du secret runtime : le dépôt n'écrit jamais de secret dans Terraform (`secrets.tf`). Il a été ajouté le 2026-11-19 au secret de dev, avec la valeur du token du compte Apify utilisé pour les tests Reddit de l'owner (le même que `APIFY_YOUTUBE_API_TOKEN`). Il faudra le copier dans le secret de prod avant la production.
+
+**Hors périmètre, à décider par l'owner.** Reddit n'est pas proposé dans la vitrine des sources de l'app (`_WITHHELD_PLATFORMS`, `share_targets.py`) : ajouter une puce est un changement visible.
+
+`ruff` et `mypy` sont propres sur les 20 fichiers Python touchés. `terraform validate` passe sur dev et prod. `tsc` passe sur core, web et mobile.
+
+**À vérifier par l'owner après push** (voir les notes de la description) :
+- Terraform Dev doit avoir appliqué `REDDIT_INGESTION_QUEUE` avant que l'image de l'API serve : la variable est lue au démarrage.
+- Rejouer les trois parcours : partage mobile, extension, lien `/s/`.
+<!-- SECTION:NOTES:END -->

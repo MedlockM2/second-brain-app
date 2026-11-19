@@ -105,7 +105,9 @@ _ALIAS_FORMATS: frozenset[DocumentFormat] = frozenset({DocumentFormat.IMAGE_JPEG
 #: `UNKNOWN` is the sentinel a failed classification carries, so there is
 #: nothing to advertise. Anything else added to the enum has to be either
 #: offered below or listed here, on purpose — see `_assert_exhaustive`.
-_WITHHELD_PLATFORMS: frozenset[SourcePlatform] = frozenset({SourcePlatform.UNKNOWN})
+#: ``REDDIT`` (TASK-633): threads are read through Apify since 2026-11-19, but
+#: adding a chip to the showcase is a visible change the owner has not decided yet.
+_WITHHELD_PLATFORMS: frozenset[SourcePlatform] = frozenset({SourcePlatform.UNKNOWN, SourcePlatform.REDDIT})
 
 #: Everything the user can send, in the order the screen reads it.
 #:

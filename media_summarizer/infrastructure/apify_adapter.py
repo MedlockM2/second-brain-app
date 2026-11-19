@@ -39,6 +39,8 @@ class ApifyActorKind(str, Enum):
     INSTAGRAM_POST = "instagram_post"
     TIKTOK_TRANSCRIPT = "tiktok_transcript"
     YOUTUBE_TRANSCRIPT = "youtube_transcript"
+    REDDIT_PRIMARY = "reddit_primary"
+    REDDIT_FALLBACK = "reddit_fallback"
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,15 @@ def _actor_configuration(kind: ApifyActorKind) -> tuple[str, str]:
             "APIFY_TIKTOK_TRANSCRIPT_ACTOR_ID",
             "scrape-creators~best-tiktok-transcripts-scraper",
         )
+    elif kind in (ApifyActorKind.REDDIT_PRIMARY, ApifyActorKind.REDDIT_FALLBACK):
+        from media_summarizer.infrastructure import reddit_apify
+
+        token = os.environ.get("APIFY_REDDIT_API_TOKEN", "")
+        actor_id = (
+            reddit_apify.primary_actor_id()
+            if kind == ApifyActorKind.REDDIT_PRIMARY
+            else reddit_apify.fallback_actor_id()
+        )
     else:
         token = os.environ.get("APIFY_YOUTUBE_API_TOKEN", "")
         actor_id = os.environ.get(
@@ -144,7 +155,7 @@ def parse_webhook_payload(body: Any) -> ApifyWebhookPayload:
     dataset_value = resource.get("defaultDatasetId")
     dataset_id = str(dataset_value).strip() if dataset_value else None
 
-    if not job_id or source_platform not in {"instagram", "tiktok", "youtube"}:
+    if not job_id or source_platform not in {"instagram", "tiktok", "youtube", "reddit"}:
         raise ValueError("Webhook correlation fields are invalid")
     if not run_id or status not in APIFY_TERMINAL_STATUSES:
         raise ValueError("Webhook run fields are invalid")
@@ -277,11 +288,28 @@ def _token_for_platform(source_platform: str) -> str:
         return os.environ.get("APIFY_TIKTOK_API_TOKEN", "").strip()
     if source_platform == "youtube":
         return os.environ.get("APIFY_YOUTUBE_API_TOKEN", "").strip()
+    if source_platform == "reddit":
+        return os.environ.get("APIFY_REDDIT_API_TOKEN", "").strip()
     return ""
 
 
-async def fetch_dataset_items(*, source_platform: str, dataset_id: str) -> list[dict[str, Any]]:
-    """Fetch a completed run's dataset without polling its status."""
+#: Items read per dataset page; a Reddit thread is read page after page.
+_DATASET_PAGE_SIZE = 1000
+
+
+async def fetch_dataset_items(
+    *,
+    source_platform: str,
+    dataset_id: str,
+    max_items: int = 100,
+    pool_units: int | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch a completed run's dataset without polling its status.
+
+    ``max_items`` above one page reads the dataset page by page (a Reddit thread
+    is a post and every comment). ``pool_units`` is what the read counts on the
+    shared Apify pool when one item is not one billed result.
+    """
     token = _token_for_platform(source_platform)
     if not token:
         raise ApifyAdapterError("apify_token_missing", retryable=False)
@@ -289,29 +317,37 @@ async def fetch_dataset_items(*, source_platform: str, dataset_id: str) -> list[
         raise ApifyAdapterError("apify_dataset_missing", retryable=False)
 
     dataset_url = f"{APIFY_API_BASE_URL}/datasets/{quote(dataset_id, safe='')}/items"
+    results: list[dict[str, Any]] = []
+    page_size = min(max(1, max_items), _DATASET_PAGE_SIZE)
     try:
         async with httpx.AsyncClient(timeout=APIFY_REQUEST_TIMEOUT_SECONDS) as client:
-            response = await client.get(
-                dataset_url,
-                params={"clean": "true", "format": "json", "limit": 100},
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            while len(results) < max_items:
+                response = await client.get(
+                    dataset_url,
+                    params={
+                        "clean": "true",
+                        "format": "json",
+                        "limit": min(page_size, max_items - len(results)),
+                        "offset": len(results),
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                _raise_for_response(response, "fetch_dataset")
+                try:
+                    items = response.json()
+                except ValueError as exc:
+                    raise ApifyAdapterError("apify_invalid_json", retryable=True) from exc
+                if not isinstance(items, list):
+                    raise ApifyAdapterError("apify_invalid_dataset", retryable=False)
+                results.extend(item for item in items if isinstance(item, dict))
+                if len(items) < page_size:
+                    break
     except (httpx.TimeoutException, httpx.TransportError) as exc:
         raise ApifyAdapterError(
             "apify_network_error",
             retryable=True,
             detail=type(exc).__name__,
         ) from exc
-
-    _raise_for_response(response, "fetch_dataset")
-    try:
-        items = response.json()
-    except ValueError as exc:
-        raise ApifyAdapterError("apify_invalid_json", retryable=True) from exc
-    if not isinstance(items, list):
-        raise ApifyAdapterError("apify_invalid_dataset", retryable=False)
-
-    results = [item for item in items if isinstance(item, dict)]
 
     # Apify bills per result, and this is the one place every actor's results are
     # collected, so it is where the shared pool is counted. Keyed on the dataset id
@@ -320,7 +356,42 @@ async def fetch_dataset_items(*, source_platform: str, dataset_id: str) -> list[
 
     await provider_pool_guard.record_spend(
         provider_pool_guard.POOL_APIFY,
-        units=len(results),
+        units=len(results) if pool_units is None else pool_units,
         idempotency_token=f"apify:{dataset_id}",
     )
     return results
+
+
+@dataclass(frozen=True)
+class ApifyRunUsage:
+    """What a finished run reports about its billing."""
+
+    usage_usd: float | None
+    #: Pay-per-event counts (``{"apify-default-dataset-item": 270, …}``).
+    charged_events: dict[str, int]
+
+
+async def fetch_run_usage(*, source_platform: str, run_id: str) -> ApifyRunUsage:
+    """The billing a run reports. ``usageTotalUsd`` may still be rising for a few
+    seconds after the run ends (0.0011 then 0.0069 USD on 2026-11-19), the event
+    counts are final: callers price the events and keep the larger figure."""
+    token = _token_for_platform(source_platform)
+    if not token:
+        raise ApifyAdapterError("apify_token_missing", retryable=False)
+    run_url = f"{APIFY_API_BASE_URL}/actor-runs/{quote(run_id, safe='')}"
+    try:
+        async with httpx.AsyncClient(timeout=APIFY_REQUEST_TIMEOUT_SECONDS) as client:
+            response = await client.get(run_url, headers={"Authorization": f"Bearer {token}"})
+    except (httpx.TimeoutException, httpx.TransportError) as exc:
+        raise ApifyAdapterError("apify_network_error", retryable=True, detail=type(exc).__name__) from exc
+    _raise_for_response(response, "fetch_run")
+    try:
+        data = response.json().get("data", {})
+    except (ValueError, AttributeError) as exc:
+        raise ApifyAdapterError("apify_invalid_json", retryable=True) from exc
+    usage = data.get("usageTotalUsd")
+    events = data.get("chargedEventCounts") or {}
+    return ApifyRunUsage(
+        usage_usd=float(usage) if isinstance(usage, (int, float)) else None,
+        charged_events={str(key): int(value) for key, value in events.items() if isinstance(value, (int, float))},
+    )

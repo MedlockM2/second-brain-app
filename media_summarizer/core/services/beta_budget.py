@@ -358,6 +358,25 @@ class Tariffs:
     def apify_per_result(self, actor_id: str) -> Decimal:
         return self._price("apify", actor_id.strip().replace("/", "~"), "per_result")
 
+    def apify_run_usd(self, actor_id: str, results: int) -> Decimal:
+        """What a run that billed ``results`` dataset items costs.
+
+        Two shapes of Apify pay-per-event pricing are listed: ``per_result``
+        alone (one event per result), or a start event plus a price per item
+        (``per_start``, ``per_item``), with the post priced apart when the actor
+        bills it differently (``per_post``: automation-lab's Reddit scraper).
+        """
+        count = max(0, results)
+        entry = self._family("apify").get(actor_id.strip().replace("/", "~"))
+        per_item = _decimal(entry.get("per_item")) if isinstance(entry, Mapping) else None
+        if not isinstance(entry, Mapping) or per_item is None:
+            return Decimal(count) * self.apify_per_result(actor_id)
+        start = _decimal(entry.get("per_start")) or Decimal(0)
+        per_post = _decimal(entry.get("per_post"))
+        if per_post is not None and count > 0:
+            return start + per_post + per_item * (count - 1)
+        return start + per_item * count
+
     def x_per_post(self) -> Decimal:
         return self._price("x_api", "post", "usd")
 
@@ -687,15 +706,15 @@ def estimated_text_tokens(
     return 0
 
 
-def apify_line(ctx: PricingContext, *, actor_id: str) -> ReservationLine:
-    """Bound of one Apify run: the price of its single result."""
+def apify_line(ctx: PricingContext, *, actor_id: str, results: int = 1) -> ReservationLine:
+    """Bound of one Apify run: the price of the results it may bill (one, unless said)."""
     return ReservationLine(
         component=Component.COLLECTION,
         kind=ProviderKind.APIFY,
         provider="apify",
         model=actor_id.strip().replace("/", "~"),
-        quantities={"results": 1},
-        bound_usd=ctx.tariffs.apify_per_result(actor_id),
+        quantities={"results": results},
+        bound_usd=ctx.tariffs.apify_run_usd(actor_id, results),
     )
 
 
@@ -784,7 +803,7 @@ def apify_cost(ctx: PricingContext, *, actor_id: str, results: int) -> MeasuredC
     """Cost of the result events a run was charged."""
     count = max(0, results)
     return MeasuredCost(
-        usd=Decimal(count) * ctx.tariffs.apify_per_result(actor_id),
+        usd=ctx.tariffs.apify_run_usd(actor_id, count),
         usage={"results": count},
         tariff_version=ctx.tariffs.version,
     )

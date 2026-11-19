@@ -41,6 +41,7 @@ export type SourcePlatform =
   | "instagram"
   | "tiktok"
   | "x"
+  | "reddit"
   | "whatsapp"
   | "notes"
   | "web"

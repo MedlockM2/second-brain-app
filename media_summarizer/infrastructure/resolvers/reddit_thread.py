@@ -1,4 +1,4 @@
-"""A Reddit thread the browser extension sent: the post, then its loaded comments.
+"""A Reddit thread as text: the reader of the page the extension sent, and the renderer.
 
 TASK-632. Trafilatura reads a thread page as an article and keeps its longest run
 of text. On a thread with a pinned moderator summary, that summary is what it
@@ -6,6 +6,12 @@ keeps: on 2026-11-19 a saved r/codex thread came back as 167 words of a bot's
 "GPT-generated summary of the conversation", with no title, no post and none of
 the comments. A thread is not an article: its structure is declared in the markup,
 so it is read from there.
+
+Since TASK-633 every Reddit link is read through Apify
+(`workers/reddit_ingestion_worker.py`), which returns the whole thread. The page
+reader below is the last resort when both actors fail, and gives the library row
+its title at submission (`RedditResolver`). `render_thread` is the one format of a
+thread's text, whichever source fed it (`infrastructure/reddit_apify.py`).
 
 What the extension sends (`extension/lib/page.ts`, `cleanedDocument`): the light
 DOM of the tab, i.e. `document.documentElement.outerHTML` minus ``script``,
@@ -61,6 +67,8 @@ _BASE_URL = "https://www.reddit.com"
 _SUBREDDIT_SUFFIX_RE = re.compile(r"\s*:\s*r/[A-Za-z0-9_]+\s*$")
 #: An account that is a bot by name. AutoModerator is Reddit's own.
 _BOT_NAME_RE = re.compile(r"(?:^automoderator$|bot$)", re.IGNORECASE)
+#: A comment with nothing left to read: removed by its author or by a moderator.
+_EMPTY_BODIES = frozenset({"", "[deleted]", "[removed]"})
 _HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
 _CONTAINERS = ("div", "section", "article", "span")
 
@@ -73,7 +81,7 @@ class RedditThread:
 
 
 @dataclass(frozen=True)
-class _Comment:
+class RedditComment:
     author: str
     depth: int
     body: str
@@ -110,12 +118,12 @@ def _shreddit_thread(tree: Any) -> Optional[RedditThread]:
         return None
     post = posts[0]
     post_id = post.get("id") or ""
-    title = _clean_title(post.get("post-title")) or _clean_title(
+    title = clean_title(post.get("post-title")) or clean_title(
         _first_text(tree, f"//*[@id='post-title-{post_id}']")
     )
     if not title:
         return None
-    subreddit = _prefixed_subreddit(
+    subreddit = prefixed_subreddit(
         post.get("subreddit-prefixed-name") or post.get("subreddit-name")
     )
     body_nodes = tree.xpath(f"//*[@id='{post_id}-post-rtjson-content']") if post_id else []
@@ -126,7 +134,7 @@ def _shreddit_thread(tree: Any) -> Optional[RedditThread]:
         for badge in tree.xpath("//shreddit-comment-badges[@stickied]")
         if badge.get("thing-id")
     }
-    comments: List[_Comment] = []
+    comments: List[RedditComment] = []
     seen: set[str] = set()
     for element in tree.xpath("//shreddit-comment"):
         thing_id = element.get("thingid") or ""
@@ -135,7 +143,7 @@ def _shreddit_thread(tree: Any) -> Optional[RedditThread]:
         seen.add(thing_id)
         content = element.xpath(f".//*[@id='{thing_id}-comment-rtjson-content']") if thing_id else []
         comments.append(
-            _Comment(
+            RedditComment(
                 author=element.get("author") or "[deleted]",
                 depth=_int(element.get("depth")) or 0,
                 body=_markdown(content[0]) if content else "",
@@ -146,7 +154,7 @@ def _shreddit_thread(tree: Any) -> Optional[RedditThread]:
     return RedditThread(
         title=title,
         subreddit=subreddit,
-        markdown=_thread_markdown(
+        markdown=render_thread(
             title=title,
             subreddit=subreddit,
             author=post.get("author"),
@@ -170,16 +178,16 @@ def _old_reddit_thread(tree: Any) -> Optional[RedditThread]:
     if not things:
         return None
     post = things[0]
-    title = _clean_title(_first_text(post, f".//a[{_has_class('title')}]"))
+    title = clean_title(_first_text(post, f".//a[{_has_class('title')}]"))
     if not title:
         return None
-    subreddit = _prefixed_subreddit(post.get("data-subreddit"))
+    subreddit = prefixed_subreddit(post.get("data-subreddit"))
     body_nodes = post.xpath(
         f".//div[{_has_class('usertext-body')}]/div[{_has_class('md')}]"
     )
     body = _markdown(body_nodes[0]) if body_nodes else ""
 
-    comments: List[_Comment] = []
+    comments: List[RedditComment] = []
     for element in tree.xpath(f"//div[{_has_class('thing')} and {_has_class('comment')}]"):
         entry = element.xpath(f"./div[{_has_class('entry')}]")
         content = (
@@ -192,7 +200,7 @@ def _old_reddit_thread(tree: Any) -> Optional[RedditThread]:
         )
         depth = len(element.xpath(f"ancestor::div[{_has_class('thing')} and {_has_class('comment')}]"))
         comments.append(
-            _Comment(
+            RedditComment(
                 author=element.get("data-author") or "[deleted]",
                 depth=depth,
                 body=_markdown(content[0]) if content else "",
@@ -210,7 +218,7 @@ def _old_reddit_thread(tree: Any) -> Optional[RedditThread]:
     return RedditThread(
         title=title,
         subreddit=subreddit,
-        markdown=_thread_markdown(
+        markdown=render_thread(
             title=title,
             subreddit=subreddit,
             author=post.get("data-author"),
@@ -225,23 +233,24 @@ def _old_reddit_thread(tree: Any) -> Optional[RedditThread]:
 # -- the text ----------------------------------------------------------------
 
 
-def _thread_markdown(
+def render_thread(
     *,
     title: str,
     subreddit: Optional[str],
     author: Optional[str],
     created: Optional[str],
     body: str,
-    comments: List[_Comment],
+    comments: List[RedditComment],
     total: Optional[int],
 ) -> str:
+    """The thread as the readers draw it; shared by the page reader and the Apify path (TASK-633)."""
     context = [part for part in (subreddit, f"u/{author}" if author else None, created) if part]
     blocks = [f"## {title}"]
     if context:
         blocks.append(" · ".join(context))
     if body:
         blocks.append(body)
-    shown = [comment for comment in comments if comment.body]
+    shown = [comment for comment in comments if comment.body.strip() not in _EMPTY_BODIES]
     if shown:
         count = f"{len(shown)} of {total}" if total and total > len(shown) else str(len(shown))
         blocks.append(f"## Comments ({count})")
@@ -251,7 +260,7 @@ def _thread_markdown(
     return "\n\n".join(blocks)
 
 
-def _comment_header(comment: _Comment) -> str:
+def _comment_header(comment: RedditComment) -> str:
     parts = [f"**u/{comment.author}**"]
     if comment.depth > 0:
         parts.append(f"reply, level {comment.depth}")
@@ -347,13 +356,13 @@ def _first_text(tree: Any, xpath: str) -> Optional[str]:
     return " ".join(nodes[0].text_content().split()) if nodes else None
 
 
-def _clean_title(raw: Optional[str]) -> Optional[str]:
+def clean_title(raw: Optional[str]) -> Optional[str]:
     title = " ".join((raw or "").split())
     title = _SUBREDDIT_SUFFIX_RE.sub("", title).strip()
     return title or None
 
 
-def _prefixed_subreddit(raw: Optional[str]) -> Optional[str]:
+def prefixed_subreddit(raw: Optional[str]) -> Optional[str]:
     name = (raw or "").strip()
     if not name:
         return None

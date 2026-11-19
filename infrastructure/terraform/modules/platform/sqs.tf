@@ -86,6 +86,35 @@ resource "aws_sqs_queue" "x_ingestion" {
 }
 
 # =============================================================================
+# Reddit Ingestion (TASK-633): a thread read through Apify, primary then fallback
+# actor, the run finishing through the Apify webhook.
+# =============================================================================
+
+resource "aws_sqs_queue" "reddit_ingestion_dlq" {
+  name                      = "reddit-ingestion-dlq${local.suffix}"
+  message_retention_seconds = 1209600 # 14 days
+
+  tags = {
+    Name = "reddit-ingestion-dlq${local.suffix}"
+  }
+}
+
+resource "aws_sqs_queue" "reddit_ingestion" {
+  name                       = "reddit-ingestion-queue${local.suffix}"
+  visibility_timeout_seconds = 300
+  message_retention_seconds  = 1209600
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.reddit_ingestion_dlq.arn
+    maxReceiveCount     = local.worker_max_receive_count
+  })
+
+  tags = {
+    Name = "reddit-ingestion-queue${local.suffix}"
+  }
+}
+
+# =============================================================================
 # YouTube Ingestion
 # =============================================================================
 
@@ -468,6 +497,7 @@ output "queue_urls" {
     podcastindex_resolution = aws_sqs_queue.rss_resolution.url
     article_extraction      = aws_sqs_queue.article_extraction.url
     x_ingestion             = aws_sqs_queue.x_ingestion.url
+    reddit_ingestion        = aws_sqs_queue.reddit_ingestion.url
     web_page_render         = aws_sqs_queue.web_page_render.url
     youtube_ingestion       = aws_sqs_queue.youtube_ingestion.url
     instagram_ingestion     = aws_sqs_queue.instagram_ingestion.url
@@ -489,6 +519,7 @@ output "dlq_arns" {
     podcastindex_resolution = aws_sqs_queue.rss_resolution_dlq.arn
     article_extraction      = aws_sqs_queue.article_extraction_dlq.arn
     x_ingestion             = aws_sqs_queue.x_ingestion_dlq.arn
+    reddit_ingestion        = aws_sqs_queue.reddit_ingestion_dlq.arn
     web_page_render         = aws_sqs_queue.web_page_render_dlq.arn
     youtube_ingestion       = aws_sqs_queue.youtube_ingestion_dlq.arn
     instagram_ingestion     = aws_sqs_queue.instagram_ingestion_dlq.arn

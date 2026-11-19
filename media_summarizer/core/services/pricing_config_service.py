@@ -225,6 +225,14 @@ DEFAULT_PRICING_CONFIG: Dict[str, Any] = {
             "scrape-creators~best-tiktok-transcripts-scraper": {"per_result": "0.001"},
             "apify~instagram-reel-scraper": {"per_result": "0.0026"},
             "apify~instagram-post-scraper": {"per_result": "0.0027"},
+            # Reddit threads (TASK-633), pay-per-event as listed on 2026-11-19:
+            # a start event, then every dataset item (the post and each comment).
+            "kaix~reddit-scraper": {"per_start": "0.00005", "per_item": "0.00002"},
+            "automation-lab~reddit-scraper": {
+                "per_start": "0.003",
+                "per_post": "0.00115",
+                "per_item": "0.00075",
+            },
         },
         # One post read through the X API v2; author and media expansions are not
         # billed (measured 2026-10-28).

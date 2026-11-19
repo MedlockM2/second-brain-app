@@ -54,6 +54,7 @@ _UNSUPPORTED_YOUTUBE_FORMAT_MESSAGE = "Unsupported YouTube URL format."
 _UNSUPPORTED_INSTAGRAM_FORMAT_MESSAGE = "Unsupported Instagram URL format."
 _UNSUPPORTED_X_FORMAT_MESSAGE = "Unsupported X/Twitter URL format."
 _UNSUPPORTED_TIKTOK_FORMAT_MESSAGE = "Unsupported TikTok URL format."
+_UNSUPPORTED_REDDIT_FORMAT_MESSAGE = "Unsupported Reddit URL format."
 _UNSUPPORTED_TIKTOK_PHOTO_MESSAGE = "TikTok photo posts are not supported yet."
 _UNSAFE_URL_FORMAT_MESSAGE = "Unsupported unsafe URL format."
 _BLOCKED_DOMAIN_MESSAGE = "Blocked URL host by safety policy."
@@ -216,6 +217,21 @@ def _is_tiktok_video_path(*, host: str, path: str) -> bool:
     if host in _TIKTOK_SHORT_HOSTS:
         return bool(_path_segments(path))
     return (path.startswith("/@") and "/video/" in path) or path.startswith("/t/")
+
+
+def _is_reddit_thread_path(*, host: str, path: str) -> bool:
+    """A thread, or a share link Reddit resolves to one (TASK-633).
+
+    ``/r/<sub>/comments/<id>/…`` and ``/comments/<id>`` on the Reddit hosts, the
+    app's share links ``/r/<sub>/s/<code>``, and ``redd.it/<id>``. A subreddit,
+    a user page or a search is not a thread.
+    """
+    parts = _path_segments(path)
+    if host == "redd.it":
+        return len(parts) == 1
+    if len(parts) >= 2 and parts[0] == "comments":
+        return True
+    return len(parts) >= 4 and parts[0] == "r" and parts[2] in {"comments", "s"}
 
 
 def _is_x_post_path(path: str) -> bool:
@@ -399,6 +415,15 @@ class RuleBasedUrlClassifier(UrlClassifierPort):
                 media_family=MediaFamily.ARTICLE,
                 source_platform=SourcePlatform.X,
                 resolver_key="x.default",
+            )
+
+        if source_type is MediaSourceType.REDDIT:
+            if not _is_reddit_thread_path(host=host, path=path):
+                raise UnsupportedUrlError(_UNSUPPORTED_REDDIT_FORMAT_MESSAGE)
+            return ClassifiedUrl(
+                media_family=MediaFamily.ARTICLE,
+                source_platform=SourcePlatform.REDDIT,
+                resolver_key="reddit.default",
             )
 
         if source_type is MediaSourceType.TIKTOK:

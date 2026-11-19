@@ -443,6 +443,61 @@ class XPostResolver(ContentResolverPort):
         return resolved
 
 
+class RedditResolver(ContentResolverPort):
+    """Deferred Reddit thread resolver: classifies, never calls a provider (TASK-633).
+
+    Reddit refuses AWS addresses, so a thread is read by an Apify actor in
+    ``reddit_ingestion_worker``, with or without the page the browser extension
+    sent. That page is still read here when it came: it gives the library row its
+    title at once, and it is the text kept if both actors fail. It carries only
+    the comments the page had inserted, which is why it is never the first choice.
+    """
+
+    @property
+    def key(self) -> str:
+        return "reddit.default"
+
+    async def resolve(self, context: ResolveContext) -> ResolvedMedia:
+        page_html = context.command.request.page_html
+        page_thread = None
+        if page_html:
+            from media_summarizer.infrastructure.resolvers.reddit_thread import (
+                read_reddit_thread,
+            )
+
+            page_thread = read_reddit_thread(page_html, url=context.normalized_url)
+        resolved = ResolvedMedia(
+            media_key=context.media_key,
+            normalized_url=context.normalized_url,
+            media_family=MediaFamily.ARTICLE,
+            media_type=MediaType.ARTICLE,
+            source_platform=SourcePlatform.REDDIT,
+            resolver_key=self.key,
+            title=page_thread.title if page_thread else None,
+            creator_name=page_thread.subreddit if page_thread else None,
+            # The worker's last resort, never stored as the text by the request.
+            raw_text=page_thread.markdown if page_thread else None,
+            metadata={
+                "resolver_version": "v1",
+                "extraction_mode": "queued_worker",
+                "source_url": context.normalized_url,
+                "page_thread_available": page_thread is not None,
+            },
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "resolver.completed",
+            "Reddit resolver completed",
+            source_platform=SourcePlatform.REDDIT.value,
+            resolver_key=self.key,
+            media_type=MediaType.ARTICLE.value,
+            fallback_strategy="queued_worker",
+            page_thread_available=page_thread is not None,
+        )
+        return resolved
+
+
 class YouTubeResolver(ContentResolverPort):
     @property
     def key(self) -> str:

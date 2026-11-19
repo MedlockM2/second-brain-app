@@ -60,6 +60,7 @@ locals {
     rss_resolution         = { queue = aws_sqs_queue.rss_resolution.name, dlq = aws_sqs_queue.rss_resolution_dlq.name }
     article_extraction     = { queue = aws_sqs_queue.article_extraction.name, dlq = aws_sqs_queue.article_extraction_dlq.name }
     x_ingestion            = { queue = aws_sqs_queue.x_ingestion.name, dlq = aws_sqs_queue.x_ingestion_dlq.name }
+    reddit_ingestion       = { queue = aws_sqs_queue.reddit_ingestion.name, dlq = aws_sqs_queue.reddit_ingestion_dlq.name }
     web_page_render        = { queue = aws_sqs_queue.web_page_render.name, dlq = aws_sqs_queue.web_page_render_dlq.name }
     youtube_ingestion      = { queue = aws_sqs_queue.youtube_ingestion.name, dlq = aws_sqs_queue.youtube_ingestion_dlq.name }
     instagram_ingestion    = { queue = aws_sqs_queue.instagram_ingestion.name, dlq = aws_sqs_queue.instagram_ingestion_dlq.name }

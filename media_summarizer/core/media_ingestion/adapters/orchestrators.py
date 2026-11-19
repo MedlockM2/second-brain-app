@@ -54,6 +54,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_DEEPGRAM_TRANSCRIPTION_QUEUE = required_env("DEEPGRAM_TRANSCRIPTION_QUEUE")
 DEFAULT_PODCASTINDEX_RESOLUTION_QUEUE = required_env("PODCASTINDEX_RESOLUTION_QUEUE")
 DEFAULT_X_INGESTION_QUEUE = required_env("X_INGESTION_QUEUE")
+DEFAULT_REDDIT_INGESTION_QUEUE = required_env("REDDIT_INGESTION_QUEUE")
 DEFAULT_WEB_PAGE_RENDER_QUEUE = required_env("WEB_PAGE_RENDER_QUEUE")
 DEFAULT_YOUTUBE_INGESTION_QUEUE = required_env("YOUTUBE_INGESTION_QUEUE")
 DEFAULT_TIKTOK_INGESTION_QUEUE = required_env("TIKTOK_INGESTION_QUEUE")
@@ -390,6 +391,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         deepgram_transcription_queue: Optional[str] = None,
         podcastindex_resolution_queue: Optional[str] = None,
         x_ingestion_queue: Optional[str] = None,
+        reddit_ingestion_queue: Optional[str] = None,
         youtube_ingestion_queue: Optional[str] = None,
         tiktok_ingestion_queue: Optional[str] = None,
         instagram_ingestion_queue: Optional[str] = None,
@@ -403,6 +405,9 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             podcastindex_resolution_queue or DEFAULT_PODCASTINDEX_RESOLUTION_QUEUE
         )
         self._x_ingestion_queue = x_ingestion_queue or DEFAULT_X_INGESTION_QUEUE
+        self._reddit_ingestion_queue = (
+            reddit_ingestion_queue or DEFAULT_REDDIT_INGESTION_QUEUE
+        )
         self._youtube_ingestion_queue = (
             youtube_ingestion_queue or DEFAULT_YOUTUBE_INGESTION_QUEUE
         )
@@ -620,6 +625,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             pipeline_enqueued = False
             podcastindex_resolution_enqueued = False
             x_ingestion_enqueued = False
+            reddit_ingestion_enqueued = False
             youtube_ingestion_enqueued = False
             tiktok_ingestion_enqueued = False
             instagram_ingestion_enqueued = False
@@ -949,6 +955,49 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     resolver_key=resolved.resolver_key,
                     source_platform=resolved.source_platform.value,
                 )
+            elif resolved.resolver_key == "reddit.default":
+                # Reddit refuses AWS addresses: an Apify actor reads the thread in
+                # the worker (TASK-633). A page the extension sent is kept aside,
+                # as the text of last resort should both actors fail.
+                job.mark_extracting()
+                await database_async.update_processing_job(job)
+                page_thread_s3_key = None
+                if resolved.raw_text:
+                    page_thread_s3_key = f"{job.id}.reddit-page.md"
+                    await s3.upload_file_object(
+                        bucket=DEFAULT_TRANSCRIPT_BUCKET,
+                        key=page_thread_s3_key,
+                        file_obj=BytesIO(resolved.raw_text.encode("utf-8")),
+                        content_type="text/markdown",
+                        metadata={"job-type": "reddit-page-fallback"},
+                    )
+                await sqs.send_message(
+                    queue_name=self._reddit_ingestion_queue,
+                    message_body={
+                        "job_id": job.id,
+                        "user_id": command.user.user_id,
+                        "user_email": command.user.user_email,
+                        "media_key": resolved.media_key,
+                        "normalized_url": resolved.normalized_url,
+                        "resolver_key": resolved.resolver_key,
+                        "source_platform": resolved.source_platform.value,
+                        "page_thread_s3_key": page_thread_s3_key,
+                    },
+                )
+                pipeline_enqueued = True
+                reddit_ingestion_enqueued = True
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "worker.enqueued",
+                    "Reddit ingestion enqueued",
+                    job_id=job.id,
+                    media_item_id=canonical_media_item_id,
+                    queue=self._reddit_ingestion_queue,
+                    resolver_key=resolved.resolver_key,
+                    source_platform=resolved.source_platform.value,
+                    page_thread_available=page_thread_s3_key is not None,
+                )
             elif resolved.resolver_key == "article.default" and resolved.metadata.get(
                 "web_page_render"
             ):
@@ -1144,7 +1193,9 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     outcome_status
                     if outcome_status != ProcessingLifecycleStatus.PENDING
                     else ProcessingLifecycleStatus.EXTRACTING
-                    if tiktok_ingestion_enqueued or instagram_ingestion_enqueued
+                    if tiktok_ingestion_enqueued
+                    or instagram_ingestion_enqueued
+                    or reddit_ingestion_enqueued
                     else ProcessingLifecycleStatus.PENDING
                 ),
                 media_key=resolved.media_key,
@@ -1155,6 +1206,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     "pipeline_enqueued": pipeline_enqueued,
                     "podcastindex_resolution_enqueued": podcastindex_resolution_enqueued,
                     "x_ingestion_enqueued": x_ingestion_enqueued,
+                    "reddit_ingestion_enqueued": reddit_ingestion_enqueued,
                     "youtube_ingestion_enqueued": youtube_ingestion_enqueued,
                     "tiktok_ingestion_enqueued": tiktok_ingestion_enqueued,
                     "instagram_ingestion_enqueued": instagram_ingestion_enqueued,

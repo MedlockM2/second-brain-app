@@ -49,6 +49,7 @@ usage() {
   echo "  podcastindex-resolution-dlq"
   echo "  article-extraction-dlq"
   echo "  x-ingestion-dlq"
+  echo "  reddit-ingestion-dlq"
   echo "  youtube-ingestion-dlq"
   echo "  instagram-ingestion-dlq"
   echo "  tiktok-ingestion-dlq"

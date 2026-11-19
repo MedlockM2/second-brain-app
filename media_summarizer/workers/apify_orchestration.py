@@ -69,6 +69,7 @@ async def start_run_for_job(
     context: dict[str, Any],
     replace_active_run: bool = False,
     defer_automatic: bool = False,
+    bound_results: int = 1,
 ) -> ApifyRun:
     """Admit, start, persist, and arm one run before the worker invocation returns.
 
@@ -77,7 +78,8 @@ async def start_run_for_job(
     deux temps »). ``replace_active_run`` starts a second run for the same import
     (the YouTube default-track fallback): the first one produced a result nobody
     will read, so its attempt is released at that price, and the new run is a try
-    of its own (rule 6).
+    of its own (rule 6). ``bound_results`` is how many results the run is reserved
+    for: one, except for an actor that returns a whole thread (Reddit, TASK-633).
 
     A run the budget does not admit raises ``ApifyAdapterError`` with the
     refusal's code (``budget_exhausted``, ``item_too_large``,
@@ -98,6 +100,7 @@ async def start_run_for_job(
         kind=kind,
         replace_active_run=replace_active_run,
         defer_automatic=defer_automatic,
+        bound_results=bound_results,
     )
     try:
         run = await apify_adapter.start_actor_run(
@@ -136,13 +139,14 @@ async def _admit_run(
     kind: ApifyActorKind,
     replace_active_run: bool,
     defer_automatic: bool,
+    bound_results: int,
 ) -> BudgetCall:
     actor_id = apify_adapter.configured_actor_id(kind)
     user_id = job.user_id or ""
     operation_id = budget_guard.import_operation_id(job)
 
     def line(ctx: beta_budget.PricingContext) -> Any:
-        return beta_budget.apify_line(ctx, actor_id=actor_id)
+        return beta_budget.apify_line(ctx, actor_id=actor_id, results=bound_results)
 
     try:
         if replace_active_run:

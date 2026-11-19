@@ -590,6 +590,23 @@ Ref: `tiktok_ingestion_worker.py::_mark_job_failed`, `tiktok_ingestion_worker.py
 
 ---
 
+## Reddit
+
+**Source type**: `reddit` (TASK-633)
+**Worker file**: `media_summarizer/workers/reddit_ingestion_worker.py`
+
+Every Reddit link — `/r/<sub>/comments/<id>/…`, `/comments/<id>`, the app's share links `/r/<sub>/s/<code>`, `redd.it/<id>`, on `reddit.com`, `www.` or `old.` — goes through Apify, with or without the page the browser extension sent. Reddit refuses AWS addresses whatever the client, so nothing is downloaded or rendered first.
+
+| Order | Provider | Identifier | Extracts | Key env vars |
+|---|---|---|---|---|
+| 1 | Apify actor | `kaix~reddit-scraper` (`mode: post`, whole thread) | Post and every comment (`depth`, `stickied`, `distinguished`); accepts `redd.it` | `APIFY_REDDIT_API_TOKEN` (runtime secret), `APIFY_REDDIT_PRIMARY_ACTOR_ID` |
+| 2 | Apify actor | `automation-lab~reddit-scraper`, only when 1 fails or returns no post | Post and up to `APIFY_REDDIT_FALLBACK_MAX_COMMENTS` comments; refuses `redd.it`; no pinned/moderator flags | `APIFY_REDDIT_FALLBACK_ACTOR_ID`, `APIFY_REDDIT_FALLBACK_MAX_COMMENTS` |
+| 3 | The page the extension sent | `resolvers/reddit_thread.read_reddit_thread`, kept on S3 by the orchestrator | Post and the comments the page had inserted | — |
+
+Measured on 2026-11-19 on a 269-comment thread: kaix 270 items for 0.0069 USD, automation-lab 263 items for 0.2007 USD. Both texts go through `render_thread` (`## <title>`, context line, post, `## Comments (N of total)`), after `reddit_apify.clean_body`. Each run is settled at the larger of `usageTotalUsd` and its charged events priced at the barème (`provider_tariffs.apify`).
+
+---
+
 ## X (Twitter)
 
 **Source type**: `x`

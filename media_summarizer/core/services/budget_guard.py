@@ -878,6 +878,56 @@ async def settle_collections(user_id: Optional[str], operation_id: Optional[str]
     return settled
 
 
+async def close_apify_collection(
+    user_id: Optional[str],
+    operation_id: Optional[str],
+    *,
+    actor_id: str,
+    cost: MeasuredCost,
+    delivered: bool,
+    content_media_key: Optional[str],
+) -> bool:
+    """Close the open collection of one Apify run at its measured cost. Never raises.
+
+    For an actor billed per item over a whole thread (Reddit, TASK-633), one
+    result is not the price: the worker that read the run settles it at what the
+    run cost when its result reaches the user, or releases it at that cost as
+    operator spend when the run delivered nothing (rule 5). Returns whether an
+    open attempt was found.
+    """
+    if not user_id or not operation_id:
+        return False
+    model = actor_id.strip().replace("/", "~")
+    try:
+        attempts = await beta_budget.list_operation_attempts(user_id, operation_id)
+    except Exception as exc:  # noqa: BLE001 - the backstop releases what this misses
+        log_event(
+            logger,
+            logging.WARNING,
+            "budget_guard.close_apify_collection_failed",
+            "Could not read the collection of an Apify run",
+            user_id=user_id,
+            operation_id=operation_id,
+            error_type=type(exc).__name__,
+        )
+        return False
+    for attempt in attempts:
+        if (
+            attempt.component != Component.COLLECTION.value
+            or not attempt.is_open
+            or attempt.kind != ProviderKind.APIFY.value
+            or attempt.model != model
+        ):
+            continue
+        call = _call(user_id, operation_id, attempt.attempt_id, Component.COLLECTION, content_media_key, attempt.provider)
+        if delivered:
+            await call.settle(cost, metric_source="apify_run_usage")
+        else:
+            await call.release(reason=ReleaseReason.FAILED, operator_cost=cost)
+        return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Synchronous refusals before a processing starts
 # ---------------------------------------------------------------------------

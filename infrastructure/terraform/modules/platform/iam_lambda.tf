@@ -56,6 +56,7 @@ resource "aws_iam_policy" "lambda_worker" {
           aws_sqs_queue.article_extraction.arn,
           aws_sqs_queue.web_page_render.arn,
           aws_sqs_queue.x_ingestion.arn,
+          aws_sqs_queue.reddit_ingestion.arn,
           aws_sqs_queue.youtube_ingestion.arn,
           aws_sqs_queue.tiktok_ingestion.arn,
           aws_sqs_queue.deepgram_transcription.arn,
@@ -233,6 +234,7 @@ resource "aws_iam_policy" "lambda_api" {
           # a browser by the render worker instead.
           aws_sqs_queue.web_page_render.arn,
           aws_sqs_queue.x_ingestion.arn,
+          aws_sqs_queue.reddit_ingestion.arn,
           aws_sqs_queue.youtube_ingestion.arn,
           aws_sqs_queue.tiktok_ingestion.arn,
           aws_sqs_queue.deepgram_transcription.arn,

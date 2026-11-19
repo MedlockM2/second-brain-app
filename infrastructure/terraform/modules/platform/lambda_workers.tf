@@ -33,6 +33,15 @@ locals {
       queue_arn   = aws_sqs_queue.x_ingestion.arn
       handler     = "media_summarizer.workers.lambda_handlers.x_ingestion_handler"
     }
+    # TASK-633. 120 s: a callback reads the whole dataset of a thread (page by
+    # page) and the run's cost before storing it. Under the queue's 300 s
+    # visibility timeout.
+    reddit_ingestion = {
+      memory_size = 512
+      timeout     = 120
+      queue_arn   = aws_sqs_queue.reddit_ingestion.arn
+      handler     = "media_summarizer.workers.lambda_handlers.reddit_ingestion_handler"
+    }
     youtube_ingestion = {
       memory_size = 512
       timeout     = 60
@@ -160,8 +169,16 @@ resource "aws_lambda_function" "worker" {
     variables = merge(
       local.lambda_environment,
       { SQS_MAX_RECEIVE_COUNT = tostring(local.worker_max_receive_count) },
-      contains(["instagram_ingestion", "tiktok_ingestion", "youtube_ingestion"], each.key) ? {
+      contains(["instagram_ingestion", "tiktok_ingestion", "youtube_ingestion", "reddit_ingestion"], each.key) ? {
         APIFY_WEBHOOK_URL = "${aws_apigatewayv2_api.main.api_endpoint}/api/webhooks/apify"
+      } : {},
+      # The two Reddit actors are configuration, not secrets: swapping them is
+      # the remedy when the primary keeps failing (TASK-633). Their token,
+      # APIFY_REDDIT_API_TOKEN, is in the runtime secret like every Apify token.
+      each.key == "reddit_ingestion" ? {
+        APIFY_REDDIT_PRIMARY_ACTOR_ID      = "kaix~reddit-scraper"
+        APIFY_REDDIT_FALLBACK_ACTOR_ID     = "automation-lab~reddit-scraper"
+        APIFY_REDDIT_FALLBACK_MAX_COMMENTS = "1000"
       } : {},
     )
   }

@@ -10,6 +10,7 @@ from media_summarizer.core.media_ingestion.adapters import (
     InstagramResolver,
     PodcastResolver,
     ProcessingJobSubmissionOrchestrator,
+    RedditResolver,
     RuleBasedUrlClassifier,
     SocialVideoResolver,
     TikTokResolver,
@@ -38,6 +39,7 @@ def build_default_resolver_registry(
         [
             PodcastResolver(),
             XPostResolver(),
+            RedditResolver(),
             ArticleResolver(),
             YouTubeResolver(),
             InstagramResolver(),

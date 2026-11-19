@@ -58,6 +58,8 @@ _YOUTUBE_HOSTS = {
 }
 _INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com"}
 _X_HOSTS = {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}
+#: A Reddit thread, and the short host of the share links Reddit gave out (TASK-633).
+_REDDIT_HOSTS = {"reddit.com", "www.reddit.com", "old.reddit.com", "redd.it"}
 _TIKTOK_SHORT_HOSTS = {"vm.tiktok.com", "vt.tiktok.com"}
 _TIKTOK_HOSTS = {
     "tiktok.com",
@@ -101,6 +103,7 @@ class MediaSourceType(str, Enum):
     INSTAGRAM = "instagram"
     TIKTOK = "tiktok"
     X = "x"
+    REDDIT = "reddit"
     SPOTIFY = "spotify"
     APPLE_PODCASTS = "apple_podcasts"
     DEEZER = "deezer"
@@ -116,6 +119,7 @@ PLATFORM_HOSTS: Dict[MediaSourceType, frozenset[str]] = {
     MediaSourceType.INSTAGRAM: frozenset(_INSTAGRAM_HOSTS),
     MediaSourceType.TIKTOK: frozenset(_TIKTOK_HOSTS),
     MediaSourceType.X: frozenset(_X_HOSTS),
+    MediaSourceType.REDDIT: frozenset(_REDDIT_HOSTS),
     MediaSourceType.SPOTIFY: frozenset(_SPOTIFY_HOSTS),
     MediaSourceType.APPLE_PODCASTS: frozenset(_APPLE_PODCASTS_HOSTS),
     MediaSourceType.DEEZER: frozenset(_DEEZER_HOSTS),
@@ -135,6 +139,9 @@ _URL_PRESERVING_SOURCE_TYPES = frozenset(
         MediaSourceType.FEED,
         MediaSourceType.AUDIO_FILE,
         MediaSourceType.WEB_ARTICLE,
+        # A share link (`/r/<sub>/s/<code>`, `redd.it/<id>`) cannot be resolved
+        # from AWS -- Reddit refuses it -- so the URL stays as it was given.
+        MediaSourceType.REDDIT,
     }
 )
 
@@ -233,6 +240,8 @@ def classify_source_type(*, host: str, path: str) -> MediaSourceType:
         return MediaSourceType.X
     if normalized_host in _TIKTOK_HOSTS:
         return MediaSourceType.TIKTOK
+    if normalized_host in _REDDIT_HOSTS:
+        return MediaSourceType.REDDIT
     if _path_looks_like_audio_file(normalized_path):
         return MediaSourceType.AUDIO_FILE
     return MediaSourceType.WEB_ARTICLE
