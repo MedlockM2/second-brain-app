@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "快捷键：{keys}"
   },
+  "linkedAccount": {
+    "message": "已关联账户"
+  },
   "chatWaiting": {
     "message": "处理完成后即可开始对话。"
   }

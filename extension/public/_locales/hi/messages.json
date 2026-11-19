@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "शॉर्टकट: {keys}"
   },
+  "linkedAccount": {
+    "message": "जुड़ा हुआ खाता"
+  },
   "chatWaiting": {
     "message": "प्रोसेसिंग पूरी होने पर बातचीत शुरू होगी।"
   }

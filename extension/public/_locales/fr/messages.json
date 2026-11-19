@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "Raccourci : {keys}"
   },
+  "linkedAccount": {
+    "message": "Compte relié"
+  },
   "chatWaiting": {
     "message": "La discussion s'ouvre une fois le traitement terminé."
   }

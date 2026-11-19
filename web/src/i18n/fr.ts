@@ -82,6 +82,8 @@ export const fr: WebCatalog = {
   "ext.link": "Relier cette extension",
   "ext.linking": "Liaison…",
   "ext.linkedNow": "L'extension de ce navigateur est reliée.",
+  "ext.otherAccount": "L'extension de ce navigateur enregistre dans un autre compte que celui-ci.",
+  "ext.linkHere": "Relier à ce compte",
   "ext.notFound": "L'extension n'a pas répondu. Installez-la dans ce navigateur, ou reliez-la avec un code ci-dessous.",
   "ext.listTitle": "Navigateurs reliés",
   "ext.none": "Aucune extension reliée pour l'instant.",

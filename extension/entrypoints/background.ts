@@ -6,7 +6,7 @@ import { lastFolderId, savePage, saveSelection } from "../lib/api";
 import { readSelection } from "../lib/page";
 import { openPanel } from "../lib/panel";
 import { saveTab } from "../lib/save";
-import { savePairing } from "../lib/session";
+import { linkedAccount, savePairing } from "../lib/session";
 
 /**
  * The service worker. The toolbar button and its shortcut (Alt+S) open the
@@ -76,10 +76,22 @@ export default defineBackground(() => {
    * — the manifest's `externally_connectable` names its origin alone — and the
    * origin is checked again here, as an allow-list on the exact origin, before
    * anything is stored.
+   *
+   * `whoami` (TASK-634) lets My account › Browser extension tell whether this
+   * extension saves into another account than the one signed in on the web. It
+   * answers the account id alone — never a token, never the address — and
+   * `accountId: null` when nothing is linked.
    */
   if (import.meta.env.FIREFOX) return;
 
   browser.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+    if (sender.origin === WEB_APP_ORIGIN && message?.type === "whoami") {
+      void linkedAccount().then(
+        (account) => sendResponse({ ok: true, accountId: account?.id ?? null }),
+        () => sendResponse({ ok: true, accountId: null }),
+      );
+      return true;
+    }
     const valid =
       sender.origin === WEB_APP_ORIGIN &&
       message?.type === "pair" &&

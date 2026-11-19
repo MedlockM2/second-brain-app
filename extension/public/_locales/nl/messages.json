@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "Sneltoets: {keys}"
   },
+  "linkedAccount": {
+    "message": "Gekoppeld account"
+  },
   "chatWaiting": {
     "message": "Het gesprek opent zodra de verwerking klaar is."
   }

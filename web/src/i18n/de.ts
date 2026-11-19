@@ -82,6 +82,8 @@ export const de: WebCatalog = {
   "ext.link": "Diese Erweiterung verknüpfen",
   "ext.linking": "Wird verknüpft…",
   "ext.linkedNow": "Die Erweiterung in diesem Browser ist verknüpft.",
+  "ext.otherAccount": "Die Erweiterung in diesem Browser speichert in einem anderen Konto als diesem.",
+  "ext.linkHere": "Mit diesem Konto verknüpfen",
   "ext.notFound": "Die Erweiterung hat nicht geantwortet. Installiere sie in diesem Browser oder verknüpfe sie unten mit einem Code.",
   "ext.listTitle": "Verknüpfte Browser",
   "ext.none": "Noch keine Erweiterung verknüpft.",

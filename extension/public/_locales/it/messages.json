@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "Scorciatoia: {keys}"
   },
+  "linkedAccount": {
+    "message": "Account collegato"
+  },
   "chatWaiting": {
     "message": "La conversazione si apre al termine dell'elaborazione."
   }

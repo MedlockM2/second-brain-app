@@ -82,6 +82,8 @@ export const es: WebCatalog = {
   "ext.link": "Vincular esta extensión",
   "ext.linking": "Vinculando…",
   "ext.linkedNow": "La extensión de este navegador está vinculada.",
+  "ext.otherAccount": "La extensión de este navegador guarda en otra cuenta distinta de esta.",
+  "ext.linkHere": "Vincular a esta cuenta",
   "ext.notFound": "La extensión no ha respondido. Instálala en este navegador o vincúlala con un código abajo.",
   "ext.listTitle": "Navegadores vinculados",
   "ext.none": "Todavía no hay ninguna extensión vinculada.",

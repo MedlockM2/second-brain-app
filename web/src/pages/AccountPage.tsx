@@ -404,22 +404,41 @@ type ChromeRuntime = {
   lastError?: unknown;
 };
 
-function sendToExtension(id: string, message: unknown): Promise<boolean> {
+/** What one installed extension answers, or `null` when none answers in time. */
+function askExtension(id: string, message: unknown): Promise<{ ok?: boolean; accountId?: string | null } | null> {
   const runtime = (window as unknown as { chrome?: { runtime?: ChromeRuntime } }).chrome?.runtime;
-  if (!runtime?.sendMessage) return Promise.resolve(false);
+  if (!runtime?.sendMessage) return Promise.resolve(null);
   return new Promise((resolve) => {
-    const timer = window.setTimeout(() => resolve(false), 2000);
+    const timer = window.setTimeout(() => resolve(null), 2000);
     try {
       runtime.sendMessage(id, message, (response) => {
         window.clearTimeout(timer);
         // Reading lastError is what tells Chrome the failure was handled.
-        resolve(!runtime.lastError && (response as { ok?: boolean } | undefined)?.ok === true);
+        resolve(runtime.lastError ? null : ((response as { ok?: boolean; accountId?: string | null } | undefined) ?? null));
       });
     } catch {
       window.clearTimeout(timer);
-      resolve(false);
+      resolve(null);
     }
   });
+}
+
+async function sendToExtension(id: string, message: unknown): Promise<boolean> {
+  return (await askExtension(id, message))?.ok === true;
+}
+
+/**
+ * The account the extension in this browser saves into, by id (TASK-634):
+ * `undefined` when no extension answers (none installed, Firefox), `null` when
+ * one answers unlinked. Web and extension sessions stay independent — signing out
+ * here never signs the extension out — so this is how a mismatch shows.
+ */
+async function extensionAccountId(): Promise<string | null | undefined> {
+  for (const id of Config.EXTENSION_IDS) {
+    const answer = await askExtension(id, { type: "whoami" });
+    if (answer?.ok) return typeof answer.accountId === "string" ? answer.accountId : null;
+  }
+  return undefined;
 }
 
 /** "Chrome · macOS": how the list names this browser. */
@@ -432,7 +451,9 @@ function browserLabel(): string {
 
 function ExtensionPane() {
   const { t, tw } = useI18n();
+  const { user } = useSession();
   const [linked, setLinked] = useState<LinkedExtension[] | null>(null);
+  const [otherAccount, setOtherAccount] = useState(false);
   const [linking, setLinking] = useState(false);
   const [outcome, setOutcome] = useState<"linked" | "not-found" | "failed" | null>(null);
   const [code, setCode] = useState<PairingCodeResponse | null>(null);
@@ -447,6 +468,14 @@ function ExtensionPane() {
       .catch(() => { if (active) setFailed(true); });
     return () => { active = false; };
   }, [round]);
+
+  useEffect(() => {
+    let active = true;
+    void extensionAccountId().then((accountId) => {
+      if (active) setOtherAccount(typeof accountId === "string" && !!user && accountId !== user.id);
+    });
+    return () => { active = false; };
+  }, [round, user]);
 
   useEffect(() => {
     if (!code) return;
@@ -523,6 +552,14 @@ function ExtensionPane() {
           </a>
         )}
       </div>
+      {otherAccount && outcome !== "linked" && (
+        <div className="banner-err" role="status" style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span className="grow">{tw("ext.otherAccount")}</span>
+          <button type="button" className="btn tonal" disabled={linking} onClick={() => void link()}>
+            {tw("ext.linkHere")}
+          </button>
+        </div>
+      )}
       {outcome && (
         <p className={outcome === "linked" ? "small subtle" : "banner-err"} role="status" style={{ marginTop: 12 }}>
           {outcome === "linked" ? tw("ext.linkedNow") : outcome === "not-found" ? tw("ext.notFound") : t("common.somethingWentWrong")}

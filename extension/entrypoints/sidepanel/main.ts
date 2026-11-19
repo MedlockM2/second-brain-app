@@ -25,7 +25,7 @@ import { icon, type IconName } from "../../lib/icons";
 import { mediaStage } from "../../lib/media";
 import { onPanelStateChange, type PanelState, panelState } from "../../lib/panel";
 import { retrySave } from "../../lib/save";
-import { linkState, NotLinkedError, signOut } from "../../lib/session";
+import { linkedAccount, linkState, type LinkState, NotLinkedError, signOut } from "../../lib/session";
 import { $, el, note, type Scope, sleep } from "./dom";
 import { mountNotebook, type NotebookView } from "./notebook";
 import { mountReader, type ReaderView } from "./reader";
@@ -78,6 +78,7 @@ function unmount(): void {
 
 async function draw(): Promise<void> {
   const link = await linkState();
+  void drawAccount(link);
   $("pair").hidden = link === "linked";
   $("pair-expired").hidden = link !== "expired";
   const view = $("view");
@@ -93,6 +94,23 @@ async function draw(): Promise<void> {
   unmount();
   foot.replaceChildren();
   view.replaceChildren(...placeholder(state));
+}
+
+/** The account saves go to, from `/api/auth/me`: on screen as long as the extension is linked. */
+async function drawAccount(link: LinkState): Promise<void> {
+  const box = $("account");
+  if (link !== "linked") {
+    box.hidden = true;
+    return;
+  }
+  const account = await linkedAccount().catch((error) => {
+    unlinked(error);
+    return null;
+  });
+  const email = $("account-email");
+  email.textContent = account?.email ?? "";
+  email.title = account?.email ?? "";
+  box.hidden = !account;
 }
 
 function hostOf(url: string): string {

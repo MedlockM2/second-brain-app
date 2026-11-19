@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "Shortcut: {keys}"
   },
+  "linkedAccount": {
+    "message": "Linked account"
+  },
   "chatWaiting": {
     "message": "The chat opens once processing is done."
   }

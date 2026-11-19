@@ -82,6 +82,8 @@ export const it: WebCatalog = {
   "ext.link": "Collega questa estensione",
   "ext.linking": "Collegamento…",
   "ext.linkedNow": "L'estensione di questo browser è collegata.",
+  "ext.otherAccount": "L'estensione di questo browser salva in un account diverso da questo.",
+  "ext.linkHere": "Collega a questo account",
   "ext.notFound": "L'estensione non ha risposto. Installala in questo browser o collegala con un codice qui sotto.",
   "ext.listTitle": "Browser collegati",
   "ext.none": "Nessuna estensione collegata per ora.",

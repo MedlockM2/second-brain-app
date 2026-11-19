@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "ショートカット: {keys}"
   },
+  "linkedAccount": {
+    "message": "連携中のアカウント"
+  },
   "chatWaiting": {
     "message": "処理が完了すると会話を始められます。"
   }

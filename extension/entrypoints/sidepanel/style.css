@@ -16,6 +16,11 @@ h1, h2, h3, h4 { font-family: var(--font-head); }
 .link { display: inline-flex; align-items: center; gap: 5px; text-decoration: none; font-size: 12.5px; font-weight: 600; }
 .link:disabled { opacity: .5; cursor: default; }
 
+/* The linked account: a box of fixed width whatever the address; a long one ends in an ellipsis. */
+.account { box-sizing: border-box; width: calc(100% - 32px); margin: 10px 16px 0; padding: 6px 12px; display: flex; align-items: baseline; gap: 8px; border-radius: 10px; background: var(--surface-container); font-size: 12px; }
+.account-label { flex: none; color: var(--text-muted); font-weight: 600; }
+.account-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); }
+
 /* Header */
 .mh { padding: 14px 16px 10px; }
 .mh-row { display: flex; gap: 12px; align-items: flex-start; }

@@ -8,6 +8,11 @@
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <!-- The account saves go to, always in view while linked (TASK-634). -->
+    <div id="account" class="account" hidden>
+      <span class="account-label" data-msg="linkedAccount"></span>
+      <span id="account-email" class="account-email"></span>
+    </div>
     <div id="banner" class="banner" role="alert" hidden></div>
 
     <section id="pair" class="pairing" hidden>

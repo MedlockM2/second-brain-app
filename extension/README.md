@@ -109,6 +109,25 @@ les jetons et demande de relier l'extension. « Se déconnecter » révoque la l
 par `/api/auth/logout`. Si le réseau empêche la révocation, le panneau affiche une
 erreur et conserve la session pour réessayer ; Mon compte permet aussi de révoquer.
 
+**Compte relié (TASK-634).** La session de l'extension est indépendante de celle de
+l'app web, comme pour 1Password ou Claude in Chrome : se déconnecter du web, ou s'y
+connecter avec un autre compte, ne déconnecte pas l'extension, qui doit pouvoir
+enregistrer l'onglet web fermé. Pour qu'on ne puisse pas enregistrer dans un compte
+sans le savoir :
+
+- le panneau affiche en permanence, tant que l'extension est reliée, l'e-mail du compte
+  relié, lu sur `/api/auth/me` et gardé dans `storage.local`. Il est placé dans un encart
+  de largeur fixe en haut du panneau, hors du menu « … » ; une adresse trop longue
+  finit par des points de suspension et reste lisible en entier au survol (`title`) ;
+- sur Chrome et Edge, Mon compte › Extension navigateur demande à l'extension
+  installée le message externe `whoami` : elle répond l'identifiant du compte relié
+  (ou `null`), jamais un jeton ni une adresse. Si ce n'est pas le compte connecté sur le
+  web, la page le dit et propose « Relier à ce compte », par l'appairage en un clic.
+  Firefox n'a pas `externally_connectable` : seul l'encart du panneau s'y applique ;
+- un ré-appairage révoque d'abord, au mieux, l'ancien grant par `/api/auth/logout`
+  (cinq secondes au plus) : l'ancienne lignée ne reste plus valide ni listée sur
+  l'ancien compte. Un échec réseau n'empêche pas l'appairage.
+
 Le manifeste demande :
 
 | Permission | Justification pour les stores |

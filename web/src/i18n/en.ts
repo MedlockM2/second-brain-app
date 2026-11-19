@@ -88,6 +88,8 @@ export const en = {
   "ext.link": "Link this extension",
   "ext.linking": "Linking…",
   "ext.linkedNow": "The extension in this browser is linked.",
+  "ext.otherAccount": "The extension in this browser saves to another account than this one.",
+  "ext.linkHere": "Link to this account",
   "ext.notFound": "The extension did not answer. Install it in this browser, or link it with a code below.",
   "ext.listTitle": "Linked browsers",
   "ext.none": "No extension linked yet.",

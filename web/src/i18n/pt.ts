@@ -82,6 +82,8 @@ export const pt: WebCatalog = {
   "ext.link": "Associar esta extensão",
   "ext.linking": "A associar…",
   "ext.linkedNow": "A extensão deste navegador está associada.",
+  "ext.otherAccount": "A extensão deste navegador guarda noutra conta que não esta.",
+  "ext.linkHere": "Associar a esta conta",
   "ext.notFound": "A extensão não respondeu. Instale-a neste navegador ou associe-a com um código abaixo.",
   "ext.listTitle": "Navegadores associados",
   "ext.none": "Ainda não há nenhuma extensão associada.",

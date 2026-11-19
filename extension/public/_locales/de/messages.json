@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "Tastenkürzel: {keys}"
   },
+  "linkedAccount": {
+    "message": "Verknüpftes Konto"
+  },
   "chatWaiting": {
     "message": "Das Gespräch ist möglich, sobald die Verarbeitung abgeschlossen ist."
   }

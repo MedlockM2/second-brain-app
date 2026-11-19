@@ -82,6 +82,8 @@ export const zh: WebCatalog = {
   "ext.link": "关联此扩展",
   "ext.linking": "正在关联…",
   "ext.linkedNow": "此浏览器中的扩展已关联。",
+  "ext.otherAccount": "此浏览器中的扩展正在保存到另一个账户，而不是当前账户。",
+  "ext.linkHere": "关联到此账户",
   "ext.notFound": "扩展没有响应。请在此浏览器中安装它，或使用下方的代码关联。",
   "ext.listTitle": "已关联的浏览器",
   "ext.none": "尚未关联任何扩展。",

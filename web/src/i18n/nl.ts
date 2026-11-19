@@ -82,6 +82,8 @@ export const nl: WebCatalog = {
   "ext.link": "Deze extensie koppelen",
   "ext.linking": "Bezig met koppelen…",
   "ext.linkedNow": "De extensie in deze browser is gekoppeld.",
+  "ext.otherAccount": "De extensie in deze browser bewaart in een ander account dan dit.",
+  "ext.linkHere": "Aan dit account koppelen",
   "ext.notFound": "De extensie reageerde niet. Installeer hem in deze browser of koppel hem hieronder met een code.",
   "ext.listTitle": "Gekoppelde browsers",
   "ext.none": "Nog geen extensie gekoppeld.",

@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "Atalho: {keys}"
   },
+  "linkedAccount": {
+    "message": "Conta associada"
+  },
   "chatWaiting": {
     "message": "A conversa abre quando o processamento terminar."
   }

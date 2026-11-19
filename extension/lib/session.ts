@@ -22,8 +22,13 @@ import { API_BASE_URL } from "./config";
 // (a 401), and the side panel learns it from there.
 type StoredRefresh = { token: string };
 type StoredAccess = { token: string; expiresAtMs: number };
+/** The account the grant belongs to, as `/api/auth/me` names it (TASK-634). */
+export type LinkedAccount = { id: string; email: string };
 
 const REFRESH_KEY = "refresh";
+const ACCOUNT_KEY = "account";
+/** A re-pairing waits this long at most for the old grant to be revoked. */
+const REVOKE_TIMEOUT_MS = 5000;
 const EXPIRED_KEY = "expired";
 const ACCESS_KEY = "access";
 /** Obtain a fresh access token this long before it expires. */
@@ -54,19 +59,64 @@ async function readRefresh(): Promise<StoredRefresh | null> {
   return (stored[REFRESH_KEY] as StoredRefresh | undefined) ?? null;
 }
 
-/** Keep the stable grant handed over by pairing, and forget the old session. */
+/**
+ * Keep the stable grant handed over by pairing, and end the old session.
+ *
+ * Linking to another account used to overwrite the previous grant only here:
+ * its lineage stayed valid on the server and listed on the old account. It is
+ * now revoked first, at best — a revocation that fails or takes too long (no
+ * network, the old grant already dead) never stands in the way of the new link.
+ */
 export async function savePairing(refreshToken: string): Promise<void> {
   await prepareStorage();
+  const previous = await readRefresh();
+  if (previous && previous.token !== refreshToken) await revoke(previous.token).catch(() => undefined);
   await browser.storage.local.set({ [REFRESH_KEY]: { token: refreshToken } satisfies StoredRefresh });
-  await browser.storage.local.remove("folderId");
-  await browser.storage.local.remove(EXPIRED_KEY);
+  await browser.storage.local.remove(["folderId", EXPIRED_KEY, ACCOUNT_KEY]);
   await browser.storage.session.remove(ACCESS_KEY);
+}
+
+/** Revoke one grant through /logout, which wants an access token of the same lineage. */
+async function revoke(token: string): Promise<void> {
+  const signal = AbortSignal.timeout(REVOKE_TIMEOUT_MS);
+  const renewed = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: token }),
+    signal,
+  });
+  if (!renewed.ok) return;
+  const body = (await renewed.json()) as { access_token: string; refresh_token: string };
+  await fetch(`${API_BASE_URL}/api/auth/logout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${body.access_token}` },
+    body: JSON.stringify({ refresh_token: body.refresh_token }),
+    signal,
+  });
+}
+
+/** The account this extension saves into: kept from `/api/auth/me`, asked again when unknown. */
+export async function linkedAccount(): Promise<LinkedAccount | null> {
+  if (!(await readRefresh())) return null;
+  const stored = await browser.storage.local.get(ACCOUNT_KEY);
+  const known = stored[ACCOUNT_KEY] as LinkedAccount | undefined;
+  if (known?.id && known.email) return known;
+  const response = await fetch(`${API_BASE_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${await accessToken()}` } });
+  if (response.status === 401) {
+    await forget(true);
+    throw new NotLinkedError();
+  }
+  if (!response.ok) throw await responseError(response);
+  const me = (await response.json()) as { id: string; email: string };
+  const account: LinkedAccount = { id: me.id, email: me.email };
+  await browser.storage.local.set({ [ACCOUNT_KEY]: account });
+  return account;
 }
 
 async function forget(expired: boolean): Promise<void> {
   await browser.storage.local.remove(REFRESH_KEY);
   await browser.storage.session.remove(ACCESS_KEY);
-  await browser.storage.local.remove("folderId");
+  await browser.storage.local.remove(["folderId", ACCOUNT_KEY]);
   if (expired) await browser.storage.local.set({ [EXPIRED_KEY]: true });
   else await browser.storage.local.remove(EXPIRED_KEY);
 }

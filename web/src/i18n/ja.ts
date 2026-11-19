@@ -82,6 +82,8 @@ export const ja: WebCatalog = {
   "ext.link": "この拡張機能を連携",
   "ext.linking": "連携中…",
   "ext.linkedNow": "このブラウザの拡張機能は連携済みです。",
+  "ext.otherAccount": "このブラウザの拡張機能は、このアカウントとは別のアカウントに保存しています。",
+  "ext.linkHere": "このアカウントに連携",
   "ext.notFound": "拡張機能から応答がありません。このブラウザにインストールするか、下のコードで連携してください。",
   "ext.listTitle": "連携済みのブラウザ",
   "ext.none": "連携済みの拡張機能はまだありません。",

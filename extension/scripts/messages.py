@@ -540,6 +540,12 @@ EXTENSION_MESSAGES = {
         "it": "Scorciatoia: {keys}", "pt_PT": "Atalho: {keys}", "nl": "Sneltoets: {keys}", "ja": "ショートカット: {keys}",
         "zh_CN": "快捷键：{keys}", "ar": "الاختصار: {keys}", "hi": "शॉर्टकट: {keys}",
     },
+    # TASK-634: the label of the always-visible box naming the linked account.
+    "linkedAccount": {
+        "en": "Linked account", "fr": "Compte relié", "es": "Cuenta vinculada", "de": "Verknüpftes Konto",
+        "it": "Account collegato", "pt_PT": "Conta associada", "nl": "Gekoppeld account", "ja": "連携中のアカウント",
+        "zh_CN": "已关联账户", "ar": "الحساب المرتبط", "hi": "जुड़ा हुआ खाता",
+    },
     "chatWaiting": {
         "en": "The chat opens once processing is done.", "fr": "La discussion s'ouvre une fois le traitement terminé.",
         "es": "La conversación se abre cuando termina el procesamiento.",

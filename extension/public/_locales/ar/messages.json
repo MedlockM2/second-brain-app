@@ -377,6 +377,9 @@
   "shortcutHint": {
     "message": "الاختصار: {keys}"
   },
+  "linkedAccount": {
+    "message": "الحساب المرتبط"
+  },
   "chatWaiting": {
     "message": "تُفتح المحادثة بعد انتهاء المعالجة."
   }
