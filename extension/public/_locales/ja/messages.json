@@ -93,7 +93,7 @@
     "message": "ネットワークエラーです。接続を確認してもう一度お試しください。"
   },
   "sourceRefused": {
-    "message": "このリンクには対応していません。対応しているリンク：ポッドキャストのエピソード、YouTube・TikTok の動画、Instagram・X の投稿、Web 記事、音声ファイル。"
+    "message": "このリンクには対応していません。対応しているリンク：ポッドキャストのエピソードと番組（Spotify・Apple Podcasts・Deezer・RSS フィード）、YouTube・TikTok の動画、Instagram の投稿とリール、X の投稿、Reddit のスレッド、Web ページ（記事、LinkedIn の投稿など）、音声ファイル。"
   },
   "retry": {
     "message": "再試行"

@@ -93,7 +93,7 @@
     "message": "Erro de rede. Verifique a sua ligação e tente novamente."
   },
   "sourceRefused": {
-    "message": "Esta ligação não é suportada. Ligações suportadas: episódios de podcast, vídeos do YouTube e TikTok, publicações do Instagram e X, artigos web e ficheiros de áudio."
+    "message": "Esta ligação não é suportada. Ligações suportadas: episódios e programas de podcast (Spotify, Apple Podcasts, Deezer, feeds RSS), vídeos do YouTube e TikTok, publicações e reels do Instagram, publicações do X, tópicos do Reddit, páginas web (artigos, publicações do LinkedIn…) e ficheiros de áudio."
   },
   "retry": {
     "message": "Repetir"

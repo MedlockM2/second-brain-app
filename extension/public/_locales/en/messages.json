@@ -93,7 +93,7 @@
     "message": "Network error. Please check your connection and try again."
   },
   "sourceRefused": {
-    "message": "This link isn't supported. Supported links: podcast episodes, YouTube and TikTok videos, Instagram and X posts, web articles, audio files."
+    "message": "This link isn't supported. Supported links: podcast episodes and shows (Spotify, Apple Podcasts, Deezer, RSS feeds), YouTube and TikTok videos, Instagram posts and reels, X posts, Reddit threads, web pages (articles, LinkedIn posts…), audio files."
   },
   "retry": {
     "message": "Retry"

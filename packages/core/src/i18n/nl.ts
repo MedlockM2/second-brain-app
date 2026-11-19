@@ -239,7 +239,7 @@ export const nl: Catalog = {
   "error.artifactNotFound": "Deze gegenereerde inhoud is niet gevonden of niet langer beschikbaar.",
   "error.invalidUrl": "Deze link is ongeldig. Probeer een andere URL.",
   "error.unsupportedUrl":
-    "Deze link wordt niet ondersteund. Ondersteunde links: podcastafleveringen, YouTube- en TikTok-video's, Instagram-, X- en LinkedIn-posts, Reddit-threads, webartikelen en audiobestanden.",
+    "Deze link wordt niet ondersteund. Ondersteunde links: podcastafleveringen en -programma's (Spotify, Apple Podcasts, Deezer, RSS-feeds), YouTube- en TikTok-video's, Instagram-posts en -reels, X-posts, Reddit-threads, webpagina's (artikelen, LinkedIn-posts…) en audiobestanden.",
   "error.validation": "Vul alle verplichte velden in.",
   "error.rateLimited": "Te veel verzoeken. Wacht even en probeer het opnieuw.",
   "error.conflict": "Deze actie botst met bestaande gegevens. Vernieuw en probeer het opnieuw.",

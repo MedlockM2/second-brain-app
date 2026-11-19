@@ -238,7 +238,7 @@ export const ar: Catalog = {
   "error.artifactNotFound": "لم يُعثر على هذا المحتوى المُنشأ أو لم يعد متاحًا.",
   "error.invalidUrl": "هذا الرابط غير صالح. جرّب رابطًا آخر.",
   "error.unsupportedUrl":
-    "هذا الرابط غير مدعوم. الروابط المدعومة: حلقات البودكاست، ومقاطع فيديو YouTube وTikTok، ومنشورات Instagram وX وLinkedIn، وسلاسل Reddit، ومقالات الويب، والملفات الصوتية.",
+    "هذا الرابط غير مدعوم. الروابط المدعومة: حلقات البودكاست وبرامجه (Spotify وApple Podcasts وDeezer وخلاصات RSS)، ومقاطع فيديو YouTube وTikTok، ومنشورات Instagram ومقاطع Reels، ومنشورات X، وسلاسل Reddit، وصفحات الويب (المقالات ومنشورات LinkedIn…)، والملفات الصوتية.",
   "error.validation": "يرجى ملء جميع الحقول المطلوبة.",
   "error.rateLimited": "طلبات كثيرة جدًا. انتظر لحظة ثم حاول مرة أخرى.",
   "error.conflict": "يتعارض هذا الإجراء مع بيانات موجودة. حدّث الصفحة ثم حاول مرة أخرى.",

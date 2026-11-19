@@ -93,7 +93,7 @@
     "message": "Error de red. Comprueba tu conexión e inténtalo de nuevo."
   },
   "sourceRefused": {
-    "message": "Este enlace no es compatible. Enlaces admitidos: episodios de pódcast, vídeos de YouTube y TikTok, publicaciones de Instagram y X, artículos web y archivos de audio."
+    "message": "Este enlace no es compatible. Enlaces admitidos: episodios y programas de pódcast (Spotify, Apple Podcasts, Deezer, feeds RSS), vídeos de YouTube y TikTok, publicaciones y reels de Instagram, publicaciones de X, hilos de Reddit, páginas web (artículos, publicaciones de LinkedIn…) y archivos de audio."
   },
   "retry": {
     "message": "Reintentar"

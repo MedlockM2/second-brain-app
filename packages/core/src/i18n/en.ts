@@ -329,7 +329,7 @@ export const en = {
   "error.artifactNotFound": "This artifact was not found or is no longer available.",
   "error.invalidUrl": "This link is invalid. Please try another URL.",
   "error.unsupportedUrl":
-    "This link isn't supported. Supported links: podcast episodes, YouTube and TikTok videos, Instagram, X and LinkedIn posts, Reddit threads, web articles, audio files.",
+    "This link isn't supported. Supported links: podcast episodes and shows (Spotify, Apple Podcasts, Deezer, RSS feeds), YouTube and TikTok videos, Instagram posts and reels, X posts, Reddit threads, web pages (articles, LinkedIn posts…), audio files.",
   "error.validation": "Please fill in all required fields.",
   "error.rateLimited": "Too many requests. Please wait a moment and try again.",
   "error.conflict":

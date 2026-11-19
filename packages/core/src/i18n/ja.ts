@@ -237,7 +237,7 @@ export const ja: Catalog = {
   "error.artifactNotFound": "この生成コンテンツは見つからないか、すでに利用できません。",
   "error.invalidUrl": "このリンクは無効です。別の URL をお試しください。",
   "error.unsupportedUrl":
-    "このリンクには対応していません。対応しているリンク：ポッドキャストのエピソード、YouTube・TikTok の動画、Instagram・X・LinkedIn の投稿、Reddit のスレッド、Web 記事、音声ファイル。",
+    "このリンクには対応していません。対応しているリンク：ポッドキャストのエピソードと番組（Spotify・Apple Podcasts・Deezer・RSS フィード）、YouTube・TikTok の動画、Instagram の投稿とリール、X の投稿、Reddit のスレッド、Web ページ（記事、LinkedIn の投稿など）、音声ファイル。",
   "error.validation": "必須項目をすべて入力してください。",
   "error.rateLimited": "リクエストが多すぎます。少し待ってからもう一度お試しください。",
   "error.conflict": "この操作は既存のデータと競合します。更新してからもう一度お試しください。",

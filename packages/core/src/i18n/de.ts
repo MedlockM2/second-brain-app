@@ -255,7 +255,7 @@ export const de: Catalog = {
     "Dieser erstellte Inhalt wurde nicht gefunden oder ist nicht mehr verfügbar.",
   "error.invalidUrl": "Dieser Link ist ungültig. Versuche eine andere URL.",
   "error.unsupportedUrl":
-    "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen, YouTube- und TikTok-Videos, Instagram-, X- und LinkedIn-Beiträge, Reddit-Threads, Webartikel und Audiodateien.",
+    "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen und -Sendungen (Spotify, Apple Podcasts, Deezer, RSS-Feeds), YouTube- und TikTok-Videos, Instagram-Beiträge und -Reels, X-Beiträge, Reddit-Threads, Webseiten (Artikel, LinkedIn-Beiträge …) und Audiodateien.",
   "error.validation": "Bitte fülle alle Pflichtfelder aus.",
   "error.rateLimited":
     "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
