@@ -266,7 +266,17 @@ data "aws_iam_policy_document" "gha_deploy" {
     resources = ["arn:aws:ssm:${local.gha_aws_region}:${data.aws_caller_identity.current.account_id}:parameter/deepn/extension/store-state"]
   }
 
-  # Same script: Edge wants certification notes with every submission, holding the
+  # mobile-beta-distribute.yml: whether each platform is still owed a beta
+  # distribution, written by scripts/mobile_beta_distribute.mjs and read first by
+  # the scheduled run, which stops when nothing is owed.
+  statement {
+    sid       = "MobileBetaState"
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter", "ssm:PutParameter"]
+    resources = ["arn:aws:ssm:${local.gha_aws_region}:${data.aws_caller_identity.current.account_id}:parameter/deepn/mobile/beta-state/*"]
+  }
+
+  # deploy-extension.yml: Edge wants certification notes with every submission, holding the
   # `edge` demo account of this secret (scripts/create_review_account.py). Read only;
   # the -?????? suffix is the one Secrets Manager appends to every secret ARN.
   statement {
