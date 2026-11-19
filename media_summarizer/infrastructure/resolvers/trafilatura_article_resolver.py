@@ -45,6 +45,10 @@ from media_summarizer.infrastructure.resolvers.article_markdown import (
     INCOMPLETE_MARKER,
     article_markdown,
 )
+from media_summarizer.infrastructure.resolvers.reddit_thread import (
+    RedditThread,
+    read_reddit_thread,
+)
 from media_summarizer.utils.http_user_agent import BROWSER_USER_AGENT
 from media_summarizer.utils.logging_config import log_event
 
@@ -197,9 +201,15 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
         rendered it -- and the resolver then downloads the page as if no HTML had
         come. Over the size ceiling is ``None`` too: the client must not send it,
         and a truncated document reads badly.
+
+        A Reddit thread is read from its markup before trafilatura, which would
+        keep its longest comment instead of the post (`reddit_thread`, TASK-632).
         """
         if not html or len(html.encode("utf-8")) > self._max_html_bytes:
             return None
+        thread = read_reddit_thread(html, url=url)
+        if thread is not None:
+            return self._reddit_thread(html, url=url, thread=thread)
         try:
             text = extract_clean_text(html)
         except ArticleFetchError:
@@ -220,6 +230,25 @@ class TrafilaturaArticleResolver(ArticleContentFetcherPort):
             paragraph_count=count_paragraphs(text),
             provider=self.provider_name,
             extractor="trafilatura",
+        )
+
+    def _reddit_thread(self, html: str, *, url: str, thread: RedditThread) -> ArticleContent:
+        """The post and loaded comments of a thread; its title and subreddit as identity."""
+        text = normalize_transcript_text(thread.markdown, source="article")
+        _, _, cover_url = extract_page_metadata(html, requested_url=url)
+        return ArticleContent(
+            text=text,
+            requested_url=url,
+            content_type="text/html",
+            title=thread.title,
+            creator_name=select_creator([thread.subreddit], title=thread.title),
+            cover_url=cover_url,
+            language=None,
+            char_count=len(text),
+            word_count=_word_count(text),
+            paragraph_count=count_paragraphs(text),
+            provider=self.provider_name,
+            extractor="reddit_thread",
         )
 
     def _refused_page(self, requested_url: str, error: ArticleFetchError) -> ArticleContent:
