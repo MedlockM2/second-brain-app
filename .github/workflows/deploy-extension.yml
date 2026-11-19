@@ -32,6 +32,10 @@ env:
   AWS_ACCOUNT_ID: "125313707865"
   EXTENSION_API: https://api.dev.deepn.app
   EXTENSION_WEB: https://dev.deepn.app
+  # Read by `wxt prepare`, which `npm ci` runs as postinstall; the packaging step
+  # sets them again from --api/--web.
+  VITE_API_BASE_URL: https://api.dev.deepn.app
+  VITE_WEB_APP_ORIGIN: https://dev.deepn.app
 
 jobs:
   publish:
