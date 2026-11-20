@@ -56,11 +56,14 @@ push to `main`), behind an HTTP API at `POST /webhook`. For every request it:
      submission whose `status` is `finished`, and for the App Store Connect events
      `BUILD_UPLOAD_STATE_UPDATED` and `BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED`
      (iOS);
-   - `mobile-build-watch.yml` for an EAS **build** whose `status` is `errored` (a
-     build payload carries `buildDetailsPageUrl`, a submission
-     `submissionDetailsPageUrl`): the watcher then opens the issue.
+   - `mobile-build-watch.yml` for an EAS build or submission whose `status` is
+     `errored`; the watcher then opens the issue. A build payload carries
+     `buildDetailsPageUrl`, and the watcher lists the errored builds itself. A
+     submission payload carries `submissionDetailsPageUrl`, and its id, platform,
+     build id (`turtleBuildId`), error code and message, and logs URL travel as
+     `submission_*` inputs: no CLI command can read a submission back.
 
-   Anything else (pings, canceled builds, failed submissions) gets 200 and wakes
+   Anything else (pings, canceled builds or submissions) gets 200 and wakes
    nothing;
 3. calls GitHub's `workflow_dispatch` API on that workflow (`ref: main`). A GitHub
    failure is answered 502 so the sender retries.
@@ -2493,20 +2496,24 @@ Two deliberate limits, both documented in the file's header comment:
   Actions mail on — github.com → avatar → **Settings** → **Notifications** →
   **Actions** → **Email**.
 
-#### Submission failures stay uncovered, and why
+#### Submission failures: reported from the webhook
 
-No workflow notices a failed `eas submit`. There is no read-only CLI command for
-a submission: `eas submission:view` does not exist, and `eas submit --latest` is
-not a read — it *creates another submission* (and two overlapping Android
-submissions break each other, see
+There is no read-only CLI command for a submission: `eas submission:view` does
+not exist, and `eas submit --latest` is not a read — it *creates another
+submission* (and two overlapping Android submissions break each other, see
 [Never let two Android submissions overlap](#never-let-two-android-submissions-overlap)).
-Covering them therefore means either the Expo GraphQL API with an
-`expo-session` secret, or an EAS webhook
-(`eas webhook:create --event BUILD|SUBMIT`) — which needs a public HTTPS
-receiver, because Expo POSTs HMAC-SHA1-signed JSON (`expo-signature`) that no
-Slack or Discord webhook accepts as-is. Both were judged too much machinery for
-today's volume. Revisit only if submission failures become a real concern; until
-then a submission is checked by hand or noticed on the store dashboard.
+So the watcher does not look submissions up. Since TASK-635 the
+[webhook relay](#webhook-relay-task-635) receives EAS's `SUBMIT` webhook, and an
+`errored` one dispatches `mobile-build-watch.yml` with the submission's fields as
+inputs. Its `report-errored-submission` job opens one issue per submission id,
+with the error code and message, the logs URL, and the `eas submit --id <build>`
+command that sends the same build again.
+
+Before, such a failure was silent: the build existed, the store never got it, and
+`scripts/mobile_beta_distribute.mjs` read that as "waiting for EAS submission"
+and kept waiting. A failed submission is not retried automatically: most causes
+(version code already used, expired App Store Connect key, Play service account)
+fail the same way until the owner fixes them.
 
 #### Why an issue is labeled `bug` and nothing else
 

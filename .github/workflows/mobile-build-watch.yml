@@ -55,11 +55,15 @@ name: Mobile Build Watch
 # failure emits `::notice::`, and `::error::` is reserved for the broken-check
 # path. Keep it that way.
 #
-# Scope: builds only. Submissions are out — no read-only CLI command exists for
-# one (`eas submission:view` does not exist, and `eas submit --latest` *creates*
-# another submission). The relay above does receive the SUBMIT webhook, so it is
-# the way to close that gap; it is recorded in mobile/MOBILE_CI_CD.md instead of
-# being half-closed here.
+# SUBMISSIONS: no read-only CLI command exists for one (`eas submission:view`
+# does not exist, and `eas submit --latest` *creates* another submission), so
+# this file cannot list them. It does not need to: when EAS posts a SUBMIT
+# webhook with status `errored`, the relay passes the submission's fields as
+# `submission_*` inputs and the `report-errored-submission` job opens one issue
+# per submission id. Such a failure used to be silent: the build exists, the
+# store never got it, and scripts/mobile_beta_distribute.mjs reads that as
+# "waiting for the submission" and retries forever. A dispatch carrying a
+# `submission_id` runs that job only; every other run lists the errored builds.
 # ---------------------------------------------------------------------------
 
 on:
@@ -74,6 +78,38 @@ on:
   # The relay's trigger (an EAS build errored), and the owner's way to run the
   # file by hand: a `schedule` trigger only ever runs on the default branch.
   workflow_dispatch:
+    # Set by the webhook relay for a failed EAS submission (TASK-635). Untrusted
+    # text even though the webhook is signed: read through env, never
+    # interpolated into a script.
+    inputs:
+      submission_id:
+        description: "EAS submission id (relay only; leave empty to list errored builds)"
+        type: string
+        default: ""
+      submission_platform:
+        description: "ios or android"
+        type: string
+        default: ""
+      submission_build_id:
+        description: "EAS build the submission sent (turtleBuildId)"
+        type: string
+        default: ""
+      submission_error_code:
+        description: "submissionInfo.error.errorCode"
+        type: string
+        default: ""
+      submission_error_message:
+        description: "submissionInfo.error.message"
+        type: string
+        default: ""
+      submission_logs_url:
+        description: "submissionInfo.logsUrl"
+        type: string
+        default: ""
+      submission_page_url:
+        description: "submissionDetailsPageUrl"
+        type: string
+        default: ""
 
 # One watcher at a time. Two overlapping runs could each see the same errored
 # build before either had opened its issue, and both would open one.
@@ -122,6 +158,7 @@ env:
 jobs:
   watch-errored-builds:
     name: Surface errored EAS builds
+    if: ${{ !inputs.submission_id }}
     runs-on: ubuntu-latest
     # Nothing here waits on a build: it reads a list and writes issues. A run
     # that has not finished in 10 minutes is hung, and a hung run reports
@@ -379,3 +416,90 @@ jobs:
             echo "\`gh\` call refused (check the job's \`permissions:\` block still grants"
             echo "\`issues: write\`), or a \`bug\` label that no longer exists in the repository."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # A failed EAS submission, reported by the relay with everything the issue needs:
+  # nothing is queried, so this job needs no EXPO_TOKEN and no checkout. Same split
+  # as above: reporting the failure is green, failing to report it is red.
+  report-errored-submission:
+    name: Surface an errored EAS submission
+    if: ${{ inputs.submission_id }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue for the submission unless one exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          PLATFORM: ${{ inputs.submission_platform }}
+          BUILD_ID: ${{ inputs.submission_build_id }}
+          ERROR_CODE: ${{ inputs.submission_error_code }}
+          ERROR_MESSAGE: ${{ inputs.submission_error_message }}
+          LOGS_URL: ${{ inputs.submission_logs_url }}
+          PAGE_URL: ${{ inputs.submission_page_url }}
+        run: |
+          set -euo pipefail
+          # An EAS id is a UUID; anything else is refused before it reaches a
+          # search query or a title.
+          if ! [[ "${SUBMISSION_ID}" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "::error::submission_id is not an EAS id."
+            exit 1
+          fi
+          case "${PLATFORM}" in ios|android) ;; *) PLATFORM="unknown" ;; esac
+          [[ "${BUILD_ID}" =~ ^[0-9a-fA-F-]{36}$ ]] || BUILD_ID=""
+          [[ "${PAGE_URL}" == https://expo.dev/* ]] || PAGE_URL=""
+          [[ "${LOGS_URL}" == https://* ]] || LOGS_URL=""
+
+          # Deduplication keyed on the submission id, both lookups exact, as for builds.
+          SEARCH_HITS=$(gh issue list --repo "${REPO}" --state all --search "${SUBMISSION_ID}" --limit 50 --json title \
+            | jq -r --arg id "${SUBMISSION_ID}" '[.[] | select(.title | contains($id))] | length')
+          KNOWN_HITS=$(gh issue list --repo "${REPO}" --state all --limit 100 --json title \
+            | jq -r --arg id "${SUBMISSION_ID}" '[.[] | select(.title | contains($id))] | length')
+          if (( SEARCH_HITS > 0 || KNOWN_HITS > 0 )); then
+            echo "Submission ${SUBMISSION_ID} already has an issue. Nothing to do."
+            echo "- already reported: \`${SUBMISSION_ID}\` (${PLATFORM})" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          BODY_FILE="${RUNNER_TEMP}/submission-${SUBMISSION_ID}.md"
+          {
+            echo "@MedlockM2 — an EAS submission errored: the build exists, but the store never"
+            echo "received it, so no tester gets it. \`scripts/mobile_beta_distribute.mjs\` reads"
+            echo "this as \"waiting for the submission\" and keeps waiting: this issue is the only signal."
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Submission page | ${PAGE_URL:-unknown} |"
+            echo "| Submission id | \`${SUBMISSION_ID}\` |"
+            echo "| Platform | ${PLATFORM} |"
+            echo "| Build id | \`${BUILD_ID:-unknown}\` |"
+            echo "| Error code | \`${ERROR_CODE:-unknown}\` |"
+            echo "| Logs | ${LOGS_URL:-none} |"
+            echo ""
+            echo "**EAS error message**"
+            echo ""
+            printf '%s\n' "${ERROR_MESSAGE:-no message on the submission}" | sed 's/^/> /'
+            echo ""
+            echo "### What to do"
+            echo ""
+            echo "1. Read the logs above. The recurring causes (Play version code already used,"
+            echo "   expired App Store Connect key, Play service account) are in"
+            echo "   \`mobile/MOBILE_CI_CD.md\` § Troubleshooting."
+            echo "2. Once the cause is fixed, send the same build again:"
+            echo "   \`cd mobile && eas submit --platform ${PLATFORM} --id ${BUILD_ID:-<build id>} --profile internal\`."
+            echo "   A cause that needs a new build (a version code clash) needs a new build instead."
+            echo "3. Close this issue once handled; it is not auto-closed."
+            echo ""
+            echo "---"
+            echo "Opened by \`.github/workflows/mobile-build-watch.yml\` ([run](${GITHUB_SERVER_URL}/${REPO}/actions/runs/${GITHUB_RUN_ID})), dispatched by the mobile store webhook relay."
+          } > "${BODY_FILE}"
+
+          ISSUE_URL=$(gh issue create \
+            --repo "${REPO}" \
+            --title "EAS submission errored: ${PLATFORM} — ${SUBMISSION_ID}" \
+            --body-file "${BODY_FILE}" \
+            --label "bug")
+          echo "::notice title=EAS submission errored::${PLATFORM} submission ${SUBMISSION_ID} errored. Issue: ${ISSUE_URL}"
+          echo "- **opened** ${ISSUE_URL} for submission \`${SUBMISSION_ID}\` (${PLATFORM})" >> "$GITHUB_STEP_SUMMARY"

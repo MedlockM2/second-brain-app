@@ -4,7 +4,7 @@
 # BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED) post here. The function checks
 # the signature, then starts a workflow through GitHub's workflow_dispatch API:
 # mobile-beta-distribute.yml when a build, submission or Apple step finishes,
-# mobile-build-watch.yml when an EAS build errors. This replaces the 30-minute
+# mobile-build-watch.yml when an EAS build or submission errors. This replaces the 30-minute
 # polls of both workflows, which now run once a day as a safety net.
 #
 # Dev root only: the beta CI is a property of the repository, not of an

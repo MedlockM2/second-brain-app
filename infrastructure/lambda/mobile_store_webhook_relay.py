@@ -7,8 +7,11 @@ GitHub to run the workflow concerned:
 - ``mobile-beta-distribute.yml``, for the platform concerned, when an EAS build or
   submission finishes, when Apple finishes processing an upload, and when Apple
   ends the external beta review;
-- ``mobile-build-watch.yml`` when an EAS **build** errors: the build was started
-  with ``--no-wait``, so no job is left to fail, and the watcher opens the issue.
+- ``mobile-build-watch.yml`` when an EAS **build** errors (the build was started
+  with ``--no-wait``, so no job is left to fail) or an EAS **submission** errors
+  (the store never got the build, and the distribution only waits for it). The
+  watcher opens the issue; for a submission, the fields it shows come from this
+  webhook, since EAS has no read-only command for a submission.
 
 Both workflows keep one safety run a day: Google Play sends no webhook when a
 track review ends, and a webhook can be lost.
@@ -66,10 +69,10 @@ def _eas_target(payload: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
     """The workflow an EAS build or submission event wakes, with its inputs.
 
     ``finished`` (build or submission): the distribution, for that platform.
-    ``errored`` on a build (a build payload has ``buildDetailsPageUrl``, a
-    submission ``submissionDetailsPageUrl``): the build watcher, which opens the
-    issue. A failed submission and any ``canceled`` event wake nothing: the
-    watcher reads builds only, and cancelling is the owner's own act.
+    ``errored``: the watcher, which opens the issue. A build payload has
+    ``buildDetailsPageUrl`` and the watcher lists errored builds itself; a
+    submission payload has ``submissionDetailsPageUrl`` and its fields travel as
+    inputs. ``canceled`` wakes nothing: cancelling is the owner's own act.
     """
     status = payload.get("status")
     platform = payload.get("platform")
@@ -77,7 +80,26 @@ def _eas_target(payload: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
         return DISTRIBUTE_WORKFLOW, {"platform": str(platform)}
     if status == "errored" and "buildDetailsPageUrl" in payload:
         return BUILD_WATCH_WORKFLOW, {}
+    if status == "errored" and "submissionDetailsPageUrl" in payload:
+        info = payload.get("submissionInfo")
+        info = info if isinstance(info, dict) else {}
+        error = info.get("error")
+        error = error if isinstance(error, dict) else {}
+        return BUILD_WATCH_WORKFLOW, {
+            "submission_id": _field(payload.get("id")),
+            "submission_platform": _field(platform),
+            "submission_build_id": _field(payload.get("turtleBuildId")),
+            "submission_error_code": _field(error.get("errorCode")),
+            "submission_error_message": _field(error.get("message"), limit=1000),
+            "submission_logs_url": _field(info.get("logsUrl")),
+            "submission_page_url": _field(payload.get("submissionDetailsPageUrl")),
+        }
     return None
+
+
+def _field(value: Any, *, limit: int = 300) -> str:
+    """A webhook value as a workflow input: a string, bounded."""
+    return value.strip()[:limit] if isinstance(value, str) else ""
 
 
 def _asc_target(payload: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
@@ -136,7 +158,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     target = _eas_target(payload) if source == "eas" else _asc_target(payload)
     if target is None:
-        # Pings, canceled builds, failed submissions, events no workflow needs:
+        # Pings, canceled builds or submissions, events no workflow needs:
         # acknowledged so the sender does not retry them.
         print(json.dumps({"event": "ignored", "source": source}))
         return _response(200, "ignored")
@@ -147,6 +169,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         return _response(503, "relay not configured")
     workflow, inputs = target
     status = _dispatch(token, workflow, inputs)
-    print(json.dumps({"event": "dispatched", "source": source, "workflow": workflow, **inputs, "github_status": status}))
+    logged = {key: value for key, value in inputs.items() if key in ("platform", "submission_id", "submission_error_code")}
+    print(json.dumps({"event": "dispatched", "source": source, "workflow": workflow, **logged, "github_status": status}))
     # 204 is GitHub's success. Anything else is answered 502 so the sender retries.
     return _response(202, "dispatched") if status == 204 else _response(502, "dispatch failed")
