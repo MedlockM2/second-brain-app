@@ -493,16 +493,23 @@ jobs:
           # .ApiEndpoint | [0]` picked one non-deterministically: the gate could
           # pass by health-checking a different environment than the one just
           # deployed. The Environment tag is the source of truth.
-          API_ARN=$(aws resourcegroupstaggingapi get-resources \
-            --resource-type-filters apigateway \
-            --tag-filters "Key=Environment,Values=${DEPLOY_ENVIRONMENT}" \
-            --query 'ResourceTagMappingList[].ResourceARN' \
-            --output text \
-            | tr '\t' '\n' \
-            | grep -E '/apis/[^/]+$' \
-            | head -1)
-          test -n "$API_ARN" || { echo "No API Gateway tagged Environment=${DEPLOY_ENVIRONMENT}"; exit 1; }
-          API_ID="${API_ARN##*/}"
+          # The tag alone is not enough either: an environment holds more than one
+          # HTTP API (dev also has the mobile store webhook relay, TASK-635), and
+          # `head -1` once health-checked the relay. Tag and name together are unique.
+          API_ID=""
+          for API_ARN in $(aws resourcegroupstaggingapi get-resources \
+              --resource-type-filters apigateway \
+              --tag-filters "Key=Environment,Values=${DEPLOY_ENVIRONMENT}" \
+              --query 'ResourceTagMappingList[].ResourceARN' \
+              --output text \
+              | tr '\t' '\n' \
+              | grep -E '/apis/[^/]+$'); do
+            if [ "$(aws apigatewayv2 get-api --api-id "${API_ARN##*/}" --query Name --output text)" = "media-summarizer-api-${DEPLOY_ENVIRONMENT}" ]; then
+              API_ID="${API_ARN##*/}"
+              break
+            fi
+          done
+          test -n "$API_ID" || { echo "No API Gateway media-summarizer-api-${DEPLOY_ENVIRONMENT} tagged Environment=${DEPLOY_ENVIRONMENT}"; exit 1; }
           API_ENDPOINT=$(aws apigatewayv2 get-api \
             --api-id "$API_ID" \
             --query 'ApiEndpoint' \
@@ -655,16 +662,24 @@ jobs:
 
       - name: Validate the prod health endpoint
         run: |
-          API_ARN=$(aws resourcegroupstaggingapi get-resources \
-            --resource-type-filters apigateway \
-            --tag-filters "Key=Environment,Values=${DEPLOY_ENVIRONMENT}" \
-            --query 'ResourceTagMappingList[].ResourceARN' \
-            --output text \
-            | tr '\t' '\n' \
-            | grep -E '/apis/[^/]+$' \
-            | head -1)
-          test -n "$API_ARN" || { echo "No API Gateway tagged Environment=${DEPLOY_ENVIRONMENT}"; exit 1; }
-          API_ENDPOINT=$(aws apigatewayv2 get-api --api-id "${API_ARN##*/}" --query ApiEndpoint --output text)
+          # The tag alone is not enough either: an environment holds more than one
+          # HTTP API (dev also has the mobile store webhook relay, TASK-635), and
+          # `head -1` once health-checked the relay. Tag and name together are unique.
+          API_ID=""
+          for API_ARN in $(aws resourcegroupstaggingapi get-resources \
+              --resource-type-filters apigateway \
+              --tag-filters "Key=Environment,Values=${DEPLOY_ENVIRONMENT}" \
+              --query 'ResourceTagMappingList[].ResourceARN' \
+              --output text \
+              | tr '\t' '\n' \
+              | grep -E '/apis/[^/]+$'); do
+            if [ "$(aws apigatewayv2 get-api --api-id "${API_ARN##*/}" --query Name --output text)" = "media-summarizer-api-${DEPLOY_ENVIRONMENT}" ]; then
+              API_ID="${API_ARN##*/}"
+              break
+            fi
+          done
+          test -n "$API_ID" || { echo "No API Gateway media-summarizer-api-${DEPLOY_ENVIRONMENT} tagged Environment=${DEPLOY_ENVIRONMENT}"; exit 1; }
+          API_ENDPOINT=$(aws apigatewayv2 get-api --api-id "$API_ID" --query ApiEndpoint --output text)
           HEALTH_BODY=$(mktemp)
           curl --fail --silent --show-error \
             --retry 5 --retry-all-errors --retry-delay 3 \
