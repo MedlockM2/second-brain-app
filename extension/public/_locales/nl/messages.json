@@ -188,6 +188,12 @@
   "chatSend": {
     "message": "Vraag verzenden"
   },
+  "chatWebSearch": {
+    "message": "Zoeken op het web"
+  },
+  "chatWebSearchHint": {
+    "message": "Als dit aan staat, steunt het volgende antwoord op een zoekopdracht op het web."
+  },
   "chatNew": {
     "message": "Nieuw gesprek"
   },

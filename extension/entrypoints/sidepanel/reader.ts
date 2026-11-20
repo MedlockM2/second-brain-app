@@ -153,7 +153,10 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
 
   const question = el("textarea", { attrs: { rows: "1", placeholder: msg("chatAsk"), "aria-label": msg("chatAsk") } });
   const send = el("button", { className: "send", attrs: { type: "submit", "aria-label": msg("chatSend"), title: msg("chatSend") } }, icon("arrow-up", 18));
-  const composer = el("form", { className: "composer" }, question, send);
+  // Where chat apps put their tools, as in the app: the globe of the web citations, a toggle.
+  const webSearch = el("button", { className: "web-search", attrs: { type: "button", "aria-pressed": "false",
+    "aria-label": msg("chatWebSearch"), title: msg("chatWebSearchHint") } }, icon("globe-outline", 18));
+  const composer = el("form", { className: "composer" }, webSearch, question, send);
 
   let chatGeneration = 0;
   let conversationId: string | null = null;
@@ -161,6 +164,7 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
   let pendingQuestion: string | null = null;
   let webSearching = false;
   let sending = false;
+  let forceWebSearch = false;
   const chatAlive = (run: number) => scope.alive && run === chatGeneration;
 
   function settled(detail: ChatConversationDetail): boolean {
@@ -240,6 +244,9 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     const ready = media !== null && mediaStage(media.status) === "ready";
     question.disabled = !ready;
     send.disabled = !ready || sending;
+    webSearch.disabled = !ready;
+    webSearch.classList.toggle("on", forceWebSearch);
+    webSearch.setAttribute("aria-pressed", String(forceWebSearch));
     composer.classList.toggle("off", !ready);
     if (!chatStatus.classList.contains("error")) {
       chatStatus.textContent = !ready && media && mediaStage(media.status) !== "failed" ? msg("chatWaiting") : "";
@@ -266,7 +273,9 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
       question.value = "";
       fit();
       drawThread();
-      await sendTurn(conversationId, text, crypto.randomUUID());
+      await sendTurn(conversationId, text, crypto.randomUUID(), forceWebSearch);
+      // The globe holds for one question, as in the app.
+      forceWebSearch = false;
       if (chatAlive(run)) void follow(run);
     } catch (error) {
       if (onUnlinked(error) || !chatAlive(run)) return;
@@ -287,6 +296,11 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     event.preventDefault();
     void ask();
   };
+  webSearch.onclick = () => {
+    forceWebSearch = !forceWebSearch;
+    drawComposer();
+    question.focus();
+  };
   question.oninput = fit;
   question.onkeydown = (event) => {
     // Enter sends, Shift+Enter breaks the line; never in the middle of an IME composition.
@@ -301,6 +315,7 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     messages = [];
     pendingQuestion = null;
     webSearching = false;
+    forceWebSearch = false;
     chatStatus.className = "status";
     drawThread();
     drawComposer();

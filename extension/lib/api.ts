@@ -145,9 +145,13 @@ export async function conversation(conversationId: string): Promise<ChatConversa
   return getJson<ChatConversationDetail>(conversationPath(conversationId));
 }
 
-/** The same `clientRequestId` on a retry of one question: the server answers the turn it already made. */
-export async function sendTurn(conversationId: string, question: string, clientRequestId: string): Promise<void> {
-  await expectOk(await authed(`${conversationPath(conversationId)}/turns`, post({ question, client_request_id: clientRequestId })));
+/**
+ * The same `clientRequestId` on a retry of one question: the server answers the turn it already made.
+ * `forceWebSearch` is the composer's globe: the model searches the web before answering.
+ */
+export async function sendTurn(conversationId: string, question: string, clientRequestId: string, forceWebSearch = false): Promise<void> {
+  await expectOk(await authed(`${conversationPath(conversationId)}/turns`,
+    post({ question, client_request_id: clientRequestId, force_web_search: forceWebSearch })));
 }
 
 /** The rescue code: six digits shown by My account, with the account's email. */

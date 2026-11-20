@@ -188,6 +188,12 @@
   "chatSend": {
     "message": "सवाल भेजें"
   },
+  "chatWebSearch": {
+    "message": "वेब पर खोजें"
+  },
+  "chatWebSearchHint": {
+    "message": "चालू होने पर, अगला जवाब वेब खोज पर आधारित होगा।"
+  },
   "chatNew": {
     "message": "नई बातचीत"
   },

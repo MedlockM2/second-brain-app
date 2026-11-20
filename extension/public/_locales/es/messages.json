@@ -188,6 +188,12 @@
   "chatSend": {
     "message": "Enviar la pregunta"
   },
+  "chatWebSearch": {
+    "message": "Buscar en la web"
+  },
+  "chatWebSearchHint": {
+    "message": "Si está activado, la próxima respuesta se basa en una búsqueda web."
+  },
   "chatNew": {
     "message": "Nueva conversación"
   },

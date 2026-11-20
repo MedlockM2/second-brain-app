@@ -188,6 +188,12 @@
   "chatSend": {
     "message": "إرسال السؤال"
   },
+  "chatWebSearch": {
+    "message": "البحث على الويب"
+  },
+  "chatWebSearchHint": {
+    "message": "عند التفعيل، تعتمد الإجابة التالية على بحث على الويب."
+  },
   "chatNew": {
     "message": "محادثة جديدة"
   },

@@ -188,6 +188,12 @@
   "chatSend": {
     "message": "发送问题"
   },
+  "chatWebSearch": {
+    "message": "搜索网络"
+  },
+  "chatWebSearchHint": {
+    "message": "开启后，下一个回答将基于网络搜索。"
+  },
   "chatNew": {
     "message": "新对话"
   },

@@ -113,6 +113,11 @@ button.mrow { cursor: pointer; } button.mrow:hover, button.mrow:focus-visible { 
 .composer { display: flex; gap: 8px; align-items: flex-end; padding: 10px 14px 14px; border-top: 1px solid var(--outline-variant); background: var(--background); }
 .composer textarea { flex: 1; min-height: 42px; max-height: 160px; padding: 10px 16px; border-radius: 21px; resize: none; }
 .composer.off { opacity: .6; }
+.web-search { width: 36px; height: 36px; margin-bottom: 3px; flex: none; border: 0; border-radius: 9999px; background: none; color: var(--text-subtle); cursor: pointer; display: grid; place-items: center; }
+.web-search:hover:not(:disabled) { background: var(--surface-container); }
+.web-search.on { background: var(--web-citation); color: var(--on-web-citation); }
+.web-search:disabled { cursor: default; }
+.web-search:focus-visible { outline: 2px solid var(--text-main); outline-offset: 2px; }
 .send { width: 42px; height: 42px; flex: none; border: 0; border-radius: 50%; background: var(--primary); color: var(--on-primary); cursor: pointer; display: grid; place-items: center; }
 .send:disabled { opacity: .5; cursor: default; }
 .send:focus-visible { outline: 2px solid var(--text-main); outline-offset: 2px; }

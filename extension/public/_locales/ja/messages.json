@@ -188,6 +188,12 @@
   "chatSend": {
     "message": "質問を送信"
   },
+  "chatWebSearch": {
+    "message": "ウェブを検索"
+  },
+  "chatWebSearchHint": {
+    "message": "オンにすると、次の回答はウェブ検索に基づきます。"
+  },
   "chatNew": {
     "message": "新しい会話"
   },

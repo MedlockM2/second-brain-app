@@ -391,6 +391,8 @@ CORE_MESSAGES = {
     "panelChat": "home.discussion",
     "chatAsk": "chat.dock.askMedia",
     "chatSend": "chat.composer.sendA11y",
+    "chatWebSearch": "chat.composer.webSearchA11y",
+    "chatWebSearchHint": "chat.composer.webSearchHint",
     "chatNew": "chat.conversation.newConversation",
     "chatWriting": "chat.a11y.answerStarted",
     "chatSearchingWeb": "chat.thread.searchingWeb",
