@@ -3,12 +3,20 @@
 Run by .github/workflows/deploy-extension.yml after `npm run zip`. For each store,
 the package is compared with the last one that store accepted, by a fingerprint of
 its contents without the manifest's version (a version bump alone is not a change).
-Nothing is sent when they match. When a store still has a submission in review, it
+Nothing is sent when they match.
+
+Versions: the build keeps package.json's placeholder version; this script numbers
+the package when it sends it. A content gets the next patch number the first time
+it is sent (state "release"), and keeps it for every store and retry, so both
+stores show the same number for the same content and numbers have no gaps. A
+content that comes back after a newer one gets a new number: the stores refuse a
+version lower than one they already have. When a store still has a submission in review, it
 is skipped, its fingerprint is left as it was, and it is marked "pending": the next
-push, or the daily run (which builds only when a store is pending), sends
+push, or a scheduled run (which goes on only when a store is pending), sends
 everything that piled up meanwhile.
 
-State: the SSM parameter given by --state ({"chrome": {...}, "edge": {...}}), on dev.
+State: the SSM parameter given by --state, on dev:
+{"release": {"fingerprint", "version"}, "chrome": {...}, "edge": {...}}.
 
 Credentials, from the environment (GitHub secrets):
 - CWS_SERVICE_ACCOUNT_JSON: JSON key of the service account added to the Chrome
@@ -31,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 import zipfile
@@ -70,6 +79,33 @@ def fingerprint(package: Path) -> tuple[str, str]:
     return digest.hexdigest(), version
 
 
+def next_version(state: dict, digest: str) -> str:
+    """The number of this content: the last one sent if it is the same, else the next patch."""
+    release = state.get("release", {})
+    if release.get("fingerprint") == digest:
+        return release["version"]
+    major, minor, patch = (int(part) for part in release.get("version", "1.0.0").split("."))
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def stamp(package: Path, version: str) -> Path:
+    """Copy of the package with this version in its manifest, the other entries untouched."""
+    target = package.with_name(re.sub(r"-\d+\.\d+\.\d+-", f"-{version}-", package.name))
+    if target == package:
+        target = package.with_name(f"{package.stem}-{version}.zip")
+    with zipfile.ZipFile(package) as source, zipfile.ZipFile(target, "w") as copy:
+        for entry in source.infolist():
+            data = source.read(entry)
+            if entry.filename == "manifest.json":
+                data, count = re.subn(
+                    rb'("version"\s*:\s*")[^"]*"', lambda m: m.group(1) + version.encode() + b'"', data, count=1
+                )
+                if count != 1:
+                    raise SystemExit("manifest.json has no version to set")
+            copy.writestr(entry, data)
+    return target
+
+
 def fail(response: requests.Response, what: str) -> None:
     if response.status_code == 401:
         raise SystemExit(f"{what}: 401, credentials refused or expired (Edge API keys last 72 days).")
@@ -91,7 +127,10 @@ def publish_chrome(package: Path) -> str:
 
     status = requests.get(f"{CWS_API}/v2/{name}:fetchStatus", headers=headers, timeout=60)
     fail(status, "Chrome fetchStatus")
-    submitted = (status.json().get("submittedItemRevisionStatus") or {}).get("state")
+    body = status.json()
+    submitted = (body.get("submittedItemRevisionStatus") or {}).get("state")
+    published = (body.get("publishedItemRevisionStatus") or {}).get("state")
+    print(f"Chrome before upload: submitted {submitted}, published {published}")
     if submitted == "PENDING_REVIEW":
         raise Busy("a submission is pending review")
 
@@ -191,9 +230,11 @@ def main() -> None:
     except ssm.exceptions.ParameterNotFound:
         state = {}
 
-    digest, version = fingerprint(args.package)
+    digest, _ = fingerprint(args.package)
+    version = next_version(state, digest)
     summary = [f"Package {version}, fingerprint {digest[:12]}"]
     changed = False
+    package: Path | None = None
     for store in args.store or sorted(PUBLISHERS):
         previous = state.get(store, {})
         if previous.get("fingerprint") == digest:
@@ -202,17 +243,19 @@ def main() -> None:
         if args.dry_run:
             summary.append(f"- {store}: would submit {version} (last: {previous.get('version', 'none')})")
             continue
+        package = package or stamp(args.package, version)
         try:
-            outcome = PUBLISHERS[store](args.package)
+            outcome = PUBLISHERS[store](package)
         except Busy as busy:
-            # Marks the store as owed a submission: the daily run of
-            # deploy-extension.yml builds only when some store carries this mark.
+            # Marks the store as owed a submission: a scheduled run of
+            # deploy-extension.yml goes on only when some store carries this mark.
             if previous.get("pending") != digest:
                 state[store] = {**previous, "pending": digest}
                 changed = True
             summary.append(f"- {store}: skipped, {busy}; retried by the next run")
             continue
         state[store] = {"fingerprint": digest, "version": version, "commit": args.commit, "outcome": outcome}
+        state["release"] = {"fingerprint": digest, "version": version}
         changed = True
         summary.append(f"- {store}: submitted {version} ({outcome})")
 

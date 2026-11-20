@@ -1,8 +1,9 @@
 # Submits the browser extension to the Chrome Web Store and Edge Add-ons when a push
 # to main changed what the extension ships. The package is built against dev (the
-# beta's API and web app), numbered 1.0.<run number>, then
-# extension/scripts/publish_stores.py compares it with what each store last
-# accepted and sends it only where it differs. A store still reviewing an earlier
+# beta's API and web app), then extension/scripts/publish_stores.py compares it
+# with what each store last accepted and sends it only where it differs. That
+# script also numbers it: a new content takes the next patch version, the same
+# content keeps its number on both stores. A store still reviewing an earlier
 # submission is skipped, marked pending, and caught up by the next push or a
 # scheduled run. The store pages (listing, visibility, privacy) are not touched:
 # they stay as set in each dashboard.
@@ -133,20 +134,13 @@ jobs:
             exit 1
           }
 
-      # Stores refuse a version they already have; the run number only grows.
-      - name: Number this build
-        if: env.PACKAGE == ''
-        working-directory: extension
-        run: |
-          npm version "1.0.${{ github.run_number }}" --no-git-tag-version --allow-same-version
-          echo "Version 1.0.${{ github.run_number }}" >> "$GITHUB_STEP_SUMMARY"
-
       - name: Build the distribution package
         if: env.PACKAGE == ''
         working-directory: extension
         run: |
           npm run zip -- --api "$EXTENSION_API" --web "$EXTENSION_WEB"
-          PACKAGE=$(ls "$PWD"/.output/delivery/distribution/*/deepn-extension-1.0.${{ github.run_number }}-chrome.zip)
+          # Built with package.json's placeholder version; publish_stores.py sets the real one.
+          PACKAGE=$(ls "$PWD"/.output/delivery/distribution/*/deepn-extension-*-chrome.zip)
           echo "PACKAGE=$PACKAGE" >> "$GITHUB_ENV"
           echo "BUILT=true" >> "$GITHUB_ENV"
 

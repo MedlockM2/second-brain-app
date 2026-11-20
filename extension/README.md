@@ -209,11 +209,18 @@ La vérification finale sur les deux navigateurs reste à effectuer par l'owner.
 `.github/workflows/deploy-extension.yml` tourne à chaque push sur `main` qui touche
 `extension/**` ou `packages/core/**`. Il vérifie que `_locales` correspond à
 `scripts/messages.py`, construit le paquet de distribution contre dev
-(`https://api.dev.deepn.app`, `https://dev.deepn.app`) en version
-`1.0.<numéro du run>`, puis `scripts/publish_stores.py` le soumet à chaque store
-**seulement si son contenu diffère** de la dernière version que ce store a acceptée.
-L'empreinte ignore le numéro de version ; elle est gardée dans le paramètre SSM dev
-`/deepn/extension/store-state`. Un store qui examine encore une soumission est
+(`https://api.dev.deepn.app`, `https://dev.deepn.app`), puis `scripts/publish_stores.py`
+le soumet à chaque store **seulement si son contenu diffère** de la dernière version
+que ce store a acceptée. L'empreinte ignore le numéro de version ; elle est gardée
+dans le paramètre SSM dev `/deepn/extension/store-state`.
+
+Le numéro est attribué à l'envoi, pas à la construction (le paquet garde la version
+de `package.json`, qui ne sert que d'emplacement) : un contenu jamais envoyé prend le
+numéro suivant (`1.0.9` puis `1.0.10`…), noté sous `release` dans ce paramètre, et le
+garde sur les deux stores et à chaque nouvelle tentative. Les numéros se suivent donc
+sans trou, et un même contenu porte le même numéro sur Chrome et Edge. Un contenu
+qui revient après un plus récent prend un nouveau numéro : les stores refusent une
+version inférieure à celle qu'ils ont déjà. Un store qui examine encore une soumission est
 sauté, sans échec, et marqué « pending » dans ce paramètre ; le push suivant ou un passage planifié rattrape. Ce passage a lieu toutes les 3 heures (TASK-635) : ni le Chrome Web Store ni Edge Add-ons n'envoient de webhook à la fin d'un examen, donc seul un passage planifié peut rattraper, mais un examen dure des heures et chaque minute entamée est facturée une fois le dépôt privé. La distribution beta mobile, elle, est réveillée par un relais de webhooks EAS et App Store Connect (voir `mobile/MOBILE_CI_CD.md`, « Webhook relay ») ; ce relais ne concerne pas l'extension, qui n'a aucun webhook à enregistrer ni token à faire tourner. Un passage planifié ne lit d'abord que ce paramètre et s'arrête en quelques secondes quand aucun store n'est en attente ; sinon il réutilise le paquet que le dernier push a construit (artefact `extension-package`, gardé 90 jours) au lieu de le reconstruire. Fiches, visibilité et déclarations ne
 sont pas touchées : elles restent celles des tableaux de bord.
 
