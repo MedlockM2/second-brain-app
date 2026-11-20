@@ -23,9 +23,18 @@ import { mountFolderPicker } from "../../lib/folderPicker";
 import { localize, msg } from "../../lib/i18n";
 import { icon, type IconName } from "../../lib/icons";
 import { mediaStage } from "../../lib/media";
-import { onPanelStateChange, type PanelState, panelState } from "../../lib/panel";
+import { onPanelStateChange, onSaved, type PanelState, panelState } from "../../lib/panel";
 import { retrySave } from "../../lib/save";
-import { linkedAccount, linkState, type LinkState, NotLinkedError, signOut } from "../../lib/session";
+import {
+  ignoredWebAccount,
+  ignoreWebAccount,
+  linkedAccount,
+  linkState,
+  type LinkState,
+  NotLinkedError,
+  signOut,
+  webAccount,
+} from "../../lib/session";
 import { $, el, note, type Scope, sleep } from "./dom";
 import { mountNotebook, type NotebookView } from "./notebook";
 import { mountReader, type ReaderView } from "./reader";
@@ -57,11 +66,18 @@ localize(document);
 const render = () => (rendering = rendering.then(draw, draw));
 void render();
 void drawBanner();
+void drawWebAccount();
 onPanelStateChange(() => void render());
 onContextFailureChange(() => void drawBanner());
+onSaved(() => void drawWebAccount());
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") void drawWebAccount(); });
+window.addEventListener("focus", () => void drawWebAccount());
 browser.storage.onChanged.addListener((changes, area) => {
   // Linked from the web app, or the link ended: the panel follows.
-  if (area === "local" && ("refresh" in changes || "expired" in changes)) void render();
+  if (area === "local" && ("refresh" in changes || "expired" in changes)) {
+    void render();
+    void drawWebAccount();
+  }
 });
 
 /** A refusal that ends the link sends the whole panel to "link again". */
@@ -112,6 +128,37 @@ async function drawAccount(link: LinkState): Promise<void> {
   email.title = account?.email ?? "";
   box.hidden = !account;
 }
+
+/** Only the last check draws: an earlier answer arriving late must not bring back a banner. */
+let webCheck = 0;
+let webAccountId = "";
+
+/**
+ * Another account signed in on the web (TASK-638): a banner under the linked one,
+ * only when both accounts are known and differ, and the reader has not chosen to
+ * keep this one. Anything unknown — no web session, a failure — shows nothing.
+ */
+async function drawWebAccount(): Promise<void> {
+  const check = ++webCheck;
+  const [link, web, ignored] = await Promise.all([linkState(), webAccount(), ignoredWebAccount()]);
+  const linked = link === "linked" ? await linkedAccount().catch(() => null) : null;
+  if (check !== webCheck) return;
+  const box = $("web-account");
+  const show = Boolean(linked && web && web.id !== linked.id && web.id !== ignored);
+  webAccountId = show && web ? web.id : "";
+  const email = $("web-account-email");
+  email.textContent = show && web ? web.email : "";
+  email.title = email.textContent;
+  box.hidden = !show;
+}
+
+$("web-account-icon").replaceWith(icon("alert-circle-outline", 20));
+// The one-click relink of My account › Browser extension (TASK-634) does the switch.
+$("web-account-switch").onclick = () => void browser.tabs.create({ url: ACCOUNT_EXTENSION_URL });
+$("web-account-keep").onclick = async () => {
+  if (webAccountId) await ignoreWebAccount(webAccountId);
+  $("web-account").hidden = true;
+};
 
 function hostOf(url: string): string {
   try {
@@ -359,6 +406,7 @@ async function drawBanner(): Promise<void> {
         if (save.kind === "link") await savePage(save.url, save.folderId);
         else await saveSelection(save.text, save.url, save.folderId);
         await clearContextFailure();
+        void drawWebAccount();
       } catch (error) {
         if (unlinked(error)) return;
         text.textContent = `${what} ${failureMessage(saveFailure(error))}`;

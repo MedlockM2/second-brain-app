@@ -3,9 +3,10 @@ id: TASK-638
 title: >-
   Prévenir dans le panneau de l'extension quand le compte connecté sur le web
   n'est pas le compte relié
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-20 17:16'
+updated_date: '2026-11-20 17:27'
 labels:
   - extension
   - backend
@@ -83,11 +84,27 @@ Mettre à jour la déclaration des données du Chrome Web Store si besoin : l'ex
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Toute réponse de session web (mode cookie) pose un cookie d'identité HttpOnly, Secure, SameSite=Strict, Path=/api/auth, que le client ne peut pas forger et qui ne permet pas d'appeler l'API ; il est effacé partout où le cookie de rafraîchissement l'est
-- [ ] #2 `GET /api/auth/web-account` lit seulement ce cookie, n'appelle pas Cognito et ne fait tourner aucun jeton, et répond `{account: {id, email}}` ou `{account: null}` avec `Cache-Control: no-store`
-- [ ] #3 Le panneau interroge cette route avec `credentials: "include"` à l'ouverture, au retour de visibilité ou de focus, et après chaque enregistrement, sur Chrome, Edge et Firefox ; tout échec n'affiche rien
-- [ ] #4 Le bandeau décrit dans la description s'affiche sous l'encart du compte relié quand le compte web existe et diffère du compte relié, avec « Passer à ce compte » (ouvre `ACCOUNT_EXTENSION_URL`) et « Garder l'actuel » (retient le compte web ignoré dans `storage.local` ; le bandeau revient quand le compte web change)
-- [ ] #5 Les nouveaux libellés sont dans les 11 catalogues `_locales`, régénérés par `scripts/messages.py`
-- [ ] #6 `extension/README.md` (« Session et permissions ») décrit le cookie d'identité, la route et le bandeau, et la limite au cas où le navigateur n'envoie pas le cookie
-- [ ] #7 `ruff` et `mypy` passent sur le backend modifié ; `npm run typecheck`, `npm run lint`, `npm run build` et `npm run build:firefox` passent dans `extension/`
+- [x] #1 Toute réponse de session web (mode cookie) pose un cookie d'identité HttpOnly, Secure, SameSite=Strict, Path=/api/auth, que le client ne peut pas forger et qui ne permet pas d'appeler l'API ; il est effacé partout où le cookie de rafraîchissement l'est
+- [x] #2 `GET /api/auth/web-account` lit seulement ce cookie, n'appelle pas Cognito et ne fait tourner aucun jeton, et répond `{account: {id, email}}` ou `{account: null}` avec `Cache-Control: no-store`
+- [x] #3 Le panneau interroge cette route avec `credentials: "include"` à l'ouverture, au retour de visibilité ou de focus, et après chaque enregistrement, sur Chrome, Edge et Firefox ; tout échec n'affiche rien
+- [x] #4 Le bandeau décrit dans la description s'affiche sous l'encart du compte relié quand le compte web existe et diffère du compte relié, avec « Passer à ce compte » (ouvre `ACCOUNT_EXTENSION_URL`) et « Garder l'actuel » (retient le compte web ignoré dans `storage.local` ; le bandeau revient quand le compte web change)
+- [x] #5 Les nouveaux libellés sont dans les 11 catalogues `_locales`, régénérés par `scripts/messages.py`
+- [x] #6 `extension/README.md` (« Session et permissions ») décrit le cookie d'identité, la route et le bandeau, et la limite au cas où le navigateur n'envoie pas le cookie
+- [x] #7 `ruff` et `mypy` passent sur le backend modifié ; `npm run typecheck`, `npm run lint`, `npm run build` et `npm run build:firefox` passent dans `extension/`
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-20 — Run séquentiel du backlog (`/process-backlog`).
+
+**Cookie d'identité : la piste préférée, l'ID token Cognito.** `session_response` reçoit `id_token` (passé par `answer_session` depuis `tokens["IdToken"]`) et, en mode cookie, pose `__Secure-web_account` (HttpOnly, Secure, SameSite=Strict, Path=/api/auth, même `max_age` que le cookie de rafraîchissement). Si une réponse de session n'a pas d'ID token, le cookie est effacé, pour ne jamais laisser celui d'un compte précédent. `exchange_code` (OAuth) renvoie désormais aussi `id_token`, que Cognito émet puisque le client web a le scope `openid`. `clear_refresh_cookie` devient `clear_session_cookies` et efface les deux cookies aux deux endroits de `/logout`. Ce cookie est infalsifiable (signature RS256 du pool) et ne sert pas d'accès : `cognito.identity` n'accepte que `token_use=access`.
+
+**Route.** `GET /api/auth/web-account` → `cognito.web_account(cookie)`. Elle vérifie la signature avec les JWKS déjà en cache (`keys()`), l'émetteur, l'audience du client web et `token_use=id`, mais pas l'expiration. Le compte est résolu comme dans `profile` (`custom:app_user_id` sinon `sub`, puis `cognito_sub` doit correspondre), sans GetUser ni rotation. Réponse `{account: {id, email}}` ou `{account: null}`, avec `Cache-Control: no-store`.
+
+**Extension.** Dans `lib/session.ts` : `webAccount()` (`credentials: "include"`, sans bearer, tout échec → null), ainsi que `ignoredWebAccount`/`ignoreWebAccount`, dont la clé est effacée au ré-appairage et à l'oubli de session. Dans `lib/panel.ts` : un signal `savedAt` (`noteSaved`/`onSaved`), émis après un enregistrement par l'icône (`lib/save.ts`) et par le menu contextuel (`background.ts`). Le panneau vérifie à l'ouverture, sur `visibilitychange`, sur `focus`, après chaque enregistrement (et un « Réessayer » du bandeau d'erreur), et quand le lien change. Un compteur ignore les réponses arrivées en retard. Le bandeau ambré (`.warn`, jetons `--warn*` clair et sombre dans `assets/base.css`) est placé sous l'encart du compte relié, avec les styles de la cellule de maquette. 5 nouveaux libellés sont ajoutés dans les 11 catalogues via `scripts/messages.py`. Le README (« Session et permissions ») et la justification de l'hôte de l'API sont mis à jour. La légende de la cellule « Compte différent sur le web » de la maquette `extension_panneau_lateral` est corrigée (cookie, Firefox compris).
+
+**Vérifié** : `ruff` et `mypy` sur `media_summarizer` sont propres. `npm run typecheck`, `lint`, `build` et `build:firefox` passent dans `extension/`.
+
+**Hors de portée de ce run (owner, après le push)** : l'envoi effectif du cookie `SameSite=Strict` avec la requête de l'extension sur Chrome, Edge et Firefox (Total Cookie Protection), avec le scénario A/B/C de la description. Si un navigateur ne l'envoie pas, la route répond `null` et rien ne s'affiche (limite documentée dans le README). Il faut aussi mettre à jour la déclaration des données du Chrome Web Store si besoin.
+<!-- SECTION:NOTES:END -->

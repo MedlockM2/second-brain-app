@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "Verknüpftes Konto"
   },
+  "otherWebAccountTitle": {
+    "message": "Im Web ist ein anderes Konto angemeldet"
+  },
+  "otherWebAccountUsing": {
+    "message": "In Deepn verwendest du"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "Deine Speicherungen landen im oben verknüpften Konto."
+  },
+  "otherWebAccountSwitch": {
+    "message": "Zu diesem Konto wechseln"
+  },
+  "otherWebAccountKeep": {
+    "message": "Aktuelles behalten"
+  },
   "chatWaiting": {
     "message": "Das Gespräch ist möglich, sobald die Verarbeitung abgeschlossen ist."
   }

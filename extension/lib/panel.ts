@@ -17,6 +17,7 @@ export type PanelState =
   | { kind: "notSavable"; title: string | null };
 
 const PANEL_KEY = "panelState";
+const SAVED_KEY = "savedAt";
 
 export async function setPanelState(state: PanelState | null): Promise<void> {
   if (state) await browser.storage.session.set({ [PANEL_KEY]: state });
@@ -30,6 +31,17 @@ export async function panelState(): Promise<PanelState | null> {
 export function onPanelStateChange(listener: (state: PanelState | null) => void): void {
   browser.storage.onChanged.addListener((changes, area) => {
     if (area === "session" && PANEL_KEY in changes) listener((changes[PANEL_KEY].newValue as PanelState | undefined) ?? null);
+  });
+}
+
+/** A save went through, from the icon or the context menu: the panel checks the web account again (TASK-638). */
+export async function noteSaved(): Promise<void> {
+  await browser.storage.session.set({ [SAVED_KEY]: Date.now() });
+}
+
+export function onSaved(listener: () => void): void {
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "session" && SAVED_KEY in changes) listener();
   });
 }
 

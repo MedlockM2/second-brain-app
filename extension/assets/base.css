@@ -8,6 +8,7 @@
   --artifact-summary-tint: #fff3c4; --artifact-summary-ink: #9c7400; --artifact-notes-tint: #e3eee4; --artifact-notes-ink: #3f7048;
   --artifact-flashcards-tint: #f5e1e1; --artifact-flashcards-ink: #9b4a52; --artifact-quiz-tint: #e2e8f4; --artifact-quiz-ink: #46598a;
   --shadow: 0 8px 24px rgba(43, 45, 66, 0.06);
+  --warn: #9c7400; --warn-tint: rgba(255, 203, 5, 0.18); --warn-button: rgba(255, 203, 5, 0.28);
   --font-head: "Plus Jakarta Sans", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
   --font-body: "Inter", ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
   color-scheme: light;
@@ -22,6 +23,7 @@
     --artifact-summary-tint: #3f331a; --artifact-summary-ink: #e2b55a; --artifact-notes-tint: #28392b; --artifact-notes-ink: #93c89a;
     --artifact-flashcards-tint: #472e2f; --artifact-flashcards-ink: #faa4a9; --artifact-quiz-tint: #2a3546; --artifact-quiz-ink: #a9baf4;
     --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --warn: #f0bf2a; --warn-tint: rgba(240, 191, 42, 0.14); --warn-button: rgba(240, 191, 42, 0.24);
     color-scheme: dark;
   }
 }

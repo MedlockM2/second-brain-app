@@ -299,7 +299,7 @@ ${cell("Quiz", quiz, "Le quiz de l'app : une question à la fois, la bonne répo
 ${cell("Changer de dossier", folderOpen, "Le dossier se change sur place : on cherche, ou on crée le dossier tapé. Le choix est retenu pour les enregistrements suivants.")}
 ${cell("Menu « … »", more, "Le raccourci (modifiable dans les réglages du navigateur) et la déconnexion. « Ouvrir dans Deepn » est le bouton à côté.")}
 ${cell("Extension non reliée", unlinked, "Le panneau remplace la popup pour relier l'extension : en un clic depuis Mon compte, ou par code.")}
-${cell("Compte différent sur le web", mismatch, "L'app web dit à l'extension quel compte y est connecté, à chaque ouverture. S'il diffère du compte relié, un bandeau le dit au-dessus de la page. « Passer à ce compte » ouvre Mon compte › Extension navigateur, qui relie l'extension en un clic. « Garder l'actuel » masque le bandeau jusqu'au prochain changement de compte sur le web. Chrome et Edge seulement : Firefox ne permet pas à la page web de parler à l'extension.")}
+${cell("Compte différent sur le web", mismatch, "L'extension lit elle-même, par le cookie de session web, quel compte est connecté sur Deepn : à l'ouverture du panneau, à son retour au premier plan et après chaque enregistrement. S'il diffère du compte relié, un bandeau le dit sous l'encart du compte relié. « Passer à ce compte » ouvre Mon compte › Extension navigateur, qui relie l'extension en un clic. « Garder l'actuel » masque le bandeau jusqu'au prochain changement de compte sur le web. Chrome, Edge et Firefox.")}
 ${cell("Thème sombre", dark, "Les teintes sombres de l'app.")}
 </div>
 </div></body></html>`;

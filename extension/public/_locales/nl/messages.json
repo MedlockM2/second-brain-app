@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "Gekoppeld account"
   },
+  "otherWebAccountTitle": {
+    "message": "Op het web is een ander account aangemeld"
+  },
+  "otherWebAccountUsing": {
+    "message": "Op Deepn gebruik je"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "Wat je bewaart, gaat naar het gekoppelde account hierboven."
+  },
+  "otherWebAccountSwitch": {
+    "message": "Overschakelen naar dit account"
+  },
+  "otherWebAccountKeep": {
+    "message": "Huidige behouden"
+  },
   "chatWaiting": {
     "message": "Het gesprek opent zodra de verwerking klaar is."
   }

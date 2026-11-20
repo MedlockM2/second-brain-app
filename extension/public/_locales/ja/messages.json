@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "連携中のアカウント"
   },
+  "otherWebAccountTitle": {
+    "message": "ウェブで別のアカウントにログインしています"
+  },
+  "otherWebAccountUsing": {
+    "message": "Deepn で使用中のアカウント:"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "保存したものは上の連携中のアカウントに入ります。"
+  },
+  "otherWebAccountSwitch": {
+    "message": "このアカウントに切り替える"
+  },
+  "otherWebAccountKeep": {
+    "message": "今のままにする"
+  },
   "chatWaiting": {
     "message": "処理が完了すると会話を始められます。"
   }

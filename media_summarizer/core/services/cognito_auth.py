@@ -106,6 +106,34 @@ async def identity(access_token: str) -> tuple[dict[str, Any], dict[str, str], s
     return claims, attributes, user["Username"]
 
 
+async def web_account(id_token: str) -> User | None:
+    """The account an ID token of the web client names, or None.
+
+    Only says who it is, never authorizes: the expiry is ignored, as the cookie that
+    carries it lives as long as the refresh token. The signature, issuer, audience and
+    ``token_use`` are checked, so it cannot be forged or taken from another client.
+    The profile is resolved as ``profile`` does, without its GetUser call.
+    """
+    if not id_token:
+        return None
+    try:
+        key = await asyncio.to_thread(keys().get_signing_key_from_jwt, id_token)
+        claims = jwt.decode(
+            id_token,
+            key.key,
+            algorithms=["RS256"],
+            issuer=issuer(),
+            audience=client_id(True),
+            options={"verify_exp": False, "require": ["iss", "sub", "aud", "token_use"]},
+        )
+    except jwt.PyJWTError:
+        return None
+    if claims["token_use"] != "id":
+        return None
+    user = await database_async.get_user_by_id(claims.get("custom:app_user_id") or claims["sub"])
+    return user if user is not None and user.cognito_sub == claims["sub"] else None
+
+
 async def profile(access_token: str, *, provision: bool = False) -> User:
     claims, attributes, username = await identity(access_token)
     subject = claims["sub"]
@@ -233,7 +261,12 @@ async def exchange_code(web: bool, code: str, verifier: str) -> dict[str, Any]:
         if response.status_code != 200:
             raise refuse("INVALID_CREDENTIALS", 401)
         payload = response.json()
-        return {"AccessToken": payload["access_token"], "RefreshToken": payload["refresh_token"], "ExpiresIn": payload["expires_in"]}
+        return {
+            "AccessToken": payload["access_token"],
+            "RefreshToken": payload["refresh_token"],
+            "IdToken": payload.get("id_token"),
+            "ExpiresIn": payload["expires_in"],
+        }
     except (httpx.HTTPError, ValueError, KeyError):
         raise refuse("AUTH_UNAVAILABLE", 503) from None
 

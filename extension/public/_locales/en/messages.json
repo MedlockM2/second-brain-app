@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "Linked account"
   },
+  "otherWebAccountTitle": {
+    "message": "Another account is signed in on the web"
+  },
+  "otherWebAccountUsing": {
+    "message": "On Deepn, you are using"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "Your saves go to the linked account above."
+  },
+  "otherWebAccountSwitch": {
+    "message": "Switch to this account"
+  },
+  "otherWebAccountKeep": {
+    "message": "Keep current"
+  },
   "chatWaiting": {
     "message": "The chat opens once processing is done."
   }

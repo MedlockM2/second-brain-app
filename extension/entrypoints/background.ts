@@ -4,7 +4,7 @@ import { clearContextFailure, type ContextSave, rememberContextFailure } from ".
 import { msg } from "../lib/i18n";
 import { lastFolderId, savePage, saveSelection } from "../lib/api";
 import { readSelection } from "../lib/page";
-import { openPanel } from "../lib/panel";
+import { noteSaved, openPanel } from "../lib/panel";
 import { saveTab } from "../lib/save";
 import { linkedAccount, savePairing } from "../lib/session";
 
@@ -62,6 +62,7 @@ export default defineBackground(() => {
         if (save.kind === "link") await savePage(save.url, save.folderId);
         else await saveSelection(save.text, save.url, save.folderId);
         await clearContextFailure().catch(() => undefined);
+        await noteSaved().catch(() => undefined);
         await flash("✓", "#1c1b1a", 3000);
       } catch (error) {
         // The "!" stays until the side panel shows why, with the same save to send again.

@@ -13,6 +13,20 @@
       <span class="account-label" data-msg="linkedAccount"></span>
       <span id="account-email" class="account-email"></span>
     </div>
+    <!-- Another account signed in on the web (TASK-638). -->
+    <div id="web-account" class="warn" role="alert" hidden>
+      <span id="web-account-icon"></span>
+      <div class="warn-body">
+        <p class="warn-title" data-msg="otherWebAccountTitle"></p>
+        <p data-msg="otherWebAccountUsing"></p>
+        <p id="web-account-email" class="warn-email"></p>
+        <p data-msg="otherWebAccountSavesGo"></p>
+        <div class="warn-actions">
+          <button id="web-account-switch" class="wbtn primary" type="button" data-msg="otherWebAccountSwitch"></button>
+          <button id="web-account-keep" class="wbtn" type="button" data-msg="otherWebAccountKeep"></button>
+        </div>
+      </div>
+    </div>
     <div id="banner" class="banner" role="alert" hidden></div>
 
     <section id="pair" class="pairing" hidden>

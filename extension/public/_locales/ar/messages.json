@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "الحساب المرتبط"
   },
+  "otherWebAccountTitle": {
+    "message": "حساب آخر مسجَّل الدخول على الويب"
+  },
+  "otherWebAccountUsing": {
+    "message": "على Deepn، أنت تستخدم"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "تذهب محفوظاتك إلى الحساب المرتبط أعلاه."
+  },
+  "otherWebAccountSwitch": {
+    "message": "التبديل إلى هذا الحساب"
+  },
+  "otherWebAccountKeep": {
+    "message": "الإبقاء على الحالي"
+  },
   "chatWaiting": {
     "message": "تُفتح المحادثة بعد انتهاء المعالجة."
   }

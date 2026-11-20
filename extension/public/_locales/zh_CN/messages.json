@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "已关联账户"
   },
+  "otherWebAccountTitle": {
+    "message": "网页上登录的是另一个账户"
+  },
+  "otherWebAccountUsing": {
+    "message": "你在 Deepn 上使用的是"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "你保存的内容会进入上方已关联的账户。"
+  },
+  "otherWebAccountSwitch": {
+    "message": "切换到此账户"
+  },
+  "otherWebAccountKeep": {
+    "message": "保留当前账户"
+  },
   "chatWaiting": {
     "message": "处理完成后即可开始对话。"
   }

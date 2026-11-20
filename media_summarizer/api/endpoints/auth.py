@@ -11,7 +11,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from media_summarizer.api.dependencies.auth import get_current_user
-from media_summarizer.api.dependencies.session import clear_refresh_cookie, is_web_session, presented_refresh_token, session_response
+from media_summarizer.api.dependencies.session import (
+    ACCOUNT_COOKIE_NAME,
+    clear_session_cookies,
+    is_web_session,
+    presented_refresh_token,
+    session_response,
+)
 from media_summarizer.core.models.auth import (
     AuthToken,
     AuthUser,
@@ -147,6 +153,7 @@ async def answer_session(request: Request, tokens: dict[str, Any], *, provision:
         refresh_token=tokens["RefreshToken"],
         expires_in=tokens["ExpiresIn"],
         refresh_expires_at=datetime.now(timezone.utc) + timedelta(days=7 if is_web_session(request) else 365),
+        id_token=tokens.get("IdToken"),
         user=AuthUser.from_user(user).model_dump(),
     )
 
@@ -326,7 +333,7 @@ async def refresh_token(request: Request, body: Optional[RefreshRequest] = None)
 async def logout(request: Request, body: Optional[LogoutRequest] = None):
     response = JSONResponse({"status": "signed_out"})
     if is_web_session(request):
-        clear_refresh_cookie(response)
+        clear_session_cookies(response)
     try:
         token = presented_refresh_token(request, body.refresh_token if body else None)
     except HTTPException:
@@ -344,8 +351,20 @@ async def logout(request: Request, body: Optional[LogoutRequest] = None):
             if exc.status_code in (429, 503):
                 response = JSONResponse({"detail": {"error_code": "AUTH_UNAVAILABLE"}}, status_code=503)
                 if is_web_session(request):
-                    clear_refresh_cookie(response)
+                    clear_session_cookies(response)
     return response
+
+
+@router.get("/web-account")
+async def web_account(request: Request):
+    """Who is signed in on the web, for the extension's other-account banner (TASK-638).
+
+    Reads the account cookie alone: no Cognito call, no token rotated. A missing or
+    invalid cookie is no account, never an error, so the extension shows nothing.
+    """
+    user = await cognito.web_account(request.cookies.get(ACCOUNT_COOKIE_NAME, ""))
+    account = {"id": user.id, "email": user.email} if user else None
+    return JSONResponse({"account": account}, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
 
 
 @router.get("/me", response_model=AuthUser)

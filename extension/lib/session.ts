@@ -27,6 +27,8 @@ export type LinkedAccount = { id: string; email: string };
 
 const REFRESH_KEY = "refresh";
 const ACCOUNT_KEY = "account";
+/** The web account the reader chose to keep saving beside ("Keep current", TASK-638). */
+const IGNORED_WEB_ACCOUNT_KEY = "ignoredWebAccount";
 /** A re-pairing waits this long at most for the old grant to be revoked. */
 const REVOKE_TIMEOUT_MS = 5000;
 const EXPIRED_KEY = "expired";
@@ -72,7 +74,7 @@ export async function savePairing(refreshToken: string): Promise<void> {
   const previous = await readRefresh();
   if (previous && previous.token !== refreshToken) await revoke(previous.token).catch(() => undefined);
   await browser.storage.local.set({ [REFRESH_KEY]: { token: refreshToken } satisfies StoredRefresh });
-  await browser.storage.local.remove(["folderId", EXPIRED_KEY, ACCOUNT_KEY]);
+  await browser.storage.local.remove(["folderId", EXPIRED_KEY, ACCOUNT_KEY, IGNORED_WEB_ACCOUNT_KEY]);
   await browser.storage.session.remove(ACCESS_KEY);
 }
 
@@ -113,10 +115,41 @@ export async function linkedAccount(): Promise<LinkedAccount | null> {
   return account;
 }
 
+/**
+ * The account signed in on the web, read from the web session's cookie by
+ * `/api/auth/web-account` (TASK-638) — so on Firefox too, and right even when the
+ * web app has not been opened since the account changed. The extension's own
+ * session is not involved: the request carries no bearer, only the browser's
+ * cookie for the API host, which `host_permissions` already covers.
+ *
+ * Any failure is no account: no network, a browser that does not send the cookie,
+ * a 404 before the API carrying the route is deployed.
+ */
+export async function webAccount(): Promise<LinkedAccount | null> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/web-account`, { credentials: "include", cache: "no-store" });
+    if (!response.ok) return null;
+    const { account } = (await response.json()) as { account?: Partial<LinkedAccount> | null };
+    return account?.id && account.email ? { id: account.id, email: account.email } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function ignoredWebAccount(): Promise<string | null> {
+  const stored = await browser.storage.local.get(IGNORED_WEB_ACCOUNT_KEY);
+  return (stored[IGNORED_WEB_ACCOUNT_KEY] as string | undefined) ?? null;
+}
+
+/** "Keep current": no banner for this web account; another one brings it back. */
+export async function ignoreWebAccount(id: string): Promise<void> {
+  await browser.storage.local.set({ [IGNORED_WEB_ACCOUNT_KEY]: id });
+}
+
 async function forget(expired: boolean): Promise<void> {
   await browser.storage.local.remove(REFRESH_KEY);
   await browser.storage.session.remove(ACCESS_KEY);
-  await browser.storage.local.remove(["folderId", ACCOUNT_KEY]);
+  await browser.storage.local.remove(["folderId", ACCOUNT_KEY, IGNORED_WEB_ACCOUNT_KEY]);
   if (expired) await browser.storage.local.set({ [EXPIRED_KEY]: true });
   else await browser.storage.local.remove(EXPIRED_KEY);
 }

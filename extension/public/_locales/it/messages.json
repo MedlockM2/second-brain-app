@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "Account collegato"
   },
+  "otherWebAccountTitle": {
+    "message": "Sul web è connesso un altro account"
+  },
+  "otherWebAccountUsing": {
+    "message": "Su Deepn stai usando"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "I tuoi salvataggi vanno nell'account collegato qui sopra."
+  },
+  "otherWebAccountSwitch": {
+    "message": "Passa a questo account"
+  },
+  "otherWebAccountKeep": {
+    "message": "Mantieni l'attuale"
+  },
   "chatWaiting": {
     "message": "La conversazione si apre al termine dell'elaborazione."
   }

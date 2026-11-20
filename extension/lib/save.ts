@@ -2,7 +2,7 @@ import { browser, type Browser } from "wxt/browser";
 import { lastFolderId, listFolders, savedItem, savePage } from "./api";
 import { saveFailure } from "./errors";
 import { readPage } from "./page";
-import { setPanelState } from "./panel";
+import { noteSaved, setPanelState } from "./panel";
 import { NotLinkedError, linkState } from "./session";
 
 /**
@@ -31,6 +31,7 @@ async function send(pending: PendingSave): Promise<void> {
     const mediaItemId = await savePage(pending.url, pending.folderId, pending.pageHtml);
     await browser.storage.session.remove(PENDING_KEY);
     await setPanelState({ kind: "media", mediaItemId, url: pending.url, title: pending.title, origin: "saved" });
+    await noteSaved();
   } catch (error) {
     if (error instanceof NotLinkedError) return setPanelState(null);
     await browser.storage.session.set({ [PENDING_KEY]: pending });

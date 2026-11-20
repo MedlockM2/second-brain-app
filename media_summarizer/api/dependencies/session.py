@@ -19,6 +19,11 @@ COOKIE_TRANSPORT = "cookie"
 # and the cookie must only ride on /api/auth requests.
 REFRESH_COOKIE_NAME = "__Secure-refresh_token"
 REFRESH_COOKIE_PATH = "/api/auth"
+# Who is signed in on the web, for the extension's other-account banner (TASK-638):
+# the Cognito ID token of the session. Its signature makes it unforgeable, and the
+# API never accepts it as a bearer (``cognito.identity`` wants ``token_use=access``).
+# It rides with the refresh cookie, on the same path, and lives and dies with it.
+ACCOUNT_COOKIE_NAME = "__Secure-web_account"
 
 
 def is_web_session(request: Request) -> bool:
@@ -37,10 +42,10 @@ def presented_refresh_token(request: Request, body_token: Optional[str]) -> str:
     return token
 
 
-def _set_refresh_cookie(response: JSONResponse, value: str, expires_at: datetime) -> None:
+def _set_session_cookie(response: JSONResponse, name: str, value: str, expires_at: datetime) -> None:
     max_age = max(0, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
     response.set_cookie(
-        key=REFRESH_COOKIE_NAME,
+        key=name,
         value=value,
         max_age=max_age,
         path=REFRESH_COOKIE_PATH,
@@ -50,15 +55,15 @@ def _set_refresh_cookie(response: JSONResponse, value: str, expires_at: datetime
     )
 
 
-def clear_refresh_cookie(response: JSONResponse) -> None:
-    """Drop the refresh cookie; attributes must match the ones it was set with."""
-    response.delete_cookie(
-        key=REFRESH_COOKIE_NAME,
-        path=REFRESH_COOKIE_PATH,
-        secure=True,
-        httponly=True,
-        samesite="strict",
-    )
+def _clear_session_cookie(response: JSONResponse, name: str) -> None:
+    # Attributes must match the ones the cookie was set with.
+    response.delete_cookie(key=name, path=REFRESH_COOKIE_PATH, secure=True, httponly=True, samesite="strict")
+
+
+def clear_session_cookies(response: JSONResponse) -> None:
+    """Drop the refresh cookie and the account cookie that goes with it."""
+    _clear_session_cookie(response, REFRESH_COOKIE_NAME)
+    _clear_session_cookie(response, ACCOUNT_COOKIE_NAME)
 
 
 def session_response(
@@ -69,12 +74,14 @@ def session_response(
     user: Dict[str, Any],
     refresh_token: str,
     refresh_expires_at: datetime,
+    id_token: Optional[str],
     status_code: int = status.HTTP_200_OK,
 ) -> JSONResponse:
     """The answer of every route that opens or rotates a session.
 
     Mobile gets both tokens in the body. Web gets the access token in the body and
-    the refresh token in the cookie, and nothing else.
+    the refresh token in the cookie, and nothing else. The ID token goes beside it,
+    in the account cookie only the extension's other-account check reads.
     """
     body: Union[TokenVerificationResponse, WebSessionResponse]
     if not is_web_session(request):
@@ -85,5 +92,10 @@ def session_response(
         content=body.model_dump(), status_code=status_code, headers={"Cache-Control": "no-store", "Pragma": "no-cache"}
     )
     if is_web_session(request):
-        _set_refresh_cookie(response, refresh_token, refresh_expires_at)
+        _set_session_cookie(response, REFRESH_COOKIE_NAME, refresh_token, refresh_expires_at)
+        # Never leave the previous account's cookie behind a session that has none.
+        if id_token:
+            _set_session_cookie(response, ACCOUNT_COOKIE_NAME, id_token, refresh_expires_at)
+        else:
+            _clear_session_cookie(response, ACCOUNT_COOKIE_NAME)
     return response

@@ -128,6 +128,32 @@ sans le savoir :
   (cinq secondes au plus) : l'ancienne lignée ne reste plus valide ni listée sur
   l'ancien compte. Un échec réseau n'empêche pas l'appairage.
 
+**Autre compte connecté sur le web (TASK-638).** Le panneau prévient lui-même, sur
+Chrome, Edge et Firefox, quand le compte connecté sur le web n'est pas le compte relié :
+
+- à chaque réponse de session web (connexion, OAuth, rafraîchissement), l'API pose à
+  côté du cookie de rafraîchissement un cookie d'identité `__Secure-web_account` :
+  HttpOnly, Secure, `SameSite=Strict`, chemin `/api/auth`, même durée de vie. Il
+  contient l'ID token Cognito de la session : sa signature le rend infalsifiable, et
+  l'API ne l'accepte jamais comme bearer (elle n'accepte que des access tokens). Il est
+  effacé avec le cookie de rafraîchissement à la déconnexion ;
+- `GET /api/auth/web-account` lit ce seul cookie, vérifie la signature, l'émetteur et
+  l'audience du client web (pas l'expiration : il dit qui c'est, il n'autorise rien),
+  n'appelle pas Cognito et ne fait tourner aucun jeton. Elle répond
+  `{ "account": { "id", "email" } }` (identifiant de `/api/auth/me`, e-mail lu en base)
+  ou `{ "account": null }`, en `Cache-Control: no-store` ;
+- le panneau l'appelle avec `credentials: "include"`, sans bearer, à l'ouverture, au
+  retour de visibilité ou de focus, et après chaque enregistrement. Si les deux comptes
+  sont connus et diffèrent, un bandeau ambré sous l'encart du compte relié le dit.
+  « Passer à ce compte » ouvre Mon compte › Extension navigateur, qui relie en un clic ;
+  « Garder l'actuel » retient l'identifiant du compte web dans `storage.local`, et le
+  bandeau ne revient que si le compte web change. Se déconnecter du web n'affiche rien ;
+- **limite** : si le navigateur n'envoie pas le cookie avec la requête de l'extension
+  (`SameSite=Strict` vu depuis l'origine de l'extension, cloisonnement des cookies de
+  Firefox), la route répond `{ "account": null }` et aucun bandeau ne s'affiche. Tout
+  autre échec (réseau, 404 avant le déploiement de l'API) se comporte de même.
+  L'encart du compte relié reste alors le seul signal.
+
 Le manifeste demande :
 
 | Permission | Justification pour les stores |
@@ -137,7 +163,7 @@ Le manifeste demande :
 | `contextMenus` | Proposer au clic droit l'enregistrement de la sélection et d'un lien. |
 | `sidePanel` (Chromium) | Afficher l'aperçu, le résumé et la discussion de la page enregistrée. Firefox utilise `sidebar_action`, sans permission. |
 | `storage` | Garder la session propre à cette extension, le dossier choisi, et le temps de la session du navigateur la page montrée par le panneau et un enregistrement échoué à réessayer. |
-| Hôte exact de l'API | Envoyer les sauvegardes, lire le résumé et la discussion, gérer la session auprès de Deepn. Aucun autre hôte. |
+| Hôte exact de l'API | Envoyer les sauvegardes, lire le résumé et la discussion, gérer la session auprès de Deepn, et savoir quel compte est connecté sur le web (cookie de session de Deepn). Aucun autre hôte. |
 
 `externally_connectable` n'autorise que l'hôte de l'app web. Le service worker
 vérifie en plus `sender.origin` exactement, port compris, avant toute écriture.

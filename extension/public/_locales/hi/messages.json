@@ -386,6 +386,21 @@
   "linkedAccount": {
     "message": "जुड़ा हुआ खाता"
   },
+  "otherWebAccountTitle": {
+    "message": "वेब पर कोई दूसरा खाता साइन इन है"
+  },
+  "otherWebAccountUsing": {
+    "message": "Deepn पर आप इस्तेमाल कर रहे हैं"
+  },
+  "otherWebAccountSavesGo": {
+    "message": "आप जो सहेजते हैं, वह ऊपर जुड़े हुए खाते में जाता है।"
+  },
+  "otherWebAccountSwitch": {
+    "message": "इस खाते पर जाएँ"
+  },
+  "otherWebAccountKeep": {
+    "message": "मौजूदा रखें"
+  },
   "chatWaiting": {
     "message": "प्रोसेसिंग पूरी होने पर बातचीत शुरू होगी।"
   }
