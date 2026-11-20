@@ -83,7 +83,7 @@ const chat = (state) => {
   return `${head}<div class="thread"><div class="q">Quelle pause pour un après-midi de relecture ?</div>${answer}${second}</div>`;
 };
 
-const composer = (disabled = false) => `<div class="composer ${disabled ? "off" : ""}"><span class="field">Interroger cette source…</span><span class="send">${ic("arrow-up", 18)}</span></div>`;
+const composer = (disabled = false) => `<div class="composer ${disabled ? "off" : ""}"><span class="web-search" title="Rechercher sur le web">${ic("globe-outline", 18)}</span><span class="field">Interroger cette source…</span><span class="send">${ic("arrow-up", 18)}</span></div>`;
 
 const panel = (body, { foot = "", cls = "", h = 900 } = {}) =>
   `<div class="frame panel ${cls}" style="height:${h}px">${chromeBar}<div class="pbody">${body}</div>${foot}</div>`;
@@ -154,6 +154,12 @@ const unlinked = panel(`<div class="pad link-pad">
   <span class="btn primary">Ouvrir Mon compte</span>
   <p class="lp small">Ou saisissez le code affiché là-bas, avec l'e-mail de votre compte :</p>
   <span class="input">E-mail de votre compte</span><span class="input">Code à 6 chiffres</span><span class="btn">Relier</span></div>`, { h: 640 });
+const accountBox = `<div class="account"><span class="account-label">Compte relié</span><span class="account-email">camille.martin@gmail.com</span></div>`;
+const otherAccount = `<div class="warn" role="alert">${ic("alert-circle-outline", 20)}<div class="warn-body">
+  <p class="warn-t">Un autre compte est connecté sur le web</p>
+  <p>Sur Deepn, vous utilisez <b class="mail">c.martin@atelier-lumen.fr</b></p><p>Vos enregistrements vont dans le compte relié ci‑dessus.</p>
+  <div class="warn-acts"><span class="wbtn primary">Passer à ce compte</span><span class="wbtn">Garder l'actuel</span></div></div></div>`;
+const mismatch = panel(`${accountBox}${otherAccount}${header()}${tabs("reader")}<div class="pad">${essential()}</div>`, { h: 760 });
 const dark = panel(`${header()}${tabs("reader")}<div class="pad">${essential()}${fullText("closed")}${chat("answered")}</div>`, { foot: composer(), cls: "dark" });
 
 // --- In the browser -------------------------------------------------------------------------------------
@@ -212,6 +218,7 @@ h1.ptitle{font-size:30px;margin:10px 0 6px;letter-spacing:-.4px}.lede{color:#5c6
 .composer{flex:none;display:flex;gap:8px;align-items:center;padding:10px 14px 14px;border-top:1px solid var(--ov);background:var(--background)}
 .field{flex:1;height:42px;border-radius:9999px;background:var(--sc);display:flex;align-items:center;padding:0 16px;color:var(--muted)}
 .send{width:42px;height:42px;border-radius:50%;background:var(--primary);color:#1c1b1a;display:grid;place-items:center}.composer.off{opacity:.5}
+.web-search{flex:none;width:36px;height:36px;border-radius:9999px;display:grid;place-items:center;color:var(--subtle)}
 /* Notebook */
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tile{display:flex;align-items:center;gap:9px;height:48px;padding:0 12px;border-radius:12px;background:var(--tint);color:var(--text);font-weight:600}.tile .ic{color:var(--ink)}
 .f-summary{--tint:var(--st);--ink:var(--si)}.f-notes{--tint:var(--nt);--ink:var(--ni)}.f-flashcards{--tint:var(--ft);--ink:var(--fi)}.f-quiz{--tint:var(--qt);--ink:var(--qi)}
@@ -238,6 +245,11 @@ h1.ptitle{font-size:30px;margin:10px 0 6px;letter-spacing:-.4px}.lede{color:#5c6
 .has-menu .pbody{position:relative}.menu{position:absolute;z-index:2;left:16px;top:122px;width:270px;background:var(--surface);border-radius:14px;box-shadow:0 12px 32px rgba(43,45,66,.18);padding:8px}
 .menu.right{left:auto;right:16px;top:58px;width:230px}.msearch{display:flex;align-items:center;gap:8px;height:38px;padding:0 12px;border-radius:9999px;background:var(--sc);margin-bottom:6px}
 .caret{display:inline-block;width:1.5px;height:16px;background:var(--text);margin-left:-6px}.mrow{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px}.mrow.on{background:var(--sc);font-weight:600}.mrow.create{color:var(--subtle);font-weight:600}.muted-row{color:var(--muted)}
+/* Linked account and another account on the web */
+.account{margin:10px 16px 0;padding:6px 12px;display:flex;align-items:baseline;gap:8px;border-radius:10px;background:var(--sc);font-size:12px}.account-label{flex:none;color:var(--muted);font-weight:600}.account-email{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.warn{display:flex;gap:10px;align-items:flex-start;margin:8px 12px 0;padding:12px 14px 12px 12px;border-radius:12px;background:rgba(255,203,5,.18);color:var(--text);font-size:13px}.warn>.ic{color:#9c7400;margin-top:1px}.dark .warn>.ic{color:var(--primary)}
+.warn-body{flex:1;min-width:0}.warn-body p{margin:0 0 6px;overflow-wrap:anywhere}.warn-t{font-weight:650}.mail{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}.warn-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.wbtn{display:inline-flex;align-items:center;max-width:100%;height:32px;padding:0 12px;border-radius:9999px;background:rgba(255,203,5,.28);font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.wbtn.primary{background:var(--primary);color:#1c1b1a}
 /* Unlinked */
 .link-pad{padding:36px 22px;text-align:center}.lt{font:650 18px/1.3 "Plus Jakarta Sans",-apple-system,system-ui,sans-serif;margin:16px 0 8px}.lp{color:var(--subtle);margin:0 0 6px}.lp.small{font-size:12.5px;margin-top:22px;color:var(--muted)}
 .input{display:flex;align-items:center;height:42px;border-radius:9999px;background:var(--sc);padding:0 16px;color:var(--muted);margin-top:8px;text-align:left}
@@ -287,6 +299,7 @@ ${cell("Quiz", quiz, "Le quiz de l'app : une question à la fois, la bonne répo
 ${cell("Changer de dossier", folderOpen, "Le dossier se change sur place : on cherche, ou on crée le dossier tapé. Le choix est retenu pour les enregistrements suivants.")}
 ${cell("Menu « … »", more, "Le raccourci (modifiable dans les réglages du navigateur) et la déconnexion. « Ouvrir dans Deepn » est le bouton à côté.")}
 ${cell("Extension non reliée", unlinked, "Le panneau remplace la popup pour relier l'extension : en un clic depuis Mon compte, ou par code.")}
+${cell("Compte différent sur le web", mismatch, "L'app web dit à l'extension quel compte y est connecté, à chaque ouverture. S'il diffère du compte relié, un bandeau le dit au-dessus de la page. « Passer à ce compte » ouvre Mon compte › Extension navigateur, qui relie l'extension en un clic. « Garder l'actuel » masque le bandeau jusqu'au prochain changement de compte sur le web. Chrome et Edge seulement : Firefox ne permet pas à la page web de parler à l'extension.")}
 ${cell("Thème sombre", dark, "Les teintes sombres de l'app.")}
 </div>
 </div></body></html>`;
