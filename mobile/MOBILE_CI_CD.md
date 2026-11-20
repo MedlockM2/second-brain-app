@@ -99,10 +99,8 @@ the Terraform output `mobile_store_webhook_relay_url`.
 
 **Rotating the GitHub token** (fine-grained tokens expire): create the new token,
 `put-secret-value` the JSON with the new `github_token` and the two unchanged
-secrets, then revoke the old token. The relay reads the secret once per cold start,
-so a running instance may keep the old token for a few minutes; revoke it after a
-quarter of an hour, or run `aws lambda update-function-configuration` on the
-function to force a cold start. **Rotating a webhook secret**: change it in
+secrets, then revoke the old token. The relay re-reads the secret at most every
+5 minutes, so revoke the old token after a quarter of an hour. **Rotating a webhook secret**: change it in
 Secrets Manager and in EAS (`eas webhook:update`) or App Store Connect at the same
 time; deliveries signed with the old secret in between are refused with 401 and
 retried by the sender.

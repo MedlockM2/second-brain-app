@@ -18,7 +18,9 @@ track review ends, and a webhook can be lost.
 
 Every request is authenticated before anything else happens: an unsigned or badly
 signed body is refused with 401 and never reaches GitHub. The GitHub token and both
-webhook secrets come from one Secrets Manager secret, read once per cold start.
+webhook secrets come from one Secrets Manager secret, re-read at most every
+``SECRET_TTL_SECONDS``: a warm instance picks up a filled-in or rotated secret
+within minutes instead of keeping the value it started with.
 
 Entry point: an API Gateway HTTP API (payload format 2.0), see
 infrastructure/terraform/envs/dev/mobile_store_webhook_relay.tf.
@@ -28,6 +30,7 @@ import base64
 import hmac
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -43,14 +46,18 @@ REF = os.environ.get("GITHUB_REF", "main")
 # App Store Connect events that change what the distribution script can do next.
 ASC_EVENTS = {"buildUploadStateUpdated", "buildBetaDetailExternalBuildStateUpdated"}
 
-_secrets: dict[str, str] | None = None
+SECRET_TTL_SECONDS = 300
+
+_secrets: dict[str, str] = {}
+_secrets_read_at = 0.0
 
 
 def _load_secrets() -> dict[str, str]:
-    global _secrets
-    if _secrets is None:
+    global _secrets, _secrets_read_at
+    if not _secrets_read_at or time.monotonic() - _secrets_read_at > SECRET_TTL_SECONDS:
         value = boto3.client("secretsmanager").get_secret_value(SecretId=SECRET_ID)["SecretString"]
         _secrets = {k: v for k, v in json.loads(value).items() if isinstance(v, str)}
+        _secrets_read_at = time.monotonic()
     return _secrets
 
 
