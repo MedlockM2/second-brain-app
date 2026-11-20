@@ -12,7 +12,7 @@ signed body is refused with 401 and never reaches GitHub. The GitHub token and b
 webhook secrets come from one Secrets Manager secret, read once per cold start.
 
 Entry point: an API Gateway HTTP API (payload format 2.0), see
-infrastructure/terraform/envs/dev/mobile_beta_relay.tf.
+infrastructure/terraform/envs/dev/mobile_store_webhook_relay.tf.
 """
 
 import base64
@@ -81,7 +81,7 @@ def _dispatch(token: str, platform: str) -> int:
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
             "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "mobile-beta-relay",
+            "User-Agent": "mobile-store-webhook-relay",
         },
     )
     try:

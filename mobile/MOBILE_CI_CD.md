@@ -43,8 +43,8 @@ a build, and manual ones, always go through.
 
 #### Webhook relay (TASK-635)
 
-`infrastructure/lambda/mobile_beta_relay.py`, deployed in dev by
-`infrastructure/terraform/envs/dev/mobile_beta_relay.tf` (Terraform Dev workflow, on
+`infrastructure/lambda/mobile_store_webhook_relay.py`, deployed in dev by
+`infrastructure/terraform/envs/dev/mobile_store_webhook_relay.tf` (Terraform Dev workflow, on
 push to `main`), behind an HTTP API at `POST /webhook`. For every request it:
 
 1. checks the signature before anything else and answers 401 when it is absent or
@@ -60,7 +60,7 @@ push to `main`), behind an HTTP API at `POST /webhook`. For every request it:
    main`). A GitHub failure is answered 502 so the sender retries.
 
 Its three values live in the Secrets Manager secret
-`media-summarizer-mobile-beta-relay-dev` (dev account), which Terraform creates
+`media-summarizer-mobile-store-webhook-relay-dev` (dev account), which Terraform creates
 empty and never overwrites:
 
 ```json
@@ -68,7 +68,7 @@ empty and never overwrites:
 ```
 
 Until it is filled, every request fails the signature check. The webhook URL is
-the Terraform output `mobile_beta_relay_webhook_url`.
+the Terraform output `mobile_store_webhook_relay_url`.
 
 **One-time setup (owner):**
 
@@ -76,7 +76,7 @@ the Terraform output `mobile_beta_relay_webhook_url`.
    this repository, permission **Actions: Read and write**, nothing else.
 2. Pick two random webhook secrets (`openssl rand -hex 32`, twice).
 3. Store the three values:
-   `AWS_PROFILE=second-brain-app aws secretsmanager put-secret-value --secret-id media-summarizer-mobile-beta-relay-dev --secret-string file://relay.json`
+   `AWS_PROFILE=second-brain-app aws secretsmanager put-secret-value --secret-id media-summarizer-mobile-store-webhook-relay-dev --secret-string file://relay.json`
    (then delete `relay.json`).
 4. EAS, from `mobile/`: `eas webhook:create --event BUILD --url <webhook url> --secret <eas secret>`,
    then the same with `--event SUBMIT`.
@@ -85,7 +85,7 @@ the Terraform output `mobile_beta_relay_webhook_url`.
    build (beta) state. Send the test ping: the relay logs `ignored` for it.
 6. Check: after the next EAS build finishes, `Mobile Beta Distribution` starts with
    event `workflow_dispatch`, without waiting for the daily run. The relay logs
-   (`/aws/lambda/media-summarizer-mobile-beta-relay-dev`) show `dispatched` with
+   (`/aws/lambda/media-summarizer-mobile-store-webhook-relay-dev`) show `dispatched` with
    `github_status: 204`.
 
 **Rotating the GitHub token** (fine-grained tokens expire): create the new token,

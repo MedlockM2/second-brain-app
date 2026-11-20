@@ -31,7 +31,7 @@ on:
     paths:
       - "infrastructure/terraform/**"
       - "infrastructure/lambda/apple_auth.py"
-      - "infrastructure/lambda/mobile_beta_relay.py"
+      - "infrastructure/lambda/mobile_store_webhook_relay.py"
       - "scripts/terraform_with_cognito.py"
       - ".github/workflows/terraform-dev.yml"
   # Re-run an apply without a commit: after a manual `terraform state` operation, or

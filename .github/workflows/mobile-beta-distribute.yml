@@ -4,7 +4,7 @@ name: Mobile Beta Distribution
 # Reconcile store state rather than holding an Actions runner or uploading again.
 #
 # What wakes this workflow up (TASK-635):
-# - the mobile beta relay (infrastructure/lambda/mobile_beta_relay.py), on an EAS
+# - the mobile store webhook relay (infrastructure/lambda/mobile_store_webhook_relay.py), on an EAS
 #   build or submission finishing and on App Store Connect finishing to process an
 #   upload or ending the external beta review. It dispatches with `platform` set;
 # - a build workflow completing (workflow_run);
