@@ -41,6 +41,10 @@ class ApifyActorKind(str, Enum):
     YOUTUBE_TRANSCRIPT = "youtube_transcript"
     REDDIT_PRIMARY = "reddit_primary"
     REDDIT_FALLBACK = "reddit_fallback"
+    FACEBOOK_VIDEO = "facebook_video"
+    FACEBOOK_VIDEO_FALLBACK = "facebook_video_fallback"
+    FACEBOOK_POST = "facebook_post"
+    FACEBOOK_COMMENTS = "facebook_comments"
 
 
 @dataclass(frozen=True)
@@ -111,6 +115,16 @@ def _actor_configuration(kind: ApifyActorKind) -> tuple[str, str]:
             if kind == ApifyActorKind.REDDIT_PRIMARY
             else reddit_apify.fallback_actor_id()
         )
+    elif kind in (
+        ApifyActorKind.FACEBOOK_VIDEO,
+        ApifyActorKind.FACEBOOK_VIDEO_FALLBACK,
+        ApifyActorKind.FACEBOOK_POST,
+        ApifyActorKind.FACEBOOK_COMMENTS,
+    ):
+        from media_summarizer.infrastructure import facebook_apify
+
+        token = os.environ.get("APIFY_FACEBOOK_API_TOKEN", "")
+        actor_id = facebook_apify.actor_id(kind.value)
     else:
         token = os.environ.get("APIFY_YOUTUBE_API_TOKEN", "")
         actor_id = os.environ.get(
@@ -155,7 +169,7 @@ def parse_webhook_payload(body: Any) -> ApifyWebhookPayload:
     dataset_value = resource.get("defaultDatasetId")
     dataset_id = str(dataset_value).strip() if dataset_value else None
 
-    if not job_id or source_platform not in {"instagram", "tiktok", "youtube", "reddit"}:
+    if not job_id or source_platform not in {"instagram", "tiktok", "youtube", "reddit", "facebook"}:
         raise ValueError("Webhook correlation fields are invalid")
     if not run_id or status not in APIFY_TERMINAL_STATUSES:
         raise ValueError("Webhook run fields are invalid")
@@ -290,6 +304,8 @@ def _token_for_platform(source_platform: str) -> str:
         return os.environ.get("APIFY_YOUTUBE_API_TOKEN", "").strip()
     if source_platform == "reddit":
         return os.environ.get("APIFY_REDDIT_API_TOKEN", "").strip()
+    if source_platform == "facebook":
+        return os.environ.get("APIFY_FACEBOOK_API_TOKEN", "").strip()
     return ""
 
 

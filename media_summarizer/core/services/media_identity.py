@@ -35,9 +35,14 @@ from enum import Enum
 from typing import Dict, List, Tuple
 from urllib.parse import parse_qsl, quote, unquote, urlencode, urlsplit, urlunsplit
 
-_TRACKING_QUERY_PREFIXES = ("utm_",)
+_TRACKING_QUERY_PREFIXES = ("utm_", "__cft__")
 _TRACKING_QUERY_KEYS = {
     "fbclid",
+    # Facebook's share and click tracking (TASK-636): `mibextid` and `rdid` on
+    # the app's share links, `__tn__` and `__cft__[0]` on links clicked in a feed.
+    "mibextid",
+    "rdid",
+    "__tn__",
     "gclid",
     "igshid",
     "mc_cid",
@@ -60,6 +65,16 @@ _INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com"}
 _X_HOSTS = {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}
 #: A Reddit thread, and the short host of the share links Reddit gave out (TASK-633).
 _REDDIT_HOSTS = {"reddit.com", "www.reddit.com", "old.reddit.com", "redd.it"}
+#: Facebook's web, mobile and basic hosts, and the short host of its video share
+#: links (TASK-636).
+_FACEBOOK_HOSTS = {
+    "facebook.com",
+    "www.facebook.com",
+    "m.facebook.com",
+    "web.facebook.com",
+    "mbasic.facebook.com",
+    "fb.watch",
+}
 _TIKTOK_SHORT_HOSTS = {"vm.tiktok.com", "vt.tiktok.com"}
 _TIKTOK_HOSTS = {
     "tiktok.com",
@@ -104,6 +119,7 @@ class MediaSourceType(str, Enum):
     TIKTOK = "tiktok"
     X = "x"
     REDDIT = "reddit"
+    FACEBOOK = "facebook"
     SPOTIFY = "spotify"
     APPLE_PODCASTS = "apple_podcasts"
     DEEZER = "deezer"
@@ -120,6 +136,7 @@ PLATFORM_HOSTS: Dict[MediaSourceType, frozenset[str]] = {
     MediaSourceType.TIKTOK: frozenset(_TIKTOK_HOSTS),
     MediaSourceType.X: frozenset(_X_HOSTS),
     MediaSourceType.REDDIT: frozenset(_REDDIT_HOSTS),
+    MediaSourceType.FACEBOOK: frozenset(_FACEBOOK_HOSTS),
     MediaSourceType.SPOTIFY: frozenset(_SPOTIFY_HOSTS),
     MediaSourceType.APPLE_PODCASTS: frozenset(_APPLE_PODCASTS_HOSTS),
     MediaSourceType.DEEZER: frozenset(_DEEZER_HOSTS),
@@ -142,6 +159,11 @@ _URL_PRESERVING_SOURCE_TYPES = frozenset(
         # A share link (`/r/<sub>/s/<code>`, `redd.it/<id>`) cannot be resolved
         # from AWS -- Reddit refuses it -- so the URL stays as it was given.
         MediaSourceType.REDDIT,
+        # Same for Facebook (TASK-636): its share links (`/share/r|v|p/<code>`,
+        # `fb.watch/<code>`) answer AWS with a login wall, and `/watch/?v=`,
+        # `permalink.php?story_fbid=&id=` or `photo/?fbid=` carry their identity
+        # in the query, so the URL is kept as given, tracking aside.
+        MediaSourceType.FACEBOOK,
     }
 )
 
@@ -242,6 +264,8 @@ def classify_source_type(*, host: str, path: str) -> MediaSourceType:
         return MediaSourceType.TIKTOK
     if normalized_host in _REDDIT_HOSTS:
         return MediaSourceType.REDDIT
+    if normalized_host in _FACEBOOK_HOSTS:
+        return MediaSourceType.FACEBOOK
     if _path_looks_like_audio_file(normalized_path):
         return MediaSourceType.AUDIO_FILE
     return MediaSourceType.WEB_ARTICLE

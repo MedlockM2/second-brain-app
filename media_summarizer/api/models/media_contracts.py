@@ -49,6 +49,7 @@ class SourcePlatform(str, Enum):
     TIKTOK = "tiktok"
     X = "x"
     REDDIT = "reddit"
+    FACEBOOK = "facebook"
     WHATSAPP = "whatsapp"
     # Shared note text (task-380). See `SourcePlatform.NOTES` in
     # `core/media_ingestion/domain.py` for why every unattributable text lands here.

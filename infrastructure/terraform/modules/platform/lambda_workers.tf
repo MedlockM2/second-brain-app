@@ -54,7 +54,7 @@ locals {
       # OCR'd inside this invocation, image by image, through LlamaParse (upload
       # then poll, up to 120 s for one file) with the Unstructured fallback behind
       # it. That is the document worker's workload, and it is why that worker has
-      # 600 s. The worker's own budget (INSTAGRAM_IMAGE_PARSE_BUDGET_SECONDS, 240 s)
+      # 600 s. The worker's own budget (POST_IMAGE_PARSE_BUDGET_SECONDS, 240 s)
       # stops the parsing loop before this ceiling, so a long carousel completes
       # with the slides it managed rather than being killed with nothing. Stays
       # under the queue's 360 s visibility timeout so a redelivery can never
@@ -62,6 +62,14 @@ locals {
       timeout   = 300
       queue_arn = aws_sqs_queue.instagram_ingestion.arn
       handler   = "media_summarizer.workers.lambda_handlers.instagram_ingestion_handler"
+    }
+    # TASK-636. 300 s like Instagram: a post's images are OCR'd in the callback
+    # that also reads its comments, under the queue's 360 s visibility timeout.
+    facebook_ingestion = {
+      memory_size = 512
+      timeout     = 300
+      queue_arn   = aws_sqs_queue.facebook_ingestion.arn
+      handler     = "media_summarizer.workers.lambda_handlers.facebook_ingestion_handler"
     }
     tiktok_ingestion = {
       memory_size = 512
@@ -169,7 +177,7 @@ resource "aws_lambda_function" "worker" {
     variables = merge(
       local.lambda_environment,
       { SQS_MAX_RECEIVE_COUNT = tostring(local.worker_max_receive_count) },
-      contains(["instagram_ingestion", "tiktok_ingestion", "youtube_ingestion", "reddit_ingestion"], each.key) ? {
+      contains(["instagram_ingestion", "tiktok_ingestion", "youtube_ingestion", "reddit_ingestion", "facebook_ingestion"], each.key) ? {
         APIFY_WEBHOOK_URL = "${aws_apigatewayv2_api.main.api_endpoint}/api/webhooks/apify"
       } : {},
       # The two Reddit actors are configuration, not secrets: swapping them is
@@ -179,6 +187,16 @@ resource "aws_lambda_function" "worker" {
         APIFY_REDDIT_PRIMARY_ACTOR_ID      = "kaix~reddit-scraper"
         APIFY_REDDIT_FALLBACK_ACTOR_ID     = "automation-lab~reddit-scraper"
         APIFY_REDDIT_FALLBACK_MAX_COMMENTS = "1000"
+      } : {},
+      # The four Facebook actors and the comment cap (TASK-636): configuration,
+      # swapped here if an actor breaks. APIFY_FACEBOOK_API_TOKEN is in the
+      # runtime secret like every Apify token.
+      each.key == "facebook_ingestion" ? {
+        APIFY_FACEBOOK_VIDEO_ACTOR_ID          = var.apify_facebook_actors.video
+        APIFY_FACEBOOK_VIDEO_FALLBACK_ACTOR_ID = var.apify_facebook_actors.video_fallback
+        APIFY_FACEBOOK_POST_ACTOR_ID           = var.apify_facebook_actors.post
+        APIFY_FACEBOOK_COMMENT_ACTOR_ID        = var.apify_facebook_actors.comments
+        APIFY_FACEBOOK_MAX_COMMENTS            = tostring(var.apify_facebook_max_comments)
       } : {},
     )
   }

@@ -118,6 +118,10 @@ reddit_ingestion_handler = _build_handler(
     "media_summarizer.workers.reddit_ingestion_worker", fails_job=True
 )
 
+facebook_ingestion_handler = _build_handler(
+    "media_summarizer.workers.facebook_ingestion_worker", fails_job=True
+)
+
 youtube_ingestion_handler = _build_handler(
     "media_summarizer.workers.youtube_ingestion_worker", fails_job=True
 )

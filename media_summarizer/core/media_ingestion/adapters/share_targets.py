@@ -137,6 +137,9 @@ SHARE_TARGETS: tuple[ShareTarget, ...] = (
     ShareTarget(id=SourcePlatform.X.value, group=GROUP_PLATFORM, label="X"),
     # Threads read through Apify, post and comments (TASK-633).
     ShareTarget(id=SourcePlatform.REDDIT.value, group=GROUP_PLATFORM, label="Reddit"),
+    # Reels and videos transcribed, posts read with their images and comments,
+    # all through Apify (TASK-636).
+    ShareTarget(id=SourcePlatform.FACEBOOK.value, group=GROUP_PLATFORM, label="Facebook"),
     # A LinkedIn post or article has no worker of its own: it is a web page, read
     # as one (the extension sends the page as the reader sees it). Named here
     # because a newcomer looks for the brand, not for "web pages" (owner,

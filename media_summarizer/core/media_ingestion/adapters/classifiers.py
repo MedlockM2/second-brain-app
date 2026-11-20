@@ -55,6 +55,7 @@ _UNSUPPORTED_INSTAGRAM_FORMAT_MESSAGE = "Unsupported Instagram URL format."
 _UNSUPPORTED_X_FORMAT_MESSAGE = "Unsupported X/Twitter URL format."
 _UNSUPPORTED_TIKTOK_FORMAT_MESSAGE = "Unsupported TikTok URL format."
 _UNSUPPORTED_REDDIT_FORMAT_MESSAGE = "Unsupported Reddit URL format."
+_UNSUPPORTED_FACEBOOK_FORMAT_MESSAGE = "Unsupported Facebook URL format."
 _UNSUPPORTED_TIKTOK_PHOTO_MESSAGE = "TikTok photo posts are not supported yet."
 _UNSAFE_URL_FORMAT_MESSAGE = "Unsupported unsafe URL format."
 _BLOCKED_DOMAIN_MESSAGE = "Blocked URL host by safety policy."
@@ -88,6 +89,7 @@ RECOGNISED_HOSTS: dict[SourcePlatform, frozenset[str]] = {
     SourcePlatform.TIKTOK: PLATFORM_HOSTS[MediaSourceType.TIKTOK],
     SourcePlatform.X: PLATFORM_HOSTS[MediaSourceType.X],
     SourcePlatform.REDDIT: PLATFORM_HOSTS[MediaSourceType.REDDIT],
+    SourcePlatform.FACEBOOK: PLATFORM_HOSTS[MediaSourceType.FACEBOOK],
 }
 
 #: Path extensions that turn any URL into a direct audio import. Published for
@@ -233,6 +235,50 @@ def _is_reddit_thread_path(*, host: str, path: str) -> bool:
     if len(parts) >= 2 and parts[0] == "comments":
         return True
     return len(parts) >= 4 and parts[0] == "r" and parts[2] in {"comments", "s"}
+
+
+#: What a Facebook link points at (TASK-636): a video goes to the video actors and
+#: is transcribed, a post to the posts actor with its images and comments.
+FACEBOOK_VIDEO = "video"
+FACEBOOK_POST = "post"
+
+
+def facebook_link_kind(*, host: str, path: str, query_params: dict[str, list[str]]) -> str | None:
+    """``FACEBOOK_VIDEO``, ``FACEBOOK_POST``, or ``None`` for a link that is neither.
+
+    Videos: ``/reel/<id>``, ``/watch/?v=<id>``, ``/<x>/videos/…``,
+    ``fb.watch/<code>``, and the app's share links ``/share/r/`` and ``/share/v/``.
+    Posts: ``/<x>/posts/…``, ``/permalink.php``, ``/story.php``,
+    ``/groups/<x>/posts|permalink/<id>``, ``/share/p/``, ``/photo/?fbid=``,
+    ``/photo.php?fbid=`` and ``/<x>/photos/…``. A page, a profile or a group on its
+    own, a story, an event, the marketplace and every other path are refused.
+    """
+    parts = tuple(segment.lower() for segment in _path_segments(path))
+    has = lambda key: bool((query_params.get(key) or [""])[0].strip())  # noqa: E731
+    if host == "fb.watch":
+        return FACEBOOK_VIDEO if len(parts) == 1 else None
+    if not parts:
+        return None
+    head = parts[0]
+    if head == "share" and len(parts) >= 3:
+        return {"r": FACEBOOK_VIDEO, "v": FACEBOOK_VIDEO, "p": FACEBOOK_POST}.get(parts[1])
+    if head == "reel":
+        return FACEBOOK_VIDEO if len(parts) >= 2 else None
+    if head == "watch":
+        return FACEBOOK_VIDEO if has("v") else None
+    if head in ("permalink.php", "story.php"):
+        return FACEBOOK_POST if has("story_fbid") else None
+    if head in ("photo", "photo.php"):
+        return FACEBOOK_POST if has("fbid") else None
+    if head == "groups":
+        return FACEBOOK_POST if len(parts) >= 4 and parts[2] in ("posts", "permalink") else None
+    if head in ("stories", "events", "marketplace"):
+        return None
+    if len(parts) >= 3 and parts[1] == "videos":
+        return FACEBOOK_VIDEO
+    if len(parts) >= 3 and parts[1] in ("posts", "photos"):
+        return FACEBOOK_POST
+    return None
 
 
 def _is_x_post_path(path: str) -> bool:
@@ -425,6 +471,18 @@ class RuleBasedUrlClassifier(UrlClassifierPort):
                 media_family=MediaFamily.ARTICLE,
                 source_platform=SourcePlatform.REDDIT,
                 resolver_key="reddit.default",
+            )
+
+        if source_type is MediaSourceType.FACEBOOK:
+            # Every accepted link goes to Apify, page sent by the extension or not
+            # (TASK-636): Facebook shows AWS a login wall.
+            kind = facebook_link_kind(host=host, path=path, query_params=query_params)
+            if kind is None:
+                raise UnsupportedUrlError(_UNSUPPORTED_FACEBOOK_FORMAT_MESSAGE)
+            return ClassifiedUrl(
+                media_family=MediaFamily.SOCIAL_VIDEO if kind == FACEBOOK_VIDEO else MediaFamily.ARTICLE,
+                source_platform=SourcePlatform.FACEBOOK,
+                resolver_key="facebook.default",
             )
 
         if source_type is MediaSourceType.TIKTOK:

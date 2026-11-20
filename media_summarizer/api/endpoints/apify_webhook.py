@@ -21,6 +21,7 @@ _QUEUE_BY_PLATFORM = {
     "tiktok": required_env("TIKTOK_INGESTION_QUEUE"),
     "youtube": required_env("YOUTUBE_INGESTION_QUEUE"),
     "reddit": required_env("REDDIT_INGESTION_QUEUE"),
+    "facebook": required_env("FACEBOOK_INGESTION_QUEUE"),
 }
 
 

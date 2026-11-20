@@ -20,6 +20,7 @@ from .podcast_resolver_foundation import (
 from .resolvers import (
     ArticleResolver,
     AudioResolver,
+    FacebookResolver,
     InstagramResolver,
     PodcastResolver,
     RedditResolver,
@@ -48,6 +49,7 @@ __all__ = [
     "SocialVideoResolver",
     "TikTokResolver",
     "RedditResolver",
+    "FacebookResolver",
     "XPostResolver",
     "YouTubeResolver",
     "build_deferred_podcast_platform_resolver_registry",

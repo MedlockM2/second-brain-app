@@ -115,6 +115,36 @@ resource "aws_sqs_queue" "reddit_ingestion" {
 }
 
 # =============================================================================
+# Facebook Ingestion (TASK-636): a video or a post read through Apify, each run
+# finishing through the Apify webhook. 360 s visibility: the worker runs 300 s
+# when it OCRs a post's images.
+# =============================================================================
+
+resource "aws_sqs_queue" "facebook_ingestion_dlq" {
+  name                      = "facebook-ingestion-dlq${local.suffix}"
+  message_retention_seconds = 1209600 # 14 days
+
+  tags = {
+    Name = "facebook-ingestion-dlq${local.suffix}"
+  }
+}
+
+resource "aws_sqs_queue" "facebook_ingestion" {
+  name                       = "facebook-ingestion-queue${local.suffix}"
+  visibility_timeout_seconds = 360
+  message_retention_seconds  = 1209600
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.facebook_ingestion_dlq.arn
+    maxReceiveCount     = local.worker_max_receive_count
+  })
+
+  tags = {
+    Name = "facebook-ingestion-queue${local.suffix}"
+  }
+}
+
+# =============================================================================
 # YouTube Ingestion
 # =============================================================================
 
@@ -498,6 +528,7 @@ output "queue_urls" {
     article_extraction      = aws_sqs_queue.article_extraction.url
     x_ingestion             = aws_sqs_queue.x_ingestion.url
     reddit_ingestion        = aws_sqs_queue.reddit_ingestion.url
+    facebook_ingestion      = aws_sqs_queue.facebook_ingestion.url
     web_page_render         = aws_sqs_queue.web_page_render.url
     youtube_ingestion       = aws_sqs_queue.youtube_ingestion.url
     instagram_ingestion     = aws_sqs_queue.instagram_ingestion.url
@@ -520,6 +551,7 @@ output "dlq_arns" {
     article_extraction      = aws_sqs_queue.article_extraction_dlq.arn
     x_ingestion             = aws_sqs_queue.x_ingestion_dlq.arn
     reddit_ingestion        = aws_sqs_queue.reddit_ingestion_dlq.arn
+    facebook_ingestion      = aws_sqs_queue.facebook_ingestion_dlq.arn
     web_page_render         = aws_sqs_queue.web_page_render_dlq.arn
     youtube_ingestion       = aws_sqs_queue.youtube_ingestion_dlq.arn
     instagram_ingestion     = aws_sqs_queue.instagram_ingestion_dlq.arn

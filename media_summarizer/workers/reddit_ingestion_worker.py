@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import json
 import logging
-from decimal import Decimal
 from io import BytesIO
 from typing import Any, Dict, Optional
 
@@ -129,35 +128,6 @@ async def _start_run(
     return {"mode": "apify_pending", "job_id": job.id, "apify_actor_id": actor_id}
 
 
-async def _run_cost(*, actor_id: str, run_id: str, items_read: int) -> beta_budget.MeasuredCost:
-    """What one run cost: the larger of Apify's own figure and its events at the barème.
-
-    ``usageTotalUsd`` can still be rising for a few seconds after the run ends,
-    while the charged events are final; without either, the items read are priced.
-    """
-    ctx = await beta_budget.load_pricing_context()
-    results = items_read
-    reported: Optional[float] = None
-    try:
-        usage = await apify_adapter.fetch_run_usage(source_platform=SOURCE_PLATFORM, run_id=run_id)
-        billed = [count for name, count in usage.charged_events.items() if "start" not in name.lower()]
-        if billed:
-            results = sum(billed)
-        reported = usage.usage_usd
-    except apify_adapter.ApifyAdapterError as exc:
-        log_event(
-            logger,
-            logging.WARNING,
-            "apify.run_usage_unavailable",
-            "Could not read the cost of a Reddit Apify run; pricing the items read",
-            apify_run_id=run_id,
-            detail=exc.code,
-        )
-    priced = beta_budget.apify_cost(ctx, actor_id=actor_id, results=results)
-    usd = max(priced.usd, Decimal(str(reported))) if reported is not None else priced.usd
-    return beta_budget.MeasuredCost(usd=usd, usage={"results": results}, tariff_version=priced.tariff_version)
-
-
 async def _read_run(
     *, job: ProcessingJob, actor_id: str, run_id: str, succeeded: bool
 ) -> tuple[Optional[reddit_apify.ApifyRedditThread], beta_budget.MeasuredCost]:
@@ -185,7 +155,9 @@ async def _read_run(
     thread = reddit_apify.thread_from_items(
         items, strip_indentation=reddit_apify.rebuilds_text_from_html(actor_id)
     )
-    cost = await _run_cost(actor_id=actor_id, run_id=run_id, items_read=len(items))
+    cost = await apify_orchestration.measured_run_cost(
+        source_platform=SOURCE_PLATFORM, actor_id=actor_id, run_id=run_id, items_read=len(items)
+    )
     return thread, cost
 
 

@@ -38,6 +38,7 @@ class SourcePlatform(str, Enum):
     TIKTOK = "tiktok"
     X = "x"
     REDDIT = "reddit"
+    FACEBOOK = "facebook"
     WHATSAPP = "whatsapp"
     #: Text shared from a note-taking app -- iOS Notes, Google Keep, Samsung
     #: Notes. Neither platform tells a share extension which app the item came

@@ -80,3 +80,30 @@ variable "processing_jobs_ttl_days" {
     error_message = "processing_jobs_ttl_days must be between 30 and 90 days."
   }
 }
+
+variable "apify_facebook_actors" {
+  description = "Apify actors that read Facebook (TASK-636): the video actor, its fallback, the posts actor and the comments actor. Swap one here when it breaks; why these four is in media_summarizer/infrastructure/facebook_apify.py."
+  type = object({
+    video          = string
+    video_fallback = string
+    post           = string
+    comments       = string
+  })
+  default = {
+    video          = "neuro-scraper~facebook-video-details-scraper"
+    video_fallback = "lance_api~facebook-video-downloader-api"
+    post           = "apify~facebook-posts-scraper"
+    comments       = "thedoor~facebook-comment-scraper"
+  }
+}
+
+variable "apify_facebook_max_comments" {
+  description = "Most comments, replies included, read for one Facebook post (TASK-636, owner decision: 200)."
+  type        = number
+  default     = 200
+
+  validation {
+    condition     = var.apify_facebook_max_comments >= 1
+    error_message = "apify_facebook_max_comments must be at least 1."
+  }
+}

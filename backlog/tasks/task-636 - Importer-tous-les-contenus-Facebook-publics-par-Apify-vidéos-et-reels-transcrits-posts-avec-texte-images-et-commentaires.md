@@ -3,9 +3,10 @@ id: TASK-636
 title: >-
   Importer tous les contenus Facebook publics par Apify : vidéos et reels
   transcrits, posts avec texte, images et commentaires
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-11-20 10:11'
+updated_date: '2026-11-20 10:34'
 labels:
   - backend
   - ingestion
@@ -161,15 +162,66 @@ Il rappelle pourquoi on passe par Apify : Facebook bloque nos serveurs et ses li
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Le classifieur reconnaît comme Facebook les hôtes `facebook.com`, `www.`, `m.`, `web.`, `mbasic.` et `fb.watch`. Il classe en vidéo ou en post chaque forme de lien listée dans la description et refuse les autres (page seule, groupe seul, stories, événements, marketplace) avec « Unsupported Facebook URL format. »
-- [ ] #2 Tout lien Facebook accepté, avec ou sans `page_html`, part vers Apify, sans téléchargement direct ni rendu Chromium ; les liens de partage et `fb.watch` sont transmis tels quels à l'acteur
-- [ ] #3 Une vidéo est lue par `neuro-scraper`, puis par `lance_api` seulement si neuro échoue ou ne renvoie aucune URL audio ou vidéo. L'audio part en transcription Deepgram en mode `push` ; la légende vient de neuro ou du post, jamais du `title` de lance_api ; aucun commentaire n'est récupéré
-- [ ] #4 Un post est lu par `apify/facebook-posts-scraper`. Une photo isolée est relue via `container_story.post_id`. Un post vidéo suit le chemin vidéo avec le texte du post comme légende
-- [ ] #5 Les commentaires d'un post sont lus par `thedoor/facebook-comment-scraper`, réponses comprises, dans la limite d'un plafond réglable par variable d'environnement (200 par défaut)
-- [ ] #6 Le texte complet d'un post contient l'en-tête, le texte, le lien attaché, le texte OCR des images par la chaîne partagée et `## Comments (N of total)` avec auteur et niveau. Il est produit par un rendu partagé avec Reddit, généralisé et non dupliqué, sans ligne lue comme du code ni image cassée
-- [ ] #7 `title`, `creator_name` et les métadonnées d'extraction (acteurs utilisés, commentaires récupérés sur annoncés, coût) suivent les règles de la description
-- [ ] #8 Les prix des quatre acteurs figurent sous `"apify"` dans `pricing_config_service.py`. L'import est admis sur le budget avant le premier run, puis chaque run lancé est réglé au maximum entre `usageTotalUsd` et les événements valorisés
-- [ ] #9 Un contenu non public, supprimé ou illisible par tous les acteurs fait échouer le job avec un code d'échec existant, sans raison détaillée pour l'utilisateur
-- [ ] #10 De vrais runs, lancés depuis le poste de l'agent sur les liens de la description (au moins un reel, un `share/r`, un `share/v` long, un `fb.watch`, un post de page, un `share/p`, un post de groupe et une photo isolée), sont consignés dans les notes : acteur, statut, résultat et coût
-- [ ] #11 Les identifiants d'acteur et le plafond de commentaires sont déclarés dans Terraform ; `APIFY_FACEBOOK_API_TOKEN` est ajouté au secret runtime de dev. `ruff`, `mypy` et `terraform validate` sont propres
+- [x] #1 Le classifieur reconnaît comme Facebook les hôtes `facebook.com`, `www.`, `m.`, `web.`, `mbasic.` et `fb.watch`. Il classe en vidéo ou en post chaque forme de lien listée dans la description et refuse les autres (page seule, groupe seul, stories, événements, marketplace) avec « Unsupported Facebook URL format. »
+- [x] #2 Tout lien Facebook accepté, avec ou sans `page_html`, part vers Apify, sans téléchargement direct ni rendu Chromium ; les liens de partage et `fb.watch` sont transmis tels quels à l'acteur
+- [x] #3 Une vidéo est lue par `neuro-scraper`, puis par `lance_api` seulement si neuro échoue ou ne renvoie aucune URL audio ou vidéo. L'audio part en transcription Deepgram en mode `push` ; la légende vient de neuro ou du post, jamais du `title` de lance_api ; aucun commentaire n'est récupéré
+- [x] #4 Un post est lu par `apify/facebook-posts-scraper`. Une photo isolée est relue via `container_story.post_id`. Un post vidéo suit le chemin vidéo avec le texte du post comme légende
+- [x] #5 Les commentaires d'un post sont lus par `thedoor/facebook-comment-scraper`, réponses comprises, dans la limite d'un plafond réglable par variable d'environnement (200 par défaut)
+- [x] #6 Le texte complet d'un post contient l'en-tête, le texte, le lien attaché, le texte OCR des images par la chaîne partagée et `## Comments (N of total)` avec auteur et niveau. Il est produit par un rendu partagé avec Reddit, généralisé et non dupliqué, sans ligne lue comme du code ni image cassée
+- [x] #7 `title`, `creator_name` et les métadonnées d'extraction (acteurs utilisés, commentaires récupérés sur annoncés, coût) suivent les règles de la description
+- [x] #8 Les prix des quatre acteurs figurent sous `"apify"` dans `pricing_config_service.py`. L'import est admis sur le budget avant le premier run, puis chaque run lancé est réglé au maximum entre `usageTotalUsd` et les événements valorisés
+- [x] #9 Un contenu non public, supprimé ou illisible par tous les acteurs fait échouer le job avec un code d'échec existant, sans raison détaillée pour l'utilisateur
+- [x] #10 De vrais runs, lancés depuis le poste de l'agent sur les liens de la description (au moins un reel, un `share/r`, un `share/v` long, un `fb.watch`, un post de page, un `share/p`, un post de groupe et une photo isolée), sont consignés dans les notes : acteur, statut, résultat et coût
+- [x] #11 Les identifiants d'acteur et le plafond de commentaires sont déclarés dans Terraform ; `APIFY_FACEBOOK_API_TOKEN` est ajouté au secret runtime de dev. `ruff`, `mypy` et `terraform validate` sont propres
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-11-20 — Run séquentiel du backlog (`/process-backlog`).
+
+## Fait
+- **Reconnaissance** : `MediaSourceType.FACEBOOK`, `SourcePlatform.FACEBOOK` (Python et `packages/core`), hôtes `facebook.com`, `www.`, `m.`, `web.`, `mbasic.` et `fb.watch`. L'URL est conservée telle quelle, sans les paramètres de suivi (`mibextid`, `rdid`, `__tn__` et `__cft__*` ajoutés à la liste). `classifiers.facebook_link_kind` distingue vidéo et post, et refuse les autres liens avec « Unsupported Facebook URL format. ». Contrôle fait sur 24 formes de liens : celles de la description, plus page seule, groupe seul, stories, événements, marketplace et `/watch/` sans `v`.
+- **Routage** : `FacebookResolver` est différé, ne lit pas `page_html`, et envoie tout lien vers la file `facebook-ingestion`. Le webhook Apify accepte `facebook`.
+- **Worker** `workers/facebook_ingestion_worker.py`, un run Apify à la fois :
+  - vidéo : neuro-scraper, puis lance_api si neuro échoue ou ne renvoie aucune URL. L'audio part vers Deepgram en `push`, sans commentaires ;
+  - post : posts-scraper. Une photo isolée est relue via `container_story`. Un post vidéo suit le chemin vidéo avec le texte du post comme légende. Sinon, les commentaires sont lus par thedoor (plafond `APIFY_FACEBOOK_MAX_COMMENTS`, 200 par défaut), puis les images passent par l'OCR partagé.
+- **Mutualisation, sans duplication** :
+  - `resolvers/discussion_text.py` (`render_discussion`, `clean_body`) est le rendu partagé, et `reddit_thread.render_thread` y délègue ;
+  - l'OCR des images de post sort du worker Instagram vers `workers/post_images.py`, qu'Instagram utilise désormais. Ses variables d'environnement deviennent `POST_IMAGE_*` ; les anciennes `INSTAGRAM_IMAGE_*` n'étaient définies nulle part ;
+  - le coût réel d'un run (`max(usageTotalUsd, événements valorisés)`) passe du worker Reddit à `apify_orchestration.measured_run_cost`.
+- **Titre et auteur** : `title` vient de `select_title([first_sentence(légende ou texte)])`. `creator_name` reçoit le groupe, sinon la page ou le profil. Les métadonnées d'extraction contiennent `apify_actors`, `apify_cost_usd`, `comments_fetched`/`comments_total` et `images_parsed`. Le transcript de Facebook est conservé, tronqué à 2 000 caractères, dans `resolver_metadata.facebook_transcript`.
+- **Budget** : les 4 prix sont sous `"apify"`. Le premier run est admis avec l'import, aperçu et traduction différés. Chaque run est clos sur son callback à son coût réel. Les images sont admises avec la taille du texte déjà lu.
+- **Échec** : un contenu illisible donne `MEDIA_UNAVAILABLE` si le run a réussi sans contenu, `PROVIDER_UNAVAILABLE` si le run a échoué. Un post vide donne `POST_TEXT_EMPTY`.
+- **Terraform** : file et DLQ (visibilité 360 s), worker de 300 s, droits IAM, variables `apify_facebook_actors` et `apify_facebook_max_comments`, tableau de bord. L'alarme passe dans le groupe `import_finish`, parce que `import_capture` et `import_read` sont déjà à la limite de 10 métriques.
+- **Secret** : `APIFY_FACEBOOK_API_TOKEN` est ajouté au secret runtime de dev, avec la même valeur que `APIFY_REDDIT_API_TOKEN`. Vérifié par relecture, 42 clés.
+- **Vitrine** : chip « Facebook » dans `share_targets.py`.
+- **Docs** : section Facebook dans `docs/INGESTION_WORKERS_PROVIDERS.md`, `.env.example`, `scripts/replay_dlq.sh`.
+
+## Vérifié
+`ruff check .` et `mypy media_summarizer` sont propres (226 fichiers). `terraform fmt` et `validate` sont propres. `tsc` passe sur `packages/core`. Le parseur a été rejoué sur les sorties réelles ci-dessous ; le rendu d'un post avec ses commentaires est conforme.
+
+## Vrais runs (2026-11-20, depuis le poste, compte Apify des tests)
+| Lien | Acteur | Statut | Résultat | usageTotalUsd / événements |
+|---|---|---|---|---|
+| `/reel/1056346190744779/` | neuro | SUCCEEDED | audio, 23 s, légende NASA | 0.0014 / result 1 |
+| `share/r/1aDyu6fNFs` | neuro | SUCCEEDED | audio, 35 s, « Wait for the end😆🥶 » | 0.0020 / result 1 |
+| `share/v/1BUQzP2gNr` (10 min) | neuro | SUCCEEDED, 0 item | aucun média : bascule | 0.0024 / result 0 |
+| `share/v/1BUQzP2gNr` (10 min) | lance_api | SUCCEEDED | audio, 606 s | 0 / facebook-video-result 1 (0.005 au barème) |
+| `fb.watch/wmNYZ-F2nD` | neuro | SUCCEEDED | audio, 35 s, transcript Facebook id_ID | 0.0018 / result 1 |
+| `m.facebook.com/watch?v=1591316522498163` (forme canonique) | neuro | SUCCEEDED | audio | 0.0014 / result 1 |
+| `/100044561550831/posts/1685704526258250/` (page) | posts | SUCCEEDED | texte, 1 photo, 171 commentaires annoncés | 0.001 / post 1 + start |
+| `share/p/1Fzv3oGCZM` | posts | SUCCEEDED | texte, 10 commentaires annoncés | 0.006 / post 1 + start |
+| `/groups/HomeAssistant/permalink/4633151540289513/` | posts | SUCCEEDED | post vidéo (`isVideo`), groupe « Home Assistant » | 0.001 / post 1 + start |
+| vidéo du post de groupe | neuro | SUCCEEDED | URL sd, 54 s | 0.0014 / result 1 |
+| `/photo/?fbid=1685704506258252&…` et forme canonique `/photo?fbid=` | posts | SUCCEEDED | `Photo` sans texte, `container_story.url` = post NASA | 0 et 0.001 / post 1 + start |
+| post NASA (relecture de la photo) | posts | SUCCEEDED | texte, 1 photo, 171 annoncés | 0.001 / post 1 + start |
+| post NASA | thedoor | SUCCEEDED | 127 items (116 commentaires + 11 réponses), 3 commentaires image → `(image)` | 0.0268 / dataset-item 107 + start |
+| post `share/p` | thedoor | SUCCEEDED | 10 items | 0.0015 / dataset-item 6 + start |
+Total des runs : 0,049 USD (usageTotalUsd). Les écarts entre usageTotalUsd et les événements (0 pour lance_api, 0.001 pour un post au lieu de 0.006) confirment l'intérêt de la règle du maximum.
+
+## Notes pour l'owner (hors AC)
+- Après le push : Terraform Dev crée la file et le worker, puis Deploy Lambda déploie l'image. Partager ensuite un reel, une vidéo longue, un post photo, un post de groupe public et un post avec lien, puis enregistrer un post depuis l'extension.
+- **Changement visible** : le chip « Facebook » apparaît dans la vitrine (`/api/pricing`). Le libellé est la marque, sans traduction. Aucun logo dédié n'a été ajouté au carrousel d'accueil web ou mobile.
+- **Choix déduits, à valider** : un post vidéo ne récupère pas de commentaires, car il suit le chemin vidéo. Un post est stocké en `.txt` Markdown, comme Reddit. Le `media_type` d'un post reste `article`, même avec des photos.
+<!-- SECTION:NOTES:END -->

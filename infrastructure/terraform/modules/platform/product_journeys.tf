@@ -14,10 +14,12 @@ locals {
       queues  = [aws_sqs_queue.reddit_ingestion, aws_sqs_queue.rss_resolution, aws_sqs_queue.article_extraction, aws_sqs_queue.deepgram_transcription, aws_sqs_queue.document_parsing]
       dlqs    = [aws_sqs_queue.reddit_ingestion_dlq, aws_sqs_queue.rss_resolution_dlq, aws_sqs_queue.article_extraction_dlq, aws_sqs_queue.deepgram_transcription_dlq, aws_sqs_queue.document_parsing_dlq]
     }
+    # Facebook (TASK-636) sits here for the same reason: import_capture and
+    # import_read are both at five queues.
     import_finish = {
       journey = "imports"
-      queues  = [aws_sqs_queue.media_completed_events, aws_sqs_queue.transcript_translation]
-      dlqs    = [aws_sqs_queue.media_completed_events_dlq, aws_sqs_queue.transcript_translation_dlq]
+      queues  = [aws_sqs_queue.facebook_ingestion, aws_sqs_queue.media_completed_events, aws_sqs_queue.transcript_translation]
+      dlqs    = [aws_sqs_queue.facebook_ingestion_dlq, aws_sqs_queue.media_completed_events_dlq, aws_sqs_queue.transcript_translation_dlq]
     }
     artifacts = {
       journey = "artefacts"
@@ -40,7 +42,7 @@ locals {
   import_failure_pattern   = "{ (($.event = \"worker.failed\") && ($.retryable = true)) || ($.event = \"worker.fail_job_failed\") || (($.event = \"llm.generation_failed\") && ($.failure_kind = \"other\")) || (($.event = \"transcription.failed\") && (($.error_code = \"PROVIDER_UNAVAILABLE\") || ($.error_code = \"PROVIDER_TIMED_OUT\") || ($.error_code = \"PROVIDER_RESULT_INVALID\") || ($.error_code = \"INTERNAL_ERROR\"))) }"
   artifact_failure_pattern = "{ ($.event = \"artifact.failed\") && ($.artifact_type != \"review_blurb\") && (($.error_code = \"INTERNAL_ERROR\") || ($.error_code = \"VALIDATION_ERROR\") || ($.error_code = \"PROVIDER_UNAVAILABLE\") || ($.error_code = \"PROVIDER_TIMED_OUT\") || ($.error_code = \"PROVIDER_RESULT_INVALID\") || ($.error_code = \"generation_stalled\") || ($.error_code = \"sources_preparation_timeout\")) }"
   journey_log_sources = merge(
-    { for w in ["podcastindex_resolution", "article_extraction", "x_ingestion", "reddit_ingestion", "youtube_ingestion", "instagram_ingestion", "tiktok_ingestion", "deepgram_transcription", "document_parsing", "media_completed_events", "transcript_translation"] : w => {
+    { for w in ["podcastindex_resolution", "article_extraction", "x_ingestion", "reddit_ingestion", "facebook_ingestion", "youtube_ingestion", "instagram_ingestion", "tiktok_ingestion", "deepgram_transcription", "document_parsing", "media_completed_events", "transcript_translation"] : w => {
       group = aws_cloudwatch_log_group.lambda_worker[w].name, journey = "imports", pattern = local.import_failure_pattern
     } },
     { for w, group in { artifacts_api = aws_cloudwatch_log_group.lambda_api.name, artifacts_worker = aws_cloudwatch_log_group.lambda_worker["artifact_generator"].name } : w => {

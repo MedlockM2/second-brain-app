@@ -7,6 +7,7 @@ from typing import Iterable, Optional
 from media_summarizer.core.media_ingestion.adapters import (
     ArticleResolver,
     AudioResolver,
+    FacebookResolver,
     InstagramResolver,
     PodcastResolver,
     ProcessingJobSubmissionOrchestrator,
@@ -40,6 +41,7 @@ def build_default_resolver_registry(
             PodcastResolver(),
             XPostResolver(),
             RedditResolver(),
+            FacebookResolver(),
             ArticleResolver(),
             YouTubeResolver(),
             InstagramResolver(),

@@ -50,6 +50,7 @@ usage() {
   echo "  article-extraction-dlq"
   echo "  x-ingestion-dlq"
   echo "  reddit-ingestion-dlq"
+  echo "  facebook-ingestion-dlq"
   echo "  youtube-ingestion-dlq"
   echo "  instagram-ingestion-dlq"
   echo "  tiktok-ingestion-dlq"

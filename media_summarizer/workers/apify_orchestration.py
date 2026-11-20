@@ -13,7 +13,9 @@ delivered (``budget_guard.settle_collections``), and releases it when it fails
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
 from media_summarizer.core.models.beta_budget import BudgetRefusal, Component, ReleaseReason
@@ -24,6 +26,9 @@ from media_summarizer.core.services.budget_guard import BudgetBusyError, BudgetC
 from media_summarizer.infrastructure import apify_adapter
 from media_summarizer.infrastructure.apify_adapter import ApifyActorKind, ApifyRun
 from media_summarizer.utils import database_async, sqs
+from media_summarizer.utils.logging_config import log_event
+
+logger = logging.getLogger(__name__)
 
 ACTIVE_APIFY_STATES = frozenset({"waiting", "processing"})
 
@@ -194,6 +199,39 @@ async def _release_replaced_run(*, user_id: str, operation_id: str, actor_id: st
                 reason=ReleaseReason.FAILED,
                 operator_cost=beta_budget.apify_cost(ctx, actor_id=actor_id, results=1),
             )
+
+
+async def measured_run_cost(
+    *, source_platform: str, actor_id: str, run_id: str, items_read: int
+) -> beta_budget.MeasuredCost:
+    """What one finished run cost: the larger of Apify's figure and its events at the barème.
+
+    ``usageTotalUsd`` can still be rising for a few seconds after the run ends, or
+    read 0 while events were billed (TASK-633, TASK-636); the charged events are
+    final. Without either, the items read are priced.
+    """
+    ctx = await beta_budget.load_pricing_context()
+    results = items_read
+    reported: float | None = None
+    try:
+        usage = await apify_adapter.fetch_run_usage(source_platform=source_platform, run_id=run_id)
+        billed = [count for name, count in usage.charged_events.items() if "start" not in name.lower()]
+        if billed:
+            results = sum(billed)
+        reported = usage.usage_usd
+    except apify_adapter.ApifyAdapterError as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "apify.run_usage_unavailable",
+            "Could not read the cost of an Apify run; pricing the items read",
+            apify_run_id=run_id,
+            source_platform=source_platform,
+            detail=exc.code,
+        )
+    priced = beta_budget.apify_cost(ctx, actor_id=actor_id, results=results)
+    usd = max(priced.usd, Decimal(str(reported))) if reported is not None else priced.usd
+    return beta_budget.MeasuredCost(usd=usd, usage={"results": results}, tariff_version=priced.tariff_version)
 
 
 async def claim_callback(job_id: str, run_id: str) -> ProcessingJob | None:

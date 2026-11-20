@@ -498,6 +498,48 @@ class RedditResolver(ContentResolverPort):
         return resolved
 
 
+class FacebookResolver(ContentResolverPort):
+    """Deferred Facebook resolver: classifies, never calls a provider (TASK-636).
+
+    Facebook shows AWS a login wall and refuses its share links, so every link is
+    read by Apify actors in ``facebook_ingestion_worker``. A page the browser
+    extension sent is not read: it is the same wall, or the part of a post the
+    reader had on screen, and the actors return the whole post.
+    """
+
+    @property
+    def key(self) -> str:
+        return "facebook.default"
+
+    async def resolve(self, context: ResolveContext) -> ResolvedMedia:
+        video = context.classification.media_family == MediaFamily.SOCIAL_VIDEO
+        media_type = MediaType.SHORT_VIDEO if video else MediaType.ARTICLE
+        resolved = ResolvedMedia(
+            media_key=context.media_key,
+            normalized_url=context.normalized_url,
+            media_family=context.classification.media_family,
+            media_type=media_type,
+            source_platform=SourcePlatform.FACEBOOK,
+            resolver_key=self.key,
+            metadata={
+                "resolver_version": "v1",
+                "extraction_mode": "queued_worker",
+                "source_url": context.normalized_url,
+            },
+        )
+        log_event(
+            logger,
+            logging.INFO,
+            "resolver.completed",
+            "Facebook resolver completed",
+            source_platform=SourcePlatform.FACEBOOK.value,
+            resolver_key=self.key,
+            media_type=media_type.value,
+            fallback_strategy="queued_worker",
+        )
+        return resolved
+
+
 class YouTubeResolver(ContentResolverPort):
     @property
     def key(self) -> str:

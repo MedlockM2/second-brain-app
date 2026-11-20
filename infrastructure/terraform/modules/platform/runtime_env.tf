@@ -59,6 +59,7 @@ locals {
     ARTICLE_EXTRACTION_QUEUE      = aws_sqs_queue.article_extraction.name
     X_INGESTION_QUEUE             = aws_sqs_queue.x_ingestion.name
     REDDIT_INGESTION_QUEUE        = aws_sqs_queue.reddit_ingestion.name
+    FACEBOOK_INGESTION_QUEUE      = aws_sqs_queue.facebook_ingestion.name
     WEB_PAGE_RENDER_QUEUE         = aws_sqs_queue.web_page_render.name
     YOUTUBE_INGESTION_QUEUE       = aws_sqs_queue.youtube_ingestion.name
     INSTAGRAM_INGESTION_QUEUE     = aws_sqs_queue.instagram_ingestion.name

@@ -11,7 +11,9 @@ Since TASK-633 every Reddit link is read through Apify
 (`workers/reddit_ingestion_worker.py`), which returns the whole thread. The page
 reader below is the last resort when both actors fail, and gives the library row
 its title at submission (`RedditResolver`). `render_thread` is the one format of a
-thread's text, whichever source fed it (`infrastructure/reddit_apify.py`).
+thread's text, whichever source fed it (`infrastructure/reddit_apify.py`); it lays
+the thread out through `discussion_text.render_discussion`, which Facebook posts
+share (TASK-636).
 
 What the extension sends (`extension/lib/page.ts`, `cleanedDocument`): the light
 DOM of the tab, i.e. `document.documentElement.outerHTML` minus ``script``,
@@ -60,6 +62,11 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional
 from urllib.parse import urljoin, urlsplit
 
+from media_summarizer.infrastructure.resolvers.discussion_text import (
+    DiscussionComment,
+    render_discussion,
+)
+
 REDDIT_HOSTS = frozenset({"reddit.com", "www.reddit.com", "old.reddit.com"})
 
 _BASE_URL = "https://www.reddit.com"
@@ -67,8 +74,6 @@ _BASE_URL = "https://www.reddit.com"
 _SUBREDDIT_SUFFIX_RE = re.compile(r"\s*:\s*r/[A-Za-z0-9_]+\s*$")
 #: An account that is a bot by name. AutoModerator is Reddit's own.
 _BOT_NAME_RE = re.compile(r"(?:^automoderator$|bot$)", re.IGNORECASE)
-#: A comment with nothing left to read: removed by its author or by a moderator.
-_EMPTY_BODIES = frozenset({"", "[deleted]", "[removed]"})
 _HEADINGS = ("h1", "h2", "h3", "h4", "h5", "h6")
 _CONTAINERS = ("div", "section", "article", "span")
 
@@ -244,33 +249,29 @@ def render_thread(
     total: Optional[int],
 ) -> str:
     """The thread as the readers draw it; shared by the page reader and the Apify path (TASK-633)."""
-    context = [part for part in (subreddit, f"u/{author}" if author else None, created) if part]
-    blocks = [f"## {title}"]
-    if context:
-        blocks.append(" · ".join(context))
-    if body:
-        blocks.append(body)
-    shown = [comment for comment in comments if comment.body.strip() not in _EMPTY_BODIES]
-    if shown:
-        count = f"{len(shown)} of {total}" if total and total > len(shown) else str(len(shown))
-        blocks.append(f"## Comments ({count})")
-        for comment in shown:
-            blocks.append(_comment_header(comment))
-            blocks.append(comment.body)
-    return "\n\n".join(blocks)
-
-
-def _comment_header(comment: RedditComment) -> str:
-    parts = [f"**u/{comment.author}**"]
-    if comment.depth > 0:
-        parts.append(f"reply, level {comment.depth}")
-    if comment.pinned:
-        parts.append("pinned")
-    if comment.moderator:
-        parts.append("moderator")
-    if _BOT_NAME_RE.search(comment.author):
-        parts.append("bot")
-    return " · ".join(parts)
+    return render_discussion(
+        title=title,
+        context=(subreddit, f"u/{author}" if author else None, created),
+        sections=(body,),
+        comments=[
+            DiscussionComment(
+                author=f"u/{comment.author}",
+                depth=comment.depth,
+                body=comment.body,
+                labels=tuple(
+                    label
+                    for label, applies in (
+                        ("pinned", comment.pinned),
+                        ("moderator", comment.moderator),
+                        ("bot", bool(_BOT_NAME_RE.search(comment.author))),
+                    )
+                    if applies
+                ),
+            )
+            for comment in comments
+        ],
+        total=total,
+    )
 
 
 def _markdown(container: Any) -> str:

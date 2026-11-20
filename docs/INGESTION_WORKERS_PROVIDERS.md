@@ -603,7 +603,25 @@ Every Reddit link — `/r/<sub>/comments/<id>/…`, `/comments/<id>`, the app's 
 | 2 | Apify actor | `automation-lab~reddit-scraper`, only when 1 fails or returns no post | Post and up to `APIFY_REDDIT_FALLBACK_MAX_COMMENTS` comments; refuses `redd.it`; no pinned/moderator flags | `APIFY_REDDIT_FALLBACK_ACTOR_ID`, `APIFY_REDDIT_FALLBACK_MAX_COMMENTS` |
 | 3 | The page the extension sent | `resolvers/reddit_thread.read_reddit_thread`, kept on S3 by the orchestrator | Post and the comments the page had inserted | — |
 
-Measured on 2026-11-19 on a 269-comment thread: kaix 270 items for 0.0069 USD, automation-lab 263 items for 0.2007 USD. Both texts go through `render_thread` (`## <title>`, context line, post, `## Comments (N of total)`), after `reddit_apify.clean_body`. Each run is settled at the larger of `usageTotalUsd` and its charged events priced at the barème (`provider_tariffs.apify`).
+Measured on 2026-11-19 on a 269-comment thread: kaix 270 items for 0.0069 USD, automation-lab 263 items for 0.2007 USD. Both texts go through `render_thread` (`## <title>`, context line, post, `## Comments (N of total)`), laid out by the shared `resolvers/discussion_text.render_discussion`, after `discussion_text.clean_body`. Each run is settled at the larger of `usageTotalUsd` and its charged events priced at the barème (`provider_tariffs.apify`).
+
+---
+
+## Facebook
+
+**Source type**: `facebook` (TASK-636)
+**Worker file**: `media_summarizer/workers/facebook_ingestion_worker.py`
+
+Every public Facebook link on `facebook.com`, `www.`, `m.`, `web.`, `mbasic.` or `fb.watch` goes through Apify, with or without the page the browser extension sent: Facebook shows AWS a login wall, and its share links do not resolve there. The URL is kept as given (tracking parameters aside). Videos: `/reel/<id>`, `/watch/?v=`, `/<x>/videos/…`, `fb.watch/<code>`, `/share/r/`, `/share/v/`. Posts: `/<x>/posts/…`, `/permalink.php`, `/story.php`, `/groups/<x>/posts|permalink/<id>`, `/share/p/`, `/photo/?fbid=`, `/photo.php?fbid=`, `/<x>/photos/…`. Anything else (page, profile or group alone, stories, events, marketplace) is refused with « Unsupported Facebook URL format. ».
+
+| Path | Order | Identifier | Extracts | Key env vars |
+|---|---|---|---|---|
+| Video | 1 | `neuro-scraper~facebook-video-details-scraper` | Caption, `audioUrl`, duration, owner, Facebook's own transcript (metadata only) | `APIFY_FACEBOOK_VIDEO_ACTOR_ID` |
+| Video | 2 | `lance_api~facebook-video-downloader-api`, only when 1 fails or has no audio/video URL | `audioUrl`/`videoUrl`, duration, author. Its `title` is invented and never read | `APIFY_FACEBOOK_VIDEO_FALLBACK_ACTOR_ID` |
+| Post | 1 | `apify~facebook-posts-scraper` | Text, author/page/group, date, outside link, photos, comment count, `isVideo`. A lone photo returns its `container_story`, read again | `APIFY_FACEBOOK_POST_ACTOR_ID` |
+| Post | 2 | `thedoor~facebook-comment-scraper` | Comments and replies (`depth`, `replyto_comment_id`), up to the cap | `APIFY_FACEBOOK_COMMENT_ACTOR_ID`, `APIFY_FACEBOOK_MAX_COMMENTS` (200) |
+
+All four share `APIFY_FACEBOOK_API_TOKEN` (runtime secret). A video's audio goes to Deepgram in `push` mode; it gets no comments. A video post follows the video path with the post's text as caption. A post's photos go through the shared OCR chain (`workers/post_images.py`), and the whole is stored as one text by `discussion_text.render_discussion`: context line, text, outside link, `## Image N` per image that gave text, `## Comments (N of total)`. Each run is closed at the larger of `usageTotalUsd` and its charged events at the barème; on 2026-11-20 a reel cost 0.0014 USD, a post 0.006 USD, 107 comments 0.027 USD.
 
 ---
 

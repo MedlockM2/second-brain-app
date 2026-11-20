@@ -55,6 +55,7 @@ DEFAULT_DEEPGRAM_TRANSCRIPTION_QUEUE = required_env("DEEPGRAM_TRANSCRIPTION_QUEU
 DEFAULT_PODCASTINDEX_RESOLUTION_QUEUE = required_env("PODCASTINDEX_RESOLUTION_QUEUE")
 DEFAULT_X_INGESTION_QUEUE = required_env("X_INGESTION_QUEUE")
 DEFAULT_REDDIT_INGESTION_QUEUE = required_env("REDDIT_INGESTION_QUEUE")
+DEFAULT_FACEBOOK_INGESTION_QUEUE = required_env("FACEBOOK_INGESTION_QUEUE")
 DEFAULT_WEB_PAGE_RENDER_QUEUE = required_env("WEB_PAGE_RENDER_QUEUE")
 DEFAULT_YOUTUBE_INGESTION_QUEUE = required_env("YOUTUBE_INGESTION_QUEUE")
 DEFAULT_TIKTOK_INGESTION_QUEUE = required_env("TIKTOK_INGESTION_QUEUE")
@@ -392,6 +393,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         podcastindex_resolution_queue: Optional[str] = None,
         x_ingestion_queue: Optional[str] = None,
         reddit_ingestion_queue: Optional[str] = None,
+        facebook_ingestion_queue: Optional[str] = None,
         youtube_ingestion_queue: Optional[str] = None,
         tiktok_ingestion_queue: Optional[str] = None,
         instagram_ingestion_queue: Optional[str] = None,
@@ -407,6 +409,9 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
         self._x_ingestion_queue = x_ingestion_queue or DEFAULT_X_INGESTION_QUEUE
         self._reddit_ingestion_queue = (
             reddit_ingestion_queue or DEFAULT_REDDIT_INGESTION_QUEUE
+        )
+        self._facebook_ingestion_queue = (
+            facebook_ingestion_queue or DEFAULT_FACEBOOK_INGESTION_QUEUE
         )
         self._youtube_ingestion_queue = (
             youtube_ingestion_queue or DEFAULT_YOUTUBE_INGESTION_QUEUE
@@ -626,6 +631,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
             podcastindex_resolution_enqueued = False
             x_ingestion_enqueued = False
             reddit_ingestion_enqueued = False
+            facebook_ingestion_enqueued = False
             youtube_ingestion_enqueued = False
             tiktok_ingestion_enqueued = False
             instagram_ingestion_enqueued = False
@@ -998,6 +1004,36 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     source_platform=resolved.source_platform.value,
                     page_thread_available=page_thread_s3_key is not None,
                 )
+            elif resolved.resolver_key == "facebook.default":
+                # Facebook shows AWS a login wall: Apify actors read the video or
+                # the post in the worker (TASK-636), whatever page the extension sent.
+                job.mark_extracting()
+                await database_async.update_processing_job(job)
+                await sqs.send_message(
+                    queue_name=self._facebook_ingestion_queue,
+                    message_body={
+                        "job_id": job.id,
+                        "user_id": command.user.user_id,
+                        "user_email": command.user.user_email,
+                        "media_key": resolved.media_key,
+                        "normalized_url": resolved.normalized_url,
+                        "resolver_key": resolved.resolver_key,
+                        "source_platform": resolved.source_platform.value,
+                    },
+                )
+                pipeline_enqueued = True
+                facebook_ingestion_enqueued = True
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "worker.enqueued",
+                    "Facebook ingestion enqueued",
+                    job_id=job.id,
+                    media_item_id=canonical_media_item_id,
+                    queue=self._facebook_ingestion_queue,
+                    resolver_key=resolved.resolver_key,
+                    source_platform=resolved.source_platform.value,
+                )
             elif resolved.resolver_key == "article.default" and resolved.metadata.get(
                 "web_page_render"
             ):
@@ -1196,6 +1232,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     if tiktok_ingestion_enqueued
                     or instagram_ingestion_enqueued
                     or reddit_ingestion_enqueued
+                    or facebook_ingestion_enqueued
                     else ProcessingLifecycleStatus.PENDING
                 ),
                 media_key=resolved.media_key,
@@ -1207,6 +1244,7 @@ class ProcessingJobSubmissionOrchestrator(SubmissionOrchestratorPort):
                     "podcastindex_resolution_enqueued": podcastindex_resolution_enqueued,
                     "x_ingestion_enqueued": x_ingestion_enqueued,
                     "reddit_ingestion_enqueued": reddit_ingestion_enqueued,
+                    "facebook_ingestion_enqueued": facebook_ingestion_enqueued,
                     "youtube_ingestion_enqueued": youtube_ingestion_enqueued,
                     "tiktok_ingestion_enqueued": tiktok_ingestion_enqueued,
                     "instagram_ingestion_enqueued": instagram_ingestion_enqueued,
