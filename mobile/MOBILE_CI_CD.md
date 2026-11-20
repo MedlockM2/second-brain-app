@@ -51,13 +51,19 @@ push to `main`), behind an HTTP API at `POST /webhook`. For every request it:
    wrong: `expo-signature: sha1=<hex HMAC-SHA1 of the body>` for EAS,
    `x-apple-signature: hmacsha256=<hex HMAC-SHA256 of the body>` for App Store
    Connect;
-2. keeps only the events that move a beta forward: an EAS build or submission
-   whose `status` is `finished` (its `platform` is passed on), and the App Store
-   Connect events `BUILD_UPLOAD_STATE_UPDATED` and
-   `BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED` (iOS). Anything else, pings
-   included, gets 200 and wakes nothing;
-3. calls GitHub's `workflow_dispatch` API on `mobile-beta-distribute.yml` (`ref:
-   main`). A GitHub failure is answered 502 so the sender retries.
+2. picks the workflow the event concerns:
+   - `mobile-beta-distribute.yml`, with `platform` set, for an EAS build or
+     submission whose `status` is `finished`, and for the App Store Connect events
+     `BUILD_UPLOAD_STATE_UPDATED` and `BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED`
+     (iOS);
+   - `mobile-build-watch.yml` for an EAS **build** whose `status` is `errored` (a
+     build payload carries `buildDetailsPageUrl`, a submission
+     `submissionDetailsPageUrl`): the watcher then opens the issue.
+
+   Anything else (pings, canceled builds, failed submissions) gets 200 and wakes
+   nothing;
+3. calls GitHub's `workflow_dispatch` API on that workflow (`ref: main`). A GitHub
+   failure is answered 502 so the sender retries.
 
 Its three values live in the Secrets Manager secret
 `media-summarizer-mobile-store-webhook-relay-dev` (dev account), which Terraform creates
@@ -1867,8 +1873,9 @@ It runs the same `scripts/mobile_release_check.sh internal` pre-flight, and it
 declares a `concurrency` group so two pushes cannot race two publishes. Decision
 rule and commands: [Shipping JS Over The Air](#shipping-js-over-the-air).
 
-`mobile-build-watch.yml` takes neither kind of entry point: `schedule` every
-30 min plus `workflow_dispatch`, no push and no tag. It cannot spend quota or
+`mobile-build-watch.yml` takes neither kind of entry point: `workflow_dispatch`
+(sent by the webhook relay when an EAS build errors) plus one `schedule` run a
+day, no push and no tag. It cannot spend quota or
 reach a tester — it reads `eas build:list` and opens issues. See
 [Automatic Notifications](#automatic-notifications).
 
@@ -2415,8 +2422,10 @@ is the channel that works.
 
 #### `mobile-build-watch.yml` — the failed-build watcher
 
-Added by task-349. `on: schedule` (every 30 min, at :17 and :47) plus
-`workflow_dispatch`, and nothing else. It runs
+Added by task-349. Since TASK-635 it is dispatched by the [webhook
+relay](#webhook-relay-task-635) the moment EAS reports an errored build, and runs
+once a day on `schedule` (07:17 UTC) as the safety net for a lost webhook; it used
+to poll every 30 minutes. It runs
 
 ```bash
 eas build:list --platform all --status errored --limit 20 --json --non-interactive
@@ -2519,7 +2528,7 @@ eas build:list --platform all --limit 10
 # View specific build
 eas build:view <build-id>
 
-# What mobile-build-watch.yml runs every 30 min — same command, by hand.
+# What mobile-build-watch.yml runs (on an errored-build webhook, and daily) — by hand.
 # Needs no EXPO_PUBLIC_* variable since 2026-09-08: app.config.ts resolves the API
 # base URL from eas.json on its own. It used to throw and die on a bare
 # "Error: build:list command failed."

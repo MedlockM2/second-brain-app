@@ -44,32 +44,35 @@ name: Mobile Build Watch
 # fire because SLACK_WEBHOOK_URL is not set. Nothing detected a failed build
 # before this file.
 #
+# WHAT WAKES IT (TASK-635): the mobile store webhook relay
+# (infrastructure/lambda/mobile_store_webhook_relay.py) dispatches this workflow
+# the moment EAS posts a BUILD webhook whose status is `errored`. The query below
+# is unchanged — the run still lists the errored builds and deduplicates on the
+# build id — so the webhook only decides *when* to look. One scheduled run a day
+# remains as the safety net for a lost webhook.
+#
 # In the log, the two paths are told apart by their annotations: a detected build
 # failure emits `::notice::`, and `::error::` is reserved for the broken-check
 # path. Keep it that way.
 #
 # Scope: builds only. Submissions are out — no read-only CLI command exists for
 # one (`eas submission:view` does not exist, and `eas submit --latest` *creates*
-# another submission), so covering them means the Expo GraphQL API or an EAS
-# webhook receiver. The gap is recorded in mobile/MOBILE_CI_CD.md instead of
+# another submission). The relay above does receive the SUBMIT webhook, so it is
+# the way to close that gap; it is recorded in mobile/MOBILE_CI_CD.md instead of
 # being half-closed here.
 # ---------------------------------------------------------------------------
 
 on:
   schedule:
-    # Every 30 minutes, and off the top of the hour on purpose: GitHub's
-    # scheduler is most loaded — and drops the most runs — at minute 0.
-    #
-    # Why 30 and not 60: Actions minutes are free on this public repository, so
-    # a tick costs nothing, and because deduplication is keyed on the build id a
-    # doubled detection cannot double-report. A shorter period therefore only
-    # buys resilience to the runs GitHub silently drops. It is not shorter than
-    # 30 min because nothing downstream is faster: a Free-plan build takes tens
-    # of minutes to hours (45-minute build timeout, multi-hour queue waits), so
-    # polling faster would only re-read the same rows.
-    - cron: "17,47 * * * *"
-  # Not decoration: a `schedule` trigger only ever runs on the default branch,
-  # so this is the owner's only way to exercise the file once it is merged.
+    # Once a day, the safety net for a lost webhook (TASK-635), off the top of
+    # the hour on purpose: GitHub's scheduler is most loaded — and drops the most
+    # runs — at minute 0. It used to run every 30 minutes, which was free while
+    # the repository was public; once it is private every run is billed by the
+    # started minute, and the relay already reports a failure as it happens.
+    # REPORT_WINDOW_HOURS (48 h) still covers a day between two runs twice over.
+    - cron: "17 7 * * *"
+  # The relay's trigger (an EAS build errored), and the owner's way to run the
+  # file by hand: a `schedule` trigger only ever runs on the default branch.
   workflow_dispatch:
 
 # One watcher at a time. Two overlapping runs could each see the same errored
@@ -109,8 +112,8 @@ env:
   #
   # This is NOT the timestamp state machine the design rejects: the cutoff is
   # relative to *now*, not to the previous run, so a skipped or doubled tick
-  # changes nothing. 48 h against a 30-minute period is 96 consecutive missed
-  # ticks of slack — far beyond GitHub's 30-60 min scheduler drift. The gap it
+  # changes nothing. 48 h against the daily safety run is one missed run of
+  # slack on top of the relay's dispatch at the moment a build errors. The gap it
   # accepts is a watcher stopped for two full days, which is the failure mode the
   # owner has explicitly chosen to cover by watching their inbox (GitHub mails a
   # warning before disabling a scheduled workflow for repository inactivity).

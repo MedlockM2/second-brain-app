@@ -1,11 +1,17 @@
-"""Relay EAS and App Store Connect webhooks to the Mobile Beta Distribution workflow.
+"""Relay EAS and App Store Connect webhooks to the mobile CI workflows (TASK-635).
 
-mobile-beta-distribute.yml used to poll every 30 minutes for the three events that
-move a beta forward: an EAS build or submission finishing, Apple finishing to
-process an upload, and Apple ending the external beta review. All three exist as
-webhooks, so this function receives them, checks their signature, and asks GitHub
-to run the workflow for the platform concerned (TASK-635). Google Play has no such
-webhook; the workflow's daily safety run covers it.
+Two workflows used to poll EAS and the stores every 30 minutes for events that
+exist as webhooks. This function receives them, checks their signature, and asks
+GitHub to run the workflow concerned:
+
+- ``mobile-beta-distribute.yml``, for the platform concerned, when an EAS build or
+  submission finishes, when Apple finishes processing an upload, and when Apple
+  ends the external beta review;
+- ``mobile-build-watch.yml`` when an EAS **build** errors: the build was started
+  with ``--no-wait``, so no job is left to fail, and the watcher opens the issue.
+
+Both workflows keep one safety run a day: Google Play sends no webhook when a
+track review ends, and a webhook can be lost.
 
 Every request is authenticated before anything else happens: an unsigned or badly
 signed body is refused with 401 and never reaches GitHub. The GitHub token and both
@@ -27,12 +33,10 @@ import boto3
 
 SECRET_ID = os.environ["RELAY_SECRET_ID"]
 REPOSITORY = os.environ["GITHUB_REPOSITORY"]
-WORKFLOW = os.environ.get("GITHUB_WORKFLOW_FILE", "mobile-beta-distribute.yml")
+DISTRIBUTE_WORKFLOW = os.environ.get("GITHUB_DISTRIBUTE_WORKFLOW", "mobile-beta-distribute.yml")
+BUILD_WATCH_WORKFLOW = os.environ.get("GITHUB_BUILD_WATCH_WORKFLOW", "mobile-build-watch.yml")
 REF = os.environ.get("GITHUB_REF", "main")
 
-# EAS: build or submission reached its end. "errored" and "canceled" leave nothing
-# to distribute, so they wake nothing up.
-EAS_DONE = {"finished"}
 # App Store Connect events that change what the distribution script can do next.
 ASC_EVENTS = {"buildUploadStateUpdated", "buildBetaDetailExternalBuildStateUpdated"}
 
@@ -58,24 +62,35 @@ def _signed(body: bytes, secret: str | None, received: str, algorithm: str, pref
     return hmac.compare_digest(expected, received.strip())
 
 
-def _eas_platform(payload: dict[str, Any]) -> str | None:
+def _eas_target(payload: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
+    """The workflow an EAS build or submission event wakes, with its inputs.
+
+    ``finished`` (build or submission): the distribution, for that platform.
+    ``errored`` on a build (a build payload has ``buildDetailsPageUrl``, a
+    submission ``submissionDetailsPageUrl``): the build watcher, which opens the
+    issue. A failed submission and any ``canceled`` event wake nothing: the
+    watcher reads builds only, and cancelling is the owner's own act.
+    """
+    status = payload.get("status")
     platform = payload.get("platform")
-    if payload.get("status") in EAS_DONE and platform in {"ios", "android"}:
-        return str(platform)
+    if status == "finished" and platform in {"ios", "android"}:
+        return DISTRIBUTE_WORKFLOW, {"platform": str(platform)}
+    if status == "errored" and "buildDetailsPageUrl" in payload:
+        return BUILD_WATCH_WORKFLOW, {}
     return None
 
 
-def _asc_platform(payload: dict[str, Any]) -> str | None:
+def _asc_target(payload: dict[str, Any]) -> tuple[str, dict[str, str]] | None:
     data = payload.get("data")
     if isinstance(data, dict) and data.get("type") in ASC_EVENTS:
-        return "ios"
+        return DISTRIBUTE_WORKFLOW, {"platform": "ios"}
     return None
 
 
-def _dispatch(token: str, platform: str) -> int:
+def _dispatch(token: str, workflow: str, inputs: dict[str, str]) -> int:
     request = urllib.request.Request(
-        f"https://api.github.com/repos/{REPOSITORY}/actions/workflows/{WORKFLOW}/dispatches",
-        data=json.dumps({"ref": REF, "inputs": {"platform": platform}}).encode(),
+        f"https://api.github.com/repos/{REPOSITORY}/actions/workflows/{workflow}/dispatches",
+        data=json.dumps({"ref": REF, "inputs": inputs}).encode(),
         method="POST",
         headers={
             "Accept": "application/vnd.github+json",
@@ -119,10 +134,10 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return _response(400, "invalid JSON")
 
-    platform = _eas_platform(payload) if source == "eas" else _asc_platform(payload)
-    if platform is None:
-        # Pings, failed builds, events of no use to the distribution: acknowledged so
-        # the sender does not retry them.
+    target = _eas_target(payload) if source == "eas" else _asc_target(payload)
+    if target is None:
+        # Pings, canceled builds, failed submissions, events no workflow needs:
+        # acknowledged so the sender does not retry them.
         print(json.dumps({"event": "ignored", "source": source}))
         return _response(200, "ignored")
 
@@ -130,7 +145,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if not token:
         print(json.dumps({"event": "no_github_token", "source": source}))
         return _response(503, "relay not configured")
-    status = _dispatch(token, platform)
-    print(json.dumps({"event": "dispatched", "source": source, "platform": platform, "github_status": status}))
+    workflow, inputs = target
+    status = _dispatch(token, workflow, inputs)
+    print(json.dumps({"event": "dispatched", "source": source, "workflow": workflow, **inputs, "github_status": status}))
     # 204 is GitHub's success. Anything else is answered 502 so the sender retries.
     return _response(202, "dispatched") if status == 204 else _response(502, "dispatch failed")

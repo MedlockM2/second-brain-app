@@ -1,10 +1,11 @@
 # Mobile beta webhook relay (TASK-635).
 #
 # EAS (BUILD, SUBMIT) and App Store Connect (BUILD_UPLOAD_STATE_UPDATED,
-# BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED) post here when a beta can move
-# forward. The function checks the signature, then starts mobile-beta-distribute.yml
-# through GitHub's workflow_dispatch API for the platform concerned. This replaces
-# the 30-minute poll of that workflow, which now runs once a day as a safety net.
+# BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED) post here. The function checks
+# the signature, then starts a workflow through GitHub's workflow_dispatch API:
+# mobile-beta-distribute.yml when a build, submission or Apple step finishes,
+# mobile-build-watch.yml when an EAS build errors. This replaces the 30-minute
+# polls of both workflows, which now run once a day as a safety net.
 #
 # Dev root only: the beta CI is a property of the repository, not of an
 # environment, and nothing in staging or prod should call GitHub.
@@ -78,10 +79,11 @@ resource "aws_lambda_function" "mobile_store_webhook_relay" {
 
   environment {
     variables = {
-      RELAY_SECRET_ID      = aws_secretsmanager_secret.mobile_store_webhook_relay.arn
-      GITHUB_REPOSITORY    = "MedlockM2/second-brain-app"
-      GITHUB_WORKFLOW_FILE = "mobile-beta-distribute.yml"
-      GITHUB_REF           = "main"
+      RELAY_SECRET_ID             = aws_secretsmanager_secret.mobile_store_webhook_relay.arn
+      GITHUB_REPOSITORY           = "MedlockM2/second-brain-app"
+      GITHUB_DISTRIBUTE_WORKFLOW  = "mobile-beta-distribute.yml"
+      GITHUB_BUILD_WATCH_WORKFLOW = "mobile-build-watch.yml"
+      GITHUB_REF                  = "main"
     }
   }
 

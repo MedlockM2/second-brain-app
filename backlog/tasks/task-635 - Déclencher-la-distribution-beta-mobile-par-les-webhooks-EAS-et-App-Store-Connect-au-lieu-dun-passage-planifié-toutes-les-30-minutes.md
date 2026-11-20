@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-19 16:34'
-updated_date: '2026-11-20 10:20'
+updated_date: '2026-11-20 10:43'
 labels:
   - tooling
   - mobile
@@ -80,4 +80,6 @@ Vérifié : `terraform validate` et `terraform fmt -check` propres sur `envs/dev
 Hors de portée de cette tâche, à faire par l'owner après le push (détail dans `mobile/MOBILE_CI_CD.md`) : créer le token GitHub à portée fine (Actions: write), remplir le secret `media-summarizer-mobile-store-webhook-relay-dev`, enregistrer les webhooks EAS (BUILD, SUBMIT) et App Store Connect, puis vérifier qu'un build EAS terminé lance `Mobile Beta Distribution` en `workflow_dispatch`.
 
 Hors périmètre, signalé : `mobile-build-watch.yml` tourne lui aussi toutes les 30 minutes (:17/:47) et compte dans les minutes facturées une fois le dépôt privé.
+
+2026-11-20, à la demande de l'owner. Le relais s'appelle désormais `mobile_store_webhook_relay` (secret et fonction `media-summarizer-mobile-store-webhook-relay-dev`, output `mobile_store_webhook_relay_url`). Il déclenche aussi `mobile-build-watch.yml` quand EAS signale un **build** `errored` (le payload contient `buildDetailsPageUrl`). Le watcher passe d'un passage toutes les 30 minutes à un passage quotidien de sécurité, à 07:17 UTC. Une soumission en échec ne réveille rien : le watcher ne lit que les builds, et ce manque reste noté dans `mobile/MOBILE_CI_CD.md`.
 <!-- SECTION:NOTES:END -->
