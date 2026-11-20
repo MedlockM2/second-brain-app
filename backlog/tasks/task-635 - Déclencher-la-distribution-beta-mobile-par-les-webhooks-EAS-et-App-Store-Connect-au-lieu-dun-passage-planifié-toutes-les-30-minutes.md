@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-11-19 16:34'
-updated_date: '2026-11-20 10:43'
+updated_date: '2026-11-20 10:50'
 labels:
   - tooling
   - mobile
@@ -82,4 +82,6 @@ Hors de portée de cette tâche, à faire par l'owner après le push (détail da
 Hors périmètre, signalé : `mobile-build-watch.yml` tourne lui aussi toutes les 30 minutes (:17/:47) et compte dans les minutes facturées une fois le dépôt privé.
 
 2026-11-20, à la demande de l'owner. Le relais s'appelle désormais `mobile_store_webhook_relay` (secret et fonction `media-summarizer-mobile-store-webhook-relay-dev`, output `mobile_store_webhook_relay_url`). Il déclenche aussi `mobile-build-watch.yml` quand EAS signale un **build** `errored` (le payload contient `buildDetailsPageUrl`). Le watcher passe d'un passage toutes les 30 minutes à un passage quotidien de sécurité, à 07:17 UTC. Une soumission en échec ne réveille rien : le watcher ne lit que les builds, et ce manque reste noté dans `mobile/MOBILE_CI_CD.md`.
+
+2026-11-20, à la demande de l'owner. Quand une soumission EAS est `errored` (le payload contient `submissionDetailsPageUrl`), le relais déclenche `mobile-build-watch.yml` en lui passant la soumission dans les inputs `submission_*`. Le job `report-errored-submission` ouvre alors une issue par id de soumission, avec le code et le message d'erreur, les logs et la commande `eas submit --id` qui renvoie le même build. Il n'y a pas de relance automatique.
 <!-- SECTION:NOTES:END -->
