@@ -161,6 +161,7 @@ terraform.rc
 infrastructure/terraform/.lambda-builds/
 infrastructure/terraform/*.zip
 infrastructure/terraform/modules/platform/.build/
+infrastructure/terraform/envs/dev/.build/
 
 # =============================================================================
 # LocalStack

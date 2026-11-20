@@ -20,10 +20,13 @@ on:
   # Catches up a store that was skipped because it was still reviewing: without
   # it, the skipped change waits for the next push touching the extension. The
   # `pending` job stops it within seconds when no store is owed a submission, and
-  # a retry reuses the package its push built instead of building it again. Same
-  # cadence as mobile-beta-distribute.yml.
+  # a retry reuses the package its push built instead of building it again.
+  # Every 3 hours, not every 30 minutes (TASK-635): neither the Chrome Web Store
+  # nor Edge Add-ons sends a webhook when a review ends, so polling is the only way
+  # to catch up, but a review takes hours to days and each run is billed by the
+  # started minute once the repository is private.
   schedule:
-    - cron: "23,53 * * * *"
+    - cron: "23 */3 * * *"
   workflow_dispatch:
 
 # One submission at a time: two runs racing would both read the same store state.

@@ -19,11 +19,19 @@ Alpha after the asynchronous build, upload and store processing have finished.
 
 `scripts/mobile_beta_distribute.mjs` reads the latest finished EAS `internal` build
 on each platform and reconciles it with the stores. It never builds or uploads a
-binary. The workflow runs after `Mobile OTA or Build` / `Mobile Build & Distribute`
-on `main`, every 30 minutes at minutes 8 and 38, and by manual dispatch. The
-scheduled retry is essential: `--no-wait` can finish hours before the binary and
-its auto-submission are ready. GitHub schedules can be delayed; 30 minutes is
-the polling interval, not a delivery SLA. Each platform has a concurrency lock.
+binary. `--no-wait` returns hours before the binary, its auto-submission and
+Apple's processing are done, so the workflow has to be woken up again later. Since
+TASK-635 it is woken by webhooks rather than a 30-minute poll (see "Webhook relay"
+below). It runs:
+
+- when the relay dispatches it, with `platform` set to the platform concerned;
+- after `Mobile OTA or Build` / `Mobile Build & Distribute` on `main`;
+- once a day at 06:08 UTC, as a safety net: Google Play sends no webhook when a
+  track review ends, and a webhook can be lost;
+- by manual dispatch (`platform` defaults to `both`).
+
+Each platform has a concurrency lock, so a BUILD and a SUBMIT webhook arriving
+together queue rather than race.
 
 A scheduled run first reads `/deepn/mobile/beta-state/<platform>` (SSM, dev) and
 stops within seconds when that platform is owed nothing. The script writes it at
@@ -32,6 +40,63 @@ the end of every complete, non-dry run: `owed` is true when the run ended on
 upload or Apple processing not finished, Play internal submission not done,
 Google already reviewing). A missing parameter counts as owed. Runs that follow
 a build, and manual ones, always go through.
+
+#### Webhook relay (TASK-635)
+
+`infrastructure/lambda/mobile_beta_relay.py`, deployed in dev by
+`infrastructure/terraform/envs/dev/mobile_beta_relay.tf` (Terraform Dev workflow, on
+push to `main`), behind an HTTP API at `POST /webhook`. For every request it:
+
+1. checks the signature before anything else and answers 401 when it is absent or
+   wrong: `expo-signature: sha1=<hex HMAC-SHA1 of the body>` for EAS,
+   `x-apple-signature: hmacsha256=<hex HMAC-SHA256 of the body>` for App Store
+   Connect;
+2. keeps only the events that move a beta forward: an EAS build or submission
+   whose `status` is `finished` (its `platform` is passed on), and the App Store
+   Connect events `BUILD_UPLOAD_STATE_UPDATED` and
+   `BUILD_BETA_DETAIL_EXTERNAL_BUILD_STATE_UPDATED` (iOS). Anything else, pings
+   included, gets 200 and wakes nothing;
+3. calls GitHub's `workflow_dispatch` API on `mobile-beta-distribute.yml` (`ref:
+   main`). A GitHub failure is answered 502 so the sender retries.
+
+Its three values live in the Secrets Manager secret
+`media-summarizer-mobile-beta-relay-dev` (dev account), which Terraform creates
+empty and never overwrites:
+
+```json
+{"github_token": "...", "eas_webhook_secret": "...", "asc_webhook_secret": "..."}
+```
+
+Until it is filled, every request fails the signature check. The webhook URL is
+the Terraform output `mobile_beta_relay_webhook_url`.
+
+**One-time setup (owner):**
+
+1. GitHub → Settings → Developer settings → Fine-grained tokens: a token limited to
+   this repository, permission **Actions: Read and write**, nothing else.
+2. Pick two random webhook secrets (`openssl rand -hex 32`, twice).
+3. Store the three values:
+   `AWS_PROFILE=second-brain-app aws secretsmanager put-secret-value --secret-id media-summarizer-mobile-beta-relay-dev --secret-string file://relay.json`
+   (then delete `relay.json`).
+4. EAS, from `mobile/`: `eas webhook:create --event BUILD --url <webhook url> --secret <eas secret>`,
+   then the same with `--event SUBMIT`.
+5. App Store Connect → Users and Access → Integrations → Webhooks: URL = the
+   webhook URL, secret = the ASC secret, events = build upload state and external
+   build (beta) state. Send the test ping: the relay logs `ignored` for it.
+6. Check: after the next EAS build finishes, `Mobile Beta Distribution` starts with
+   event `workflow_dispatch`, without waiting for the daily run. The relay logs
+   (`/aws/lambda/media-summarizer-mobile-beta-relay-dev`) show `dispatched` with
+   `github_status: 204`.
+
+**Rotating the GitHub token** (fine-grained tokens expire): create the new token,
+`put-secret-value` the JSON with the new `github_token` and the two unchanged
+secrets, then revoke the old token. The relay reads the secret once per cold start,
+so a running instance may keep the old token for a few minutes; revoke it after a
+quarter of an hour, or run `aws lambda update-function-configuration` on the
+function to force a cold start. **Rotating a webhook secret**: change it in
+Secrets Manager and in EAS (`eas webhook:update`) or App Store Connect at the same
+time; deliveries signed with the old secret in between are refused with 401 and
+retried by the sender.
 
 - **iOS:** find the exact marketing version and build number in App Store
   Connect, wait for valid processing, set the FR/EN "What to Test" notes,

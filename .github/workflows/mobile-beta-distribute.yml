@@ -2,12 +2,20 @@ name: Mobile Beta Distribution
 
 # Native builds and store processing can finish hours after --no-wait returns.
 # Reconcile store state rather than holding an Actions runner or uploading again.
-# The scheduled run first reads /deepn/mobile/beta-state/<platform> (written by
-# scripts/mobile_beta_distribute.mjs) and stops within seconds when the platform
-# is owed nothing; runs after a build, and manual ones, always go through.
+#
+# What wakes this workflow up (TASK-635):
+# - the mobile beta relay (infrastructure/lambda/mobile_beta_relay.py), on an EAS
+#   build or submission finishing and on App Store Connect finishing to process an
+#   upload or ending the external beta review. It dispatches with `platform` set;
+# - a build workflow completing (workflow_run);
+# - one safety run a day, for what no webhook reports (Google Play ending a track
+#   review) and for a lost webhook. It first reads
+#   /deepn/mobile/beta-state/<platform> (written by scripts/mobile_beta_distribute.mjs)
+#   and stops within seconds when the platform is owed nothing.
+# Dispatched and workflow_run runs always go through.
 on:
   schedule:
-    - cron: "8,38 * * * *"
+    - cron: "8 6 * * *"
   workflow_run:
     workflows: [Mobile OTA or Build, Mobile Build & Distribute]
     types: [completed]
@@ -18,6 +26,11 @@ on:
         description: "Inspect store state without distributing or submitting for review"
         type: boolean
         default: false
+      platform:
+        description: "Platform to reconcile (the relay names the one its webhook is about)"
+        type: choice
+        options: [both, ios, android]
+        default: both
 
 permissions:
   contents: read
@@ -49,6 +62,7 @@ jobs:
       - name: Is this platform owed a distribution?
         id: gate
         run: |
+          if [[ -n "${{ inputs.platform }}" && "${{ inputs.platform }}" != "both" && "${{ inputs.platform }}" != "${{ matrix.platform }}" ]]; then echo "go=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           if [[ "${{ github.event_name }}" != "schedule" ]]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           STATE=$(aws ssm get-parameter --name "$BETA_STATE_PARAMETER/${{ matrix.platform }}" --query Parameter.Value --output text 2>/dev/null || echo '{"owed":true}')
           GO=$(echo "$STATE" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin).get("owed") else "false")')
