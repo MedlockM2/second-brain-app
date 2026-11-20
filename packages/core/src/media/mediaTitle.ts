@@ -57,6 +57,8 @@ const LABEL_KEYS: Record<string, TranslationKey> = {
   instagram_video: "mediaTitle.label.instagramVideo",
   tiktok_video: "mediaTitle.label.tiktokVideo",
   instagram_post: "mediaTitle.label.instagramPost",
+  facebook_video: "mediaTitle.label.facebookVideo",
+  facebook_post: "mediaTitle.label.facebookPost",
   x_post: "mediaTitle.label.xPost",
   audio_note: "mediaTitle.label.audioNote",
   voice_note: "mediaTitle.label.voiceNote",

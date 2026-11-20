@@ -93,7 +93,7 @@
     "message": "خطأ في الشبكة. تحقق من اتصالك وحاول مرة أخرى."
   },
   "sourceRefused": {
-    "message": "هذا الرابط غير مدعوم. الروابط المدعومة: حلقات البودكاست وبرامجه (Spotify وApple Podcasts وDeezer وخلاصات RSS)، ومقاطع فيديو YouTube وTikTok، ومنشورات Instagram ومقاطع Reels، ومنشورات X، وسلاسل Reddit، وصفحات الويب (المقالات ومنشورات LinkedIn…)، والملفات الصوتية."
+    "message": "هذا الرابط غير مدعوم. الروابط المدعومة: حلقات البودكاست وبرامجه (Spotify وApple Podcasts وDeezer وخلاصات RSS)، ومقاطع فيديو YouTube وTikTok، ومنشورات Instagram ومقاطع Reels، ومنشورات Facebook ومقاطع الفيديو فيه، ومنشورات X، وسلاسل Reddit، وصفحات الويب (المقالات ومنشورات LinkedIn…)، والملفات الصوتية."
   },
   "retry": {
     "message": "إعادة المحاولة"

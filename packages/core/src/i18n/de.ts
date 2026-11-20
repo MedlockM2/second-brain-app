@@ -255,7 +255,7 @@ export const de: Catalog = {
     "Dieser erstellte Inhalt wurde nicht gefunden oder ist nicht mehr verfügbar.",
   "error.invalidUrl": "Dieser Link ist ungültig. Versuche eine andere URL.",
   "error.unsupportedUrl":
-    "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen und -Sendungen (Spotify, Apple Podcasts, Deezer, RSS-Feeds), YouTube- und TikTok-Videos, Instagram-Beiträge und -Reels, X-Beiträge, Reddit-Threads, Webseiten (Artikel, LinkedIn-Beiträge …) und Audiodateien.",
+    "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen und -Sendungen (Spotify, Apple Podcasts, Deezer, RSS-Feeds), YouTube- und TikTok-Videos, Instagram-Beiträge und -Reels, Facebook-Beiträge und -Videos, X-Beiträge, Reddit-Threads, Webseiten (Artikel, LinkedIn-Beiträge …) und Audiodateien.",
   "error.validation": "Bitte fülle alle Pflichtfelder aus.",
   "error.rateLimited":
     "Zu viele Anfragen. Warte einen Moment und versuche es erneut.",
@@ -884,6 +884,8 @@ export const de: Catalog = {
   "mediaTitle.label.instagramVideo": "Instagram-Video",
   "mediaTitle.label.tiktokVideo": "TikTok-Video",
   "mediaTitle.label.instagramPost": "Instagram-Beitrag",
+  "mediaTitle.label.facebookVideo": "Facebook-Video",
+  "mediaTitle.label.facebookPost": "Facebook-Beitrag",
   "mediaTitle.label.xPost": "X-Post",
   "mediaTitle.label.audioNote": "Audionotiz",
   "mediaTitle.label.voiceNote": "Sprachnachricht",
@@ -992,8 +994,8 @@ export const de: Catalog = {
   "auth.method.apple": "Apple",
   "auth.method.google": "Google",
   "intro.share.title": "Aus jeder App speichern",
-  "intro.share.bodyIos": "Tippe in YouTube, Instagram, LinkedIn, Spotify oder Safari auf {share} und dann auf {app}. Das Medium landet in deiner Bibliothek.",
-  "intro.share.bodyAndroid": "Tippe in YouTube, Instagram, LinkedIn, Spotify oder Chrome auf {share} Teilen und dann auf {app}. Das Medium landet in deiner Bibliothek.",
+  "intro.share.bodyIos": "Tippe in YouTube, Instagram, Facebook, LinkedIn, Spotify oder Safari auf {share} und dann auf {app}. Das Medium landet in deiner Bibliothek.",
+  "intro.share.bodyAndroid": "Tippe in YouTube, Instagram, Facebook, LinkedIn, Spotify oder Chrome auf {share} Teilen und dann auf {app}. Das Medium landet in deiner Bibliothek.",
   "intro.next": "Weiter",
   "intro.start": "Los geht’s",
   "intro.worksWith": "Funktioniert mit",

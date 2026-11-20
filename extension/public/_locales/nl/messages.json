@@ -93,7 +93,7 @@
     "message": "Netwerkfout. Controleer je verbinding en probeer het opnieuw."
   },
   "sourceRefused": {
-    "message": "Deze link wordt niet ondersteund. Ondersteunde links: podcastafleveringen en -programma's (Spotify, Apple Podcasts, Deezer, RSS-feeds), YouTube- en TikTok-video's, Instagram-posts en -reels, X-posts, Reddit-threads, webpagina's (artikelen, LinkedIn-posts…) en audiobestanden."
+    "message": "Deze link wordt niet ondersteund. Ondersteunde links: podcastafleveringen en -programma's (Spotify, Apple Podcasts, Deezer, RSS-feeds), YouTube- en TikTok-video's, Instagram-posts en -reels, Facebook-berichten en -video's, X-posts, Reddit-threads, webpagina's (artikelen, LinkedIn-posts…) en audiobestanden."
   },
   "retry": {
     "message": "Opnieuw"

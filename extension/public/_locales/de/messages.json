@@ -93,7 +93,7 @@
     "message": "Netzwerkfehler. Prüfe deine Verbindung und versuche es erneut."
   },
   "sourceRefused": {
-    "message": "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen und -Sendungen (Spotify, Apple Podcasts, Deezer, RSS-Feeds), YouTube- und TikTok-Videos, Instagram-Beiträge und -Reels, X-Beiträge, Reddit-Threads, Webseiten (Artikel, LinkedIn-Beiträge …) und Audiodateien."
+    "message": "Dieser Link wird nicht unterstützt. Unterstützt werden: Podcast-Folgen und -Sendungen (Spotify, Apple Podcasts, Deezer, RSS-Feeds), YouTube- und TikTok-Videos, Instagram-Beiträge und -Reels, Facebook-Beiträge und -Videos, X-Beiträge, Reddit-Threads, Webseiten (Artikel, LinkedIn-Beiträge …) und Audiodateien."
   },
   "retry": {
     "message": "Wiederholen"

@@ -93,7 +93,7 @@
     "message": "网络错误，请检查连接后重试。"
   },
   "sourceRefused": {
-    "message": "不支持此链接。支持的链接：播客单集和节目（Spotify、Apple Podcasts、Deezer、RSS 订阅源）、YouTube 和 TikTok 视频、Instagram 帖子和 Reels、X 帖子、Reddit 讨论串、网页（文章、LinkedIn 帖子等）、音频文件。"
+    "message": "不支持此链接。支持的链接：播客单集和节目（Spotify、Apple Podcasts、Deezer、RSS 订阅源）、YouTube 和 TikTok 视频、Instagram 帖子和 Reels、Facebook 帖子和视频、X 帖子、Reddit 讨论串、网页（文章、LinkedIn 帖子等）、音频文件。"
   },
   "retry": {
     "message": "重试"

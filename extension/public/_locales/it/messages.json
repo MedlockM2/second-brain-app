@@ -93,7 +93,7 @@
     "message": "Errore di rete. Controlla la connessione e riprova."
   },
   "sourceRefused": {
-    "message": "Questo link non è supportato. Link supportati: episodi e programmi podcast (Spotify, Apple Podcasts, Deezer, feed RSS), video di YouTube e TikTok, post e reel di Instagram, post di X, thread di Reddit, pagine web (articoli, post di LinkedIn…) e file audio."
+    "message": "Questo link non è supportato. Link supportati: episodi e programmi podcast (Spotify, Apple Podcasts, Deezer, feed RSS), video di YouTube e TikTok, post e reel di Instagram, post e video di Facebook, post di X, thread di Reddit, pagine web (articoli, post di LinkedIn…) e file audio."
   },
   "retry": {
     "message": "Riprova"

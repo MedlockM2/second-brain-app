@@ -93,7 +93,7 @@
     "message": "Erreur réseau. Vérifiez votre connexion et réessayez."
   },
   "sourceRefused": {
-    "message": "Ce lien n'est pas pris en charge. Liens acceptés : épisodes et émissions de podcast (Spotify, Apple Podcasts, Deezer, flux RSS), vidéos YouTube et TikTok, publications et reels Instagram, publications X, fils Reddit, pages web (articles, posts LinkedIn…), fichiers audio."
+    "message": "Ce lien n'est pas pris en charge. Liens acceptés : épisodes et émissions de podcast (Spotify, Apple Podcasts, Deezer, flux RSS), vidéos YouTube et TikTok, publications et reels Instagram, publications et vidéos Facebook, publications X, fils Reddit, pages web (articles, posts LinkedIn…), fichiers audio."
   },
   "retry": {
     "message": "Réessayer"

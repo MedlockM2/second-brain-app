@@ -178,6 +178,9 @@ _PLATFORM_LABEL_KEYS = {
     ("short_video", "instagram"): "instagram_video",
     ("short_video", "tiktok"): "tiktok_video",
     ("image_post", "instagram"): "instagram_post",
+    # TASK-636: a Facebook video, and a post (stored as an article).
+    ("short_video", "facebook"): "facebook_video",
+    ("article", "facebook"): "facebook_post",
     ("article", "x"): "x_post",
     ("article", "rss"): "article",
     # A voice note is the only thing WhatsApp still labels: since task-380 a
@@ -401,6 +404,8 @@ def title_label_key_for(
         return "youtube_video"
     if platform == "instagram":
         return "instagram_video"
+    if platform == "facebook":
+        return "facebook_video"
     if platform == "tiktok":
         return "tiktok_video"
     return _DEFAULT_LABEL_KEY

@@ -269,7 +269,7 @@ export const fr: Catalog = {
     "Ce contenu généré est introuvable ou n'est plus disponible.",
   "error.invalidUrl": "Ce lien est invalide. Essayez une autre URL.",
   "error.unsupportedUrl":
-    "Ce lien n'est pas pris en charge. Liens acceptés : épisodes et émissions de podcast (Spotify, Apple Podcasts, Deezer, flux RSS), vidéos YouTube et TikTok, publications et reels Instagram, publications X, fils Reddit, pages web (articles, posts LinkedIn…), fichiers audio.",
+    "Ce lien n'est pas pris en charge. Liens acceptés : épisodes et émissions de podcast (Spotify, Apple Podcasts, Deezer, flux RSS), vidéos YouTube et TikTok, publications et reels Instagram, publications et vidéos Facebook, publications X, fils Reddit, pages web (articles, posts LinkedIn…), fichiers audio.",
   "error.validation": "Veuillez remplir tous les champs obligatoires.",
   "error.rateLimited":
     "Trop de requêtes. Patientez un instant et réessayez.",
@@ -904,6 +904,8 @@ export const fr: Catalog = {
   "mediaTitle.label.instagramVideo": "Vidéo Instagram",
   "mediaTitle.label.tiktokVideo": "Vidéo TikTok",
   "mediaTitle.label.instagramPost": "Publication Instagram",
+  "mediaTitle.label.facebookVideo": "Vidéo Facebook",
+  "mediaTitle.label.facebookPost": "Publication Facebook",
   "mediaTitle.label.xPost": "Post X",
   "mediaTitle.label.audioNote": "Note audio",
   "mediaTitle.label.voiceNote": "Message vocal",
@@ -1012,8 +1014,8 @@ export const fr: Catalog = {
   "auth.method.apple": "Apple",
   "auth.method.google": "Google",
   "intro.share.title": "Enregistrez depuis n’importe quelle app",
-  "intro.share.bodyIos": "Dans YouTube, Instagram, LinkedIn, Spotify ou Safari, touchez {share} puis {app}. Le média arrive dans votre bibliothèque.",
-  "intro.share.bodyAndroid": "Dans YouTube, Instagram, LinkedIn, Spotify ou Chrome, touchez {share} Partager, puis {app}. Le média arrive dans votre bibliothèque.",
+  "intro.share.bodyIos": "Dans YouTube, Instagram, Facebook, LinkedIn, Spotify ou Safari, touchez {share} puis {app}. Le média arrive dans votre bibliothèque.",
+  "intro.share.bodyAndroid": "Dans YouTube, Instagram, Facebook, LinkedIn, Spotify ou Chrome, touchez {share} Partager, puis {app}. Le média arrive dans votre bibliothèque.",
   "intro.next": "Suivant",
   "intro.start": "C’est parti",
   "intro.worksWith": "Fonctionne avec",
