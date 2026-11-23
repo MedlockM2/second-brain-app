@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "Deze link kon niet worden bewaard."
   },
-  "alreadySaved": {
-    "message": "Staat al in je bibliotheek"
-  },
   "openInDeepn": {
     "message": "Openen in Deepn"
   },

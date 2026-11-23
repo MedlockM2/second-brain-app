@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "このリンクを保存できませんでした。"
   },
-  "alreadySaved": {
-    "message": "すでにライブラリにあります"
-  },
   "openInDeepn": {
     "message": "Deepn で開く"
   },

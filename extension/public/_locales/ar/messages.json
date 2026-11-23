@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "تعذّر حفظ هذا الرابط."
   },
-  "alreadySaved": {
-    "message": "موجود بالفعل في مكتبتك"
-  },
   "openInDeepn": {
     "message": "فتح في Deepn"
   },

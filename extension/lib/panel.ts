@@ -12,7 +12,7 @@ import type { SaveFailure } from "./errors";
  */
 export type PanelState =
   | { kind: "saving"; url: string; title: string | null }
-  | { kind: "media"; mediaItemId: string; url: string; title: string | null; origin: "saved" | "already" }
+  | { kind: "media"; mediaItemId: string; url: string; title: string | null }
   | { kind: "failed"; url: string; title: string | null; failure: SaveFailure }
   | { kind: "notSavable"; title: string | null };
 

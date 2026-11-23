@@ -55,7 +55,7 @@ type Tab = "reader" | "notebook";
 
 /** The tab the reader last chose, kept from one media to the next. */
 let activeTab: Tab = "reader";
-let mounted: { mediaItemId: string; scope: Scope; setOrigin(origin: "saved" | "already"): void } | null = null;
+let mounted: { mediaItemId: string; scope: Scope } | null = null;
 let rendering = Promise.resolve();
 
 if (import.meta.env.FIREFOX) {
@@ -201,14 +201,10 @@ const THUMBS: Partial<Record<MediaType, [IconName, string]>> = {
 };
 
 function mountMedia(state: Extract<PanelState, { kind: "media" }>): void {
-  if (mounted?.mediaItemId === state.mediaItemId) {
-    mounted.setOrigin(state.origin);
-    return;
-  }
+  if (mounted?.mediaItemId === state.mediaItemId) return;
   unmount();
   const scope: Scope = { alive: true };
   const id = state.mediaItemId;
-  let origin = state.origin;
   let media: MediaItemContract | null = null;
   const openInApp = () => void browser.tabs.create({ url: mediaUrl(id) });
 
@@ -260,7 +256,7 @@ function mountMedia(state: Extract<PanelState, { kind: "media" }>): void {
       ? ["sync-outline", msg("statusProcessing"), ""] as const
       : stage === "failed"
         ? ["alert-circle-outline", msg("statusFailed"), "err"] as const
-        : ["checkmark-circle", msg(origin === "already" ? "alreadySaved" : "saved"), "ok"] as const;
+        : ["checkmark-circle", msg("saved"), "ok"] as const;
     chip.className = `chip ${tone}`.trim();
     chip.replaceChildren(icon(glyph, 15, stage === "processing" ? "spin" : ""), text);
   }
@@ -365,14 +361,7 @@ function mountMedia(state: Extract<PanelState, { kind: "media" }>): void {
     }
   })();
 
-  mounted = {
-    mediaItemId: id,
-    scope,
-    setOrigin(next) {
-      origin = next;
-      drawChip();
-    },
-  };
+  mounted = { mediaItemId: id, scope };
 }
 
 /** "Alt+S", or whatever the reader set in the browser's shortcut settings. */

@@ -4,9 +4,7 @@ import type { ChatConversationDetail, ChatConversationList } from "@media-summar
 import type {
   ArtifactType,
   IngestUrlResponse,
-  ListMediaResponse,
   MediaItemContract,
-  MediaListItem,
   MediaStatusResponse,
   RawContentResponse,
 } from "@media-summarizer/core/types/media";
@@ -84,12 +82,6 @@ export async function saveSelection(text: string, sourceUrl: string | null, fold
     folder_id: folderId,
   };
   return (await getJson<IngestSharedContentResponse>("/api/media/ingest-shared-content", post(body))).media_item_id;
-}
-
-/** The latest save of this address, or `null`: what makes the side panel say "already in your library". */
-export async function savedItem(url: string): Promise<MediaListItem | null> {
-  const params = new URLSearchParams({ url, limit: "1" });
-  return (await getJson<ListMediaResponse>(`/api/media?${params.toString()}`)).items[0] ?? null;
 }
 
 export async function mediaItem(mediaItemId: string): Promise<MediaItemContract> {

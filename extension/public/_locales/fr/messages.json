@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "Ce lien n'a pas pu être enregistré."
   },
-  "alreadySaved": {
-    "message": "Déjà dans votre bibliothèque"
-  },
   "openInDeepn": {
     "message": "Ouvrir dans Deepn"
   },

@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "यह लिंक सहेजा नहीं जा सका।"
   },
-  "alreadySaved": {
-    "message": "पहले से आपकी लाइब्रेरी में है"
-  },
   "openInDeepn": {
     "message": "Deepn में खोलें"
   },

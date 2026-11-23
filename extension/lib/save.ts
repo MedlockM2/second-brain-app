@@ -1,16 +1,16 @@
 import { browser, type Browser } from "wxt/browser";
-import { lastFolderId, listFolders, savedItem, savePage } from "./api";
+import { lastFolderId, listFolders, savePage } from "./api";
 import { saveFailure } from "./errors";
-import { mediaStage } from "./media";
 import { readPage } from "./page";
 import { noteSaved, setPanelState } from "./panel";
 import { NotLinkedError, linkState } from "./session";
 
 /**
  * The save of a click on the icon (or Alt+S): the tab goes into the folder used
- * last, read as the reader sees it, unless the library already holds it — a
- * save whose processing failed holds nothing, so the click saves again. The
- * side panel follows through `PanelState`.
+ * last, read as the reader sees it. Every click saves, as a share does in the
+ * app: the same content can sit in several folders, a page whose text changed
+ * (a feed) is read afresh, and unchanged content is not processed again — the
+ * server reuses it by its text. The side panel follows through `PanelState`.
  *
  * A save that failed keeps what it would have sent — the page included, since
  * it cannot be read again without a new click — so the panel can send it again.
@@ -32,7 +32,7 @@ async function send(pending: PendingSave): Promise<void> {
   try {
     const mediaItemId = await savePage(pending.url, pending.folderId, pending.pageHtml);
     await browser.storage.session.remove(PENDING_KEY);
-    await setPanelState({ kind: "media", mediaItemId, url: pending.url, title: pending.title, origin: "saved" });
+    await setPanelState({ kind: "media", mediaItemId, url: pending.url, title: pending.title });
     await noteSaved();
   } catch (error) {
     if (error instanceof NotLinkedError) return setPanelState(null);
@@ -50,11 +50,7 @@ export async function saveTab(tab: Browser.tabs.Tab): Promise<void> {
 
   await setPanelState({ kind: "saving", url, title });
   try {
-    const [existing, folders, remembered] = await Promise.all([orNull(savedItem(url)), orNull(listFolders()), lastFolderId()]);
-    if (existing && mediaStage(existing.status) !== "failed") {
-      await setPanelState({ kind: "media", mediaItemId: existing.media_item_id, url, title, origin: "already" });
-      return;
-    }
+    const [folders, remembered] = await Promise.all([orNull(listFolders()), lastFolderId()]);
     const folderId = remembered && folders?.some((folder) => folder.id === remembered) ? remembered : null;
     const pageHtml = tab.id !== undefined ? await readPage(tab.id) : null;
     await send({ url, title, folderId, pageHtml });

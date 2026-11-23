@@ -544,12 +544,6 @@ EXTENSION_MESSAGES = {
         "ja": "このリンクを保存できませんでした。", "zh_CN": "无法保存此链接。", "ar": "تعذّر حفظ هذا الرابط.",
         "hi": "यह लिंक सहेजा नहीं जा सका।",
     },
-    "alreadySaved": {
-        "en": "Already in your library", "fr": "Déjà dans votre bibliothèque", "es": "Ya está en tu biblioteca",
-        "de": "Bereits in deiner Bibliothek", "it": "Già nella tua libreria", "pt_PT": "Já está na sua biblioteca",
-        "nl": "Staat al in je bibliotheek", "ja": "すでにライブラリにあります", "zh_CN": "已在你的资料库中",
-        "ar": "موجود بالفعل في مكتبتك", "hi": "पहले से आपकी लाइब्रेरी में है",
-    },
     "openInDeepn": {
         "en": "Open in Deepn", "fr": "Ouvrir dans Deepn", "es": "Abrir en Deepn", "de": "In Deepn öffnen",
         "it": "Apri in Deepn", "pt_PT": "Abrir no Deepn", "nl": "Openen in Deepn", "ja": "Deepn で開く",

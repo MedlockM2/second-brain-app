@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "Non è stato possibile salvare questo link."
   },
-  "alreadySaved": {
-    "message": "Già nella tua libreria"
-  },
   "openInDeepn": {
     "message": "Apri in Deepn"
   },

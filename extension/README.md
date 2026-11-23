@@ -6,8 +6,10 @@ et une cible Firefox dédiée.
 - **Un clic ouvre le panneau et enregistre.** Il n'y a pas de popup : cliquer sur
   l'icône, ou `Alt+S`, ouvre le panneau latéral (barre latérale sur Firefox) et
   enregistre l'onglet dans le dernier dossier utilisé (`lib/save.ts`, dans le
-  service worker). Une page déjà enregistrée ne l'est pas deux fois : l'en-tête dit
-  « Déjà dans votre bibliothèque » (`GET /api/media?url=`).
+  service worker). Chaque clic enregistre, comme un partage dans l'app : un même
+  contenu peut aller dans plusieurs dossiers, une page dont le texte a changé (un
+  fil) est relue, et un contenu inchangé n'est pas retraité — le serveur le
+  reconnaît à son texte et réutilise son traitement.
 - **La page telle qu'on la voit.** Au clic seulement, l'extension lit l'onglet et
   envoie son HTML nettoyé avec l'adresse (`page_html`) : une page payante ou
   derrière une connexion arrive en entier. Décision de l'owner du 2026-11-17, qui
@@ -76,7 +78,8 @@ web dans les deux applications. Le build refuse une origine vide ou un chemin.
 5. Ouvrir une page publique `https` et cliquer sur l'extension (ou `Alt+S`) : le
    panneau s'ouvre et la page est enregistrée sans autre clic. Changer de dossier
    dans l'en-tête, en cherchant puis en créant un dossier. Recliquer sur l'icône sur
-   la même page : « Déjà dans votre bibliothèque », sans doublon.
+   la même page : une seconde entrée, prête aussitôt (`media.ingest.duplicate_reused`
+   dans les logs de l'API, aucun nouveau job).
 6. Ouvrir un article réservé aux abonnés avec un compte abonné, l'enregistrer, et
    vérifier dans Deepn que le texte complet est là (`extraction_mode:
    "client_html"` dans les métadonnées du job).

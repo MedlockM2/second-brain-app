@@ -374,9 +374,6 @@
   "linkFailed": {
     "message": "无法保存此链接。"
   },
-  "alreadySaved": {
-    "message": "已在你的资料库中"
-  },
   "openInDeepn": {
     "message": "在 Deepn 中打开"
   },
