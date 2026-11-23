@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "正在搜索网页…"
   },
+  "chatWaitingForSource": {
+    "message": "等待提取 — 问题保留在当前会话中。"
+  },
+  "cancel": {
+    "message": "取消"
+  },
   "chatFailed": {
     "message": "未能生成回答。"
   },

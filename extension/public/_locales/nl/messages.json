@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "Zoeken op het web…"
   },
+  "chatWaitingForSource": {
+    "message": "Wachten op extractie — vraag bewaard in deze sessie."
+  },
+  "cancel": {
+    "message": "Annuleren"
+  },
   "chatFailed": {
     "message": "Er kon geen antwoord worden gemaakt."
   },

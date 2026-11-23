@@ -396,6 +396,8 @@ CORE_MESSAGES = {
     "chatNew": "chat.conversation.newConversation",
     "chatWriting": "chat.a11y.answerStarted",
     "chatSearchingWeb": "chat.thread.searchingWeb",
+    "chatWaitingForSource": "chat.thread.waitingForSource",
+    "cancel": "common.cancel",
     "chatFailed": "chat.thread.failed",
     "chatInterruptedCancelled": "chat.thread.interruptedCancelled",
     "chatInterruptedOutputLimit": "chat.thread.interruptedOutputLimit",

@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "वेब पर खोज रहे हैं…"
   },
+  "chatWaitingForSource": {
+    "message": "निष्कर्षण की प्रतीक्षा — प्रश्न इस सत्र में सुरक्षित है।"
+  },
+  "cancel": {
+    "message": "रद्द करें"
+  },
   "chatFailed": {
     "message": "कोई जवाब नहीं बन सका।"
   },

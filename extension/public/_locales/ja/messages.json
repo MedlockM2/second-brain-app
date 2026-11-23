@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "ウェブを検索中…"
   },
+  "chatWaitingForSource": {
+    "message": "抽出待ち — 質問はこのセッションに保存されています。"
+  },
+  "cancel": {
+    "message": "キャンセル"
+  },
   "chatFailed": {
     "message": "回答を作成できませんでした。"
   },

@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "جارٍ البحث على الويب…"
   },
+  "chatWaitingForSource": {
+    "message": "بانتظار الاستخراج — السؤال محفوظ في هذه الجلسة."
+  },
+  "cancel": {
+    "message": "إلغاء"
+  },
   "chatFailed": {
     "message": "تعذّر إنتاج إجابة."
   },

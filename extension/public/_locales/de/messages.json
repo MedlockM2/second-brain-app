@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "Suche im Web…"
   },
+  "chatWaitingForSource": {
+    "message": "Warten auf die Extraktion — die Frage bleibt in dieser Sitzung gespeichert."
+  },
+  "cancel": {
+    "message": "Abbrechen"
+  },
   "chatFailed": {
     "message": "Es konnte keine Antwort erzeugt werden."
   },

@@ -203,6 +203,12 @@
   "chatSearchingWeb": {
     "message": "Recherche sur le web…"
   },
+  "chatWaitingForSource": {
+    "message": "En attente de l’extraction — question conservée dans cette session."
+  },
+  "cancel": {
+    "message": "Annuler"
+  },
   "chatFailed": {
     "message": "Aucune réponse n'a pu être produite."
   },

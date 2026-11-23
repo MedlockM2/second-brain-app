@@ -24,6 +24,9 @@ const CHAT_POLL_MS = 2000;
 const TRANSLATION_POLL_MS = 5000;
 const POLL_LIMIT = 200;
 const TRANSLATION_LIMIT = 24;
+/** A question asked while the source is extracted is retried this often once it reads as ready. */
+const SOURCE_RETRY_MS = 3000;
+const SOURCE_RETRY_LIMIT = 20;
 
 export interface ReaderView {
   element: HTMLElement;
@@ -162,6 +165,10 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
   let conversationId: string | null = null;
   let messages: ChatMessage[] = [];
   let pendingQuestion: string | null = null;
+  // A question asked before the source is extracted, as in the app: kept in the thread, sent once it is ready.
+  let heldQuestion: { text: string; web: boolean } | null = null;
+  let waitTimer: ReturnType<typeof setTimeout> | null = null;
+  let sourceRetries = 0;
   let webSearching = false;
   let sending = false;
   let forceWebSearch = false;
@@ -220,7 +227,13 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     if (waiting && !(last?.role === "assistant" && last.text)) {
       items.push(el("li", { className: "typing" }, el("span"), el("span"), el("span"), msg(webSearching ? "chatSearchingWeb" : "chatWriting")));
     }
-    // The invitation, once there is something to ask about; before, "chatWaiting" says why not yet.
+    if (heldQuestion) {
+      const cancel = el("button", { className: "link", attrs: { type: "button" }, text: msg("cancel") });
+      cancel.onclick = cancelWaiting;
+      items.push(el("li", { className: "q", text: heldQuestion.text }),
+        el("li", { className: "typing" }, el("span"), el("span"), el("span"), msg("chatWaitingForSource"), cancel));
+    }
+    // The invitation, once there is something to ask about.
     if (items.length === 0 && media !== null && mediaStage(media.status) === "ready") items.push(el("li", { className: "note", text: msg("chatEmpty") }));
     thread.replaceChildren(...items);
     newConversation.hidden = conversationId === null || messages.length === 0;
@@ -240,17 +253,62 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     return item;
   }
 
+  const sourceReady = () => media !== null && mediaStage(media.status) === "ready";
+
   function drawComposer(): void {
-    const ready = media !== null && mediaStage(media.status) === "ready";
-    question.disabled = !ready;
-    send.disabled = !ready || sending;
-    webSearch.disabled = !ready;
+    // Open while the source is extracted too: a question asked then waits for it in the thread.
+    const open = media !== null && mediaStage(media.status) !== "failed";
+    question.disabled = !open;
+    send.disabled = !open || sending || heldQuestion !== null;
+    webSearch.disabled = !open;
     webSearch.classList.toggle("on", forceWebSearch);
     webSearch.setAttribute("aria-pressed", String(forceWebSearch));
-    composer.classList.toggle("off", !ready);
-    if (!chatStatus.classList.contains("error")) {
-      chatStatus.textContent = !ready && media && mediaStage(media.status) !== "failed" ? msg("chatWaiting") : "";
+    composer.classList.toggle("off", !open);
+  }
+
+  function hold(text: string, web: boolean): void {
+    heldQuestion = { text, web };
+    drawThread();
+    drawComposer();
+    // Ready on the panel's last read but not yet on the server's: try again shortly.
+    if (sourceReady() && !waitTimer && sourceRetries < SOURCE_RETRY_LIMIT) {
+      sourceRetries += 1;
+      waitTimer = setTimeout(() => {
+        waitTimer = null;
+        if (scope.alive) release();
+      }, SOURCE_RETRY_MS);
     }
+  }
+
+  /** Sends the held question once the source is ready, or hands it back if the source failed. */
+  function release(): void {
+    if (!heldQuestion || sending || !media) return;
+    const stage = mediaStage(media.status);
+    if (stage === "processing") return;
+    const held = heldQuestion;
+    heldQuestion = null;
+    if (stage === "ready") {
+      void submit(held.text, held.web);
+      return;
+    }
+    question.value = held.text;
+    fit();
+    drawThread();
+    drawComposer();
+  }
+
+  function cancelWaiting(): void {
+    if (!heldQuestion) return;
+    if (waitTimer) clearTimeout(waitTimer);
+    waitTimer = null;
+    // The draft goes back to the field, to edit or ask again.
+    question.value = heldQuestion.text;
+    forceWebSearch = heldQuestion.web;
+    heldQuestion = null;
+    fit();
+    drawThread();
+    drawComposer();
+    question.focus();
   }
 
   function fit(): void {
@@ -258,30 +316,42 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     question.style.height = `${Math.min(question.scrollHeight, 160)}px`;
   }
 
-  async function ask(): Promise<void> {
+  function ask(): void {
     const text = question.value.trim();
-    if (!text || sending) return;
-    const run = chatGeneration;
-    sending = true;
+    if (!text || sending || heldQuestion) return;
+    // The globe holds for one question, as in the app.
+    const web = forceWebSearch;
+    forceWebSearch = false;
+    question.value = "";
+    fit();
     chatStatus.className = "status";
     chatStatus.textContent = "";
+    sourceRetries = 0;
+    if (sourceReady()) void submit(text, web);
+    else hold(text, web);
+  }
+
+  async function submit(text: string, web: boolean): Promise<void> {
+    const run = chatGeneration;
+    sending = true;
+    pendingQuestion = text;
+    drawThread();
     drawComposer();
     try {
       if (!conversationId) conversationId = (await openConversation(mediaItemId)).conversation_id;
       if (!chatAlive(run)) return;
-      pendingQuestion = text;
-      question.value = "";
-      fit();
-      drawThread();
-      await sendTurn(conversationId, text, crypto.randomUUID(), forceWebSearch);
-      // The globe holds for one question, as in the app.
-      forceWebSearch = false;
+      await sendTurn(conversationId, text, crypto.randomUUID(), web);
       if (chatAlive(run)) void follow(run);
     } catch (error) {
       if (onUnlinked(error) || !chatAlive(run)) return;
-      // The draft is kept: the question goes back to the field.
       pendingQuestion = null;
+      if (saveFailure(error).code === "scope_preparing") {
+        hold(text, web);
+        return;
+      }
+      // The draft is kept: the question goes back to the field.
       question.value = text;
+      forceWebSearch = web;
       fit();
       drawThread();
       chatStatus.className = "status error";
@@ -294,7 +364,7 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
 
   composer.onsubmit = (event) => {
     event.preventDefault();
-    void ask();
+    ask();
   };
   webSearch.onclick = () => {
     forceWebSearch = !forceWebSearch;
@@ -306,7 +376,7 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     // Enter sends, Shift+Enter breaks the line; never in the middle of an IME composition.
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
-      void ask();
+      ask();
     }
   };
   newConversation.onclick = () => {
@@ -314,6 +384,9 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
     conversationId = null;
     messages = [];
     pendingQuestion = null;
+    if (waitTimer) clearTimeout(waitTimer);
+    waitTimer = null;
+    heldQuestion = null;
     webSearching = false;
     forceWebSearch = false;
     chatStatus.className = "status";
@@ -337,6 +410,7 @@ export function mountReader(scope: Scope, mediaItemId: string, onUnlinked: (erro
       drawFold();
       drawComposer();
       drawThread();
+      release();
     },
   };
 }
