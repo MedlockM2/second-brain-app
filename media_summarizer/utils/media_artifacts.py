@@ -12,10 +12,12 @@ only when a single entry is opened.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from functools import partial
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from boto3.dynamodb.conditions import Attr, Key
 from botocore.exceptions import ClientError
@@ -32,6 +34,28 @@ SCOPE_INDEX = os.environ.get("MEDIA_ARTIFACTS_SCOPE_INDEX", "scope-index")
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# A row that a TransactWriteItems is still holding refuses any plain write with
+# ``TransactionConflictException``. An artifact row is held that way by every
+# engagement stamp (``user_engagements.record`` puts a ConditionCheck on it),
+# which the API and the clients fire while the entry is still generating — so a
+# worker's claim, completion or failure can land inside one. The transaction lasts
+# tens of milliseconds and botocore never retries this code: these writes do,
+# briefly. A refused write was not applied, so sending it again re-evaluates its
+# condition against the row as it now stands.
+_TRANSACTION_CONFLICT_DELAYS_SECONDS = (0.05, 0.1, 0.2, 0.4)
+
+
+async def _through_transaction_conflicts(write: Callable[[], Awaitable[Any]]) -> Any:
+    for delay in _TRANSACTION_CONFLICT_DELAYS_SECONDS:
+        try:
+            return await write()
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "TransactionConflictException":
+                raise
+        await asyncio.sleep(delay)
+    return await write()
 
 
 class ArtifactAlreadyExistsError(Exception):
@@ -131,7 +155,8 @@ async def update_media_artifact(record: MediaArtifactRecord) -> MediaArtifactRec
         region_name=database_async.AWS_REGION,
     ) as dynamodb:
         table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
-        await table.put_item(
+        await _through_transaction_conflicts(partial(
+            table.put_item,
             Item=record.to_dynamodb_item(),
             ConditionExpression="attribute_exists(artifact_id) AND generation_revision = :revision AND "
             + ("#st = :generating" if record.status.value == "ready" else "#st IN (:generating, :queued)"),
@@ -141,7 +166,7 @@ async def update_media_artifact(record: MediaArtifactRecord) -> MediaArtifactRec
                 ":generating": "generating",
                 **({":queued": "queued"} if record.status.value != "ready" else {}),
             },
-        )
+        ))
         return record
 
 
@@ -166,7 +191,8 @@ async def claim_artifact_generation(
             region_name=database_async.AWS_REGION,
         ) as dynamodb:
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
-            await table.update_item(
+            await _through_transaction_conflicts(partial(
+                table.update_item,
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=(
                     "SET #st = :generating, lease_expires_at = :lease, updated_at = :now REMOVE error_code, error_message"
@@ -186,7 +212,7 @@ async def claim_artifact_generation(
                     ":revision": generation_revision,
                     ":now": now_iso,
                 },
-            )
+            ))
             return True
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
@@ -220,7 +246,8 @@ async def claim_awaiting_artifact(
             region_name=database_async.AWS_REGION,
         ) as dynamodb:
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
-            await table.update_item(
+            await _through_transaction_conflicts(partial(
+                table.update_item,
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=("SET sources = :sources, source_count = :count, updated_at = :now REMOVE awaiting_expires_at"),
                 ConditionExpression=("attribute_exists(artifact_id) AND #st = :queued AND attribute_exists(awaiting_expires_at)")
@@ -233,7 +260,7 @@ async def claim_awaiting_artifact(
                     ":queued": "queued",
                     ":now": _now_iso(),
                 },
-            )
+            ))
             return True
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
@@ -264,7 +291,8 @@ async def fail_awaiting_artifact(
             region_name=database_async.AWS_REGION,
         ) as dynamodb:
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
-            await table.update_item(
+            await _through_transaction_conflicts(partial(
+                table.update_item,
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=(
                     "SET #st = :failed, error_code = :code, error_message = :msg, "
@@ -284,7 +312,7 @@ async def fail_awaiting_artifact(
                     ":msg": error_message[:500],
                     ":now": now_iso,
                 },
-            )
+            ))
             return True
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
@@ -325,7 +353,8 @@ async def fail_stalled_artifact(
             region_name=database_async.AWS_REGION,
         ) as dynamodb:
             table = await dynamodb.Table(MEDIA_ARTIFACTS_TABLE)
-            await table.update_item(
+            await _through_transaction_conflicts(partial(
+                table.update_item,
                 Key={"artifact_id": artifact_id},
                 UpdateExpression=(
                     "SET #st = :failed, error_code = :code, error_message = :msg, "
@@ -348,7 +377,7 @@ async def fail_stalled_artifact(
                     ":msg": error_message[:500],
                     ":now": now_iso,
                 },
-            )
+            ))
             return True
     except ClientError as exc:
         if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
