@@ -18,7 +18,7 @@ class UrlClassifierPort(ABC):
     """Classifies canonical URLs into a resolver key and media family."""
 
     @abstractmethod
-    def classify(self, normalized_url: str) -> ClassifiedUrl:
+    def classify(self, normalized_url: str, *, rendered_page: bool = False) -> ClassifiedUrl:
         raise NotImplementedError
 
 

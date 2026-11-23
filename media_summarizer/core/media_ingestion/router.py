@@ -30,7 +30,7 @@ class ResolverRouter:
         self._classifier = classifier
         self._resolver_registry = resolver_registry
 
-    def route(self, normalized_url: str) -> ResolverRoute:
-        classification = self._classifier.classify(normalized_url)
+    def route(self, normalized_url: str, *, rendered_page: bool = False) -> ResolverRoute:
+        classification = self._classifier.classify(normalized_url, rendered_page=rendered_page)
         resolver = self._resolver_registry.get(classification.resolver_key)
         return ResolverRoute(classification=classification, resolver=resolver)

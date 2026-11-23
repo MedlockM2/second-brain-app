@@ -18,9 +18,12 @@ const PAGE_HTML_MAX_BYTES = 2_000_000;
 /**
  * Runs in the page. The document without what carries no text — measured
  * lossless for the extraction (task-490 §2) — or `null` past the ceiling: a cut
- * document reads badly, the address alone is sent instead.
+ * document reads badly, the address alone is sent instead. `null` too for a
+ * document that is not HTML (a feed shown as XML): the server takes any page it
+ * receives for an HTML page, whatever its address says.
  */
 function cleanedDocument(maxBytes: number): string | null {
+  if (document.contentType !== "text/html") return null;
   const copy = document.documentElement.cloneNode(true) as HTMLElement;
   copy.querySelectorAll("script, style, noscript, svg, iframe, template, link").forEach((node) => node.remove());
   copy.querySelectorAll("[style]").forEach((node) => node.removeAttribute("style"));

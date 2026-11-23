@@ -117,7 +117,11 @@ class IngestUrlUseCase:
         except ValueError as exc:
             raise InvalidUrlError(DEFAULT_INVALID_URL_MESSAGE) from exc
 
-        route = self._router.route(normalized_url)
+        # A page the reader's browser drew (the extension's `page_html`) is HTML,
+        # whatever its address suggests: `linkedin.com/feed` is a page, not a feed.
+        route = self._router.route(
+            normalized_url, rendered_page=bool(command.request.page_html)
+        )
 
         resolve_context = ResolveContext(
             command=command,

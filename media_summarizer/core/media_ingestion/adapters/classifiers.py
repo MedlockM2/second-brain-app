@@ -320,7 +320,8 @@ class RuleBasedUrlClassifier(UrlClassifierPort):
     serves.
     """
 
-    def classify(self, normalized_url: str) -> ClassifiedUrl:
+    def classify(self, normalized_url: str, *, rendered_page: bool = False) -> ClassifiedUrl:
+        """`rendered_page`: the browser drew this URL as an HTML page, so it is no feed."""
         url = (normalized_url or "").strip()
         if not url:
             raise InvalidUrlError(DEFAULT_INVALID_URL_MESSAGE)
@@ -398,6 +399,10 @@ class RuleBasedUrlClassifier(UrlClassifierPort):
         )
 
         source_type = classify_source_type(host=host, path=path)
+        # The feed criterion reads the address only (`/feed`, `.xml`, `feeds.`); a
+        # page the browser rendered as HTML settles it the other way.
+        if rendered_page and source_type is MediaSourceType.FEED:
+            source_type = MediaSourceType.WEB_ARTICLE
 
         if source_type is MediaSourceType.SPOTIFY:
             if not _is_spotify_podcast_path(path):
