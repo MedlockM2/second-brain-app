@@ -1,13 +1,15 @@
 import { browser, type Browser } from "wxt/browser";
 import { lastFolderId, listFolders, savedItem, savePage } from "./api";
 import { saveFailure } from "./errors";
+import { mediaStage } from "./media";
 import { readPage } from "./page";
 import { noteSaved, setPanelState } from "./panel";
 import { NotLinkedError, linkState } from "./session";
 
 /**
  * The save of a click on the icon (or Alt+S): the tab goes into the folder used
- * last, read as the reader sees it, unless the library already holds it. The
+ * last, read as the reader sees it, unless the library already holds it — a
+ * save whose processing failed holds nothing, so the click saves again. The
  * side panel follows through `PanelState`.
  *
  * A save that failed keeps what it would have sent — the page included, since
@@ -49,7 +51,7 @@ export async function saveTab(tab: Browser.tabs.Tab): Promise<void> {
   await setPanelState({ kind: "saving", url, title });
   try {
     const [existing, folders, remembered] = await Promise.all([orNull(savedItem(url)), orNull(listFolders()), lastFolderId()]);
-    if (existing) {
+    if (existing && mediaStage(existing.status) !== "failed") {
       await setPanelState({ kind: "media", mediaItemId: existing.media_item_id, url, title, origin: "already" });
       return;
     }
