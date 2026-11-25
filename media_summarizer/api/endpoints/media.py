@@ -120,6 +120,11 @@ from media_summarizer.core.services.raw_content_service import (
 )
 from media_summarizer.core.services.short_url_resolver import resolve_tiktok_short_link
 from media_summarizer.core.services.transcript_translation import TranslationPayer
+from media_summarizer.infrastructure.resolvers.linked_document_download import (
+    LinkedDocumentTooLarge,
+    LinkedDocumentUnreadable,
+    download_linked_pdf,
+)
 from media_summarizer.utils import database_async, s3, sqs
 from media_summarizer.utils.env import required_env
 from media_summarizer.utils.language_codes import normalize_language_code
@@ -1439,6 +1444,7 @@ async def ingest_url(
     )
     from media_summarizer.core.media_ingestion.errors import (
         InvalidUrlError,
+        LinkedDocumentFound,
         MediaIngestionError,
         UnsupportedUrlError,
     )
@@ -1547,6 +1553,16 @@ async def ingest_url(
 
     except HTTPException:
         raise
+    except LinkedDocumentFound as found:
+        # The link answers a PDF: a document, not an article (task-639).
+        document = await _ingest_linked_document(
+            user=user, url=found.url, folder_id=resolved_folder_id
+        )
+        return IngestUrlResponse(
+            media_item_id=document.media_item_id,
+            status=document.status,
+            source_platform="document",
+        )
     except BudgetRefusedError as refusal:
         # A save of content another account processed, or an article whose
         # preview and translation the month does not cover: refused like a new
@@ -1696,6 +1712,187 @@ async def create_upload_url(
     )
 
 
+async def _submit_staged_document(
+    *,
+    user: Any,
+    staged: StagedUpload,
+    folder_id: Optional[str],
+    origin: str,
+) -> UploadDocumentResponse:
+    """Turn a staged document into a library row, a job and a parsing message.
+
+    The one place a document enters the pipeline, whether the client PUT it itself
+    (`origin="upload"`) or the server fetched it from a shared link
+    (`origin="link"`, task-639): the identity, the title, the durable row, the job
+    and the budget admission by the parsing worker are the same for both.
+    """
+    resolved_folder_id = folder_id
+    file_name = staged.file_name
+    # Content identity of this document: the fingerprint of its bytes, inside
+    # this account (task-393). Neither the file's name nor its size is in it --
+    # the two together identify no content, so `report.pdf` overwrote
+    # `report.pdf`. Computed before the job so it can seed the durable library
+    # id.
+    media_key = generate_uploaded_file_media_key(
+        kind=UploadedFileKind.DOCUMENT,
+        owner_user_id=user.id,
+        content_fingerprint=staged.content_fingerprint,
+    )
+
+    # Title stored right away (task-266): the cleaned filename when it says
+    # something -- "Grant Deed_Security.pdf" reads "Grant Deed Security" --
+    # otherwise a label key the app renders with the upload date, which is the
+    # owner's rule for a camera capture or a library pick whose name is
+    # `IMG_4821`. The key is chosen from the extension rather than from the
+    # media type: every import is filed as a `document` row, and an image among
+    # them must still read "Photo" (task-400).
+    # The parsing worker upgrades the title later if the document carries one.
+    derived_title = derive_stored_title(
+        [],
+        label_key=title_label_key_for_file_name(file_name),
+        file_name_candidates=[file_name],
+    )
+    media_title = derived_title.title
+    # No cover here, for any format: this handler never sees the bytes. The
+    # parsing worker builds it once the object sits at its canonical key and
+    # the parse is done, and mirrors it back -- the photo itself for a capture
+    # or a gallery pick (task-302 §4, rows 9-10), the render of page 1 for a
+    # document (task-344). No creator either: an uploaded file has no publisher
+    # we can read.
+
+    # Durable library entry first (task-240, task-218 §4.3): the job, the S3
+    # object and the queue message are operational and may be retried; what
+    # the user saved must not depend on any of them surviving. Since task-220
+    # the library is read from this row, so a failure here fails the upload:
+    # returning 202 for a save the user will never see is worse than an error.
+    durable_media_item_id = await save_media_for_user(
+        user_id=user.id,
+        media_key=media_key,
+        title=media_title,
+        title_label_key=derived_title.label_key,
+        source_platform="document",
+        media_type="document",
+        folder_id=resolved_folder_id,
+    )
+
+    # Create processing job
+    job = ProcessingJob(
+        user_id=user.id,
+        user_email=user.email,
+        source_url="",
+        source_platform="document",
+        media_type="document",
+        title=media_title,
+        # Pointer to the durable library row this job is working for. The job
+        # deliberately stays free of `media_key`: the completion events and the
+        # watcher fan-out key off it, and this upload path has no entry in the
+        # global idempotence ledger to point at.
+        media_item_id=durable_media_item_id,
+    )
+    job = await database_async.create_processing_job(job)
+
+    # Move the uploaded object to the key the parsing worker and the deletion
+    # cascade expect. Server-side copy: the bytes stay inside S3.
+    document_s3_key = f"{job.id}/{file_name}"
+    await _promote_staged_upload(staged, bucket=DOCUMENT_BUCKET, key=document_s3_key)
+
+    # Enqueue document parsing message
+    await sqs.send_message(
+        queue_name=DOCUMENT_PARSING_QUEUE,
+        message_body={
+            "job_id": job.id,
+            "user_id": user.id,
+            "document_s3_key": document_s3_key,
+            "file_name": file_name,
+            "media_key": media_key,
+        },
+    )
+
+    # The minutes this document costs are charged by the parsing worker, which
+    # is the only place the page count exists.
+
+    log_event(
+        logger,
+        logging.INFO,
+        "media.upload.created",
+        "Document uploaded and queued for parsing",
+        origin=origin,
+        media_item_id=durable_media_item_id,
+        job_id=job.id,
+        source_platform="document",
+        file_name=file_name,
+        file_size_bytes=staged.size_bytes,
+    )
+
+    return UploadDocumentResponse(
+        media_item_id=durable_media_item_id,
+        status=job.status.value,
+        source_platform="document",
+        file_name=file_name,
+    )
+
+
+async def _ingest_linked_document(
+    *,
+    user: Any,
+    url: str,
+    folder_id: Optional[str],
+) -> UploadDocumentResponse:
+    """Import the PDF a shared link answers, through the document pipeline (task-639).
+
+    The server fetches the bytes the client never held: they go to the same
+    per-user staging key a presigned PUT would have used, are vouched for by their
+    own MD5 (what S3's ETag would have said), and are then submitted exactly like
+    an upload. Refused loudly -- never truncated, never filed as a failed article
+    -- when the file is over the document ceiling or cannot be read as a PDF.
+    """
+    max_bytes = _max_upload_bytes_for(UploadTarget.DOCUMENT)
+    try:
+        document = await download_linked_pdf(url, max_bytes=max_bytes)
+    except LinkedDocumentTooLarge as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail={"error_code": "DOCUMENT_LINK_TOO_LARGE", "max_bytes": exc.max_bytes},
+        ) from exc
+    except LinkedDocumentUnreadable as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "media.linked_document.unreadable",
+            "Linked document could not be downloaded as a PDF",
+            error_code="DOCUMENT_LINK_UNREADABLE",
+            reason=exc.reason,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"error_code": "DOCUMENT_LINK_UNREADABLE"},
+        ) from exc
+
+    try:
+        file_name = _staging_file_name(document.file_name)
+        staging_key = f"{UPLOAD_STAGING_PREFIX}/{user.id}/{uuid.uuid4().hex}/{file_name}"
+        await s3.upload_file_object(
+            DOCUMENT_BUCKET,
+            staging_key,
+            document.body,
+            content_type=document.content_type,
+        )
+    finally:
+        document.body.close()
+
+    staged = StagedUpload(
+        bucket=DOCUMENT_BUCKET,
+        key=staging_key,
+        file_name=file_name,
+        size_bytes=document.size_bytes,
+        content_type=document.content_type,
+        content_fingerprint=document.content_fingerprint,
+    )
+    return await _submit_staged_document(
+        user=user, staged=staged, folder_id=folder_id, origin="link"
+    )
+
+
 @router.post("/upload", response_model=UploadDocumentResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
     payload: UploadDocumentRequest,
@@ -1747,106 +1944,11 @@ async def upload_document(
         # calls, so it is checked like any other import.
         await _precheck_budget(user.id)
 
-        # Content identity of this document: the fingerprint of its bytes, inside
-        # this account (task-393). Neither the file's name nor its size is in it --
-        # the two together identify no content, so `report.pdf` overwrote
-        # `report.pdf`. Computed before the job so it can seed the durable library
-        # id.
-        media_key = generate_uploaded_file_media_key(
-            kind=UploadedFileKind.DOCUMENT,
-            owner_user_id=user.id,
-            content_fingerprint=staged.content_fingerprint,
-        )
-
-        # Title stored right away (task-266): the cleaned filename when it says
-        # something -- "Grant Deed_Security.pdf" reads "Grant Deed Security" --
-        # otherwise a label key the app renders with the upload date, which is the
-        # owner's rule for a camera capture or a library pick whose name is
-        # `IMG_4821`. The key is chosen from the extension rather than from the
-        # media type: every import is filed as a `document` row, and an image among
-        # them must still read "Photo" (task-400).
-        # The parsing worker upgrades the title later if the document carries one.
-        derived_title = derive_stored_title(
-            [],
-            label_key=title_label_key_for_file_name(file_name),
-            file_name_candidates=[file_name],
-        )
-        media_title = derived_title.title
-        # No cover here, for any format: this handler never sees the bytes. The
-        # parsing worker builds it once the object sits at its canonical key and
-        # the parse is done, and mirrors it back -- the photo itself for a capture
-        # or a gallery pick (task-302 §4, rows 9-10), the render of page 1 for a
-        # document (task-344). No creator either: an uploaded file has no publisher
-        # we can read.
-
-        # Durable library entry first (task-240, task-218 §4.3): the job, the S3
-        # object and the queue message are operational and may be retried; what
-        # the user saved must not depend on any of them surviving. Since task-220
-        # the library is read from this row, so a failure here fails the upload:
-        # returning 202 for a save the user will never see is worse than an error.
-        durable_media_item_id = await save_media_for_user(
-            user_id=user.id,
-            media_key=media_key,
-            title=media_title,
-            title_label_key=derived_title.label_key,
-            source_platform="document",
-            media_type="document",
+        return await _submit_staged_document(
+            user=user,
+            staged=staged,
             folder_id=resolved_folder_id,
-        )
-
-        # Create processing job
-        job = ProcessingJob(
-            user_id=user.id,
-            user_email=user.email,
-            source_url="",
-            source_platform="document",
-            media_type="document",
-            title=media_title,
-            # Pointer to the durable library row this job is working for. The job
-            # deliberately stays free of `media_key`: the completion events and the
-            # watcher fan-out key off it, and this upload path has no entry in the
-            # global idempotence ledger to point at.
-            media_item_id=durable_media_item_id,
-        )
-        job = await database_async.create_processing_job(job)
-
-        # Move the uploaded object to the key the parsing worker and the deletion
-        # cascade expect. Server-side copy: the bytes stay inside S3.
-        document_s3_key = f"{job.id}/{file_name}"
-        await _promote_staged_upload(staged, bucket=DOCUMENT_BUCKET, key=document_s3_key)
-
-        # Enqueue document parsing message
-        await sqs.send_message(
-            queue_name=DOCUMENT_PARSING_QUEUE,
-            message_body={
-                "job_id": job.id,
-                "user_id": user.id,
-                "document_s3_key": document_s3_key,
-                "file_name": file_name,
-                "media_key": media_key,
-            },
-        )
-
-        # The minutes this document costs are charged by the parsing worker, which
-        # is the only place the page count exists.
-
-        log_event(
-            logger,
-            logging.INFO,
-            "media.upload.created",
-            "Document uploaded and queued for parsing",
-            media_item_id=durable_media_item_id,
-            job_id=job.id,
-            source_platform="document",
-            file_name=file_name,
-            file_size_bytes=staged.size_bytes,
-        )
-
-        return UploadDocumentResponse(
-            media_item_id=durable_media_item_id,
-            status=job.status.value,
-            source_platform="document",
-            file_name=file_name,
+            origin="upload",
         )
 
     except HTTPException:

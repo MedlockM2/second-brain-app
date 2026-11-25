@@ -177,6 +177,17 @@ Request (`IngestUrlRequest`):
 the backend assigns the user's default Uncategorized folder. A provided folder id
 must belong to the authenticated user.
 
+**A link that answers a PDF (task-639).** When the URL's response is `application/pdf`
+(after redirects), the link is imported as a document, whatever the client: the server
+downloads the file (bounded by the document upload ceiling, 50 MB) and submits it through
+the same path as `POST /api/media/upload` -- same parsing worker, same budget admission by
+page count, `source_platform: "document"` in the response, title from `Content-Disposition`
+or the URL's file name. Its identity is `md5-<hex>` of the bytes, so the same PDF uploaded
+or shared is one media. Refusals: `413 DOCUMENT_LINK_TOO_LARGE` (with `max_bytes`) and
+`422 DOCUMENT_LINK_UNREADABLE` (not a PDF on download, error status, timeout). A PDF that
+needs a session cookie rather than a token in the URL still fails: the server receives the
+login page.
+
 **`page_html` (optional, browser extension).** The page as the reader's browser drew it,
 read on the click and cleaned by the extension (`script`, `style`, `noscript`, `svg`,
 `iframe`, `template`, `link` and `style` attributes removed), at most

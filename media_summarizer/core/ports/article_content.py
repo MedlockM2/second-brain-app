@@ -90,6 +90,15 @@ MEDIA_FAILURE_CODE_BY_ARTICLE_FETCH_ERROR: Dict[
 }
 
 
+_PDF_CONTENT_TYPES = frozenset({"application/pdf", "application/x-pdf"})
+
+
+def is_pdf_content_type(content_type: Optional[str]) -> bool:
+    """Whether a `Content-Type` header names a PDF, parameters ignored."""
+    media_type = (content_type or "").split(";", 1)[0].strip().lower()
+    return media_type in _PDF_CONTENT_TYPES
+
+
 def _now_iso_utc() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 

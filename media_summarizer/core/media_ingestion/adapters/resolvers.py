@@ -24,6 +24,7 @@ from media_summarizer.core.media_ingestion.domain import (
     SourcePlatform,
 )
 from media_summarizer.core.media_ingestion.errors import (
+    LinkedDocumentFound,
     UnsupportedUrlError,
 )
 from media_summarizer.core.media_ingestion.media_metadata import (
@@ -36,6 +37,8 @@ from media_summarizer.core.ports.article_content import (
     ArticleContent,
     ArticleContentFetcherPort,
     ArticleFetchError,
+    ArticleFetchErrorCode,
+    is_pdf_content_type,
 )
 from media_summarizer.core.services.media_identity import (
     article_content_fingerprint,
@@ -252,6 +255,15 @@ class ArticleResolver(ContentResolverPort):
         try:
             article = await self._fetcher().fetch(context.normalized_url)
         except ArticleFetchError as exc:
+            content_type = str(exc.context.get("content_type") or "")
+            if exc.code is ArticleFetchErrorCode.NOT_HTML and is_pdf_content_type(
+                content_type
+            ):
+                # Not a page but a document behind a link (task-639): the
+                # endpoint imports it through the document pipeline.
+                raise LinkedDocumentFound(
+                    url=context.command.request.url, content_type=content_type
+                ) from exc
             return self._unreadable_page(context=context, error=exc)
 
         signals = article.signals

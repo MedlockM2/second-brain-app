@@ -51,3 +51,19 @@ class NonRetryableProviderResolutionError(ResolutionError, PermanentIngestionFai
 
 class OrchestrationError(MediaIngestionError):
     """Raised when submission orchestration fails."""
+
+
+class LinkedDocumentFound(MediaIngestionError):
+    """The link answered a PDF, not a page: it is a document to import (task-639).
+
+    Raised by the article resolver, which is the first to see the answer's
+    `Content-Type`. It is not a failure: the API endpoint catches it and hands the
+    link to the document pipeline, the same one `POST /api/media/upload` feeds, so
+    a shared link to a PDF ends as a document exactly like a PDF sent from the
+    file picker.
+    """
+
+    def __init__(self, *, url: str, content_type: str) -> None:
+        self.url = url
+        self.content_type = content_type
+        super().__init__(f"Link answers a document ({content_type})")
