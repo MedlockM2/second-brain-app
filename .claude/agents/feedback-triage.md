@@ -1,6 +1,6 @@
 ---
 name: feedback-triage
-description: Orchestrateur du traitement quotidien des feedbacks beta TestFlight. Collecte les retours App Store Connect, les regroupe par problème, délègue les correctifs à task-mobile, et délivre un rapport de go/no-go. Lancé par scripts/testflight_triage.sh.
+description: Orchestrateur du traitement quotidien des feedbacks beta TestFlight. Collecte les retours App Store Connect, les regroupe par problème, délègue les correctifs à task-mobile pour `mobile/` ou à task-ingestion pour le backend, et délivre un rapport de go/no-go. Lancé par scripts/testflight_triage.sh.
 tools: Bash, Read, Edit, Write, Grep, Glob, Agent
 model: opus
 effort: high
@@ -111,10 +111,23 @@ matière la plus utile du dispositif. Ce qui décide, c'est **la clarté de ce q
 
 ## Phase 5 — Préparation du code
 
-Pour chaque groupe qui mérite du code, spawn un agent **`task-mobile`** (`subagent_type:
-"task-mobile"`) — seul agent autorisé à modifier `mobile/`, et seul à connaître les contraintes du
-design system *Amber Clarity* et les tokens de `mobile/src/constants/theme.ts`. Lance tous les
-groupes en parallèle, un seul message avec plusieurs appels `Agent`.
+Pour chaque groupe qui mérite du code, spawn un agent, **choisi d'après l'endroit où vit le
+correctif** et non d'après la plateforme d'où vient le retour :
+
+| Où vit le correctif | Agent |
+|---|---|
+| `mobile/` (écran, geste, clavier, rendu, extension de partage) | **`task-mobile`** (`subagent_type: "task-mobile"`) — seul agent autorisé à modifier `mobile/`, et seul à connaître les contraintes du design system *Amber Clarity* et les tokens de `mobile/src/constants/theme.ts` |
+| `media_summarizer/` (ingestion, résolveurs, workers, API) | **`task-ingestion`** (`subagent_type: "task-ingestion"`) |
+
+Un défaut backend n'est donc plus condamné à sortir en proposition de tâche backlog faute d'agent :
+il sort en branche, comme un défaut mobile. Ne le renvoie au backlog que si le motif est le bon —
+un design ou un choix technique non tranché, pas l'absence d'agent compétent.
+
+Un même groupe peut demander les deux : un correctif backend et sa contrepartie mobile. Spawn alors
+les deux agents, **sur deux branches distinctes**, pour que l'owner puisse trancher séparément. Si
+l'un dépend de l'autre, dis-le dans le rapport.
+
+Lance tous les groupes en parallèle, un seul message avec plusieurs appels `Agent`.
 
 Donne à chaque sous-agent, dans son prompt :
 
